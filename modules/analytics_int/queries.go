@@ -303,6 +303,108 @@ func (m *Module) getTimeSeries(ctx context.Context, startDate, endDate time.Time
 	})
 }
 
+// getPageStats returns all-time view and read counts for a given path.
+func (m *Module) getPageStats(ctx context.Context, path string) PageStats {
+	var stats PageStats
+
+	// Count views from daily aggregates + today's raw views
+	today := time.Now().Format(dateFormat)
+	var aggregatedViews int64
+	_ = m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(views), 0)
+		FROM page_analytics_daily
+		WHERE path = ?
+	`, path).Scan(&aggregatedViews)
+
+	var todayViews int64
+	_ = m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM page_analytics_views
+		WHERE path = ? AND DATE(created_at) = ?
+	`, path, today).Scan(&todayViews)
+
+	stats.Views = aggregatedViews + todayViews
+
+	// Count reads (all time from raw table — reads are low volume)
+	_ = m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM page_analytics_reads
+		WHERE path = ?
+	`, path).Scan(&stats.Reads)
+
+	return stats
+}
+
+// getPageStatsReport returns view/read stats for all pages, for the admin report.
+func (m *Module) getPageStatsReport(ctx context.Context, startDate, endDate time.Time, limit, offset int) []PageStatsRow {
+	startDateStr := startDate.Format(dateFormat)
+	endDateStr := endDate.Format(dateFormat)
+
+	rows, err := m.ctx.DB.QueryContext(ctx, `
+		SELECT
+			v.path,
+			COALESCE(p.title, v.path) AS page_title,
+			COALESCE(p.page_type, '') AS page_type,
+			v.total_views,
+			COALESCE(r.total_reads, 0) AS total_reads
+		FROM (
+			SELECT path, SUM(views) AS total_views
+			FROM (
+				SELECT path, views FROM page_analytics_daily
+				WHERE date >= ? AND date < ?
+				UNION ALL
+				SELECT path, COUNT(*) AS views FROM page_analytics_views
+				WHERE DATE(created_at) = ?
+				GROUP BY path
+			)
+			GROUP BY path
+		) v
+		LEFT JOIN (
+			SELECT path, COUNT(*) AS total_reads
+			FROM page_analytics_reads
+			WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+			GROUP BY path
+		) r ON r.path = v.path
+		LEFT JOIN pages p ON p.slug = LTRIM(v.path, '/')
+		ORDER BY v.total_views DESC
+		LIMIT ? OFFSET ?
+	`, startDateStr, endDateStr, endDateStr, startDateStr, endDateStr, limit, offset)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var result []PageStatsRow
+	for rows.Next() {
+		var row PageStatsRow
+		if err := rows.Scan(&row.Path, &row.PageTitle, &row.PageType, &row.Views, &row.Reads); err != nil {
+			continue
+		}
+		if row.Views > 0 {
+			row.ReadRate = float64(row.Reads) / float64(row.Views) * 100
+		}
+		result = append(result, row)
+	}
+	return result
+}
+
+// getPageStatsReportCount returns the total number of distinct paths for pagination.
+func (m *Module) getPageStatsReportCount(ctx context.Context, startDate, endDate time.Time) int {
+	startDateStr := startDate.Format(dateFormat)
+	endDateStr := endDate.Format(dateFormat)
+
+	var count int
+	_ = m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT path)
+		FROM (
+			SELECT path FROM page_analytics_daily WHERE date >= ? AND date < ?
+			UNION
+			SELECT path FROM page_analytics_views WHERE DATE(created_at) = ?
+		)
+	`, startDateStr, endDateStr, endDateStr).Scan(&count)
+	return count
+}
+
 // parseDateRange converts a date range string to start and end times.
 func parseDateRange(rangeStr string) (time.Time, time.Time) {
 	now := time.Now()

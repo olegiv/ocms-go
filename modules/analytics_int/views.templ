@@ -93,6 +93,7 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 				<p class="page-description">{ pc.T("analytics_int.description") }</p>
 			</div>
 			<div class="page-actions">
+				<a href="/admin/internal-analytics/report" class="btn btn-sm btn-outline">{ pc.T("analytics_int.views_reads_report") }</a>
 				<div class="date-range-selector">
 					<a href="?range=7d" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "7d") }>7d</a>
 					<a href="?range=30d" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "30d") }>30d</a>
@@ -383,6 +384,13 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 							<p class="form-hint">{ pc.T("analytics_int.enabled_hint") }</p>
 						</div>
 						<div class="form-group">
+							<label class="form-check">
+								<input type="checkbox" name="show_post_stats" value="1" checked?={ data.Settings.ShowPostStats }/>
+								<span>{ pc.T("analytics_int.show_post_stats") }</span>
+							</label>
+							<p class="form-hint">{ pc.T("analytics_int.show_post_stats_hint") }</p>
+						</div>
+						<div class="form-group">
 							<label>{ pc.T("analytics_int.retention_days") }</label>
 							<input type="number" name="retention_days" value={ strconv.Itoa(data.Settings.RetentionDays) } min="30" max="730" class="form-control form-control-sm"/>
 							<p class="form-hint">{ pc.T("analytics_int.retention_hint") }</p>
@@ -425,5 +433,77 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 				.catch(err => console.error('Failed to fetch realtime stats:', err));
 		}, 30000);
 		</script>
+	}
+}
+
+templ AnalyticsIntReportPage(pc *adminviews.PageContext, data ReportViewData) {
+	@adminviews.AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("analytics_int.views_reads_report") }</h1>
+				<p class="page-description">{ pc.T("analytics_int.report_description") }</p>
+			</div>
+			<div class="page-actions">
+				<div class="date-range-selector">
+					<a href="?range=7d" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "7d") }>7d</a>
+					<a href="?range=30d" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "30d") }>30d</a>
+					<a href="?range=90d" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "90d") }>90d</a>
+					<a href="?range=1y" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "1y") }>1y</a>
+				</div>
+			</div>
+		</div>
+		<div class="card">
+			<div class="card-body">
+				if len(data.Rows) > 0 {
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ pc.T("analytics_int.page") }</th>
+								<th>{ pc.T("analytics_int.page_type") }</th>
+								<th class="text-right">{ pc.T("analytics_int.views") }</th>
+								<th class="text-right">{ pc.T("analytics_int.reads") }</th>
+								<th class="text-right">{ pc.T("analytics_int.read_rate") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, row := range data.Rows {
+								<tr>
+									<td class="page-path" title={ row.Path }>{ row.PageTitle }</td>
+									<td>
+										if row.PageType != "" {
+											<span class={ "badge badge-" + row.PageType }>{ row.PageType }</span>
+										} else {
+											<span class="badge">—</span>
+										}
+									</td>
+									<td class="text-right">{ formatNumber(row.Views) }</td>
+									<td class="text-right">{ formatNumber(row.Reads) }</td>
+									<td class="text-right">{ fmt.Sprintf("%.1f%%", row.ReadRate) }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+					if data.TotalPages > 1 {
+						<div class="pagination-wrapper mt-4">
+							<nav class="pagination">
+								if data.Page > 1 {
+									<a href={ templ.SafeURL(fmt.Sprintf("?range=%s&page=%d", data.DateRange, data.Page-1)) } class="btn btn-sm btn-outline">&laquo;</a>
+								}
+								<span class="pagination-info">
+									{ fmt.Sprintf("%d / %d", data.Page, data.TotalPages) }
+								</span>
+								if data.Page < data.TotalPages {
+									<a href={ templ.SafeURL(fmt.Sprintf("?range=%s&page=%d", data.DateRange, data.Page+1)) } class="btn btn-sm btn-outline">&raquo;</a>
+								}
+							</nav>
+						</div>
+					}
+				} else {
+					<div class="empty-state">
+						<p>{ pc.T("analytics_int.no_data") }</p>
+					</div>
+				}
+			</div>
+		</div>
 	}
 }

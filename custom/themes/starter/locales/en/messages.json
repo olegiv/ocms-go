@@ -126,6 +126,16 @@
             "id": "sidebar.recent_posts",
             "message": "Recent Posts",
             "translation": "Latest Articles"
+        },
+        {
+            "id": "frontend.views",
+            "message": "views",
+            "translation": "views"
+        },
+        {
+            "id": "frontend.reads",
+            "message": "reads",
+            "translation": "reads"
         }
     ]
 }

@@ -4,6 +4,7 @@
 package analytics_int
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"html/template"
@@ -153,14 +154,15 @@ func (m *Module) scheduleGeoIPReload() {
 	}
 }
 
-// RegisterRoutes registers public routes (none for this module).
-func (m *Module) RegisterRoutes(_ chi.Router) {
-	// No public routes
+// RegisterRoutes registers public routes.
+func (m *Module) RegisterRoutes(r chi.Router) {
+	r.Post("/analytics/read", m.handleRecordRead)
 }
 
 // RegisterAdminRoutes registers admin routes.
 func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	r.Get("/internal-analytics", m.handleDashboard)
+	r.Get("/internal-analytics/report", m.handleViewsReadsReport)
 	r.Get("/internal-analytics/api/stats", m.handleAPIStats)
 	r.Get("/internal-analytics/api/realtime", m.handleRealtime)
 	r.Post("/internal-analytics/settings", m.handleSaveSettings)
@@ -169,7 +171,79 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 
 // TemplateFuncs returns template functions provided by the module.
 func (m *Module) TemplateFuncs() template.FuncMap {
-	return template.FuncMap{}
+	return template.FuncMap{
+		"analyticsPostStats": func(slug string) PageStats {
+			if m.ctx == nil || m.ctx.DB == nil || m.settings == nil || !m.settings.Enabled {
+				return PageStats{}
+			}
+			return m.getPageStats(context.Background(), "/"+slug)
+		},
+		"analyticsShowPostStats": func() bool {
+			if m.settings == nil {
+				return false
+			}
+			return m.settings.Enabled && m.settings.ShowPostStats
+		},
+		"analyticsIntReadTracker": func(args ...any) template.HTML {
+			if m.settings == nil || !m.settings.Enabled {
+				return ""
+			}
+			nonce := ""
+			if len(args) > 0 {
+				if n, ok := args[0].(string); ok {
+					nonce = n
+				}
+			}
+			return template.HTML(m.readTrackerScript(nonce))
+		},
+	}
+}
+
+// readTrackerScript returns the inline JavaScript for read tracking.
+func (m *Module) readTrackerScript(nonce string) string {
+	nonceAttr := ""
+	if nonce != "" {
+		nonceAttr = ` nonce="` + nonce + `"`
+	}
+	return `<script` + nonceAttr + `>
+(function(){
+  if(document.body&&!document.body.classList.contains('single-page'))return;
+  var sent=false,startTime=Date.now();
+  var content=document.querySelector('.page-content,.st-article__body');
+  if(!content)return;
+  function getScrollPercent(){
+    var rect=content.getBoundingClientRect();
+    var contentTop=rect.top+window.pageYOffset;
+    var contentHeight=rect.height;
+    if(contentHeight===0)return 0;
+    var scrolled=window.pageYOffset+window.innerHeight-contentTop;
+    return Math.min(100,Math.max(0,Math.round(scrolled/contentHeight*100)));
+  }
+  function trySend(){
+    if(sent)return;
+    var elapsed=Math.round((Date.now()-startTime)/1000);
+    var depth=getScrollPercent();
+    if(depth>=60&&elapsed>=30){
+      sent=true;
+      var data=JSON.stringify({path:location.pathname,scroll_depth:depth,time_on_page:elapsed});
+      if(navigator.sendBeacon){
+        navigator.sendBeacon('/analytics/read',new Blob([data],{type:'application/json'}));
+      }else{
+        var x=new XMLHttpRequest();
+        x.open('POST','/analytics/read');
+        x.setRequestHeader('Content-Type','application/json');
+        x.send(data);
+      }
+    }
+  }
+  var scrollTimer;
+  window.addEventListener('scroll',function(){
+    clearTimeout(scrollTimer);
+    scrollTimer=setTimeout(trySend,200);
+  },{passive:true});
+  setInterval(trySend,5000);
+})();
+</script>`
 }
 
 // AdminURL returns the admin dashboard URL.
@@ -411,6 +485,43 @@ func (m *Module) Migrations() []module.Migration {
 			},
 			Down: func(db *sql.DB) error {
 				return nil // data purge is not reversible
+			},
+		},
+		{
+			Version:     10,
+			Description: "Create page_analytics_reads table for read tracking",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`
+					CREATE TABLE IF NOT EXISTS page_analytics_reads (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						visitor_hash TEXT NOT NULL,
+						path TEXT NOT NULL,
+						page_id INTEGER,
+						session_hash TEXT NOT NULL,
+						scroll_depth INTEGER NOT NULL DEFAULT 0,
+						time_on_page INTEGER NOT NULL DEFAULT 0,
+						created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+					);
+					CREATE INDEX IF NOT EXISTS idx_reads_created_at ON page_analytics_reads(created_at);
+					CREATE INDEX IF NOT EXISTS idx_reads_path ON page_analytics_reads(path);
+					CREATE UNIQUE INDEX IF NOT EXISTS idx_reads_session_path ON page_analytics_reads(session_hash, path);
+				`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`DROP TABLE IF EXISTS page_analytics_reads`)
+				return err
+			},
+		},
+		{
+			Version:     11,
+			Description: "Add show_post_stats column to page_analytics_settings",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`ALTER TABLE page_analytics_settings ADD COLUMN show_post_stats INTEGER NOT NULL DEFAULT 1`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				return nil
 			},
 		},
 	}

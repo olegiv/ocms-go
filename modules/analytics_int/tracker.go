@@ -283,6 +283,68 @@ func parseAcceptLanguage(header string) string {
 	return strings.ToLower(first)
 }
 
+// ReadRequest represents a read tracking beacon request from the frontend.
+type ReadRequest struct {
+	Path        string `json:"path"`
+	ScrollDepth int    `json:"scroll_depth"`
+	TimeOnPage  int    `json:"time_on_page"`
+}
+
+// recordRead processes a read beacon request and inserts a read event.
+// Returns true if the read was recorded, false if it was a duplicate or invalid.
+func (m *Module) recordRead(r *http.Request, req *ReadRequest) bool {
+	ip := getRealIP(r)
+
+	// Skip excluded IPs
+	if excludedIPs := m.getExcludedIPs(); len(excludedIPs) > 0 && util.MatchesIPList(ip, excludedIPs) {
+		return false
+	}
+
+	userAgent := r.UserAgent()
+
+	// Skip bots
+	ua := parseUserAgent(userAgent)
+	if ua.DeviceType == "bot" {
+		return false
+	}
+
+	visitorHash := m.CreateVisitorHash(ip, userAgent)
+	sessionHash := m.CreateSessionHash(ip, userAgent)
+
+	read := &PageRead{
+		VisitorHash: visitorHash,
+		Path:        req.Path,
+		SessionHash: sessionHash,
+		ScrollDepth: req.ScrollDepth,
+		TimeOnPage:  req.TimeOnPage,
+		CreatedAt:   timeNow(),
+	}
+
+	if err := m.insertPageRead(read); err != nil {
+		// Unique constraint violation means duplicate — not an error
+		if strings.Contains(err.Error(), "UNIQUE constraint") {
+			return false
+		}
+		m.ctx.Logger.Error("failed to insert page read", "error", err, "path", read.Path)
+		return false
+	}
+	return true
+}
+
+// insertPageRead inserts a read event into the database.
+// The unique index on (session_hash, path) prevents duplicate reads.
+func (m *Module) insertPageRead(read *PageRead) error {
+	createdAtStr := read.CreatedAt.Format("2006-01-02 15:04:05")
+	_, err := m.ctx.DB.Exec(`
+		INSERT INTO page_analytics_reads (
+			visitor_hash, path, page_id, session_hash,
+			scroll_depth, time_on_page, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, read.VisitorHash, read.Path, read.PageID,
+		read.SessionHash, read.ScrollDepth, read.TimeOnPage, createdAtStr)
+	return err
+}
+
 // GetRealTimeVisitorCount returns the number of unique visitors in the last N minutes.
 func (m *Module) GetRealTimeVisitorCount(minutes int) int {
 	cutoff := time.Now().Add(-time.Duration(minutes) * time.Minute)

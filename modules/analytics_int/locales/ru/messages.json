@@ -35,6 +35,13 @@
         {"id": "analytics_int.run_aggregation", "message": "Run Aggregation", "translation": "Запустить агрегацию"},
         {"id": "analytics_int.run_aggregation_hint", "message": "Manually aggregate all historical raw data into daily statistics", "translation": "Вручную агрегировать все исторические данные в дневную статистику"},
         {"id": "analytics_int.success_aggregation", "message": "Aggregation complete. Processed %d date(s).", "translation": "Агрегация завершена. Обработано дат: %d."},
-        {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Не удалось выполнить агрегацию"}
+        {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Не удалось выполнить агрегацию"},
+        {"id": "analytics_int.show_post_stats", "message": "Show view & read counts on posts", "translation": "Показывать просмотры и прочтения на постах"},
+        {"id": "analytics_int.show_post_stats_hint", "message": "Display view and read statistics on public post pages", "translation": "Отображать статистику просмотров и прочтений на публичных страницах постов"},
+        {"id": "analytics_int.views_reads_report", "message": "Views & Reads", "translation": "Просмотры и прочтения"},
+        {"id": "analytics_int.report_description", "message": "View and read counts per page", "translation": "Количество просмотров и прочтений по страницам"},
+        {"id": "analytics_int.reads", "message": "Reads", "translation": "Прочтения"},
+        {"id": "analytics_int.read_rate", "message": "Read Rate", "translation": "Процент прочтений"},
+        {"id": "analytics_int.page_type", "message": "Type", "translation": "Тип"}
     ]
 }

@@ -100,6 +100,88 @@ func (m *Module) handleRealtime(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]int{"visitors": count})
 }
 
+// maxReadBodySize is the maximum size of a read beacon request body.
+const maxReadBodySize = 1024 // 1 KB
+
+// handleRecordRead handles POST /analytics/read - records a read event.
+// This is a public endpoint that receives read beacons from the frontend JS.
+func (m *Module) handleRecordRead(w http.ResponseWriter, r *http.Request) {
+	// Skip if tracking is disabled
+	if m.settings == nil || !m.settings.Enabled {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Limit request body size
+	r.Body = http.MaxBytesReader(w, r.Body, maxReadBodySize)
+
+	var req ReadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.Path == "" || req.ScrollDepth < 60 || req.TimeOnPage < 30 {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// Cap scroll depth to 100
+	if req.ScrollDepth > 100 {
+		req.ScrollDepth = 100
+	}
+
+	// Record the read asynchronously
+	go m.recordRead(r, &req)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// reportPerPage is the number of items per page in the views/reads report.
+const reportPerPage = 25
+
+// handleViewsReadsReport renders the admin views/reads report page.
+func (m *Module) handleViewsReadsReport(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+
+	lang := m.ctx.Render.GetAdminLang(r)
+	dateRange, startDate, endDate := parseDateRangeParam(r)
+
+	// Parse pagination
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	offset := (page - 1) * reportPerPage
+
+	rows := m.getPageStatsReport(r.Context(), startDate, endDate, reportPerPage, offset)
+	totalCount := m.getPageStatsReportCount(r.Context(), startDate, endDate)
+	totalPages := (totalCount + reportPerPage - 1) / reportPerPage
+
+	viewData := ReportViewData{
+		Rows:       rows,
+		DateRange:  dateRange,
+		Page:       page,
+		TotalPages: totalPages,
+		TotalCount: totalCount,
+	}
+
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "analytics_int.views_reads_report"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "analytics_int.title"), URL: "/admin/internal-analytics"},
+		{Label: i18n.T(lang, "analytics_int.views_reads_report"), URL: "/admin/internal-analytics/report", Active: true},
+	})
+	render.Templ(w, r, AnalyticsIntReportPage(pc, viewData))
+}
+
 // handleSaveSettings saves module settings.
 func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
@@ -125,6 +207,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Update settings
 	m.settings.Enabled = r.FormValue("enabled") == "1"
+	m.settings.ShowPostStats = r.FormValue("show_post_stats") == "1"
 
 	// Parse retention days
 	if retentionStr := r.FormValue("retention_days"); retentionStr != "" {
