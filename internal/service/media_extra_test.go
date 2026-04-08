@@ -28,6 +28,7 @@ func TestGetURL(t *testing.T) {
 		{"thumbnail variant", "thumbnail", "/uploads/thumbnail/abc-123/photo.jpg"},
 		{"grid variant", "grid", "/uploads/grid/abc-123/photo.jpg"},
 		{"large variant", "large", "/uploads/large/abc-123/photo.jpg"},
+		{"og variant", "og", "/uploads/og/abc-123/photo.jpg"},
 	}
 
 	for _, tt := range tests {

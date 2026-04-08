@@ -1128,6 +1128,11 @@
             "translation": "Grid"
         },
         {
+            "id": "media.variant_small",
+            "message": "Small",
+            "translation": "Small"
+        },
+        {
             "id": "media.variant_medium",
             "message": "Medium",
             "translation": "Medium"
@@ -1136,6 +1141,11 @@
             "id": "media.variant_large",
             "message": "Large",
             "translation": "Large"
+        },
+        {
+            "id": "media.variant_og",
+            "message": "Social Share",
+            "translation": "Social Share"
         },
         {
             "id": "media.download_original",

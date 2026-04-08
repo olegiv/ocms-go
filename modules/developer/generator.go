@@ -608,6 +608,7 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 			{name: "small", width: 400, height: 300, crop: false},
 			{name: "medium", width: 800, height: 600, crop: false},
 			{name: "large", width: 1920, height: 1080, crop: false},
+			{name: "og", width: 1200, height: 630, crop: false},
 		}
 
 		for _, v := range variants {
@@ -1087,7 +1088,7 @@ func deleteMediaFiles(uploadDir, mediaUUID string) {
 	_ = os.RemoveAll(originalsDir)
 
 	// Delete variants (must match variants created in generateMedia)
-	for _, variant := range []string{"thumbnail", "grid", "small", "medium", "large"} {
+	for _, variant := range []string{"thumbnail", "grid", "small", "medium", "large", "og"} {
 		variantDir := filepath.Join(uploadDir, variant, mediaUUID)
 		_ = os.RemoveAll(variantDir)
 	}

@@ -498,3 +498,76 @@ func TestSetModuleTemplateFuncsProvider(t *testing.T) {
 		t.Errorf("after SetModuleTemplateFuncsProvider: got %q; want %q", got, "<test/>")
 	}
 }
+
+func TestPickOGVariant(t *testing.T) {
+	tests := []struct {
+		name     string
+		variants []store.MediaVariant
+		wantType string
+		wantNil  bool
+	}{
+		{
+			name:    "empty variants",
+			wantNil: true,
+		},
+		{
+			name: "only thumbnail — no OG candidate",
+			variants: []store.MediaVariant{
+				{Type: "thumbnail", Width: 150, Height: 150},
+			},
+			wantNil: true,
+		},
+		{
+			name: "og variant wins over large and medium",
+			variants: []store.MediaVariant{
+				{Type: "medium", Width: 800, Height: 600},
+				{Type: "large", Width: 1920, Height: 1080},
+				{Type: "og", Width: 1200, Height: 630},
+			},
+			wantType: "og",
+		},
+		{
+			name: "large wins when no og",
+			variants: []store.MediaVariant{
+				{Type: "thumbnail", Width: 150, Height: 150},
+				{Type: "medium", Width: 800, Height: 600},
+				{Type: "large", Width: 1536, Height: 1024},
+			},
+			wantType: "large",
+		},
+		{
+			name: "medium is fallback when no og or large",
+			variants: []store.MediaVariant{
+				{Type: "thumbnail", Width: 150, Height: 150},
+				{Type: "medium", Width: 800, Height: 600},
+			},
+			wantType: "medium",
+		},
+		{
+			name: "og wins even if listed first",
+			variants: []store.MediaVariant{
+				{Type: "og", Width: 1200, Height: 630},
+				{Type: "large", Width: 1920, Height: 1080},
+			},
+			wantType: "og",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := pickOGVariant(tt.variants)
+			if tt.wantNil {
+				if got != nil {
+					t.Errorf("pickOGVariant() = %v, want nil", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("pickOGVariant() = nil, want non-nil")
+			}
+			if got.Type != tt.wantType {
+				t.Errorf("pickOGVariant().Type = %q, want %q", got.Type, tt.wantType)
+			}
+		})
+	}
+}

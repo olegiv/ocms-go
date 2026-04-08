@@ -2008,10 +2008,14 @@ func convertMediaEditViewData(data MediaEditData, lang string) adminviews.MediaE
 			typeLabel = i18n.T(lang, "media.variant_thumbnail")
 		case "grid":
 			typeLabel = i18n.T(lang, "media.variant_grid")
+		case "small":
+			typeLabel = i18n.T(lang, "media.variant_small")
 		case "medium":
 			typeLabel = i18n.T(lang, "media.variant_medium")
 		case "large":
 			typeLabel = i18n.T(lang, "media.variant_large")
+		case "og":
+			typeLabel = i18n.T(lang, "media.variant_og")
 		}
 		viewVariants[i] = adminviews.MediaVariantView{
 			Type:      v.Type,
