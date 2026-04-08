@@ -14,16 +14,21 @@ import (
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// requireAPIAuth checks if the user is authenticated and returns 401 if not.
-// Returns the user if authenticated, nil otherwise.
-func (m *Module) requireAPIAuth(w http.ResponseWriter, r *http.Request) *store.User {
+// requireEditorAuth checks if the user is authenticated with editor or admin role.
+// Returns the user if authorized, nil otherwise.
+func (m *Module) requireEditorAuth(w http.ResponseWriter, r *http.Request) *store.User {
 	user := middleware.GetUser(r)
 	if user == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil
+	}
+	if user.Role != model.RoleEditor && user.Role != model.RoleAdmin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return nil
 	}
 	return user
@@ -41,9 +46,7 @@ func parseDateRangeParam(r *http.Request) (string, time.Time, time.Time) {
 
 // handleDashboard renders the analytics dashboard.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	if user == nil {
-		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+	if m.requireEditorAuth(w, r) == nil {
 		return
 	}
 
@@ -73,7 +76,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 // handleAPIStats returns JSON stats for HTMX updates.
 func (m *Module) handleAPIStats(w http.ResponseWriter, r *http.Request) {
-	if m.requireAPIAuth(w, r) == nil {
+	if m.requireEditorAuth(w, r) == nil {
 		return
 	}
 
@@ -91,7 +94,7 @@ func (m *Module) handleAPIStats(w http.ResponseWriter, r *http.Request) {
 
 // handleRealtime returns real-time visitor count.
 func (m *Module) handleRealtime(w http.ResponseWriter, r *http.Request) {
-	if m.requireAPIAuth(w, r) == nil {
+	if m.requireEditorAuth(w, r) == nil {
 		return
 	}
 
@@ -162,9 +165,7 @@ const reportPerPage = 25
 
 // handleViewsReadsReport renders the admin views/reads report page.
 func (m *Module) handleViewsReadsReport(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	if user == nil {
-		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+	if m.requireEditorAuth(w, r) == nil {
 		return
 	}
 
@@ -206,7 +207,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := m.requireAPIAuth(w, r)
+	user := m.requireEditorAuth(w, r)
 	if user == nil {
 		return
 	}
@@ -234,7 +235,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	// Parse excluded paths (newline-separated, max 100 entries, max 512 chars each)
 	excludePathsStr := r.FormValue("exclude_paths")
 	var excludePaths []string
-	for _, path := range strings.Split(excludePathsStr, "\n") {
+	for path := range strings.SplitSeq(excludePathsStr, "\n") {
 		path = strings.TrimSpace(path)
 		if path != "" && len(path) <= 512 {
 			excludePaths = append(excludePaths, path)
@@ -259,7 +260,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 // handleRunAggregation triggers full aggregation of historical data.
 func (m *Module) handleRunAggregation(w http.ResponseWriter, r *http.Request) {
-	user := m.requireAPIAuth(w, r)
+	user := m.requireEditorAuth(w, r)
 	if user == nil {
 		return
 	}

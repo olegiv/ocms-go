@@ -68,9 +68,11 @@ func (m *Module) Init(ctx *module.Context) error {
 
 	// Ensure we have a salt
 	if m.settings.CurrentSalt == "" {
-		m.settings.CurrentSalt = generateRandomSalt()
-		m.settings.SaltCreatedAt = timeNow()
-		_ = m.saveSettings()
+		if salt := generateRandomSalt(); salt != "" {
+			m.settings.CurrentSalt = salt
+			m.settings.SaltCreatedAt = timeNow()
+			_ = m.saveSettings()
+		}
 	}
 
 	// Initialize GeoIP lookup with path from config
