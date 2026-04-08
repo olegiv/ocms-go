@@ -138,8 +138,15 @@ func (m *Module) handleRecordRead(w http.ResponseWriter, r *http.Request) {
 		req.ScrollDepth = 100
 	}
 
+	// Extract identity before spawning goroutine to avoid capturing *http.Request
+	id := m.extractIdentity(r)
+	if id == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	// Record the read asynchronously
-	go m.recordRead(r, &req)
+	go m.recordReadWithIdentity(id, &req)
 
 	w.WriteHeader(http.StatusNoContent)
 }

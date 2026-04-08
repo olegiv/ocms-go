@@ -230,12 +230,14 @@ func (m *Module) readTrackerScript(nonce string) string {
     var scrolled=window.pageYOffset+window.innerHeight-contentTop;
     return Math.min(100,Math.max(0,Math.round(scrolled/contentHeight*100)));
   }
+  var intervalId;
   function trySend(){
     if(sent)return;
     var elapsed=Math.round((Date.now()-startTime)/1000);
     var depth=getScrollPercent();
     if(depth>=60&&elapsed>=30){
       sent=true;
+      clearInterval(intervalId);
       var data=JSON.stringify({path:location.pathname,scroll_depth:depth,time_on_page:elapsed});
       if(navigator.sendBeacon){
         navigator.sendBeacon('/analytics/read',new Blob([data],{type:'application/json'}));
@@ -252,7 +254,7 @@ func (m *Module) readTrackerScript(nonce string) string {
     clearTimeout(scrollTimer);
     scrollTimer=setTimeout(trySend,200);
   },{passive:true});
-  setInterval(trySend,5000);
+  intervalId=setInterval(trySend,5000);
 })();
 </script>`
 }

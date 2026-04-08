@@ -313,7 +313,12 @@ func (m *Module) recordRead(r *http.Request, req *ReadRequest) bool {
 	if id == nil {
 		return false
 	}
+	return m.recordReadWithIdentity(id, req)
+}
 
+// recordReadWithIdentity inserts a read event using pre-extracted identity.
+// This avoids capturing *http.Request in goroutines after the response completes.
+func (m *Module) recordReadWithIdentity(id *requestIdentity, req *ReadRequest) bool {
 	read := &PageRead{
 		VisitorHash: id.VisitorHash,
 		Path:        req.Path,
