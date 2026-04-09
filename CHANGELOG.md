@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-04-09
+
+### Added
+
+#### Analytics
+- Add views/reads tracking with Medium-style engagement metrics (read ratio, estimated read time)
+- Add analytics dashboard with page-level view/read stats and retention reports
+- Add view/read counters to page templates across all themes
+- Add per-IP rate limiting to read beacon endpoint
+
+#### Media
+- Add OG image variant (1200×630) for social sharing across all themes
+
+#### Deployment
+- Follow symlinks in deploy custom content sync (`rsync -aL`)
+- Add broken symlink validation before deploy to prevent failed deployments
+- Pass git version, commit hash, and build time to Fly.io Docker builds
+
+### Changed
+
+#### Dependencies
+- Update go-sqlite3 1.14.41 → 1.14.42
+
+### Fixed
+
+#### Analytics
+- Fix multilingual stats and retention-bound reads
+- Fix security and code quality issues from audit
+- Extract shared extractIdentity helper to eliminate duplicate code
+
+#### Admin UI
+- Fix theme settings demo mode alert rendering one word per line (grid layout issue)
+
+### Security
+- Harden analytics auth and salt generation
+- Fix security audit findings in analytics module (input validation, error handling)
+
 ## [0.17.0] - 2026-04-08
 
 ### Added
@@ -791,7 +828,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/olegiv/ocms-go/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/olegiv/ocms-go/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/olegiv/ocms-go/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/olegiv/ocms-go/compare/v0.14.0...v0.15.0
