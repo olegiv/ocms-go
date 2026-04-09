@@ -1063,6 +1063,9 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 							@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("media.featured_image") } }
 							@mediaDropzoneSelectArea(pc)
 							<span class="form-hint">{ pc.T("media.featured_image_requirements") }</span>
+							if data.Errors["featured_image_id"] != "" {
+								<span class="form-error">{ data.Errors["featured_image_id"] }</span>
+							}
 							@mediaDropzoneSelectModal(pc)
 						</div>
 					</div>

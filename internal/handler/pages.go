@@ -799,9 +799,11 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		validationErrors["page_type"] = "Invalid page type"
 	}
 
-	// Featured image size validation
-	if errMsg := h.validateFeaturedImageSize(r.Context(), input.FeaturedImageID, lang); errMsg != "" {
-		validationErrors["featured_image_id"] = errMsg
+	// Featured image size validation (skip if image unchanged to grandfather existing data)
+	if input.FeaturedImageID != existingPage.FeaturedImageID {
+		if errMsg := h.validateFeaturedImageSize(r.Context(), input.FeaturedImageID, lang); errMsg != "" {
+			validationErrors["featured_image_id"] = errMsg
+		}
 	}
 	rawBody := input.Body
 	if bodyErr := validatePageBodySecurityPolicy(rawBody, h.blockSuspiciousMarkup); bodyErr != "" {

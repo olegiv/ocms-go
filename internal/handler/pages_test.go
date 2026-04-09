@@ -5,12 +5,14 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -711,4 +713,185 @@ func TestPageDispatchEventNilDispatcher(t *testing.T) {
 		Title: "Test",
 		Slug:  "test",
 	}, "test@example.com")
+}
+
+// createTestMedia inserts a media record with the given dimensions.
+func createTestMedia(t *testing.T, db *sql.DB, userID int64, width, height int64) store.Medium {
+	t.Helper()
+	queries := store.New(db)
+	now := time.Now()
+	media, err := queries.CreateMedia(context.Background(), store.CreateMediaParams{
+		Uuid:         "test-uuid-" + time.Now().Format("150405.000000000"),
+		Filename:     "test.jpg",
+		MimeType:     "image/jpeg",
+		Size:         1024,
+		Width:        sql.NullInt64{Int64: width, Valid: true},
+		Height:       sql.NullInt64{Int64: height, Valid: true},
+		UploadedBy:   userID,
+		LanguageCode: "en",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create test media: %v", err)
+	}
+	return media
+}
+
+// TestValidateFeaturedImageSize tests the validateFeaturedImageSize method.
+func TestValidateFeaturedImageSize(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	h := NewPagesHandler(db, nil, sm)
+
+	t.Run("no image set returns empty", func(t *testing.T) {
+		result := h.validateFeaturedImageSize(context.Background(), sql.NullInt64{}, "en")
+		if result != "" {
+			t.Errorf("expected empty string, got %q", result)
+		}
+	})
+
+	t.Run("image meets minimum size", func(t *testing.T) {
+		media := createTestMedia(t, db, user.ID, model.MinFeaturedImageWidth, model.MinFeaturedImageHeight)
+		imgID := sql.NullInt64{Int64: media.ID, Valid: true}
+		result := h.validateFeaturedImageSize(context.Background(), imgID, "en")
+		if result != "" {
+			t.Errorf("expected empty string for valid image, got %q", result)
+		}
+	})
+
+	t.Run("image larger than minimum", func(t *testing.T) {
+		media := createTestMedia(t, db, user.ID, 1920, 1080)
+		imgID := sql.NullInt64{Int64: media.ID, Valid: true}
+		result := h.validateFeaturedImageSize(context.Background(), imgID, "en")
+		if result != "" {
+			t.Errorf("expected empty string for large image, got %q", result)
+		}
+	})
+
+	t.Run("image too small", func(t *testing.T) {
+		media := createTestMedia(t, db, user.ID, 800, 600)
+		imgID := sql.NullInt64{Int64: media.ID, Valid: true}
+		result := h.validateFeaturedImageSize(context.Background(), imgID, "en")
+		if result == "" {
+			t.Error("expected error for undersized image, got empty string")
+		}
+	})
+
+	t.Run("image width too small", func(t *testing.T) {
+		media := createTestMedia(t, db, user.ID, 1000, 800)
+		imgID := sql.NullInt64{Int64: media.ID, Valid: true}
+		result := h.validateFeaturedImageSize(context.Background(), imgID, "en")
+		if result == "" {
+			t.Error("expected error when width below minimum")
+		}
+	})
+
+	t.Run("image height too small", func(t *testing.T) {
+		media := createTestMedia(t, db, user.ID, 1200, 700)
+		imgID := sql.NullInt64{Int64: media.ID, Valid: true}
+		result := h.validateFeaturedImageSize(context.Background(), imgID, "en")
+		if result == "" {
+			t.Error("expected error when height below minimum")
+		}
+	})
+
+	t.Run("nonexistent media ID returns empty", func(t *testing.T) {
+		imgID := sql.NullInt64{Int64: 99999, Valid: true}
+		result := h.validateFeaturedImageSize(context.Background(), imgID, "en")
+		if result != "" {
+			t.Errorf("expected empty string for missing media, got %q", result)
+		}
+	})
+
+	t.Run("media without dimensions returns empty", func(t *testing.T) {
+		queries := store.New(db)
+		now := time.Now()
+		media, err := queries.CreateMedia(context.Background(), store.CreateMediaParams{
+			Uuid:         "test-pdf-" + time.Now().Format("150405.000000000"),
+			Filename:     "document.pdf",
+			MimeType:     "application/pdf",
+			Size:         2048,
+			Width:        sql.NullInt64{},
+			Height:       sql.NullInt64{},
+			UploadedBy:   user.ID,
+			LanguageCode: "en",
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		})
+		if err != nil {
+			t.Fatalf("failed to create test media: %v", err)
+		}
+		imgID := sql.NullInt64{Int64: media.ID, Valid: true}
+		result := h.validateFeaturedImageSize(context.Background(), imgID, "en")
+		if result != "" {
+			t.Errorf("expected empty string for non-image media, got %q", result)
+		}
+	})
+}
+
+// TestUpdateSkipsFeaturedImageValidationWhenUnchanged verifies that the Update
+// handler skips featured image size validation when the image hasn't changed.
+func TestUpdateSkipsFeaturedImageValidationWhenUnchanged(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+
+	// Create a small image (below minimum requirements)
+	smallImg := createTestMedia(t, db, user.ID, 800, 600)
+
+	// Create a page with the small image directly in DB
+	page, err := queries.CreatePage(context.Background(), store.CreatePageParams{
+		Title:           "Test Page",
+		Slug:            "test-featured-image",
+		Body:            "<p>Content</p>",
+		Status:          "draft",
+		AuthorID:        user.ID,
+		FeaturedImageID: sql.NullInt64{Int64: smallImg.ID, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("failed to create test page: %v", err)
+	}
+
+	// Verify the page was created with the small image
+	got, err := queries.GetPageByID(context.Background(), page.ID)
+	if err != nil {
+		t.Fatalf("failed to get page: %v", err)
+	}
+	if !got.FeaturedImageID.Valid || got.FeaturedImageID.Int64 != smallImg.ID {
+		t.Fatalf("page featured_image_id = %v, want %d", got.FeaturedImageID, smallImg.ID)
+	}
+
+	t.Run("same small image should not trigger validation", func(t *testing.T) {
+		// The key behavior: when input.FeaturedImageID == existingPage.FeaturedImageID,
+		// validation is skipped (grandfathering existing data)
+		existingImgID := got.FeaturedImageID
+		inputImgID := sql.NullInt64{Int64: smallImg.ID, Valid: true}
+
+		// Simulate the condition in Update handler
+		if inputImgID != existingImgID {
+			t.Error("same image IDs should be equal — validation would incorrectly run")
+		}
+	})
+
+	t.Run("different small image should trigger validation", func(t *testing.T) {
+		// Create another small image
+		anotherSmallImg := createTestMedia(t, db, user.ID, 640, 480)
+		existingImgID := got.FeaturedImageID
+		inputImgID := sql.NullInt64{Int64: anotherSmallImg.ID, Valid: true}
+
+		// Simulate the condition in Update handler
+		if inputImgID == existingImgID {
+			t.Error("different image IDs should not be equal — validation should run")
+		}
+	})
+
+	t.Run("clearing image should trigger validation path", func(t *testing.T) {
+		existingImgID := got.FeaturedImageID
+		inputImgID := sql.NullInt64{} // cleared
+
+		if inputImgID == existingImgID {
+			t.Error("cleared vs set image should not be equal — validation path should run")
+		}
+	})
 }

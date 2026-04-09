@@ -75,6 +75,15 @@ The REST API returns all variant URLs:
 }
 ```
 
+## Featured Image Requirements
+
+When assigning a featured image to a page, the image must meet minimum size requirements:
+
+- **Minimum dimensions**: 1200 x 800 pixels
+- **Supported formats**: JPEG, PNG, GIF, WebP
+
+Size validation is enforced when creating a page or changing the featured image on an existing page. If a page already has a featured image that is below the minimum size, saving other fields on that page will not trigger validation — the existing image is grandfathered.
+
 ## Supported Formats
 
 - **Images**: JPEG, PNG, GIF, WebP
