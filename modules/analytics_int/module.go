@@ -225,7 +225,7 @@ func (m *Module) readTrackerScript(nonce string) string {
 (function(){
   if(document.body&&!document.body.classList.contains('single-page'))return;
   var sent=false,startTime=Date.now();
-  var content=document.querySelector('.page-content,.st-article__body,.dev-article-body');
+  var content=document.querySelector('.page-content,.article-content,.st-article__body,.dev-article-body');
   if(!content)return;
   var words=content.textContent.split(/\s+/).length;
   var minTime=Math.max(5,Math.min(20,Math.round(words/200*60*0.1)));
