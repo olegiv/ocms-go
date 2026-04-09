@@ -1498,6 +1498,7 @@ func run() error {
 		slog.Info("frontend page HTML sanitization enabled")
 	}
 	frontendHandler.SetModuleTemplateFuncsProvider(moduleRegistry)
+	frontendHandler.SetFormEmbedDeps(hookRegistry, sessionManager)
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager, hookRegistry, themeManager, cacheManager, renderer.GetMenuService(), frontendHandler)
 	formsHandler.SetRequireCaptcha(cfg.RequireFormCaptcha)
 	if cfg.RequireFormCaptcha {
@@ -1681,6 +1682,7 @@ func run() error {
 			r.Post(handler.RouteMenusID+handler.RouteSuffixReorder, menusHandler.Reorder)
 
 			// Form management routes
+			r.Get(handler.RouteForms+"/api", formsHandler.FormsAPI) // JSON API for form picker
 			registerCRUD(r, handler.RouteForms, handler.RouteFormsID, crudHandlers{
 				List: formsHandler.List, NewForm: formsHandler.NewForm, Create: formsHandler.Create,
 				EditForm: formsHandler.EditForm, Update: formsHandler.Update, Delete: formsHandler.Delete,

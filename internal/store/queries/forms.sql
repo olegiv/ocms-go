@@ -15,6 +15,9 @@ SELECT * FROM forms WHERE slug = ? AND language_code = ?;
 -- name: ListForms :many
 SELECT * FROM forms ORDER BY name LIMIT ? OFFSET ?;
 
+-- name: ListActiveForms :many
+SELECT * FROM forms WHERE is_active = 1 ORDER BY name;
+
 -- name: ListFormsByLanguage :many
 SELECT * FROM forms WHERE language_code = ? ORDER BY name LIMIT ? OFFSET ?;
 

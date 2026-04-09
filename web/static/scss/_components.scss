@@ -1135,6 +1135,75 @@ select.form-control {
   }
 }
 
+// Form Picker (for embedding forms in page content)
+.editor-form-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+  padding: $spacing-4 $spacing-6;
+}
+
+.editor-form-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  padding: $spacing-3 $spacing-4;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background-color: $white;
+
+  &:hover {
+    border-color: $primary;
+    background-color: rgba($primary, 0.04);
+  }
+}
+
+.editor-form-item-icon {
+  flex-shrink: 0;
+  color: $gray-400;
+}
+
+.editor-form-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.editor-form-item-name {
+  font-weight: 600;
+  font-size: $font-size-sm;
+  color: $gray-900;
+}
+
+.editor-form-item-slug {
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+.editor-form-item-desc {
+  font-size: $font-size-xs;
+  color: $gray-400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Embedded form on public pages
+.ocms-embedded-form-rendered {
+  margin: $spacing-6 0;
+  padding: $spacing-6;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  background-color: $white;
+}
+
+.ocms-embedded-form-success {
+  text-align: center;
+}
+
 // Empty state enhancements
 .empty-state {
   text-align: center;

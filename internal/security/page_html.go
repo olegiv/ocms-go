@@ -18,6 +18,13 @@ func buildPageHTMLSanitizer() *bluemonday.Policy {
 	p.AllowAttrs("class").Matching(
 		regexp.MustCompile(`^language-[a-zA-Z0-9_-]+(\s+line-numbers)?$`),
 	).OnElements("pre", "code")
+	// Allow form embed placeholders: <div data-ocms-form="slug" class="ocms-embedded-form">
+	p.AllowAttrs("data-ocms-form").Matching(
+		regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$`),
+	).OnElements("div")
+	p.AllowAttrs("class").Matching(
+		regexp.MustCompile(`^ocms-embedded-form$`),
+	).OnElements("div")
 	return p
 }
 

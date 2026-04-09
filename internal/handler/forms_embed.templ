@@ -1,0 +1,250 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package handler
+
+import (
+	"fmt"
+
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
+)
+
+// EmbeddedFormData holds data needed to render an embedded form within page content.
+type EmbeddedFormData struct {
+	FormSlug       string
+	FormTitle      string
+	Description    string
+	SuccessMessage string
+	Fields         []PublicFormField
+	Errors         map[string]string
+	Values         map[string]string
+	Success        bool
+	CaptchaWidget  string
+	Lang           string
+}
+
+// EmbeddedForm renders a form embedded within page content.
+// Uses HTMX for inline submission without page reload.
+templ EmbeddedForm(data EmbeddedFormData) {
+	<div class="ocms-embedded-form-rendered" id={ "ocms-form-" + data.FormSlug }>
+		if data.Success {
+			@embeddedFormSuccess(data)
+		} else {
+			@embeddedFormEntry(data)
+		}
+	</div>
+}
+
+templ embeddedFormSuccess(data EmbeddedFormData) {
+	<div class="ocms-embedded-form-success text-center py-8 space-y-4">
+		<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-green-600">
+			<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+			<polyline points="22 4 12 14.01 9 11.01"></polyline>
+		</svg>
+		<h3 class="text-xl font-bold tracking-tight text-foreground">
+			{ formT(data.Lang, "forms.public.thank_you") }
+		</h3>
+		<p class="text-muted-foreground">
+			if data.SuccessMessage != "" {
+				{ data.SuccessMessage }
+			} else {
+				{ formT(data.Lang, "forms.public.default_success") }
+			}
+		</p>
+	</div>
+}
+
+templ embeddedFormEntry(data EmbeddedFormData) {
+	if data.FormTitle != "" {
+		<h3 class="text-xl font-bold tracking-tight text-foreground mb-2">{ data.FormTitle }</h3>
+	}
+	if data.Description != "" {
+		<p class="text-muted-foreground mb-4">{ data.Description }</p>
+	}
+	if formErr, ok := data.Errors["_form"]; ok && formErr != "" {
+		@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "mb-4"}) {
+			@alert.Description() {
+				{ formErr }
+			}
+		}
+	}
+	if captchaErr, ok := data.Errors["_captcha"]; ok && captchaErr != "" {
+		@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "mb-4"}) {
+			@alert.Description() {
+				{ captchaErr }
+			}
+		}
+	}
+	<form
+		method="POST"
+		action={ templ.SafeURL("/forms/" + data.FormSlug) }
+		hx-post={ "/forms/" + data.FormSlug }
+		hx-target={ "#ocms-form-" + data.FormSlug }
+		hx-swap="outerHTML"
+		class="space-y-4"
+	>
+		<!-- Honeypot -->
+		<div class="sr-only" aria-hidden="true">
+			<label for={ "embed_website_" + data.FormSlug }>{ formT(data.Lang, "forms.public.honeypot_label") }</label>
+			<input type="text" name="_website" id={ "embed_website_" + data.FormSlug } tabindex="-1" autocomplete="off"/>
+		</div>
+		for _, field := range data.Fields {
+			if field.Type == "captcha" {
+				if data.CaptchaWidget != "" {
+					<div class="space-y-2">
+						@templ.Raw(data.CaptchaWidget)
+					</div>
+				}
+			} else {
+				@embeddedFormFieldGroup(data, field)
+			}
+		}
+		<div class="pt-2">
+			@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeLg}) {
+				{ formT(data.Lang, "forms.public.submit") }
+			}
+		</div>
+	</form>
+}
+
+templ embeddedFormFieldGroup(data EmbeddedFormData, field PublicFormField) {
+	<div class="space-y-2">
+		@label.Label(label.Props{
+			For:   fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID),
+			Error: data.Errors[field.Name],
+		}) {
+			{ field.Label }
+			if field.IsRequired {
+				<span class="text-destructive ml-0.5">*</span>
+			}
+		}
+		switch field.Type {
+			case "text":
+				@input.Input(input.Props{
+					ID:          fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID),
+					Name:        field.Name,
+					Type:        input.TypeText,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+			case "email":
+				@input.Input(input.Props{
+					ID:          fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID),
+					Name:        field.Name,
+					Type:        input.TypeEmail,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+			case "textarea":
+				@textarea.Textarea(textarea.Props{
+					ID:          fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID),
+					Name:        field.Name,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					Rows:        5,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+			case "number":
+				@input.Input(input.Props{
+					ID:          fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID),
+					Name:        field.Name,
+					Type:        input.TypeNumber,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+			case "date":
+				@input.Input(input.Props{
+					ID:       fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID),
+					Name:     field.Name,
+					Type:     input.TypeDate,
+					Value:    data.Values[field.Name],
+					HasError: data.Errors[field.Name] != "",
+					Attributes: requiredAttr(field.IsRequired),
+				})
+			case "select":
+				<select
+					id={ fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID) }
+					name={ field.Name }
+					if field.IsRequired {
+						required
+					}
+					class={
+						"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+						templ.KV("border-destructive", data.Errors[field.Name] != ""),
+					}
+				>
+					<option value="">{ formT(data.Lang, "forms.public.select_default") }</option>
+					for _, opt := range field.Options {
+						<option value={ opt } selected?={ opt == data.Values[field.Name] }>{ opt }</option>
+					}
+				</select>
+			case "radio":
+				<div class="flex flex-col gap-2">
+					for i, opt := range field.Options {
+						<label class="flex items-center gap-2 text-sm cursor-pointer" for={ fmt.Sprintf("embed_%s_%d_%d", data.FormSlug, field.ID, i) }>
+							<input
+								type="radio"
+								id={ fmt.Sprintf("embed_%s_%d_%d", data.FormSlug, field.ID, i) }
+								name={ field.Name }
+								value={ opt }
+								checked?={ opt == data.Values[field.Name] }
+								class="h-4 w-4 border-input text-primary focus:ring-ring"
+							/>
+							<span>{ opt }</span>
+						</label>
+					}
+				</div>
+			case "checkbox":
+				<div class="flex flex-col gap-2">
+					for i, opt := range field.Options {
+						<label class="flex items-center gap-2 text-sm cursor-pointer" for={ fmt.Sprintf("embed_%s_%d_%d", data.FormSlug, field.ID, i) }>
+							<input
+								type="checkbox"
+								id={ fmt.Sprintf("embed_%s_%d_%d", data.FormSlug, field.ID, i) }
+								name={ field.Name }
+								value={ opt }
+								checked?={ fieldValueContains(data.Values[field.Name], opt) }
+								class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+							/>
+							<span>{ opt }</span>
+						</label>
+					}
+				</div>
+			case "file":
+				@input.Input(input.Props{
+					ID:       fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID),
+					Name:     field.Name,
+					Type:     input.TypeFile,
+					HasError: data.Errors[field.Name] != "",
+					Attributes: requiredAttr(field.IsRequired),
+				})
+			default:
+				@input.Input(input.Props{
+					ID:          fmt.Sprintf("embed_%s_%d", data.FormSlug, field.ID),
+					Name:        field.Name,
+					Type:        input.TypeText,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+		}
+		if field.HelpText != "" {
+			<p class="text-sm text-muted-foreground">{ field.HelpText }</p>
+		}
+		if fieldErr := data.Errors[field.Name]; fieldErr != "" {
+			<p class="text-sm text-destructive">{ fieldErr }</p>
+		}
+	</div>
+}

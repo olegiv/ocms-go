@@ -520,6 +520,43 @@ func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 	renderTempl(w, r, adminviews.FormsListPage(pc, viewData))
 }
 
+// FormsAPI handles GET /admin/forms/api - returns active forms as JSON for the form picker.
+func (h *FormsHandler) FormsAPI(w http.ResponseWriter, r *http.Request) {
+	forms, err := h.queries.ListActiveForms(r.Context())
+	if err != nil {
+		slog.Error("failed to list active forms for API", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	type formAPIItem struct {
+		ID          int64  `json:"id"`
+		Name        string `json:"name"`
+		Slug        string `json:"slug"`
+		Title       string `json:"title"`
+		Description string `json:"description,omitempty"`
+	}
+
+	items := make([]formAPIItem, 0, len(forms))
+	for _, f := range forms {
+		item := formAPIItem{
+			ID:    f.ID,
+			Name:  f.Name,
+			Slug:  f.Slug,
+			Title: f.Title,
+		}
+		if f.Description.Valid {
+			item.Description = f.Description.String
+		}
+		items = append(items, item)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"items": items,
+	})
+}
+
 // FormTranslationInfo holds information about a form translation.
 type FormTranslationInfo struct {
 	Language store.Language
@@ -1352,6 +1389,13 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	// HTMX request from embedded form — return just the form fragment
+	if r.Header.Get("HX-Request") != "" {
+		embedData := h.buildEmbeddedFormData(r, form, fields, fieldErrors, values, false)
+		renderTempl(w, r, EmbeddedForm(embedData))
+		return
+	}
+
 	// Build template data with theme support
 	base := h.getBaseTemplateData(r, form.Title)
 	data := FormTemplateData{
@@ -1369,6 +1413,13 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 
 // renderFormSuccess renders the form success page.
 func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request, form store.Form, fields []store.FormField) {
+	// HTMX request from embedded form — return just the success fragment
+	if r.Header.Get("HX-Request") != "" {
+		embedData := h.buildEmbeddedFormData(r, form, fields, nil, nil, true)
+		renderTempl(w, r, EmbeddedForm(embedData))
+		return
+	}
+
 	// Build template data with theme support
 	base := h.getBaseTemplateData(r, form.Title)
 	data := FormTemplateData{
@@ -2166,6 +2217,64 @@ func fieldValueContains(value, option string) bool {
 		return false
 	}
 	return strings.Contains(value, option)
+}
+
+// buildEmbeddedFormData builds EmbeddedFormData for HTMX responses from embedded forms.
+func (h *FormsHandler) buildEmbeddedFormData(r *http.Request, form store.Form, fields []store.FormField, fieldErrors map[string]string, values map[string]string, success bool) EmbeddedFormData {
+	pubFields := make([]PublicFormField, 0, len(fields))
+	for _, f := range fields {
+		pf := PublicFormField{
+			ID:         f.ID,
+			Type:       f.Type,
+			Name:       f.Name,
+			Label:      f.Label,
+			IsRequired: f.IsRequired,
+		}
+		if f.Placeholder.Valid {
+			pf.Placeholder = f.Placeholder.String
+		}
+		if f.HelpText.Valid {
+			pf.HelpText = f.HelpText.String
+		}
+		if f.Options.Valid && f.Options.String != "" && f.Options.String != "[]" {
+			pf.Options = parseFieldOptions(f.Options.String)
+		}
+		pubFields = append(pubFields, pf)
+	}
+
+	if fieldErrors == nil {
+		fieldErrors = make(map[string]string)
+	}
+	if values == nil {
+		values = make(map[string]string)
+	}
+
+	description := ""
+	if form.Description.Valid {
+		description = form.Description.String
+	}
+	successMsg := ""
+	if form.SuccessMessage.Valid {
+		successMsg = form.SuccessMessage.String
+	}
+
+	langCode := ""
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		langCode = langInfo.Code
+	}
+
+	return EmbeddedFormData{
+		FormSlug:       form.Slug,
+		FormTitle:      form.Title,
+		Description:    description,
+		SuccessMessage: successMsg,
+		Fields:         pubFields,
+		Errors:         fieldErrors,
+		Values:         values,
+		Success:        success,
+		CaptchaWidget:  h.getCaptchaWidget(r.Context()),
+		Lang:           langCode,
+	}
 }
 
 // getBaseTemplateData builds base template data for form rendering.

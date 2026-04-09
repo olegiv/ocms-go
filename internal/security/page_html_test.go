@@ -22,3 +22,27 @@ func TestSanitizePageHTML(t *testing.T) {
 		t.Fatalf("expected safe paragraph preserved, got %q", got)
 	}
 }
+
+func TestSanitizePageHTML_PreservesFormEmbed(t *testing.T) {
+	raw := `<p>Before</p><div data-ocms-form="contact-form" class="ocms-embedded-form">Form: Contact</div><p>After</p>`
+	got := SanitizePageHTML(raw)
+
+	if !strings.Contains(got, `data-ocms-form="contact-form"`) {
+		t.Fatalf("expected data-ocms-form attribute preserved, got %q", got)
+	}
+	if !strings.Contains(got, `class="ocms-embedded-form"`) {
+		t.Fatalf("expected ocms-embedded-form class preserved, got %q", got)
+	}
+	if !strings.Contains(got, "<p>Before</p>") {
+		t.Fatalf("expected surrounding content preserved, got %q", got)
+	}
+}
+
+func TestSanitizePageHTML_RejectsInvalidFormSlug(t *testing.T) {
+	raw := `<div data-ocms-form="<script>alert(1)</script>" class="ocms-embedded-form">XSS</div>`
+	got := SanitizePageHTML(raw)
+
+	if strings.Contains(got, "<script") {
+		t.Fatalf("expected script in attribute to be stripped, got %q", got)
+	}
+}

@@ -6,6 +6,7 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -879,5 +880,175 @@ func TestFormFormDataWithTranslations(t *testing.T) {
 	}
 	if data.Translations[0].Language.Code != "ru" {
 		t.Errorf("Translation language = %q, want %q", data.Translations[0].Language.Code, "ru")
+	}
+}
+
+func TestFormsAPI_ReturnsActiveForms(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	// Create an active form
+	_, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Contact Form",
+		Slug:      "contact",
+		Title:     "Contact Us",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	// Create an inactive form
+	_, err = queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Draft Form",
+		Slug:      "draft",
+		Title:     "Draft",
+		IsActive:  false,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/forms/api", nil)
+	rr := httptest.NewRecorder()
+
+	h.FormsAPI(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("FormsAPI status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var response struct {
+		Items []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+			Slug string `json:"slug"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(response.Items) != 1 {
+		t.Fatalf("expected 1 active form, got %d", len(response.Items))
+	}
+	if response.Items[0].Slug != "contact" {
+		t.Errorf("expected slug %q, got %q", "contact", response.Items[0].Slug)
+	}
+}
+
+func TestFormsAPI_EmptyWhenNoActiveForms(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	// Create only an inactive form
+	_, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Draft Form",
+		Slug:      "draft",
+		Title:     "Draft",
+		IsActive:  false,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/forms/api", nil)
+	rr := httptest.NewRecorder()
+
+	h.FormsAPI(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("FormsAPI status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var response struct {
+		Items []struct{} `json:"items"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(response.Items) != 0 {
+		t.Fatalf("expected 0 items, got %d", len(response.Items))
+	}
+}
+
+func TestBuildEmbeddedFormData(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+
+	form := store.Form{
+		ID:       1,
+		Name:     "Test Form",
+		Slug:     "test-form",
+		Title:    "Test",
+		IsActive: true,
+		Description: sql.NullString{
+			String: "A test form",
+			Valid:  true,
+		},
+		SuccessMessage: sql.NullString{
+			String: "Thanks!",
+			Valid:  true,
+		},
+	}
+
+	fields := []store.FormField{
+		{
+			ID:         1,
+			FormID:     1,
+			Type:       "text",
+			Name:       "name",
+			Label:      "Name",
+			IsRequired: true,
+		},
+		{
+			ID:     2,
+			FormID: 1,
+			Type:   "email",
+			Name:   "email",
+			Label:  "Email",
+		},
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/forms/test-form", nil)
+	data := h.buildEmbeddedFormData(req, form, fields, map[string]string{"name": "required"}, map[string]string{"email": "test@example.com"}, false)
+
+	if data.FormSlug != "test-form" {
+		t.Errorf("FormSlug = %q, want %q", data.FormSlug, "test-form")
+	}
+	if data.Description != "A test form" {
+		t.Errorf("Description = %q, want %q", data.Description, "A test form")
+	}
+	if data.SuccessMessage != "Thanks!" {
+		t.Errorf("SuccessMessage = %q, want %q", data.SuccessMessage, "Thanks!")
+	}
+	if len(data.Fields) != 2 {
+		t.Fatalf("Fields count = %d, want 2", len(data.Fields))
+	}
+	if data.Errors["name"] != "required" {
+		t.Errorf("Errors[name] = %q, want %q", data.Errors["name"], "required")
+	}
+	if data.Values["email"] != "test@example.com" {
+		t.Errorf("Values[email] = %q, want %q", data.Values["email"], "test@example.com")
+	}
+	if data.Success {
+		t.Error("expected Success = false")
+	}
+
+	// Test success state
+	successData := h.buildEmbeddedFormData(req, form, fields, nil, nil, true)
+	if !successData.Success {
+		t.Error("expected Success = true for success data")
 	}
 }

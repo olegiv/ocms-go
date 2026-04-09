@@ -255,6 +255,51 @@ Forms support translations via the `language_code` field:
 | `language_code` | TEXT | ISO language code |
 | `created_at` | DATETIME | Submission timestamp |
 
+## Embedding Forms in Pages
+
+Forms can be embedded directly into page content using the TinyMCE editor. Embedded forms render inline within the page and support HTMX-powered submission without page reload.
+
+### Inserting a Form
+
+1. Open the page editor in **Admin > Pages > Edit**
+2. Click the **Insert Form** button (document icon) in the TinyMCE toolbar
+3. Select a form from the picker dialog
+4. The form appears as a styled placeholder block in the editor
+
+### How It Works
+
+When a page containing an embedded form is displayed:
+
+1. The server detects `<div data-ocms-form="slug">` placeholders in the page body
+2. Each placeholder is replaced with the fully rendered form HTML (fields, honeypot, captcha, submit button)
+3. The embedded form uses HTMX (`hx-post`) for inline submission -- the form submits and shows success/error without a full page reload
+4. For browsers without JavaScript, the form falls back to a standard POST to `/forms/{slug}`
+
+### Placeholder Format
+
+The editor inserts this HTML into page content:
+
+```html
+<div data-ocms-form="contact-form" class="ocms-embedded-form">Form: Contact Form</div>
+```
+
+The `data-ocms-form` attribute specifies the form slug. The inner text is a visual label visible only in the editor.
+
+### Limitations
+
+- Only **active** forms can be embedded. Inactive forms display nothing on the public page.
+- Form slugs must match the pattern `[a-z0-9][a-z0-9-]*[a-z0-9]`.
+- Embedded forms are processed only on single page views, not on listing pages (home, category, tag, search).
+- Each embedded form instance has unique IDs to support multiple forms on one page.
+
+### Security
+
+- CSRF protection is handled by the existing middleware (Fetch metadata headers)
+- Honeypot spam protection is included in every embedded form
+- Rate limiting applies via the existing `/forms/{slug}` POST route (1 request/second, burst of 5)
+- The HTML sanitizer preserves `data-ocms-form` attributes with valid slug patterns
+- Captcha integration works if the hCaptcha module is active and the form has a captcha field
+
 ## Environment Variables
 
 | Variable | Default | Description |

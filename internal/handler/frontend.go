@@ -15,22 +15,26 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/a-h/templ"
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
 	"github.com/olegiv/ocms-go/internal/video"
+	"github.com/olegiv/ocms-go/modules/hcaptcha"
 )
 
 // PageView represents a page with computed fields for template rendering.
@@ -408,6 +412,8 @@ type FrontendHandler struct {
 	sanitizePages       bool
 	videoRegistry       *video.Registry
 	moduleFuncsProvider ModuleTemplateFuncsProvider
+	hookRegistry        *module.HookRegistry
+	sessionManager      *scs.SessionManager
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
@@ -446,6 +452,12 @@ func (h *FrontendHandler) SetModuleTemplateFuncsProvider(p ModuleTemplateFuncsPr
 	h.moduleFuncsProvider = p
 }
 
+// SetFormEmbedDeps sets dependencies needed for form embedding in page content.
+func (h *FrontendHandler) SetFormEmbedDeps(hr *module.HookRegistry, sm *scs.SessionManager) {
+	h.hookRegistry = hr
+	h.sessionManager = sm
+}
+
 // callModuleHTMLFuncs calls named template functions and concatenates their HTML output.
 func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce string, names ...string) template.HTML {
 	var sb strings.Builder
@@ -463,13 +475,134 @@ func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce stri
 	return template.HTML(sb.String())
 }
 
+// formEmbedRe matches <div data-ocms-form="slug" ...>...</div> placeholders in page content.
+var formEmbedRe = regexp.MustCompile(`<div\s+data-ocms-form="([a-z0-9][a-z0-9-]*[a-z0-9])"[^>]*>.*?</div>`)
+
 // trustedPageBody returns page HTML for rendering, optionally sanitizing to
-// strip scripts and dangerous attributes.
-func (h *FrontendHandler) trustedPageBody(raw string) template.HTML {
+// strip scripts and dangerous attributes. If r is non-nil, form embed
+// placeholders are replaced with rendered form HTML.
+func (h *FrontendHandler) trustedPageBody(raw string, r *http.Request) template.HTML {
+	if r != nil && strings.Contains(raw, "data-ocms-form") {
+		raw = h.processFormEmbeds(r, raw)
+	}
 	if !h.sanitizePages {
 		return template.HTML(raw)
 	}
 	return template.HTML(security.SanitizePageHTML(raw))
+}
+
+// processFormEmbeds replaces <div data-ocms-form="slug"> placeholders with rendered form HTML.
+func (h *FrontendHandler) processFormEmbeds(r *http.Request, body string) string {
+	ctx := r.Context()
+
+	return formEmbedRe.ReplaceAllStringFunc(body, func(match string) string {
+		// Extract slug from the match
+		subs := formEmbedRe.FindStringSubmatch(match)
+		if len(subs) < 2 {
+			return ""
+		}
+		slug := subs[1]
+
+		// Look up form
+		form, err := h.queries.GetFormBySlug(ctx, slug)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				slog.Error("failed to get form for embed", "error", err, "slug", slug)
+			}
+			return "<!-- form not found: " + html.EscapeString(slug) + " -->"
+		}
+
+		if !form.IsActive {
+			return "<!-- form inactive: " + html.EscapeString(slug) + " -->"
+		}
+
+		// Get form fields
+		fields, err := h.queries.GetFormFields(ctx, form.ID)
+		if err != nil {
+			slog.Error("failed to get form fields for embed", "error", err, "form_id", form.ID)
+			return "<!-- form error -->"
+		}
+
+		// Build view data
+		pubFields := make([]PublicFormField, 0, len(fields))
+		for _, f := range fields {
+			pf := PublicFormField{
+				ID:         f.ID,
+				Type:       f.Type,
+				Name:       f.Name,
+				Label:      f.Label,
+				IsRequired: f.IsRequired,
+			}
+			if f.Placeholder.Valid {
+				pf.Placeholder = f.Placeholder.String
+			}
+			if f.HelpText.Valid {
+				pf.HelpText = f.HelpText.String
+			}
+			if f.Options.Valid && f.Options.String != "" && f.Options.String != "[]" {
+				pf.Options = parseFieldOptions(f.Options.String)
+			}
+			pubFields = append(pubFields, pf)
+		}
+
+		description := ""
+		if form.Description.Valid {
+			description = form.Description.String
+		}
+		successMsg := ""
+		if form.SuccessMessage.Valid {
+			successMsg = form.SuccessMessage.String
+		}
+
+		// Get language code
+		langCode := ""
+		if langInfo := middleware.GetLanguage(r); langInfo != nil {
+			langCode = langInfo.Code
+		}
+
+		// Get captcha widget if available
+		captchaWidget := h.getEmbedCaptchaWidget(ctx)
+
+		data := EmbeddedFormData{
+			FormSlug:       form.Slug,
+			FormTitle:      form.Title,
+			Description:    description,
+			SuccessMessage: successMsg,
+			Fields:         pubFields,
+			Errors:         make(map[string]string),
+			Values:         make(map[string]string),
+			Success:        false,
+			CaptchaWidget:  captchaWidget,
+			Lang:           langCode,
+		}
+
+		// Render the templ component to a string
+		var buf bytes.Buffer
+		if err := EmbeddedForm(data).Render(ctx, &buf); err != nil {
+			slog.Error("failed to render embedded form", "error", err, "slug", slug)
+			return "<!-- form render error -->"
+		}
+		return buf.String()
+	})
+}
+
+// getEmbedCaptchaWidget safely fetches the captcha widget HTML via hooks.
+func (h *FrontendHandler) getEmbedCaptchaWidget(ctx context.Context) string {
+	if h.hookRegistry == nil {
+		return ""
+	}
+	if !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaWidget) {
+		return ""
+	}
+	result, err := h.hookRegistry.Call(ctx, hcaptcha.HookFormCaptchaWidget, nil)
+	if err != nil {
+		slog.Error("failed to get captcha widget for embed", "error", err)
+		return ""
+	}
+	if htmlStr, ok := result.(template.HTML); ok {
+		return string(htmlStr)
+	}
+	return ""
 }
 
 // Home handles the homepage.
@@ -721,6 +854,9 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	// Convert to PageView
 	pageView := h.pageToView(ctx, page, base.LangCode, base.LangPrefix)
+
+	// Process form embeds for single page views (not listings)
+	pageView.Body = h.trustedPageBody(page.Body, r)
 
 	// Update base data with page title and excerpt
 	base.Title = pageView.Title
@@ -1196,7 +1332,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			ID:        sr.ID,
 			Title:     sr.Title,
 			Slug:      sr.Slug,
-			Body:      h.trustedPageBody(sr.Body),
+			Body:      h.trustedPageBody(sr.Body, nil),
 			Excerpt:   sr.Excerpt,
 			Highlight: cleanHighlight,
 			URL:       "/" + sr.Slug,
@@ -1416,7 +1552,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		ID:         p.ID,
 		Title:      p.Title,
 		Slug:       p.Slug,
-		Body:       h.trustedPageBody(p.Body),
+		Body:       h.trustedPageBody(p.Body, nil),
 		URL:        "/" + p.Slug,
 		Status:     p.Status,
 		Type:       p.PageType,

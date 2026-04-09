@@ -1943,6 +1943,26 @@
             "translation": "Submit"
         },
         {
+            "id": "forms.embed.insert_form",
+            "message": "Insert Form",
+            "translation": "Insert Form"
+        },
+        {
+            "id": "forms.embed.select_form",
+            "message": "Select a form to embed",
+            "translation": "Select a form to embed"
+        },
+        {
+            "id": "forms.embed.no_forms",
+            "message": "No active forms available",
+            "translation": "No active forms available"
+        },
+        {
+            "id": "forms.embed.form_not_found",
+            "message": "Form not found or inactive",
+            "translation": "Form not found or inactive"
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Themes"

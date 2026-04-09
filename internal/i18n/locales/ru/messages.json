@@ -1943,6 +1943,26 @@
             "translation": "Отправить"
         },
         {
+            "id": "forms.embed.insert_form",
+            "message": "Insert Form",
+            "translation": "Вставить форму"
+        },
+        {
+            "id": "forms.embed.select_form",
+            "message": "Select a form to embed",
+            "translation": "Выберите форму для встраивания"
+        },
+        {
+            "id": "forms.embed.no_forms",
+            "message": "No active forms available",
+            "translation": "Нет доступных активных форм"
+        },
+        {
+            "id": "forms.embed.form_not_found",
+            "message": "Form not found or inactive",
+            "translation": "Форма не найдена или неактивна"
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Темы"

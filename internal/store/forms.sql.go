@@ -648,6 +648,45 @@ func (q *Queries) GetRecentSubmissionsWithForm(ctx context.Context, limit int64)
 	return items, nil
 }
 
+const listActiveForms = `-- name: ListActiveForms :many
+SELECT id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at FROM forms WHERE is_active = 1 ORDER BY name
+`
+
+func (q *Queries) ListActiveForms(ctx context.Context) ([]Form, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveForms)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Form{}
+	for rows.Next() {
+		var i Form
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.SuccessMessage,
+			&i.EmailTo,
+			&i.IsActive,
+			&i.LanguageCode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listForms = `-- name: ListForms :many
 SELECT id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at FROM forms ORDER BY name LIMIT ? OFFSET ?
 `

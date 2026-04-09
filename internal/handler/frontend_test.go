@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -226,7 +227,7 @@ func TestFrontendHandler_TrustedPageBody_DefaultBypass(t *testing.T) {
 	h := &FrontendHandler{}
 
 	raw := `<p>Hello</p><script>alert('xss')</script>`
-	got := string(h.trustedPageBody(raw))
+	got := string(h.trustedPageBody(raw, nil))
 
 	if got != raw {
 		t.Fatalf("trustedPageBody() = %q, want %q", got, raw)
@@ -238,7 +239,7 @@ func TestFrontendHandler_TrustedPageBody_SanitizesWhenEnabled(t *testing.T) {
 	h.SetSanitizePageHTML(true)
 
 	raw := `<p>Hello</p><script>alert('xss')</script><a href="javascript:alert(1)">link</a>`
-	got := string(h.trustedPageBody(raw))
+	got := string(h.trustedPageBody(raw, nil))
 
 	if strings.Contains(got, "<script") {
 		t.Fatalf("trustedPageBody() should strip script tags, got %q", got)
@@ -248,6 +249,186 @@ func TestFrontendHandler_TrustedPageBody_SanitizesWhenEnabled(t *testing.T) {
 	}
 	if !strings.Contains(got, "<p>Hello</p>") {
 		t.Fatalf("trustedPageBody() should keep safe content, got %q", got)
+	}
+}
+
+func TestProcessFormEmbeds_ValidForm(t *testing.T) {
+	db := testDB(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	// Create an active form with fields
+	form, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Contact Form",
+		Slug:      "contact",
+		Title:     "Contact Us",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	_, err = queries.CreateFormField(context.Background(), store.CreateFormFieldParams{
+		FormID:    form.ID,
+		Type:      "text",
+		Name:      "name",
+		Label:     "Your Name",
+		Position:  1,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateFormField failed: %v", err)
+	}
+
+	h := &FrontendHandler{db: db, queries: queries}
+	r := httptest.NewRequest(http.MethodGet, "/test-page", nil)
+
+	body := `<p>Hello</p><div data-ocms-form="contact" class="ocms-embedded-form">Form: Contact</div><p>After</p>`
+	result := h.processFormEmbeds(r, body)
+
+	if strings.Contains(result, "data-ocms-form") {
+		t.Error("placeholder should be replaced, but data-ocms-form still present")
+	}
+	if !strings.Contains(result, "ocms-embedded-form-rendered") {
+		t.Error("expected rendered form HTML with class 'ocms-embedded-form-rendered'")
+	}
+	if !strings.Contains(result, "contact") {
+		t.Error("expected form slug in rendered output")
+	}
+	if !strings.Contains(result, "<p>Hello</p>") {
+		t.Error("expected surrounding content to be preserved")
+	}
+	if !strings.Contains(result, "<p>After</p>") {
+		t.Error("expected trailing content to be preserved")
+	}
+}
+
+func TestProcessFormEmbeds_NonexistentForm(t *testing.T) {
+	db := testDB(t)
+	h := &FrontendHandler{db: db, queries: store.New(db)}
+	r := httptest.NewRequest(http.MethodGet, "/test-page", nil)
+
+	body := `<p>Before</p><div data-ocms-form="nonexistent" class="ocms-embedded-form">Form: NA</div><p>After</p>`
+	result := h.processFormEmbeds(r, body)
+
+	if strings.Contains(result, "ocms-embedded-form-rendered") {
+		t.Error("should not render form for nonexistent slug")
+	}
+	if !strings.Contains(result, "form not found") {
+		t.Error("expected 'form not found' comment for nonexistent form")
+	}
+	if !strings.Contains(result, "<p>Before</p>") {
+		t.Error("expected surrounding content to be preserved")
+	}
+}
+
+func TestProcessFormEmbeds_InactiveForm(t *testing.T) {
+	db := testDB(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	_, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Inactive Form",
+		Slug:      "inactive",
+		Title:     "Inactive",
+		IsActive:  false,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	h := &FrontendHandler{db: db, queries: queries}
+	r := httptest.NewRequest(http.MethodGet, "/test-page", nil)
+
+	body := `<div data-ocms-form="inactive" class="ocms-embedded-form">Form</div>`
+	result := h.processFormEmbeds(r, body)
+
+	if strings.Contains(result, "ocms-embedded-form-rendered") {
+		t.Error("should not render inactive form")
+	}
+	if !strings.Contains(result, "form inactive") {
+		t.Error("expected 'form inactive' comment")
+	}
+}
+
+func TestProcessFormEmbeds_MultipleEmbeds(t *testing.T) {
+	db := testDB(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	_, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name: "Form A", Slug: "form-a", Title: "Form A",
+		IsActive: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+	_, err = queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name: "Form B", Slug: "form-b", Title: "Form B",
+		IsActive: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	h := &FrontendHandler{db: db, queries: queries}
+	r := httptest.NewRequest(http.MethodGet, "/test-page", nil)
+
+	body := `<div data-ocms-form="form-a" class="ocms-embedded-form">A</div><div data-ocms-form="form-b" class="ocms-embedded-form">B</div>`
+	result := h.processFormEmbeds(r, body)
+
+	if !strings.Contains(result, "ocms-form-form-a") {
+		t.Error("expected rendered form-a")
+	}
+	if !strings.Contains(result, "ocms-form-form-b") {
+		t.Error("expected rendered form-b")
+	}
+}
+
+func TestProcessFormEmbeds_NoEmbeds(t *testing.T) {
+	db := testDB(t)
+	h := &FrontendHandler{db: db, queries: store.New(db)}
+	r := httptest.NewRequest(http.MethodGet, "/test-page", nil)
+
+	body := `<p>No forms here</p>`
+	result := h.processFormEmbeds(r, body)
+
+	if result != body {
+		t.Errorf("expected body to be unchanged, got %q", result)
+	}
+}
+
+func TestFormEmbedRegex(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		matches bool
+		slug    string
+	}{
+		{"valid slug", `<div data-ocms-form="contact-form" class="ocms-embedded-form">Form</div>`, true, "contact-form"},
+		{"slug with numbers", `<div data-ocms-form="form-123" class="ocms-embedded-form">Form</div>`, true, "form-123"},
+		{"no match - no attribute", `<div class="some-class">Content</div>`, false, ""},
+		{"no match - invalid slug chars", `<div data-ocms-form="UPPER" class="ocms-embedded-form">Form</div>`, false, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matches := formEmbedRe.FindStringSubmatch(tt.input)
+			if tt.matches && len(matches) < 2 {
+				t.Error("expected match but got none")
+			}
+			if !tt.matches && len(matches) >= 2 {
+				t.Errorf("expected no match but got slug %q", matches[1])
+			}
+			if tt.matches && len(matches) >= 2 && matches[1] != tt.slug {
+				t.Errorf("slug = %q, want %q", matches[1], tt.slug)
+			}
+		})
 	}
 }
 
