@@ -6,7 +6,9 @@ package store
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"image"
 	"image/color"
@@ -24,13 +26,11 @@ import (
 
 // Demo mode credentials
 const (
-	DemoAdminEmail    = "demo@example.com"
-	DemoAdminPassword = "demo1234demo"
-	DemoAdminName     = "Demo Admin"
+	DemoAdminEmail = "demo@example.com"
+	DemoAdminName  = "Demo Admin"
 
-	DemoEditorEmail    = "editor@example.com"
-	DemoEditorPassword = "demo1234demo"
-	DemoEditorName     = "Demo Editor"
+	DemoEditorEmail = "editor@example.com"
+	DemoEditorName  = "Demo Editor"
 )
 
 // SeedDemo creates demo content for showcasing oCMS functionality.
@@ -106,7 +106,7 @@ func SeedDemoInformerSettings(db *sql.DB) error {
 		return nil
 	}
 
-	const demoText = `This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Login: <strong>demo@example.com</strong> / <strong>demo1234demo</strong>`
+	const demoText = `This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Set <strong>OCMS_DEMO_ADMIN_PASSWORD</strong> to sign in as <strong>demo@example.com</strong>.`
 
 	_, err = db.Exec(`
 		UPDATE informer_settings SET
@@ -135,9 +135,25 @@ func seedDemoUsers(ctx context.Context, queries *Queries) (int64, error) {
 	}
 
 	now := time.Now()
+	adminPassword := os.Getenv("OCMS_DEMO_ADMIN_PASSWORD")
+	if adminPassword == "" {
+		adminPassword, err = generateDemoPassword()
+		if err != nil {
+			return 0, fmt.Errorf("generating admin password: %w", err)
+		}
+		slog.Warn("OCMS_DEMO_ADMIN_PASSWORD is not set; generated a random admin password for this seeded demo instance")
+	}
+
+	editorPassword := os.Getenv("OCMS_DEMO_EDITOR_PASSWORD")
+	if editorPassword == "" {
+		editorPassword, err = generateDemoPassword()
+		if err != nil {
+			return 0, fmt.Errorf("generating editor password: %w", err)
+		}
+	}
 
 	// Create demo admin
-	adminHash, err := auth.HashPassword(DemoAdminPassword)
+	adminHash, err := auth.HashPassword(adminPassword)
 	if err != nil {
 		return 0, fmt.Errorf("hashing admin password: %w", err)
 	}
@@ -155,7 +171,7 @@ func seedDemoUsers(ctx context.Context, queries *Queries) (int64, error) {
 	}
 
 	// Create demo editor
-	editorHash, err := auth.HashPassword(DemoEditorPassword)
+	editorHash, err := auth.HashPassword(editorPassword)
 	if err != nil {
 		return 0, fmt.Errorf("hashing editor password: %w", err)
 	}
@@ -175,10 +191,17 @@ func seedDemoUsers(ctx context.Context, queries *Queries) (int64, error) {
 	slog.Info("created demo users",
 		"admin_email", DemoAdminEmail,
 		"editor_email", DemoEditorEmail,
-		"password", DemoAdminPassword,
 	)
 
 	return admin.ID, nil
+}
+
+func generateDemoPassword() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 func seedDemoCategories(ctx context.Context, queries *Queries, langCode string) (map[string]int64, error) {
@@ -792,7 +815,7 @@ func getHomePageBody() string {
 <li><strong>Admin Panel</strong> - Login to explore the full admin interface</li>
 </ul>
 
-<p><em>Demo credentials: <code>demo@example.com</code> / <code>demo1234demo</code></em></p>`
+<p><em>Set environment variable <code>OCMS_DEMO_ADMIN_PASSWORD</code> to enable demo admin login for <code>demo@example.com</code>.</em></p>`
 }
 
 func getAboutPageBody() string {
