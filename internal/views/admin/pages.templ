@@ -1877,20 +1877,57 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 				this.grid.innerHTML = '<div class="editor-image-empty"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><p>No images found</p><a href="/admin/media/upload" class="btn btn-primary btn-sm" target="_blank">Upload Images</a></div>';
 				return;
 			}
+
 			this.currentItems = items;
-			const gridHTML = items.map(item => {
+			this.grid.innerHTML = '';
+
+			const gridContainer = document.createElement('div');
+			gridContainer.className = 'editor-image-grid';
+
+			items.forEach(item => {
 				const isSelected = this.selectedImage?.id === item.id;
 				const thumbnailUrl = item.thumbnail || item.filepath;
-				return `<div class="editor-image-item ${isSelected ? 'is-selected' : ''}" data-id="${item.id}"><div class="editor-image-item-preview"><img src="${thumbnailUrl}" alt="${item.filename || ''}"></div><div class="editor-image-item-info"><span class="editor-image-item-name">${item.filename || 'Untitled'}</span></div>${isSelected ? '<div class="editor-image-item-check"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : ''}</div>`;
-			}).join('');
-			this.grid.innerHTML = `<div class="editor-image-grid">${gridHTML}</div>`;
-			this.grid.querySelectorAll('.editor-image-item').forEach(item => {
-				item.addEventListener('click', () => {
-					const id = parseInt(item.dataset.id, 10);
+
+				const itemEl = document.createElement('div');
+				itemEl.className = `editor-image-item${isSelected ? ' is-selected' : ''}`;
+				itemEl.dataset.id = String(item.id);
+
+				const previewEl = document.createElement('div');
+				previewEl.className = 'editor-image-item-preview';
+
+				const imgEl = document.createElement('img');
+				imgEl.src = thumbnailUrl || '';
+				imgEl.alt = item.filename || '';
+				previewEl.appendChild(imgEl);
+
+				const infoEl = document.createElement('div');
+				infoEl.className = 'editor-image-item-info';
+
+				const nameEl = document.createElement('span');
+				nameEl.className = 'editor-image-item-name';
+				nameEl.textContent = item.filename || 'Untitled';
+				infoEl.appendChild(nameEl);
+
+				itemEl.appendChild(previewEl);
+				itemEl.appendChild(infoEl);
+
+				if (isSelected) {
+					const checkEl = document.createElement('div');
+					checkEl.className = 'editor-image-item-check';
+					checkEl.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+					itemEl.appendChild(checkEl);
+				}
+
+				itemEl.addEventListener('click', () => {
+					const id = parseInt(itemEl.dataset.id, 10);
 					const selectedItem = this.currentItems.find(i => i.id === id);
 					if (selectedItem) this.selectImage(selectedItem);
 				});
+
+				gridContainer.appendChild(itemEl);
 			});
+
+			this.grid.appendChild(gridContainer);
 		},
 		selectImage(item) {
 			this.selectedImage = item;
