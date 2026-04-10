@@ -6,7 +6,10 @@ package store
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -93,7 +96,7 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 
 // SeedDemoInformerSettings enables the informer bar with demo credentials.
 // Must be called after module initialization (informer module creates the table).
-func SeedDemoInformerSettings(db *sql.DB) error {
+func SeedDemoInformerSettings(db *sql.DB, adminPassword string) error {
 	if os.Getenv("OCMS_DEMO_MODE") != "true" {
 		return nil
 	}
@@ -106,7 +109,15 @@ func SeedDemoInformerSettings(db *sql.DB) error {
 		return nil
 	}
 
-	const demoText = `This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Login: <strong>demo@example.com</strong> / <strong>demo1234demo</strong>`
+	password := adminPassword
+	if password == "" {
+		password = DemoAdminPassword
+	}
+	demoText := fmt.Sprintf(
+		`This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Login: <strong>%s</strong> / <strong>%s</strong>`,
+		DemoAdminEmail,
+		password,
+	)
 
 	_, err = db.Exec(`
 		UPDATE informer_settings SET
@@ -124,6 +135,46 @@ func SeedDemoInformerSettings(db *sql.DB) error {
 
 	slog.Info("demo informer bar enabled")
 	return nil
+}
+
+// RotateDemoAdminPassword rotates the demo admin password and returns the new password.
+// Rotation only occurs when OCMS_DEMO_MODE=true and the demo admin account exists.
+func RotateDemoAdminPassword(ctx context.Context, db *sql.DB) (string, error) {
+	if os.Getenv("OCMS_DEMO_MODE") != "true" {
+		return "", nil
+	}
+
+	queries := New(db)
+	admin, err := queries.GetUserByEmail(ctx, DemoAdminEmail)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", fmt.Errorf("loading demo admin account: %w", err)
+	}
+	if admin.Role != "admin" {
+		return "", nil
+	}
+
+	raw := make([]byte, 18)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("generating demo admin password: %w", err)
+	}
+	password := "demo-" + base64.RawURLEncoding.EncodeToString(raw)
+
+	passwordHash, err := auth.HashPassword(password)
+	if err != nil {
+		return "", fmt.Errorf("hashing rotated demo admin password: %w", err)
+	}
+	if err := queries.UpdateUserPassword(ctx, UpdateUserPasswordParams{
+		PasswordHash: passwordHash,
+		UpdatedAt:    time.Now(),
+		ID:           admin.ID,
+	}); err != nil {
+		return "", fmt.Errorf("updating demo admin password: %w", err)
+	}
+
+	return password, nil
 }
 
 func seedDemoUsers(ctx context.Context, queries *Queries) (int64, error) {
@@ -792,7 +843,7 @@ func getHomePageBody() string {
 <li><strong>Admin Panel</strong> - Login to explore the full admin interface</li>
 </ul>
 
-<p><em>Demo credentials: <code>demo@example.com</code> / <code>demo1234demo</code></em></p>`
+<p><em>Demo login credentials are shown in the banner at the top of the page. The admin password is rotated on every restart for security.</em></p>`
 }
 
 func getAboutPageBody() string {
