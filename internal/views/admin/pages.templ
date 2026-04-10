@@ -2180,7 +2180,7 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 										<strong>{ pc.T("pages.content") }:</strong>
 										<div class="content-preview">
 											if version.Body != "" {
-												@templ.Raw(version.Body)
+												{ version.Body }
 											} else {
 												<em class="text-muted">{ pc.T("forms.no_content") }</em>
 											}
