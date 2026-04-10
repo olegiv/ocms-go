@@ -6,6 +6,8 @@ package store
 import (
 	"image"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/auth"
 )
 
 func TestSeedDemo(t *testing.T) {
@@ -270,6 +272,63 @@ func TestSeedDemoUsers(t *testing.T) {
 	}
 	if adminID2 != adminID {
 		t.Errorf("second call returned adminID=%d, want %d", adminID2, adminID)
+	}
+}
+
+func TestRotateDemoAdminPassword(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+	t.Setenv("OCMS_DEMO_MODE", "true")
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	if err := SeedDemo(ctx, db); err != nil {
+		t.Fatalf("SeedDemo: %v", err)
+	}
+
+	password, err := RotateDemoAdminPassword(ctx, db)
+	if err != nil {
+		t.Fatalf("RotateDemoAdminPassword: %v", err)
+	}
+	if password == "" {
+		t.Fatal("expected rotated demo admin password to be returned")
+	}
+	if password == DemoAdminPassword {
+		t.Fatal("expected rotated password to differ from seeded default demo password")
+	}
+
+	admin, err := q.GetUserByEmail(ctx, DemoAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail(%s): %v", DemoAdminEmail, err)
+	}
+	valid, err := auth.CheckPassword(password, admin.PasswordHash)
+	if err != nil {
+		t.Fatalf("CheckPassword: %v", err)
+	}
+	if !valid {
+		t.Fatal("expected rotated password to authenticate against stored hash")
+	}
+}
+
+func TestRotateDemoAdminPassword_DisabledWhenNotDemoMode(t *testing.T) {
+	db, cleanup, ctx, _ := testSetup(t)
+	defer cleanup()
+	t.Setenv("OCMS_DEMO_MODE", "")
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	if err := SeedDemo(ctx, db); err != nil {
+		t.Fatalf("SeedDemo: %v", err)
+	}
+
+	password, err := RotateDemoAdminPassword(ctx, db)
+	if err != nil {
+		t.Fatalf("RotateDemoAdminPassword: %v", err)
+	}
+	if password != "" {
+		t.Fatalf("expected no rotated password outside demo mode, got %q", password)
 	}
 }
 
