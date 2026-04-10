@@ -8,11 +8,14 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 )
 
@@ -458,5 +461,29 @@ func TestAuditRequiredWebhookAllowedHostPolicyPosture_AllowsConfiguredAllowlist(
 
 	if err := auditRequiredWebhookAllowedHostPolicyPosture(context.Background(), db, "hooks.example.com"); err != nil {
 		t.Fatalf("expected configured webhook allowlist to pass, got: %v", err)
+	}
+}
+
+func TestRunPreModulePostureAudits_RejectsDefaultAdminCredsInProduction(t *testing.T) {
+	db := newPolicyTestDB(t)
+	cfg := &config.Config{Env: "production"}
+
+	err := runPreModulePostureAudits(context.Background(), cfg, db, true, nil, nil)
+	if err == nil {
+		t.Fatal("expected error when default admin credentials are active in production")
+	}
+	if !strings.Contains(err.Error(), store.DefaultAdminEmail) {
+		t.Fatalf("expected error to mention default admin account, got: %v", err)
+	}
+}
+
+func TestRunPreModulePostureAudits_RejectsDefaultAdminCredsInProductionDemoMode(t *testing.T) {
+	t.Setenv("OCMS_DEMO_MODE", "true")
+	db := newPolicyTestDB(t)
+	cfg := &config.Config{Env: "production"}
+
+	err := runPreModulePostureAudits(context.Background(), cfg, db, true, nil, nil)
+	if err == nil {
+		t.Fatal("expected error when default admin credentials are active in production even in demo mode")
 	}
 }

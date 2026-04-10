@@ -908,7 +908,7 @@ func runPreModulePostureAudits(
 	if cfg.Env != "production" {
 		return nil
 	}
-	if hasDefaultAdminCreds && os.Getenv("OCMS_DEMO_MODE") != "true" {
+	if hasDefaultAdminCreds {
 		return fmt.Errorf(
 			"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
 			store.DefaultAdminEmail,
@@ -1238,6 +1238,17 @@ func run() error {
 			return fmt.Errorf("seeding demo content: %w", err)
 		}
 	}
+	demoAdminPassword, err := store.RotateDemoAdminPassword(ctx, db)
+	if err != nil {
+		return fmt.Errorf("rotating demo admin password: %w", err)
+	}
+	if demoAdminPassword != "" {
+		slog.Warn(
+			"demo admin password rotated for this startup",
+			"email", store.DemoAdminEmail,
+			"password", demoAdminPassword,
+		)
+	}
 
 	// Update i18n from database settings
 	queries := store.New(db)
@@ -1357,8 +1368,8 @@ func run() error {
 	}()
 
 	// Seed demo informer settings (must run after module init creates the table)
-	if cfg.DoSeed {
-		if err := store.SeedDemoInformerSettings(db); err != nil {
+	if cfg.DoSeed || middleware.IsDemoMode() {
+		if err := store.SeedDemoInformerSettings(db, demoAdminPassword); err != nil {
 			slog.Warn("failed to seed demo informer settings", "error", err)
 		} else if mod, ok := moduleRegistry.Get("informer"); ok {
 			if inf, ok := mod.(*informer.Module); ok {
