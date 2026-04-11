@@ -103,7 +103,26 @@ var (
 	revokeAPIKeyOnSourceChange   bool
 	revokeAPIKeyOnSourceChangeMu sync.RWMutex
 	apiKeySourceTracker          = newAPIKeySourceTracker(24 * time.Hour)
+	apiKeyVerifySlots            = make(chan struct{}, apiKeyVerifyMaxConcurrent)
 )
+
+const apiKeyVerifyMaxConcurrent = 8
+
+func tryAcquireAPIKeyVerifySlot() bool {
+	select {
+	case apiKeyVerifySlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func releaseAPIKeyVerifySlot() {
+	select {
+	case <-apiKeyVerifySlots:
+	default:
+	}
+}
 
 // SetRequireAPIKeyExpiry configures whether API keys must have an expiration timestamp.
 func SetRequireAPIKeyExpiry(required bool) {
@@ -524,10 +543,24 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	// Find matching key by verifying hash
 	var matchedKey *store.ApiKey
 	for i := range apiKeys {
+		if !tryAcquireAPIKeyVerifySlot() {
+			slog.Warn("API key verification throttled due to concurrency limit",
+				"ip", clientIP,
+				"path", r.URL.Path,
+				"prefix", prefix)
+			if required {
+				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many authentication attempts. Please slow down.", nil)
+				return nil, true
+			}
+			return nil, false
+		}
+
 		if model.CheckAPIKeyHash(rawKey, apiKeys[i].KeyHash) {
+			releaseAPIKeyVerifySlot()
 			matchedKey = &apiKeys[i]
 			break
 		}
+		releaseAPIKeyVerifySlot()
 	}
 
 	if matchedKey == nil {

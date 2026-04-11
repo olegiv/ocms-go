@@ -416,6 +416,36 @@ func TestAPIKeyAuth_ValidKey(t *testing.T) {
 	}
 }
 
+func TestAPIKeyAuth_VerificationConcurrencyLimit(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	rawKey := insertTestAPIKey(t, db, "Test Key", []string{"pages:read"}, true, nil)
+
+	originalSlots := apiKeyVerifySlots
+	limitedSlots := make(chan struct{}, 1)
+	limitedSlots <- struct{}{} // fill slot to force throttling
+	apiKeyVerifySlots = limitedSlots
+	t.Cleanup(func() {
+		apiKeyVerifySlots = originalSlots
+	})
+
+	handler := APIKeyAuth(db)(simpleOKHandler)
+	w := executeAuthRequest(handler, "Bearer "+rawKey)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected status %d, got %d", http.StatusTooManyRequests, w.Code)
+	}
+
+	var resp APIError
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Error.Code != "rate_limit_exceeded" {
+		t.Fatalf("expected error code %q, got %q", "rate_limit_exceeded", resp.Error.Code)
+	}
+}
+
 func TestAPIKeyAuth_ValidKeyWithFutureExpiry(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
