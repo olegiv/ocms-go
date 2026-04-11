@@ -4,7 +4,9 @@
 package render
 
 import (
+	"bytes"
 	"database/sql"
+	"html/template"
 	"testing"
 	"time"
 
@@ -92,6 +94,94 @@ func TestBlankLinesRegex(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSanitizeCustomCSS(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  template.CSS
+	}{
+		{
+			name:  "normal stylesheet is passed through",
+			input: "body { color: red; }",
+			want:  "body { color: red; }",
+		},
+		{
+			name:  "selectors with braces survive",
+			input: ".st-btn:hover { background: #123456; } a { color: red; }",
+			want:  ".st-btn:hover { background: #123456; } a { color: red; }",
+		},
+		{
+			name:  "closing style tag is stripped",
+			input: "body{}</style><script>alert(1)</script>",
+			want:  "body{}><script>alert(1)</script>",
+		},
+		{
+			name:  "closing style tag is case-insensitive",
+			input: "body{}</StYlE ><script>x</script>",
+			want:  "body{} ><script>x</script>",
+		},
+		{
+			name:  "closing style tag without closing bracket",
+			input: "body{}</style",
+			want:  "body{}",
+		},
+		{
+			name:  "empty input",
+			input: "",
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeCustomCSS(tt.input); got != tt.want {
+				t.Errorf("sanitizeCustomCSS(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSafeCSS_RendersThroughTemplate(t *testing.T) {
+	r := &Renderer{}
+	funcs := r.TemplateFuncs()
+
+	tmpl, err := template.New("style").Funcs(funcs).Parse(
+		`<style>{{. | safeCSS}}</style>`,
+	)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	// A normal stylesheet must render verbatim — not as ZgotmplZ, which is
+	// what html/template emits when it filters an unknown CSS value.
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, "body { color: red; }"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := buf.String()
+	want := "<style>body { color: red; }</style>"
+	if got != want {
+		t.Errorf("normal CSS: got %q, want %q", got, want)
+	}
+
+	// A breakout attempt must have its </style sequence stripped.
+	buf.Reset()
+	if err := tmpl.Execute(&buf, "body{}</style><script>alert(1)</script>"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got = buf.String()
+	if contains := "</style><script>"; stringContains(got, contains) {
+		t.Errorf("expected %q to be stripped, got %q", contains, got)
+	}
+	if !stringContains(got, "body{}") {
+		t.Errorf("expected stylesheet body to survive, got %q", got)
+	}
+}
+
+func stringContains(haystack, needle string) bool {
+	return bytes.Contains([]byte(haystack), []byte(needle))
 }
 
 func TestFormatDateForLocale(t *testing.T) {

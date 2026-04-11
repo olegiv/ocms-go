@@ -48,7 +48,7 @@
 
     <!-- Custom CSS -->
     {{if .CustomCSS}}
-    <style>{{.CustomCSS | safeHTML}}</style>
+    <style>{{.CustomCSS | safeCSS}}</style>
     {{end}}
 
     <!-- Favicon (served from theme settings or default) -->
