@@ -756,6 +756,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Trigger", "folderCreated")
 		w.WriteHeader(http.StatusOK)
+		escapedFolderName := html.EscapeString(folder.Name)
 		// Return folder list item HTML
 		folderHTML := fmt.Sprintf(`<li class="folder-item" data-folder-id="%d">
 			<a href="/admin/media?folder=%d" class="folder-link">
@@ -763,7 +764,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 				<span class="folder-name">%s</span>
 				<span class="folder-count">0</span>
 			</a>
-		</li>`, folder.ID, folder.ID, folder.Name)
+		</li>`, folder.ID, folder.ID, escapedFolderName)
 		_, _ = w.Write([]byte(folderHTML))
 		return
 	}
