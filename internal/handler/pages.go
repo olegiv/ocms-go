@@ -1116,6 +1116,9 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate page cache after visibility changes.
+	h.invalidatePageCache(id)
+
 	// Get updated page for webhook event
 	updatedPage, err := h.queries.GetPageByID(r.Context(), id)
 	if err == nil {
