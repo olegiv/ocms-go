@@ -592,9 +592,11 @@ func TestPublishPage(t *testing.T) {
 	langCode := getDefaultLangCode(t, q, ctx)
 	now := time.Now()
 
+	scheduledAt := sql.NullTime{Time: now.Add(-1 * time.Hour), Valid: true}
 	created, err := q.CreatePage(ctx, CreatePageParams{
 		Title: "Publish Test", Slug: "publish-test", Body: "<p>Content</p>",
 		Status: "draft", AuthorID: user.ID, LanguageCode: langCode,
+		ScheduledAt: scheduledAt,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -616,6 +618,49 @@ func TestPublishPage(t *testing.T) {
 	}
 	if !published.PublishedAt.Valid {
 		t.Error("PublishedAt should be valid after publishing")
+	}
+	if published.ScheduledAt.Valid {
+		t.Error("ScheduledAt should be cleared after manual publish")
+	}
+}
+
+func TestUnpublishPageClearsScheduledAt(t *testing.T) {
+	_, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+
+	user := createTestUser(t, q, ctx, "author@example.com")
+	langCode := getDefaultLangCode(t, q, ctx)
+	now := time.Now()
+	publishTime := time.Now()
+	scheduledAt := sql.NullTime{Time: now.Add(-1 * time.Hour), Valid: true}
+
+	created, err := q.CreatePage(ctx, CreatePageParams{
+		Title: "Unpublish Test", Slug: "unpublish-test", Body: "<p>Content</p>",
+		Status: "published", AuthorID: user.ID, LanguageCode: langCode,
+		ScheduledAt: scheduledAt,
+		PublishedAt: sql.NullTime{Time: publishTime, Valid: true},
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage: %v", err)
+	}
+
+	unpublished, err := q.UnpublishPage(ctx, UnpublishPageParams{
+		ID:        created.ID,
+		UpdatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("UnpublishPage: %v", err)
+	}
+
+	if unpublished.Status != "draft" {
+		t.Errorf("Status = %q, want %q", unpublished.Status, "draft")
+	}
+	if unpublished.PublishedAt.Valid {
+		t.Error("PublishedAt should be null after unpublish")
+	}
+	if unpublished.ScheduledAt.Valid {
+		t.Error("ScheduledAt should be cleared after manual unpublish")
 	}
 }
 
