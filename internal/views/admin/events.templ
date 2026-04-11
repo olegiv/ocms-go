@@ -202,7 +202,7 @@ templ eventsTable(pc *PageContext, data EventsListData) {
 templ eventIPCell(pc *PageContext, event EventItem, sentinelActive bool) {
 	if event.IPAddress != "" {
 		<code class="text-muted">{ event.IPAddress }</code>
-		if sentinelActive {
+		if sentinelActive && event.RawIPAddress != "" {
 			if event.IsBanned {
 				@badge.Badge(badge.Props{Variant: badge.VariantDestructive, Class: "ban-badge", Attributes: templ.Attributes{"data-ip": event.RawIPAddress}}) {
 					{ pc.T("sentinel.banned") }
