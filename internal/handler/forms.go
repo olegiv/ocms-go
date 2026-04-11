@@ -2044,11 +2044,16 @@ func (h *FormsHandler) TranslateForm(w http.ResponseWriter, r *http.Request) {
 // FormTemplateData holds data for form template rendering.
 type FormTemplateData struct {
 	BaseTemplateData
-	Form      store.Form
-	Fields    []store.FormField
-	Errors    map[string]string
-	Values    map[string]string
-	Success   bool
+	Form    store.Form
+	Fields  []store.FormField
+	Errors  map[string]string
+	Values  map[string]string
+	Success bool
+	// CSRFToken is intentionally left unassigned so existing HTML theme
+	// templates that still reference {{.CSRFToken}} render an empty string
+	// instead of failing with "can't evaluate field CSRFToken". The session
+	// token must not be populated here — see PR #76.
+	CSRFToken template.HTML
 }
 
 // render renders a form page using the active theme's render engine.

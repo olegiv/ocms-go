@@ -4,8 +4,10 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -272,6 +274,31 @@ func TestBuildFormEventDataForMode(t *testing.T) {
 	none := buildFormEventDataForMode(input, formWebhookDataModeNone)
 	if none != nil {
 		t.Errorf("none mode data = %#v, want nil", none)
+	}
+}
+
+// TestFormTemplateData_CSRFTokenCompatibility verifies that HTML theme
+// templates which still reference {{.CSRFToken}} render successfully against
+// FormTemplateData and do not receive a session token value. The starter
+// theme's form.html references .CSRFToken; removing the field would fail
+// html/template execution with "can't evaluate field CSRFToken".
+func TestFormTemplateData_CSRFTokenCompatibility(t *testing.T) {
+	tmpl, err := template.New("form").Parse(
+		`<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">`,
+	)
+	if err != nil {
+		t.Fatalf("parse template: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, FormTemplateData{}); err != nil {
+		t.Fatalf("execute template: %v", err)
+	}
+
+	got := buf.String()
+	want := `<input type="hidden" name="csrf_token" value="">`
+	if got != want {
+		t.Errorf("rendered = %q, want %q", got, want)
 	}
 }
 
