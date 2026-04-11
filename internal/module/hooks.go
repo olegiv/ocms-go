@@ -159,6 +159,25 @@ func (h *HookRegistry) HasHandlers(hookName string) bool {
 	return exists && len(handlers) > 0
 }
 
+// HasActiveHandlers returns true if there are active handlers for the hook.
+func (h *HookRegistry) HasActiveHandlers(hookName string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	handlers, exists := h.hooks[hookName]
+	if !exists || len(handlers) == 0 {
+		return false
+	}
+
+	for _, handler := range handlers {
+		if h.isModuleActive(handler.Module) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // HandlerCount returns the number of handlers registered for a hook.
 func (h *HookRegistry) HandlerCount(hookName string) int {
 	h.mu.RLock()

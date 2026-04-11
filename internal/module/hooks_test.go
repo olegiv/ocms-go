@@ -257,6 +257,35 @@ func TestHookRegistryHasHandlers(t *testing.T) {
 	}
 }
 
+func TestHookRegistryHasActiveHandlers(t *testing.T) {
+	logger := newTestLogger()
+	registry := NewHookRegistry(logger)
+
+	if registry.HasActiveHandlers("test.hook") {
+		t.Error("HasActiveHandlers() = true for unregistered hook")
+	}
+
+	registry.RegisterFunc("test.hook", "handler", "inactive_module", func(ctx context.Context, data any) (any, error) {
+		return data, nil
+	})
+
+	registry.SetIsModuleActive(func(moduleName string) bool {
+		return moduleName != "inactive_module"
+	})
+
+	if registry.HasActiveHandlers("test.hook") {
+		t.Error("HasActiveHandlers() = true with only inactive handlers")
+	}
+
+	registry.RegisterFunc("test.hook", "active_handler", "active_module", func(ctx context.Context, data any) (any, error) {
+		return data, nil
+	})
+
+	if !registry.HasActiveHandlers("test.hook") {
+		t.Error("HasActiveHandlers() = false with active handlers")
+	}
+}
+
 func TestHookRegistryHandlerCount(t *testing.T) {
 	logger := newTestLogger()
 	registry := NewHookRegistry(logger)

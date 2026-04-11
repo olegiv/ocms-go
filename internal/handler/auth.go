@@ -115,8 +115,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify hCaptcha if hook registry is available
-	if h.hookRegistry != nil && h.hookRegistry.HasHandlers(hcaptcha.HookAuthBeforeLogin) {
+	// Verify hCaptcha only when there is at least one active hook handler.
+	if h.hookRegistry != nil && h.hookRegistry.HasActiveHandlers(hcaptcha.HookAuthBeforeLogin) {
 		verifyReq := &hcaptcha.VerifyRequest{
 			Response: hcaptcha.GetResponseFromForm(r),
 			RemoteIP: hcaptcha.GetRemoteIP(r),
