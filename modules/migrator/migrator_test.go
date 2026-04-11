@@ -142,6 +142,31 @@ func TestShutdownBeforeInit(t *testing.T) {
 	}
 }
 
+func TestApplySafeDefaults_SkipsPasswordFields(t *testing.T) {
+	config := make(map[string]string)
+	fields := []types.ConfigField{
+		{Name: "mysql_host", Type: "text", Default: "localhost"},
+		{Name: "mysql_password", Type: "password", Default: "super-secret"},
+		{Name: "mysql_port", Type: "number", Default: "3306"},
+		{Name: "empty", Type: "text", Default: ""},
+	}
+
+	applySafeDefaults(config, fields)
+
+	if got := config["mysql_host"]; got != "localhost" {
+		t.Fatalf("mysql_host default mismatch: got %q, want %q", got, "localhost")
+	}
+	if got := config["mysql_port"]; got != "3306" {
+		t.Fatalf("mysql_port default mismatch: got %q, want %q", got, "3306")
+	}
+	if _, ok := config["mysql_password"]; ok {
+		t.Fatal("mysql_password should not be defaulted for password fields")
+	}
+	if _, ok := config["empty"]; ok {
+		t.Fatal("empty default should not be copied")
+	}
+}
+
 // --- Source registry ---
 
 func TestSourceRegistry_RegisterAndGet(t *testing.T) {
