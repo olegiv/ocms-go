@@ -1075,7 +1075,6 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		Errors:           make(map[string]string),
 		Values:           make(map[string]string),
 		Success:          false,
-		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
 	h.render(w, r, data)
@@ -1361,7 +1360,6 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		Errors:           fieldErrors,
 		Values:           values,
 		Success:          false,
-		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
 	h.render(w, r, data)
@@ -2051,7 +2049,6 @@ type FormTemplateData struct {
 	Errors    map[string]string
 	Values    map[string]string
 	Success   bool
-	CSRFToken template.HTML
 }
 
 // render renders a form page using the active theme's render engine.

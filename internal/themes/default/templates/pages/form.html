@@ -33,8 +33,6 @@
     {{end}}
 
     <form method="POST" action="/forms/{{.Form.Slug}}" class="public-form">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-
         <!-- Honeypot field (hidden from real users, bots will fill it) -->
         <div class="sr-only">
             <label for="_website">{{TTheme $.LangCode "forms.public.honeypot_label"}}</label>
