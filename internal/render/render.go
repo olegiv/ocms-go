@@ -40,6 +40,19 @@ const SessionKeyAdminLang = "admin_lang"
 // blankLinesRegex matches two or more consecutive newlines (with optional whitespace between).
 var blankLinesRegex = regexp.MustCompile(`(\r?\n\s*){2,}`)
 
+// styleCloseTagRegex matches any </style closing-tag sequence case-insensitively.
+// Used by sanitizeCustomCSS to prevent breakout from an enclosing <style> element.
+var styleCloseTagRegex = regexp.MustCompile(`(?i)</style`)
+
+// sanitizeCustomCSS returns admin-supplied stylesheet content as template.CSS
+// after stripping any </style closing-tag sequence that would let an attacker
+// break out of the surrounding <style> element. See the safeCSS template
+// helper for usage constraints.
+func sanitizeCustomCSS(s string) template.CSS {
+	sanitized := styleCloseTagRegex.ReplaceAllString(s, "")
+	return template.CSS(sanitized) //nolint:gosec // Sanitized for <style> context above
+}
+
 // SidebarModule represents a module to display in the admin sidebar.
 type SidebarModule struct {
 	Name     string
@@ -253,6 +266,15 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s) //nolint:gosec // Intentional bypass for admin-controlled CMS content
 		},
+		// safeCSS returns an admin-supplied stylesheet body as template.CSS so
+		// html/template does not apply CSS-value filtering (which replaces
+		// structured CSS like selectors and braces with "ZgotmplZ"). Before
+		// casting, any </style closing sequence is stripped case-insensitively
+		// so stored values cannot break out of the enclosing <style> element
+		// (e.g. `body{}</style><script>alert(1)</script>`).
+		// SECURITY: Only use inside <style> contexts and only for admin-
+		// controlled CSS. Do not use for untrusted user input.
+		"safeCSS": sanitizeCustomCSS,
 		"add": func(a, b int) int {
 			return a + b
 		},
