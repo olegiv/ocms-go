@@ -18,13 +18,18 @@ type DebounceConfig struct {
 	// MaxWait is the maximum time to wait before dispatching.
 	// Even if events keep coming, dispatch after this time.
 	MaxWait time.Duration
+	// MaxPending is the maximum number of distinct pending debounced events.
+	// When this limit is reached, new unique events bypass debouncing and are
+	// dispatched immediately through the normal dispatcher queue.
+	MaxPending int
 }
 
 // DefaultDebounceConfig returns default debounce configuration.
 func DefaultDebounceConfig() DebounceConfig {
 	return DebounceConfig{
-		Interval: 1 * time.Second, // Coalesce events within 1 second
-		MaxWait:  5 * time.Second, // Always dispatch within 5 seconds
+		Interval:   1 * time.Second, // Coalesce events within 1 second
+		MaxWait:    5 * time.Second, // Always dispatch within 5 seconds
+		MaxPending: 1000,            // Bound memory/timer usage for unique events
 	}
 }
 
@@ -52,6 +57,9 @@ type Debouncer struct {
 // NewDebouncer creates a new event debouncer.
 func NewDebouncer(dispatcher *Dispatcher, config DebounceConfig) *Debouncer {
 	ctx, cancel := context.WithCancel(context.Background())
+	if config.MaxPending <= 0 {
+		config.MaxPending = DefaultDebounceConfig().MaxPending
+	}
 	return &Debouncer{
 		dispatcher: dispatcher,
 		config:     config,
@@ -101,13 +109,11 @@ func eventKey(event *Event) string {
 // Dispatch queues an event for debounced delivery.
 // If an event for the same entity is already pending, it will be updated
 // with the latest data and the timer will be reset.
-func (d *Debouncer) Dispatch(_ context.Context, event *Event) error {
+func (d *Debouncer) Dispatch(ctx context.Context, event *Event) error {
 	key := eventKey(event)
 	now := time.Now()
 
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	if existing, ok := d.pending[key]; ok {
 		// Update existing pending event with new data
 		existing.event = event
@@ -117,6 +123,7 @@ func (d *Debouncer) Dispatch(_ context.Context, event *Event) error {
 		if now.Sub(existing.firstSeen) >= d.config.MaxWait {
 			// Dispatch immediately
 			d.dispatchLocked(key)
+			d.mu.Unlock()
 			return nil
 		}
 
@@ -126,7 +133,18 @@ func (d *Debouncer) Dispatch(_ context.Context, event *Event) error {
 			"key", key,
 			"event_type", event.Type,
 			"wait_time", now.Sub(existing.firstSeen))
+		d.mu.Unlock()
 		return nil
+	}
+
+	// Bound pending unique keys/timers to avoid unbounded memory growth under
+	// high-cardinality event floods.
+	if len(d.pending) >= d.config.MaxPending {
+		d.mu.Unlock()
+		d.dispatcher.logger.Warn("debouncer capacity reached, dispatching immediately",
+			"event_type", event.Type,
+			"max_pending", d.config.MaxPending)
+		return d.dispatcher.Dispatch(ctx, event)
 	}
 
 	// Create new pending event
@@ -147,6 +165,7 @@ func (d *Debouncer) Dispatch(_ context.Context, event *Event) error {
 	d.dispatcher.logger.Debug("debounced event queued",
 		"key", key,
 		"event_type", event.Type)
+	d.mu.Unlock()
 
 	return nil
 }

@@ -407,6 +407,9 @@ func TestDefaultDebounceConfig(t *testing.T) {
 	if cfg.MaxWait != 5*time.Second {
 		t.Errorf("DefaultDebounceConfig().MaxWait = %v, want 5s", cfg.MaxWait)
 	}
+	if cfg.MaxPending != 1000 {
+		t.Errorf("DefaultDebounceConfig().MaxPending = %d, want 1000", cfg.MaxPending)
+	}
 }
 
 func TestDeliveryResult(t *testing.T) {

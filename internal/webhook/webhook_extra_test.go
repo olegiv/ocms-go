@@ -92,6 +92,9 @@ func TestDefaultConfig_AllFields(t *testing.T) {
 	if cfg.Debounce.MaxWait != 5*time.Second {
 		t.Errorf("DefaultConfig().Debounce.MaxWait = %v, want 5s", cfg.Debounce.MaxWait)
 	}
+	if cfg.Debounce.MaxPending != 1000 {
+		t.Errorf("DefaultConfig().Debounce.MaxPending = %d, want 1000", cfg.Debounce.MaxPending)
+	}
 }
 
 func TestDefaultDebounceConfig_Reasonable(t *testing.T) {
@@ -105,6 +108,9 @@ func TestDefaultDebounceConfig_Reasonable(t *testing.T) {
 	}
 	if cfg.MaxWait < cfg.Interval {
 		t.Errorf("DefaultDebounceConfig().MaxWait (%v) should be >= Interval (%v)", cfg.MaxWait, cfg.Interval)
+	}
+	if cfg.MaxPending <= 0 {
+		t.Error("DefaultDebounceConfig().MaxPending must be positive")
 	}
 }
 
@@ -197,6 +203,23 @@ func TestNewDebouncer_NotNil(t *testing.T) {
 	}
 	if db.PendingCount() != 0 {
 		t.Error("NewDebouncer() should have 0 pending events")
+	}
+}
+
+func TestNewDebouncer_DefaultsMaxPendingWhenUnset(t *testing.T) {
+	d := &Dispatcher{
+		logger: slog.Default(),
+		queue:  make(chan *QueuedDelivery, 16),
+		done:   make(chan struct{}),
+	}
+	db := NewDebouncer(d, DebounceConfig{
+		Interval: 50 * time.Millisecond,
+		MaxWait:  200 * time.Millisecond,
+	})
+	defer db.Stop()
+
+	if db.config.MaxPending != DefaultDebounceConfig().MaxPending {
+		t.Errorf("NewDebouncer().config.MaxPending = %d, want %d", db.config.MaxPending, DefaultDebounceConfig().MaxPending)
 	}
 }
 
