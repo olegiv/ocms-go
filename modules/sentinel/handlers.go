@@ -795,6 +795,15 @@ func isAllowedBanURL(rawURL string) bool {
 	if err != nil {
 		return false
 	}
+	// Accept root-relative paths like "/admin/login". Events store request
+	// URLs as path-only values (middleware.GetRequestURL returns r.URL.Path),
+	// and the AJAX ban workflow from the events page posts those paths as
+	// data-url. A leading "/" is required so inputs with no scheme cannot
+	// collapse to an absolute URL (e.g. "//evil.com/x") or be interpreted as
+	// a relative scheme like "javascript:alert(1)".
+	if parsed.Scheme == "" && parsed.Host == "" {
+		return strings.HasPrefix(rawURL, "/") && !strings.HasPrefix(rawURL, "//")
+	}
 	if parsed.Host == "" {
 		return false
 	}

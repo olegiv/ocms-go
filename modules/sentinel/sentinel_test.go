@@ -370,7 +370,12 @@ func TestIsAllowedBanURL(t *testing.T) {
 		{name: "mixed-case scheme", in: "HtTpS://example.com", want: true},
 		{name: "javascript scheme", in: "javascript:alert(1)", want: false},
 		{name: "data scheme", in: "data:text/html,hello", want: false},
-		{name: "relative", in: "/admin", want: false},
+		{name: "root-relative path", in: "/admin", want: true},
+		{name: "root-relative path with query", in: "/admin/login?next=/home", want: true},
+		{name: "event request path", in: "/admin/pages/42", want: true},
+		{name: "protocol-relative rejected", in: "//evil.com/x", want: false},
+		{name: "bare relative rejected", in: "admin", want: false},
+		{name: "scheme-less colon rejected", in: "javascript:alert(1)", want: false},
 		{name: "host missing", in: "https:///path-only", want: false},
 	}
 
