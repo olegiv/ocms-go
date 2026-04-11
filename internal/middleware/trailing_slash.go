@@ -16,6 +16,12 @@ func StripTrailingSlash(next http.Handler) http.Handler {
 		if path != "/" && strings.HasSuffix(path, "/") {
 			// Build new URL without trailing slash
 			newPath := strings.TrimSuffix(path, "/")
+			if strings.HasPrefix(newPath, "//") {
+				newPath = "/" + strings.TrimLeft(newPath, "/")
+			}
+			if newPath == "" {
+				newPath = "/"
+			}
 			newURL := newPath
 			if r.URL.RawQuery != "" {
 				newURL += "?" + r.URL.RawQuery
