@@ -15,7 +15,6 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -469,26 +468,15 @@ func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce, ori
 	return template.HTML(sb.String())
 }
 
-// requestPageOrigin returns a normalized scheme://host for the incoming request,
-// preferring the Origin header, falling back to Referer, and finally to the
-// request's own host + inferred scheme. Returns "" if the host cannot be
-// determined.
+// requestPageOrigin returns a normalized scheme://host for the page being
+// served, derived from r.Host and the inferred scheme. Origin/Referer
+// headers are intentionally ignored: for top-level navigation GETs a
+// browser usually omits Origin entirely and Referer points at the
+// *previous* page (often external), so trusting either would bind the
+// render-time proxy token to the wrong origin and make the widget's
+// subsequent fetches fail downstream validation.
 func requestPageOrigin(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
-		if u, err := url.Parse(origin); err == nil && u.Scheme != "" && u.Host != "" {
-			return strings.ToLower(u.Scheme + "://" + u.Host)
-		}
-	}
-	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
-		if u, err := url.Parse(referer); err == nil && u.Scheme != "" && u.Host != "" {
-			return strings.ToLower(u.Scheme + "://" + u.Host)
-		}
-	}
-	host := r.Host
-	if host == "" {
+	if r == nil || r.Host == "" {
 		return ""
 	}
 	scheme := "http"
@@ -497,7 +485,7 @@ func requestPageOrigin(r *http.Request) string {
 	} else if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto != "" {
 		scheme = strings.ToLower(proto)
 	}
-	return strings.ToLower(scheme + "://" + host)
+	return strings.ToLower(scheme + "://" + r.Host)
 }
 
 // trustedPageBody returns page HTML for rendering, optionally sanitizing to

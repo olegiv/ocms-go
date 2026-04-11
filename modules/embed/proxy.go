@@ -37,8 +37,12 @@ const (
 	maxDifyInputsCount       = 32
 	maxDifyInputKeyLen       = 64
 	maxDifyInputValueLen     = 512
-	embedProxyTokenHeader    = "X-Embed-Proxy-Token"
-	embedProxyTokenTTL       = 90 * time.Second
+	embedProxyTokenHeader = "X-Embed-Proxy-Token"
+	// embedProxyTokenTTL is long enough to cover a typical idle-then-interact
+	// session in an open tab without forcing a refresh round-trip, while
+	// keeping stolen-token reuse bounded. The render-time mint path and the
+	// refresh endpoint both issue tokens with this TTL.
+	embedProxyTokenTTL       = 30 * time.Minute
 	embedProxyTokenSkew      = 10 * time.Second
 	embedProxyTokenNonceSize = 16
 	// embedProxyTokenRefreshGrace is the window past a token's Exp during

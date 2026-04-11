@@ -5,6 +5,7 @@ package handler
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"embed"
 	"html/template"
@@ -530,6 +531,87 @@ func TestCallModuleHTMLFuncs_NoncePassthrough(t *testing.T) {
 	if receivedOrigin != "https://example.com" {
 		t.Errorf("origin: got %q; want %q", receivedOrigin, "https://example.com")
 	}
+}
+
+func TestRequestPageOrigin(t *testing.T) {
+	// Regression: inbound traffic from an external referring site (search,
+	// social) must not cause requestPageOrigin to return the external host.
+	// The render-time proxy token is bound to this value and must match the
+	// runtime Origin header the widget's fetches will send — which is this
+	// page's host, not the previous page's.
+	tests := []struct {
+		name    string
+		host    string
+		tls     bool
+		headers map[string]string
+		want    string
+	}{
+		{
+			name: "plain http",
+			host: "example.com",
+			want: "http://example.com",
+		},
+		{
+			name: "tls connection",
+			host: "example.com",
+			tls:  true,
+			want: "https://example.com",
+		},
+		{
+			name:    "behind reverse proxy with X-Forwarded-Proto",
+			host:    "example.com",
+			headers: map[string]string{"X-Forwarded-Proto": "https"},
+			want:    "https://example.com",
+		},
+		{
+			name:    "ignores Referer from external site",
+			host:    "example.com",
+			headers: map[string]string{"Referer": "https://evil.example/some-path"},
+			want:    "http://example.com",
+		},
+		{
+			name: "ignores Origin header pointing at referring page",
+			host: "example.com",
+			headers: map[string]string{
+				"Origin":  "https://other.example",
+				"Referer": "https://other.example/page",
+			},
+			want: "http://example.com",
+		},
+		{
+			name:    "host with port preserved",
+			host:    "example.com:8443",
+			headers: map[string]string{"X-Forwarded-Proto": "https"},
+			want:    "https://example.com:8443",
+		},
+		{
+			name: "empty host yields empty origin",
+			host: "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Host = tt.host
+			if tt.tls {
+				req.TLS = &tls.ConnectionState{}
+			}
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
+			if got := requestPageOrigin(req); got != tt.want {
+				t.Errorf("requestPageOrigin() = %q; want %q", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("nil request", func(t *testing.T) {
+		if got := requestPageOrigin(nil); got != "" {
+			t.Errorf("requestPageOrigin(nil) = %q; want empty", got)
+		}
+	})
 }
 
 // staticModuleFuncsProvider implements ModuleTemplateFuncsProvider for tests.
