@@ -1254,7 +1254,6 @@ func run() error {
 		slog.Warn(
 			"demo admin password rotated for this startup",
 			"email", store.DemoAdminEmail,
-			"password", demoAdminPassword,
 		)
 	}
 
