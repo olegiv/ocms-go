@@ -1177,9 +1177,9 @@ func run() error {
 	}
 	slog.Info("i18n system initialized", "languages", i18n.SupportedLanguages)
 
-	// Ensure data directory exists
+	// Ensure data directory exists with restricted permissions.
 	dbDir := filepath.Dir(cfg.DBPath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
+	if err := os.MkdirAll(dbDir, 0700); err != nil {
 		return fmt.Errorf("creating data directory: %w", err)
 	}
 
@@ -1195,6 +1195,10 @@ func run() error {
 	db, err := store.NewDB(cfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("initializing database: %w", err)
+	}
+	if err := os.Chmod(cfg.DBPath, 0600); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("setting database file permissions: %w", err)
 	}
 	defer func(db *sql.DB) {
 		err = db.Close()
