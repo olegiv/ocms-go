@@ -7,12 +7,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/time/rate"
 
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -1291,4 +1293,33 @@ func TestGlobalRateLimiter_HTMLMiddleware_DifferentIPs(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	testRateLimiterDifferentIPs(t, handler, "/login")
+}
+
+func TestLimiterCache_EvictOldestWhenMaxEntriesExceeded(t *testing.T) {
+	cache := newLimiterCache[string](10, 5)
+
+	// Freeze time relationships by directly controlling lastUsed values.
+	cache.mu.Lock()
+	cache.entries = make(map[string]*limiterEntry, limiterCacheMaxEntries+1)
+	now := time.Now()
+	for i := 0; i < limiterCacheMaxEntries+1; i++ {
+		key := fmt.Sprintf("key-%d", i)
+		cache.entries[key] = &limiterEntry{
+			limiter:  rate.NewLimiter(cache.rate, cache.burst),
+			lastUsed: now.Add(time.Duration(i) * time.Second),
+		}
+	}
+	cache.evictOldestIfExceedsLocked()
+	cache.mu.Unlock()
+
+	cache.mu.RLock()
+	defer cache.mu.RUnlock()
+
+	if got := len(cache.entries); got != limiterCacheMaxEntries {
+		t.Fatalf("expected %d entries after eviction, got %d", limiterCacheMaxEntries, got)
+	}
+
+	if _, exists := cache.entries["key-0"]; exists {
+		t.Fatalf("expected oldest entry to be evicted")
+	}
 }
