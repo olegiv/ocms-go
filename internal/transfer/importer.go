@@ -6,6 +6,7 @@ package transfer
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/rand"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -1010,7 +1011,11 @@ func (i *Importer) importUsers(ctx context.Context, queries *store.Queries, user
 		}
 
 		// Create new user with random password (they'll need to reset it)
-		randomPassword := generateRandomPassword()
+		randomPassword, err := generateRandomPassword()
+		if err != nil {
+			result.AddError("user", user.Email, "failed to generate random password")
+			continue
+		}
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(randomPassword), bcrypt.DefaultCost)
 		if err != nil {
 			result.AddError("user", user.Email, "failed to generate password hash")
@@ -1955,15 +1960,19 @@ func (i *Importer) generateUniqueSlug(ctx context.Context, queries *store.Querie
 }
 
 // generateRandomPassword generates a random password for imported users.
-func generateRandomPassword() string {
+func generateRandomPassword() (string, error) {
 	// Generate a random 16-character password
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%"
-	result := make([]byte, 16)
-	for i := range result {
-		result[i] = chars[time.Now().UnixNano()%int64(len(chars))]
-		time.Sleep(time.Nanosecond)
+	const passwordLength = 16
+	result := make([]byte, passwordLength)
+	randomBytes := make([]byte, passwordLength)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", err
 	}
-	return string(result)
+	for i := range result {
+		result[i] = chars[int(randomBytes[i])%len(chars)]
+	}
+	return string(result), nil
 }
 
 // toNullString converts a string to sql.NullString.
