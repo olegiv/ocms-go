@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
 )
@@ -381,6 +382,53 @@ func TestFrontendHandler_Page_PublishedPageWorksForAnonymous(t *testing.T) {
 
 	if w.Code == http.StatusNotFound {
 		t.Errorf("anonymous user on published page: got 404; want page to be served")
+	}
+}
+
+func TestFrontendHandler_NotFound_DoesNotPersistEventForAnonymous(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, service.NewEventService(db))
+
+	req := httptest.NewRequest(http.MethodGet, "/definitely-missing", nil)
+	w := httptest.NewRecorder()
+	h.NotFound(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want %d", w.Code, http.StatusNotFound)
+	}
+
+	count, err := store.New(db).CountEvents(context.Background())
+	if err != nil {
+		t.Fatalf("CountEvents failed: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("event count = %d; want 0", count)
+	}
+}
+
+func TestFrontendHandler_NotFound_PersistsEventForAuthenticatedUser(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	user := createTestUser(t, db, testUser{
+		Email: "member@example.com",
+		Name:  "Member",
+		Role:  "public",
+	})
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, service.NewEventService(db))
+
+	req := withUser(httptest.NewRequest(http.MethodGet, "/missing-auth", nil), user)
+	w := httptest.NewRecorder()
+	h.NotFound(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want %d", w.Code, http.StatusNotFound)
+	}
+
+	count, err := store.New(db).CountEvents(context.Background())
+	if err != nil {
+		t.Fatalf("CountEvents failed: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("event count = %d; want 1", count)
 	}
 }
 

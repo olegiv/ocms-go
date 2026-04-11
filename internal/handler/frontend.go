@@ -2490,11 +2490,14 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 	// Log 404 to event log (visible in admin panel)
 	if h.eventService != nil {
 		userID := middleware.GetUserIDPtr(r)
-		metadata := map[string]any{
-			"method": r.Method,
-			"status": http.StatusNotFound,
+		// Avoid unauthenticated event-log flooding on public 404s.
+		if userID != nil {
+			metadata := map[string]any{
+				"method": r.Method,
+				"status": http.StatusNotFound,
+			}
+			_ = h.eventService.LogSystemEvent(r.Context(), "info", "Page not found", userID, clientIP, r.URL.Path, metadata)
 		}
-		_ = h.eventService.LogSystemEvent(r.Context(), "info", "Page not found", userID, clientIP, r.URL.Path, metadata)
 	}
 
 	base := h.getBaseTemplateData(r, "Page Not Found", "")
