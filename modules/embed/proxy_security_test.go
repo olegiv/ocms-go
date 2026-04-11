@@ -118,6 +118,36 @@ func TestHandleDifyProxyToken(t *testing.T) {
 		}
 	})
 
+	t.Run("issues token for browser flow without static secret header", func(t *testing.T) {
+		mod := New()
+		mod.proxyToken = "test-secret"
+		mod.allowedOrigins = map[string]struct{}{
+			"https://example.com": {},
+		}
+		mod.requireOriginPolicy = true
+
+		req := httptest.NewRequest(http.MethodGet, "/embed/dify/token", nil)
+		req.Header.Set("Origin", "https://example.com")
+		w := httptest.NewRecorder()
+
+		mod.handleDifyProxyToken(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		token, _ := payload["token"].(string)
+		if token == "" {
+			t.Fatal("expected token in response")
+		}
+		if err := mod.validateSignedProxyToken(token, "https://example.com", time.Now()); err != nil {
+			t.Fatalf("expected issued token to validate: %v", err)
+		}
+	})
+
 	t.Run("blocks disallowed origin", func(t *testing.T) {
 		mod := New()
 		mod.proxyToken = "test-secret"

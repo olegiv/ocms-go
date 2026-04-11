@@ -211,6 +211,18 @@ func TestIsProxyTokenAuthorized(t *testing.T) {
 		}
 	})
 
+	t.Run("allow when raw proxy secret matches", func(t *testing.T) {
+		mod := New()
+		mod.requireProxyToken = true
+		mod.proxyToken = "secret-token"
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		req.Header.Set(embedProxyTokenHeader, "secret-token")
+		if !mod.isProxyTokenAuthorized(req) {
+			t.Fatal("expected proxy token check to pass with raw secret token")
+		}
+	})
+
 	t.Run("block when signed token origin mismatches", func(t *testing.T) {
 		mod := New()
 		mod.requireProxyToken = true

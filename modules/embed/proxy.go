@@ -394,6 +394,10 @@ func (m *Module) isProxyTokenAuthorized(r *http.Request) bool {
 		return !m.requireProxyToken
 	}
 
+	if m.isStaticProxySecretAuthorized(r) {
+		return true
+	}
+
 	provided := strings.TrimSpace(r.Header.Get(embedProxyTokenHeader))
 	if provided == "" {
 		return false
@@ -405,6 +409,24 @@ func (m *Module) isProxyTokenAuthorized(r *http.Request) bool {
 	}
 
 	return m.validateSignedProxyToken(provided, origin, time.Now()) == nil
+}
+
+func (m *Module) isStaticProxySecretAuthorized(r *http.Request) bool {
+	if m == nil || r == nil {
+		return false
+	}
+
+	expected := strings.TrimSpace(m.proxyToken)
+	if expected == "" {
+		return false
+	}
+
+	provided := strings.TrimSpace(r.Header.Get(embedProxyTokenHeader))
+	if provided == "" {
+		return false
+	}
+
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
 func requestOrigin(r *http.Request) (string, error) {
