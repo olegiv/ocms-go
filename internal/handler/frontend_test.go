@@ -593,10 +593,52 @@ func TestRequestPageOrigin(t *testing.T) {
 			want: "http://example.com",
 		},
 		{
-			name:    "host with port preserved",
+			name:    "non-default https port preserved",
 			host:    "example.com:8443",
 			headers: map[string]string{"X-Forwarded-Proto": "https"},
 			want:    "https://example.com:8443",
+		},
+		{
+			// Regression: some reverse proxies forward Host with an explicit
+			// default port. Browsers omit default ports from Origin per
+			// RFC 6454 §6.2, so the bound origin must also omit them or
+			// downstream validation sees a mismatch.
+			name: "default http port 80 stripped",
+			host: "example.com:80",
+			want: "http://example.com",
+		},
+		{
+			name:    "default https port 443 stripped",
+			host:    "example.com:443",
+			headers: map[string]string{"X-Forwarded-Proto": "https"},
+			want:    "https://example.com",
+		},
+		{
+			name: "non-default http port preserved",
+			host: "example.com:8080",
+			want: "http://example.com:8080",
+		},
+		{
+			// :443 is NOT the default port for http, so it must be preserved.
+			name: "http scheme with :443 port preserved",
+			host: "example.com:443",
+			want: "http://example.com:443",
+		},
+		{
+			name: "ipv6 with default http port stripped",
+			host: "[::1]:80",
+			want: "http://[::1]",
+		},
+		{
+			name:    "ipv6 with default https port stripped",
+			host:    "[::1]:443",
+			headers: map[string]string{"X-Forwarded-Proto": "https"},
+			want:    "https://[::1]",
+		},
+		{
+			name: "ipv6 with non-default port preserved",
+			host: "[::1]:8080",
+			want: "http://[::1]:8080",
 		},
 		{
 			name: "empty host yields empty origin",

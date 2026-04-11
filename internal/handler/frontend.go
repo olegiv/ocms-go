@@ -14,6 +14,7 @@ import (
 	"html"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -491,7 +492,29 @@ func requestPageOrigin(r *http.Request) string {
 		}
 		scheme = strings.ToLower(proto)
 	}
-	return strings.ToLower(scheme + "://" + r.Host)
+	return strings.ToLower(scheme + "://" + canonicalHost(r.Host, scheme))
+}
+
+// canonicalHost strips a default port from host when it matches the scheme's
+// default (80 for http, 443 for https). Browsers omit default ports when
+// serializing the Origin header (RFC 6454 §6.2), so a render-time token
+// bound to "example.com:443" would not match the "example.com" the widget's
+// subsequent fetches send. Uses net.SplitHostPort so IPv6 literals like
+// "[::1]:80" round-trip correctly — SplitHostPort returns the bare IPv6
+// address without brackets, so we re-bracket it on the way out.
+func canonicalHost(host, scheme string) string {
+	h, p, err := net.SplitHostPort(host)
+	if err != nil {
+		// No port present (or malformed) — return verbatim.
+		return host
+	}
+	if (scheme == "http" && p == "80") || (scheme == "https" && p == "443") {
+		if strings.Contains(h, ":") {
+			return "[" + h + "]"
+		}
+		return h
+	}
+	return host
 }
 
 // trustedPageBody returns page HTML for rendering, optionally sanitizing to
