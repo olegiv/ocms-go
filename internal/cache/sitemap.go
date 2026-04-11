@@ -20,9 +20,10 @@ type SitemapCache struct {
 	mu      sync.RWMutex
 
 	// Cached sitemap data
-	xml      []byte
-	cachedAt time.Time
-	ttl      time.Duration
+	xml           []byte
+	cachedAt      time.Time
+	cachedSiteURL string
+	ttl           time.Duration
 }
 
 // NewSitemapCache creates a new sitemap cache.
@@ -41,7 +42,7 @@ func NewSitemapCache(queries *store.Queries, ttl time.Duration) *SitemapCache {
 // Get returns the cached sitemap XML, generating it if needed.
 func (c *SitemapCache) Get(ctx context.Context, siteURL string) ([]byte, error) {
 	c.mu.RLock()
-	if c.xml != nil && time.Since(c.cachedAt) < c.ttl {
+	if c.xml != nil && c.cachedSiteURL == siteURL && time.Since(c.cachedAt) < c.ttl {
 		xml := c.xml
 		c.mu.RUnlock()
 		c.cache.hits.Add(1)
@@ -59,7 +60,7 @@ func (c *SitemapCache) regenerate(ctx context.Context, siteURL string) ([]byte, 
 	defer c.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if c.xml != nil && time.Since(c.cachedAt) < c.ttl {
+	if c.xml != nil && c.cachedSiteURL == siteURL && time.Since(c.cachedAt) < c.ttl {
 		c.cache.hits.Add(1)
 		return c.xml, nil
 	}
@@ -112,6 +113,7 @@ func (c *SitemapCache) regenerate(ctx context.Context, siteURL string) ([]byte, 
 	// Cache it
 	c.xml = xml
 	c.cachedAt = time.Now()
+	c.cachedSiteURL = siteURL
 	c.cache.sets.Add(1)
 
 	return xml, nil
@@ -123,6 +125,7 @@ func (c *SitemapCache) Invalidate() {
 	defer c.mu.Unlock()
 	c.xml = nil
 	c.cachedAt = time.Time{}
+	c.cachedSiteURL = ""
 	c.cache.ResetStats()
 }
 
