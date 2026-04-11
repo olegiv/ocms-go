@@ -843,7 +843,7 @@ func getHomePageBody() string {
 <li><strong>Admin Panel</strong> - Login to explore the full admin interface</li>
 </ul>
 
-<p><em>Demo credentials: <code>demo@example.com</code> / <code>demo1234demo</code></em></p>`
+<p><em>Demo login credentials are shown in the banner at the top of the page. The admin password is rotated on every restart for security.</em></p>`
 }
 
 func getAboutPageBody() string {

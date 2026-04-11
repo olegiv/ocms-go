@@ -279,6 +279,8 @@ func TestRotateDemoAdminPassword(t *testing.T) {
 	db, cleanup, ctx, q := testSetup(t)
 	defer cleanup()
 	t.Setenv("OCMS_DEMO_MODE", "true")
+	uploadsDir := t.TempDir()
+	t.Setenv("OCMS_UPLOADS_DIR", uploadsDir)
 
 	if err := Seed(ctx, db, true); err != nil {
 		t.Fatalf("Seed: %v", err)
