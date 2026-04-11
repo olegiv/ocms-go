@@ -127,9 +127,8 @@ func Load() (*Config, error) {
 
 	applyProductionSecurityDefaults(cfg)
 
-	// Production hardening: prevent default seeding in production
-	// (allowed when demo mode is explicitly enabled).
-	if cfg.Env == "production" && cfg.DoSeed && os.Getenv("OCMS_DEMO_MODE") != "true" {
+	// Production hardening: prevent default seeding in production.
+	if cfg.Env == "production" && cfg.DoSeed {
 		return nil, fmt.Errorf("OCMS_DO_SEED must be false in production")
 	}
 	if cfg.Env == "production" && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {

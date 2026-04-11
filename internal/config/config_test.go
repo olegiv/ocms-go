@@ -271,6 +271,19 @@ func TestLoad_RejectSeedInProduction(t *testing.T) {
 	}
 }
 
+func TestLoad_RejectSeedInProductionEvenWithDemoMode(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_DO_SEED", "true")
+	setEnv(t, "OCMS_DEMO_MODE", "true")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_DO_SEED=true in production even with OCMS_DEMO_MODE=true")
+	}
+}
+
 func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
