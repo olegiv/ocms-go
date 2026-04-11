@@ -283,6 +283,44 @@ func TestEventLogHandler_SpecialCharactersInMetadata(t *testing.T) {
 	}
 }
 
+func TestEventLogHandler_WarnRateLimitedByMessage(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	handler := NewEventLogHandler(discardHandler{}, db)
+	now := time.Now()
+	handler.limiter.now = func() time.Time {
+		return now
+	}
+
+	logger := slog.New(handler)
+
+	logger.Warn("invalid CSRF token", "form_slug", "contact")
+	logger.Warn("invalid CSRF token", "form_slug", "contact")
+
+	q := store.New(db)
+	count, err := q.CountEvents(context.Background())
+	if err != nil {
+		t.Fatalf("CountEvents: %v", err)
+	}
+
+	if count != 1 {
+		t.Fatalf("expected 1 event after duplicate WARN logs, got %d", count)
+	}
+
+	now = now.Add(handler.limiter.interval)
+	logger.Warn("invalid CSRF token", "form_slug", "contact")
+
+	count, err = q.CountEvents(context.Background())
+	if err != nil {
+		t.Fatalf("CountEvents: %v", err)
+	}
+
+	if count != 2 {
+		t.Fatalf("expected 2 events after interval elapsed, got %d", count)
+	}
+}
+
 func TestEscapeJSON(t *testing.T) {
 	testCases := []struct {
 		input    string

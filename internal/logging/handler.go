@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"log/slog"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -22,6 +24,14 @@ type EventLogHandler struct {
 	inner   slog.Handler
 	queries *store.Queries
 	level   slog.Level // Minimum level to forward to Event Log (default: WARN)
+	limiter *warnLogLimiter
+}
+
+type warnLogLimiter struct {
+	mu            sync.Mutex
+	lastByMessage map[string]time.Time
+	interval      time.Duration
+	now           func() time.Time
 }
 
 // NewEventLogHandler creates a new EventLogHandler that wraps the given handler.
@@ -31,6 +41,7 @@ func NewEventLogHandler(inner slog.Handler, db *sql.DB) *EventLogHandler {
 		inner:   inner,
 		queries: store.New(db),
 		level:   slog.LevelWarn,
+		limiter: newWarnLogLimiter(),
 	}
 }
 
@@ -40,6 +51,15 @@ func NewEventLogHandlerWithLevel(inner slog.Handler, db *sql.DB, level slog.Leve
 		inner:   inner,
 		queries: store.New(db),
 		level:   level,
+		limiter: newWarnLogLimiter(),
+	}
+}
+
+func newWarnLogLimiter() *warnLogLimiter {
+	return &warnLogLimiter{
+		lastByMessage: make(map[string]time.Time),
+		interval:      30 * time.Second,
+		now:           time.Now,
 	}
 }
 
@@ -56,7 +76,7 @@ func (h *EventLogHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	// Only write to Event Log if the level is at or above our threshold
-	if r.Level >= h.level {
+	if r.Level >= h.level && h.shouldWriteToEventLog(r) {
 		h.writeToEventLog(ctx, r)
 	}
 
@@ -69,6 +89,7 @@ func (h *EventLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		inner:   h.inner.WithAttrs(attrs),
 		queries: h.queries,
 		level:   h.level,
+		limiter: h.limiter,
 	}
 }
 
@@ -78,7 +99,31 @@ func (h *EventLogHandler) WithGroup(name string) slog.Handler {
 		inner:   h.inner.WithGroup(name),
 		queries: h.queries,
 		level:   h.level,
+		limiter: h.limiter,
 	}
+}
+
+func (h *EventLogHandler) shouldWriteToEventLog(r slog.Record) bool {
+	if r.Level > slog.LevelWarn {
+		return true
+	}
+
+	key := r.Message
+	if key == "" {
+		key = "warn"
+	}
+
+	now := h.limiter.now()
+	h.limiter.mu.Lock()
+	defer h.limiter.mu.Unlock()
+
+	last, ok := h.limiter.lastByMessage[key]
+	if ok && now.Sub(last) < h.limiter.interval {
+		return false
+	}
+
+	h.limiter.lastByMessage[key] = now
+	return true
 }
 
 // writeToEventLog writes a log record to the Event Log database.
