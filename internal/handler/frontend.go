@@ -470,29 +470,71 @@ func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce, ori
 }
 
 // requestPageOrigin returns a normalized scheme://host for the page being
-// served, derived from r.Host and the inferred scheme. Origin/Referer
-// headers are intentionally ignored: for top-level navigation GETs a
-// browser usually omits Origin entirely and Referer points at the
-// *previous* page (often external), so trusting either would bind the
-// render-time proxy token to the wrong origin and make the widget's
-// subsequent fetches fail downstream validation.
+// served. Origin/Referer headers are intentionally ignored: for top-level
+// navigation GETs a browser usually omits Origin entirely and Referer
+// points at the *previous* page (often external), so trusting either
+// would bind the render-time proxy token to the wrong origin and make
+// the widget's subsequent fetches fail downstream validation.
+//
+// Host resolution prefers X-Forwarded-Host (leftmost value) when the
+// immediate peer is a configured trusted proxy — this handles deployments
+// where a reverse proxy rewrites the inbound Host to an internal upstream
+// name. Untrusted clients can still send X-Forwarded-Host, but it is
+// ignored to prevent spoofing the bound origin.
 func requestPageOrigin(r *http.Request) string {
-	if r == nil || r.Host == "" {
+	if r == nil {
 		return ""
 	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	} else if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto != "" {
-		// X-Forwarded-Proto may be a comma-separated list when a request
-		// traverses multiple proxies (RFC 7239). Only the leftmost value
-		// — the scheme the original client used — is meaningful here.
-		if comma := strings.Index(proto, ","); comma >= 0 {
-			proto = strings.TrimSpace(proto[:comma])
-		}
-		scheme = strings.ToLower(proto)
+	host := resolveRequestHost(r)
+	if host == "" {
+		return ""
 	}
-	return strings.ToLower(scheme + "://" + canonicalHost(r.Host, scheme))
+	scheme := resolveRequestScheme(r)
+	return strings.ToLower(scheme + "://" + canonicalHost(host, scheme))
+}
+
+// resolveRequestHost returns the public host the page is served from,
+// honouring X-Forwarded-Host only when the request comes from a configured
+// trusted proxy. Falls back to r.Host. Untrusted clients can set this
+// header but it is ignored to prevent spoofing the bound origin.
+func resolveRequestHost(r *http.Request) string {
+	if middleware.IsRequestFromTrustedProxy(r) {
+		if fwd := firstForwardedValue(r.Header.Get("X-Forwarded-Host")); fwd != "" {
+			return fwd
+		}
+	}
+	return r.Host
+}
+
+// resolveRequestScheme returns "http" or "https" for the request, preferring
+// the TLS state on the connection, then X-Forwarded-Proto (leftmost value).
+// X-Forwarded-Proto is honoured only when the immediate peer is a trusted
+// proxy, matching the X-Forwarded-Host gate so untrusted clients cannot
+// spoof the bound scheme.
+func resolveRequestScheme(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	if middleware.IsRequestFromTrustedProxy(r) {
+		if proto := firstForwardedValue(r.Header.Get("X-Forwarded-Proto")); proto != "" {
+			return strings.ToLower(proto)
+		}
+	}
+	return "http"
+}
+
+// firstForwardedValue returns the leftmost value of a possibly comma-separated
+// forwarded header (e.g., X-Forwarded-Host, X-Forwarded-Proto), trimmed.
+// Returns "" if the input is empty or only whitespace.
+func firstForwardedValue(raw string) string {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return ""
+	}
+	if comma := strings.Index(v, ","); comma >= 0 {
+		v = strings.TrimSpace(v[:comma])
+	}
+	return v
 }
 
 // canonicalHost strips a default port from host when it matches the scheme's

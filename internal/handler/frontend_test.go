@@ -534,18 +534,19 @@ func TestCallModuleHTMLFuncs_NoncePassthrough(t *testing.T) {
 }
 
 func TestRequestPageOrigin(t *testing.T) {
-	// Regression: inbound traffic from an external referring site (search,
-	// social) must not cause requestPageOrigin to return the external host.
-	// The render-time proxy token is bound to this value and must match the
-	// runtime Origin header the widget's fetches will send — which is this
-	// page's host, not the previous page's.
+	// trustedProxy on a case puts the request peer inside a configured
+	// trusted-proxy CIDR so X-Forwarded-* headers are honoured. Cases
+	// without the flag use the default httptest.NewRequest peer
+	// (192.0.2.1), which is untrusted.
 	tests := []struct {
-		name    string
-		host    string
-		tls     bool
-		headers map[string]string
-		want    string
+		name          string
+		host          string
+		tls           bool
+		headers       map[string]string
+		trustedProxy  bool
+		want          string
 	}{
+		// --- Direct (no trusted proxy) ----------------------------------
 		{
 			name: "plain http",
 			host: "example.com",
@@ -558,26 +559,9 @@ func TestRequestPageOrigin(t *testing.T) {
 			want: "https://example.com",
 		},
 		{
-			name:    "behind reverse proxy with X-Forwarded-Proto",
-			host:    "example.com",
-			headers: map[string]string{"X-Forwarded-Proto": "https"},
-			want:    "https://example.com",
-		},
-		{
-			// Regression: multi-proxy chain may append to X-Forwarded-Proto.
-			// Only the leftmost (original client) value is meaningful.
-			name:    "multi-value X-Forwarded-Proto takes leftmost",
-			host:    "example.com",
-			headers: map[string]string{"X-Forwarded-Proto": "https,http"},
-			want:    "https://example.com",
-		},
-		{
-			name:    "multi-value X-Forwarded-Proto with space takes leftmost",
-			host:    "example.com",
-			headers: map[string]string{"X-Forwarded-Proto": "https, http"},
-			want:    "https://example.com",
-		},
-		{
+			// Regression: inbound traffic from an external referring site
+			// (search, social) must not cause requestPageOrigin to return
+			// the external host.
 			name:    "ignores Referer from external site",
 			host:    "example.com",
 			headers: map[string]string{"Referer": "https://evil.example/some-path"},
@@ -593,11 +577,23 @@ func TestRequestPageOrigin(t *testing.T) {
 			want: "http://example.com",
 		},
 		{
-			name:    "non-default https port preserved",
-			host:    "example.com:8443",
+			// Untrusted client cannot influence the bound scheme by
+			// spoofing X-Forwarded-Proto.
+			name:    "untrusted X-Forwarded-Proto ignored",
+			host:    "example.com",
 			headers: map[string]string{"X-Forwarded-Proto": "https"},
-			want:    "https://example.com:8443",
+			want:    "http://example.com",
 		},
+		{
+			// Untrusted client cannot influence the bound host by
+			// spoofing X-Forwarded-Host.
+			name:    "untrusted X-Forwarded-Host ignored",
+			host:    "example.com",
+			headers: map[string]string{"X-Forwarded-Host": "evil.example"},
+			want:    "http://example.com",
+		},
+
+		// --- Default-port stripping (RFC 6454 §6.2 alignment) -----------
 		{
 			// Regression: some reverse proxies forward Host with an explicit
 			// default port. Browsers omit default ports from Origin per
@@ -606,12 +602,6 @@ func TestRequestPageOrigin(t *testing.T) {
 			name: "default http port 80 stripped",
 			host: "example.com:80",
 			want: "http://example.com",
-		},
-		{
-			name:    "default https port 443 stripped",
-			host:    "example.com:443",
-			headers: map[string]string{"X-Forwarded-Proto": "https"},
-			want:    "https://example.com",
 		},
 		{
 			name: "non-default http port preserved",
@@ -630,16 +620,103 @@ func TestRequestPageOrigin(t *testing.T) {
 			want: "http://[::1]",
 		},
 		{
-			name:    "ipv6 with default https port stripped",
-			host:    "[::1]:443",
-			headers: map[string]string{"X-Forwarded-Proto": "https"},
-			want:    "https://[::1]",
-		},
-		{
 			name: "ipv6 with non-default port preserved",
 			host: "[::1]:8080",
 			want: "http://[::1]:8080",
 		},
+
+		// --- Trusted-proxy forwarding ----------------------------------
+		{
+			name:         "trusted X-Forwarded-Proto honoured",
+			host:         "example.com",
+			headers:      map[string]string{"X-Forwarded-Proto": "https"},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+		{
+			// Regression: multi-proxy chain may append to X-Forwarded-Proto.
+			// Only the leftmost (original client) value is meaningful.
+			name:         "multi-value X-Forwarded-Proto takes leftmost",
+			host:         "example.com",
+			headers:      map[string]string{"X-Forwarded-Proto": "https,http"},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+		{
+			name:         "multi-value X-Forwarded-Proto with space takes leftmost",
+			host:         "example.com",
+			headers:      map[string]string{"X-Forwarded-Proto": "https, http"},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+		{
+			name:         "non-default https port preserved with trusted proxy",
+			host:         "example.com:8443",
+			headers:      map[string]string{"X-Forwarded-Proto": "https"},
+			trustedProxy: true,
+			want:         "https://example.com:8443",
+		},
+		{
+			name:         "default https port 443 stripped",
+			host:         "example.com:443",
+			headers:      map[string]string{"X-Forwarded-Proto": "https"},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+		{
+			name:         "ipv6 with default https port stripped",
+			host:         "[::1]:443",
+			headers:      map[string]string{"X-Forwarded-Proto": "https"},
+			trustedProxy: true,
+			want:         "https://[::1]",
+		},
+		{
+			// Regression: a reverse proxy may rewrite Host to an internal
+			// upstream name (e.g., "backend:8080"). The browser sends the
+			// public host on widget fetches, so the render-time token must
+			// be bound to the public host carried in X-Forwarded-Host, not
+			// the internal one in r.Host.
+			name: "trusted X-Forwarded-Host beats internal r.Host",
+			host: "backend:8080",
+			headers: map[string]string{
+				"X-Forwarded-Host":  "public.example.com",
+				"X-Forwarded-Proto": "https",
+			},
+			trustedProxy: true,
+			want:         "https://public.example.com",
+		},
+		{
+			name: "trusted X-Forwarded-Host with default port stripped",
+			host: "backend:8080",
+			headers: map[string]string{
+				"X-Forwarded-Host":  "public.example.com:443",
+				"X-Forwarded-Proto": "https",
+			},
+			trustedProxy: true,
+			want:         "https://public.example.com",
+		},
+		{
+			name: "trusted X-Forwarded-Host multi-value takes leftmost",
+			host: "backend:8080",
+			headers: map[string]string{
+				"X-Forwarded-Host":  "public.example.com, hop2.internal",
+				"X-Forwarded-Proto": "https",
+			},
+			trustedProxy: true,
+			want:         "https://public.example.com",
+		},
+		{
+			name: "trusted X-Forwarded-Host empty falls back to r.Host",
+			host: "example.com",
+			headers: map[string]string{
+				"X-Forwarded-Host":  "",
+				"X-Forwarded-Proto": "https",
+			},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+
+		// --- Edge cases -------------------------------------------------
 		{
 			name: "empty host yields empty origin",
 			host: "",
@@ -647,6 +724,10 @@ func TestRequestPageOrigin(t *testing.T) {
 		},
 	}
 
+	// Tests can run in parallel within this top-level test, but trusted-proxy
+	// state is process-global, so any case that touches it must serialize
+	// against any other case that touches it. Run cases sequentially and
+	// reset trusted proxies after each case to avoid leakage.
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -657,6 +738,21 @@ func TestRequestPageOrigin(t *testing.T) {
 			for k, v := range tt.headers {
 				req.Header.Set(k, v)
 			}
+
+			if tt.trustedProxy {
+				if err := middleware.SetTrustedProxies([]string{"127.0.0.1/32"}); err != nil {
+					t.Fatalf("SetTrustedProxies() error: %v", err)
+				}
+				req.RemoteAddr = "127.0.0.1:54321"
+			} else {
+				if err := middleware.SetTrustedProxies(nil); err != nil {
+					t.Fatalf("SetTrustedProxies(nil) error: %v", err)
+				}
+			}
+			t.Cleanup(func() {
+				_ = middleware.SetTrustedProxies(nil)
+			})
+
 			if got := requestPageOrigin(req); got != tt.want {
 				t.Errorf("requestPageOrigin() = %q; want %q", got, tt.want)
 			}
