@@ -434,12 +434,12 @@ func TestFrontendHandler_NotFound_PersistsEventForAuthenticatedUser(t *testing.T
 
 func TestCallModuleHTMLFuncs_NoFuncs(t *testing.T) {
 	h := &FrontendHandler{}
-	got := h.callModuleHTMLFuncs(nil, "test-nonce", "privacyHead")
+	got := h.callModuleHTMLFuncs(nil, "test-nonce", "", "privacyHead")
 	if got != "" {
 		t.Errorf("nil funcmap: got %q; want empty", got)
 	}
 
-	got = h.callModuleHTMLFuncs(template.FuncMap{}, "test-nonce", "privacyHead")
+	got = h.callModuleHTMLFuncs(template.FuncMap{}, "test-nonce", "", "privacyHead")
 	if got != "" {
 		t.Errorf("empty funcmap: got %q; want empty", got)
 	}
@@ -452,7 +452,7 @@ func TestCallModuleHTMLFuncs_SingleMatch(t *testing.T) {
 			return "<script>privacy</script>"
 		},
 	}
-	got := h.callModuleHTMLFuncs(funcs, "nonce", "privacyHead")
+	got := h.callModuleHTMLFuncs(funcs, "nonce", "", "privacyHead")
 	want := template.HTML("<script>privacy</script>")
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
@@ -469,7 +469,7 @@ func TestCallModuleHTMLFuncs_MultipleConcat(t *testing.T) {
 			return "<link rel=\"embed\">"
 		},
 	}
-	got := h.callModuleHTMLFuncs(funcs, "nonce", "analyticsExtHead", "embedHead")
+	got := h.callModuleHTMLFuncs(funcs, "nonce", "", "analyticsExtHead", "embedHead")
 	want := template.HTML(`<meta name="analytics"><link rel="embed">`)
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
@@ -483,7 +483,7 @@ func TestCallModuleHTMLFuncs_MissingNameSkipped(t *testing.T) {
 			return "<div>chat</div>"
 		},
 	}
-	got := h.callModuleHTMLFuncs(funcs, "nonce", "nonExistent", "embedBody")
+	got := h.callModuleHTMLFuncs(funcs, "nonce", "", "nonExistent", "embedBody")
 	want := template.HTML("<div>chat</div>")
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
@@ -498,7 +498,7 @@ func TestCallModuleHTMLFuncs_WrongSignatureSkipped(t *testing.T) {
 			return "<good/>"
 		},
 	}
-	got := h.callModuleHTMLFuncs(funcs, "nonce", "badFunc", "goodFunc")
+	got := h.callModuleHTMLFuncs(funcs, "nonce", "", "badFunc", "goodFunc")
 	want := template.HTML("<good/>")
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
@@ -506,7 +506,7 @@ func TestCallModuleHTMLFuncs_WrongSignatureSkipped(t *testing.T) {
 }
 
 func TestCallModuleHTMLFuncs_NoncePassthrough(t *testing.T) {
-	var receivedNonce string
+	var receivedNonce, receivedOrigin string
 	h := &FrontendHandler{}
 	funcs := template.FuncMap{
 		"testFunc": func(args ...any) template.HTML {
@@ -515,12 +515,20 @@ func TestCallModuleHTMLFuncs_NoncePassthrough(t *testing.T) {
 					receivedNonce = s
 				}
 			}
+			if len(args) > 1 {
+				if s, ok := args[1].(string); ok {
+					receivedOrigin = s
+				}
+			}
 			return ""
 		},
 	}
-	h.callModuleHTMLFuncs(funcs, "my-secret-nonce", "testFunc")
+	h.callModuleHTMLFuncs(funcs, "my-secret-nonce", "https://example.com", "testFunc")
 	if receivedNonce != "my-secret-nonce" {
 		t.Errorf("nonce: got %q; want %q", receivedNonce, "my-secret-nonce")
+	}
+	if receivedOrigin != "https://example.com" {
+		t.Errorf("origin: got %q; want %q", receivedOrigin, "https://example.com")
 	}
 }
 
@@ -541,7 +549,7 @@ func TestSetModuleTemplateFuncsProvider(t *testing.T) {
 		},
 	}
 	h.SetModuleTemplateFuncsProvider(&staticModuleFuncsProvider{funcs: funcs})
-	got := h.callModuleHTMLFuncs(h.moduleFuncsProvider.AllTemplateFuncs(), "nonce", "testFunc")
+	got := h.callModuleHTMLFuncs(h.moduleFuncsProvider.AllTemplateFuncs(), "nonce", "", "testFunc")
 	if got != "<test/>" {
 		t.Errorf("after SetModuleTemplateFuncsProvider: got %q; want %q", got, "<test/>")
 	}

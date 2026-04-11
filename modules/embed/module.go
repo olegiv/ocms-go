@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/time/rate"
@@ -172,25 +173,40 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 }
 
 // TemplateFuncs returns template functions provided by the module.
+//
+// embedHead and embedBody accept (nonce, origin) as variadic args. The origin
+// is required for providers that issue render-time proxy tokens bound to the
+// page origin; callers that don't have an origin can pass an empty string,
+// in which case token-dependent providers fall back to their "optional"
+// configuration.
 func (m *Module) TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
-		// embedHead returns scripts for the <head> section
 		"embedHead": func(args ...any) template.HTML {
-			return m.renderHead(firstStringArg(args...))
+			nonce, origin := parseRenderArgs(args...)
+			return m.renderHead(nonce, origin)
 		},
-		// embedBody returns scripts for before </body>
 		"embedBody": func(args ...any) template.HTML {
-			return m.renderBody(firstStringArg(args...))
+			nonce, origin := parseRenderArgs(args...)
+			return m.renderBody(nonce, origin)
 		},
 	}
 }
 
-func firstStringArg(args ...any) string {
-	if len(args) == 0 {
-		return ""
+func parseRenderArgs(args ...any) (nonce, origin string) {
+	if len(args) > 0 {
+		nonce, _ = args[0].(string)
 	}
-	s, _ := args[0].(string)
-	return s
+	if len(args) > 1 {
+		origin, _ = args[1].(string)
+	}
+	return nonce, origin
+}
+
+// IssueProxyToken mints a signed proxy token bound to the given origin.
+// Returns an error if the module has no proxy secret configured or the
+// origin is empty. Used by providers at render time via RenderContext.
+func (m *Module) IssueProxyToken(origin string) (string, time.Time, error) {
+	return m.issueSignedProxyToken(origin, time.Now())
 }
 
 // renderScripts generates all enabled provider scripts using the provided render function.
@@ -213,16 +229,26 @@ func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]stri
 }
 
 // renderHead generates all enabled provider head scripts.
-func (m *Module) renderHead(nonce string) template.HTML {
+func (m *Module) renderHead(nonce, _ string) template.HTML {
 	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
 		return p.RenderHead(s)
 	}, nonce)
 }
 
-// renderBody generates all enabled provider body scripts.
-func (m *Module) renderBody(nonce string) template.HTML {
+// renderBody generates all enabled provider body scripts. origin is the
+// normalized scheme://host of the page the widget will run on, used to
+// bind render-time proxy tokens to the correct origin.
+func (m *Module) renderBody(nonce, origin string) template.HTML {
 	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
-		return p.RenderBody(s)
+		rc := providers.RenderContext{
+			Origin: origin,
+		}
+		if origin != "" {
+			rc.IssueProxyToken = func() (string, time.Time, error) {
+				return m.IssueProxyToken(origin)
+			}
+		}
+		return p.RenderBody(s, rc)
 	}, nonce)
 }
 

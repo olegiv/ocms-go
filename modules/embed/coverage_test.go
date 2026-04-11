@@ -33,27 +33,30 @@ func testModuleDB(t *testing.T) (*Module, func()) {
 }
 
 // ---------------------------------------------------------------------------
-// firstStringArg
+// parseRenderArgs
 // ---------------------------------------------------------------------------
 
-func TestFirstStringArg(t *testing.T) {
+func TestParseRenderArgs(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     []any
-		expected string
+		name       string
+		args       []any
+		wantNonce  string
+		wantOrigin string
 	}{
-		{"no args", []any{}, ""},
-		{"one string", []any{"abc"}, "abc"},
-		{"non-string", []any{99}, ""},
-		{"nil", []any{nil}, ""},
-		{"multiple", []any{"first", "second"}, "first"},
+		{"no args", []any{}, "", ""},
+		{"nonce only", []any{"abc"}, "abc", ""},
+		{"nonce and origin", []any{"abc", "https://example.com"}, "abc", "https://example.com"},
+		{"non-string nonce", []any{99}, "", ""},
+		{"non-string origin", []any{"abc", 42}, "abc", ""},
+		{"nil", []any{nil}, "", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := firstStringArg(tt.args...)
-			if got != tt.expected {
-				t.Errorf("firstStringArg(%v) = %q, want %q", tt.args, got, tt.expected)
+			nonce, origin := parseRenderArgs(tt.args...)
+			if nonce != tt.wantNonce || origin != tt.wantOrigin {
+				t.Errorf("parseRenderArgs(%v) = (%q, %q); want (%q, %q)",
+					tt.args, nonce, origin, tt.wantNonce, tt.wantOrigin)
 			}
 		})
 	}
@@ -409,7 +412,7 @@ func TestRenderHead_NoEnabledProviders(t *testing.T) {
 	m, cleanup := testModuleDB(t)
 	defer cleanup()
 
-	result := m.renderHead("nonce123")
+	result := m.renderHead("nonce123", "")
 	if result != "" {
 		t.Errorf("renderHead() with no enabled providers = %q, want empty", result)
 	}
@@ -419,7 +422,7 @@ func TestRenderBody_NoEnabledProviders(t *testing.T) {
 	m, cleanup := testModuleDB(t)
 	defer cleanup()
 
-	result := m.renderBody("nonce123")
+	result := m.renderBody("nonce123", "")
 	if result != "" {
 		t.Errorf("renderBody() with no enabled providers = %q, want empty", result)
 	}
@@ -453,7 +456,7 @@ func TestRenderBody_WithEnabledProvider(t *testing.T) {
 		t.Fatalf("reloadSettings: %v", err)
 	}
 
-	result := string(m.renderBody(""))
+	result := string(m.renderBody("", ""))
 	if !strings.Contains(result, "dify-chat-widget") {
 		t.Error("expected dify widget HTML in renderBody output")
 	}
@@ -488,7 +491,7 @@ func TestRenderHead_WithEnabledProvider(t *testing.T) {
 	}
 
 	// Dify returns empty head. Just confirm no panic.
-	result := m.renderHead("nonce-test")
+	result := m.renderHead("nonce-test", "")
 	_ = result
 }
 
@@ -506,7 +509,7 @@ func TestRenderScripts_UnknownProvider(t *testing.T) {
 	m.mu.Unlock()
 
 	// renderHead should skip unknown providers without panicking.
-	result := m.renderHead("")
+	result := m.renderHead("", "")
 	if result != "" {
 		t.Errorf("renderHead with unknown provider = %q, want empty", result)
 	}

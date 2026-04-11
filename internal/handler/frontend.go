@@ -15,6 +15,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -226,6 +227,7 @@ type BaseTemplateData struct {
 	LangPrefix         string            // URL prefix for current language (e.g., "/ru" or "" for default)
 	ShowLanguagePicker bool              // Whether to show language picker
 	CSPNonce           string            // CSP nonce for inline scripts
+	PageOrigin         string            // Normalized scheme://host the page is served from — used by template funcs like embedBody that need to bind render-time tokens to the page origin
 
 	// Module-rendered HTML for templ-based layouts (aggregated from all active modules).
 	// HTML themes use template funcs directly; templ layouts use these fields.
@@ -447,7 +449,11 @@ func (h *FrontendHandler) SetModuleTemplateFuncsProvider(p ModuleTemplateFuncsPr
 }
 
 // callModuleHTMLFuncs calls named template functions and concatenates their HTML output.
-func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce string, names ...string) template.HTML {
+// origin is the normalized scheme://host of the incoming request; it is passed to
+// template funcs as a second positional argument so modules that need it (e.g. the
+// embed module, which mints render-time proxy tokens bound to the page origin) can
+// consume it. Funcs that only care about the nonce ignore the extra argument.
+func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce, origin string, names ...string) template.HTML {
 	var sb strings.Builder
 	for _, name := range names {
 		fn, ok := funcs[name]
@@ -455,12 +461,43 @@ func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce stri
 			continue
 		}
 		if f, ok := fn.(func(...any) template.HTML); ok {
-			if result := f(nonce); result != "" {
+			if result := f(nonce, origin); result != "" {
 				sb.WriteString(string(result))
 			}
 		}
 	}
 	return template.HTML(sb.String())
+}
+
+// requestPageOrigin returns a normalized scheme://host for the incoming request,
+// preferring the Origin header, falling back to Referer, and finally to the
+// request's own host + inferred scheme. Returns "" if the host cannot be
+// determined.
+func requestPageOrigin(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		if u, err := url.Parse(origin); err == nil && u.Scheme != "" && u.Host != "" {
+			return strings.ToLower(u.Scheme + "://" + u.Host)
+		}
+	}
+	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
+		if u, err := url.Parse(referer); err == nil && u.Scheme != "" && u.Host != "" {
+			return strings.ToLower(u.Scheme + "://" + u.Host)
+		}
+	}
+	host := r.Host
+	if host == "" {
+		return ""
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	} else if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto != "" {
+		scheme = strings.ToLower(proto)
+	}
+	return strings.ToLower(scheme + "://" + host)
 }
 
 // trustedPageBody returns page HTML for rendering, optionally sanitizing to
@@ -1888,6 +1925,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	ctx := r.Context()
 	site := h.getSiteData(ctx)
 
+	pageOrigin := requestPageOrigin(r)
 	data := BaseTemplateData{
 		Title:           title,
 		MetaDescription: metaDesc,
@@ -1903,6 +1941,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		ShowSearch:      true,
 		SearchQuery:     r.URL.Query().Get("q"),
 		CSPNonce:        middleware.GetCSPNonce(r),
+		PageOrigin:      pageOrigin,
 	}
 
 	// Populate module HTML for templ-based layouts by calling known template funcs.
@@ -1910,9 +1949,9 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	// Fetched per-request so module toggle takes effect without restart.
 	if h.moduleFuncsProvider != nil {
 		funcs := h.moduleFuncsProvider.AllTemplateFuncs()
-		data.ModuleHeadHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "privacyHead", "analyticsExtHead", "embedHead")
-		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "informerBar", "analyticsExtBody")
-		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "embedBody", "analyticsIntReadTracker")
+		data.ModuleHeadHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "privacyHead", "analyticsExtHead", "embedHead")
+		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "informerBar", "analyticsExtBody")
+		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "embedBody", "analyticsIntReadTracker")
 	}
 
 	// Get site logo and custom CSS from cache
