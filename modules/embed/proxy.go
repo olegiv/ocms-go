@@ -88,10 +88,6 @@ func (m *Module) handleDifyProxyToken(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !m.isStaticProxySecretAuthorized(r) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
 
 	origin, err := requestOrigin(r)
 	if err != nil {
