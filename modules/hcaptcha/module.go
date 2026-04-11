@@ -212,6 +212,30 @@ func (m *Module) Migrations() []module.Migration {
 				return err
 			},
 		},
+		{
+			Version:     2,
+			Description: "Scrub persisted hCaptcha test keys from upgraded installs",
+			Up: func(db *sql.DB) error {
+				// v1 previously seeded the hCaptcha test keys as column
+				// defaults, so upgraded installs keep them in the row even
+				// after v1's defaults are changed. Wipe any row whose keys
+				// still match the known test values and disable the module
+				// so IsEnabled() returns false until a real key is set.
+				_, err := db.Exec(`
+					UPDATE hcaptcha_settings
+					SET enabled = 0,
+					    site_key = '',
+					    secret_key = '',
+					    updated_at = CURRENT_TIMESTAMP
+					WHERE site_key = '10000000-ffff-ffff-ffff-000000000001'
+					   OR secret_key = '0x0000000000000000000000000000000000000000'
+				`)
+				return err
+			},
+			// Rolling back would restore the insecure test keys, which
+			// defeats the purpose of this scrub — keep Down as a no-op.
+			Down: func(_ *sql.DB) error { return nil },
+		},
 	}
 }
 

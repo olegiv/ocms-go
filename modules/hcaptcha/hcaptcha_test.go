@@ -65,7 +65,7 @@ func TestModuleAdminURL(t *testing.T) {
 
 func TestModuleMigrations(t *testing.T) {
 	m := New()
-	moduleutil.AssertMigrations(t, m.Migrations(), 1)
+	moduleutil.AssertMigrations(t, m.Migrations(), 2)
 }
 
 func TestModuleTemplateFuncs(t *testing.T) {

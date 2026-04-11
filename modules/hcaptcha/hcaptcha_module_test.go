@@ -640,6 +640,102 @@ func TestLoadSettingsNoRows(t *testing.T) {
 }
 
 // ============================================================================
+// Migration v2: scrub persisted hCaptcha test keys on upgrade
+// ============================================================================
+
+func TestMigrationV2ScrubsPersistedTestKeys(t *testing.T) {
+	const (
+		legacyTestSiteKey   = "10000000-ffff-ffff-ffff-000000000001"
+		legacyTestSecretKey = "0x0000000000000000000000000000000000000000"
+	)
+
+	// Simulate a pre-upgrade database: apply only v1, then seed the row with
+	// the legacy test keys (as older installs would have on disk).
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := New()
+	migrations := m.Migrations()
+	if len(migrations) < 2 {
+		t.Fatalf("expected at least 2 migrations, got %d", len(migrations))
+	}
+	if err := migrations[0].Up(db); err != nil {
+		t.Fatalf("migration v1 up: %v", err)
+	}
+	if _, err := db.Exec(`
+		UPDATE hcaptcha_settings
+		SET enabled = 1, site_key = ?, secret_key = ?
+		WHERE id = 1
+	`, legacyTestSiteKey, legacyTestSecretKey); err != nil {
+		t.Fatalf("seed legacy test keys: %v", err)
+	}
+
+	// Apply v2 and verify the row was scrubbed and disabled.
+	if err := migrations[1].Up(db); err != nil {
+		t.Fatalf("migration v2 up: %v", err)
+	}
+
+	settings, err := loadSettings(db)
+	if err != nil {
+		t.Fatalf("loadSettings: %v", err)
+	}
+	if settings.SiteKey != "" {
+		t.Errorf("SiteKey = %q, want empty", settings.SiteKey)
+	}
+	if settings.SecretKey != "" {
+		t.Errorf("SecretKey = %q, want empty", settings.SecretKey)
+	}
+	if settings.Enabled {
+		t.Error("Enabled = true, want false after scrub")
+	}
+
+	mod := New()
+	mod.settings = settings
+	if mod.IsEnabled() {
+		t.Error("IsEnabled() = true after scrub, want false")
+	}
+}
+
+func TestMigrationV2PreservesRealKeys(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := New()
+	migrations := m.Migrations()
+
+	// Apply v1, seed a row with real (non-test) keys.
+	if err := migrations[0].Up(db); err != nil {
+		t.Fatalf("migration v1 up: %v", err)
+	}
+	if _, err := db.Exec(`
+		UPDATE hcaptcha_settings
+		SET enabled = 1, site_key = ?, secret_key = ?
+		WHERE id = 1
+	`, "real-site-key", "real-secret-key"); err != nil {
+		t.Fatalf("seed real keys: %v", err)
+	}
+
+	// v2 must leave real keys untouched.
+	if err := migrations[1].Up(db); err != nil {
+		t.Fatalf("migration v2 up: %v", err)
+	}
+
+	settings, err := loadSettings(db)
+	if err != nil {
+		t.Fatalf("loadSettings: %v", err)
+	}
+	if settings.SiteKey != "real-site-key" {
+		t.Errorf("SiteKey = %q, want real-site-key", settings.SiteKey)
+	}
+	if settings.SecretKey != "real-secret-key" {
+		t.Errorf("SecretKey = %q, want real-secret-key", settings.SecretKey)
+	}
+	if !settings.Enabled {
+		t.Error("Enabled = false, want true (real keys should stay enabled)")
+	}
+}
+
+// ============================================================================
 // saveSettings: covers the update path when settings already exist
 // ============================================================================
 
