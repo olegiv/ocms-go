@@ -80,12 +80,16 @@ func (m *Module) handleDifyProxyToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !m.isRequestOriginAllowed(r) {
+	if strings.TrimSpace(m.proxyToken) == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(r.Header.Get(embedProxyTokenHeader))), []byte(strings.TrimSpace(m.proxyToken))) != 1 {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	if strings.TrimSpace(m.proxyToken) == "" {
-		http.NotFound(w, r)
+	if !m.isRequestOriginAllowed(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
