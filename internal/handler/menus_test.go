@@ -6,6 +6,8 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -360,6 +362,51 @@ func TestMenuItemDelete(t *testing.T) {
 	_, err = queries.GetMenuItemByID(context.Background(), item.ID)
 	if err == nil {
 		t.Error("expected error when getting deleted menu item")
+	}
+}
+
+func TestValidateMenuItemInputRejectsUnsafeURLScheme(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	_, ok := validateMenuItemInput(recorder, menuItemInput{
+		Title:  "Bad Link",
+		Target: "_self",
+		URL:    "javascript:alert(1)",
+	})
+	if ok {
+		t.Fatal("expected validation to fail for javascript URL")
+	}
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+}
+
+func TestValidateMenuItemInputAcceptsSafeURLs(t *testing.T) {
+	testCases := []string{
+		"/docs",
+		"#footer",
+		"?q=ocms",
+		"https://example.com",
+		"mailto:info@example.com",
+		"tel:+1234567890",
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+
+			validated, ok := validateMenuItemInput(recorder, menuItemInput{
+				Title:  "Good Link",
+				Target: "_self",
+				URL:    tc,
+			})
+			if !ok {
+				t.Fatalf("expected validation success for %q", tc)
+			}
+			if !validated.URL.Valid || validated.URL.String != tc {
+				t.Fatalf("validated URL = %#v, want %q", validated.URL, tc)
+			}
+		})
 	}
 }
 
