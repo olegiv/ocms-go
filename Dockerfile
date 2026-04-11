@@ -89,9 +89,9 @@ RUN mkdir -p /app/data /app/uploads /app/custom/themes /app/custom/modules /app/
 # Copy binary from builder
 COPY --from=builder /build/bin/ocms /app/ocms
 
-# Copy entrypoint script
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+# Copy entrypoint script outside writable /app tree
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Copy demo reset script (for Fly.io demo deployments)
 COPY .fly/scripts/reset-demo.sh /app/scripts/reset-demo.sh
@@ -120,5 +120,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 VOLUME ["/app/data", "/app/uploads", "/app/custom"]
 
 # Entrypoint handles permissions and drops to non-root user
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["/app/ocms"]
