@@ -564,6 +564,20 @@ func TestRequestPageOrigin(t *testing.T) {
 			want:    "https://example.com",
 		},
 		{
+			// Regression: multi-proxy chain may append to X-Forwarded-Proto.
+			// Only the leftmost (original client) value is meaningful.
+			name:    "multi-value X-Forwarded-Proto takes leftmost",
+			host:    "example.com",
+			headers: map[string]string{"X-Forwarded-Proto": "https,http"},
+			want:    "https://example.com",
+		},
+		{
+			name:    "multi-value X-Forwarded-Proto with space takes leftmost",
+			host:    "example.com",
+			headers: map[string]string{"X-Forwarded-Proto": "https, http"},
+			want:    "https://example.com",
+		},
+		{
 			name:    "ignores Referer from external site",
 			host:    "example.com",
 			headers: map[string]string{"Referer": "https://evil.example/some-path"},

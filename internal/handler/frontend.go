@@ -483,6 +483,12 @@ func requestPageOrigin(r *http.Request) string {
 	if r.TLS != nil {
 		scheme = "https"
 	} else if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto != "" {
+		// X-Forwarded-Proto may be a comma-separated list when a request
+		// traverses multiple proxies (RFC 7239). Only the leftmost value
+		// — the scheme the original client used — is meaningful here.
+		if comma := strings.Index(proto, ","); comma >= 0 {
+			proto = strings.TrimSpace(proto[:comma])
+		}
 		scheme = strings.ToLower(proto)
 	}
 	return strings.ToLower(scheme + "://" + r.Host)

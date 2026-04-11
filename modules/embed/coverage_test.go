@@ -4,10 +4,12 @@
 package embed
 
 import (
+	"database/sql"
 	"html/template"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
@@ -460,6 +462,131 @@ func TestRenderBody_WithEnabledProvider(t *testing.T) {
 	if !strings.Contains(result, "dify-chat-widget") {
 		t.Error("expected dify widget HTML in renderBody output")
 	}
+}
+
+// TestRenderBody_FallbackOrigin exercises the legacy-theme path: templates
+// that invoke {{embedBody .CSPNonce}} without .PageOrigin. Single-origin
+// deployments should still get a working widget via the allowedOrigins
+// fallback; multi- or zero-origin deployments fall into optional mode.
+func TestRenderBody_FallbackOrigin(t *testing.T) {
+	enableDify := func(t *testing.T, db *sql.DB, m *Module) {
+		t.Helper()
+		ps := &ProviderSettings{
+			ProviderID: "dify",
+			Settings: map[string]string{
+				"api_endpoint": "https://api.dify.ai/v1",
+				"api_key":      "app-testkey",
+			},
+			IsEnabled: true,
+		}
+		if err := saveProviderSettings(db, ps); err != nil {
+			t.Fatalf("saveProviderSettings: %v", err)
+		}
+		if err := m.reloadSettings(); err != nil {
+			t.Fatalf("reloadSettings: %v", err)
+		}
+	}
+
+	t.Run("single allowed origin is used as fallback", func(t *testing.T) {
+		db, cleanup := testutil.TestDB(t)
+		defer cleanup()
+		m := New()
+		moduleutil.RunMigrations(t, db, m.Migrations())
+		ctx, _ := moduleutil.TestModuleContext(t, db)
+		if err := m.Init(ctx); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+		defer func() { _ = m.Shutdown() }()
+		m.proxyToken = "test-secret"
+		m.allowedOrigins = map[string]struct{}{"https://example.com": {}}
+		enableDify(t, db, m)
+
+		// Empty origin arg → fallback kicks in → widget should embed a real
+		// token bound to https://example.com.
+		result := string(m.renderBody("nonce", ""))
+		if !strings.Contains(result, "proxyTokenOptional=false") {
+			t.Error("expected token to be injected (proxyTokenOptional=false) when a single allowed origin is configured")
+		}
+		if !strings.Contains(result, "proxyToken='") {
+			t.Error("expected a non-empty proxyToken literal")
+		}
+	})
+
+	t.Run("multiple allowed origins fall back to optional mode", func(t *testing.T) {
+		db, cleanup := testutil.TestDB(t)
+		defer cleanup()
+		m := New()
+		moduleutil.RunMigrations(t, db, m.Migrations())
+		ctx, _ := moduleutil.TestModuleContext(t, db)
+		if err := m.Init(ctx); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+		defer func() { _ = m.Shutdown() }()
+		m.proxyToken = "test-secret"
+		m.allowedOrigins = map[string]struct{}{
+			"https://a.example": {},
+			"https://b.example": {},
+		}
+		enableDify(t, db, m)
+
+		result := string(m.renderBody("nonce", ""))
+		if !strings.Contains(result, "proxyTokenOptional=true") {
+			t.Error("expected optional mode (proxyTokenOptional=true) when origin is ambiguous")
+		}
+	})
+
+	t.Run("no allowed origins fall back to optional mode", func(t *testing.T) {
+		db, cleanup := testutil.TestDB(t)
+		defer cleanup()
+		m := New()
+		moduleutil.RunMigrations(t, db, m.Migrations())
+		ctx, _ := moduleutil.TestModuleContext(t, db)
+		if err := m.Init(ctx); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+		defer func() { _ = m.Shutdown() }()
+		m.proxyToken = "test-secret"
+		m.allowedOrigins = map[string]struct{}{}
+		enableDify(t, db, m)
+
+		result := string(m.renderBody("nonce", ""))
+		if !strings.Contains(result, "proxyTokenOptional=true") {
+			t.Error("expected optional mode when no allowed origins are configured")
+		}
+	})
+
+	t.Run("explicit origin arg beats fallback", func(t *testing.T) {
+		db, cleanup := testutil.TestDB(t)
+		defer cleanup()
+		m := New()
+		moduleutil.RunMigrations(t, db, m.Migrations())
+		ctx, _ := moduleutil.TestModuleContext(t, db)
+		if err := m.Init(ctx); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+		defer func() { _ = m.Shutdown() }()
+		m.proxyToken = "test-secret"
+		m.allowedOrigins = map[string]struct{}{"https://example.com": {}}
+		enableDify(t, db, m)
+
+		// Explicit origin is used verbatim; the token must validate for that
+		// origin and nothing else.
+		result := string(m.renderBody("nonce", "https://other.example"))
+		if !strings.Contains(result, "proxyTokenOptional=false") {
+			t.Error("expected token injected for explicit origin")
+		}
+		_, rest, ok := strings.Cut(result, "proxyToken='")
+		if !ok {
+			t.Fatal("no proxyToken literal found")
+		}
+		token, _, ok := strings.Cut(rest, "'")
+		if !ok {
+			t.Fatal("unterminated proxyToken literal")
+		}
+		if err := m.validateSignedProxyToken(token, "https://other.example", time.Now()); err != nil {
+			t.Errorf("explicit-origin token should validate for https://other.example: %v", err)
+		}
+	})
 }
 
 func TestRenderHead_WithEnabledProvider(t *testing.T) {

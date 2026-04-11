@@ -50,6 +50,9 @@ type Module struct {
 	proxyToken                string
 	requireProxyToken         bool
 	mu                        sync.RWMutex
+	// warnLegacyThemeOnce dedupes the "theme template did not pass PageOrigin"
+	// warning so legacy custom themes don't flood the log on every pageview.
+	warnLegacyThemeOnce sync.Once
 }
 
 // New creates a new instance of the embed module.
@@ -237,19 +240,57 @@ func (m *Module) renderHead(nonce, _ string) template.HTML {
 
 // renderBody generates all enabled provider body scripts. origin is the
 // normalized scheme://host of the page the widget will run on, used to
-// bind render-time proxy tokens to the correct origin.
+// bind render-time proxy tokens to the correct origin. If origin is empty
+// (legacy theme templates that did not pass .PageOrigin), fall back to the
+// single configured allowed origin if there is exactly one; otherwise log
+// a one-shot warning and render the widget in optional mode.
 func (m *Module) renderBody(nonce, origin string) template.HTML {
+	effectiveOrigin := origin
+	if effectiveOrigin == "" {
+		effectiveOrigin = m.fallbackRenderOrigin()
+	}
 	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
 		rc := providers.RenderContext{
-			Origin: origin,
+			Origin: effectiveOrigin,
 		}
-		if origin != "" {
+		if effectiveOrigin != "" {
 			rc.IssueProxyToken = func() (string, time.Time, error) {
-				return m.IssueProxyToken(origin)
+				return m.IssueProxyToken(effectiveOrigin)
 			}
 		}
 		return p.RenderBody(s, rc)
 	}, nonce)
+}
+
+// fallbackRenderOrigin picks a safe default origin when a theme template
+// does not pass one to embedBody. It only succeeds when exactly one
+// allowed origin is configured — multi-origin deployments have no single
+// correct answer without request context. In every non-matching case it
+// emits a one-shot warning so operators can update the theme.
+func (m *Module) fallbackRenderOrigin() string {
+	m.mu.RLock()
+	origins := make([]string, 0, len(m.allowedOrigins))
+	for o := range m.allowedOrigins {
+		origins = append(origins, o)
+	}
+	m.mu.RUnlock()
+
+	if len(origins) == 1 {
+		return origins[0]
+	}
+
+	m.warnLegacyThemeOnce.Do(func() {
+		if m == nil || m.ctx == nil || m.ctx.Logger == nil {
+			return
+		}
+		m.ctx.Logger.Warn(
+			"embed renderBody called without page origin; widget will render in optional mode. "+
+				"Update your theme template to pass .PageOrigin to embedBody "+
+				"(e.g. {{embedBody .CSPNonce .PageOrigin}}).",
+			"allowed_origins", len(origins),
+		)
+	})
+	return ""
 }
 
 // AdminURL returns the admin dashboard URL for the module.
