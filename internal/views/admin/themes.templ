@@ -28,6 +28,11 @@ func safeThemeImageURL(raw string) string {
 		return raw
 	}
 
+	// Allow bundled theme static assets: /themes/{theme}/static/...
+	if strings.HasPrefix(raw, "/themes/") && strings.Contains(raw, "/static/") {
+		return raw
+	}
+
 	parsed, err := url.Parse(raw)
 	if err != nil {
 		return ""
@@ -342,8 +347,11 @@ templ themeSettingsScript(pc *PageContext) {
 		// Allow /uploads/ paths (media API returns these)
 		if (url.startsWith('/uploads/')) return true;
 
-		// Allow /static/ paths (theme assets)
+		// Allow /static/ paths
 		if (url.startsWith('/static/')) return true;
+
+		// Allow bundled theme assets under /themes/{theme}/static/*
+		if (url.startsWith('/themes/') && url.indexOf('/static/') !== -1) return true;
 
 		// For other values, only allow absolute HTTP(S) URLs
 		try {

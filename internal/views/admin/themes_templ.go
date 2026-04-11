@@ -37,6 +37,11 @@ func safeThemeImageURL(raw string) string {
 		return raw
 	}
 
+	// Allow bundled theme static assets: /themes/{theme}/static/...
+	if strings.HasPrefix(raw, "/themes/") && strings.Contains(raw, "/static/") {
+		return raw
+	}
+
 	parsed, err := url.Parse(raw)
 	if err != nil {
 		return ""
@@ -179,7 +184,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var6 string
 						templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs("/themes/" + thm.Name + "/static/" + thm.ConfigScreenshot)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 92, Col: 76}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 97, Col: 76}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 						if templ_7745c5c3_Err != nil {
@@ -192,7 +197,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var7 string
 						templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(thm.ConfigName + " preview")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 92, Col: 112}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 97, Col: 112}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 						if templ_7745c5c3_Err != nil {
@@ -224,7 +229,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var8 string
 						templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.active"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 99, Col: 70}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 104, Col: 70}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 						if templ_7745c5c3_Err != nil {
@@ -243,7 +248,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var9 string
 						templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.core"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 102, Col: 66}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 107, Col: 66}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 						if templ_7745c5c3_Err != nil {
@@ -261,7 +266,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var10 string
 						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.custom"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 104, Col: 70}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 109, Col: 70}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 						if templ_7745c5c3_Err != nil {
@@ -279,7 +284,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(thm.ConfigName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 108, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 113, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
@@ -292,7 +297,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.version"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 109, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 114, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 					if templ_7745c5c3_Err != nil {
@@ -305,7 +310,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(thm.ConfigVersion)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 109, Col: 78}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 114, Col: 78}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
@@ -323,7 +328,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var14 string
 						templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.author"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 111, Col: 55}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 116, Col: 55}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 						if templ_7745c5c3_Err != nil {
@@ -336,7 +341,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var15 string
 						templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(thm.ConfigAuthor)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 111, Col: 76}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 116, Col: 76}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 						if templ_7745c5c3_Err != nil {
@@ -355,7 +360,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var16 string
 						templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(thm.ConfigDescription)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 114, Col: 60}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 119, Col: 60}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 						if templ_7745c5c3_Err != nil {
@@ -378,7 +383,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var17 string
 						templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(thm.Name)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 120, Col: 59}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 125, Col: 59}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 						if templ_7745c5c3_Err != nil {
@@ -411,7 +416,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 							var templ_7745c5c3_Var19 string
 							templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.activate"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 123, Col: 35}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 128, Col: 35}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 							if templ_7745c5c3_Err != nil {
@@ -452,7 +457,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 							var templ_7745c5c3_Var21 string
 							templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.settings"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 130, Col: 34}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 135, Col: 34}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 							if templ_7745c5c3_Err != nil {
@@ -514,7 +519,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var24 string
 						templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.no_themes"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 142, Col: 35}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 147, Col: 35}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 						if templ_7745c5c3_Err != nil {
@@ -527,7 +532,7 @@ func ThemesListPage(pc *PageContext, data ThemesListData) templ.Component {
 						var templ_7745c5c3_Var25 string
 						templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.no_themes_hint"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 143, Col: 62}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 148, Col: 62}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 						if templ_7745c5c3_Err != nil {
@@ -629,7 +634,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 					var templ_7745c5c3_Var30 string
 					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.back_to_themes"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 157, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 162, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 					if templ_7745c5c3_Err != nil {
@@ -690,7 +695,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 						var templ_7745c5c3_Var34 string
 						templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.theme_settings"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 163, Col: 36}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 168, Col: 36}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 						if templ_7745c5c3_Err != nil {
@@ -722,7 +727,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 							var templ_7745c5c3_Var36 string
 							templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.active_theme"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 167, Col: 35}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 172, Col: 35}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 							if templ_7745c5c3_Err != nil {
@@ -748,7 +753,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 				var templ_7745c5c3_Var37 templ.SafeURL
 				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/themes/%s/settings", data.ThemeName)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 171, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 176, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
@@ -782,7 +787,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 						var templ_7745c5c3_Var39 string
 						templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.demo_readonly"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 176, Col: 42}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 181, Col: 42}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 						if templ_7745c5c3_Err != nil {
@@ -824,7 +829,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 							var templ_7745c5c3_Var41 string
 							templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.TDefault(fmt.Sprintf("theme_settings.%s", setting.Key), setting.Label))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 184, Col: 84}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 189, Col: 84}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 							if templ_7745c5c3_Err != nil {
@@ -865,7 +870,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 							var templ_7745c5c3_Var42 string
 							templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(setting.Error)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 196, Col: 49}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 201, Col: 49}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 							if templ_7745c5c3_Err != nil {
@@ -913,7 +918,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 							var templ_7745c5c3_Var44 string
 							templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.save_settings"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 205, Col: 38}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 210, Col: 38}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 							if templ_7745c5c3_Err != nil {
@@ -940,7 +945,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 							var templ_7745c5c3_Var46 string
 							templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 208, Col: 28}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 213, Col: 28}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 							if templ_7745c5c3_Err != nil {
@@ -973,7 +978,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 					var templ_7745c5c3_Var47 string
 					templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.no_settings"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 215, Col: 37}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 220, Col: 37}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 					if templ_7745c5c3_Err != nil {
@@ -986,7 +991,7 @@ func ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) templ.Compon
 					var templ_7745c5c3_Var48 string
 					templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.no_settings_hint"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 216, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 221, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 					if templ_7745c5c3_Err != nil {
@@ -1062,7 +1067,7 @@ func themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting Them
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(setting.Key)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 231, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 236, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 		if templ_7745c5c3_Err != nil {
@@ -1075,7 +1080,7 @@ func themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting Them
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(setting.Key)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 232, Col: 21}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 237, Col: 21}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
@@ -1088,7 +1093,7 @@ func themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting Them
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(setting.Value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 234, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 239, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 		if templ_7745c5c3_Err != nil {
@@ -1111,7 +1116,7 @@ func themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting Them
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(setting.Value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 240, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 245, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
@@ -1217,7 +1222,7 @@ func themeSettingSelect(pc *PageContext, data ThemeSettingsViewData, setting The
 						var templ_7745c5c3_Var59 string
 						templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(pc.TDefault(fmt.Sprintf("option.%s", opt), opt))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 262, Col: 54}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 267, Col: 54}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 						if templ_7745c5c3_Err != nil {
@@ -1283,7 +1288,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var61 string
 			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs("preview-" + setting.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 273, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 278, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 			if templ_7745c5c3_Err != nil {
@@ -1296,7 +1301,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var62 string
 			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(safeThemeImageURL(setting.Value))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 274, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 279, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 			if templ_7745c5c3_Err != nil {
@@ -1309,7 +1314,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var63 string
 			templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(setting.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 274, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 279, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 			if templ_7745c5c3_Err != nil {
@@ -1327,7 +1332,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var64 string
 			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs("preview-" + setting.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 277, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 282, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 			if templ_7745c5c3_Err != nil {
@@ -1340,7 +1345,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var65 string
 			templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(setting.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 278, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 283, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 			if templ_7745c5c3_Err != nil {
@@ -1392,7 +1397,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 				var templ_7745c5c3_Var67 string
 				templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("themes.browse"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 298, Col: 27}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 303, Col: 27}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 				if templ_7745c5c3_Err != nil {
@@ -1445,7 +1450,7 @@ func themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting Them
 			var templ_7745c5c3_Var69 string
 			templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("theme_settings.favicon_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 308, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 313, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 			if templ_7745c5c3_Err != nil {
@@ -1529,20 +1534,20 @@ func themeSettingsScript(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 329, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 334, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\">\n\t// Sync color input with text display\n\tdocument.querySelectorAll('.color-input').forEach(function(colorInput) {\n\t\tvar textInput = colorInput.nextElementSibling;\n\t\tcolorInput.addEventListener('input', function() {\n\t\t\ttextInput.value = this.value;\n\t\t});\n\t});\n\n\t// Validate URL to prevent XSS - only allow safe schemes and paths\n\tfunction isValidImageUrl(url) {\n\t\tif (!url || typeof url !== 'string') return false;\n\n\t\t// Allow /uploads/ paths (media API returns these)\n\t\tif (url.startsWith('/uploads/')) return true;\n\n\t\t// Allow /static/ paths (theme assets)\n\t\tif (url.startsWith('/static/')) return true;\n\n\t\t// For other values, only allow absolute HTTP(S) URLs\n\t\ttry {\n\t\t\tvar parsed = new URL(url, window.location.origin);\n\t\t\tif (parsed.origin === window.location.origin) {\n\t\t\t\t// Relative URL resolved against current origin but not under allowed paths\n\t\t\t\treturn false;\n\t\t\t}\n\t\t\treturn parsed.protocol === 'http:' || parsed.protocol === 'https:';\n\t\t} catch (e) {\n\t\t\t// Invalid URL\n\t\t\treturn false;\n\t\t}\n\t}\n\n\t// Safely set image src with validation\n\tfunction safeSetImageSrc(img, url) {\n\t\tif (isValidImageUrl(url)) {\n\t\t\t// Use URL constructor to sanitize and escape meta-characters\n\t\t\ttry {\n\t\t\t\tvar sanitized = new URL(url, window.location.origin);\n\t\t\t\timg.src = sanitized.href;\n\t\t\t\treturn true;\n\t\t\t} catch (e) {\n\t\t\t\treturn false;\n\t\t\t}\n\t\t}\n\t\treturn false;\n\t}\n\n\t// Update image preview when URL changes\n\tfunction updateImagePreview(fieldId) {\n\t\tvar input = document.getElementById(fieldId);\n\t\tvar preview = document.getElementById('preview-' + fieldId);\n\t\tif (preview && input) {\n\t\t\tvar img = preview.querySelector('img');\n\t\t\tif (input.value && safeSetImageSrc(img, input.value)) {\n\t\t\t\tpreview.style.display = 'block';\n\t\t\t} else {\n\t\t\t\tpreview.style.display = 'none';\n\t\t\t}\n\t\t}\n\t}\n\n\t// Clear image field and hide preview\n\tfunction clearImageField(fieldId) {\n\t\tvar input = document.getElementById(fieldId);\n\t\tvar preview = document.getElementById('preview-' + fieldId);\n\t\tif (input) {\n\t\t\tinput.value = '';\n\t\t}\n\t\tif (preview) {\n\t\t\tpreview.style.display = 'none';\n\t\t}\n\t}\n\n\t// Escape HTML to prevent XSS in dynamic content\n\tfunction escapeHtml(text) {\n\t\tvar div = document.createElement('div');\n\t\tdiv.textContent = text;\n\t\treturn div.innerHTML;\n\t}\n\n\t// Attach change handlers to image URL inputs\n\tdocument.querySelectorAll('.image-url-input').forEach(function(input) {\n\t\tinput.addEventListener('change', function() {\n\t\t\tupdateImagePreview(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Attach click handlers to media browse buttons\n\tdocument.querySelectorAll('.btn-media-browse').forEach(function(btn) {\n\t\tbtn.addEventListener('click', function() {\n\t\t\topenMediaPicker(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Attach click handlers to image clear buttons\n\tdocument.querySelectorAll('.btn-image-clear').forEach(function(btn) {\n\t\tbtn.addEventListener('click', function() {\n\t\t\tclearImageField(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Open media picker modal\n\tfunction openMediaPicker(fieldId) {\n\t\t// Create modal overlay\n\t\tvar overlay = document.createElement('div');\n\t\toverlay.className = 'modal-overlay';\n\t\toverlay.id = 'media-picker-overlay';\n\t\toverlay.onclick = function(e) {\n\t\t\tif (e.target === overlay) closeMediaPicker();\n\t\t};\n\n\t\t// Create modal content\n\t\tvar modal = document.createElement('div');\n\t\tmodal.className = 'modal media-picker-modal';\n\n\t\tvar header = document.createElement('div');\n\t\theader.className = 'modal-header';\n\t\tvar h3 = document.createElement('h3');\n\t\th3.textContent = document.getElementById('media-picker-title').value;\n\t\tvar closeBtn = document.createElement('button');\n\t\tcloseBtn.type = 'button';\n\t\tcloseBtn.className = 'modal-close';\n\t\tcloseBtn.textContent = '\\u00D7';\n\t\tcloseBtn.onclick = closeMediaPicker;\n\t\theader.appendChild(h3);\n\t\theader.appendChild(closeBtn);\n\n\t\tvar body = document.createElement('div');\n\t\tbody.className = 'modal-body';\n\t\tvar content = document.createElement('div');\n\t\tcontent.id = 'media-picker-content';\n\t\tcontent.className = 'media-picker-loading';\n\t\tcontent.textContent = document.getElementById('media-picker-loading-text').value + '...';\n\t\tbody.appendChild(content);\n\n\t\tmodal.appendChild(header);\n\t\tmodal.appendChild(body);\n\t\toverlay.appendChild(modal);\n\t\tdocument.body.appendChild(overlay);\n\t\tdocument.body.classList.add('modal-open');\n\n\t\t// Load media items\n\t\tfetch('/admin/media/api?type=image&limit=50')\n\t\t\t.then(function(response) { return response.json(); })\n\t\t\t.then(function(data) {\n\t\t\t\tvar content = document.getElementById('media-picker-content');\n\t\t\t\tif (data.items && data.items.length > 0) {\n\t\t\t\t\tcontent.className = 'media-picker-grid';\n\t\t\t\t\tcontent.innerHTML = '';\n\t\t\t\t\tdata.items.forEach(function(item) {\n\t\t\t\t\t\tvar filepath = item.filepath || '';\n\t\t\t\t\t\tvar thumbnail = item.thumbnail || filepath;\n\t\t\t\t\t\tvar filename = item.filename || '';\n\n\t\t\t\t\t\tif (!isValidImageUrl(filepath)) return;\n\n\t\t\t\t\t\tvar div = document.createElement('div');\n\t\t\t\t\t\tdiv.className = 'media-picker-item';\n\t\t\t\t\t\tdiv.onclick = function() { selectMedia(fieldId, filepath); };\n\n\t\t\t\t\t\tvar img = document.createElement('img');\n\t\t\t\t\t\tsafeSetImageSrc(img, thumbnail);\n\t\t\t\t\t\timg.alt = escapeHtml(filename);\n\n\t\t\t\t\t\tvar span = document.createElement('span');\n\t\t\t\t\t\tspan.className = 'media-picker-filename';\n\t\t\t\t\t\tspan.textContent = filename;\n\n\t\t\t\t\t\tdiv.appendChild(img);\n\t\t\t\t\t\tdiv.appendChild(span);\n\t\t\t\t\t\tcontent.appendChild(div);\n\t\t\t\t\t});\n\t\t\t\t\tif (content.children.length === 0) {\n\t\t\t\t\t\tcontent.innerHTML = '<p style=\"text-align: center; padding: 2rem;\">' + escapeHtml(document.getElementById('media-picker-no-media').value) + '</p>';\n\t\t\t\t\t}\n\t\t\t\t} else {\n\t\t\t\t\tcontent.innerHTML = '<p style=\"text-align: center; padding: 2rem;\">' + escapeHtml(document.getElementById('media-picker-no-media').value) + '</p>';\n\t\t\t\t}\n\t\t\t})\n\t\t\t.catch(function() {\n\t\t\t\tdocument.getElementById('media-picker-content').innerHTML = '<p style=\"text-align: center; padding: 2rem; color: var(--color-danger);\">' + escapeHtml(document.getElementById('media-picker-error').value) + '</p>';\n\t\t\t});\n\t}\n\n\tfunction closeMediaPicker() {\n\t\tvar overlay = document.getElementById('media-picker-overlay');\n\t\tif (overlay) {\n\t\t\toverlay.remove();\n\t\t\tdocument.body.classList.remove('modal-open');\n\t\t}\n\t}\n\n\tfunction selectMedia(fieldId, url) {\n\t\tif (!isValidImageUrl(url)) return;\n\t\tvar input = document.getElementById(fieldId);\n\t\tif (input) {\n\t\t\tinput.value = url;\n\t\t\tupdateImagePreview(fieldId);\n\t\t}\n\t\tcloseMediaPicker();\n\t}\n\t</script><!-- Hidden inputs for i18n strings used by JavaScript --><input type=\"hidden\" id=\"media-picker-title\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\">\n\t// Sync color input with text display\n\tdocument.querySelectorAll('.color-input').forEach(function(colorInput) {\n\t\tvar textInput = colorInput.nextElementSibling;\n\t\tcolorInput.addEventListener('input', function() {\n\t\t\ttextInput.value = this.value;\n\t\t});\n\t});\n\n\t// Validate URL to prevent XSS - only allow safe schemes and paths\n\tfunction isValidImageUrl(url) {\n\t\tif (!url || typeof url !== 'string') return false;\n\n\t\t// Allow /uploads/ paths (media API returns these)\n\t\tif (url.startsWith('/uploads/')) return true;\n\n\t\t// Allow /static/ paths\n\t\tif (url.startsWith('/static/')) return true;\n\n\t\t// Allow bundled theme assets under /themes/{theme}/static/*\n\t\tif (url.startsWith('/themes/') && url.indexOf('/static/') !== -1) return true;\n\n\t\t// For other values, only allow absolute HTTP(S) URLs\n\t\ttry {\n\t\t\tvar parsed = new URL(url, window.location.origin);\n\t\t\tif (parsed.origin === window.location.origin) {\n\t\t\t\t// Relative URL resolved against current origin but not under allowed paths\n\t\t\t\treturn false;\n\t\t\t}\n\t\t\treturn parsed.protocol === 'http:' || parsed.protocol === 'https:';\n\t\t} catch (e) {\n\t\t\t// Invalid URL\n\t\t\treturn false;\n\t\t}\n\t}\n\n\t// Safely set image src with validation\n\tfunction safeSetImageSrc(img, url) {\n\t\tif (isValidImageUrl(url)) {\n\t\t\t// Use URL constructor to sanitize and escape meta-characters\n\t\t\ttry {\n\t\t\t\tvar sanitized = new URL(url, window.location.origin);\n\t\t\t\timg.src = sanitized.href;\n\t\t\t\treturn true;\n\t\t\t} catch (e) {\n\t\t\t\treturn false;\n\t\t\t}\n\t\t}\n\t\treturn false;\n\t}\n\n\t// Update image preview when URL changes\n\tfunction updateImagePreview(fieldId) {\n\t\tvar input = document.getElementById(fieldId);\n\t\tvar preview = document.getElementById('preview-' + fieldId);\n\t\tif (preview && input) {\n\t\t\tvar img = preview.querySelector('img');\n\t\t\tif (input.value && safeSetImageSrc(img, input.value)) {\n\t\t\t\tpreview.style.display = 'block';\n\t\t\t} else {\n\t\t\t\tpreview.style.display = 'none';\n\t\t\t}\n\t\t}\n\t}\n\n\t// Clear image field and hide preview\n\tfunction clearImageField(fieldId) {\n\t\tvar input = document.getElementById(fieldId);\n\t\tvar preview = document.getElementById('preview-' + fieldId);\n\t\tif (input) {\n\t\t\tinput.value = '';\n\t\t}\n\t\tif (preview) {\n\t\t\tpreview.style.display = 'none';\n\t\t}\n\t}\n\n\t// Escape HTML to prevent XSS in dynamic content\n\tfunction escapeHtml(text) {\n\t\tvar div = document.createElement('div');\n\t\tdiv.textContent = text;\n\t\treturn div.innerHTML;\n\t}\n\n\t// Attach change handlers to image URL inputs\n\tdocument.querySelectorAll('.image-url-input').forEach(function(input) {\n\t\tinput.addEventListener('change', function() {\n\t\t\tupdateImagePreview(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Attach click handlers to media browse buttons\n\tdocument.querySelectorAll('.btn-media-browse').forEach(function(btn) {\n\t\tbtn.addEventListener('click', function() {\n\t\t\topenMediaPicker(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Attach click handlers to image clear buttons\n\tdocument.querySelectorAll('.btn-image-clear').forEach(function(btn) {\n\t\tbtn.addEventListener('click', function() {\n\t\t\tclearImageField(this.dataset.fieldId);\n\t\t});\n\t});\n\n\t// Open media picker modal\n\tfunction openMediaPicker(fieldId) {\n\t\t// Create modal overlay\n\t\tvar overlay = document.createElement('div');\n\t\toverlay.className = 'modal-overlay';\n\t\toverlay.id = 'media-picker-overlay';\n\t\toverlay.onclick = function(e) {\n\t\t\tif (e.target === overlay) closeMediaPicker();\n\t\t};\n\n\t\t// Create modal content\n\t\tvar modal = document.createElement('div');\n\t\tmodal.className = 'modal media-picker-modal';\n\n\t\tvar header = document.createElement('div');\n\t\theader.className = 'modal-header';\n\t\tvar h3 = document.createElement('h3');\n\t\th3.textContent = document.getElementById('media-picker-title').value;\n\t\tvar closeBtn = document.createElement('button');\n\t\tcloseBtn.type = 'button';\n\t\tcloseBtn.className = 'modal-close';\n\t\tcloseBtn.textContent = '\\u00D7';\n\t\tcloseBtn.onclick = closeMediaPicker;\n\t\theader.appendChild(h3);\n\t\theader.appendChild(closeBtn);\n\n\t\tvar body = document.createElement('div');\n\t\tbody.className = 'modal-body';\n\t\tvar content = document.createElement('div');\n\t\tcontent.id = 'media-picker-content';\n\t\tcontent.className = 'media-picker-loading';\n\t\tcontent.textContent = document.getElementById('media-picker-loading-text').value + '...';\n\t\tbody.appendChild(content);\n\n\t\tmodal.appendChild(header);\n\t\tmodal.appendChild(body);\n\t\toverlay.appendChild(modal);\n\t\tdocument.body.appendChild(overlay);\n\t\tdocument.body.classList.add('modal-open');\n\n\t\t// Load media items\n\t\tfetch('/admin/media/api?type=image&limit=50')\n\t\t\t.then(function(response) { return response.json(); })\n\t\t\t.then(function(data) {\n\t\t\t\tvar content = document.getElementById('media-picker-content');\n\t\t\t\tif (data.items && data.items.length > 0) {\n\t\t\t\t\tcontent.className = 'media-picker-grid';\n\t\t\t\t\tcontent.innerHTML = '';\n\t\t\t\t\tdata.items.forEach(function(item) {\n\t\t\t\t\t\tvar filepath = item.filepath || '';\n\t\t\t\t\t\tvar thumbnail = item.thumbnail || filepath;\n\t\t\t\t\t\tvar filename = item.filename || '';\n\n\t\t\t\t\t\tif (!isValidImageUrl(filepath)) return;\n\n\t\t\t\t\t\tvar div = document.createElement('div');\n\t\t\t\t\t\tdiv.className = 'media-picker-item';\n\t\t\t\t\t\tdiv.onclick = function() { selectMedia(fieldId, filepath); };\n\n\t\t\t\t\t\tvar img = document.createElement('img');\n\t\t\t\t\t\tsafeSetImageSrc(img, thumbnail);\n\t\t\t\t\t\timg.alt = escapeHtml(filename);\n\n\t\t\t\t\t\tvar span = document.createElement('span');\n\t\t\t\t\t\tspan.className = 'media-picker-filename';\n\t\t\t\t\t\tspan.textContent = filename;\n\n\t\t\t\t\t\tdiv.appendChild(img);\n\t\t\t\t\t\tdiv.appendChild(span);\n\t\t\t\t\t\tcontent.appendChild(div);\n\t\t\t\t\t});\n\t\t\t\t\tif (content.children.length === 0) {\n\t\t\t\t\t\tcontent.innerHTML = '<p style=\"text-align: center; padding: 2rem;\">' + escapeHtml(document.getElementById('media-picker-no-media').value) + '</p>';\n\t\t\t\t\t}\n\t\t\t\t} else {\n\t\t\t\t\tcontent.innerHTML = '<p style=\"text-align: center; padding: 2rem;\">' + escapeHtml(document.getElementById('media-picker-no-media').value) + '</p>';\n\t\t\t\t}\n\t\t\t})\n\t\t\t.catch(function() {\n\t\t\t\tdocument.getElementById('media-picker-content').innerHTML = '<p style=\"text-align: center; padding: 2rem; color: var(--color-danger);\">' + escapeHtml(document.getElementById('media-picker-error').value) + '</p>';\n\t\t\t});\n\t}\n\n\tfunction closeMediaPicker() {\n\t\tvar overlay = document.getElementById('media-picker-overlay');\n\t\tif (overlay) {\n\t\t\toverlay.remove();\n\t\t\tdocument.body.classList.remove('modal-open');\n\t\t}\n\t}\n\n\tfunction selectMedia(fieldId, url) {\n\t\tif (!isValidImageUrl(url)) return;\n\t\tvar input = document.getElementById(fieldId);\n\t\tif (input) {\n\t\t\tinput.value = url;\n\t\t\tupdateImagePreview(fieldId);\n\t\t}\n\t\tcloseMediaPicker();\n\t}\n\t</script><!-- Hidden inputs for i18n strings used by JavaScript --><input type=\"hidden\" id=\"media-picker-title\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var73 string
 		templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.select_image"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 533, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 541, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 		if templ_7745c5c3_Err != nil {
@@ -1555,7 +1560,7 @@ func themeSettingsScript(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var74 string
 		templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.loading"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 534, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 542, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 		if templ_7745c5c3_Err != nil {
@@ -1568,7 +1573,7 @@ func themeSettingsScript(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var75 string
 		templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.no_media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 535, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 543, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 		if templ_7745c5c3_Err != nil {
@@ -1581,7 +1586,7 @@ func themeSettingsScript(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var76 string
 		templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("error.loading_failed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 536, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/themes.templ`, Line: 544, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 		if templ_7745c5c3_Err != nil {

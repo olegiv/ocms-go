@@ -14,6 +14,7 @@ func TestSafeThemeImageURL(t *testing.T) {
 		{name: "empty", in: "", want: ""},
 		{name: "uploads path", in: "/uploads/site/logo.png", want: "/uploads/site/logo.png"},
 		{name: "static path", in: "/static/themes/default/logo.svg", want: "/static/themes/default/logo.svg"},
+		{name: "theme static path", in: "/themes/default/static/logo.svg", want: "/themes/default/static/logo.svg"},
 		{name: "http url", in: "http://example.com/logo.png", want: "http://example.com/logo.png"},
 		{name: "https url", in: "https://cdn.example.com/logo.png", want: "https://cdn.example.com/logo.png"},
 		{name: "trim whitespace", in: "   /uploads/site/logo.png  ", want: "/uploads/site/logo.png"},
