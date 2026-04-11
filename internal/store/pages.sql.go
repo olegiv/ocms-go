@@ -1613,7 +1613,7 @@ func (q *Queries) ListScheduledPages(ctx context.Context, arg ListScheduledPages
 
 const publishPage = `-- name: PublishPage :one
 UPDATE pages
-SET status = 'published', published_at = ?, updated_at = ?
+SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
 WHERE id = ?
 RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
 `
@@ -1997,7 +1997,7 @@ func (q *Queries) SlugOrAliasExistsExcluding(ctx context.Context, arg SlugOrAlia
 
 const unpublishPage = `-- name: UnpublishPage :one
 UPDATE pages
-SET status = 'draft', published_at = NULL, updated_at = ?
+SET status = 'draft', published_at = NULL, scheduled_at = NULL, updated_at = ?
 WHERE id = ?
 RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
 `

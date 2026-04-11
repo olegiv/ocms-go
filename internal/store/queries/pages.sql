@@ -29,13 +29,13 @@ UPDATE pages SET created_at = ? WHERE id = ?;
 
 -- name: PublishPage :one
 UPDATE pages
-SET status = 'published', published_at = ?, updated_at = ?
+SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
 -- name: UnpublishPage :one
 UPDATE pages
-SET status = 'draft', published_at = NULL, updated_at = ?
+SET status = 'draft', published_at = NULL, scheduled_at = NULL, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
