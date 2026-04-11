@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -284,6 +285,13 @@ func newFrontendPageRequest(slug string) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 }
 
+func newFrontendPageByIDRequest(id string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/page/"+id, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
+
 // withUser adds a user to the request context (simulates OptionalLoadUser middleware).
 func withUser(r *http.Request, user store.User) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), middleware.ContextKeyUser, user))
@@ -382,6 +390,36 @@ func TestFrontendHandler_Page_PublishedPageWorksForAnonymous(t *testing.T) {
 
 	if w.Code == http.StatusNotFound {
 		t.Errorf("anonymous user on published page: got 404; want page to be served")
+	}
+}
+
+func TestFrontendHandler_PageByID_InvalidStoredSlugReturnsNotFound(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	now := "CURRENT_TIMESTAMP"
+	res, err := db.Exec(
+		`INSERT INTO pages (title, slug, body, status, author_id, page_type, published_at) VALUES (?, ?, ?, ?, ?, ?, `+now+`)`,
+		"Bad Slug Page", "/t.co", "<p>Published content</p>", "published", admin.ID, "post",
+	)
+	if err != nil {
+		t.Fatalf("failed to create page with invalid slug: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get inserted page id: %v", err)
+	}
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := newFrontendPageByIDRequest(strconv.FormatInt(id, 10))
+	w := httptest.NewRecorder()
+
+	h.PageByID(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want %d", w.Code, http.StatusNotFound)
+	}
+	if location := w.Header().Get("Location"); location != "" {
+		t.Fatalf("Location header = %q; want empty", location)
 	}
 }
 
