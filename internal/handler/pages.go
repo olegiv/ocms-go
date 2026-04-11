@@ -73,13 +73,13 @@ var suspiciousPageHTMLTokens = []string{
 var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
 
 var pagesSortableFields = map[string]SortConfig{
-	"title":        {DefaultDir: sortDirAsc},
-	"page_type":      {DefaultDir: sortDirAsc},
-	"language_code":  {DefaultDir: sortDirAsc},
-	"status":         {DefaultDir: sortDirAsc},
-	"updated_at":   {DefaultDir: sortDirDesc},
-	"created_at":   {DefaultDir: sortDirDesc},
-	"scheduled_at": {DefaultDir: sortDirAsc},
+	"title":         {DefaultDir: sortDirAsc},
+	"page_type":     {DefaultDir: sortDirAsc},
+	"language_code": {DefaultDir: sortDirAsc},
+	"status":        {DefaultDir: sortDirAsc},
+	"updated_at":    {DefaultDir: sortDirDesc},
+	"created_at":    {DefaultDir: sortDirDesc},
+	"scheduled_at":  {DefaultDir: sortDirAsc},
 }
 
 func defaultPagesSort(_, _ string) (string, string) {
@@ -448,6 +448,28 @@ func buildPageCategoryTree(categories []store.Category, parentID *int64, depth i
 	return nodes
 }
 
+// selectedPageCategoriesFromForm builds selected categories from submitted category IDs.
+func selectedPageCategoriesFromForm(categoryIDStrs []string) []store.Category {
+	selected := make([]store.Category, 0, len(categoryIDStrs))
+	seen := make(map[int64]struct{}, len(categoryIDStrs))
+	for _, categoryIDStr := range categoryIDStrs {
+		categoryIDStr = strings.TrimSpace(categoryIDStr)
+		if categoryIDStr == "" {
+			continue
+		}
+		categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		if _, exists := seen[categoryID]; exists {
+			continue
+		}
+		seen[categoryID] = struct{}{}
+		selected = append(selected, store.Category{ID: categoryID})
+	}
+	return selected
+}
+
 // NewForm handles GET /admin/pages/new - displays the new page form.
 func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
@@ -553,10 +575,20 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
+		// Load all categories and preserve selected categories for re-rendering
+		allCategories, err := h.queries.ListCategories(r.Context())
+		if err != nil {
+			slog.Error("failed to list categories", "error", err)
+			allCategories = []store.Category{}
+		}
+		categoryTree := buildPageCategoryTree(allCategories, nil, 0)
+
 		// Load languages for re-rendering
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 		data := PageFormData{
+			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
+			AllCategories: categoryTree,
 			AllLanguages:  allLanguages,
 			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
 			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
@@ -818,8 +850,18 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
+		// Load all categories and preserve selected categories for re-rendering
+		allCategories, err := h.queries.ListCategories(r.Context())
+		if err != nil {
+			slog.Error("failed to list categories", "error", err)
+			allCategories = []store.Category{}
+		}
+		categoryTree := buildPageCategoryTree(allCategories, nil, 0)
+
 		data := PageFormData{
 			Page:          &existingPage,
+			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
+			AllCategories: categoryTree,
 			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
 			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
 			Statuses:      ValidPageStatuses,
