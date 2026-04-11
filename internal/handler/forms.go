@@ -1792,6 +1792,7 @@ func (h *FormsHandler) ExportSubmissions(w http.ResponseWriter, r *http.Request)
 func escapeCSVRow(values []string) string {
 	escaped := make([]string, len(values))
 	for i, v := range values {
+		v = neutralizeCSVFormula(v)
 		// Escape double quotes by doubling them
 		v = strings.ReplaceAll(v, "\"", "\"\"")
 		// Wrap in quotes if contains comma, newline, or quotes
@@ -1801,6 +1802,17 @@ func escapeCSVRow(values []string) string {
 		escaped[i] = v
 	}
 	return strings.Join(escaped, ",")
+}
+
+func neutralizeCSVFormula(value string) string {
+	trimmed := strings.TrimLeft(value, " \t")
+	if trimmed == "" {
+		return value
+	}
+	if strings.ContainsAny(string(trimmed[0]), "=+-@") {
+		return "'" + value
+	}
+	return value
 }
 
 // parseFieldIDParamJSON parses field ID from URL and returns JSON error response if invalid.

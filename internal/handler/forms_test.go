@@ -881,3 +881,25 @@ func TestFormFormDataWithTranslations(t *testing.T) {
 		t.Errorf("Translation language = %q, want %q", data.Translations[0].Language.Code, "ru")
 	}
 }
+
+func TestEscapeCSVRow_NeutralizesFormulaValues(t *testing.T) {
+	row := []string{"=2+3", "+cmd", "-10", "@sum(A1:A2)", "safe", "  =still-dangerous"}
+
+	got := escapeCSVRow(row)
+	want := "'=2+3,'+cmd,'-10,'@sum(A1:A2),safe,'  =still-dangerous"
+
+	if got != want {
+		t.Fatalf("escapeCSVRow() = %q, want %q", got, want)
+	}
+}
+
+func TestEscapeCSVRow_StillEscapesQuotesAndCommas(t *testing.T) {
+	row := []string{`=1,2`, `hello "quoted"`}
+
+	got := escapeCSVRow(row)
+	want := "\"'=1,2\",\"hello \"\"quoted\"\"\""
+
+	if got != want {
+		t.Fatalf("escapeCSVRow() = %q, want %q", got, want)
+	}
+}
