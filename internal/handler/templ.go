@@ -248,7 +248,12 @@ func userEditBreadcrumbs(lang string, userName string, userID int64) []render.Br
 // It masks IPs for display and pre-computes sentinel ban/whitelist state.
 func convertEventItems(events []EventWithUser, renderer *render.Renderer, sentinelActive bool) []adminviews.EventItem {
 	items := make([]adminviews.EventItem, len(events))
+	isDemoMode := middleware.IsDemoMode()
 	for i, e := range events {
+		rawIP := e.IPAddress
+		if isDemoMode {
+			rawIP = ""
+		}
 		items[i] = adminviews.EventItem{
 			ID:           e.ID,
 			Level:        e.Level,
@@ -257,7 +262,7 @@ func convertEventItems(events []EventWithUser, renderer *render.Renderer, sentin
 			Details:      e.Details,
 			DetailsLong:  e.DetailsLong,
 			IPAddress:    maskIP(e.IPAddress),
-			RawIPAddress: e.IPAddress,
+			RawIPAddress: rawIP,
 			IsOwnIP:      e.IsOwnIP,
 			RequestURL:   e.RequestURL,
 			CreatedAt:    e.CreatedAt,
