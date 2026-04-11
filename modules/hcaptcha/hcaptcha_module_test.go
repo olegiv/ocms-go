@@ -631,11 +631,11 @@ func TestLoadSettingsNoRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadSettings: %v", err)
 	}
-	if settings.SiteKey != TestSiteKey {
-		t.Errorf("SiteKey = %q, want test key", settings.SiteKey)
+	if settings.SiteKey != "" {
+		t.Errorf("SiteKey = %q, want empty", settings.SiteKey)
 	}
-	if settings.SecretKey != TestSecretKey {
-		t.Errorf("SecretKey = %q, want test key", settings.SecretKey)
+	if settings.SecretKey != "" {
+		t.Errorf("SecretKey = %q, want empty", settings.SecretKey)
 	}
 }
 
@@ -830,19 +830,6 @@ func TestHookConstants(t *testing.T) {
 }
 
 // ============================================================================
-// Test and debug key constants
-// ============================================================================
-
-func TestTestKeyConstants(t *testing.T) {
-	if TestSiteKey == "" {
-		t.Error("TestSiteKey should not be empty")
-	}
-	if TestSecretKey == "" {
-		t.Error("TestSecretKey should not be empty")
-	}
-}
-
-// ============================================================================
 // Verify: disabled path
 // ============================================================================
 
@@ -894,7 +881,7 @@ func TestVerifyFromRequest_EnabledNonEmpty(t *testing.T) {
 }
 
 // ============================================================================
-// loadSettings: key fallback to test keys when DB has empty strings
+// loadSettings: preserve empty keys when DB has empty strings
 // ============================================================================
 
 func TestLoadSettingsEmptyKeysFallback(t *testing.T) {
@@ -924,11 +911,11 @@ func TestLoadSettingsEmptyKeysFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadSettings: %v", err)
 	}
-	// Empty keys should fall back to test keys
-	if settings.SiteKey != TestSiteKey {
-		t.Errorf("SiteKey = %q, want TestSiteKey when empty", settings.SiteKey)
+	// Empty keys should remain empty
+	if settings.SiteKey != "" {
+		t.Errorf("SiteKey = %q, want empty", settings.SiteKey)
 	}
-	if settings.SecretKey != TestSecretKey {
-		t.Errorf("SecretKey = %q, want TestSecretKey when empty", settings.SecretKey)
+	if settings.SecretKey != "" {
+		t.Errorf("SecretKey = %q, want empty", settings.SecretKey)
 	}
 }
