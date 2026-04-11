@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"net/http"
 	"strings"
 	"time"
@@ -770,6 +771,33 @@ func validateMenuItemTarget(target string) (string, error) {
 	return target, nil
 }
 
+// validateMenuItemURL validates user-provided external URL values for menu links.
+func validateMenuItemURL(rawURL string) error {
+	if rawURL == "" {
+		return nil
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+
+	if parsed.IsAbs() {
+		switch strings.ToLower(parsed.Scheme) {
+		case "http", "https", "mailto", "tel":
+			return nil
+		default:
+			return errors.New("invalid URL scheme")
+		}
+	}
+
+	if strings.HasPrefix(rawURL, "/") || strings.HasPrefix(rawURL, "#") || strings.HasPrefix(rawURL, "?") {
+		return nil
+	}
+
+	return errors.New("invalid URL format")
+}
+
 // menuItemInput represents common input fields for menu item creation/update.
 type menuItemInput struct {
 	Title    string
@@ -798,6 +826,10 @@ func validateMenuItemInput(w http.ResponseWriter, input menuItemInput) (menuItem
 	target, err := validateMenuItemTarget(input.Target)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid target")
+		return menuItemValidated{}, false
+	}
+	if err := validateMenuItemURL(input.URL); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid URL")
 		return menuItemValidated{}, false
 	}
 
