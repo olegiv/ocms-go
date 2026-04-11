@@ -1256,7 +1256,13 @@ func (h *FrontendHandler) NotFound(w http.ResponseWriter, r *http.Request) {
 // Sitemap generates and serves the sitemap.xml file.
 func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	siteURL := h.getSiteURL(ctx, r)
+	siteURL := h.getConfiguredSiteURL(ctx)
+	if siteURL == "" {
+		h.logger.Warn("sitemap requested without configured site_url")
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, "Sitemap is unavailable until site_url is configured", http.StatusServiceUnavailable)
+		return
+	}
 
 	// Get sitemap from cache (or generate it)
 	var xmlContent []byte
@@ -2260,15 +2266,23 @@ func (h *FrontendHandler) fetchPagesForEntity(ctx context.Context, entityID int6
 // defaultPerPage is the default number of items per page for pagination.
 const defaultPerPage = 10
 
+// getConfiguredSiteURL retrieves the site URL from config with cache fallback.
+func (h *FrontendHandler) getConfiguredSiteURL(ctx context.Context) string {
+	if h.cacheManager != nil {
+		if siteURL, err := h.cacheManager.GetConfig(ctx, "site_url"); err == nil {
+			return siteURL
+		}
+	}
+	if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
+		return cfg.Value
+	}
+	return ""
+}
+
 // getSiteURL retrieves the site URL from config with cache fallback.
 // Falls back to request host if no config is set.
 func (h *FrontendHandler) getSiteURL(ctx context.Context, r *http.Request) string {
-	var siteURL string
-	if h.cacheManager != nil {
-		siteURL, _ = h.cacheManager.GetConfig(ctx, "site_url")
-	} else if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
-		siteURL = cfg.Value
-	}
+	siteURL := h.getConfiguredSiteURL(ctx)
 	if siteURL == "" {
 		scheme := "http"
 		if r.TLS != nil {
