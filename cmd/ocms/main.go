@@ -262,6 +262,40 @@ func parseLogLevel(level string) slog.Level {
 	}
 }
 
+func sqliteFilePathFromDSN(dsn string) (string, bool) {
+	trimmed := strings.TrimSpace(dsn)
+	if trimmed == "" || trimmed == ":memory:" {
+		return "", false
+	}
+
+	if !strings.HasPrefix(strings.ToLower(trimmed), "file:") {
+		return trimmed, true
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil || !strings.EqualFold(parsed.Scheme, "file") {
+		return "", false
+	}
+	if strings.EqualFold(parsed.Query().Get("mode"), "memory") {
+		return "", false
+	}
+
+	candidate := parsed.Path
+	if candidate == "" {
+		candidate = parsed.Opaque
+	}
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" || candidate == ":memory:" || candidate == "::memory:" {
+		return "", false
+	}
+
+	if unescaped, unescapeErr := url.PathUnescape(candidate); unescapeErr == nil {
+		candidate = unescaped
+	}
+
+	return candidate, true
+}
+
 func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *module.HookRegistry, verifierEnabled bool) error {
 	if hooks == nil || !hooks.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
 		return fmt.Errorf(
@@ -1198,11 +1232,15 @@ func run() error {
 	}
 	// Restrict database file permissions to the owner only.
 	// Skip non-file DSNs such as ":memory:" where no real file exists on disk.
-	if info, statErr := os.Stat(cfg.DBPath); statErr == nil && info.Mode().IsRegular() {
-		if err := os.Chmod(cfg.DBPath, 0600); err != nil {
-			_ = db.Close()
-			return fmt.Errorf("setting database file permissions: %w", err)
+	if dbFilePath, isFileDSN := sqliteFilePathFromDSN(cfg.DBPath); isFileDSN {
+		if info, statErr := os.Stat(dbFilePath); statErr == nil && info.Mode().IsRegular() {
+			if err := os.Chmod(dbFilePath, 0600); err != nil {
+				_ = db.Close()
+				return fmt.Errorf("setting database file permissions: %w", err)
+			}
 		}
+	} else {
+		slog.Debug("skipping database chmod for non-file sqlite dsn", "dsn", cfg.DBPath)
 	}
 	defer func(db *sql.DB) {
 		err = db.Close()
