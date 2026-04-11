@@ -65,7 +65,7 @@ func TestModuleAdminURL(t *testing.T) {
 
 func TestModuleMigrations(t *testing.T) {
 	m := New()
-	moduleutil.AssertMigrations(t, m.Migrations(), 1)
+	moduleutil.AssertMigrations(t, m.Migrations(), 2)
 }
 
 func TestModuleTemplateFuncs(t *testing.T) {
@@ -109,15 +109,15 @@ func TestLoadSettings(t *testing.T) {
 		t.Fatalf("loadSettings: %v", err)
 	}
 
-	// Default values (test keys are used as defaults)
+	// Default values
 	if settings.Enabled {
 		t.Error("Enabled should be false by default")
 	}
-	if settings.SiteKey != TestSiteKey {
-		t.Errorf("SiteKey = %q, want test key %q", settings.SiteKey, TestSiteKey)
+	if settings.SiteKey != "" {
+		t.Errorf("SiteKey = %q, want empty", settings.SiteKey)
 	}
-	if settings.SecretKey != TestSecretKey {
-		t.Errorf("SecretKey = %q, want test key %q", settings.SecretKey, TestSecretKey)
+	if settings.SecretKey != "" {
+		t.Errorf("SecretKey = %q, want empty", settings.SecretKey)
 	}
 	if settings.Theme != "light" {
 		t.Errorf("Theme = %q, want 'light'", settings.Theme)
