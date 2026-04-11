@@ -709,8 +709,8 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 			_ = tracker.TrackImportedItem(ctx, s.Name(), "page", page.ID)
 		}
 
-		// Create page alias for old Elefant URL path
-		if wp.ID != slug {
+		// Create page alias for old Elefant URL path (only if it is a safe alias format)
+		if wp.ID != slug && util.IsValidAlias(wp.ID) {
 			_, aliasErr := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
 				PageID:    page.ID,
 				Alias:     wp.ID,
@@ -722,6 +722,10 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 					"alias", wp.ID,
 					"error", aliasErr)
 			}
+		} else if wp.ID != slug {
+			slog.Warn("skipping unsafe page alias from elefant import",
+				"page_id", page.ID,
+				"alias", wp.ID)
 		}
 
 		// Set published_at if published
