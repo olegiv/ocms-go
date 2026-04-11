@@ -26,11 +26,23 @@ import (
 //go:embed locales
 var localesFS embed.FS
 
+// Embed proxy rate limits. These are the primary compensating control
+// against cost abuse of the Dify upstream via the public widget: because
+// the render-time token path is a defense-in-depth measure (any client
+// that can GET a public page can scrape a token from the HTML), the hard
+// bound on upstream cost comes from per-IP + global rate limiting and
+// the semaphore on in-flight upstream requests.
+//
+// A legitimate chat session averages roughly 1 message every 20–30s with
+// occasional bursts of 3–5 in quick succession, so 1 RPS per IP with a
+// burst of 5 comfortably covers real users while making scraping attacks
+// visibly slow. The global limit (5 RPS / burst 10) caps aggregate cost
+// regardless of how many source IPs an attacker rotates through.
 const (
-	embedProxyRateLimitRPS         = 2.0
-	embedProxyRateLimitBurst       = 10
-	embedProxyGlobalRateLimitRPS   = 20.0
-	embedProxyGlobalRateLimitBurst = 40
+	embedProxyRateLimitRPS         = 1.0
+	embedProxyRateLimitBurst       = 5
+	embedProxyGlobalRateLimitRPS   = 5.0
+	embedProxyGlobalRateLimitBurst = 10
 	embedProxyMaxConcurrent        = 32
 )
 
