@@ -1196,9 +1196,13 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("initializing database: %w", err)
 	}
-	if err := os.Chmod(cfg.DBPath, 0600); err != nil {
-		_ = db.Close()
-		return fmt.Errorf("setting database file permissions: %w", err)
+	// Restrict database file permissions to the owner only.
+	// Skip non-file DSNs such as ":memory:" where no real file exists on disk.
+	if info, statErr := os.Stat(cfg.DBPath); statErr == nil && info.Mode().IsRegular() {
+		if err := os.Chmod(cfg.DBPath, 0600); err != nil {
+			_ = db.Close()
+			return fmt.Errorf("setting database file permissions: %w", err)
+		}
 	}
 	defer func(db *sql.DB) {
 		err = db.Close()
