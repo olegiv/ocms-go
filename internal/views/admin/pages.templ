@@ -726,7 +726,7 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 			}
 		}
 		@table.Cell() {
-			<a href={ templ.SafeURL(fmt.Sprintf("/%s", page.Slug)) } class="page-title-link" target="_blank">{ page.Title }</a>
+			<a href={ templ.SafeURL(fmt.Sprintf("/%s", page.Slug)) } class="page-title-link" target="_blank" rel="noopener noreferrer">{ page.Title }</a>
 		}
 		@table.Cell() {
 			if len(page.Tags) > 0 {
