@@ -86,6 +86,7 @@ func TestHandleDifyProxyToken(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/embed/dify/token", nil)
 		req.Header.Set("Origin", "https://example.com")
+		req.Header.Set(embedProxyTokenHeader, "test-secret")
 		w := httptest.NewRecorder()
 
 		mod.handleDifyProxyToken(w, req)
@@ -115,6 +116,24 @@ func TestHandleDifyProxyToken(t *testing.T) {
 		}
 		if err := mod.validateSignedProxyToken(token, "https://example.com", time.Now()); err != nil {
 			t.Fatalf("expected issued token to validate: %v", err)
+		}
+	})
+
+	t.Run("blocks token issuance when proxy secret header is missing", func(t *testing.T) {
+		mod := New()
+		mod.proxyToken = "test-secret"
+		mod.allowedOrigins = map[string]struct{}{
+			"https://example.com": {},
+		}
+		mod.requireOriginPolicy = true
+
+		req := httptest.NewRequest(http.MethodGet, "/embed/dify/token", nil)
+		req.Header.Set("Origin", "https://example.com")
+		w := httptest.NewRecorder()
+
+		mod.handleDifyProxyToken(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
 	})
 
