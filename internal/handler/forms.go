@@ -1075,7 +1075,6 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		Errors:           make(map[string]string),
 		Values:           make(map[string]string),
 		Success:          false,
-		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
 	h.render(w, r, data)
@@ -1361,7 +1360,6 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		Errors:           fieldErrors,
 		Values:           values,
 		Success:          false,
-		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
 	h.render(w, r, data)
@@ -2046,11 +2044,15 @@ func (h *FormsHandler) TranslateForm(w http.ResponseWriter, r *http.Request) {
 // FormTemplateData holds data for form template rendering.
 type FormTemplateData struct {
 	BaseTemplateData
-	Form      store.Form
-	Fields    []store.FormField
-	Errors    map[string]string
-	Values    map[string]string
-	Success   bool
+	Form    store.Form
+	Fields  []store.FormField
+	Errors  map[string]string
+	Values  map[string]string
+	Success bool
+	// CSRFToken is intentionally left unassigned so existing HTML theme
+	// templates that still reference {{.CSRFToken}} render an empty string
+	// instead of failing with "can't evaluate field CSRFToken". The session
+	// token must not be populated here — see PR #76.
 	CSRFToken template.HTML
 }
 
