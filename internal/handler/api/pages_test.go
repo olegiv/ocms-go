@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -290,6 +291,28 @@ func TestResolveTagNames(t *testing.T) {
 		_, err = resolveTagNames(ctx, closedQ, []string{"Will Fail"}, "en")
 		if err == nil {
 			t.Fatal("expected error from closed database, got nil")
+		}
+	})
+}
+
+func TestAPIKeyHasPermission(t *testing.T) {
+	t.Run("nil key has no permissions", func(t *testing.T) {
+		if apiKeyHasPermission(nil, model.PermissionPagesRead) {
+			t.Fatal("expected false for nil key")
+		}
+	})
+
+	t.Run("matching permission returns true", func(t *testing.T) {
+		apiKey := &store.ApiKey{Permissions: `["media:read","pages:read"]`}
+		if !apiKeyHasPermission(apiKey, model.PermissionPagesRead) {
+			t.Fatal("expected pages:read permission to be detected")
+		}
+	})
+
+	t.Run("non-matching permission returns false", func(t *testing.T) {
+		apiKey := &store.ApiKey{Permissions: `["media:read"]`}
+		if apiKeyHasPermission(apiKey, model.PermissionPagesRead) {
+			t.Fatal("expected false for missing pages:read permission")
 		}
 	})
 }

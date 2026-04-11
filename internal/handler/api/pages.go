@@ -171,6 +171,18 @@ var suspiciousPageMarkupTokens = []string{
 // avoiding false positives on plain text like "JavaScript: a language".
 var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
 
+func apiKeyHasPermission(apiKey *store.ApiKey, permission string) bool {
+	if apiKey == nil {
+		return false
+	}
+	for _, p := range middleware.ParseAPIKeyPermissions(apiKey) {
+		if p == permission {
+			return true
+		}
+	}
+	return false
+}
+
 // listPagesByFilter returns pages filtered by category or tag with published-only option.
 func (h *Handler) listPagesByFilter(ctx context.Context, publishedOnly bool, filterType pageFilterType, filterID, limit, offset int64) ([]store.Page, int64, error) {
 	// Select query functions based on filter type and published status
@@ -268,16 +280,16 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 
 	// Check authentication for non-published access
 	apiKey := middleware.GetAPIKey(r)
-	isAuthenticated := apiKey != nil
+	canReadNonPublished := apiKeyHasPermission(apiKey, model.PermissionPagesRead)
 
-	// Non-authenticated users can only see published pages
-	if !isAuthenticated && status != "" && status != model.PageStatusPublished {
-		WriteForbidden(w, "Authentication required to view non-published pages")
+	// Keys without pages:read permission can only see published pages
+	if !canReadNonPublished && status != "" && status != model.PageStatusPublished {
+		WriteForbidden(w, "pages:read permission required to view non-published pages")
 		return
 	}
 
-	// Default to published for unauthenticated requests
-	if !isAuthenticated {
+	// Default to published when pages:read permission is missing
+	if !canReadNonPublished {
 		status = model.PageStatusPublished
 	}
 
@@ -358,7 +370,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 		resp := storePageToResponse(p)
 
 		if includeAuthor {
-			h.populatePageAuthor(ctx, &resp, p.ID, isAuthenticated)
+			h.populatePageAuthor(ctx, &resp, p.ID, canReadNonPublished)
 		}
 
 		if includeCategories {
@@ -394,13 +406,13 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 
 	// Check access for non-published pages
 	apiKey := middleware.GetAPIKey(r)
-	if page.Status != model.PageStatusPublished && apiKey == nil {
+	if page.Status != model.PageStatusPublished && !apiKeyHasPermission(apiKey, model.PermissionPagesRead) {
 		WriteNotFound(w, "Page not found")
 		return
 	}
 
 	resp := storePageToResponse(page)
-	h.populatePageIncludes(ctx, &resp, page.ID, include, apiKey != nil)
+	h.populatePageIncludes(ctx, &resp, page.ID, include, apiKeyHasPermission(apiKey, model.PermissionPagesRead))
 
 	WriteSuccess(w, resp, nil)
 }
@@ -420,11 +432,12 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 
 	// Check authentication
 	apiKey := middleware.GetAPIKey(r)
+	canReadNonPublished := apiKeyHasPermission(apiKey, model.PermissionPagesRead)
 
 	var page store.Page
 	var err error
 
-	if apiKey != nil {
+	if canReadNonPublished {
 		// Authenticated: can get any page by slug
 		page, err = h.queries.GetPageBySlug(ctx, slug)
 	} else {
@@ -442,7 +455,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := storePageToResponse(page)
-	h.populatePageIncludes(ctx, &resp, page.ID, include, apiKey != nil)
+	h.populatePageIncludes(ctx, &resp, page.ID, include, canReadNonPublished)
 
 	WriteSuccess(w, resp, nil)
 }
