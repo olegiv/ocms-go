@@ -908,7 +908,7 @@ func runPreModulePostureAudits(
 	if cfg.Env != "production" {
 		return nil
 	}
-	if hasDefaultAdminCreds && os.Getenv("OCMS_DEMO_MODE") != "true" {
+	if hasDefaultAdminCreds {
 		return fmt.Errorf(
 			"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
 			store.DefaultAdminEmail,
