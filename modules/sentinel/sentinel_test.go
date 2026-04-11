@@ -355,3 +355,49 @@ func TestDecodeJSONStrict(t *testing.T) {
 		}
 	})
 }
+
+func TestIsAllowedBanURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "empty", in: "", want: false},
+		{name: "http", in: "http://example.com/path", want: true},
+		{name: "https", in: "https://example.com", want: true},
+		{name: "mixed-case scheme", in: "HtTpS://example.com", want: true},
+		{name: "javascript scheme", in: "javascript:alert(1)", want: false},
+		{name: "data scheme", in: "data:text/html,hello", want: false},
+		{name: "root-relative path", in: "/admin", want: true},
+		{name: "root-relative path with query", in: "/admin/login?next=/home", want: true},
+		{name: "event request path", in: "/admin/pages/42", want: true},
+		{name: "protocol-relative rejected", in: "//evil.com/x", want: false},
+		{name: "bare relative rejected", in: "admin", want: false},
+		{name: "scheme-less colon rejected", in: "javascript:alert(1)", want: false},
+		{name: "host missing", in: "https:///path-only", want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := isAllowedBanURL(tt.in)
+			if got != tt.want {
+				t.Fatalf("isAllowedBanURL(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSafeBanURL(t *testing.T) {
+	t.Parallel()
+
+	if got := safeBanURL("https://example.com"); got != "https://example.com" {
+		t.Fatalf("safeBanURL(valid) = %q, want %q", got, "https://example.com")
+	}
+	if got := safeBanURL("javascript:alert(1)"); got != "" {
+		t.Fatalf("safeBanURL(invalid) = %q, want empty string", got)
+	}
+}

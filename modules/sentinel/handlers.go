@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -89,7 +90,7 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 			IPPattern:   b.IPPattern,
 			CountryCode: b.CountryCode,
 			Notes:       b.Notes,
-			URL:         b.URL,
+			URL:         safeBanURL(b.URL),
 			BannedAt:    b.BannedAt.Format("Jan 02, 2006 15:04"),
 		}
 	}
@@ -153,6 +154,11 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 	ipPattern := strings.TrimSpace(r.FormValue("ip_pattern"))
 	notes := strings.TrimSpace(r.FormValue("notes"))
 	urlField := strings.TrimSpace(r.FormValue("url"))
+	if urlField != "" && !isAllowedBanURL(urlField) {
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_create_failed"), "error")
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
 
 	if ipPattern == "" {
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_ip_required"), "error")
@@ -210,6 +216,7 @@ func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := strings.TrimSpace(req.IP)
+	banURL := strings.TrimSpace(req.URL)
 	if ip == "" {
 		writeJSONError(w, "IP address is required", http.StatusBadRequest)
 		return
@@ -217,6 +224,10 @@ func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
 
 	if !isValidIPPattern(ip) {
 		writeJSONError(w, "Invalid IP address", http.StatusBadRequest)
+		return
+	}
+	if banURL != "" && !isAllowedBanURL(banURL) {
+		writeJSONError(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
 
@@ -228,7 +239,7 @@ func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := m.createBan(ip, "Banned from event log", strings.TrimSpace(req.URL), user.ID)
+	err := m.createBan(ip, "Banned from event log", banURL, user.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			writeJSONError(w, "IP already banned", http.StatusConflict)
@@ -777,6 +788,38 @@ func isValidIPPattern(pattern string) bool {
 	}
 
 	return true
+}
+
+func isAllowedBanURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	// Accept root-relative paths like "/admin/login". Events store request
+	// URLs as path-only values (middleware.GetRequestURL returns r.URL.Path),
+	// and the AJAX ban workflow from the events page posts those paths as
+	// data-url. A leading "/" is required so inputs with no scheme cannot
+	// collapse to an absolute URL (e.g. "//evil.com/x") or be interpreted as
+	// a relative scheme like "javascript:alert(1)".
+	if parsed.Scheme == "" && parsed.Host == "" {
+		return strings.HasPrefix(rawURL, "/") && !strings.HasPrefix(rawURL, "//")
+	}
+	if parsed.Host == "" {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+		return true
+	default:
+		return false
+	}
+}
+
+func safeBanURL(rawURL string) string {
+	if isAllowedBanURL(rawURL) {
+		return rawURL
+	}
+	return ""
 }
 
 func isValidIPChar(c rune) bool {
