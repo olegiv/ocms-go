@@ -112,6 +112,25 @@ func TestModuleInit_MissingTable(t *testing.T) {
 	}
 }
 
+func TestModuleInit_ProductionRequiresProxyTokenInDemoMode(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := New()
+	ctx, _ := moduleutil.TestModuleContext(t, db)
+	ctx.Config.Env = "production"
+	ctx.Config.EmbedProxyToken = ""
+	t.Setenv("OCMS_DEMO_MODE", "true")
+
+	err := m.Init(ctx)
+	if err == nil {
+		t.Fatal("expected Init to fail when production embed proxy token is missing")
+	}
+	if !strings.Contains(err.Error(), "embed proxy token is required") {
+		t.Fatalf("unexpected Init error: %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // countEnabled / reloadSettings
 // ---------------------------------------------------------------------------
