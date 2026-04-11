@@ -892,6 +892,11 @@ const limiterCacheTTL = 10 * time.Minute
 // limiterCacheCleanupInterval is how often the cleanup goroutine runs.
 const limiterCacheCleanupInterval = 5 * time.Minute
 
+// limiterCacheMaxEntries bounds in-memory limiter cardinality to protect
+// against unbounded growth from attacker-controlled keys (for example spoofed
+// client IP headers). Oldest entries are evicted when this threshold is hit.
+const limiterCacheMaxEntries = 10000
+
 // limiterCache is a generic rate limiter cache with TTL-based eviction.
 type limiterCache[K comparable] struct {
 	entries map[K]*limiterEntry
@@ -940,6 +945,7 @@ func (lc *limiterCache[K]) get(key K) *rate.Limiter {
 		limiter:  limiter,
 		lastUsed: now,
 	}
+	lc.evictOldestIfExceedsLocked()
 	return limiter
 }
 
@@ -963,6 +969,35 @@ func (lc *limiterCache[K]) evictExpired() {
 		if entry.lastUsed.Before(cutoff) {
 			delete(lc.entries, key)
 		}
+	}
+}
+
+// evictOldestIfExceedsLocked removes least-recently-used entries until the
+// cache size is within limiterCacheMaxEntries. Caller must hold lc.mu.
+func (lc *limiterCache[K]) evictOldestIfExceedsLocked() {
+	if len(lc.entries) <= limiterCacheMaxEntries {
+		return
+	}
+
+	overflow := len(lc.entries) - limiterCacheMaxEntries
+	for i := 0; i < overflow; i++ {
+		var oldestKey K
+		var oldestTime time.Time
+		oldestSet := false
+
+		for key, entry := range lc.entries {
+			if !oldestSet || entry.lastUsed.Before(oldestTime) {
+				oldestKey = key
+				oldestTime = entry.lastUsed
+				oldestSet = true
+			}
+		}
+
+		if !oldestSet {
+			return
+		}
+
+		delete(lc.entries, oldestKey)
 	}
 }
 
