@@ -114,6 +114,7 @@ const countPublishedPagesByCategory = `-- name: CountPublishedPagesByCategory :o
 SELECT COUNT(DISTINCT p.id) FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published'
+  AND p.exclude_from_lists = 0
 `
 
 func (q *Queries) CountPublishedPagesByCategory(ctx context.Context, categoryID int64) (int64, error) {
@@ -127,6 +128,7 @@ const countPublishedPagesByCategoryAndLanguage = `-- name: CountPublishedPagesBy
 SELECT COUNT(DISTINCT p.id) FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published' AND p.language_code = ?
+  AND p.exclude_from_lists = 0
 `
 
 type CountPublishedPagesByCategoryAndLanguageParams struct {
@@ -145,6 +147,7 @@ const countPublishedPagesForTag = `-- name: CountPublishedPagesForTag :one
 SELECT COUNT(*) FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published'
+  AND p.exclude_from_lists = 0
 `
 
 func (q *Queries) CountPublishedPagesForTag(ctx context.Context, tagID int64) (int64, error) {
@@ -158,6 +161,7 @@ const countPublishedPagesForTagAndLanguage = `-- name: CountPublishedPagesForTag
 SELECT COUNT(*) FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_code = ?
+  AND p.exclude_from_lists = 0
 `
 
 type CountPublishedPagesForTagAndLanguageParams struct {
@@ -1181,6 +1185,7 @@ const listPublishedPagesByCategory = `-- name: ListPublishedPagesByCategory :man
 SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published'
+  AND p.exclude_from_lists = 0
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?
 `
@@ -1245,6 +1250,7 @@ const listPublishedPagesByCategoryAndLanguage = `-- name: ListPublishedPagesByCa
 SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published' AND p.language_code = ?
+  AND p.exclude_from_lists = 0
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?
 `
@@ -1356,6 +1362,7 @@ const listPublishedPagesForTag = `-- name: ListPublishedPagesForTag :many
 SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published'
+  AND p.exclude_from_lists = 0
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?
 `
@@ -1419,6 +1426,7 @@ const listPublishedPagesForTagAndLanguage = `-- name: ListPublishedPagesForTagAn
 SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_code = ?
+  AND p.exclude_from_lists = 0
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?
 `
