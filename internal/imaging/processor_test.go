@@ -5,9 +5,13 @@ package imaging
 
 import (
 	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/png"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
@@ -22,6 +26,39 @@ func createTestImage(width, height int) image.Image {
 		}
 	}
 	return img
+}
+
+func createPNGWithDimensions(width, height uint32) []byte {
+	var out bytes.Buffer
+	out.Write([]byte{137, 80, 78, 71, 13, 10, 26, 10}) // signature
+
+	ihdrData := make([]byte, 13)
+	binary.BigEndian.PutUint32(ihdrData[0:4], width)
+	binary.BigEndian.PutUint32(ihdrData[4:8], height)
+	ihdrData[8] = 8 // bit depth
+	ihdrData[9] = 2 // color type RGB
+
+	var lenBuf [4]byte
+	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(ihdrData)))
+	out.Write(lenBuf[:])
+	out.WriteString("IHDR")
+	out.Write(ihdrData)
+
+	ihdrCRC := crc32.NewIEEE()
+	_, _ = ihdrCRC.Write([]byte("IHDR"))
+	_, _ = ihdrCRC.Write(ihdrData)
+	binary.BigEndian.PutUint32(lenBuf[:], ihdrCRC.Sum32())
+	out.Write(lenBuf[:])
+
+	// IEND chunk
+	binary.BigEndian.PutUint32(lenBuf[:], 0)
+	out.Write(lenBuf[:])
+	out.WriteString("IEND")
+	iendCRC := crc32.ChecksumIEEE([]byte("IEND"))
+	binary.BigEndian.PutUint32(lenBuf[:], iendCRC)
+	out.Write(lenBuf[:])
+
+	return out.Bytes()
 }
 
 // runMimeTypeTests runs table-driven tests for mime type checking functions.
@@ -258,5 +295,43 @@ func TestApplyOrientation(t *testing.T) {
 				t.Error("applyOrientation returned nil")
 			}
 		})
+	}
+}
+
+func TestProcessImage_RejectsOversizedDimensions(t *testing.T) {
+	uploadsDir := t.TempDir()
+	p := NewProcessor(uploadsDir)
+
+	hugePNG := createPNGWithDimensions(40000, 40000)
+	_, err := p.ProcessImage(bytes.NewReader(hugePNG), "test-uuid", "bomb.png")
+	if err == nil {
+		t.Fatal("ProcessImage should fail for oversized image dimensions")
+	}
+	if !strings.Contains(err.Error(), "exceed maximum allowed") {
+		t.Fatalf("error = %v, want dimensions limit error", err)
+	}
+}
+
+func TestCreateVariant_RejectsOversizedDimensions(t *testing.T) {
+	uploadsDir := t.TempDir()
+	p := NewProcessor(uploadsDir)
+
+	hugePNG := createPNGWithDimensions(40000, 40000)
+	sourcePath := uploadsDir + "/huge.png"
+	if err := os.WriteFile(sourcePath, hugePNG, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := p.CreateVariant(sourcePath, "test-uuid", "huge.png", model.ImageVariantConfig{
+		Width:   1200,
+		Height:  800,
+		Quality: 85,
+		Crop:    false,
+	}, "medium")
+	if err == nil {
+		t.Fatal("CreateVariant should fail for oversized image dimensions")
+	}
+	if !strings.Contains(err.Error(), "exceed maximum allowed") {
+		t.Fatalf("error = %v, want dimensions limit error", err)
 	}
 }

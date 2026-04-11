@@ -23,6 +23,12 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
+const (
+	maxImageWidth  = 10000
+	maxImageHeight = 10000
+	maxImagePixels = 50000000 // 50 megapixels
+)
+
 // ProcessResult contains the result of processing an uploaded image.
 type ProcessResult struct {
 	Width    int
@@ -68,6 +74,15 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 		return nil, fmt.Errorf("unsupported image format")
 	}
 
+	// Validate dimensions before full decode to prevent decode bomb DoS.
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read image config: %w", err)
+	}
+	if err := validateImageDimensions(cfg.Width, cfg.Height); err != nil {
+		return nil, err
+	}
+
 	// Decode image
 	img, err := imaging.Decode(bytes.NewReader(data))
 	if err != nil {
@@ -107,6 +122,15 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 
 // CreateVariant creates a resized variant of an image.
 func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config model.ImageVariantConfig, variantType string) (*VariantResult, error) {
+	// Validate dimensions before full decode to prevent decode bomb DoS.
+	width, height, err := p.GetImageDimensions(sourcePath)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateImageDimensions(width, height); err != nil {
+		return nil, err
+	}
+
 	// Load source image
 	img, err := imaging.Open(sourcePath)
 	if err != nil {
@@ -391,6 +415,19 @@ func formatToMimeType(format string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+func validateImageDimensions(width, height int) error {
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("invalid image dimensions: %dx%d", width, height)
+	}
+	if width > maxImageWidth || height > maxImageHeight {
+		return fmt.Errorf("image dimensions exceed maximum allowed: %dx%d (max %dx%d)", width, height, maxImageWidth, maxImageHeight)
+	}
+	if int64(width)*int64(height) > maxImagePixels {
+		return fmt.Errorf("image pixel count exceeds maximum allowed: %d (max %d)", int64(width)*int64(height), maxImagePixels)
+	}
+	return nil
 }
 
 // saveImageFile creates the directory if needed and saves image data to a file.
