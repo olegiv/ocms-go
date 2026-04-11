@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
 )
 
@@ -72,9 +73,12 @@ func (m *Module) RegisterRoutes(_ chi.Router) {
 
 // RegisterAdminRoutes registers admin routes for the module.
 func (m *Module) RegisterAdminRoutes(r chi.Router) {
-	r.Get("/developer", m.handleDashboard)
-	r.Post("/developer/generate", m.handleGenerate)
-	r.Post("/developer/delete", m.handleDelete)
+	r.Route("/developer", func(r chi.Router) {
+		r.Use(middleware.RequireAdmin())
+		r.Get("/", m.handleDashboard)
+		r.Post("/generate", m.handleGenerate)
+		r.Post("/delete", m.handleDelete)
+	})
 }
 
 // TemplateFuncs returns template functions provided by the module.
