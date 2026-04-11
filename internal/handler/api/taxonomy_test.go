@@ -610,13 +610,20 @@ func TestUpdateTag(t *testing.T) {
 		if data.Slug != "original-slug" {
 			t.Errorf("expected slug to remain 'original-slug', got %q", data.Slug)
 		}
+		if data.LanguageCode != "en" {
+			t.Errorf("expected language_code to remain 'en', got %q", data.LanguageCode)
+		}
 	})
 
 	t.Run("update slug", func(t *testing.T) {
 		w := executeHandler(t, h.UpdateTag, newJSONRequest(t, http.MethodPut, "/api/v1/tags/1", `{"slug": "updated-slug"}`, map[string]string{"id": fmt.Sprintf("%d", tag.ID)}))
 		assertStatusCode(t, w, http.StatusOK)
-		if got := unmarshalData[TagAPIResponse](t, w).Slug; got != "updated-slug" {
+		data := unmarshalData[TagAPIResponse](t, w)
+		if got := data.Slug; got != "updated-slug" {
 			t.Errorf("expected slug 'updated-slug', got %q", got)
+		}
+		if data.LanguageCode != "en" {
+			t.Errorf("expected language_code to remain 'en', got %q", data.LanguageCode)
 		}
 	})
 
@@ -848,6 +855,9 @@ func TestUpdateCategory(t *testing.T) {
 				if data.Name != "Updated Category" {
 					t.Errorf("expected name 'Updated Category', got %q", data.Name)
 				}
+				if data.LanguageCode != "en" {
+					t.Errorf("expected language_code to remain 'en', got %q", data.LanguageCode)
+				}
 			},
 		},
 		{
@@ -856,6 +866,9 @@ func TestUpdateCategory(t *testing.T) {
 			checkFunc: func(t *testing.T, data CategoryAPIResponse) {
 				if data.Description != "A new description" {
 					t.Errorf("expected description 'A new description', got %q", data.Description)
+				}
+				if data.LanguageCode != "en" {
+					t.Errorf("expected language_code to remain 'en', got %q", data.LanguageCode)
 				}
 			},
 		},

@@ -58,8 +58,9 @@ func (r CreateTagRequest) GetSlug() string { return r.Slug }
 
 // UpdateTagRequest represents the request body for updating a tag.
 type UpdateTagRequest struct {
-	Name *string `json:"name,omitempty"`
-	Slug *string `json:"slug,omitempty"`
+	Name         *string `json:"name,omitempty"`
+	Slug         *string `json:"slug,omitempty"`
+	LanguageCode *string `json:"language_code,omitempty"`
 }
 
 // CreateCategoryRequest represents the request body for creating a category.
@@ -80,11 +81,12 @@ func (r CreateCategoryRequest) GetSlug() string { return r.Slug }
 
 // UpdateCategoryRequest represents the request body for updating a category.
 type UpdateCategoryRequest struct {
-	Name        *string `json:"name,omitempty"`
-	Slug        *string `json:"slug,omitempty"`
-	Description *string `json:"description,omitempty"`
-	ParentID    *int64  `json:"parent_id,omitempty"`
-	Position    *int64  `json:"position,omitempty"`
+	Name         *string `json:"name,omitempty"`
+	Slug         *string `json:"slug,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	ParentID     *int64  `json:"parent_id,omitempty"`
+	Position     *int64  `json:"position,omitempty"`
+	LanguageCode *string `json:"language_code,omitempty"`
 }
 
 // ============================================================================
@@ -241,10 +243,11 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params
 	params := store.UpdateTagParams{
-		ID:        existing.ID,
-		Name:      existing.Name,
-		Slug:      existing.Slug,
-		UpdatedAt: time.Now(),
+		ID:           existing.ID,
+		Name:         existing.Name,
+		Slug:         existing.Slug,
+		LanguageCode: existing.LanguageCode,
+		UpdatedAt:    time.Now(),
 	}
 
 	// Apply updates
@@ -253,6 +256,14 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return h.checkTagSlugUniqueExcluding(w, r, ctx, *req.Slug, existing.ID)
 	}) {
 		return
+	}
+	if req.LanguageCode != nil {
+		langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
+		if langErr != nil {
+			log.Error500(w, "Failed to resolve default language", "error", langErr)
+			return
+		}
+		params.LanguageCode = langCode
 	}
 
 	tag, err := h.queries.UpdateTag(ctx, params)
@@ -471,13 +482,14 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params
 	params := store.UpdateCategoryParams{
-		ID:          existing.ID,
-		Name:        existing.Name,
-		Slug:        existing.Slug,
-		Description: existing.Description,
-		ParentID:    existing.ParentID,
-		Position:    existing.Position,
-		UpdatedAt:   time.Now(),
+		ID:           existing.ID,
+		Name:         existing.Name,
+		Slug:         existing.Slug,
+		Description:  existing.Description,
+		ParentID:     existing.ParentID,
+		Position:     existing.Position,
+		LanguageCode: existing.LanguageCode,
+		UpdatedAt:    time.Now(),
 	}
 
 	// Apply updates
@@ -525,6 +537,14 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Position != nil {
 		params.Position = *req.Position
+	}
+	if req.LanguageCode != nil {
+		langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
+		if langErr != nil {
+			log.Error500(w, "Failed to resolve default language", "error", langErr)
+			return
+		}
+		params.LanguageCode = langCode
 	}
 
 	category, err := h.queries.UpdateCategory(ctx, params)
