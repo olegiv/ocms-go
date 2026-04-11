@@ -1,16 +1,3 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/setup-go-toolchain.sh",
-            "timeout": 120
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }
