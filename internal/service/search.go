@@ -116,7 +116,7 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 	countQuery := `
 		SELECT COUNT(*) FROM pages p
 		INNER JOIN pages_fts ON pages_fts.rowid = p.id
-		WHERE pages_fts MATCH ? AND p.status = 'published'` + languageFilter
+		WHERE pages_fts MATCH ? AND p.status = 'published' AND p.exclude_from_lists = 0` + languageFilter
 
 	var total int64
 	err := s.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total)
@@ -151,7 +151,7 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 			snippet(pages_fts, 1, '<mark>', '</mark>', '...', 30) as highlight
 		FROM pages p
 		INNER JOIN pages_fts ON pages_fts.rowid = p.id
-		WHERE pages_fts MATCH ? AND p.status = 'published'` + languageFilter + `
+		WHERE pages_fts MATCH ? AND p.status = 'published' AND p.exclude_from_lists = 0` + languageFilter + `
 		ORDER BY rank
 		LIMIT ? OFFSET ?
 	`

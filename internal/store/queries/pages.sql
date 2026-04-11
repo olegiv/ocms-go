@@ -159,25 +159,29 @@ SELECT * FROM pages WHERE slug = ? AND status = 'published';
 SELECT DISTINCT p.* FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published'
+  AND p.exclude_from_lists = 0
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPublishedPagesByCategory :one
 SELECT COUNT(DISTINCT p.id) FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
-WHERE pc.category_id = ? AND p.status = 'published';
+WHERE pc.category_id = ? AND p.status = 'published'
+  AND p.exclude_from_lists = 0;
 
 -- name: ListPublishedPagesForTag :many
 SELECT p.* FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published'
+  AND p.exclude_from_lists = 0
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPublishedPagesForTag :one
 SELECT COUNT(*) FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
-WHERE pt.tag_id = ? AND p.status = 'published';
+WHERE pt.tag_id = ? AND p.status = 'published'
+  AND p.exclude_from_lists = 0;
 
 -- name: GetPageAuthor :one
 SELECT u.id, u.name, u.email, u.avatar, u.bio, u.website_url, u.linkedin_url, u.github_url FROM users u
@@ -271,25 +275,29 @@ WHERE slug = ? AND language_code = ? AND status = 'published';
 SELECT DISTINCT p.* FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published' AND p.language_code = ?
+  AND p.exclude_from_lists = 0
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPublishedPagesByCategoryAndLanguage :one
 SELECT COUNT(DISTINCT p.id) FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
-WHERE pc.category_id = ? AND p.status = 'published' AND p.language_code = ?;
+WHERE pc.category_id = ? AND p.status = 'published' AND p.language_code = ?
+  AND p.exclude_from_lists = 0;
 
 -- name: ListPublishedPagesForTagAndLanguage :many
 SELECT p.* FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_code = ?
+  AND p.exclude_from_lists = 0
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPublishedPagesForTagAndLanguage :one
 SELECT COUNT(*) FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
-WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_code = ?;
+WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_code = ?
+  AND p.exclude_from_lists = 0;
 
 -- name: CountPagesByLanguageCode :one
 SELECT COUNT(*) FROM pages WHERE language_code = ?;
