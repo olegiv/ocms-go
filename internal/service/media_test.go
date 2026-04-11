@@ -92,6 +92,40 @@ func TestSanitizeFilename(t *testing.T) {
 	}
 }
 
+func TestValidateMediaStoredFilename(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		want     string
+		wantErr  bool
+	}{
+		{name: "valid filename", input: "image.jpg", want: "image.jpg"},
+		{name: "valid with spaces", input: "my image.jpg", want: "my image.jpg"},
+		{name: "empty", input: "", wantErr: true},
+		{name: "absolute path", input: "/etc/passwd", wantErr: true},
+		{name: "traversal", input: "../../secret.png", wantErr: true},
+		{name: "nested path", input: "foo/bar.png", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validateMediaStoredFilename(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("validateMediaStoredFilename(%q) expected error, got nil", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("validateMediaStoredFilename(%q) unexpected error: %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Fatalf("validateMediaStoredFilename(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetMimeTypeFromExtension(t *testing.T) {
 	tests := []struct {
 		filename string

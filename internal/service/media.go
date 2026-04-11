@@ -309,8 +309,13 @@ func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([
 		return nil, fmt.Errorf("media is not an image")
 	}
 
+	safeFilename, err := validateMediaStoredFilename(media.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("invalid media filename: %w", err)
+	}
+
 	// Find original file
-	originalPath := filepath.Join(s.uploadDir, "originals", media.Uuid, media.Filename)
+	originalPath := filepath.Join(s.uploadDir, "originals", media.Uuid, safeFilename)
 	if _, err := os.Stat(originalPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("original file not found")
 	}
@@ -327,7 +332,7 @@ func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([
 	}
 
 	// Regenerate variants
-	variants, err := s.processor.CreateAllVariants(originalPath, media.Uuid, media.Filename)
+	variants, err := s.processor.CreateAllVariants(originalPath, media.Uuid, safeFilename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create variants: %w", err)
 	}
@@ -470,6 +475,23 @@ func sanitizeFilename(filename string) string {
 	}
 
 	return filename
+}
+
+func validateMediaStoredFilename(filename string) (string, error) {
+	trimmed := strings.TrimSpace(filename)
+	if trimmed == "" {
+		return "", fmt.Errorf("filename is empty")
+	}
+	if filepath.IsAbs(trimmed) {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+
+	base := filepath.Base(trimmed)
+	if base != trimmed || base == "." || base == ".." {
+		return "", fmt.Errorf("path traversal is not allowed")
+	}
+
+	return base, nil
 }
 
 func getMimeTypeFromExtension(filename string) string {
