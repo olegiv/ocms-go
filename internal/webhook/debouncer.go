@@ -144,7 +144,7 @@ func (d *Debouncer) Dispatch(ctx context.Context, event *Event) error {
 		d.dispatcher.logger.Warn("debouncer capacity reached, dispatching immediately",
 			"event_type", event.Type,
 			"max_pending", d.config.MaxPending)
-		return d.dispatcher.Dispatch(ctx, event)
+		return d.dispatcher.Dispatch(d.ctx, event)
 	}
 
 	// Create new pending event
