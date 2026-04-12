@@ -601,9 +601,11 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 
 	txq := h.queries.WithTx(tx)
 
+	canCreateTags := apiKeyHasPermission(apiKey, model.PermissionTaxonomyWrite)
+
 	// Resolve tag names to IDs inside transaction (new tags roll back on failure)
 	if len(req.Tags) > 0 {
-		resolvedIDs, err := resolveTagNames(ctx, txq, req.Tags, langCode)
+		resolvedIDs, err := resolveTagNames(ctx, txq, req.Tags, langCode, canCreateTags)
 		if err != nil {
 			h.writeResolveTagError(w, r, err)
 			return
@@ -676,6 +678,11 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	log := h.pageLogger(r)
 	ctx := r.Context()
+	apiKey := middleware.GetAPIKey(r)
+	if apiKey == nil {
+		WriteUnauthorized(w, "API key required")
+		return
+	}
 
 	existing, ok := h.requirePageForAPI(w, r)
 	if !ok {
@@ -745,6 +752,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback() //nolint:errcheck
 
 	txq := h.queries.WithTx(tx)
+	canCreateTags := apiKeyHasPermission(apiKey, model.PermissionTaxonomyWrite)
 
 	// Resolve tag names inside transaction (new tags roll back on failure)
 	var tagIDs []int64
@@ -753,7 +761,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 			tagIDs = append(tagIDs, *req.TagIDs...)
 		}
 		if req.Tags != nil {
-			resolvedIDs, err := resolveTagNames(ctx, txq, *req.Tags, existing.LanguageCode)
+			resolvedIDs, err := resolveTagNames(ctx, txq, *req.Tags, existing.LanguageCode, canCreateTags)
 			if err != nil {
 				h.writeResolveTagError(w, r, err)
 				return
@@ -1000,11 +1008,22 @@ type tagValidationError struct {
 
 func (e *tagValidationError) Error() string { return e.Message }
 
+type tagPermissionError struct {
+	Message string
+}
+
+func (e *tagPermissionError) Error() string { return e.Message }
+
 // writeResolveTagError writes 422 for validation errors, 500 for internal errors.
 func (h *Handler) writeResolveTagError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve *tagValidationError
 	if errors.As(err, &ve) {
 		WriteValidationError(w, map[string]string{ve.Field: ve.Message})
+		return
+	}
+	var pe *tagPermissionError
+	if errors.As(err, &pe) {
+		WriteForbidden(w, pe.Message)
 	} else {
 		h.pageLogger(r).Error500(w, "Failed to resolve tag names", "error", err)
 	}
@@ -1026,7 +1045,7 @@ func deduplicateInt64(ids []int64) []int64 {
 // resolveTagNames resolves tag names to IDs using the given queries handle,
 // creating any tags that don't exist. Pass a transactional queries to ensure
 // newly created tags are rolled back if the outer transaction fails.
-func resolveTagNames(ctx context.Context, q *store.Queries, names []string, langCode string) ([]int64, error) {
+func resolveTagNames(ctx context.Context, q *store.Queries, names []string, langCode string, canCreate bool) ([]int64, error) {
 	if len(names) > maxTagsPerRequest {
 		return nil, &tagValidationError{Field: "tags", Message: fmt.Sprintf("Too many tags: %d exceeds maximum of %d", len(names), maxTagsPerRequest)}
 	}
@@ -1052,6 +1071,9 @@ func resolveTagNames(ctx context.Context, q *store.Queries, names []string, lang
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
+		}
+		if !canCreate {
+			return nil, &tagPermissionError{Message: "taxonomy:write permission required to create new tags"}
 		}
 		// Tag doesn't exist — create it
 		tag, err = q.CreateTag(ctx, store.CreateTagParams{
