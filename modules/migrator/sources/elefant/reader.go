@@ -450,6 +450,15 @@ func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
 		return nil, fmt.Errorf("files path is not a directory: %s", cleanPath)
 	}
 
+	realRoot, err := filepath.EvalSymlinks(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve files directory: %w", err)
+	}
+	realRoot, err = filepath.Abs(realRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve files directory absolute path: %w", err)
+	}
+
 	var files []MediaFile
 
 	err = filepath.Walk(cleanPath, func(path string, info os.FileInfo, err error) error {
@@ -459,6 +468,24 @@ func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
 
 		// Skip directories
 		if info.IsDir() {
+			return nil
+		}
+
+		// Skip symlinks to prevent importing files outside filesPath.
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+
+		resolvedPath, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return nil
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err != nil {
+			return nil
+		}
+		relResolvedPath, err := filepath.Rel(realRoot, resolvedPath)
+		if err != nil || relResolvedPath == ".." || strings.HasPrefix(relResolvedPath, ".."+string(os.PathSeparator)) {
 			return nil
 		}
 
@@ -476,7 +503,7 @@ func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
 
 		files = append(files, MediaFile{
 			Path:     relPath,
-			FullPath: path,
+			FullPath: resolvedPath,
 			Filename: info.Name(),
 			Size:     info.Size(),
 			MimeType: mimeType,

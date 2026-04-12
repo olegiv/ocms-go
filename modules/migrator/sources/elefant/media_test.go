@@ -169,6 +169,39 @@ func TestScanMediaFiles(t *testing.T) {
 	}
 }
 
+func TestScanMediaFiles_SkipsSymlinks(t *testing.T) {
+	tempDir := t.TempDir()
+	outsideDir := t.TempDir()
+
+	regularFilePath := filepath.Join(tempDir, "valid.jpg")
+	if err := os.WriteFile(regularFilePath, []byte("regular content"), 0644); err != nil {
+		t.Fatalf("failed to create regular file: %v", err)
+	}
+
+	outsideFilePath := filepath.Join(outsideDir, "secret.jpg")
+	if err := os.WriteFile(outsideFilePath, []byte("secret content"), 0644); err != nil {
+		t.Fatalf("failed to create outside file: %v", err)
+	}
+
+	symlinkPath := filepath.Join(tempDir, "leak.jpg")
+	if err := os.Symlink(outsideFilePath, symlinkPath); err != nil {
+		t.Skipf("symlink creation not supported in this environment: %v", err)
+	}
+
+	files, err := ScanMediaFiles(tempDir)
+	if err != nil {
+		t.Fatalf("ScanMediaFiles() error = %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("ScanMediaFiles() found %d files, want 1", len(files))
+	}
+
+	if files[0].Filename != "valid.jpg" {
+		t.Fatalf("unexpected file imported: %s", files[0].Filename)
+	}
+}
+
 func TestScanMediaFiles_EmptyPath(t *testing.T) {
 	_, err := ScanMediaFiles("")
 	if err == nil {
