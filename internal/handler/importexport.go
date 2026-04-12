@@ -23,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/transfer"
@@ -403,8 +404,8 @@ func collectSuspiciousImportTokens(matches []suspiciousImportPage) []string {
 		return nil
 	}
 
-	seen := make(map[string]struct{}, len(suspiciousPageHTMLTokens))
-	tokens := make([]string, 0, len(suspiciousPageHTMLTokens))
+	seen := make(map[string]struct{}, len(security.SuspiciousPageHTMLTokens))
+	tokens := make([]string, 0, len(security.SuspiciousPageHTMLTokens))
 	for _, match := range matches {
 		for _, token := range match.Tokens {
 			if _, ok := seen[token]; ok {
