@@ -4,6 +4,7 @@
 package admin
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -512,12 +513,17 @@ func languageCurrentDirection(data LanguageFormData) string {
 
 func languageFormAlpineData(data LanguageFormData) string {
 	if data.IsEdit {
-		return fmt.Sprintf(`{code:'%s',name:'%s',nativeName:'%s',direction:'%s'}`,
-			languageFormValue(data, "code"),
-			languageFormValue(data, "name"),
-			languageFormValue(data, "native_name"),
-			languageCurrentDirection(data),
-		)
+		payload := map[string]string{
+			"code":       languageFormValue(data, "code"),
+			"name":       languageFormValue(data, "name"),
+			"nativeName": languageFormValue(data, "native_name"),
+			"direction":  languageCurrentDirection(data),
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return "{}"
+		}
+		return string(encoded)
 	}
 	return "languageForm()"
 }
