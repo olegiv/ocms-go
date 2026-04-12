@@ -229,14 +229,14 @@ Options:
 - `--skip-binary` — skip binary build, backup, and transfer (deploy custom content only)
 - `--dry-run` — print commands without executing
 
-Symlinked directories inside `custom/` are followed during deployment. Broken symlinks fail the deploy before the instance is stopped.
+Symlinked directories inside `custom/` are followed during deployment only when they resolve within `custom/`. Broken symlinks or links that resolve outside `custom/` fail the deploy before the instance is stopped.
 
 The script:
 1. Builds `bin/ocms-linux-amd64`
 2. Backs up current binary on server
 3. Stops the instance via `ocmsctl`
 4. Transfers binary via `scp`
-5. (If custom themes exist) Syncs `custom/` to `{vhost}/ocms/custom/` via `rsync -aL --delete`
+5. (If custom themes exist) Syncs `custom/` to `{vhost}/ocms/custom/` via `rsync -aL --delete` (after validating all symlink targets remain under `custom/`)
 6. (If custom themes exist) Sets ownership to `{owner}:{group}`
 7. Starts the instance
 8. Checks instance status
@@ -281,7 +281,7 @@ custom/themes/default/    # Overrides the embedded 'default' theme
 
 Custom themes with the same name as core themes take priority.
 
-For local development, `custom/` may contain symlinked theme or module directories. `deploy.sh` follows those symlinks and copies the resolved files to the server, but it aborts if any symlink target is missing.
+For local development, `custom/` may contain symlinked theme or module directories. `deploy.sh` follows those symlinks and copies the resolved files to the server, but it aborts if any symlink target is missing or resolves outside `custom/`.
 
 ## Copying Local Data
 

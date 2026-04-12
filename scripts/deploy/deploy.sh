@@ -159,6 +159,13 @@ validate_custom_symlinks() {
         return 0
     fi
 
+    local custom_root
+    custom_root=$(readlink -f "$LOCAL_CUSTOM_DIR" 2>/dev/null || true)
+    if [[ -z "$custom_root" ]]; then
+        echo_error "Unable to resolve custom directory path: ${LOCAL_CUSTOM_DIR}"
+        exit 1
+    fi
+
     local broken_symlinks
     broken_symlinks=$(find "$LOCAL_CUSTOM_DIR" -type l ! -exec test -e {} \; -print 2>/dev/null || true)
 
@@ -170,6 +177,35 @@ validate_custom_symlinks() {
             target=$(readlink "$symlink" 2>/dev/null || echo "<unreadable>")
             echo "  - ${symlink} -> ${target}"
         done <<< "$broken_symlinks"
+        exit 1
+    fi
+
+    local escaped_symlinks=""
+    while IFS= read -r symlink; do
+        [[ -n "$symlink" ]] || continue
+
+        local resolved_target
+        resolved_target=$(readlink -f "$symlink" 2>/dev/null || true)
+        if [[ -z "$resolved_target" ]]; then
+            escaped_symlinks+="${symlink} -> <unreadable>"$'\n'
+            continue
+        fi
+
+        case "$resolved_target" in
+            "$custom_root"/*|"$custom_root")
+                ;;
+            *)
+                escaped_symlinks+="${symlink} -> ${resolved_target}"$'\n'
+                ;;
+        esac
+    done < <(find "$LOCAL_CUSTOM_DIR" -type l -print 2>/dev/null || true)
+
+    if [[ -n "$escaped_symlinks" ]]; then
+        echo_error "Symlinks in ${LOCAL_CUSTOM_DIR} must resolve within ${LOCAL_CUSTOM_DIR}"
+        while IFS= read -r symlink; do
+            [[ -n "$symlink" ]] || continue
+            echo "  - ${symlink}"
+        done <<< "$escaped_symlinks"
         exit 1
     fi
 }
