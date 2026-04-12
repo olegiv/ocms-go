@@ -276,6 +276,18 @@ func GetRequestURL(r *http.Request) string {
 	return r.URL.Path
 }
 
+// IsRequestFromTrustedProxy reports whether the immediate peer (r.RemoteAddr)
+// is in the configured trusted-proxy CIDR list. Callers use this to decide
+// whether forwarding headers like X-Forwarded-Host or X-Forwarded-Proto on
+// the request can be trusted as authoritative.
+func IsRequestFromTrustedProxy(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	remoteIP, _ := parseRemoteAddrIP(r.RemoteAddr)
+	return isTrustedProxy(remoteIP)
+}
+
 // GetClientIP extracts the client IP from the request.
 // It trusts forwarding headers only when the direct peer is a trusted proxy.
 // For X-Forwarded-For chains it returns the first untrusted hop from the right,

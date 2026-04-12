@@ -160,7 +160,8 @@ func TestDifyProvider_RenderBody(t *testing.T) {
 				"/chat-messages",
 				"/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId)",
 				"X-Embed-Proxy-Token",
-				"proxyTokenOptional=false",
+				// No RenderContext minter → widget falls back to optional mode.
+				"proxyTokenOptional=true",
 				"if(tr.status===404)",
 				"AI Assistant", // default bot name
 				"#1C64F2",      // default primary color
@@ -272,7 +273,7 @@ func TestDifyProvider_RenderBody(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := string(p.RenderBody(tt.settings))
+			result := string(p.RenderBody(tt.settings, providers.RenderContext{}))
 
 			for _, c := range tt.contains {
 				if !strings.Contains(result, c) {
@@ -297,7 +298,7 @@ func TestDifyProvider_RenderBody_XSSPrevention(t *testing.T) {
 		"api_key":      "app-<script>alert('xss')</script>",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, providers.RenderContext{}))
 
 	// Should not contain unescaped script tags in the API key
 	if strings.Contains(result, "<script>alert") {
@@ -314,7 +315,7 @@ func TestDifyProvider_RenderBody_OpenerQuestionsXSS(t *testing.T) {
 		"opener_questions": "Normal question\n<script>alert('xss')</script>\nAnother question",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, providers.RenderContext{}))
 
 	// Should not contain unescaped script tags in opener questions
 	if strings.Contains(result, "<script>alert") {

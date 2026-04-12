@@ -5,6 +5,7 @@ package handler
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"embed"
 	"html/template"
@@ -434,12 +435,12 @@ func TestFrontendHandler_NotFound_PersistsEventForAuthenticatedUser(t *testing.T
 
 func TestCallModuleHTMLFuncs_NoFuncs(t *testing.T) {
 	h := &FrontendHandler{}
-	got := h.callModuleHTMLFuncs(nil, "test-nonce", "privacyHead")
+	got := h.callModuleHTMLFuncs(nil, "test-nonce", "", "privacyHead")
 	if got != "" {
 		t.Errorf("nil funcmap: got %q; want empty", got)
 	}
 
-	got = h.callModuleHTMLFuncs(template.FuncMap{}, "test-nonce", "privacyHead")
+	got = h.callModuleHTMLFuncs(template.FuncMap{}, "test-nonce", "", "privacyHead")
 	if got != "" {
 		t.Errorf("empty funcmap: got %q; want empty", got)
 	}
@@ -452,7 +453,7 @@ func TestCallModuleHTMLFuncs_SingleMatch(t *testing.T) {
 			return "<script>privacy</script>"
 		},
 	}
-	got := h.callModuleHTMLFuncs(funcs, "nonce", "privacyHead")
+	got := h.callModuleHTMLFuncs(funcs, "nonce", "", "privacyHead")
 	want := template.HTML("<script>privacy</script>")
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
@@ -469,7 +470,7 @@ func TestCallModuleHTMLFuncs_MultipleConcat(t *testing.T) {
 			return "<link rel=\"embed\">"
 		},
 	}
-	got := h.callModuleHTMLFuncs(funcs, "nonce", "analyticsExtHead", "embedHead")
+	got := h.callModuleHTMLFuncs(funcs, "nonce", "", "analyticsExtHead", "embedHead")
 	want := template.HTML(`<meta name="analytics"><link rel="embed">`)
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
@@ -483,7 +484,7 @@ func TestCallModuleHTMLFuncs_MissingNameSkipped(t *testing.T) {
 			return "<div>chat</div>"
 		},
 	}
-	got := h.callModuleHTMLFuncs(funcs, "nonce", "nonExistent", "embedBody")
+	got := h.callModuleHTMLFuncs(funcs, "nonce", "", "nonExistent", "embedBody")
 	want := template.HTML("<div>chat</div>")
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
@@ -498,7 +499,7 @@ func TestCallModuleHTMLFuncs_WrongSignatureSkipped(t *testing.T) {
 			return "<good/>"
 		},
 	}
-	got := h.callModuleHTMLFuncs(funcs, "nonce", "badFunc", "goodFunc")
+	got := h.callModuleHTMLFuncs(funcs, "nonce", "", "badFunc", "goodFunc")
 	want := template.HTML("<good/>")
 	if got != want {
 		t.Errorf("got %q; want %q", got, want)
@@ -506,7 +507,7 @@ func TestCallModuleHTMLFuncs_WrongSignatureSkipped(t *testing.T) {
 }
 
 func TestCallModuleHTMLFuncs_NoncePassthrough(t *testing.T) {
-	var receivedNonce string
+	var receivedNonce, receivedOrigin string
 	h := &FrontendHandler{}
 	funcs := template.FuncMap{
 		"testFunc": func(args ...any) template.HTML {
@@ -515,13 +516,254 @@ func TestCallModuleHTMLFuncs_NoncePassthrough(t *testing.T) {
 					receivedNonce = s
 				}
 			}
+			if len(args) > 1 {
+				if s, ok := args[1].(string); ok {
+					receivedOrigin = s
+				}
+			}
 			return ""
 		},
 	}
-	h.callModuleHTMLFuncs(funcs, "my-secret-nonce", "testFunc")
+	h.callModuleHTMLFuncs(funcs, "my-secret-nonce", "https://example.com", "testFunc")
 	if receivedNonce != "my-secret-nonce" {
 		t.Errorf("nonce: got %q; want %q", receivedNonce, "my-secret-nonce")
 	}
+	if receivedOrigin != "https://example.com" {
+		t.Errorf("origin: got %q; want %q", receivedOrigin, "https://example.com")
+	}
+}
+
+func TestRequestPageOrigin(t *testing.T) {
+	// trustedProxy on a case puts the request peer inside a configured
+	// trusted-proxy CIDR so X-Forwarded-* headers are honoured. Cases
+	// without the flag use the default httptest.NewRequest peer
+	// (192.0.2.1), which is untrusted.
+	tests := []struct {
+		name          string
+		host          string
+		tls           bool
+		headers       map[string]string
+		trustedProxy  bool
+		want          string
+	}{
+		// --- Direct (no trusted proxy) ----------------------------------
+		{
+			name: "plain http",
+			host: "example.com",
+			want: "http://example.com",
+		},
+		{
+			name: "tls connection",
+			host: "example.com",
+			tls:  true,
+			want: "https://example.com",
+		},
+		{
+			// Regression: inbound traffic from an external referring site
+			// (search, social) must not cause requestPageOrigin to return
+			// the external host.
+			name:    "ignores Referer from external site",
+			host:    "example.com",
+			headers: map[string]string{"Referer": "https://evil.example/some-path"},
+			want:    "http://example.com",
+		},
+		{
+			name: "ignores Origin header pointing at referring page",
+			host: "example.com",
+			headers: map[string]string{
+				"Origin":  "https://other.example",
+				"Referer": "https://other.example/page",
+			},
+			want: "http://example.com",
+		},
+		{
+			// Untrusted client cannot influence the bound scheme by
+			// spoofing X-Forwarded-Proto.
+			name:    "untrusted X-Forwarded-Proto ignored",
+			host:    "example.com",
+			headers: map[string]string{"X-Forwarded-Proto": "https"},
+			want:    "http://example.com",
+		},
+		{
+			// Untrusted client cannot influence the bound host by
+			// spoofing X-Forwarded-Host.
+			name:    "untrusted X-Forwarded-Host ignored",
+			host:    "example.com",
+			headers: map[string]string{"X-Forwarded-Host": "evil.example"},
+			want:    "http://example.com",
+		},
+
+		// --- Default-port stripping (RFC 6454 §6.2 alignment) -----------
+		{
+			// Regression: some reverse proxies forward Host with an explicit
+			// default port. Browsers omit default ports from Origin per
+			// RFC 6454 §6.2, so the bound origin must also omit them or
+			// downstream validation sees a mismatch.
+			name: "default http port 80 stripped",
+			host: "example.com:80",
+			want: "http://example.com",
+		},
+		{
+			name: "non-default http port preserved",
+			host: "example.com:8080",
+			want: "http://example.com:8080",
+		},
+		{
+			// :443 is NOT the default port for http, so it must be preserved.
+			name: "http scheme with :443 port preserved",
+			host: "example.com:443",
+			want: "http://example.com:443",
+		},
+		{
+			name: "ipv6 with default http port stripped",
+			host: "[::1]:80",
+			want: "http://[::1]",
+		},
+		{
+			name: "ipv6 with non-default port preserved",
+			host: "[::1]:8080",
+			want: "http://[::1]:8080",
+		},
+
+		// --- Trusted-proxy forwarding ----------------------------------
+		{
+			name:         "trusted X-Forwarded-Proto honoured",
+			host:         "example.com",
+			headers:      map[string]string{"X-Forwarded-Proto": "https"},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+		{
+			// Regression: multi-proxy chain may append to X-Forwarded-Proto.
+			// Only the leftmost (original client) value is meaningful.
+			name:         "multi-value X-Forwarded-Proto takes leftmost",
+			host:         "example.com",
+			headers:      map[string]string{"X-Forwarded-Proto": "https,http"},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+		{
+			name:         "multi-value X-Forwarded-Proto with space takes leftmost",
+			host:         "example.com",
+			headers:      map[string]string{"X-Forwarded-Proto": "https, http"},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+		{
+			name:         "non-default https port preserved with trusted proxy",
+			host:         "example.com:8443",
+			headers:      map[string]string{"X-Forwarded-Proto": "https"},
+			trustedProxy: true,
+			want:         "https://example.com:8443",
+		},
+		{
+			name:         "default https port 443 stripped",
+			host:         "example.com:443",
+			headers:      map[string]string{"X-Forwarded-Proto": "https"},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+		{
+			name:         "ipv6 with default https port stripped",
+			host:         "[::1]:443",
+			headers:      map[string]string{"X-Forwarded-Proto": "https"},
+			trustedProxy: true,
+			want:         "https://[::1]",
+		},
+		{
+			// Regression: a reverse proxy may rewrite Host to an internal
+			// upstream name (e.g., "backend:8080"). The browser sends the
+			// public host on widget fetches, so the render-time token must
+			// be bound to the public host carried in X-Forwarded-Host, not
+			// the internal one in r.Host.
+			name: "trusted X-Forwarded-Host beats internal r.Host",
+			host: "backend:8080",
+			headers: map[string]string{
+				"X-Forwarded-Host":  "public.example.com",
+				"X-Forwarded-Proto": "https",
+			},
+			trustedProxy: true,
+			want:         "https://public.example.com",
+		},
+		{
+			name: "trusted X-Forwarded-Host with default port stripped",
+			host: "backend:8080",
+			headers: map[string]string{
+				"X-Forwarded-Host":  "public.example.com:443",
+				"X-Forwarded-Proto": "https",
+			},
+			trustedProxy: true,
+			want:         "https://public.example.com",
+		},
+		{
+			name: "trusted X-Forwarded-Host multi-value takes leftmost",
+			host: "backend:8080",
+			headers: map[string]string{
+				"X-Forwarded-Host":  "public.example.com, hop2.internal",
+				"X-Forwarded-Proto": "https",
+			},
+			trustedProxy: true,
+			want:         "https://public.example.com",
+		},
+		{
+			name: "trusted X-Forwarded-Host empty falls back to r.Host",
+			host: "example.com",
+			headers: map[string]string{
+				"X-Forwarded-Host":  "",
+				"X-Forwarded-Proto": "https",
+			},
+			trustedProxy: true,
+			want:         "https://example.com",
+		},
+
+		// --- Edge cases -------------------------------------------------
+		{
+			name: "empty host yields empty origin",
+			host: "",
+			want: "",
+		},
+	}
+
+	// Tests can run in parallel within this top-level test, but trusted-proxy
+	// state is process-global, so any case that touches it must serialize
+	// against any other case that touches it. Run cases sequentially and
+	// reset trusted proxies after each case to avoid leakage.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Host = tt.host
+			if tt.tls {
+				req.TLS = &tls.ConnectionState{}
+			}
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
+
+			if tt.trustedProxy {
+				if err := middleware.SetTrustedProxies([]string{"127.0.0.1/32"}); err != nil {
+					t.Fatalf("SetTrustedProxies() error: %v", err)
+				}
+				req.RemoteAddr = "127.0.0.1:54321"
+			} else {
+				if err := middleware.SetTrustedProxies(nil); err != nil {
+					t.Fatalf("SetTrustedProxies(nil) error: %v", err)
+				}
+			}
+			t.Cleanup(func() {
+				_ = middleware.SetTrustedProxies(nil)
+			})
+
+			if got := requestPageOrigin(req); got != tt.want {
+				t.Errorf("requestPageOrigin() = %q; want %q", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("nil request", func(t *testing.T) {
+		if got := requestPageOrigin(nil); got != "" {
+			t.Errorf("requestPageOrigin(nil) = %q; want empty", got)
+		}
+	})
 }
 
 // staticModuleFuncsProvider implements ModuleTemplateFuncsProvider for tests.
@@ -541,7 +783,7 @@ func TestSetModuleTemplateFuncsProvider(t *testing.T) {
 		},
 	}
 	h.SetModuleTemplateFuncsProvider(&staticModuleFuncsProvider{funcs: funcs})
-	got := h.callModuleHTMLFuncs(h.moduleFuncsProvider.AllTemplateFuncs(), "nonce", "testFunc")
+	got := h.callModuleHTMLFuncs(h.moduleFuncsProvider.AllTemplateFuncs(), "nonce", "", "testFunc")
 	if got != "<test/>" {
 		t.Errorf("after SetModuleTemplateFuncsProvider: got %q; want %q", got, "<test/>")
 	}

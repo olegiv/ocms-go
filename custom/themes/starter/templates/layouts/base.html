@@ -75,7 +75,7 @@
     {{if analyticsExtHead}}{{analyticsExtHead .CSPNonce}}{{end}}
 
     {{/* External embed scripts (head) */}}
-    {{if embedHead}}{{embedHead .CSPNonce}}{{end}}
+    {{if embedHead}}{{embedHead .CSPNonce .PageOrigin}}{{end}}
 
     {{block "head" .}}{{end}}
 </head>
@@ -125,6 +125,6 @@
     {{block "scripts" .}}{{end}}
 
     {{/* External embed scripts (body - chat widgets, etc.) */}}
-    {{if embedBody}}{{embedBody .CSPNonce}}{{end}}
+    {{if embedBody}}{{embedBody .CSPNonce .PageOrigin}}{{end}}
 </body>
 </html>

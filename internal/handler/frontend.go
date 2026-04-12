@@ -14,6 +14,7 @@ import (
 	"html"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -226,6 +227,7 @@ type BaseTemplateData struct {
 	LangPrefix         string            // URL prefix for current language (e.g., "/ru" or "" for default)
 	ShowLanguagePicker bool              // Whether to show language picker
 	CSPNonce           string            // CSP nonce for inline scripts
+	PageOrigin         string            // Normalized scheme://host the page is served from — used by template funcs like embedBody that need to bind render-time tokens to the page origin
 
 	// Module-rendered HTML for templ-based layouts (aggregated from all active modules).
 	// HTML themes use template funcs directly; templ layouts use these fields.
@@ -447,7 +449,11 @@ func (h *FrontendHandler) SetModuleTemplateFuncsProvider(p ModuleTemplateFuncsPr
 }
 
 // callModuleHTMLFuncs calls named template functions and concatenates their HTML output.
-func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce string, names ...string) template.HTML {
+// origin is the normalized scheme://host of the incoming request; it is passed to
+// template funcs as a second positional argument so modules that need it (e.g. the
+// embed module, which mints render-time proxy tokens bound to the page origin) can
+// consume it. Funcs that only care about the nonce ignore the extra argument.
+func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce, origin string, names ...string) template.HTML {
 	var sb strings.Builder
 	for _, name := range names {
 		fn, ok := funcs[name]
@@ -455,12 +461,102 @@ func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce stri
 			continue
 		}
 		if f, ok := fn.(func(...any) template.HTML); ok {
-			if result := f(nonce); result != "" {
+			if result := f(nonce, origin); result != "" {
 				sb.WriteString(string(result))
 			}
 		}
 	}
 	return template.HTML(sb.String())
+}
+
+// requestPageOrigin returns a normalized scheme://host for the page being
+// served. Origin/Referer headers are intentionally ignored: for top-level
+// navigation GETs a browser usually omits Origin entirely and Referer
+// points at the *previous* page (often external), so trusting either
+// would bind the render-time proxy token to the wrong origin and make
+// the widget's subsequent fetches fail downstream validation.
+//
+// Host resolution prefers X-Forwarded-Host (leftmost value) when the
+// immediate peer is a configured trusted proxy — this handles deployments
+// where a reverse proxy rewrites the inbound Host to an internal upstream
+// name. Untrusted clients can still send X-Forwarded-Host, but it is
+// ignored to prevent spoofing the bound origin.
+func requestPageOrigin(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	host := resolveRequestHost(r)
+	if host == "" {
+		return ""
+	}
+	scheme := resolveRequestScheme(r)
+	return strings.ToLower(scheme + "://" + canonicalHost(host, scheme))
+}
+
+// resolveRequestHost returns the public host the page is served from,
+// honouring X-Forwarded-Host only when the request comes from a configured
+// trusted proxy. Falls back to r.Host. Untrusted clients can set this
+// header but it is ignored to prevent spoofing the bound origin.
+func resolveRequestHost(r *http.Request) string {
+	if middleware.IsRequestFromTrustedProxy(r) {
+		if fwd := firstForwardedValue(r.Header.Get("X-Forwarded-Host")); fwd != "" {
+			return fwd
+		}
+	}
+	return r.Host
+}
+
+// resolveRequestScheme returns "http" or "https" for the request, preferring
+// the TLS state on the connection, then X-Forwarded-Proto (leftmost value).
+// X-Forwarded-Proto is honoured only when the immediate peer is a trusted
+// proxy, matching the X-Forwarded-Host gate so untrusted clients cannot
+// spoof the bound scheme.
+func resolveRequestScheme(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	if middleware.IsRequestFromTrustedProxy(r) {
+		if proto := firstForwardedValue(r.Header.Get("X-Forwarded-Proto")); proto != "" {
+			return strings.ToLower(proto)
+		}
+	}
+	return "http"
+}
+
+// firstForwardedValue returns the leftmost value of a possibly comma-separated
+// forwarded header (e.g., X-Forwarded-Host, X-Forwarded-Proto), trimmed.
+// Returns "" if the input is empty or only whitespace.
+func firstForwardedValue(raw string) string {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return ""
+	}
+	if comma := strings.Index(v, ","); comma >= 0 {
+		v = strings.TrimSpace(v[:comma])
+	}
+	return v
+}
+
+// canonicalHost strips a default port from host when it matches the scheme's
+// default (80 for http, 443 for https). Browsers omit default ports when
+// serializing the Origin header (RFC 6454 §6.2), so a render-time token
+// bound to "example.com:443" would not match the "example.com" the widget's
+// subsequent fetches send. Uses net.SplitHostPort so IPv6 literals like
+// "[::1]:80" round-trip correctly — SplitHostPort returns the bare IPv6
+// address without brackets, so we re-bracket it on the way out.
+func canonicalHost(host, scheme string) string {
+	h, p, err := net.SplitHostPort(host)
+	if err != nil {
+		// No port present (or malformed) — return verbatim.
+		return host
+	}
+	if (scheme == "http" && p == "80") || (scheme == "https" && p == "443") {
+		if strings.Contains(h, ":") {
+			return "[" + h + "]"
+		}
+		return h
+	}
+	return host
 }
 
 // trustedPageBody returns page HTML for rendering, optionally sanitizing to
@@ -1894,6 +1990,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	ctx := r.Context()
 	site := h.getSiteData(ctx)
 
+	pageOrigin := requestPageOrigin(r)
 	data := BaseTemplateData{
 		Title:           title,
 		MetaDescription: metaDesc,
@@ -1909,6 +2006,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		ShowSearch:      true,
 		SearchQuery:     r.URL.Query().Get("q"),
 		CSPNonce:        middleware.GetCSPNonce(r),
+		PageOrigin:      pageOrigin,
 	}
 
 	// Populate module HTML for templ-based layouts by calling known template funcs.
@@ -1916,9 +2014,9 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	// Fetched per-request so module toggle takes effect without restart.
 	if h.moduleFuncsProvider != nil {
 		funcs := h.moduleFuncsProvider.AllTemplateFuncs()
-		data.ModuleHeadHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "privacyHead", "analyticsExtHead", "embedHead")
-		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "informerBar", "analyticsExtBody")
-		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "embedBody", "analyticsIntReadTracker")
+		data.ModuleHeadHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "privacyHead", "analyticsExtHead", "embedHead")
+		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "informerBar", "analyticsExtBody")
+		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "embedBody", "analyticsIntReadTracker")
 	}
 
 	// Get site logo and custom CSS from cache

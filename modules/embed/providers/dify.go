@@ -146,13 +146,33 @@ func (p *DifyProvider) RenderHead(_ map[string]string) template.HTML {
 }
 
 // RenderBody returns the custom Dify chat widget.
-func (p *DifyProvider) RenderBody(settings map[string]string) template.HTML {
+func (p *DifyProvider) RenderBody(settings map[string]string, rc RenderContext) template.HTML {
 	apiEndpoint := strings.TrimSuffix(strings.TrimSpace(settings["api_endpoint"]), "/")
 	apiKey := strings.TrimSpace(settings["api_key"])
 
 	if apiEndpoint == "" || apiKey == "" {
 		return ""
 	}
+
+	// Mint a signed proxy token for this render. If minting is not available
+	// (no secret configured, no origin, or an internal error), fall back to
+	// proxyTokenOptional so the widget behaves like the "token disabled"
+	// configuration the server already supports.
+	var injectedToken string
+	var injectedTokenExp int64
+	tokenOptional := true
+	if rc.IssueProxyToken != nil && rc.Origin != "" {
+		if tok, exp, err := rc.IssueProxyToken(); err == nil && tok != "" {
+			injectedToken = tok
+			injectedTokenExp = exp.Unix()
+			tokenOptional = false
+		}
+	}
+	tokenOptionalJS := "true"
+	if !tokenOptional {
+		tokenOptionalJS = "false"
+	}
+	safeInjectedToken := template.JSEscapeString(injectedToken)
 
 	botName := strings.TrimSpace(settings["bot_name"])
 	if botName == "" {
@@ -286,7 +306,7 @@ func (p *DifyProvider) RenderBody(settings map[string]string) template.HTML {
 (function(){
 var PROXY_BASE='/embed/dify',WELCOME='%s',OPENERS=%s,SHOW_SUGGESTED=%s;
 var convId=null,isOpen=false,busy=false,userId='user-'+Math.random().toString(36).substr(2,9),openersShown=false,lastMsgId=null;
-var proxyToken='',proxyTokenExp=0,proxyTokenOptional=false;
+var proxyToken='%s',proxyTokenExp=%d,proxyTokenOptional=%s;
 var tog=document.getElementById('dify-chat-toggle');
 var win=document.getElementById('dify-chat-window');
 var cls=document.getElementById('dify-chat-close');
@@ -364,10 +384,14 @@ function hideTyp(){var e=document.getElementById('dify-typ');if(e)e.remove();}
 
 async function ensureProxyToken(forceRefresh){
   if(proxyTokenOptional)return '';
-  if(forceRefresh){proxyToken='';proxyTokenExp=0;}
   var now=Math.floor(Date.now()/1000);
-  if(proxyToken&&now<proxyTokenExp-5)return proxyToken;
-  var tr=await fetch(PROXY_BASE+'/token',{method:'GET',credentials:'same-origin'});
+  if(!forceRefresh&&proxyToken&&now<proxyTokenExp-5)return proxyToken;
+  // Refresh flow: the server requires the current (possibly just-expired)
+  // token in X-Embed-Proxy-Token so it can validate continuity with the
+  // original page render before issuing a new one.
+  var headers={};
+  if(proxyToken)headers['X-Embed-Proxy-Token']=proxyToken;
+  var tr=await fetch(PROXY_BASE+'/token',{method:'GET',credentials:'same-origin',headers:headers});
   if(tr.status===404){
     proxyTokenOptional=true;
     proxyToken='';
@@ -479,6 +503,9 @@ inp.addEventListener('input',function(){this.style.height='auto';this.style.heig
 		safeWelcomeMessage,
 		openerJS,
 		showSuggestedJS,
+		safeInjectedToken,
+		injectedTokenExp,
+		tokenOptionalJS,
 	)
 
 	return template.HTML(widget)

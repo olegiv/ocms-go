@@ -4,7 +4,20 @@
 // Package providers defines the Provider interface and common types for embed providers.
 package providers
 
-import "html/template"
+import (
+	"html/template"
+	"time"
+)
+
+// RenderContext carries per-request state into provider render methods.
+// Origin is the normalized scheme://host of the page the widget will run on.
+// IssueProxyToken mints a signed proxy token bound to Origin (or returns an
+// error if the module is not configured to issue one). Providers that do not
+// need a token can ignore the closure.
+type RenderContext struct {
+	Origin          string
+	IssueProxyToken func() (token string, expiresAt time.Time, err error)
+}
 
 // SettingField defines a configuration field for a provider.
 type SettingField struct {
@@ -61,6 +74,9 @@ type Provider interface {
 	// RenderHead returns HTML to inject in the <head> section
 	RenderHead(settings map[string]string) template.HTML
 
-	// RenderBody returns HTML to inject before </body>
-	RenderBody(settings map[string]string) template.HTML
+	// RenderBody returns HTML to inject before </body>.
+	// ctx carries the request origin and a token-issuance closure so providers
+	// that need a signed proxy token can mint it at render time instead of
+	// relying on a public mint endpoint.
+	RenderBody(settings map[string]string, ctx RenderContext) template.HTML
 }

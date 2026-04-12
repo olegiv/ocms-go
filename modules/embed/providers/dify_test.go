@@ -6,6 +6,7 @@ package providers
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDify_ID(t *testing.T) {
@@ -104,7 +105,7 @@ func TestDify_RenderHead_AlwaysEmpty(t *testing.T) {
 
 func TestDify_RenderBody_EmptySettings(t *testing.T) {
 	p := NewDify()
-	result := p.RenderBody(map[string]string{})
+	result := p.RenderBody(map[string]string{}, RenderContext{})
 	if result != "" {
 		t.Errorf("RenderBody(empty) = %q, want empty", result)
 	}
@@ -117,7 +118,7 @@ func TestDify_RenderBody_BasicSettings(t *testing.T) {
 		"api_key":      "app-testkey-abc",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 
 	// Should not expose the API key or endpoint directly.
 	if strings.Contains(result, "app-testkey-abc") {
@@ -144,7 +145,7 @@ func TestDify_RenderBody_CustomBotName(t *testing.T) {
 		"bot_name":     "My Custom Bot",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 	if !strings.Contains(result, "My Custom Bot") {
 		t.Error("expected custom bot name in output")
 	}
@@ -158,7 +159,7 @@ func TestDify_RenderBody_CustomColor(t *testing.T) {
 		"primary_color": "#ABCDEF",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 	if !strings.Contains(result, "#ABCDEF") {
 		t.Error("expected custom primary_color in output")
 	}
@@ -172,7 +173,7 @@ func TestDify_RenderBody_BottomLeft(t *testing.T) {
 		"position":     "bottom-left",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 	if !strings.Contains(result, "left: 20px") {
 		t.Error("expected left positioning for bottom-left setting")
 	}
@@ -186,7 +187,7 @@ func TestDify_RenderBody_OpenerQuestions(t *testing.T) {
 		"opener_questions": "Question one\nQuestion two",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 	if !strings.Contains(result, "Question one") {
 		t.Error("expected opener question in output")
 	}
@@ -203,7 +204,7 @@ func TestDify_RenderBody_ShowSuggested(t *testing.T) {
 		"show_suggested": "1",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 	if !strings.Contains(result, "SHOW_SUGGESTED=true") {
 		t.Error("expected SHOW_SUGGESTED=true in output")
 	}
@@ -216,7 +217,7 @@ func TestDify_RenderBody_DefaultShowSuggested(t *testing.T) {
 		"api_key":      "app-key",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 	if !strings.Contains(result, "SHOW_SUGGESTED=false") {
 		t.Error("expected SHOW_SUGGESTED=false by default")
 	}
@@ -230,7 +231,7 @@ func TestDify_RenderBody_XSSPrevention(t *testing.T) {
 		"bot_name":     "<img src=x onerror=alert(1)>",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 
 	// api_key XSS: should not have raw <script> tag.
 	if strings.Contains(result, "<script>evil") {
@@ -257,8 +258,71 @@ func TestDify_RenderBody_WelcomeMessage(t *testing.T) {
 		"welcome_message": "Hello! How can I help?",
 	}
 
-	result := string(p.RenderBody(settings))
+	result := string(p.RenderBody(settings, RenderContext{}))
 	if !strings.Contains(result, "Hello! How can I help?") {
 		t.Error("expected welcome_message in output")
 	}
 }
+
+func TestDify_RenderBody_InjectedProxyToken(t *testing.T) {
+	p := NewDify()
+	settings := map[string]string{
+		"api_endpoint": "https://api.dify.ai/v1",
+		"api_key":      "app-key",
+	}
+
+	const want = "render-time.signed-token"
+	wantExp := time.Now().Add(90 * time.Second)
+	calls := 0
+	rc := RenderContext{
+		Origin: "https://example.com",
+		IssueProxyToken: func() (string, time.Time, error) {
+			calls++
+			return want, wantExp, nil
+		},
+	}
+
+	result := string(p.RenderBody(settings, rc))
+	if calls != 1 {
+		t.Fatalf("IssueProxyToken called %d times; want 1", calls)
+	}
+	if !strings.Contains(result, "proxyToken='"+want+"'") {
+		t.Error("expected injected proxyToken literal in rendered output")
+	}
+	if !strings.Contains(result, "proxyTokenOptional=false") {
+		t.Error("expected proxyTokenOptional=false when a token is injected")
+	}
+	// The expiry must be the Unix seconds value from the minter.
+	wantExpLit := strings.TrimSpace("proxyTokenExp=") // anchor, check value by substring
+	if !strings.Contains(result, wantExpLit) {
+		t.Error("expected proxyTokenExp in rendered output")
+	}
+}
+
+func TestDify_RenderBody_MinterErrorFallsBackToOptional(t *testing.T) {
+	p := NewDify()
+	settings := map[string]string{
+		"api_endpoint": "https://api.dify.ai/v1",
+		"api_key":      "app-key",
+	}
+	rc := RenderContext{
+		Origin: "https://example.com",
+		IssueProxyToken: func() (string, time.Time, error) {
+			return "", time.Time{}, errMinter()
+		},
+	}
+
+	result := string(p.RenderBody(settings, rc))
+	if !strings.Contains(result, "proxyTokenOptional=true") {
+		t.Error("expected proxyTokenOptional=true when minter errors")
+	}
+	if strings.Contains(result, "proxyToken='some-token'") {
+		t.Error("no token should be embedded when minter errors")
+	}
+}
+
+func errMinter() error { return testErr("minter unavailable") }
+
+type testErr string
+
+func (e testErr) Error() string { return string(e) }

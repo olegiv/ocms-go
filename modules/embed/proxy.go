@@ -37,10 +37,19 @@ const (
 	maxDifyInputsCount       = 32
 	maxDifyInputKeyLen       = 64
 	maxDifyInputValueLen     = 512
-	embedProxyTokenHeader    = "X-Embed-Proxy-Token"
-	embedProxyTokenTTL       = 90 * time.Second
+	embedProxyTokenHeader = "X-Embed-Proxy-Token"
+	// embedProxyTokenTTL is long enough to cover a typical idle-then-interact
+	// session in an open tab without forcing a refresh round-trip, while
+	// keeping stolen-token reuse bounded. The render-time mint path and the
+	// refresh endpoint both issue tokens with this TTL.
+	embedProxyTokenTTL       = 30 * time.Minute
 	embedProxyTokenSkew      = 10 * time.Second
 	embedProxyTokenNonceSize = 16
+	// embedProxyTokenRefreshGrace is the window past a token's Exp during
+	// which /embed/dify/token will still accept it as proof of prior render
+	// and issue a replacement. The downstream chat-messages validator uses
+	// the strict (no-grace) check — this window only applies to refresh.
+	embedProxyTokenRefreshGrace = 5 * time.Minute
 )
 
 var difyIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:@-]+$`)
@@ -75,6 +84,13 @@ var difyProxyHTTPClient = &http.Client{
 	},
 }
 
+// handleDifyProxyToken is a refresh-only endpoint. The widget's initial token
+// is minted at page-render time (see providers.DifyProvider.RenderBody); this
+// handler only exists to let a widget with an already-rendered token extend
+// the session when the TTL expires during a long chat. It requires the caller
+// to present the current (or recently-expired, within embedProxyTokenRefreshGrace)
+// token in X-Embed-Proxy-Token, tying issuance to a prior legitimate render
+// rather than the spoofable Origin header alone.
 func (m *Module) handleDifyProxyToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -91,6 +107,22 @@ func (m *Module) handleDifyProxyToken(w http.ResponseWriter, r *http.Request) {
 
 	origin, err := requestOrigin(r)
 	if err != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	presented := strings.TrimSpace(r.Header.Get(embedProxyTokenHeader))
+	if presented == "" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if err := m.validateSignedProxyTokenWithGrace(presented, origin, time.Now(), embedProxyTokenRefreshGrace); err != nil {
+		if m.ctx != nil && m.ctx.Logger != nil {
+			m.ctx.Logger.Warn("embed proxy token refresh rejected",
+				"error", err,
+				"origin", origin,
+				"path", r.URL.Path)
+		}
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -486,6 +518,15 @@ func (m *Module) issueSignedProxyToken(origin string, now time.Time) (string, ti
 }
 
 func (m *Module) validateSignedProxyToken(token, requestOrigin string, now time.Time) error {
+	return m.validateSignedProxyTokenWithGrace(token, requestOrigin, now, 0)
+}
+
+// validateSignedProxyTokenWithGrace is like validateSignedProxyToken but
+// tolerates expiry up to grace past the token's Exp claim. It is used by
+// the refresh-only /embed/dify/token handler to accept recently-expired
+// tokens as proof of a prior legitimate render. The strict variant
+// (grace=0) must be used on the chat-messages proxy path.
+func (m *Module) validateSignedProxyTokenWithGrace(token, requestOrigin string, now time.Time, grace time.Duration) error {
 	secret := strings.TrimSpace(m.proxyToken)
 	if secret == "" {
 		return fmt.Errorf("proxy token secret is not configured")
@@ -525,7 +566,11 @@ func (m *Module) validateSignedProxyToken(token, requestOrigin string, now time.
 	}
 
 	nowUnix := now.UTC().Unix()
-	if nowUnix > claims.Exp+int64(embedProxyTokenSkew.Seconds()) {
+	graceSec := int64(grace.Seconds())
+	if graceSec < 0 {
+		graceSec = 0
+	}
+	if nowUnix > claims.Exp+int64(embedProxyTokenSkew.Seconds())+graceSec {
 		return fmt.Errorf("token expired")
 	}
 	if nowUnix+int64(embedProxyTokenSkew.Seconds()) < claims.Iat {
