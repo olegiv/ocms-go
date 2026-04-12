@@ -470,7 +470,11 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get max position for this parent
+	// parent_id: 0 means "root level" (no parent)
 	parentID := util.NullInt64FromPtr(req.ParentID)
+	if parentID.Valid && parentID.Int64 == 0 {
+		parentID = sql.NullInt64{Valid: false}
+	}
 
 	maxPos := h.getMaxMenuItemPosition(r, menuID, parentID)
 
