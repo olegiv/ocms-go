@@ -6,6 +6,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -188,7 +189,7 @@ func TestResolveTagNames(t *testing.T) {
 	createTestTag(t, db, "Existing Tag", "existing-tag")
 
 	t.Run("creates new tag", func(t *testing.T) {
-		ids, err := resolveTagNames(ctx, q, []string{"Brand New"}, "en")
+		ids, err := resolveTagNames(ctx, q, []string{"Brand New"}, "en", true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -210,7 +211,7 @@ func TestResolveTagNames(t *testing.T) {
 	})
 
 	t.Run("finds existing tag by slug", func(t *testing.T) {
-		ids, err := resolveTagNames(ctx, q, []string{"Existing Tag"}, "en")
+		ids, err := resolveTagNames(ctx, q, []string{"Existing Tag"}, "en", true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -225,7 +226,7 @@ func TestResolveTagNames(t *testing.T) {
 	})
 
 	t.Run("mixed existing and new", func(t *testing.T) {
-		ids, err := resolveTagNames(ctx, q, []string{"Existing Tag", "Another New Tag"}, "en")
+		ids, err := resolveTagNames(ctx, q, []string{"Existing Tag", "Another New Tag"}, "en", true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -235,7 +236,7 @@ func TestResolveTagNames(t *testing.T) {
 	})
 
 	t.Run("skips empty and whitespace-only names", func(t *testing.T) {
-		ids, err := resolveTagNames(ctx, q, []string{"", "  ", "Valid Tag"}, "en")
+		ids, err := resolveTagNames(ctx, q, []string{"", "  ", "Valid Tag"}, "en", true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -245,7 +246,7 @@ func TestResolveTagNames(t *testing.T) {
 	})
 
 	t.Run("empty input returns empty slice", func(t *testing.T) {
-		ids, err := resolveTagNames(ctx, q, []string{}, "en")
+		ids, err := resolveTagNames(ctx, q, []string{}, "en", true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -259,7 +260,7 @@ func TestResolveTagNames(t *testing.T) {
 		for i := range names {
 			names[i] = "tag"
 		}
-		_, err := resolveTagNames(ctx, q, names, "en")
+		_, err := resolveTagNames(ctx, q, names, "en", true)
 		if err == nil {
 			t.Fatal("expected error for too many tags, got nil")
 		}
@@ -270,7 +271,7 @@ func TestResolveTagNames(t *testing.T) {
 
 	t.Run("rejects tag name too long", func(t *testing.T) {
 		longName := strings.Repeat("a", maxTagNameLength+1)
-		_, err := resolveTagNames(ctx, q, []string{longName}, "en")
+		_, err := resolveTagNames(ctx, q, []string{longName}, "en", true)
 		if err == nil {
 			t.Fatal("expected error for long tag name, got nil")
 		}
@@ -288,9 +289,30 @@ func TestResolveTagNames(t *testing.T) {
 		closedQ := store.New(closedDB)
 		_ = closedDB.Close()
 
-		_, err = resolveTagNames(ctx, closedQ, []string{"Will Fail"}, "en")
+		_, err = resolveTagNames(ctx, closedQ, []string{"Will Fail"}, "en", true)
 		if err == nil {
 			t.Fatal("expected error from closed database, got nil")
+		}
+	})
+
+	t.Run("disallows creating new tag without taxonomy permission", func(t *testing.T) {
+		_, err := resolveTagNames(ctx, q, []string{"Needs Create"}, "en", false)
+		if err == nil {
+			t.Fatal("expected permission error, got nil")
+		}
+		var pe *tagPermissionError
+		if !errors.As(err, &pe) {
+			t.Fatalf("expected tagPermissionError, got %T (%v)", err, err)
+		}
+	})
+
+	t.Run("allows resolving existing tag without taxonomy permission", func(t *testing.T) {
+		ids, err := resolveTagNames(ctx, q, []string{"Existing Tag"}, "en", false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(ids) != 1 {
+			t.Fatalf("expected 1 ID, got %d", len(ids))
 		}
 	})
 }
