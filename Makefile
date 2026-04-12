@@ -1,4 +1,4 @@
-make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
+.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
