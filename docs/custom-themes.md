@@ -223,7 +223,7 @@ The base layout (`layouts/base.html`) provides the HTML shell. Required elements
     <!-- Integration hooks (required) -->
     {{privacyHead}}
     {{analyticsExtHead}}
-    {{embedHead}}
+    {{if embedHead}}{{embedHead .CSPNonce .PageOrigin}}{{end}}
 </head>
 <body>
     {{template "header.html" .}}
@@ -237,7 +237,7 @@ The base layout (`layouts/base.html`) provides the HTML shell. Required elements
 
     <!-- Integration hooks (required) -->
     {{analyticsExtBody}}
-    {{embedBody}}
+    {{if embedBody}}{{embedBody .CSPNonce .PageOrigin}}{{end}}
     {{informerBar}}
 
     <script src="/themes/mytheme/static/js/theme.js"></script>
@@ -284,8 +284,8 @@ Themes must include these function calls for oCMS features to work:
 | `{{privacyHead}}` | `<head>` | Privacy consent scripts |
 | `{{analyticsExtHead}}` | `<head>` | External analytics head scripts |
 | `{{analyticsExtBody}}` | Before `</body>` | External analytics body scripts |
-| `{{embedHead}}` | `<head>` | Embedded head content |
-| `{{embedBody}}` | Before `</body>` | Embedded body content |
+| `{{embedHead .CSPNonce .PageOrigin}}` | `<head>` | Embedded head content |
+| `{{embedBody .CSPNonce .PageOrigin}}` | Before `</body>` | Embedded body content |
 | `{{informerBar}}` | In `<body>` | Informer bar widget |
 
 ### Template Data
