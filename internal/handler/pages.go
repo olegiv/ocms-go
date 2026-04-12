@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -61,16 +60,7 @@ func isPageDateInBounds(t time.Time) bool {
 	return !t.Before(minPageDate) && !t.After(time.Now().AddDate(2, 0, 0))
 }
 
-var suspiciousPageHTMLTokens = []string{
-	"<script",
-	"onerror=",
-	"onload=",
-	"<iframe",
-}
-
-// javascriptURIPattern matches javascript: in attribute contexts only,
-// avoiding false positives on plain text like "JavaScript: a language".
-var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
+// suspiciousPageHTMLTokens and javascriptURIPattern are in internal/security.
 
 var pagesSortableFields = map[string]SortConfig{
 	"title":         {DefaultDir: sortDirAsc},
@@ -1744,17 +1734,7 @@ func detectSuspiciousPageHTMLTokens(body string) []string {
 		return nil
 	}
 
-	lowerBody := strings.ToLower(body)
-	matches := make([]string, 0, len(suspiciousPageHTMLTokens)+1)
-	for _, token := range suspiciousPageHTMLTokens {
-		if strings.Contains(lowerBody, token) {
-			matches = append(matches, token)
-		}
-	}
-	if javascriptURIPattern.MatchString(body) {
-		matches = append(matches, "javascript:")
-	}
-	return matches
+	return security.DetectSuspiciousHTMLTokens(body)
 }
 
 func validatePageBodySecurityPolicy(body string, blockSuspicious bool) string {

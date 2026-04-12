@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -160,16 +159,7 @@ const (
 	filterByTag
 )
 
-var suspiciousPageMarkupTokens = []string{
-	"<script",
-	"onerror=",
-	"onload=",
-	"<iframe",
-}
-
-// javascriptURIPattern matches javascript: in attribute contexts only,
-// avoiding false positives on plain text like "JavaScript: a language".
-var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
+// suspiciousPageMarkupTokens and javascriptURIPattern are in internal/security.
 
 func apiKeyHasPermission(apiKey *store.ApiKey, permission string) bool {
 	if apiKey == nil {
@@ -1190,13 +1180,7 @@ func validatePageBodyMarkupPolicy(body string, blockSuspicious bool) string {
 		return ""
 	}
 
-	lowerBody := strings.ToLower(body)
-	for _, token := range suspiciousPageMarkupTokens {
-		if strings.Contains(lowerBody, token) {
-			return "Body contains suspicious HTML markup that is blocked by policy"
-		}
-	}
-	if javascriptURIPattern.MatchString(body) {
+	if tokens := security.DetectSuspiciousHTMLTokens(body); len(tokens) > 0 {
 		return "Body contains suspicious HTML markup that is blocked by policy"
 	}
 
