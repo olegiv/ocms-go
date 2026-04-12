@@ -16,74 +16,88 @@ func setRequireHTTPSOutboundForTest(t *testing.T, required bool) {
 	})
 }
 
+// canResolveExternal reports whether the test environment has working
+// external DNS.  Tests that hit real hostnames are skipped when this
+// returns false so CI runners without internet access don't flake.
+func canResolveExternal() bool {
+	_, err := net.LookupHost("example.com")
+	return err == nil
+}
+
 func TestValidateTaskURL(t *testing.T) {
 	SetRequireHTTPSOutbound(false)
 
 	tests := []struct {
-		name    string
-		url     string
-		wantErr bool
-		errMsg  string
+		name     string
+		url      string
+		wantErr  bool
+		errMsg   string
+		needsDNS bool // requires external DNS resolution
 	}{
-		// Valid URLs (public)
-		{"valid https", "https://example.com/health", false, ""},
-		{"valid http", "http://example.com/api/check", false, ""},
-		{"valid with port", "https://example.com:8443/status", false, ""},
-		{"valid with path", "https://httpbin.org/get", false, ""},
+		// Valid URLs (public) — need real DNS
+		{"valid https", "https://example.com/health", false, "", true},
+		{"valid http", "http://example.com/api/check", false, "", true},
+		{"valid with port", "https://example.com:8443/status", false, "", true},
+		{"valid with path", "https://httpbin.org/get", false, "", true},
 
 		// Empty / missing
-		{"empty string", "", true, "URL is required"},
+		{"empty string", "", true, "URL is required", false},
 
 		// Bad schemes
-		{"file scheme", "file:///etc/passwd", true, "only http and https"},
-		{"ftp scheme", "ftp://example.com/file", true, "only http and https"},
-		{"javascript scheme", "javascript:alert(1)", true, "only http and https"},
-		{"no scheme", "example.com/path", true, "only http and https"},
+		{"file scheme", "file:///etc/passwd", true, "only http and https", false},
+		{"ftp scheme", "ftp://example.com/file", true, "only http and https", false},
+		{"javascript scheme", "javascript:alert(1)", true, "only http and https", false},
+		{"no scheme", "example.com/path", true, "only http and https", false},
 
 		// Localhost
-		{"localhost", "http://localhost", true, "localhost"},
-		{"localhost with port", "http://localhost:8080/secret", true, "localhost"},
-		{"localhost https", "https://localhost/admin", true, "localhost"},
+		{"localhost", "http://localhost", true, "localhost", false},
+		{"localhost with port", "http://localhost:8080/secret", true, "localhost", false},
+		{"localhost https", "https://localhost/admin", true, "localhost", false},
 
 		// Loopback IPv4
-		{"127.0.0.1", "http://127.0.0.1", true, "private/reserved IP"},
-		{"127.0.0.1 with port", "http://127.0.0.1:3000/api", true, "private/reserved IP"},
+		{"127.0.0.1", "http://127.0.0.1", true, "private/reserved IP", false},
+		{"127.0.0.1 with port", "http://127.0.0.1:3000/api", true, "private/reserved IP", false},
 
 		// Private IPv4 ranges
-		{"10.x", "http://10.0.0.1/internal", true, "private/reserved IP"},
-		{"10.x high", "http://10.255.255.255", true, "private/reserved IP"},
-		{"172.16.x", "http://172.16.0.1/service", true, "private/reserved IP"},
-		{"172.31.x", "http://172.31.255.255", true, "private/reserved IP"},
-		{"192.168.x", "http://192.168.1.1/admin", true, "private/reserved IP"},
-		{"192.168.0.x", "http://192.168.0.100:9090", true, "private/reserved IP"},
+		{"10.x", "http://10.0.0.1/internal", true, "private/reserved IP", false},
+		{"10.x high", "http://10.255.255.255", true, "private/reserved IP", false},
+		{"172.16.x", "http://172.16.0.1/service", true, "private/reserved IP", false},
+		{"172.31.x", "http://172.31.255.255", true, "private/reserved IP", false},
+		{"192.168.x", "http://192.168.1.1/admin", true, "private/reserved IP", false},
+		{"192.168.0.x", "http://192.168.0.100:9090", true, "private/reserved IP", false},
 
 		// Cloud metadata
-		{"aws metadata", "http://169.254.169.254/latest/meta-data/", true, "private/reserved IP"},
-		{"aws metadata with path", "http://169.254.169.254/latest/api/token", true, "private/reserved IP"},
-		{"google metadata hostname", "http://metadata.google.internal/computeMetadata/v1/", true, "cloud metadata"},
-		{"google metadata alt", "http://metadata.goog/computeMetadata/v1/", true, "cloud metadata"},
+		{"aws metadata", "http://169.254.169.254/latest/meta-data/", true, "private/reserved IP", false},
+		{"aws metadata with path", "http://169.254.169.254/latest/api/token", true, "private/reserved IP", false},
+		{"google metadata hostname", "http://metadata.google.internal/computeMetadata/v1/", true, "cloud metadata", false},
+		{"google metadata alt", "http://metadata.goog/computeMetadata/v1/", true, "cloud metadata", false},
 
 		// Zero address
-		{"0.0.0.0", "http://0.0.0.0", true, "private/reserved IP"},
+		{"0.0.0.0", "http://0.0.0.0", true, "private/reserved IP", false},
 
 		// IPv6 loopback
-		{"ipv6 loopback", "http://[::1]/path", true, "private/reserved IP"},
+		{"ipv6 loopback", "http://[::1]/path", true, "private/reserved IP", false},
 
 		// IPv6 link-local
-		{"ipv6 link-local", "http://[fe80::1]/path", true, "private/reserved IP"},
+		{"ipv6 link-local", "http://[fe80::1]/path", true, "private/reserved IP", false},
 
 		// IPv6 unique local
-		{"ipv6 unique local", "http://[fc00::1]/path", true, "private/reserved IP"},
+		{"ipv6 unique local", "http://[fc00::1]/path", true, "private/reserved IP", false},
 
 		// Unresolvable hostname
-		{"unresolvable", "http://this-domain-does-not-exist-xyz123.invalid/path", true, "cannot resolve hostname"},
+		{"unresolvable", "http://this-domain-does-not-exist-xyz123.invalid/path", true, "cannot resolve hostname", true},
 
 		// Shared address space
-		{"100.64.x", "http://100.64.0.1/path", true, "private/reserved IP"},
+		{"100.64.x", "http://100.64.0.1/path", true, "private/reserved IP", false},
 	}
+
+	hasNetwork := canResolveExternal()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.needsDNS && !hasNetwork {
+				t.Skip("skipping: external DNS unavailable")
+			}
 			err := ValidateTaskURL(tt.url)
 			if tt.wantErr {
 				if err == nil {
@@ -101,6 +115,9 @@ func TestValidateTaskURL(t *testing.T) {
 }
 
 func TestValidateTaskURL_RequireHTTPSOutbound(t *testing.T) {
+	if !canResolveExternal() {
+		t.Skip("skipping: external DNS unavailable")
+	}
 	setRequireHTTPSOutboundForTest(t, true)
 
 	tests := []struct {
@@ -249,46 +266,52 @@ func TestValidateTaskURL_EdgeCases(t *testing.T) {
 	SetRequireHTTPSOutbound(false)
 
 	tests := []struct {
-		name    string
-		url     string
-		wantErr bool
-		errMsg  string
+		name     string
+		url      string
+		wantErr  bool
+		errMsg   string
+		needsDNS bool
 	}{
 		// Various rejected schemes
-		{"ssh scheme", "ssh://example.com/path", true, "only http and https"},
-		{"data scheme", "data:text/plain,hello", true, "only http and https"},
-		{"ws scheme", "ws://example.com/socket", true, "only http and https"},
-		{"wss scheme", "wss://example.com/socket", true, "only http and https"},
-		{"mailto scheme", "mailto:user@example.com", true, "only http and https"},
+		{"ssh scheme", "ssh://example.com/path", true, "only http and https", false},
+		{"data scheme", "data:text/plain,hello", true, "only http and https", false},
+		{"ws scheme", "ws://example.com/socket", true, "only http and https", false},
+		{"wss scheme", "wss://example.com/socket", true, "only http and https", false},
+		{"mailto scheme", "mailto:user@example.com", true, "only http and https", false},
 
 		// Hostname with explicit port
-		{"http with port 80", "http://example.com:80/path", false, ""},
-		{"https with port 443", "https://example.com:443/path", false, ""},
-		{"https with non-standard port", "https://example.com:9443/api", false, ""},
+		{"http with port 80", "http://example.com:80/path", false, "", true},
+		{"https with port 443", "https://example.com:443/path", false, "", true},
+		{"https with non-standard port", "https://example.com:9443/api", false, "", true},
 
 		// URL with query string and fragment
-		{"url with query", "https://example.com/path?key=value&other=123", false, ""},
-		{"url with fragment", "https://example.com/page#section", false, ""},
+		{"url with query", "https://example.com/path?key=value&other=123", false, "", true},
+		{"url with fragment", "https://example.com/page#section", false, "", true},
 
 		// Empty hostname (scheme only)
-		{"scheme only no host", "https:///path", true, "hostname"},
+		{"scheme only no host", "https:///path", true, "hostname", false},
 
 		// Blocked hostnames (case-insensitive)
-		{"google metadata uppercase", "http://METADATA.GOOGLE.INTERNAL/", true, "cloud metadata"},
-		{"google metadata mixed case", "http://Metadata.Google.Internal/", true, "cloud metadata"},
-		{"metadata.goog uppercase", "http://METADATA.GOOG/", true, "cloud metadata"},
+		{"google metadata uppercase", "http://METADATA.GOOGLE.INTERNAL/", true, "cloud metadata", false},
+		{"google metadata mixed case", "http://Metadata.Google.Internal/", true, "cloud metadata", false},
+		{"metadata.goog uppercase", "http://METADATA.GOOG/", true, "cloud metadata", false},
 
 		// localhost case-insensitive
-		{"LOCALHOST uppercase", "http://LOCALHOST/path", true, "localhost"},
-		{"Localhost mixed case", "http://Localhost:8080/", true, "localhost"},
+		{"LOCALHOST uppercase", "http://LOCALHOST/path", true, "localhost", false},
+		{"Localhost mixed case", "http://Localhost:8080/", true, "localhost", false},
 
 		// IPv6 direct addresses in URL
-		{"ipv6 fc00 unique local", "http://[fc00::1]/path", true, "private/reserved IP"},
-		{"ipv6 fd00 unique local 2", "http://[fd00::1]/path", true, "private/reserved IP"},
+		{"ipv6 fc00 unique local", "http://[fc00::1]/path", true, "private/reserved IP", false},
+		{"ipv6 fd00 unique local 2", "http://[fd00::1]/path", true, "private/reserved IP", false},
 	}
+
+	hasNetwork := canResolveExternal()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.needsDNS && !hasNetwork {
+				t.Skip("skipping: external DNS unavailable")
+			}
 			err := ValidateTaskURL(tt.url)
 			if tt.wantErr {
 				if err == nil {
