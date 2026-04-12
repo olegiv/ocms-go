@@ -65,11 +65,7 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 	if savedConfig := m.ctx.Render.PopSessionData(r, sessionKeyMigratorConfig); savedConfig != nil {
 		config = savedConfig
 	} else {
-		for _, field := range source.ConfigFields() {
-			if field.Default != "" {
-				config[field.Name] = field.Default
-			}
-		}
+		applySafeDefaults(config, source.ConfigFields())
 	}
 
 	viewData := MigratorSourceFormViewData{
@@ -88,6 +84,17 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 		{Label: source.DisplayName(), URL: "/admin/migrator/" + sourceName, Active: true},
 	})
 	render.Templ(w, r, MigratorSourceFormPage(pc, viewData))
+}
+
+// applySafeDefaults applies non-sensitive defaults to config.
+// Password defaults are intentionally skipped to avoid rendering secrets in the UI.
+func applySafeDefaults(config map[string]string, fields []ConfigField) {
+	for _, field := range fields {
+		if field.Default == "" || field.Type == "password" {
+			continue
+		}
+		config[field.Name] = field.Default
+	}
 }
 
 // sourceRequestContext holds common data extracted from migrator handler requests.
