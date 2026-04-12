@@ -1225,6 +1225,15 @@ type translationContext struct {
 	TargetLang store.Language
 }
 
+func adminEntityPath(entityType string) string {
+	switch entityType {
+	case model.EntityTypeCategory:
+		return "categories"
+	default:
+		return entityType + "s"
+	}
+}
+
 // getTargetLanguageForTranslation validates and returns the target language for translation.
 // Returns nil, false if an error occurred (flash message sent).
 func getTargetLanguageForTranslation(
@@ -1254,7 +1263,7 @@ func getTargetLanguageForTranslation(
 		LanguageID: targetLang.ID,
 	})
 	if err == nil && existingTranslation.ID > 0 {
-		flashAndRedirect(w, r, renderer, fmt.Sprintf("/admin/%ss/%d", entityType, existingTranslation.TranslationID), "Translation already exists", "info")
+		flashAndRedirect(w, r, renderer, fmt.Sprintf("/admin/%s/%d", adminEntityPath(entityType), existingTranslation.TranslationID), "Translation already exists", "info")
 		return nil, false
 	}
 

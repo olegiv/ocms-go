@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -482,5 +483,37 @@ func TestCategoryTreeNode(t *testing.T) {
 	}
 	if node.Children[0].Depth != 1 {
 		t.Errorf("Child depth = %d, want 1", node.Children[0].Depth)
+	}
+}
+
+func TestAdminEntityPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		entityType string
+		want       string
+	}{
+		{
+			name:       "category uses irregular plural",
+			entityType: model.EntityTypeCategory,
+			want:       "categories",
+		},
+		{
+			name:       "tag uses regular plural",
+			entityType: model.EntityTypeTag,
+			want:       "tags",
+		},
+		{
+			name:       "page uses regular plural",
+			entityType: model.EntityTypePage,
+			want:       "pages",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := adminEntityPath(tt.entityType); got != tt.want {
+				t.Errorf("adminEntityPath(%q) = %q, want %q", tt.entityType, got, tt.want)
+			}
+		})
 	}
 }
