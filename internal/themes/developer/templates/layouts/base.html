@@ -55,22 +55,22 @@
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
     <!-- Privacy/Consent scripts - MUST be before analytics for Google Consent Mode v2 -->
-    {{if privacyHead}}{{privacyHead .CSPNonce}}{{end}}
+    {{privacyHead .CSPNonce}}
 
     <!-- External analytics tracking scripts (head) -->
-    {{if analyticsExtHead}}{{analyticsExtHead .CSPNonce}}{{end}}
+    {{analyticsExtHead .CSPNonce}}
 
     <!-- External embed scripts (head) -->
-    {{if embedHead}}{{embedHead .CSPNonce .PageOrigin}}{{end}}
+    {{embedHead .CSPNonce .PageOrigin}}
 
     {{block "head" .}}{{end}}
 </head>
 <body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
     <!-- Informer notification bar (top of page) -->
-    {{if informerBar}}{{informerBar .CSPNonce}}{{end}}
+    {{informerBar .CSPNonce}}
 
     <!-- External analytics tracking scripts (body - noscript fallbacks) -->
-    {{if analyticsExtBody}}{{analyticsExtBody .CSPNonce}}{{end}}
+    {{analyticsExtBody .CSPNonce}}
 
     <div class="dev-layout">
         {{template "header.html" .}}
@@ -97,6 +97,6 @@
     {{block "scripts" .}}{{end}}
 
     <!-- External embed scripts (body - chat widgets, etc.) -->
-    {{if embedBody}}{{embedBody .CSPNonce .PageOrigin}}{{end}}
+    {{embedBody .CSPNonce .PageOrigin}}
 </body>
 </html>

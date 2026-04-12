@@ -223,7 +223,7 @@ The base layout (`layouts/base.html`) provides the HTML shell. Required elements
     <!-- Integration hooks (required) -->
     {{privacyHead}}
     {{analyticsExtHead}}
-    {{if embedHead}}{{embedHead .CSPNonce .PageOrigin}}{{end}}
+    {{embedHead .CSPNonce .PageOrigin}}
 </head>
 <body>
     {{template "header.html" .}}
@@ -237,7 +237,7 @@ The base layout (`layouts/base.html`) provides the HTML shell. Required elements
 
     <!-- Integration hooks (required) -->
     {{analyticsExtBody}}
-    {{if embedBody}}{{embedBody .CSPNonce .PageOrigin}}{{end}}
+    {{embedBody .CSPNonce .PageOrigin}}
     {{informerBar}}
 
     <script src="/themes/mytheme/static/js/theme.js"></script>

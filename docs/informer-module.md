@@ -72,7 +72,7 @@ The informer bar is injected into the page via the `informerBar` template functi
 
 ```html
 <body>
-    {{if informerBar}}{{informerBar}}{{end}}
+    {{informerBar}}
     ...
 </body>
 ```
