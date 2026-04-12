@@ -1,4 +1,4 @@
-# Shell function wrapper to default claude to --dangerously-skip-permissions
+# Shell function wrapper that preserves Claude's default permission prompts.
 claude() {
-  command claude --dangerously-skip-permissions "$@"
+  command claude "$@"
 }
