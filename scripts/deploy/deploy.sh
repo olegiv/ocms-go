@@ -158,6 +158,34 @@ if [[ -z "$SERVER" ]] || [[ -z "$INSTANCE" ]]; then
     exit 1
 fi
 
+# Validate CLI values to prevent shell/option injection in ssh/scp/rsync commands.
+validate_pattern() {
+    local value="$1"
+    local pattern="$2"
+    local field="$3"
+
+    if [[ ! "$value" =~ $pattern ]]; then
+        echo_error "Invalid ${field}: ${value}"
+        exit 1
+    fi
+}
+
+validate_pattern "$SERVER" '^[a-zA-Z0-9._-]+$' "server"
+validate_pattern "$INSTANCE" '^[a-zA-Z0-9._-]+$' "instance"
+validate_pattern "$SSH_USER" '^[a-zA-Z0-9._-]+$' "user"
+
+if [[ -n "$VHOST" ]]; then
+    validate_pattern "$VHOST" '^/[a-zA-Z0-9._/-]+$' "vhost path"
+fi
+
+if [[ -n "$VHOST_USER" ]]; then
+    validate_pattern "$VHOST_USER" '^[a-zA-Z0-9._-]+$' "owner"
+fi
+
+if [[ -n "$VHOST_GROUP" ]]; then
+    validate_pattern "$VHOST_GROUP" '^[a-zA-Z0-9._-]+$' "group"
+fi
+
 # Validate vhost/owner combination
 if [[ -n "$VHOST" ]] && [[ -z "$VHOST_USER" ]]; then
     echo_error "--owner is required when --vhost is provided"
