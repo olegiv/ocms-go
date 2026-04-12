@@ -178,10 +178,10 @@ validate_pattern() {
 
 # Hostnames, IPs, and SSH config aliases. IPv6 literals and port-qualified
 # names (host:port) are not supported; use ~/.ssh/config for non-standard ports.
-validate_pattern "$SERVER" '^[a-zA-Z0-9._-]+$' "server"
-validate_pattern "$INSTANCE" '^[a-zA-Z0-9._-]+$' "instance"
-validate_pattern "$SSH_USER" '^[a-zA-Z0-9._-]+$' "user"
-validate_pattern "$VHOST_GROUP" '^[a-zA-Z0-9._-]+$' "group"
+validate_pattern "$SERVER" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "server"
+validate_pattern "$INSTANCE" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "instance"
+validate_pattern "$SSH_USER" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "user"
+validate_pattern "$VHOST_GROUP" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "group"
 
 if [[ -n "$VHOST" ]]; then
     validate_pattern "$VHOST" '^/[a-zA-Z0-9._/-]+$' "vhost path"
@@ -192,7 +192,7 @@ if [[ -n "$VHOST" ]]; then
 fi
 
 if [[ -n "$VHOST_USER" ]]; then
-    validate_pattern "$VHOST_USER" '^[a-zA-Z0-9._-]+$' "owner"
+    validate_pattern "$VHOST_USER" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "owner"
 fi
 
 # Validate vhost/owner combination
