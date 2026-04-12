@@ -481,13 +481,7 @@ func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename st
 		return fmt.Errorf("invalid destination path: %w", err)
 	}
 
-	// Additional inline validation for CodeQL
-	cleanDestPath := filepath.Clean(destPath)
-	if strings.Contains(cleanDestPath, "..") {
-		return fmt.Errorf("invalid destination path: path traversal detected")
-	}
-
-	dest, err := os.Create(cleanDestPath)
+	dest, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file: %w", err)
 	}
