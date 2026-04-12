@@ -11,6 +11,29 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/helper.sh"
 
+# Portable readlink -f replacement. Follows the entire symlink chain
+# using readlink (POSIX) and canonicalizes with cd + pwd -P.
+resolve_path() {
+    local target="$1"
+    while [[ -L "$target" ]]; do
+        local link
+        link=$(readlink "$target")
+        if [[ "$link" = /* ]]; then
+            target="$link"
+        else
+            target="$(dirname "$target")/$link"
+        fi
+    done
+    if [[ -d "$target" ]]; then
+        (cd "$target" && pwd -P)
+    elif [[ -e "$target" ]]; then
+        local dir base
+        dir=$(cd "$(dirname "$target")" && pwd -P)
+        base=$(basename "$target")
+        echo "$dir/$base"
+    fi
+}
+
 # Hardcoded values
 LOCAL_BINARY="bin/ocms-linux-amd64"
 LOCAL_CUSTOM_DIR="custom/"
@@ -160,14 +183,21 @@ validate_custom_symlinks() {
     fi
 
     local custom_root
-    custom_root=$(readlink -f "$LOCAL_CUSTOM_DIR" 2>/dev/null || true)
+    custom_root=$(resolve_path "$LOCAL_CUSTOM_DIR")
     if [[ -z "$custom_root" ]]; then
         echo_error "Unable to resolve custom directory path: ${LOCAL_CUSTOM_DIR}"
         exit 1
     fi
 
-    local broken_symlinks
-    broken_symlinks=$(find "$LOCAL_CUSTOM_DIR" -type l ! -exec test -e {} \; -print 2>/dev/null || true)
+    local broken_symlinks find_err
+    find_err=$(mktemp)
+    broken_symlinks=$(find "$LOCAL_CUSTOM_DIR" -type l ! -exec test -e {} \; -print 2>"$find_err") || {
+        echo_error "Failed to scan for broken symlinks in ${LOCAL_CUSTOM_DIR}"
+        cat "$find_err" >&2
+        rm -f "$find_err"
+        exit 1
+    }
+    rm -f "$find_err"
 
     if [[ -n "$broken_symlinks" ]]; then
         echo_error "Broken symlinks found in ${LOCAL_CUSTOM_DIR}; fix them before deploying"
@@ -180,25 +210,39 @@ validate_custom_symlinks() {
         exit 1
     fi
 
+    # Reject symlinks that resolve outside the custom directory tree.
+    # This prevents rsync -aL from copying unrelated local files to the server.
+    local all_symlinks
+    find_err=$(mktemp)
+    all_symlinks=$(find "$LOCAL_CUSTOM_DIR" -type l -print 2>"$find_err") || {
+        echo_error "Failed to enumerate symlinks in ${LOCAL_CUSTOM_DIR}"
+        cat "$find_err" >&2
+        rm -f "$find_err"
+        exit 1
+    }
+    rm -f "$find_err"
+
     local escaped_symlinks=""
     while IFS= read -r symlink; do
         [[ -n "$symlink" ]] || continue
 
         local resolved_target
-        resolved_target=$(readlink -f "$symlink" 2>/dev/null || true)
+        resolved_target=$(resolve_path "$symlink")
         if [[ -z "$resolved_target" ]]; then
-            escaped_symlinks+="${symlink} -> <unreadable>"$'\n'
-            continue
+            echo_error "Cannot resolve symlink target: ${symlink}"
+            echo_error "Deploy aborted: all symlinks must be resolvable"
+            exit 1
         fi
 
         case "$resolved_target" in
             "$custom_root"/*|"$custom_root")
+                # Symlink stays within custom/ — allowed
                 ;;
             *)
                 escaped_symlinks+="${symlink} -> ${resolved_target}"$'\n'
                 ;;
         esac
-    done < <(find "$LOCAL_CUSTOM_DIR" -type l -print 2>/dev/null || true)
+    done <<< "$all_symlinks"
 
     if [[ -n "$escaped_symlinks" ]]; then
         echo_error "Symlinks in ${LOCAL_CUSTOM_DIR} must resolve within ${LOCAL_CUSTOM_DIR}"
