@@ -51,6 +51,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --path PATH  Full path to instance root directory"
+    echo "               Must stay under /var/www/vhosts/<domain>/"
     echo "               (default: /var/www/vhosts/<domain>/ocms)"
     echo ""
     echo "Examples:"
@@ -127,6 +128,10 @@ POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --path)
+            if [ -z "${2:-}" ]; then
+                echo_error "--path requires a value"
+                usage
+            fi
             INSTANCE_DIR_OVERRIDE="$2"
             shift 2
             ;;
@@ -154,6 +159,18 @@ if [ -n "$INSTANCE_DIR_OVERRIDE" ]; then
     INSTANCE_DIR="$INSTANCE_DIR_OVERRIDE"
 else
     INSTANCE_DIR="$VHOSTS_BASE/$DOMAIN/ocms"
+fi
+
+# Validate and normalize instance directory path
+if [[ "$INSTANCE_DIR" != /* ]]; then
+    echo_error "Instance directory must be an absolute path"
+    exit 1
+fi
+INSTANCE_DIR="$(readlink -m "$INSTANCE_DIR")"
+ALLOWED_BASE="$(readlink -m "$VHOSTS_BASE/$DOMAIN")"
+if [[ "$INSTANCE_DIR" != "$ALLOWED_BASE/"* ]]; then
+    echo_error "Instance directory must be under: $ALLOWED_BASE"
+    exit 1
 fi
 
 # Validate parent directory exists
