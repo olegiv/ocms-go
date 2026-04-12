@@ -69,8 +69,9 @@ var suspiciousPageHTMLTokens = []string{
 }
 
 // javascriptURIPattern matches javascript: in attribute contexts only,
-// avoiding false positives on plain text like "JavaScript: a language".
-var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
+// including common HTML-entity-encoded leading whitespace bypasses like
+// &#x09; and &#x0A;, while avoiding plain text false positives.
+var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*(?:(?:&#x0*(?:9|a|d|20);)|(?:&#0*(?:9|10|13|32);)|(?:&(?:tab|newline);)|\s)*javascript:`)
 
 var pagesSortableFields = map[string]SortConfig{
 	"title":         {DefaultDir: sortDirAsc},

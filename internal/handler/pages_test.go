@@ -296,6 +296,20 @@ func TestDetectSuspiciousPageHTMLTokens(t *testing.T) {
 			t.Fatalf("expected javascript: token to be detected, got %v", tokens)
 		}
 	})
+
+	t.Run("javascript URI with entity-prefixed whitespace is flagged", func(t *testing.T) {
+		body := `<a href="&#x09;javascript:alert(1)">click</a>`
+		tokens := detectSuspiciousPageHTMLTokens(body)
+		found := false
+		for _, tok := range tokens {
+			if tok == "javascript:" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected javascript: token to be detected, got %v", tokens)
+		}
+	})
 }
 
 func TestValidatePageBodySecurityPolicy(t *testing.T) {

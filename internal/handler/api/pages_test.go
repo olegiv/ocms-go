@@ -157,6 +157,20 @@ func TestValidatePageBodyMarkupPolicy(t *testing.T) {
 			t.Fatalf("unexpected error: %s", errMsg)
 		}
 	})
+
+	t.Run("enabled policy blocks javascript URI with entity-prefixed whitespace", func(t *testing.T) {
+		errMsg := validatePageBodyMarkupPolicy(`<a href="&#x0A;javascript:alert(1)">x</a>`, true)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("enabled policy allows plain text javascript mention", func(t *testing.T) {
+		errMsg := validatePageBodyMarkupPolicy(`<strong>JavaScript:</strong> language`, true)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
 }
 
 func TestSanitizePageBodyForStorage(t *testing.T) {
