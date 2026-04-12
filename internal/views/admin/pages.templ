@@ -1147,11 +1147,15 @@ func pageFormAction(data PageFormViewData) string {
 
 func pageFormXData(data PageFormViewData) string {
 	slug := formVal(data.FormValues, "slug", data.PageSlug)
+	slugJSON, err := json.Marshal(slug)
+	if err != nil {
+		slugJSON = []byte(`""`)
+	}
 	slugEdited := "true"
 	if !data.IsEdit {
 		slugEdited = "false"
 	}
-	return fmt.Sprintf(`pageForm('%s', %s)`, slug, slugEdited)
+	return fmt.Sprintf(`pageForm(%s, %s)`, string(slugJSON), slugEdited)
 }
 
 func langSelectName(isEdit bool) string {
