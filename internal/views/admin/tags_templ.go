@@ -23,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -2930,9 +2931,9 @@ func tagFormAction(data TagFormData) templ.SafeURL {
 func tagFormXData(data TagFormData) string {
 	slug := tagFormValue(data, "slug")
 	if data.IsEdit {
-		return fmt.Sprintf(`{ slug: '%s', slugEdited: true, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, slug)
+		return fmt.Sprintf(`{ slug: %s, slugEdited: true, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
 	}
-	return fmt.Sprintf(`{ slug: '%s', slugEdited: false, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, slug)
+	return fmt.Sprintf(`{ slug: %s, slugEdited: false, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
 }
 
 func tagFormValue(data TagFormData, field string) string {
