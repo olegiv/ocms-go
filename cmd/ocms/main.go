@@ -1472,6 +1472,10 @@ func run() error {
 
 	// Middleware stack
 	r.Use(chimw.RequestID)
+	// Snapshot trusted-proxy status before RealIP overwrites RemoteAddr,
+	// so downstream code (e.g. X-Forwarded-Proto resolution) can still
+	// check the original peer via middleware.WasFromTrustedProxy.
+	r.Use(middleware.AnnotateTrustedProxy)
 	// Trusted-proxy-aware RealIP: only trusts forwarding headers from
 	// configured OCMS_TRUSTED_PROXIES, preventing True-Client-IP /
 	// X-Forwarded-For spoofing by external clients.

@@ -337,6 +337,55 @@ func TestSetTrustedProxies_Validation(t *testing.T) {
 	}
 }
 
+func TestAnnotateTrustedProxy(t *testing.T) {
+	if err := SetTrustedProxies([]string{"127.0.0.1/32"}); err != nil {
+		t.Fatalf("SetTrustedProxies: %v", err)
+	}
+	defer SetTrustedProxies(nil) //nolint:errcheck
+
+	t.Run("preserves trust after RemoteAddr rewrite", func(t *testing.T) {
+		var got bool
+		inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			// Simulate RealIP middleware overwriting RemoteAddr.
+			r.RemoteAddr = "194.230.146.14:12345"
+			got = WasFromTrustedProxy(r)
+		})
+		handler := AnnotateTrustedProxy(inner)
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:54321"
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+
+		if !got {
+			t.Error("WasFromTrustedProxy should be true after AnnotateTrustedProxy, even with rewritten RemoteAddr")
+		}
+	})
+
+	t.Run("untrusted peer stays false", func(t *testing.T) {
+		var got bool
+		inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			got = WasFromTrustedProxy(r)
+		})
+		handler := AnnotateTrustedProxy(inner)
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "203.0.113.1:9999"
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+
+		if got {
+			t.Error("WasFromTrustedProxy should be false for untrusted peer")
+		}
+	})
+
+	t.Run("fallback without middleware", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:54321"
+		if !WasFromTrustedProxy(req) {
+			t.Error("WasFromTrustedProxy should fall back to IsRequestFromTrustedProxy")
+		}
+	})
+}
+
 func TestLoginProtectionMiddleware(t *testing.T) {
 	cfg := testLoginProtectionConfig(5, 1*time.Minute, 1*time.Minute)
 	lp := NewLoginProtection(cfg)

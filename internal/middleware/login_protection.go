@@ -6,6 +6,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -286,6 +287,29 @@ func IsRequestFromTrustedProxy(r *http.Request) bool {
 	}
 	remoteIP, _ := parseRemoteAddrIP(r.RemoteAddr)
 	return isTrustedProxy(remoteIP)
+}
+
+type trustedProxyCtxKey struct{}
+
+// AnnotateTrustedProxy records whether the original r.RemoteAddr belongs to a
+// configured trusted proxy. It MUST run before any middleware that rewrites
+// RemoteAddr (e.g. RealIP) so that downstream code can call
+// WasFromTrustedProxy instead of re-checking the (now-rewritten) RemoteAddr.
+func AnnotateTrustedProxy(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), trustedProxyCtxKey{}, IsRequestFromTrustedProxy(r))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// WasFromTrustedProxy reports whether the request originally arrived from a
+// trusted proxy, as recorded by AnnotateTrustedProxy. Falls back to checking
+// r.RemoteAddr directly if the middleware has not run.
+func WasFromTrustedProxy(r *http.Request) bool {
+	if v, ok := r.Context().Value(trustedProxyCtxKey{}).(bool); ok {
+		return v
+	}
+	return IsRequestFromTrustedProxy(r)
 }
 
 // GetClientIP extracts the client IP from the request.

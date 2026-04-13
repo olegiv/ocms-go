@@ -499,7 +499,7 @@ func requestPageOrigin(r *http.Request) string {
 // trusted proxy. Falls back to r.Host. Untrusted clients can set this
 // header but it is ignored to prevent spoofing the bound origin.
 func resolveRequestHost(r *http.Request) string {
-	if middleware.IsRequestFromTrustedProxy(r) {
+	if middleware.WasFromTrustedProxy(r) {
 		if fwd := firstForwardedValue(r.Header.Get("X-Forwarded-Host")); fwd != "" {
 			return fwd
 		}
@@ -516,7 +516,7 @@ func resolveRequestScheme(r *http.Request) string {
 	if r.TLS != nil {
 		return "https"
 	}
-	if middleware.IsRequestFromTrustedProxy(r) {
+	if middleware.WasFromTrustedProxy(r) {
 		if proto := firstForwardedValue(r.Header.Get("X-Forwarded-Proto")); proto != "" {
 			return strings.ToLower(proto)
 		}
