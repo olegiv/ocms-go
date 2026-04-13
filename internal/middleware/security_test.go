@@ -207,6 +207,9 @@ func TestDefaultSecurityHeadersConfig_ProductionCSPIsStrict(t *testing.T) {
 		strings.Contains(cfg.ContentSecurityPolicy, "script-src 'self' 'unsafe-inline'") {
 		t.Error("production CSP must not allow 'unsafe-inline' for scripts")
 	}
+	if strings.Contains(cfg.ContentSecurityPolicy, "'unsafe-eval'") {
+		t.Error("production CSP must not allow 'unsafe-eval' for scripts")
+	}
 }
 
 func TestDefaultSecurityHeadersConfig_DevelopmentCSPAllowsUnsafeDirectives(t *testing.T) {
