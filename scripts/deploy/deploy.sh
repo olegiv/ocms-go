@@ -17,7 +17,7 @@ resolve_path() {
     local target="$1"
     local hops=0
     local max_hops=64
-    declare -A seen=()
+    local seen=$'\n'
 
     while [[ -L "$target" ]]; do
         if (( hops >= max_hops )); then
@@ -30,10 +30,10 @@ resolve_path() {
         target_base=$(basename "$target")
         normalized_target="${target_dir}/${target_base}"
 
-        if [[ -n "${seen[$normalized_target]+x}" ]]; then
+        if [[ "$seen" == *$'\n'"$normalized_target"$'\n'* ]]; then
             return 0
         fi
-        seen["$normalized_target"]=1
+        seen+="${normalized_target}"$'\n'
 
         local link
         link=$(readlink "$target") || return 0
