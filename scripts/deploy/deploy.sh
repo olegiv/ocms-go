@@ -158,6 +158,43 @@ if [[ -z "$SERVER" ]] || [[ -z "$INSTANCE" ]]; then
     exit 1
 fi
 
+# Validate CLI values to prevent shell/option injection in ssh/scp/rsync
+# commands. Must be called in the main shell — exit 1 would be swallowed
+# inside a subshell or pipeline.
+validate_pattern() {
+    local value="$1"
+    local pattern="$2"
+    local field="$3"
+
+    if [[ -z "$value" ]]; then
+        echo_error "Empty ${field}"
+        exit 1
+    fi
+    if [[ ! "$value" =~ $pattern ]]; then
+        echo_error "Invalid ${field} value"
+        exit 1
+    fi
+}
+
+# Hostnames, IPs, and SSH config aliases. IPv6 literals and port-qualified
+# names (host:port) are not supported; use ~/.ssh/config for non-standard ports.
+validate_pattern "$SERVER" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "server"
+validate_pattern "$INSTANCE" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "instance"
+validate_pattern "$SSH_USER" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "user"
+validate_pattern "$VHOST_GROUP" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "group"
+
+if [[ -n "$VHOST" ]]; then
+    validate_pattern "$VHOST" '^/[a-zA-Z0-9._/-]+$' "vhost path"
+    if [[ "$VHOST" == *".."* ]]; then
+        echo_error "Vhost path must not contain '..'"
+        exit 1
+    fi
+fi
+
+if [[ -n "$VHOST_USER" ]]; then
+    validate_pattern "$VHOST_USER" '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' "owner"
+fi
+
 # Validate vhost/owner combination
 if [[ -n "$VHOST" ]] && [[ -z "$VHOST_USER" ]]; then
     echo_error "--owner is required when --vhost is provided"
