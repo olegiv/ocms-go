@@ -15,13 +15,32 @@ source "${SCRIPT_DIR}/helper.sh"
 # using readlink (POSIX) and canonicalizes with cd + pwd -P.
 resolve_path() {
     local target="$1"
+    local hops=0
+    local max_hops=64
+    local seen=$'\n'
+
     while [[ -L "$target" ]]; do
+        if (( hops >= max_hops )); then
+            return 0
+        fi
+        hops=$((hops + 1))
+
+        local target_dir target_base normalized_target
+        target_dir=$(cd "$(dirname "$target")" && pwd -P) || return 0
+        target_base=$(basename "$target")
+        normalized_target="${target_dir}/${target_base}"
+
+        if [[ "$seen" == *$'\n'"$normalized_target"$'\n'* ]]; then
+            return 0
+        fi
+        seen+="${normalized_target}"$'\n'
+
         local link
-        link=$(readlink "$target")
+        link=$(readlink "$target") || return 0
         if [[ "$link" = /* ]]; then
             target="$link"
         else
-            target="$(dirname "$target")/$link"
+            target="${target_dir}/$link"
         fi
     done
     if [[ -d "$target" ]]; then
