@@ -7,6 +7,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-04-14
+
+### Changed
+
+#### Themes
+- Remove `{{if}}` guards on module template functions (always render)
+- Update wiki embed hook syntax documentation
+
+#### Analytics
+- Add `article-content` selector to read tracker
+
+#### Embed Proxy
+- Strip default ports from render-time origin
+- Honor `X-Forwarded-Host` from trusted proxies
+
+#### Dependencies
+- Update golang.org/x/crypto 0.49.0 → 0.50.0
+- Update golang.org/x/image 0.38.0 → 0.39.0
+- Update golang.org/x/net 0.52.0 → 0.53.0
+- Update golang.org/x/text 0.35.0 → 0.36.0
+- Update modernc.org/sqlite 1.48.1 → 1.48.2
+
+### Fixed
+
+#### Embed Proxy
+- Fix token origin mismatch when site URL contains default port
+
+#### Pages
+- Clear `scheduled_at` on manual publish/unpublish
+- Invalidate page cache on publish toggle
+- Preserve page categories on form validation errors
+- Skip featured image validation on unchanged media
+- Filter unlisted posts from tag/category pages and search results
+- Harden PageByID language code validation
+
+#### API
+- Preserve taxonomy language code in API updates
+
+#### Admin UI
+- Fix category translation redirect path
+- Normalize root `parent_id` in menu AddItem
+- Fix legacy-theme fallback and multi-proxy scheme parsing
+- Fix Makefile `.PHONY` declaration
+
+#### Modules
+- Fix hCaptcha login lockout when module hooks inactive
+
+#### Import
+- Fix non-image import for double-dot filenames
+
+#### Tests
+- Skip DNS-dependent tests when network unavailable
+
+#### Deployment
+- Fix deploy symlink validation portability (Bash 3 compatibility)
+
+### Security
+
+#### Embed Proxy
+- Mint embed proxy tokens at render time instead of page save
+- Enforce embed proxy token verification in production
+- Require static secret for embed token minting
+- Tighten embed proxy rate limits
+
+#### XSS Prevention
+- Escape Alpine.js `x-data` values in page form slug, admin slug, and language edit views
+- Escape page version preview body in admin modal
+- Escape media folder names in HTMX create response
+- Render custom CSS via sanitizing `safeCSS` helper
+- Escape custom CSS in theme templates
+- Validate Sentinel ban URLs before rendering
+- Validate menu item URL schemes
+- Harden javascript URI suspicious markup detection
+- Consolidate XSS detection into `internal/security` package
+
+#### API Authorization
+- Enforce `pages:read` permission for draft page API access
+- Enforce taxonomy permission for page tag auto-creation
+
+#### Sitemap
+- Key sitemap cache by configured `site_url` instead of Host header
+- Require configured `site_url` for sitemap generation
+
+#### hCaptcha
+- Remove insecure default hCaptcha test keys
+- Scrub persisted hCaptcha test keys on upgrade
+
+#### Demo Mode
+- Prevent IP address leak in events ban UI
+- Rotate demo admin password on startup
+- Remove demo admin password from startup log
+- Disallow production seeding in demo mode
+- Drop stale demo credentials from seeded homepage
+
+#### Deployment
+- Validate deploy script inputs before remote commands
+- Restrict deploy symlink targets to custom directory
+- Reject leading hyphens in validated CLI values
+- Restrict `setup-site --path` to domain vhost directory
+
+#### Data Protection
+- Mitigate CSV formula injection in form submissions export
+- Prevent symlink traversal in Elefant media import
+- Use `crypto/rand` for imported user passwords
+- Validate stored media filename during variant regeneration
+- Stop exposing session token in public forms
+- Prevent migrator password default disclosure
+
+#### Infrastructure Hardening
+- Prevent scheme-relative open redirects in trailing slash middleware
+- Harden database directory and file permissions
+- Harden `chmod` for SQLite file URI DSNs
+- Image dimension guards before decode (DoS prevention)
+- Bound rate limiter cache growth
+- Bound webhook debouncer pending events
+- Throttle concurrent API key hash verification (Argon2 DoS)
+- Rate limit WARN event log persistence
+- Limit 404 event logging to authenticated users
+- Restrict developer module admin routes to admins
+- Move Docker entrypoint out of writable app directory
+- Add `noopener` to admin View Site and page preview links
+- Harden theme image preview URLs
+- Restore production default-credential startup guard
+
 ## [0.18.0] - 2026-04-09
 
 ### Added
@@ -828,7 +952,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.18.1...HEAD
+[0.18.1]: https://github.com/olegiv/ocms-go/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/olegiv/ocms-go/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/olegiv/ocms-go/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/olegiv/ocms-go/compare/v0.15.0...v0.16.0
