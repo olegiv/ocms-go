@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -285,6 +286,13 @@ func newFrontendPageRequest(slug string) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 }
 
+func newFrontendPageByIDRequest(id string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/page/"+id, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
+
 // withUser adds a user to the request context (simulates OptionalLoadUser middleware).
 func withUser(r *http.Request, user store.User) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), middleware.ContextKeyUser, user))
@@ -383,6 +391,64 @@ func TestFrontendHandler_Page_PublishedPageWorksForAnonymous(t *testing.T) {
 
 	if w.Code == http.StatusNotFound {
 		t.Errorf("anonymous user on published page: got 404; want page to be served")
+	}
+}
+
+func TestFrontendHandler_PageByID_InvalidStoredSlugReturnsNotFound(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	res, err := db.Exec(
+		`INSERT INTO pages (title, slug, body, status, author_id, page_type, published_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+		"Bad Slug Page", "/t.co", "<p>Published content</p>", "published", admin.ID, "post",
+	)
+	if err != nil {
+		t.Fatalf("failed to create page with invalid slug: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get inserted page id: %v", err)
+	}
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := newFrontendPageByIDRequest(strconv.FormatInt(id, 10))
+	w := httptest.NewRecorder()
+
+	h.PageByID(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want %d", w.Code, http.StatusNotFound)
+	}
+	if location := w.Header().Get("Location"); location != "" {
+		t.Fatalf("Location header = %q; want empty", location)
+	}
+}
+
+func TestFrontendHandler_PageByID_AllowsConfiguredMixedCaseLanguageCode(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	res, err := db.Exec(
+		`INSERT INTO pages (title, slug, body, status, author_id, page_type, language_code, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+		"Mixed Language Page", "mixed-lang-page", "<p>Published content</p>", "published", admin.ID, "post", "en-US",
+	)
+	if err != nil {
+		t.Fatalf("failed to create page with mixed-case language code: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get inserted page id: %v", err)
+	}
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := newFrontendPageByIDRequest(strconv.FormatInt(id, 10))
+	w := httptest.NewRecorder()
+
+	h.PageByID(w, req)
+
+	if w.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d; want %d", w.Code, http.StatusMovedPermanently)
+	}
+	if location := w.Header().Get("Location"); location != "/en-US/mixed-lang-page" {
+		t.Fatalf("Location header = %q; want %q", location, "/en-US/mixed-lang-page")
 	}
 }
 
@@ -539,12 +605,12 @@ func TestRequestPageOrigin(t *testing.T) {
 	// without the flag use the default httptest.NewRequest peer
 	// (192.0.2.1), which is untrusted.
 	tests := []struct {
-		name          string
-		host          string
-		tls           bool
-		headers       map[string]string
-		trustedProxy  bool
-		want          string
+		name         string
+		host         string
+		tls          bool
+		headers      map[string]string
+		trustedProxy bool
+		want         string
 	}{
 		// --- Direct (no trusted proxy) ----------------------------------
 		{

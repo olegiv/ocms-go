@@ -469,6 +469,8 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Slug == "" {
 		validationErrors["slug"] = "Slug is required"
+	} else if slugErr := handler.ValidateSlugFormat(req.Slug); slugErr != "" {
+		validationErrors["slug"] = slugErr
 	}
 	if len(validationErrors) > 0 {
 		WriteValidationError(w, validationErrors)
@@ -846,6 +848,10 @@ func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, r *http.Request, 
 		params.Title = *req.Title
 	}
 	if req.Slug != nil {
+		if slugErr := handler.ValidateSlugFormat(*req.Slug); slugErr != "" {
+			WriteValidationError(w, map[string]string{"slug": slugErr})
+			return false
+		}
 		if !h.checkPageSlugUniqueExcluding(w, r, ctx, *req.Slug, existing.ID) {
 			return false
 		}

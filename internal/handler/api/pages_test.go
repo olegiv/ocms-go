@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -406,5 +407,17 @@ func TestDeduplicateInt64(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCreatePage_RejectsInvalidSlugFormat(t *testing.T) {
+	_, h := testSetup(t)
+	req := newJSONRequest(t, http.MethodPost, "/api/v1/pages", `{"title":"Test","slug":"/t.co","body":"<p>ok</p>"}`, nil)
+	w := executeHandler(t, h.CreatePage, req)
+
+	assertStatusCode(t, w, http.StatusUnprocessableEntity)
+	resp := assertErrorResponse(t, w, "validation_error")
+	if got := resp.Error.Details["slug"]; got != "Invalid slug format" {
+		t.Fatalf("slug error = %q, want %q", got, "Invalid slug format")
 	}
 }

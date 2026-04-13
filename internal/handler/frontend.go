@@ -31,6 +31,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/internal/video"
 )
 
@@ -39,37 +40,37 @@ import (
 // Deployments can enable OCMS_SANITIZE_PAGE_HTML to sanitize page HTML before
 // rendering for additional defense in depth.
 type PageView struct {
-	ID                   int64
-	Title                string
-	Slug                 string
-	Body                 template.HTML
-	Excerpt              string
-	URL                  string
-	Status               string
-	Type                 string // "page", "post", etc.
-	PublishedAt          *time.Time
-	PublishedAtFormatted string
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	FeaturedImage        string
-	FeaturedImageSmall   string // Small variant for grid views (~400px)
-	FeaturedImageMedium  string // Medium variant for mobile grid views
+	ID                    int64
+	Title                 string
+	Slug                  string
+	Body                  template.HTML
+	Excerpt               string
+	URL                   string
+	Status                string
+	Type                  string // "page", "post", etc.
+	PublishedAt           *time.Time
+	PublishedAtFormatted  string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	FeaturedImage         string
+	FeaturedImageSmall    string // Small variant for grid views (~400px)
+	FeaturedImageMedium   string // Medium variant for mobile grid views
 	FeaturedImageLarge    string // Large variant for single page views
 	FeaturedImageOG       string // OG variant optimized for social sharing (1200x630)
 	FeaturedImageOGWidth  int
 	FeaturedImageOGHeight int
-	FeaturedImageID       int64  // Media ID for translation lookup
-	FeaturedImageAlt     string // Alt text (default language)
-	HideFeaturedImage    bool          // Show image below title instead of hero banner
-	VideoURL             string        // Original video URL
-	VideoTitle           string        // Optional video title/caption
-	VideoEmbedHTML       template.HTML // Server-generated safe iframe embed
-	ReadingTime          int           // Estimated reading time in minutes
-	Highlight            string // Search result highlight
-	Author               *AuthorView
-	Category             *CategoryView
-	Categories           []CategoryView
-	Tags                 []TagView
+	FeaturedImageID       int64         // Media ID for translation lookup
+	FeaturedImageAlt      string        // Alt text (default language)
+	HideFeaturedImage     bool          // Show image below title instead of hero banner
+	VideoURL              string        // Original video URL
+	VideoTitle            string        // Optional video title/caption
+	VideoEmbedHTML        template.HTML // Server-generated safe iframe embed
+	ReadingTime           int           // Estimated reading time in minutes
+	Highlight             string        // Search result highlight
+	Author                *AuthorView
+	Category              *CategoryView
+	Categories            []CategoryView
+	Tags                  []TagView
 	// Language context for partials
 	LangCode   string
 	LangPrefix string
@@ -157,12 +158,12 @@ type SiteData struct {
 // BaseTemplateData contains common fields expected by all frontend templates.
 type BaseTemplateData struct {
 	// SEO Meta
-	Title           string
-	MetaDescription string
-	MetaKeywords    string
-	Canonical       string
-	FeaturedImage   string
-	Robots          string      // Robots directive (index,follow / noindex,nofollow)
+	Title                string
+	MetaDescription      string
+	MetaKeywords         string
+	Canonical            string
+	FeaturedImage        string
+	Robots               string      // Robots directive (index,follow / noindex,nofollow)
 	OGImage              string      // Open Graph image (absolute URL)
 	OGImageWidth         int         // Open Graph image width
 	OGImageHeight        int         // Open Graph image height
@@ -398,15 +399,15 @@ type ModuleTemplateFuncsProvider interface {
 }
 
 type FrontendHandler struct {
-	db              *sql.DB
-	queries         *store.Queries
-	themeManager    *theme.Manager
-	menuService     *service.MenuService
-	widgetService   *service.WidgetService
-	searchService   *service.SearchService
-	cacheManager    *cache.Manager
-	eventService    *service.EventService
-	logger          *slog.Logger
+	db                  *sql.DB
+	queries             *store.Queries
+	themeManager        *theme.Manager
+	menuService         *service.MenuService
+	widgetService       *service.WidgetService
+	searchService       *service.SearchService
+	cacheManager        *cache.Manager
+	eventService        *service.EventService
+	logger              *slog.Logger
 	sanitizePages       bool
 	videoRegistry       *video.Registry
 	moduleFuncsProvider ModuleTemplateFuncsProvider
@@ -981,6 +982,12 @@ func (h *FrontendHandler) PageByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		h.renderNotFound(w, r)
+		return
+	}
+
+	if !util.IsValidSlug(page.Slug) || strings.Contains(page.LanguageCode, "/") || strings.Contains(page.LanguageCode, "\\") {
+		h.logger.Warn("invalid page slug or language code for PageByID redirect", "page_id", page.ID, "slug", page.Slug, "language_code", page.LanguageCode)
 		h.renderNotFound(w, r)
 		return
 	}
