@@ -986,7 +986,7 @@ func (h *FrontendHandler) PageByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !util.IsValidSlug(page.Slug) || (page.LanguageCode != "" && !util.IsValidLangCode(page.LanguageCode)) {
+	if !util.IsValidSlug(page.Slug) || strings.Contains(page.LanguageCode, "/") || strings.Contains(page.LanguageCode, "\\") {
 		h.logger.Warn("invalid page slug or language code for PageByID redirect", "page_id", page.ID, "slug", page.Slug, "language_code", page.LanguageCode)
 		h.renderNotFound(w, r)
 		return

@@ -423,6 +423,35 @@ func TestFrontendHandler_PageByID_InvalidStoredSlugReturnsNotFound(t *testing.T)
 	}
 }
 
+func TestFrontendHandler_PageByID_AllowsConfiguredMixedCaseLanguageCode(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	res, err := db.Exec(
+		`INSERT INTO pages (title, slug, body, status, author_id, page_type, language_code, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+		"Mixed Language Page", "mixed-lang-page", "<p>Published content</p>", "published", admin.ID, "post", "en-US",
+	)
+	if err != nil {
+		t.Fatalf("failed to create page with mixed-case language code: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get inserted page id: %v", err)
+	}
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := newFrontendPageByIDRequest(strconv.FormatInt(id, 10))
+	w := httptest.NewRecorder()
+
+	h.PageByID(w, req)
+
+	if w.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d; want %d", w.Code, http.StatusMovedPermanently)
+	}
+	if location := w.Header().Get("Location"); location != "/en-US/mixed-lang-page" {
+		t.Fatalf("Location header = %q; want %q", location, "/en-US/mixed-lang-page")
+	}
+}
+
 func TestFrontendHandler_NotFound_DoesNotPersistEventForAnonymous(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, service.NewEventService(db))
