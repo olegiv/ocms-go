@@ -76,8 +76,8 @@
             <div class="footer-bottom">
                 <div class="footer-copyright">
                     <p>
-                        {{if .CopyrightText}}{{safeHTML .CopyrightText}}{{else}}&copy; {{.Year}} {{.SiteName}}{{end -}}
-                        {{if .FooterText}}<span class="footer-sep"> &bull; </span>{{safeHTML .FooterText}}{{end -}}
+                        {{if .CopyrightText}}{{safeFooterHTML .CopyrightText}}{{else}}&copy; {{.Year}} {{.SiteName}}{{end -}}
+                        {{if .FooterText}}<span class="footer-sep"> &bull; </span>{{safeFooterHTML .FooterText}}{{end -}}
                         {{with privacyFooterLink $.LangCode}}<span class="footer-sep"> &bull; </span>{{.}}{{end}}
                     </p>
                 </div>

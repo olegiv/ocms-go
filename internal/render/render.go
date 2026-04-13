@@ -21,10 +21,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
 	"github.com/alexedwards/scs/v2"
+	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/i18n"
@@ -44,6 +46,11 @@ var blankLinesRegex = regexp.MustCompile(`(\r?\n\s*){2,}`)
 // Used by sanitizeCustomCSS to prevent breakout from an enclosing <style> element.
 var styleCloseTagRegex = regexp.MustCompile(`(?i)</style`)
 
+var (
+	footerHTMLPolicyOnce sync.Once
+	footerHTMLPolicy     *bluemonday.Policy
+)
+
 // sanitizeCustomCSS returns admin-supplied stylesheet content as template.CSS
 // after stripping any </style closing-tag sequence that would let an attacker
 // break out of the surrounding <style> element. See the safeCSS template
@@ -51,6 +58,30 @@ var styleCloseTagRegex = regexp.MustCompile(`(?i)</style`)
 func sanitizeCustomCSS(s string) template.CSS {
 	sanitized := styleCloseTagRegex.ReplaceAllString(s, "")
 	return template.CSS(sanitized) //nolint:gosec // Sanitized for <style> context above
+}
+
+func footerHTMLSanitizer() *bluemonday.Policy {
+	footerHTMLPolicyOnce.Do(func() {
+		p := bluemonday.StrictPolicy()
+		p.AllowElements("a")
+		p.AllowAttrs("href").OnElements("a")
+		p.AllowAttrs("rel").Matching(
+			regexp.MustCompile(`^(?i)(noopener|noreferrer|nofollow)(\s+(noopener|noreferrer|nofollow))*$`),
+		).OnElements("a")
+		p.AllowAttrs("target").Matching(regexp.MustCompile(`^_(blank|self)$`)).OnElements("a")
+		p.AllowStandardURLs()
+		p.RequireParseableURLs(true)
+		p.AllowURLSchemes("http", "https", "mailto")
+		p.RequireNoReferrerOnFullyQualifiedLinks(true)
+		p.RequireNoFollowOnFullyQualifiedLinks(true)
+		p.AddTargetBlankToFullyQualifiedLinks(true)
+		footerHTMLPolicy = p
+	})
+	return footerHTMLPolicy
+}
+
+func sanitizeFooterHTML(s string) template.HTML {
+	return template.HTML(footerHTMLSanitizer().Sanitize(s)) //nolint:gosec // Sanitized through strict allowlist policy above
 }
 
 // SidebarModule represents a module to display in the admin sidebar.
@@ -266,6 +297,10 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s) //nolint:gosec // Intentional bypass for admin-controlled CMS content
 		},
+		// safeFooterHTML sanitizes limited admin-configurable footer markup.
+		// Allowed HTML is intentionally narrow: <a> with safe URL schemes and
+		// controlled rel/target attributes. All other tags/attrs are stripped.
+		"safeFooterHTML": sanitizeFooterHTML,
 		// safeCSS returns an admin-supplied stylesheet body as template.CSS so
 		// html/template does not apply CSS-value filtering (which replaces
 		// structured CSS like selectors and braces with "ZgotmplZ"). Before
@@ -320,13 +355,13 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"sentinelIsIPBanned":      func(ip string) bool { return false },
 		"sentinelIsIPWhitelisted": func(ip string) bool { return false },
 		// Module no-op placeholders; modules override them via AddTemplateFuncs.
-		"informerBar":      func(args ...any) template.HTML { return "" },
-		"privacyHead":      func(args ...any) template.HTML { return "" },
+		"informerBar":       func(args ...any) template.HTML { return "" },
+		"privacyHead":       func(args ...any) template.HTML { return "" },
 		"privacyFooterLink": func(args ...any) template.HTML { return "" },
-		"analyticsExtHead": func(args ...any) template.HTML { return "" },
-		"analyticsExtBody": func(args ...any) template.HTML { return "" },
-		"embedHead":        func(args ...any) template.HTML { return "" },
-		"embedBody":        func(args ...any) template.HTML { return "" },
+		"analyticsExtHead":  func(args ...any) template.HTML { return "" },
+		"analyticsExtBody":  func(args ...any) template.HTML { return "" },
+		"embedHead":         func(args ...any) template.HTML { return "" },
+		"embedBody":         func(args ...any) template.HTML { return "" },
 		"deref": func(p *int64) int64 {
 			if p == nil {
 				return 0
