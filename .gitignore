@@ -1,5 +1,6 @@
 /data/
-/web/static/dist/
+/web/static/dist/*
+!/web/static/dist/.gitkeep
 /uploads/
 .env
 /bin/
