@@ -345,6 +345,7 @@
             "title": "Welcome to our site",
             "slug": "welcome",
             "body": "Content here...",
+            "summary": "",
             "status": "published",
             "author_id": 1,
             "language_id": 1,
@@ -439,6 +440,7 @@
                                 <tr><td class="param-name">title <span class="param-required">required</span></td><td class="param-type">string</td><td>Page title</td></tr>
                                 <tr><td class="param-name">slug <span class="param-required">required</span></td><td class="param-type">string</td><td>URL slug (must be unique)</td></tr>
                                 <tr><td class="param-name">body</td><td class="param-type">string</td><td>Page content (HTML/Markdown)</td></tr>
+                                <tr><td class="param-name">summary</td><td class="param-type">string</td><td>Brief text summary of the page content (max 500 characters)</td></tr>
                                 <tr><td class="param-name">status</td><td class="param-type">string</td><td><code>draft</code> or <code>published</code> (default: draft)</td></tr>
                                 <tr><td class="param-name">language_id</td><td class="param-type">integer</td><td>Language ID (defaults to system default language)</td></tr>
                                 <tr><td class="param-name">featured_image_id</td><td class="param-type">integer</td><td>Media ID for featured image</td></tr>
@@ -462,6 +464,7 @@
     "title": "New Blog Post",
     "slug": "new-blog-post",
     "body": "&lt;p&gt;This is my new post...&lt;/p&gt;",
+    "summary": "A brief summary of the post",
     "status": "draft",
     "meta_title": "New Blog Post | My Site",
     "meta_description": "A great new blog post about...",
