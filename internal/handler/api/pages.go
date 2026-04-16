@@ -30,6 +30,7 @@ type PageResponse struct {
 	Title             string             `json:"title"`
 	Slug              string             `json:"slug"`
 	Body              string             `json:"body"`
+	Summary           string             `json:"summary,omitempty"`
 	Status            string             `json:"status"`
 	PageType          string             `json:"page_type"`
 	AuthorID          int64              `json:"author_id"`
@@ -83,6 +84,7 @@ type CreatePageRequest struct {
 	Title             string   `json:"title"`
 	Slug              string   `json:"slug"`
 	Body              string   `json:"body"`
+	Summary           string   `json:"summary,omitempty"`
 	Status            string   `json:"status"`
 	PageType          string   `json:"page_type,omitempty"`
 	LanguageCode      *string  `json:"language_code,omitempty"`
@@ -109,6 +111,7 @@ type UpdatePageRequest struct {
 	Title             *string   `json:"title,omitempty"`
 	Slug              *string   `json:"slug,omitempty"`
 	Body              *string   `json:"body,omitempty"`
+	Summary           *string   `json:"summary,omitempty"`
 	Status            *string   `json:"status,omitempty"`
 	PageType          *string   `json:"page_type,omitempty"`
 	FeaturedImageID   *int64    `json:"featured_image_id,omitempty"`
@@ -158,6 +161,9 @@ const (
 	filterByCategory pageFilterType = iota
 	filterByTag
 )
+
+// maxSummaryLength is the maximum allowed length for page summaries.
+const maxSummaryLength = 500
 
 // suspiciousPageMarkupTokens and javascriptURIPattern are in internal/security.
 
@@ -216,6 +222,7 @@ func storePageToResponse(p store.Page) PageResponse {
 		Title:             p.Title,
 		Slug:              p.Slug,
 		Body:              p.Body,
+		Summary:           p.Summary,
 		Status:            p.Status,
 		PageType:          p.PageType,
 		AuthorID:          p.AuthorID,
@@ -491,6 +498,13 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizedBody := sanitizePageBodyForStorage(req.Body, h.sanitizePageHTML)
 
+	// Validate and trim summary
+	req.Summary = strings.TrimSpace(req.Summary)
+	if len(req.Summary) > maxSummaryLength {
+		WriteValidationError(w, map[string]string{"summary": fmt.Sprintf("Summary must be %d characters or less", maxSummaryLength)})
+		return
+	}
+
 	// Check slug uniqueness
 	if !h.checkPageSlugUnique(w, r, ctx, req.Slug) {
 		return
@@ -565,6 +579,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 
 	params.VideoUrl = req.VideoURL
 	params.VideoTitle = req.VideoTitle
+	params.Summary = req.Summary
 
 	// Set published_at if status is published
 	if req.Status == model.PageStatusPublished {
@@ -917,6 +932,14 @@ func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, r *http.Request, 
 	}
 	if req.VideoTitle != nil {
 		params.VideoTitle = *req.VideoTitle
+	}
+	if req.Summary != nil {
+		trimmed := strings.TrimSpace(*req.Summary)
+		if len(trimmed) > maxSummaryLength {
+			WriteValidationError(w, map[string]string{"summary": fmt.Sprintf("Summary must be %d characters or less", maxSummaryLength)})
+			return false
+		}
+		params.Summary = trimmed
 	}
 	// Handle published_at when status changes to published
 	if req.Status != nil && *req.Status == model.PageStatusPublished && existing.Status != model.PageStatusPublished {

@@ -382,6 +382,40 @@ func TestStorePageToResponseVideoURL(t *testing.T) {
 	}
 }
 
+func TestStorePageToResponseSummary(t *testing.T) {
+	page := store.Page{
+		ID:      1,
+		Title:   "Test Page",
+		Slug:    "test-page",
+		Summary: "Brief description of the page",
+	}
+	resp := storePageToResponse(page)
+	if resp.Summary != "Brief description of the page" {
+		t.Errorf("Summary = %q, want %q", resp.Summary, "Brief description of the page")
+	}
+
+	// Empty summary should be omitted (empty string)
+	page.Summary = ""
+	resp = storePageToResponse(page)
+	if resp.Summary != "" {
+		t.Errorf("Summary = %q, want empty for omitempty", resp.Summary)
+	}
+}
+
+func TestCreatePage_RejectsTooLongSummary(t *testing.T) {
+	_, h := testSetup(t)
+	longSummary := strings.Repeat("a", maxSummaryLength+1)
+	body := `{"title":"Test","slug":"test-long-summary","body":"<p>ok</p>","summary":"` + longSummary + `"}`
+	req := newJSONRequest(t, http.MethodPost, "/api/v1/pages", body, nil)
+	w := executeHandler(t, h.CreatePage, req)
+
+	assertStatusCode(t, w, http.StatusUnprocessableEntity)
+	resp := assertErrorResponse(t, w, "validation_error")
+	if got := resp.Error.Details["summary"]; got == "" {
+		t.Fatal("expected validation error for summary field, got none")
+	}
+}
+
 func TestDeduplicateInt64(t *testing.T) {
 	tests := []struct {
 		name  string
