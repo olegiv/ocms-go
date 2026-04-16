@@ -165,6 +165,17 @@ const (
 // maxSummaryLength is the maximum allowed length for page summaries.
 const maxSummaryLength = 500
 
+// validateAndTrimSummary trims whitespace and enforces the summary length limit.
+// Writes a validation error response and returns false if the summary is too long.
+func validateAndTrimSummary(w http.ResponseWriter, summary string) (string, bool) {
+	trimmed := strings.TrimSpace(summary)
+	if len(trimmed) > maxSummaryLength {
+		WriteValidationError(w, map[string]string{"summary": fmt.Sprintf("Summary must be %d characters or less", maxSummaryLength)})
+		return "", false
+	}
+	return trimmed, true
+}
+
 // suspiciousPageMarkupTokens and javascriptURIPattern are in internal/security.
 
 func apiKeyHasPermission(apiKey *store.ApiKey, permission string) bool {
@@ -499,11 +510,11 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	normalizedBody := sanitizePageBodyForStorage(req.Body, h.sanitizePageHTML)
 
 	// Validate and trim summary
-	req.Summary = strings.TrimSpace(req.Summary)
-	if len(req.Summary) > maxSummaryLength {
-		WriteValidationError(w, map[string]string{"summary": fmt.Sprintf("Summary must be %d characters or less", maxSummaryLength)})
+	summary, ok := validateAndTrimSummary(w, req.Summary)
+	if !ok {
 		return
 	}
+	req.Summary = summary
 
 	// Check slug uniqueness
 	if !h.checkPageSlugUnique(w, r, ctx, req.Slug) {
@@ -934,9 +945,8 @@ func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, r *http.Request, 
 		params.VideoTitle = *req.VideoTitle
 	}
 	if req.Summary != nil {
-		trimmed := strings.TrimSpace(*req.Summary)
-		if len(trimmed) > maxSummaryLength {
-			WriteValidationError(w, map[string]string{"summary": fmt.Sprintf("Summary must be %d characters or less", maxSummaryLength)})
+		trimmed, ok := validateAndTrimSummary(w, *req.Summary)
+		if !ok {
 			return false
 		}
 		params.Summary = trimmed
