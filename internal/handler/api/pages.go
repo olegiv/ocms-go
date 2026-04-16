@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
@@ -166,10 +167,12 @@ const (
 const maxSummaryLength = 500
 
 // validateAndTrimSummary trims whitespace and enforces the summary length limit.
+// Length is measured in Unicode characters (runes), not bytes, so multilingual
+// summaries are accepted as long as they fit within maxSummaryLength characters.
 // Writes a validation error response and returns false if the summary is too long.
 func validateAndTrimSummary(w http.ResponseWriter, summary string) (string, bool) {
 	trimmed := strings.TrimSpace(summary)
-	if len(trimmed) > maxSummaryLength {
+	if utf8.RuneCountInString(trimmed) > maxSummaryLength {
 		WriteValidationError(w, map[string]string{"summary": fmt.Sprintf("Summary must be %d characters or less", maxSummaryLength)})
 		return "", false
 	}

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -413,6 +414,33 @@ func TestCreatePage_RejectsTooLongSummary(t *testing.T) {
 	resp := assertErrorResponse(t, w, "validation_error")
 	if got := resp.Error.Details["summary"]; got == "" {
 		t.Fatal("expected validation error for summary field, got none")
+	}
+}
+
+// TestValidateAndTrimSummary_CountsCharactersNotBytes verifies that the
+// summary length check uses Unicode character count (runes), not byte count,
+// so multilingual summaries are accepted at up to maxSummaryLength characters.
+func TestValidateAndTrimSummary_CountsCharactersNotBytes(t *testing.T) {
+	// "Привет" (Cyrillic) = 6 runes but 12 bytes in UTF-8.
+	// Build a summary with maxSummaryLength runes using multi-byte characters.
+	// Each rune here is 2 bytes, so byte length is 2*maxSummaryLength,
+	// which would fail a naive len() check but must pass the rune-based check.
+	validMultilingual := strings.Repeat("Я", maxSummaryLength)
+	w := httptest.NewRecorder()
+	trimmed, ok := validateAndTrimSummary(w, validMultilingual)
+	if !ok {
+		t.Fatalf("multilingual summary with %d runes (%d bytes) was rejected; should be accepted",
+			maxSummaryLength, len(validMultilingual))
+	}
+	if trimmed != validMultilingual {
+		t.Errorf("trimmed = %q, want %q", trimmed, validMultilingual)
+	}
+
+	// One more rune than allowed must be rejected.
+	tooLong := strings.Repeat("Я", maxSummaryLength+1)
+	w2 := httptest.NewRecorder()
+	if _, ok := validateAndTrimSummary(w2, tooLong); ok {
+		t.Fatalf("summary with %d runes should be rejected but was accepted", maxSummaryLength+1)
 	}
 }
 
