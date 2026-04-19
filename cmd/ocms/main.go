@@ -31,6 +31,7 @@ import (
 	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
 	apiv2media "github.com/olegiv/ocms-go/internal/api/v2/media"
 	apiv2pages "github.com/olegiv/ocms-go/internal/api/v2/pages"
+	apiv2taxonomy "github.com/olegiv/ocms-go/internal/api/v2/taxonomy"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/demo"
@@ -1881,40 +1882,11 @@ func run() error {
 		r.Get("/status", apiHandler.Status)
 		r.Get("/docs", apiDocsHandler.ServeDocs)
 
-		// Pages and Media moved to /api/v2 (huma-generated spec). /api/v1 no longer
-		// exposes /pages* or /media* — clients must use /api/v2.
-
-		// Tags - public read endpoints
-		r.Get(handler.RouteTags, apiHandler.ListTags)
-		r.Get(handler.RouteTagsID, apiHandler.GetTag)
-
-		// Categories - public read endpoints
-		r.Get(handler.RouteCategories, apiHandler.ListCategories)
-		r.Get(handler.RouteCategoriesID, apiHandler.GetCategory)
-
-		// Protected endpoints (API key required)
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.APIKeyAuth(db))
-			r.Use(middleware.APIRateLimit(10, 20)) // 10 requests per second per API key
-
-			// Auth info endpoint
-			r.Get("/auth", apiHandler.AuthInfo)
-
-			// Pages + Media write endpoints moved to /api/v2 (huma-generated spec).
-
-			// Taxonomy - write endpoints (requires taxonomy:write permission)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission("taxonomy:write"))
-				r.Post(handler.RouteTags, apiHandler.CreateTag)
-				r.Put(handler.RouteTagsID, apiHandler.UpdateTag)
-				r.Delete(handler.RouteTagsID, apiHandler.DeleteTag)
-				r.Post(handler.RouteCategories, apiHandler.CreateCategory)
-				r.Put(handler.RouteCategoriesID, apiHandler.UpdateCategory)
-				r.Delete(handler.RouteCategoriesID, apiHandler.DeleteCategory)
-			})
-		})
+		// Pages, Media, and Taxonomy moved to /api/v2 (huma-generated spec). /api/v1
+		// retains only /status and /docs for backwards-compatible discovery; the full
+		// REST surface lives under /api/v2.
 	})
-	slog.Info("REST API v1 mounted at /api/v1")
+	slog.Info("REST API v1 mounted at /api/v1 (discovery only)")
 
 	// REST API v2 — huma-generated OpenAPI 3.1 at /api/v2.
 	// v1 remains mounted; each v2 domain commit deletes its v1 counterpart.
@@ -1938,6 +1910,8 @@ func run() error {
 		apiv2pages.Register(apiV2.API, pagesSvc)
 		mediaSvc := apiv2media.NewService(db, v2Queries, cfg.UploadsDir)
 		apiv2media.Register(apiV2.API, mediaSvc)
+		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries)
+		apiv2taxonomy.Register(apiV2.API, taxonomySvc)
 		apiV2Docs, err := apiv2.NewDocsServer(templatesFS, apiV2)
 		if err != nil {
 			slog.Error("v2 docs server init", "error", err)
