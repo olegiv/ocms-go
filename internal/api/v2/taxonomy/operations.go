@@ -118,6 +118,7 @@ func registerCreateTag(api huma.API, svc *Service) {
 		Summary:       "Create a tag",
 		Description:   "Requires the `taxonomy:write` permission.",
 		Tags:          []string{"Tags"},
+		Security:      v2.APIKeyAuthSecurity,
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *CreateTagInput) (*TagOutput, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -145,6 +146,7 @@ func registerUpdateTag(api huma.API, svc *Service) {
 		Summary:     "Update a tag",
 		Description: "Requires the `taxonomy:write` permission.",
 		Tags:        []string{"Tags"},
+		Security:    v2.APIKeyAuthSecurity,
 	}, func(ctx context.Context, in *UpdateTagInput) (*TagOutput, error) {
 		actor := v2.ActorFromContext(ctx)
 		t, err := svc.UpdateTag(ctx, actor, in.ID, in.Body)
@@ -170,6 +172,7 @@ func registerDeleteTag(api huma.API, svc *Service) {
 		Summary:       "Delete a tag",
 		Description:   "Requires the `taxonomy:write` permission.",
 		Tags:          []string{"Tags"},
+		Security:      v2.APIKeyAuthSecurity,
 		DefaultStatus: http.StatusNoContent,
 	}, func(ctx context.Context, in *DeleteTagInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -261,6 +264,7 @@ func registerCreateCategory(api huma.API, svc *Service) {
 		Summary:       "Create a category",
 		Description:   "Requires the `taxonomy:write` permission.",
 		Tags:          []string{"Categories"},
+		Security:      v2.APIKeyAuthSecurity,
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *CreateCategoryInput) (*CategoryOutput, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -288,6 +292,7 @@ func registerUpdateCategory(api huma.API, svc *Service) {
 		Summary:     "Update a category",
 		Description: "Requires the `taxonomy:write` permission. Circular parent references are rejected.",
 		Tags:        []string{"Categories"},
+		Security:    v2.APIKeyAuthSecurity,
 	}, func(ctx context.Context, in *UpdateCategoryInput) (*CategoryOutput, error) {
 		actor := v2.ActorFromContext(ctx)
 		c, err := svc.UpdateCategory(ctx, actor, in.ID, in.Body)
@@ -313,6 +318,7 @@ func registerDeleteCategory(api huma.API, svc *Service) {
 		Summary:       "Delete a category",
 		Description:   "Requires the `taxonomy:write` permission. Returns 409 if child categories still exist.",
 		Tags:          []string{"Categories"},
+		Security:      v2.APIKeyAuthSecurity,
 		DefaultStatus: http.StatusNoContent,
 	}, func(ctx context.Context, in *DeleteCategoryInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)

@@ -142,6 +142,7 @@ func registerUploadSingle(api huma.API, svc *Service) {
 		Summary:       "Upload a single media file",
 		Description:   "Requires `media:write`. For multiple files use `POST /media/batch`.",
 		Tags:          []string{"Media"},
+		Security:      v2.APIKeyAuthSecurity,
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *UploadMediaInput) (*MediaOutput, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -193,6 +194,7 @@ func registerUploadBatch(api huma.API, svc *Service) {
 		Summary:       "Upload multiple media files",
 		Description:   "Requires `media:write`. Per-file errors are returned in `data.errors`; at least one file must succeed.",
 		Tags:          []string{"Media"},
+		Security:      v2.APIKeyAuthSecurity,
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *UploadMediaBatchInput) (*UploadBatchOutput, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -235,6 +237,7 @@ func registerUpdate(api huma.API, svc *Service) {
 		Summary:     "Update media metadata",
 		Description: "Requires `media:write`. Pass `folder_id: 0` or null to move the item to the root folder.",
 		Tags:        []string{"Media"},
+		Security:    v2.APIKeyAuthSecurity,
 	}, func(ctx context.Context, in *UpdateMediaInput) (*MediaOutput, error) {
 		actor := v2.ActorFromContext(ctx)
 		m, err := svc.Update(ctx, actor, in.ID, in.Body)
@@ -260,6 +263,7 @@ func registerDelete(api huma.API, svc *Service) {
 		Summary:       "Delete media",
 		Description:   "Requires `media:write`. Removes the stored file, all generated variants, and the database row.",
 		Tags:          []string{"Media"},
+		Security:      v2.APIKeyAuthSecurity,
 		DefaultStatus: http.StatusNoContent,
 	}, func(ctx context.Context, in *DeleteMediaInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)

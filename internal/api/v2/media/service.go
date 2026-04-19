@@ -11,6 +11,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/textproto"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -295,8 +296,7 @@ func (s *Service) UploadBatch(ctx context.Context, a v2.Actor, in UploadMediaMet
 	for _, f := range files {
 		dto, err := s.Upload(ctx, a, in, f)
 		if err != nil {
-			msg := err.Error()
-			res.Errors = append(res.Errors, UploadError{Filename: f.Filename, Error: msg})
+			res.Errors = append(res.Errors, UploadError{Filename: f.Filename, Error: scrubUploadError(err)})
 			continue
 		}
 		res.Uploaded = append(res.Uploaded, *dto)
@@ -329,7 +329,11 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateMed
 		UpdatedAt:    time.Now(),
 	}
 	if in.Filename != nil && strings.TrimSpace(*in.Filename) != "" {
-		params.Filename = *in.Filename
+		safe, err := sanitizeDisplayFilename(*in.Filename)
+		if err != nil {
+			return nil, err
+		}
+		params.Filename = safe
 	}
 	if in.Alt != nil {
 		params.Alt = util.NullStringFromValue(*in.Alt)
@@ -391,6 +395,51 @@ func variantsToDTOs(variants []store.MediaVariant, uuid, filename string) []Vari
 		})
 	}
 	return out
+}
+
+// scrubUploadError returns an API-safe description of a per-file upload failure.
+// Domain errors keep their curated message; every other error (filesystem path,
+// imaging library diagnostics, etc.) is flattened to a generic string so we do
+// not leak internal details in the response body.
+func scrubUploadError(err error) string {
+	var de *v2.Error
+	if errors.As(err, &de) {
+		return de.Msg
+	}
+	return "Upload failed"
+}
+
+// sanitizeDisplayFilename hardens a caller-supplied filename for the metadata
+// update path: the file on disk never moves, but the display filename is shown
+// in admin templates and must not carry path separators or HTML-dangerous chars.
+func sanitizeDisplayFilename(raw string) (string, error) {
+	base := filepath.Base(strings.TrimSpace(raw))
+	if base == "" || base == "." || base == ".." {
+		return "", v2.NewValidationError(
+			map[string]string{"filename": "Invalid filename"},
+			"Validation failed",
+		)
+	}
+	replacer := strings.NewReplacer(
+		" ", "-",
+		"'", "",
+		"\"", "",
+		"<", "",
+		">", "",
+		"&", "",
+		"#", "",
+		"?", "",
+		"%", "",
+		"\\", "",
+	)
+	cleaned := replacer.Replace(base)
+	if cleaned == "" {
+		return "", v2.NewValidationError(
+			map[string]string{"filename": "Filename is empty after sanitization"},
+			"Validation failed",
+		)
+	}
+	return cleaned, nil
 }
 
 // mimePatternForType maps a friendly type filter to a mime pattern for the

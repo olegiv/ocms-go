@@ -84,12 +84,12 @@ type CreatePageBody struct {
 	OGImageID         *int64    `json:"og_image_id,omitempty"`
 	NoIndex           bool      `json:"no_index,omitempty"`
 	NoFollow          bool      `json:"no_follow,omitempty"`
-	CanonicalURL      string    `json:"canonical_url,omitempty"`
+	CanonicalURL      string    `json:"canonical_url,omitempty" format:"uri" maxLength:"2048"`
 	ScheduledAt       *string   `json:"scheduled_at,omitempty" format:"date-time" doc:"RFC3339 timestamp."`
 	CategoryIDs       []int64   `json:"category_ids,omitempty"`
 	TagIDs            []int64   `json:"tag_ids,omitempty"`
 	TagNames          []string  `json:"tags,omitempty" doc:"Tag names; new tags are created if the actor has taxonomy:write."`
-	VideoURL          string    `json:"video_url,omitempty"`
+	VideoURL          string    `json:"video_url,omitempty" format:"uri" maxLength:"2048"`
 	VideoTitle        string    `json:"video_title,omitempty"`
 }
 
@@ -112,12 +112,12 @@ type UpdatePageBody struct {
 	OGImageID         *int64    `json:"og_image_id,omitempty"`
 	NoIndex           *bool     `json:"no_index,omitempty"`
 	NoFollow          *bool     `json:"no_follow,omitempty"`
-	CanonicalURL      *string   `json:"canonical_url,omitempty"`
+	CanonicalURL      *string   `json:"canonical_url,omitempty" format:"uri" maxLength:"2048"`
 	ScheduledAt       *string   `json:"scheduled_at,omitempty" format:"date-time"`
 	CategoryIDs       *[]int64  `json:"category_ids,omitempty"`
 	TagIDs            *[]int64  `json:"tag_ids,omitempty"`
 	TagNames          *[]string `json:"tags,omitempty"`
-	VideoURL          *string   `json:"video_url,omitempty"`
+	VideoURL          *string   `json:"video_url,omitempty" format:"uri" maxLength:"2048"`
 	VideoTitle        *string   `json:"video_title,omitempty"`
 }
 

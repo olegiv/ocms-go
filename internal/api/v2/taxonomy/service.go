@@ -38,9 +38,26 @@ func (s *Service) requireWritePerm(a v2.Actor) error {
 	return nil
 }
 
-// resolveLanguageCode falls back to the system default language.
+// resolveLanguageCode falls back to the system default language. Explicit
+// codes are validated for format and existence so unknown strings cannot enter
+// language-filtered columns.
 func (s *Service) resolveLanguageCode(ctx context.Context, langCode *string) (string, error) {
 	if langCode != nil && *langCode != "" {
+		if !util.IsValidLangCode(*langCode) {
+			return "", v2.NewValidationError(
+				map[string]string{"language_code": "Invalid language code format"},
+				"Validation failed",
+			)
+		}
+		if _, err := s.queries.GetLanguageByCode(ctx, *langCode); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return "", v2.NewValidationError(
+					map[string]string{"language_code": fmt.Sprintf("Language %q is not configured", *langCode)},
+					"Validation failed",
+				)
+			}
+			return "", v2.NewError(v2.ErrInternal, "Failed to look up language")
+		}
 		return *langCode, nil
 	}
 	def, err := s.queries.GetDefaultLanguage(ctx)

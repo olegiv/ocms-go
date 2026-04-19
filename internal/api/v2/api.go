@@ -25,6 +25,11 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
+// APIKeyAuthSecurity is the huma Security block applied to every write
+// operation: it pairs the route with the `ApiKeyAuth` scheme declared in
+// Register so the OpenAPI spec and Swagger UI show the padlock.
+var APIKeyAuthSecurity = []map[string][]string{{"ApiKeyAuth": {}}}
+
 // Deps bundles dependencies that domain services may pick from.
 type Deps struct {
 	DB      *sql.DB
@@ -50,6 +55,21 @@ func Register(r chi.Router, deps Deps) *Handler {
 		Identifier: "GPL-3.0-or-later",
 	}
 	cfg.OpenAPI.Servers = []*huma.Server{{URL: "/api/v2"}}
+
+	// Advertise the API-key bearer scheme in the generated OpenAPI spec so Swagger
+	// UI renders an authorize prompt and write operations show the padlock icon.
+	if cfg.OpenAPI.Components == nil {
+		cfg.OpenAPI.Components = &huma.Components{}
+	}
+	if cfg.OpenAPI.Components.SecuritySchemes == nil {
+		cfg.OpenAPI.Components.SecuritySchemes = map[string]*huma.SecurityScheme{}
+	}
+	cfg.OpenAPI.Components.SecuritySchemes["ApiKeyAuth"] = &huma.SecurityScheme{
+		Type:         "http",
+		Scheme:       "bearer",
+		BearerFormat: "API key",
+		Description:  "API key issued from /admin/api-keys. Send as `Authorization: Bearer <key>`.",
+	}
 
 	api := humachi.New(r, cfg)
 

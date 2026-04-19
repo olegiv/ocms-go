@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -63,6 +64,28 @@ func canReadNonPublished(a v2.Actor) bool {
 	return a.HasPermission(model.PermissionPagesRead)
 }
 
+// validateSafeURL rejects URLs whose scheme would be dangerous to render in a
+// page template (javascript:, data:, vbscript:, file:, …). An empty string is
+// accepted — the caller may want to clear the field.
+func validateSafeURL(field, raw string) error {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+	u, err := url.Parse(trimmed)
+	if err != nil {
+		return v2.NewValidationError(map[string]string{field: "Invalid URL"}, "Validation failed")
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "", "http", "https":
+		return nil
+	}
+	return v2.NewValidationError(
+		map[string]string{field: fmt.Sprintf("URL scheme %q is not allowed; use http or https", u.Scheme)},
+		"Validation failed",
+	)
+}
+
 // validateSummary trims whitespace and enforces maxSummaryRunes.
 func validateSummary(summary string) (string, error) {
 	trimmed := strings.TrimSpace(summary)
@@ -98,9 +121,25 @@ func (s *Service) normalizeBody(body string) string {
 }
 
 // resolveLanguageCode falls back to the site's default language when the caller
-// didn't pin one in the request.
+// didn't pin one in the request. Explicit codes are validated for format and
+// existence so unknown strings cannot enter language-filtered columns.
 func (s *Service) resolveLanguageCode(ctx context.Context, langCode *string) (string, error) {
 	if langCode != nil && *langCode != "" {
+		if !util.IsValidLangCode(*langCode) {
+			return "", v2.NewValidationError(
+				map[string]string{"language_code": "Invalid language code format"},
+				"Validation failed",
+			)
+		}
+		if _, err := s.queries.GetLanguageByCode(ctx, *langCode); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return "", v2.NewValidationError(
+					map[string]string{"language_code": fmt.Sprintf("Language %q is not configured", *langCode)},
+					"Validation failed",
+				)
+			}
+			return "", v2.NewError(v2.ErrInternal, "Failed to look up language")
+		}
 		return *langCode, nil
 	}
 	def, err := s.queries.GetDefaultLanguage(ctx)
@@ -252,6 +291,12 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 	}
 	summary, err := validateSummary(in.Summary)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateSafeURL("canonical_url", in.CanonicalURL); err != nil {
+		return nil, err
+	}
+	if err := validateSafeURL("video_url", in.VideoURL); err != nil {
 		return nil, err
 	}
 	if err := s.validateBodyMarkup(in.Body); err != nil {
@@ -528,6 +573,9 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 		params.MetaKeywords = *in.MetaKeywords
 	}
 	if in.CanonicalURL != nil {
+		if err := validateSafeURL("canonical_url", *in.CanonicalURL); err != nil {
+			return err
+		}
 		params.CanonicalUrl = *in.CanonicalURL
 	}
 	if in.NoIndex != nil {
@@ -550,6 +598,9 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 		params.ScheduledAt = scheduled
 	}
 	if in.VideoURL != nil {
+		if err := validateSafeURL("video_url", *in.VideoURL); err != nil {
+			return err
+		}
 		params.VideoUrl = *in.VideoURL
 	}
 	if in.VideoTitle != nil {

@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -111,8 +112,11 @@ func buildBaseURL(r *http.Request) string {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
-		scheme = fwd
+	switch strings.ToLower(r.Header.Get("X-Forwarded-Proto")) {
+	case "https":
+		scheme = "https"
+	case "http":
+		scheme = "http"
 	}
 	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }
