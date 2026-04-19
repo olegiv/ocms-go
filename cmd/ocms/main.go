@@ -33,6 +33,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/demo"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/handler/api"
+	apiv2 "github.com/olegiv/ocms-go/internal/handler/api/v2"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/logging"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -1940,6 +1941,26 @@ func run() error {
 		})
 	})
 	slog.Info("REST API v1 mounted at /api/v1")
+
+	// REST API v2 — huma-generated OpenAPI 3.1 at /api/v2.
+	// Migration in progress: meta endpoints live; pages/media/taxonomy TODO.
+	var apiV2 *apiv2.Handler
+	r.Route("/api/v2", func(r chi.Router) {
+		apiRateLimiter := middleware.NewGlobalRateLimiter(100, 200)
+		r.Use(apiRateLimiter.Middleware())
+		r.Use(middleware.OptionalAPIKeyAuth(db))
+		apiV2 = apiv2.Register(r, apiv2.Deps{
+			DB:           db,
+			Queries:      store.New(db),
+			CacheManager: cacheManager,
+			EventService: service.NewEventService(db),
+		})
+		r.Get("/docs", apiDocsHandler.ServeDocs)
+		r.Get("/openapi.json", apiDocsHandler.ServeV2OpenAPIJSON)
+		r.Get("/openapi.yaml", apiDocsHandler.ServeV2OpenAPIYAML)
+	})
+	apiDocsHandler.SetV2OpenAPISource(func() any { return apiV2.OpenAPI() })
+	slog.Info("REST API v2 mounted at /api/v2")
 
 	// Public form routes (no authentication required, with CSRF protection and language detection)
 	r.Group(func(r chi.Router) {

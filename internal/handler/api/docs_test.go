@@ -34,7 +34,7 @@ func TestServeDocsEmbedsSwaggerUI(t *testing.T) {
 	mustContain := []string{
 		"/static/dist/swagger-ui/swagger-ui-bundle.js",
 		"/static/dist/swagger-ui/swagger-ui.css",
-		"url: '/api/v1/openapi.json'",
+		"url: '/api/v2/openapi.json'",
 		"persistAuthorization: false",
 	}
 	for _, want := range mustContain {

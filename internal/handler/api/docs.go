@@ -26,12 +26,34 @@ var openAPISpecYAML []byte
 
 // DocsHandler handles API documentation rendering.
 type DocsHandler struct {
-	db         *sql.DB
-	queries    *store.Queries
-	template   *template.Template
-	templateFS fs.FS
-	mu         sync.RWMutex
-	isDev      bool
+	db             *sql.DB
+	queries        *store.Queries
+	template       *template.Template
+	templateFS     fs.FS
+	mu             sync.RWMutex
+	isDev          bool
+	v2OpenAPISrc   func() any // supplies the live huma-built OpenAPI 3.1 doc for /api/v2
+	v2OpenAPISrcMu sync.RWMutex
+}
+
+// SetV2OpenAPISource wires the v2 huma.OpenAPI() accessor. Called from main
+// after the v2 router has been registered so the spec endpoints can marshal
+// the current document on each request.
+func (h *DocsHandler) SetV2OpenAPISource(src func() any) {
+	h.v2OpenAPISrcMu.Lock()
+	h.v2OpenAPISrc = src
+	h.v2OpenAPISrcMu.Unlock()
+}
+
+// v2SpecOrNil returns the current v2 OpenAPI document, or nil if v2 is not
+// mounted (e.g. in unit tests that don't boot the whole router).
+func (h *DocsHandler) v2SpecOrNil() any {
+	h.v2OpenAPISrcMu.RLock()
+	defer h.v2OpenAPISrcMu.RUnlock()
+	if h.v2OpenAPISrc == nil {
+		return nil
+	}
+	return h.v2OpenAPISrc()
 }
 
 // DocsConfig holds configuration for the docs handler.
@@ -158,4 +180,51 @@ func (h *DocsHandler) ServeOpenAPIJSON(w http.ResponseWriter, _ *http.Request) {
 	if err := json.NewEncoder(w).Encode(spec); err != nil {
 		slog.Error("encoding OpenAPI spec", "error", err)
 	}
+}
+
+// ServeV2OpenAPIJSON serves the huma-generated OpenAPI 3.1 document for /api/v2.
+func (h *DocsHandler) ServeV2OpenAPIJSON(w http.ResponseWriter, _ *http.Request) {
+	spec := h.v2SpecOrNil()
+	if spec == nil {
+		WriteInternalError(w, "v2 OpenAPI spec is not available")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if err := json.NewEncoder(w).Encode(spec); err != nil {
+		slog.Error("encoding v2 OpenAPI spec", "error", err)
+	}
+}
+
+// ServeV2OpenAPIYAML serves the huma-generated OpenAPI 3.1 document for /api/v2
+// as YAML, round-tripped through JSON so the output uses the same key order.
+func (h *DocsHandler) ServeV2OpenAPIYAML(w http.ResponseWriter, _ *http.Request) {
+	spec := h.v2SpecOrNil()
+	if spec == nil {
+		WriteInternalError(w, "v2 OpenAPI spec is not available")
+		return
+	}
+	// huma's OpenAPI struct marshals JSON natively; round-trip through JSON →
+	// generic map → YAML so we don't need YAML tags on the upstream types.
+	jsonBytes, err := json.Marshal(spec)
+	if err != nil {
+		slog.Error("marshaling v2 OpenAPI spec to JSON", "error", err)
+		WriteInternalError(w, "Error rendering API specification")
+		return
+	}
+	var generic any
+	if err := json.Unmarshal(jsonBytes, &generic); err != nil {
+		slog.Error("round-tripping v2 OpenAPI spec", "error", err)
+		WriteInternalError(w, "Error rendering API specification")
+		return
+	}
+	yamlBytes, err := yaml.Marshal(generic)
+	if err != nil {
+		slog.Error("encoding v2 OpenAPI spec as YAML", "error", err)
+		WriteInternalError(w, "Error rendering API specification")
+		return
+	}
+	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(yamlBytes)
 }
