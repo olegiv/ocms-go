@@ -1863,6 +1863,10 @@ func run() error {
 		apiV2RateLimiter := middleware.NewGlobalRateLimiter(100, 200)
 		r.Use(apiV2RateLimiter.Middleware())
 		r.Use(middleware.OptionalAPIKeyAuth(db))
+		// Per-API-key throttle layered on top of the global IP limiter so a
+		// single authenticated key cannot drive unbounded mutation throughput.
+		// Matches the v1 behaviour Codex flagged as missing after the rewrite.
+		r.Use(middleware.APIRateLimit(10, 20))
 
 		v2Queries := store.New(db)
 		v2Events := service.NewEventService(db)

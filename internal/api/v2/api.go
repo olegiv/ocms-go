@@ -14,6 +14,7 @@ package v2
 import (
 	"context"
 	"database/sql"
+	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -81,9 +82,55 @@ func Register(r chi.Router, deps Deps) *Handler {
 		return newStatusError(status, msg, errs...)
 	}
 
+	// Reject unauthenticated requests to Security-declared operations BEFORE
+	// huma parses the request body. Prevents DoS vectors where an attacker
+	// forces multipart/temp-file parsing on POST /media and only then hits the
+	// service-layer auth check. See Codex P1 review on commit 024b94f.
+	api.UseMiddleware(requireAPIKeyWhenDeclared(api))
+
 	h := &Handler{API: api, Deps: deps}
 	registerMeta(h)
 	return h
+}
+
+// requireAPIKeyWhenDeclared returns a huma API middleware that short-circuits
+// with 401 when the current operation declares `ApiKeyAuth` Security but the
+// request has no valid API key in its context. Ties runtime enforcement to the
+// spec declaration so the two can never drift.
+func requireAPIKeyWhenDeclared(api huma.API) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		op := ctx.Operation()
+		if op == nil || !operationRequiresAPIKey(op) {
+			next(ctx)
+			return
+		}
+		if _, ok := ctx.Context().Value(middleware.ContextKeyAPIKey).(store.ApiKey); !ok {
+			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "API key required")
+			return
+		}
+		next(ctx)
+	}
+}
+
+// operationRequiresAPIKey reports whether every Security alternative requires
+// a non-empty scheme AND at least one alternative references `ApiKeyAuth`.
+// OpenAPI Security semantics: the top-level list is OR; an empty block `{}`
+// means "no auth is a valid alternative", so the operation is public.
+func operationRequiresAPIKey(op *huma.Operation) bool {
+	if len(op.Security) == 0 {
+		return false
+	}
+	hasAPIKey := false
+	for _, block := range op.Security {
+		if len(block) == 0 {
+			// Public alternative exists — do not enforce auth.
+			return false
+		}
+		if _, ok := block["ApiKeyAuth"]; ok {
+			hasAPIKey = true
+		}
+	}
+	return hasAPIKey
 }
 
 // OpenAPI returns the live OpenAPI 3.1 document built from registered operations.

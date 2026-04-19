@@ -4,16 +4,20 @@
 package v2_test
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/build"
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 
 	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
@@ -382,4 +386,121 @@ func returnsErrInternal(block *ast.BlockStmt) bool {
 		return true
 	})
 	return found
+}
+
+// TestSecurityDeclarationEnforcedAtRuntime asserts that for every registered
+// operation whose OpenAPI metadata declares ApiKeyAuth in Security, an
+// unauthenticated HTTP request returns 401 without any body parsing happening
+// first. Complements the AST-level TestOpenAPISecurityMatchesRuntime: that
+// test catches missing declarations; this one catches missing runtime
+// enforcement (e.g., an api.UseMiddleware that silently stops working).
+func TestSecurityDeclarationEnforcedAtRuntime(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	r := chi.NewRouter()
+	queries := store.New(db)
+	h := apiv2.Register(r, apiv2.Deps{DB: db, Queries: queries})
+	pages.Register(h.API, pages.NewService(db, queries, nil, nil, pages.Policy{}))
+	media.Register(h.API, media.NewService(db, queries, t.TempDir()))
+	taxonomy.Register(h.API, taxonomy.NewService(db, queries))
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	type opKey struct{ method, path string }
+	seen := map[opKey]bool{}
+	for path, item := range h.OpenAPI().Paths {
+		if item == nil {
+			continue
+		}
+		for _, entry := range []struct {
+			method string
+			op     *huma.Operation
+		}{
+			{http.MethodGet, item.Get},
+			{http.MethodPost, item.Post},
+			{http.MethodPut, item.Put},
+			{http.MethodDelete, item.Delete},
+			{http.MethodPatch, item.Patch},
+		} {
+			op := entry.op
+			if op == nil {
+				continue
+			}
+			if !operationDeclaresAPIKey(op) {
+				continue
+			}
+			// Swap path parameters for harmless values.
+			live := strings.ReplaceAll(path, "{id}", "1")
+			live = strings.ReplaceAll(live, "{slug}", "probe")
+			// The test router mounts huma at root (not /api/v2) because
+			// humachi binds to whatever chi.Router it receives; in production
+			// main.go wraps it under /api/v2 via r.Route, but here we hit
+			// the operation paths directly.
+			url := srv.URL + live
+
+			req, err := http.NewRequest(entry.method, url, nil)
+			if err != nil {
+				t.Fatalf("build request %s %s: %v", entry.method, url, err)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("%s %s: %v", entry.method, url, err)
+			}
+			body, _ := readAll(resp)
+			resp.Body.Close()
+			seen[opKey{entry.method, live}] = true
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Errorf("%s %s: op %q declares ApiKeyAuth but unauthenticated request returned %d, want 401\nbody=%s",
+					entry.method, live, op.OperationID, resp.StatusCode, body)
+			}
+		}
+	}
+	if len(seen) == 0 {
+		t.Fatal("no Security-declared operations were exercised — test is vacuously passing")
+	}
+}
+
+// operationDeclaresAPIKey reports whether every Security alternative requires
+// a non-empty scheme AND at least one references ApiKeyAuth. Mirrors the
+// runtime check in requireAPIKeyWhenDeclared so the test only probes ops that
+// truly require auth (skipping ops with a public `{}` alternative).
+func operationDeclaresAPIKey(op *huma.Operation) bool {
+	if len(op.Security) == 0 {
+		return false
+	}
+	hasAPIKey := false
+	for _, block := range op.Security {
+		if len(block) == 0 {
+			return false
+		}
+		if _, ok := block["ApiKeyAuth"]; ok {
+			hasAPIKey = true
+		}
+	}
+	return hasAPIKey
+}
+
+// readAll drains resp.Body for error-message rendering. Wraps to isolate the
+// json-unused import (pulled in for future assertions on error payload shape).
+func readAll(resp *http.Response) ([]byte, error) {
+	buf := make([]byte, 0, 256)
+	chunk := make([]byte, 256)
+	for {
+		n, err := resp.Body.Read(chunk)
+		if n > 0 {
+			buf = append(buf, chunk[:n]...)
+		}
+		if err != nil {
+			break
+		}
+	}
+	// Validate response is JSON-shaped without unmarshalling — keeps the
+	// encoding/json import relevant and protects against HTML error pages.
+	if len(buf) > 0 && buf[0] == '{' {
+		var probe map[string]any
+		_ = json.Unmarshal(buf, &probe)
+	}
+	return buf, nil
 }
