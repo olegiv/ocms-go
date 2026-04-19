@@ -10,13 +10,15 @@ You are an expert REST API developer for the oCMS project. Your role is to help 
 
 This is a Go-based CMS with a RESTful API:
 
-- **Framework**: chi router v5.2.3
-- **API Base Path**: `/api/v1/`
+- **Framework**: chi router v5.2.3 + [huma v2](https://huma.rocks/) (OpenAPI 3.1 generated from Go types)
+- **API Base Path**: `/api/v2/`
 - **Authentication**: Bearer token with API keys
 - **Rate Limiting**: Per-key rate limiting (default 100 req/min)
-- **Response Format**: JSON
-- **API Handlers**: Located in `internal/handler/api/`
+- **Response Format**: JSON with `{error: {code, message, details}}` envelope for failures
+- **Domain services**: `internal/api/v2/{pages,media,taxonomy}/service.go` — business logic, transactions, validation
+- **Huma operations**: `internal/api/v2/{pages,media,taxonomy}/operations.go` — typed huma.Register calls
 - **Middleware**: `internal/middleware/`
+- **Legacy**: `/api/v1` and `internal/handler/api/` have been removed — do not add new endpoints there
 
 ## API Architecture
 
@@ -30,7 +32,7 @@ Protected API routes use this middleware stack:
 
 Example route setup:
 ```go
-r.Route("/api/v1", func(r chi.Router) {
+r.Route("/api/v2", func(r chi.Router) {
     // Public endpoints
     r.Get("/health", healthHandler)
     r.Get("/docs", docsHandler)
@@ -102,11 +104,11 @@ Permission format: `resource:action` (e.g., `pages:read`, `media:write`)
 
 ## Existing API Endpoints
 
-### Pages API (`/api/v1/pages`)
+### Pages API (`/api/v2/pages`)
 
 **List Pages:**
 ```
-GET /api/v1/pages
+GET /api/v2/pages
 Query Params:
   - published=true/false (filter by published status)
   - limit=20 (default: 20, max: 100)
@@ -116,13 +118,13 @@ Permission: pages:read (or public if published=true)
 
 **Get Page:**
 ```
-GET /api/v1/pages/{id}
+GET /api/v2/pages/{id}
 Permission: pages:read
 ```
 
 **Create Page:**
 ```
-POST /api/v1/pages
+POST /api/v2/pages
 Body: {
   "title": "Page Title",
   "slug": "page-slug",
@@ -134,43 +136,43 @@ Permission: pages:write
 
 **Update Page:**
 ```
-PUT /api/v1/pages/{id}
+PUT /api/v2/pages/{id}
 Body: { ... }
 Permission: pages:write
 ```
 
 **Delete Page:**
 ```
-DELETE /api/v1/pages/{id}
+DELETE /api/v2/pages/{id}
 Permission: pages:write
 ```
 
-### Media API (`/api/v1/media`)
+### Media API (`/api/v2/media`)
 
 **List Media:**
 ```
-GET /api/v1/media
+GET /api/v2/media
 Permission: media:read
 ```
 
 **Upload Media:**
 ```
-POST /api/v1/media
+POST /api/v2/media
 Content-Type: multipart/form-data
 Permission: media:write
 ```
 
-### Taxonomy API (`/api/v1/`)
+### Taxonomy API (`/api/v2/`)
 
 **List Tags:**
 ```
-GET /api/v1/tags
+GET /api/v2/tags
 Permission: pages:read (public)
 ```
 
 **List Categories:**
 ```
-GET /api/v1/categories
+GET /api/v2/categories
 Permission: pages:read (public)
 Returns: Hierarchical category tree
 ```
@@ -179,7 +181,7 @@ Returns: Hierarchical category tree
 
 **API Documentation:**
 ```
-GET /api/v1/docs
+GET /api/v2/docs
 Returns: OpenAPI/Swagger-style documentation
 ```
 
@@ -251,18 +253,18 @@ OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go run ./cmd/ocms &
 sleep 3
 
 # Test public endpoint
-curl -s http://localhost:8080/api/v1/tags
+curl -s http://localhost:8080/api/v2/tags
 
 # Test with API key
 curl -H "Authorization: Bearer YOUR_API_KEY" \
-     http://localhost:8080/api/v1/pages
+     http://localhost:8080/api/v2/pages
 
 # Test POST request
 curl -X POST \
      -H "Authorization: Bearer YOUR_API_KEY" \
      -H "Content-Type: application/json" \
      -d '{"title":"Test","slug":"test","content":"Content"}' \
-     http://localhost:8080/api/v1/pages
+     http://localhost:8080/api/v2/pages
 
 # Clean up
 pkill -f "go run ./cmd/ocms" || true
@@ -270,7 +272,9 @@ pkill -f "go run ./cmd/ocms" || true
 
 **Unit Testing:**
 
-See `internal/handler/api/api_integration_test.go` for test patterns:
+See `internal/api/v2/taxonomy/service_test.go` for service-level test patterns and
+`internal/api/v2/drift_test.go` for an end-to-end OpenAPI surface guard. HTTP-level
+integration example:
 
 ```go
 func TestAPIEndpoint(t *testing.T) {
@@ -285,7 +289,7 @@ func TestAPIEndpoint(t *testing.T) {
     apiKey := createTestAPIKey(t, db, []string{"pages:read"})
 
     // Make request
-    req, _ := http.NewRequest("GET", server.URL+"/api/v1/pages", nil)
+    req, _ := http.NewRequest("GET", server.URL+"/api/v2/pages", nil)
     req.Header.Set("Authorization", "Bearer "+apiKey)
 
     resp, err := http.DefaultClient.Do(req)
