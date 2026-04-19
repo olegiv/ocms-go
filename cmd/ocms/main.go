@@ -28,6 +28,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 
+	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/demo"
@@ -1938,6 +1939,30 @@ func run() error {
 		})
 	})
 	slog.Info("REST API v1 mounted at /api/v1")
+
+	// REST API v2 — huma-generated OpenAPI 3.1 at /api/v2.
+	// v1 remains mounted; each v2 domain commit deletes its v1 counterpart.
+	r.Route("/api/v2", func(r chi.Router) {
+		apiV2RateLimiter := middleware.NewGlobalRateLimiter(100, 200)
+		r.Use(apiV2RateLimiter.Middleware())
+		r.Use(middleware.OptionalAPIKeyAuth(db))
+
+		apiV2 := apiv2.Register(r, apiv2.Deps{
+			DB:      db,
+			Queries: store.New(db),
+			Cache:   cacheManager,
+			Events:  service.NewEventService(db),
+		})
+		apiV2Docs, err := apiv2.NewDocsServer(templatesFS, apiV2)
+		if err != nil {
+			slog.Error("v2 docs server init", "error", err)
+			return
+		}
+		r.Get("/docs", apiV2Docs.ServeDocs)
+		r.Get("/openapi.json", apiV2Docs.ServeOpenAPIJSON)
+		r.Get("/openapi.yaml", apiV2Docs.ServeOpenAPIYAML)
+	})
+	slog.Info("REST API v2 mounted at /api/v2")
 
 	// Public form routes (no authentication required, with CSRF protection and language detection)
 	r.Group(func(r chi.Router) {
