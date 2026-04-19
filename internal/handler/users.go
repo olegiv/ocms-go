@@ -194,6 +194,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	websiteURL := strings.TrimSpace(r.FormValue("website_url"))
 	linkedinURL := strings.TrimSpace(r.FormValue("linkedin_url"))
 	githubURL := strings.TrimSpace(r.FormValue("github_url"))
+	telegramURL := strings.TrimSpace(r.FormValue("telegram_url"))
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
@@ -205,6 +206,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"website_url":  websiteURL,
 		"linkedin_url": linkedinURL,
 		"github_url":   githubURL,
+		"telegram_url": telegramURL,
 	}
 
 	// Validate
@@ -251,7 +253,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Profile field validation
-	validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL, validationErrors)
+	validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL, telegramURL, validationErrors)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -287,6 +289,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		WebsiteUrl:   websiteURL,
 		LinkedinUrl:  linkedinURL,
 		GithubUrl:    githubURL,
+		TelegramUrl:  telegramURL,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	})
@@ -331,6 +334,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			WebsiteURL:  editUser.WebsiteUrl,
 			LinkedInURL: editUser.LinkedinUrl,
 			GitHubURL:   editUser.GithubUrl,
+			TelegramURL: editUser.TelegramUrl,
 		},
 		Roles:  model.ValidRoles,
 		Errors: make(map[string]string),
@@ -343,6 +347,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			"website_url":  editUser.WebsiteUrl,
 			"linkedin_url": editUser.LinkedinUrl,
 			"github_url":   editUser.GithubUrl,
+			"telegram_url": editUser.TelegramUrl,
 		},
 		IsEdit: true,
 	}
@@ -391,6 +396,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	websiteURL := strings.TrimSpace(r.FormValue("website_url"))
 	linkedinURL := strings.TrimSpace(r.FormValue("linkedin_url"))
 	githubURL := strings.TrimSpace(r.FormValue("github_url"))
+	telegramURL := strings.TrimSpace(r.FormValue("telegram_url"))
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
@@ -402,6 +408,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"website_url":  websiteURL,
 		"linkedin_url": linkedinURL,
 		"github_url":   githubURL,
+		"telegram_url": telegramURL,
 	}
 
 	// Validate
@@ -447,7 +454,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Profile field validation
-	validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL, validationErrors)
+	validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL, telegramURL, validationErrors)
 
 	// Business rule: Cannot demote yourself from admin if you're the last admin
 	if currentUser.ID == id && editUser.Role == model.RoleAdmin && role != model.RoleAdmin {
@@ -473,6 +480,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 				WebsiteURL:  editUser.WebsiteUrl,
 				LinkedInURL: editUser.LinkedinUrl,
 				GitHubURL:   editUser.GithubUrl,
+				TelegramURL: editUser.TelegramUrl,
 			},
 			Roles:      model.ValidRoles,
 			Errors:     validationErrors,
@@ -496,6 +504,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WebsiteUrl:  websiteURL,
 		LinkedinUrl: linkedinURL,
 		GithubUrl:   githubURL,
+		TelegramUrl: telegramURL,
 		UpdatedAt:   now,
 		ID:          id,
 	})
@@ -744,7 +753,7 @@ func validateDomainURL(rawURL string, allowedHosts []string) string {
 
 // validateProfileFields validates avatar, bio, and social URL fields.
 // It writes any errors into the provided validationErrors map.
-func validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL string, validationErrors map[string]string) {
+func validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL, telegramURL string, validationErrors map[string]string) {
 	// Length checks
 	if len(avatar) > MaxProfileURLLength {
 		validationErrors["avatar"] = fmt.Sprintf("Avatar URL must be at most %d characters", MaxProfileURLLength)
@@ -760,6 +769,9 @@ func validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL strin
 	}
 	if len(githubURL) > MaxProfileURLLength {
 		validationErrors["github_url"] = fmt.Sprintf("GitHub URL must be at most %d characters", MaxProfileURLLength)
+	}
+	if len(telegramURL) > MaxProfileURLLength {
+		validationErrors["telegram_url"] = fmt.Sprintf("Telegram URL must be at most %d characters", MaxProfileURLLength)
 	}
 
 	// URL scheme validation (only if no length error already set)
@@ -781,6 +793,11 @@ func validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL strin
 	if validationErrors["github_url"] == "" {
 		if msg := validateDomainURL(githubURL, []string{"github.com", "www.github.com"}); msg != "" {
 			validationErrors["github_url"] = msg
+		}
+	}
+	if validationErrors["telegram_url"] == "" {
+		if msg := validateDomainURL(telegramURL, []string{"t.me", "telegram.me"}); msg != "" {
+			validationErrors["telegram_url"] = msg
 		}
 	}
 }

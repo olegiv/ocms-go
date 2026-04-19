@@ -990,6 +990,24 @@ h1, h2, h3, h4, h5, h6 {
     line-height: 1.5;
 }
 
+.st-author__links {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+}
+
+.st-author__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--st-text-light);
+    transition: color 0.15s ease;
+}
+
+.st-author__link:hover {
+    color: var(--st-accent, #1e40af);
+}
+
 /* --------------------------------------------------------------------------
    Related Posts
    -------------------------------------------------------------------------- */

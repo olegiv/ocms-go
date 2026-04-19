@@ -55,6 +55,7 @@ type UserItem struct {
 	WebsiteURL  string
 	LinkedInURL string
 	GitHubURL   string
+	TelegramURL string
 }
 
 // UsersListPage renders the users list page.
@@ -423,6 +424,24 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							<span class="form-error">{ data.Errors["github_url"] }</span>
 						}
 					</div>
+					<!-- Telegram URL -->
+					<div class="form-group">
+						@label.Label(label.Props{For: "telegram_url", Class: "block mb-1"}) {
+							{ pc.T("label.telegram_url") }
+						}
+						@input.Input(input.Props{
+							Type:        input.TypeURL,
+							Name:        "telegram_url",
+							ID:          "telegram_url",
+							Value:       userFormValue(data, "telegram_url"),
+							Placeholder: pc.T("users.telegram_url_placeholder"),
+							HasError:    data.Errors["telegram_url"] != "",
+							Attributes:  templ.Attributes{"maxlength": "255"},
+						})
+						if data.Errors["telegram_url"] != "" {
+							<span class="form-error">{ data.Errors["telegram_url"] }</span>
+						}
+					</div>
 					<!-- Bio -->
 					<div class="form-group form-group-full">
 						@label.Label(label.Props{For: "bio", Class: "block mb-1"}) {
@@ -564,6 +583,8 @@ func userFormValue(data UserFormData, field string) string {
 			return data.User.LinkedInURL
 		case "github_url":
 			return data.User.GitHubURL
+		case "telegram_url":
+			return data.User.TelegramURL
 		}
 	}
 	return ""

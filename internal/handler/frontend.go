@@ -97,6 +97,7 @@ type AuthorView struct {
 	WebsiteURL  string
 	LinkedInURL string
 	GitHubURL   string
+	TelegramURL string
 }
 
 // CategoryView represents a category for template rendering.
@@ -1615,6 +1616,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 			WebsiteURL:  author.WebsiteUrl,
 			LinkedInURL: author.LinkedinUrl,
 			GitHubURL:   author.GithubUrl,
+			TelegramURL: author.TelegramUrl,
 		}
 	}
 

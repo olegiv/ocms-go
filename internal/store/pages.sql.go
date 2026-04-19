@@ -488,7 +488,7 @@ func (q *Queries) GetOGImageForPage(ctx context.Context, id int64) (Medium, erro
 }
 
 const getPageAuthor = `-- name: GetPageAuthor :one
-SELECT u.id, u.name, u.email, u.avatar, u.bio, u.website_url, u.linkedin_url, u.github_url FROM users u
+SELECT u.id, u.name, u.email, u.avatar, u.bio, u.website_url, u.linkedin_url, u.github_url, u.telegram_url FROM users u
 INNER JOIN pages p ON p.author_id = u.id
 WHERE p.id = ?
 `
@@ -502,6 +502,7 @@ type GetPageAuthorRow struct {
 	WebsiteUrl  string `json:"website_url"`
 	LinkedinUrl string `json:"linkedin_url"`
 	GithubUrl   string `json:"github_url"`
+	TelegramUrl string `json:"telegram_url"`
 }
 
 func (q *Queries) GetPageAuthor(ctx context.Context, id int64) (GetPageAuthorRow, error) {
@@ -516,6 +517,7 @@ func (q *Queries) GetPageAuthor(ctx context.Context, id int64) (GetPageAuthorRow
 		&i.WebsiteUrl,
 		&i.LinkedinUrl,
 		&i.GithubUrl,
+		&i.TelegramUrl,
 	)
 	return i, err
 }
