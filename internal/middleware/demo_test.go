@@ -125,7 +125,7 @@ func TestBlockInDemoMode(t *testing.T) {
 		{
 			name:       "demo mode on - API request blocked",
 			demoMode:   true,
-			path:       "/api/v1/users",
+			path:       "/api/v2/users",
 			wantStatus: http.StatusForbidden,
 		},
 	}
@@ -222,7 +222,7 @@ func TestBlockDeleteInDemoMode(t *testing.T) {
 		{"demo mode on - POST to edit allowed", true, http.MethodPost, "/admin/pages/1/edit", http.StatusOK},
 		{"demo mode on - DELETE blocked", true, http.MethodDelete, "/admin/pages/1", http.StatusSeeOther},
 		{"demo mode on - POST to delete blocked", true, http.MethodPost, "/admin/pages/1/delete", http.StatusSeeOther},
-		{"demo mode on - API DELETE blocked", true, http.MethodDelete, "/api/v1/pages/1", http.StatusForbidden},
+		{"demo mode on - API DELETE blocked", true, http.MethodDelete, "/api/v2/pages/1", http.StatusForbidden},
 	})
 }
 
@@ -235,7 +235,7 @@ func TestBlockWriteInDemoMode(t *testing.T) {
 		{"demo mode on - HEAD allowed", true, http.MethodHead, "/admin/config", http.StatusOK},
 		{"demo mode on - POST blocked", true, http.MethodPost, "/admin/config", http.StatusSeeOther},
 		{"demo mode on - PUT blocked", true, http.MethodPut, "/admin/config", http.StatusSeeOther},
-		{"demo mode on - API POST blocked", true, http.MethodPost, "/api/v1/config", http.StatusForbidden},
+		{"demo mode on - API POST blocked", true, http.MethodPost, "/api/v2/config", http.StatusForbidden},
 	})
 }
 

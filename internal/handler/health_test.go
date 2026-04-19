@@ -383,7 +383,7 @@ func TestHealthHandler_GetSecuritySummary(t *testing.T) {
 		UserID:     sql.NullInt64{},
 		Metadata:   "{}",
 		IpAddress:  "198.51.100.15",
-		RequestUrl: "/api/v1/pages",
+		RequestUrl: "/api/v2/pages",
 		CreatedAt:  now.Add(-30 * time.Minute),
 	})
 	if err != nil {

@@ -97,7 +97,7 @@ REST API endpoints use token-based authentication instead of CSRF. These routes 
 ```go
 // API routes skip CSRF validation
 r.Route("/api", func(r chi.Router) {
-    r.Use(middleware.SkipCSRF("/api/v1/..."))
+    r.Use(middleware.SkipCSRF("/api/v2/..."))
     // ... API routes
 })
 ```

@@ -36,7 +36,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/demo"
 	"github.com/olegiv/ocms-go/internal/handler"
-	"github.com/olegiv/ocms-go/internal/handler/api"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/logging"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -1576,18 +1575,6 @@ func run() error {
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
 	schedulerHandler := handler.NewSchedulerHandler(db, renderer, sessionManager, schedulerRegistry, taskExecutor, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
-	apiHandler := api.NewHandler(db)
-	apiHandler.SetEventService(eventService)
-	apiHandler.SetBlockSuspiciousPageMarkup(cfg.BlockSuspiciousPageHTML)
-	apiHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
-	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
-		DB:         db,
-		TemplateFS: templatesFS,
-		IsDev:      cfg.IsDevelopment(),
-	})
-	if err != nil {
-		return fmt.Errorf("initializing api docs handler: %w", err)
-	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	apiKeysHandler.SetRequireSourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
 	apiKeysHandler.SetRequireExpiry(cfg.RequireAPIKeyExpiry)
@@ -1607,7 +1594,6 @@ func run() error {
 
 	// Set cache manager on handlers that need cache invalidation
 	pagesHandler.SetCacheManager(cacheManager)
-	apiHandler.SetCacheManager(cacheManager)
 
 	// Health check routes (public, returns additional details for authenticated callers)
 	r.Get("/health", healthHandler.Health)
@@ -1872,24 +1858,7 @@ func run() error {
 
 	})
 
-	// REST API v1 routes
-	r.Route("/api/v1", func(r chi.Router) {
-		// Global rate limiting for API (100 requests per second with burst of 200)
-		apiRateLimiter := middleware.NewGlobalRateLimiter(100, 200)
-		r.Use(apiRateLimiter.Middleware())
-
-		// Public endpoints (no authentication required)
-		r.Get("/status", apiHandler.Status)
-		r.Get("/docs", apiDocsHandler.ServeDocs)
-
-		// Pages, Media, and Taxonomy moved to /api/v2 (huma-generated spec). /api/v1
-		// retains only /status and /docs for backwards-compatible discovery; the full
-		// REST surface lives under /api/v2.
-	})
-	slog.Info("REST API v1 mounted at /api/v1 (discovery only)")
-
 	// REST API v2 — huma-generated OpenAPI 3.1 at /api/v2.
-	// v1 remains mounted; each v2 domain commit deletes its v1 counterpart.
 	r.Route("/api/v2", func(r chi.Router) {
 		apiV2RateLimiter := middleware.NewGlobalRateLimiter(100, 200)
 		r.Use(apiV2RateLimiter.Middleware())

@@ -31,19 +31,19 @@ The `video_url` and `video_title` fields are available in the pages API:
 
 ```bash
 # Create page with video and title
-curl -X POST /api/v1/pages \
+curl -X POST /api/v2/pages \
   -H "Authorization: Bearer API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"title": "My Video Post", "slug": "video-post", "body": "...", "status": "draft", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "video_title": "Introduction Video"}'
 
 # Update page video
-curl -X PUT /api/v1/pages/1 \
+curl -X PUT /api/v2/pages/1 \
   -H "Authorization: Bearer API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"video_url": "https://youtu.be/dQw4w9WgXcQ", "video_title": "Updated Title"}'
 
 # Remove video (set to empty string)
-curl -X PUT /api/v1/pages/1 \
+curl -X PUT /api/v2/pages/1 \
   -H "Authorization: Bearer API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"video_url": ""}'

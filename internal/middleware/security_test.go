@@ -99,7 +99,7 @@ func TestSecurityHeadersExcludePaths(t *testing.T) {
 	}{
 		{"/", true},
 		{"/admin", true},
-		{"/api/v1/pages", false},
+		{"/api/v2/pages", false},
 		{"/api/health", false},
 	}
 

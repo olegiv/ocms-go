@@ -195,7 +195,7 @@ API responses include language information in headers:
 
 Filter API responses by language:
 ```bash
-curl "http://localhost:8080/api/v1/pages?language=ru"
+curl "http://localhost:8080/api/v2/pages?language=ru"
 ```
 
 ### Translation Data

@@ -436,26 +436,42 @@ The CMS provides a RESTful API for programmatic access to content.
 API requests require a Bearer token in the Authorization header:
 
 ```bash
-curl -H "Authorization: Bearer your-api-key" http://localhost:8080/api/v1/pages
+curl -H "Authorization: Bearer your-api-key" http://localhost:8080/api/v2/pages
 ```
 
 Create API keys in the admin panel under **Settings > API Keys**.
+
+The REST surface is `/api/v2`. The OpenAPI 3.1 spec is generated from Go types via [huma](https://huma.rocks/) and served live at `/api/v2/openapi.json` (or `.yaml`). Swagger UI is available at `/api/v2/docs`.
 
 ### Endpoints
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| GET | `/api/v1/pages` | List published pages | Optional |
-| GET | `/api/v1/pages/{id}` | Get page by ID | Optional |
-| GET | `/api/v1/pages/slug/{slug}` | Get page by slug | Optional |
-| POST | `/api/v1/pages` | Create page | Required |
-| PUT | `/api/v1/pages/{id}` | Update page | Required |
-| DELETE | `/api/v1/pages/{id}` | Delete page | Required |
-| GET | `/api/v1/media` | List media | Optional |
-| POST | `/api/v1/media` | Upload media | Required |
-| GET | `/api/v1/tags` | List tags | Public |
-| GET | `/api/v1/categories` | List categories (tree) | Public |
-| GET | `/api/v1/docs` | API documentation | Public |
+| GET | `/api/v2/status` | API status | Public |
+| GET | `/api/v2/auth` | Inspect the calling API key | Required |
+| GET | `/api/v2/pages` | List pages | Optional |
+| GET | `/api/v2/pages/{id}` | Get page by ID | Optional |
+| GET | `/api/v2/pages/slug/{slug}` | Get page by slug | Optional |
+| POST | `/api/v2/pages` | Create page | Required |
+| PUT | `/api/v2/pages/{id}` | Update page | Required |
+| DELETE | `/api/v2/pages/{id}` | Delete page | Required |
+| GET | `/api/v2/media` | List media | Optional |
+| GET | `/api/v2/media/{id}` | Get media by ID | Optional |
+| POST | `/api/v2/media` | Upload a single file | Required |
+| POST | `/api/v2/media/batch` | Upload multiple files | Required |
+| PUT | `/api/v2/media/{id}` | Update media metadata | Required |
+| DELETE | `/api/v2/media/{id}` | Delete media | Required |
+| GET | `/api/v2/tags` | List tags | Public |
+| POST | `/api/v2/tags` | Create tag | Required |
+| PUT | `/api/v2/tags/{id}` | Update tag | Required |
+| DELETE | `/api/v2/tags/{id}` | Delete tag | Required |
+| GET | `/api/v2/categories` | List categories (tree or flat) | Public |
+| POST | `/api/v2/categories` | Create category | Required |
+| PUT | `/api/v2/categories/{id}` | Update category | Required |
+| DELETE | `/api/v2/categories/{id}` | Delete category | Required |
+| GET | `/api/v2/openapi.json` | OpenAPI 3.1 spec (JSON) | Public |
+| GET | `/api/v2/openapi.yaml` | OpenAPI 3.1 spec (YAML) | Public |
+| GET | `/api/v2/docs` | Swagger UI | Public |
 | GET | `/health` | Health check | Public |
 
 ### Response Format

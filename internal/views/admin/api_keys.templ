@@ -186,12 +186,12 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 			@card.Content() {
 				<p>{ pc.T("api_keys.usage_hint") }</p>
 				<pre class="code-block"><code>Authorization: Bearer YOUR_API_KEY</code></pre>
-				<p class="mt-4">{ pc.T("api_keys.base_url") }: <code>/api/v1/</code></p>
+				<p class="mt-4">{ pc.T("api_keys.base_url") }: <code>/api/v2/</code></p>
 				<p class="tags-wrapper">
-					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/api/v1/status", Target: "_blank"}) {
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/api/v2/status", Target: "_blank"}) {
 						{ pc.T("api_keys.check_status") }
 					}
-					@button.Button(button.Props{Size: button.SizeSm, Href: "/api/v1/docs", Target: "_blank"}) {
+					@button.Button(button.Props{Size: button.SizeSm, Href: "/api/v2/docs", Target: "_blank"}) {
 						@icon.FileText(icon.Props{Size: 14})
 						{ pc.T("api_keys.view_docs") }
 					}
