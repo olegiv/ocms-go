@@ -96,7 +96,11 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 
 // SeedDemoInformerSettings enables the informer bar with demo credentials.
 // Must be called after module initialization (informer module creates the table).
-func SeedDemoInformerSettings(db *sql.DB, adminPassword string) error {
+//
+// The password is NOT baked into the banner HTML. The banner's JS fetches the
+// current password from /api/informer/demo-credentials at page-view time so it
+// always matches the live DB hash, even after cold-start rotations.
+func SeedDemoInformerSettings(db *sql.DB) error {
 	if os.Getenv("OCMS_DEMO_MODE") != "true" {
 		return nil
 	}
@@ -109,14 +113,9 @@ func SeedDemoInformerSettings(db *sql.DB, adminPassword string) error {
 		return nil
 	}
 
-	password := adminPassword
-	if password == "" {
-		password = DemoAdminPassword
-	}
 	demoText := fmt.Sprintf(
-		`This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Login: <strong>%s</strong> / <strong>%s</strong>`,
+		`This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Login: <strong>%s</strong> / <strong class="ocms-demo-pw">&hellip;</strong>`,
 		DemoAdminEmail,
-		password,
 	)
 
 	_, err = db.Exec(`

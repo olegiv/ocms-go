@@ -5,6 +5,9 @@ package informer
 
 import (
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -524,5 +527,104 @@ func TestLoadSettingsNoTable(t *testing.T) {
 	_, err = loadSettings(db)
 	if err == nil {
 		t.Error("expected error when table doesn't exist")
+	}
+}
+
+func TestHandleDemoCredentials_Returns404OutsideDemoMode(t *testing.T) {
+	t.Setenv("OCMS_DEMO_MODE", "")
+	m := &Module{}
+	m.SetDemoPassword("demo-whatever")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/informer/demo-credentials", nil)
+	m.handleDemoCredentials(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 outside demo mode, got %d", rec.Code)
+	}
+}
+
+func TestHandleDemoCredentials_ReturnsCurrentPassword(t *testing.T) {
+	t.Setenv("OCMS_DEMO_MODE", "true")
+	m := &Module{}
+	m.SetDemoPassword("demo-abc123")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/informer/demo-credentials", nil)
+	m.handleDemoCredentials(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+
+	var payload map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decoding body: %v", err)
+	}
+	if payload["password"] != "demo-abc123" {
+		t.Errorf("password = %q, want demo-abc123", payload["password"])
+	}
+}
+
+func TestHandleDemoCredentials_ReturnsRotatedPassword(t *testing.T) {
+	t.Setenv("OCMS_DEMO_MODE", "true")
+	m := &Module{}
+	m.SetDemoPassword("demo-first")
+	m.SetDemoPassword("demo-second")
+
+	rec := httptest.NewRecorder()
+	m.handleDemoCredentials(rec, httptest.NewRequest(http.MethodGet, "/api/informer/demo-credentials", nil))
+
+	var payload map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decoding body: %v", err)
+	}
+	if payload["password"] != "demo-second" {
+		t.Errorf("expected latest SetDemoPassword value, got %q", payload["password"])
+	}
+}
+
+func TestRenderBarEmitsDemoFetchScript(t *testing.T) {
+	t.Setenv("OCMS_DEMO_MODE", "true")
+	m := &Module{
+		settings: &Settings{
+			Enabled:   true,
+			Text:      `Login: <strong class="ocms-demo-pw">&hellip;</strong>`,
+			BgColor:   "#1e40af",
+			TextColor: "#ffffff",
+		},
+	}
+
+	output := string(m.renderBar(""))
+
+	if !strings.Contains(output, "/api/informer/demo-credentials") {
+		t.Error("demo-mode banner should fetch credentials endpoint")
+	}
+	if !strings.Contains(output, "ocms-demo-pw") {
+		t.Error("banner markup should contain the password placeholder class")
+	}
+}
+
+func TestRenderBarOmitsDemoFetchScriptOutsideDemoMode(t *testing.T) {
+	t.Setenv("OCMS_DEMO_MODE", "")
+	m := &Module{
+		settings: &Settings{
+			Enabled:   true,
+			Text:      "Regular notice",
+			BgColor:   "#1e40af",
+			TextColor: "#ffffff",
+		},
+	}
+
+	output := string(m.renderBar(""))
+
+	if strings.Contains(output, "/api/informer/demo-credentials") {
+		t.Error("non-demo banner must not fetch the demo credentials endpoint")
 	}
 }

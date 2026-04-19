@@ -1414,10 +1414,11 @@ func run() error {
 
 	// Seed demo informer settings (must run after module init creates the table)
 	if cfg.DoSeed || middleware.IsDemoMode() {
-		if err := store.SeedDemoInformerSettings(db, demoAdminPassword); err != nil {
+		if err := store.SeedDemoInformerSettings(db); err != nil {
 			slog.Warn("failed to seed demo informer settings", "error", err)
 		} else if mod, ok := moduleRegistry.Get("informer"); ok {
 			if inf, ok := mod.(*informer.Module); ok {
+				inf.SetDemoPassword(demoAdminPassword)
 				if err := inf.ReloadSettings(); err != nil {
 					slog.Warn("failed to reload informer settings after demo seed", "error", err)
 				}

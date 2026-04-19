@@ -7,10 +7,14 @@ package informer
 import (
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html"
 	"html/template"
+	"net/http"
+	"os"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 
@@ -30,6 +34,9 @@ type Module struct {
 	module.BaseModule
 	ctx      *module.Context
 	settings *Settings
+
+	demoPasswordMu sync.RWMutex
+	demoPassword   string
 }
 
 // New creates a new instance of the informer module.
@@ -84,8 +91,37 @@ func (m *Module) Shutdown() error {
 }
 
 // RegisterRoutes registers public routes for the module.
-func (m *Module) RegisterRoutes(_ chi.Router) {
-	// No public routes
+func (m *Module) RegisterRoutes(r chi.Router) {
+	r.Get("/api/informer/demo-credentials", m.handleDemoCredentials)
+}
+
+// SetDemoPassword stores the plaintext demo admin password in memory so the
+// demo-credentials endpoint can serve it to the banner. Called after every
+// password rotation at startup.
+func (m *Module) SetDemoPassword(pw string) {
+	m.demoPasswordMu.Lock()
+	m.demoPassword = pw
+	m.demoPasswordMu.Unlock()
+}
+
+// handleDemoCredentials returns the current demo admin password as JSON so the
+// informer banner can always display credentials that match the live DB hash,
+// even when the surrounding page HTML is served from a browser cache.
+func (m *Module) handleDemoCredentials(w http.ResponseWriter, _ *http.Request) {
+	if os.Getenv("OCMS_DEMO_MODE") != "true" {
+		http.NotFound(w, nil)
+		return
+	}
+
+	m.demoPasswordMu.RLock()
+	pw := m.demoPassword
+	m.demoPasswordMu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(map[string]string{"password": pw}); err != nil {
+		http.Error(w, "encoding credentials", http.StatusInternalServerError)
+	}
 }
 
 // RegisterAdminRoutes registers admin routes for the module.
@@ -225,6 +261,21 @@ var closeBtn=document.querySelector('#informer-bar .informer-bar-close');
 if(closeBtn){closeBtn.addEventListener('click',function(){window.dismissInformer()})}
 })();
 </script>`, cookieName, version))
+
+	// In demo mode, fetch the current demo admin password at runtime so the banner
+	// always shows credentials matching the live DB hash — even when the page HTML
+	// itself was served from a browser cache before the latest cold-start rotation.
+	if os.Getenv("OCMS_DEMO_MODE") == "true" {
+		b.WriteString(`<script>
+(function(){
+fetch('/api/informer/demo-credentials',{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(d){
+if(!d||!d.password)return;
+var els=document.querySelectorAll('#informer-bar .ocms-demo-pw');
+for(var i=0;i<els.length;i++){els[i].textContent=d.password}
+});
+})();
+</script>`)
+	}
 
 	return template.HTML(util.AddNonceToScriptTags(b.String(), nonce))
 }
