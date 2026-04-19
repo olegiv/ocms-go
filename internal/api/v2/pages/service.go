@@ -319,7 +319,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 	}
 	langCode, err := s.resolveLanguageCode(ctx, in.LanguageCode)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to resolve default language")
+		return nil, err
 	}
 
 	for _, catID := range in.CategoryIDs {

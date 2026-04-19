@@ -134,7 +134,7 @@ func (s *Service) CreateTag(ctx context.Context, a v2.Actor, in CreateTagBody) (
 	}
 	langCode, err := s.resolveLanguageCode(ctx, in.LanguageCode)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to resolve default language")
+		return nil, err
 	}
 	now := time.Now()
 	tag, err := s.queries.CreateTag(ctx, store.CreateTagParams{
@@ -185,7 +185,7 @@ func (s *Service) UpdateTag(ctx context.Context, a v2.Actor, id int64, in Update
 	if in.LanguageCode != nil {
 		lang, err := s.resolveLanguageCode(ctx, in.LanguageCode)
 		if err != nil {
-			return nil, v2.NewError(v2.ErrInternal, "Failed to resolve language")
+			return nil, err
 		}
 		params.LanguageCode = lang
 	}
@@ -300,7 +300,7 @@ func (s *Service) CreateCategory(ctx context.Context, a v2.Actor, in CreateCateg
 	}
 	langCode, err := s.resolveLanguageCode(ctx, in.LanguageCode)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to resolve default language")
+		return nil, err
 	}
 	now := time.Now()
 	params := store.CreateCategoryParams{
@@ -386,7 +386,7 @@ func (s *Service) UpdateCategory(ctx context.Context, a v2.Actor, id int64, in U
 	if in.LanguageCode != nil {
 		lang, err := s.resolveLanguageCode(ctx, in.LanguageCode)
 		if err != nil {
-			return nil, v2.NewError(v2.ErrInternal, "Failed to resolve language")
+			return nil, err
 		}
 		params.LanguageCode = lang
 	}

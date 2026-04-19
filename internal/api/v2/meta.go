@@ -44,6 +44,7 @@ func registerMeta(h *Handler) {
 		Summary:     "Authenticated API key info",
 		Description: "Returns the prefix, name, and permissions of the API key that authenticated the request.",
 		Tags:        []string{"Meta"},
+		Security:    APIKeyAuthSecurity,
 	}, func(ctx context.Context, _ *struct{}) (*struct{ Body AuthBody }, error) {
 		actor := ActorFromContext(ctx)
 		if actor.APIKey == nil {
