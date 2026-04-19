@@ -29,6 +29,7 @@ import (
 	"github.com/joho/godotenv"
 
 	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
+	apiv2pages "github.com/olegiv/ocms-go/internal/api/v2/pages"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/demo"
@@ -1879,13 +1880,8 @@ func run() error {
 		r.Get("/status", apiHandler.Status)
 		r.Get("/docs", apiDocsHandler.ServeDocs)
 
-		// Pages - public read endpoints (optional auth for enhanced access)
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.OptionalAPIKeyAuth(db))
-			r.Get(handler.RoutePages, apiHandler.ListPages)
-			r.Get(handler.RoutePagesID, apiHandler.GetPage)
-			r.Get(handler.RoutePages+"/slughandler.RouteParamSlug", apiHandler.GetPageBySlug)
-		})
+		// Pages moved to /api/v2 (huma-generated spec). /api/v1 no longer exposes
+		// /pages* — clients must use /api/v2/pages.
 
 		// Media - public read endpoints (optional auth for enhanced access)
 		r.Group(func(r chi.Router) {
@@ -1910,13 +1906,7 @@ func run() error {
 			// Auth info endpoint
 			r.Get("/auth", apiHandler.AuthInfo)
 
-			// Pages - write endpoints (requires pages:write permission)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission("pages:write"))
-				r.Post(handler.RoutePages, apiHandler.CreatePage)
-				r.Put(handler.RoutePagesID, apiHandler.UpdatePage)
-				r.Delete(handler.RoutePagesID, apiHandler.DeletePage)
-			})
+			// Pages write endpoints moved to /api/v2 (huma-generated spec).
 
 			// Media - write endpoints (requires media:write permission)
 			r.Group(func(r chi.Router) {
@@ -1947,12 +1937,19 @@ func run() error {
 		r.Use(apiV2RateLimiter.Middleware())
 		r.Use(middleware.OptionalAPIKeyAuth(db))
 
+		v2Queries := store.New(db)
+		v2Events := service.NewEventService(db)
 		apiV2 := apiv2.Register(r, apiv2.Deps{
 			DB:      db,
-			Queries: store.New(db),
+			Queries: v2Queries,
 			Cache:   cacheManager,
-			Events:  service.NewEventService(db),
+			Events:  v2Events,
 		})
+		pagesSvc := apiv2pages.NewService(db, v2Queries, cacheManager, v2Events, apiv2pages.Policy{
+			BlockSuspiciousMarkup: cfg.BlockSuspiciousPageHTML,
+			SanitizeHTML:          cfg.SanitizePageHTML,
+		})
+		apiv2pages.Register(apiV2.API, pagesSvc)
 		apiV2Docs, err := apiv2.NewDocsServer(templatesFS, apiV2)
 		if err != nil {
 			slog.Error("v2 docs server init", "error", err)
