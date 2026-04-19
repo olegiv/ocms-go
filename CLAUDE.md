@@ -318,6 +318,25 @@ pkill -f "go run ./cmd/ocms" || true
 
 Never tell the user to "restart the server and test" - always run the tests yourself first.
 
+## Fixes Need Drift Tests
+
+**CRITICAL**: When you resolve an audit finding or review comment that targets a pattern (missing declaration, error wrapping, forbidden import, required format tag, auth/spec mismatch), you MUST add a Go test that mechanically enforces the invariant. Fixing the offending site alone is half the work — the other half is preventing the same class of bug from returning via a different code path.
+
+Before declaring an audit finding or Codex comment resolved, ask:
+
+1. **What is the invariant this fix establishes?** (e.g., "every op whose handler rejects unauthenticated callers declares Security in its OpenAPI metadata")
+2. **Where else in the codebase could that invariant be violated?** If the answer is "anywhere that matches pattern X", express pattern X as a test that walks the AST or live registration state.
+
+The test must fail on the bug state (verify by reverting your fix, running the test, seeing it fail, then restoring the fix).
+
+**Existing examples** in `internal/api/v2/drift_test.go`:
+- `TestOpenAPISurface` — fails when a domain operation is dropped or renamed
+- `TestV2DoesNotImportV1` — fails on any import of the deleted v1 package
+- `TestOpenAPISecurityMatchesRuntime` — fails when a handler gates on auth but the Operation metadata omits `Security`
+- `TestResolveLanguageCodeCallersPropagate` — fails when a caller wraps the helper's validation error as `ErrInternal`
+
+The two Security/Propagate tests both catch real Codex findings against PR #127 that I missed in my own audit-fix pass. The lesson: Codex's review on the far side of PR creation is a backstop, not a replacement for making fix invariants mechanical.
+
 ## Code Quality Requirements
 
 **CRITICAL**: All code MUST be free of the following warnings and issues:
