@@ -105,11 +105,13 @@ paths:
         - name: language_code
           in: query
           schema: { type: string, example: en }
-        - name: category_id
+        - name: category
           in: query
+          description: Restrict results to a category id.
           schema: { type: integer, format: int64 }
-        - name: tag_id
+        - name: tag
           in: query
+          description: Restrict results to a tag id.
           schema: { type: integer, format: int64 }
       responses:
         "200":
@@ -232,25 +234,33 @@ paths:
     post:
       tags: [Media]
       summary: Upload media
-      description: Requires `media:write`. Accepts a multipart/form-data upload.
+      description: |
+        Requires `media:write`. Accepts a multipart/form-data upload. Use the
+        `file` field for single-file uploads; use `files` (or `files[]`) for
+        batch uploads.
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
               properties:
-                file: { type: string, format: binary }
+                file:      { type: string, format: binary, description: Single-file upload. }
+                files:     { type: array, items: { type: string, format: binary }, description: Batch upload. }
                 folder_id: { type: integer, format: int64 }
-                alt_text: { type: string }
+                alt:       { type: string }
+                caption:   { type: string }
       responses:
         "201":
-          description: Uploaded media record.
+          description: |
+            Single-file uploads return `MediaSingleResponse`; batch uploads
+            return `MediaBatchUploadResponse` with per-file errors (if any).
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MediaSingleResponse"
+                oneOf:
+                  - $ref: "#/components/schemas/MediaSingleResponse"
+                  - $ref: "#/components/schemas/MediaBatchUploadResponse"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -725,6 +735,23 @@ components:
       type: object
       properties:
         data: { $ref: "#/components/schemas/Media" }
+
+    MediaBatchUploadResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          required: [uploaded]
+          properties:
+            uploaded:
+              type: array
+              items: { $ref: "#/components/schemas/Media" }
+            errors:
+              type: array
+              description: Per-file upload errors keyed by filename.
+              items:
+                type: object
+                additionalProperties: { type: string }
 
     CreateTagRequest:
       type: object
