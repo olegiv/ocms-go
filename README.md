@@ -437,6 +437,9 @@ API requests require a Bearer token in the Authorization header:
 
 ```bash
 curl -H "Authorization: Bearer your-api-key" http://localhost:8080/api/v1/pages
+
+# Import the OpenAPI 3.1 spec into Postman / Insomnia / editor.swagger.io
+curl http://localhost:8080/api/v1/openapi.json
 ```
 
 Create API keys in the admin panel under **Settings > API Keys**.
@@ -455,7 +458,9 @@ Create API keys in the admin panel under **Settings > API Keys**.
 | POST | `/api/v1/media` | Upload media | Required |
 | GET | `/api/v1/tags` | List tags | Public |
 | GET | `/api/v1/categories` | List categories (tree) | Public |
-| GET | `/api/v1/docs` | API documentation | Public |
+| GET | `/api/v1/docs` | Interactive API documentation (Swagger UI) | Public |
+| GET | `/api/v1/openapi.json` | OpenAPI 3.1 spec (JSON) | Public |
+| GET | `/api/v1/openapi.yaml` | OpenAPI 3.1 spec (YAML) | Public |
 | GET | `/health` | Health check | Public |
 
 ### Response Format
