@@ -19,7 +19,6 @@ servers:
     description: Current server
 security:
   - ApiKeyAuth: []
-  - {}
 tags:
   - name: Meta
     description: Status and discovery endpoints.
@@ -91,6 +90,10 @@ paths:
     get:
       tags: [Pages]
       summary: List pages
+      description: Unauthenticated callers see only published pages; authenticated callers see additional fields.
+      security:
+        - ApiKeyAuth: []
+        - {}
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
@@ -142,6 +145,9 @@ paths:
     get:
       tags: [Pages]
       summary: Get page by ID
+      security:
+        - ApiKeyAuth: []
+        - {}
       responses:
         "200":
           description: Page record.
@@ -190,6 +196,9 @@ paths:
     get:
       tags: [Pages]
       summary: Get page by slug
+      security:
+        - ApiKeyAuth: []
+        - {}
       responses:
         "200":
           description: Page record.
@@ -203,6 +212,9 @@ paths:
     get:
       tags: [Media]
       summary: List media
+      security:
+        - ApiKeyAuth: []
+        - {}
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
@@ -247,6 +259,9 @@ paths:
     get:
       tags: [Media]
       summary: Get media by ID
+      security:
+        - ApiKeyAuth: []
+        - {}
       responses:
         "200":
           description: Media record.
@@ -289,6 +304,7 @@ paths:
     get:
       tags: [Tags]
       summary: List tags
+      security: []
       responses:
         "200":
           description: All tags.
@@ -323,6 +339,7 @@ paths:
     get:
       tags: [Tags]
       summary: Get tag by ID
+      security: []
       responses:
         "200":
           description: Tag record.
@@ -365,6 +382,7 @@ paths:
     get:
       tags: [Categories]
       summary: List categories (tree)
+      security: []
       responses:
         "200":
           description: All categories, ordered.
@@ -399,6 +417,7 @@ paths:
     get:
       tags: [Categories]
       summary: Get category by ID
+      security: []
       responses:
         "200":
           description: Category record.
