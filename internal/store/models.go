@@ -360,6 +360,7 @@ type User struct {
 	WebsiteUrl   string       `json:"website_url"`
 	LinkedinUrl  string       `json:"linkedin_url"`
 	GithubUrl    string       `json:"github_url"`
+	TelegramUrl  string       `json:"telegram_url"`
 }
 
 type Webhook struct {

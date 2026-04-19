@@ -321,6 +321,7 @@ func TestUserItem_ProfileFields(t *testing.T) {
 		WebsiteURL:  "https://example.com",
 		LinkedInURL: "https://linkedin.com/in/test",
 		GitHubURL:   "https://github.com/test",
+		TelegramURL: "https://t.me/testchannel",
 	}
 
 	if item.Avatar != "/uploads/avatar.jpg" {
@@ -338,6 +339,9 @@ func TestUserItem_ProfileFields(t *testing.T) {
 	if item.GitHubURL != "https://github.com/test" {
 		t.Errorf("GitHubURL = %q; want https://github.com/test", item.GitHubURL)
 	}
+	if item.TelegramURL != "https://t.me/testchannel" {
+		t.Errorf("TelegramURL = %q; want https://t.me/testchannel", item.TelegramURL)
+	}
 }
 
 func TestUserProfileFields_CreateAndRetrieve(t *testing.T) {
@@ -345,23 +349,23 @@ func TestUserProfileFields_CreateAndRetrieve(t *testing.T) {
 
 	// Insert user with profile fields
 	_, err := db.Exec(
-		`INSERT INTO users (email, password_hash, role, name, avatar, bio, website_url, linkedin_url, github_url, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		`INSERT INTO users (email, password_hash, role, name, avatar, bio, website_url, linkedin_url, github_url, telegram_url, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
 		"profile@example.com", "$argon2id$v=19$m=65536,t=1,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG",
 		"editor", "Profile User",
 		"/uploads/avatar.jpg", "A short bio",
-		"https://example.com", "https://linkedin.com/in/user", "https://github.com/user",
+		"https://example.com", "https://linkedin.com/in/user", "https://github.com/user", "https://t.me/user",
 	)
 	if err != nil {
 		t.Fatalf("failed to insert user with profile fields: %v", err)
 	}
 
 	// Read back and verify
-	var avatar, bio, websiteURL, linkedinURL, githubURL string
+	var avatar, bio, websiteURL, linkedinURL, githubURL, telegramURL string
 	err = db.QueryRow(
-		"SELECT avatar, bio, website_url, linkedin_url, github_url FROM users WHERE email = ?",
+		"SELECT avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users WHERE email = ?",
 		"profile@example.com",
-	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL)
+	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL, &telegramURL)
 	if err != nil {
 		t.Fatalf("failed to read user profile fields: %v", err)
 	}
@@ -381,6 +385,9 @@ func TestUserProfileFields_CreateAndRetrieve(t *testing.T) {
 	if githubURL != "https://github.com/user" {
 		t.Errorf("github_url = %q; want https://github.com/user", githubURL)
 	}
+	if telegramURL != "https://t.me/user" {
+		t.Errorf("telegram_url = %q; want https://t.me/user", telegramURL)
+	}
 }
 
 func TestUserProfileFields_DefaultEmpty(t *testing.T) {
@@ -393,11 +400,11 @@ func TestUserProfileFields_DefaultEmpty(t *testing.T) {
 		Role:  "editor",
 	})
 
-	var avatar, bio, websiteURL, linkedinURL, githubURL string
+	var avatar, bio, websiteURL, linkedinURL, githubURL, telegramURL string
 	err := db.QueryRow(
-		"SELECT avatar, bio, website_url, linkedin_url, github_url FROM users WHERE id = ?",
+		"SELECT avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users WHERE id = ?",
 		user.ID,
-	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL)
+	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL, &telegramURL)
 	if err != nil {
 		t.Fatalf("failed to read user: %v", err)
 	}
@@ -417,6 +424,9 @@ func TestUserProfileFields_DefaultEmpty(t *testing.T) {
 	if githubURL != "" {
 		t.Errorf("github_url should default to empty, got %q", githubURL)
 	}
+	if telegramURL != "" {
+		t.Errorf("telegram_url should default to empty, got %q", telegramURL)
+	}
 }
 
 func TestUserProfileFields_UpdateViaSQL(t *testing.T) {
@@ -430,20 +440,20 @@ func TestUserProfileFields_UpdateViaSQL(t *testing.T) {
 
 	// Update profile fields
 	_, err := db.Exec(
-		`UPDATE users SET avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ? WHERE id = ?`,
+		`UPDATE users SET avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ?, telegram_url = ? WHERE id = ?`,
 		"/uploads/new-avatar.png", "Updated bio",
-		"https://mysite.com", "https://linkedin.com/in/updated", "https://github.com/updated",
+		"https://mysite.com", "https://linkedin.com/in/updated", "https://github.com/updated", "https://t.me/updated",
 		user.ID,
 	)
 	if err != nil {
 		t.Fatalf("failed to update profile fields: %v", err)
 	}
 
-	var avatar, bio, websiteURL, linkedinURL, githubURL string
+	var avatar, bio, websiteURL, linkedinURL, githubURL, telegramURL string
 	err = db.QueryRow(
-		"SELECT avatar, bio, website_url, linkedin_url, github_url FROM users WHERE id = ?",
+		"SELECT avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users WHERE id = ?",
 		user.ID,
-	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL)
+	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL, &telegramURL)
 	if err != nil {
 		t.Fatalf("failed to read updated user: %v", err)
 	}
@@ -462,5 +472,39 @@ func TestUserProfileFields_UpdateViaSQL(t *testing.T) {
 	}
 	if githubURL != "https://github.com/updated" {
 		t.Errorf("github_url = %q; want https://github.com/updated", githubURL)
+	}
+	if telegramURL != "https://t.me/updated" {
+		t.Errorf("telegram_url = %q; want https://t.me/updated", telegramURL)
+	}
+}
+
+func TestValidateDomainURL(t *testing.T) {
+	allowed := []string{"t.me", "telegram.me"}
+	cases := []struct {
+		name    string
+		raw     string
+		wantErr bool
+	}{
+		{"empty ok", "", false},
+		{"https allowed host", "https://t.me/channel", false},
+		{"https alt allowed host", "https://telegram.me/channel", false},
+		{"http rejected", "http://t.me/channel", true},
+		{"wrong host", "https://evil.example/channel", true},
+		{"userinfo rejected", "https://user:pass@t.me/channel", true},
+		{"path traversal rejected", "https://t.me/../evil", true},
+		{"javascript scheme rejected", "javascript:alert(1)", true},
+		{"data scheme rejected", "data:text/html,<script>", true},
+		{"malformed rejected", "ht tp://broken", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := validateDomainURL(c.raw, allowed)
+			if c.wantErr && got == "" {
+				t.Errorf("validateDomainURL(%q) = ok; want rejection", c.raw)
+			}
+			if !c.wantErr && got != "" {
+				t.Errorf("validateDomainURL(%q) = %q; want ok", c.raw, got)
+			}
+		})
 	}
 }

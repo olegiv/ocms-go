@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO users (email, password_hash, role, name, avatar, bio, website_url, linkedin_url, github_url, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO users (email, password_hash, role, name, avatar, bio, website_url, linkedin_url, github_url, telegram_url, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetUserByEmail :one
@@ -13,7 +13,7 @@ SELECT * FROM users WHERE id = ?;
 SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?;
 
 -- name: UpdateUser :one
-UPDATE users SET email = ?, role = ?, name = ?, avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ?, updated_at = ?
+UPDATE users SET email = ?, role = ?, name = ?, avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ?, telegram_url = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 

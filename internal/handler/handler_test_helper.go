@@ -43,7 +43,8 @@ func testDB(t *testing.T) *sql.DB {
 			bio TEXT NOT NULL DEFAULT '',
 			website_url TEXT NOT NULL DEFAULT '',
 			linkedin_url TEXT NOT NULL DEFAULT '',
-			github_url TEXT NOT NULL DEFAULT ''
+			github_url TEXT NOT NULL DEFAULT '',
+			telegram_url TEXT NOT NULL DEFAULT ''
 		);
 		CREATE INDEX idx_users_email ON users(email);
 		CREATE INDEX idx_users_role ON users(role);

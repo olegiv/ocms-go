@@ -2853,6 +2853,11 @@
             "translation": "https://github.com/username"
         },
         {
+            "id": "users.telegram_url_placeholder",
+            "message": "https://t.me/yourchannel",
+            "translation": "https://t.me/вашканал"
+        },
+        {
             "id": "users.password_section",
             "message": "Password",
             "translation": "Пароль"
@@ -3951,6 +3956,11 @@
             "id": "label.github_url",
             "message": "GitHub",
             "translation": "GitHub"
+        },
+        {
+            "id": "label.telegram_url",
+            "message": "Telegram channel",
+            "translation": "Telegram-канал"
         },
         {
             "id": "label.password",

@@ -34,9 +34,9 @@ func (q *Queries) CountUsersByRole(ctx context.Context, role string) (int64, err
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, password_hash, role, name, avatar, bio, website_url, linkedin_url, github_url, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url
+INSERT INTO users (email, password_hash, role, name, avatar, bio, website_url, linkedin_url, github_url, telegram_url, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url
 `
 
 type CreateUserParams struct {
@@ -49,6 +49,7 @@ type CreateUserParams struct {
 	WebsiteUrl   string    `json:"website_url"`
 	LinkedinUrl  string    `json:"linkedin_url"`
 	GithubUrl    string    `json:"github_url"`
+	TelegramUrl  string    `json:"telegram_url"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -64,6 +65,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.WebsiteUrl,
 		arg.LinkedinUrl,
 		arg.GithubUrl,
+		arg.TelegramUrl,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -82,6 +84,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.WebsiteUrl,
 		&i.LinkedinUrl,
 		&i.GithubUrl,
+		&i.TelegramUrl,
 	)
 	return i, err
 }
@@ -96,7 +99,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url FROM users WHERE email = ?
+SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -116,12 +119,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.WebsiteUrl,
 		&i.LinkedinUrl,
 		&i.GithubUrl,
+		&i.TelegramUrl,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url FROM users WHERE id = ?
+SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -141,12 +145,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.WebsiteUrl,
 		&i.LinkedinUrl,
 		&i.GithubUrl,
+		&i.TelegramUrl,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListUsersParams struct {
@@ -177,6 +182,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.WebsiteUrl,
 			&i.LinkedinUrl,
 			&i.GithubUrl,
+			&i.TelegramUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -192,9 +198,9 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const updateUser = `-- name: UpdateUser :one
-UPDATE users SET email = ?, role = ?, name = ?, avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ?, updated_at = ?
+UPDATE users SET email = ?, role = ?, name = ?, avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ?, telegram_url = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url
+RETURNING id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url
 `
 
 type UpdateUserParams struct {
@@ -206,6 +212,7 @@ type UpdateUserParams struct {
 	WebsiteUrl  string    `json:"website_url"`
 	LinkedinUrl string    `json:"linkedin_url"`
 	GithubUrl   string    `json:"github_url"`
+	TelegramUrl string    `json:"telegram_url"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	ID          int64     `json:"id"`
 }
@@ -220,6 +227,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		arg.WebsiteUrl,
 		arg.LinkedinUrl,
 		arg.GithubUrl,
+		arg.TelegramUrl,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -238,6 +246,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.WebsiteUrl,
 		&i.LinkedinUrl,
 		&i.GithubUrl,
+		&i.TelegramUrl,
 	)
 	return i, err
 }

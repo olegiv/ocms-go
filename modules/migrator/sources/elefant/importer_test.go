@@ -55,7 +55,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 			bio TEXT NOT NULL DEFAULT '',
 			website_url TEXT NOT NULL DEFAULT '',
 			linkedin_url TEXT NOT NULL DEFAULT '',
-			github_url TEXT NOT NULL DEFAULT ''
+			github_url TEXT NOT NULL DEFAULT '',
+			telegram_url TEXT NOT NULL DEFAULT ''
 		)
 	`)
 	if err != nil {
