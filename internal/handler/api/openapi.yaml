@@ -543,7 +543,7 @@ components:
         data:
           type: object
           properties:
-            key_id:      { type: integer, format: int64 }
+            key_prefix:  { type: string, description: Public prefix of the API key used for display and correlation. }
             name:        { type: string }
             permissions: { type: array, items: { type: string } }
 
@@ -672,24 +672,40 @@ components:
     Media:
       type: object
       properties:
-        id:            { type: integer, format: int64 }
-        filename:      { type: string }
-        mime_type:     { type: string }
-        size_bytes:    { type: integer, format: int64 }
-        alt_text:      { type: string }
-        folder_id:     { type: integer, format: int64, nullable: true }
-        original_url:  { type: string }
-        variants:      { type: array, items: { $ref: "#/components/schemas/MediaVariant" } }
-        created_at:    { type: string, format: date-time }
-        updated_at:    { type: string, format: date-time }
+        id:          { type: integer, format: int64 }
+        uuid:        { type: string, format: uuid }
+        filename:    { type: string }
+        mime_type:   { type: string }
+        size:        { type: integer, format: int64 }
+        width:       { type: integer, format: int64, nullable: true }
+        height:      { type: integer, format: int64, nullable: true }
+        alt:         { type: string }
+        caption:     { type: string }
+        folder_id:   { type: integer, format: int64, nullable: true }
+        uploaded_by: { type: integer, format: int64 }
+        created_at:  { type: string, format: date-time }
+        updated_at:  { type: string, format: date-time }
+        urls:        { $ref: "#/components/schemas/MediaURLs" }
+        variants:    { type: array, items: { $ref: "#/components/schemas/MediaVariant" } }
+
+    MediaURLs:
+      type: object
+      properties:
+        original:  { type: string }
+        thumbnail: { type: string }
+        medium:    { type: string }
+        large:     { type: string }
 
     MediaVariant:
       type: object
       properties:
-        name:   { type: string, example: thumbnail }
-        url:    { type: string }
-        width:  { type: integer }
-        height: { type: integer }
+        id:         { type: integer, format: int64 }
+        type:       { type: string, example: thumbnail, description: Variant kind (e.g. thumbnail / medium / large). }
+        width:      { type: integer, format: int64 }
+        height:     { type: integer, format: int64 }
+        size:       { type: integer, format: int64 }
+        url:        { type: string }
+        created_at: { type: string, format: date-time }
 
     UpdateMediaRequest:
       type: object
