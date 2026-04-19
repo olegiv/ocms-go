@@ -692,7 +692,9 @@ components:
     UpdateMediaRequest:
       type: object
       properties:
-        alt_text:  { type: string }
+        filename:  { type: string }
+        alt:       { type: string }
+        caption:   { type: string }
         folder_id: { type: integer, format: int64, nullable: true }
 
     MediaListResponse:
@@ -708,16 +710,18 @@ components:
 
     CreateTagRequest:
       type: object
-      required: [name]
+      required: [name, slug]
       properties:
-        name: { type: string }
-        slug: { type: string, description: Auto-derived from name if omitted. }
+        name:          { type: string }
+        slug:          { type: string }
+        language_code: { type: string }
 
     UpdateTagRequest:
       type: object
       properties:
-        name: { type: string }
-        slug: { type: string }
+        name:          { type: string }
+        slug:          { type: string }
+        language_code: { type: string }
 
     TagListResponse:
       type: object
@@ -731,20 +735,24 @@ components:
 
     CreateCategoryRequest:
       type: object
-      required: [name]
+      required: [name, slug]
       properties:
-        name:        { type: string }
-        slug:        { type: string }
-        description: { type: string }
-        parent_id:   { type: integer, format: int64, nullable: true }
+        name:          { type: string }
+        slug:          { type: string }
+        description:   { type: string }
+        parent_id:     { type: integer, format: int64, nullable: true }
+        position:      { type: integer, format: int64 }
+        language_code: { type: string }
 
     UpdateCategoryRequest:
       type: object
       properties:
-        name:        { type: string }
-        slug:        { type: string }
-        description: { type: string }
-        parent_id:   { type: integer, format: int64, nullable: true }
+        name:          { type: string }
+        slug:          { type: string }
+        description:   { type: string }
+        parent_id:     { type: integer, format: int64, nullable: true }
+        position:      { type: integer, format: int64 }
+        language_code: { type: string }
 
     CategoryListResponse:
       type: object
