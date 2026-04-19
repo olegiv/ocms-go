@@ -1877,6 +1877,8 @@ func run() error {
 		// Public endpoints (no authentication required)
 		r.Get("/status", apiHandler.Status)
 		r.Get("/docs", apiDocsHandler.ServeDocs)
+		r.Get("/openapi.json", apiDocsHandler.ServeOpenAPIJSON)
+		r.Get("/openapi.yaml", apiDocsHandler.ServeOpenAPIYAML)
 
 		// Pages - public read endpoints (optional auth for enhanced access)
 		r.Group(func(r chi.Router) {

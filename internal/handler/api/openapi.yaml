@@ -1,0 +1,738 @@
+openapi: 3.1.0
+info:
+  title: oCMS REST API
+  summary: Content management REST API for pages, media, tags, and categories.
+  description: |
+    REST API v1 for oCMS. All responses are JSON-wrapped under a top-level
+    `data` key (list endpoints also include a `meta` object for pagination).
+    Errors use the `ErrorResponse` envelope.
+
+    Authentication uses a Bearer API key via the `Authorization` header. Most
+    read endpoints accept optional authentication and return additional fields
+    for authenticated requests.
+  license:
+    name: GPL-3.0-or-later
+    identifier: GPL-3.0-or-later
+  version: "1.0.0"
+servers:
+  - url: /api/v1
+    description: Current server
+security:
+  - ApiKeyAuth: []
+  - {}
+tags:
+  - name: Meta
+    description: Status and discovery endpoints.
+  - name: Pages
+    description: CMS pages (posts, static pages).
+  - name: Media
+    description: Media library entries.
+  - name: Tags
+    description: Content tags.
+  - name: Categories
+    description: Hierarchical content categories.
+paths:
+  /status:
+    get:
+      tags: [Meta]
+      summary: API status
+      description: Lightweight API availability check. Public.
+      security: []
+      responses:
+        "200":
+          description: API is reachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /openapi.json:
+    get:
+      tags: [Meta]
+      summary: OpenAPI 3.1 spec (JSON)
+      security: []
+      responses:
+        "200":
+          description: Machine-readable API description.
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /openapi.yaml:
+    get:
+      tags: [Meta]
+      summary: OpenAPI 3.1 spec (YAML)
+      security: []
+      responses:
+        "200":
+          description: Machine-readable API description.
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /auth:
+    get:
+      tags: [Meta]
+      summary: API key information
+      description: Returns permissions and metadata for the authenticated API key.
+      responses:
+        "200":
+          description: Authenticated key info.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /pages:
+    get:
+      tags: [Pages]
+      summary: List pages
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, published, scheduled]
+        - name: language_code
+          in: query
+          schema: { type: string, example: en }
+        - name: category_id
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: tag_id
+          in: query
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: Paginated list of pages.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageListResponse"
+    post:
+      tags: [Pages]
+      summary: Create a page
+      description: Requires `pages:write` permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePageRequest"
+      responses:
+        "201":
+          description: Created page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageSingleResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /pages/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Pages]
+      summary: Get page by ID
+      responses:
+        "200":
+          description: Page record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageSingleResponse"
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Pages]
+      summary: Update a page
+      description: Requires `pages:write` permission. Omit fields to leave unchanged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePageRequest"
+      responses:
+        "200":
+          description: Updated page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageSingleResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Pages]
+      summary: Delete a page
+      description: Requires `pages:write` permission.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /pages/slug/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Pages]
+      summary: Get page by slug
+      responses:
+        "200":
+          description: Page record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageSingleResponse"
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /media:
+    get:
+      tags: [Media]
+      summary: List media
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: folder_id
+          in: query
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: Paginated list of media.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaListResponse"
+    post:
+      tags: [Media]
+      summary: Upload media
+      description: Requires `media:write`. Accepts a multipart/form-data upload.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                folder_id: { type: integer, format: int64 }
+                alt_text: { type: string }
+      responses:
+        "201":
+          description: Uploaded media record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaSingleResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /media/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Media]
+      summary: Get media by ID
+      responses:
+        "200":
+          description: Media record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaSingleResponse"
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Media]
+      summary: Update media metadata
+      description: Requires `media:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMediaRequest"
+      responses:
+        "200":
+          description: Updated media.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaSingleResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Media]
+      summary: Delete media
+      description: Requires `media:write`.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /tags:
+    get:
+      tags: [Tags]
+      summary: List tags
+      responses:
+        "200":
+          description: All tags.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagListResponse"
+    post:
+      tags: [Tags]
+      summary: Create a tag
+      description: Requires `taxonomy:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTagRequest"
+      responses:
+        "201":
+          description: Created tag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagSingleResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /tags/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Tags]
+      summary: Get tag by ID
+      responses:
+        "200":
+          description: Tag record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagSingleResponse"
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Tags]
+      summary: Update a tag
+      description: Requires `taxonomy:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTagRequest"
+      responses:
+        "200":
+          description: Updated tag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagSingleResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tags]
+      summary: Delete a tag
+      description: Requires `taxonomy:write`.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /categories:
+    get:
+      tags: [Categories]
+      summary: List categories (tree)
+      responses:
+        "200":
+          description: All categories, ordered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryListResponse"
+    post:
+      tags: [Categories]
+      summary: Create a category
+      description: Requires `taxonomy:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "201":
+          description: Created category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategorySingleResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /categories/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Categories]
+      summary: Get category by ID
+      responses:
+        "200":
+          description: Category record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategorySingleResponse"
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Categories]
+      summary: Update a category
+      description: Requires `taxonomy:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryRequest"
+      responses:
+        "200":
+          description: Updated category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategorySingleResponse"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Categories]
+      summary: Delete a category
+      description: Requires `taxonomy:write`.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token with an API key. Obtain keys at `/admin/api-keys`.
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PerPage:
+      name: per_page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Forbidden:
+      description: API key lacks the required permission.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    ValidationError:
+      description: Request body failed validation.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    Meta:
+      type: object
+      properties:
+        total:    { type: integer, format: int64 }
+        page:     { type: integer }
+        per_page: { type: integer }
+        pages:    { type: integer }
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:    { type: string, example: validation_error }
+            message: { type: string }
+            fields:
+              type: object
+              additionalProperties: { type: string }
+
+    StatusResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            status:  { type: string, example: ok }
+            version: { type: string, example: v1 }
+
+    AuthResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            key_id:      { type: integer, format: int64 }
+            name:        { type: string }
+            permissions: { type: array, items: { type: string } }
+
+    Author:
+      type: object
+      properties:
+        id:    { type: integer, format: int64 }
+        name:  { type: string }
+        email: { type: string, format: email, description: Authenticated requests only. }
+
+    Category:
+      type: object
+      properties:
+        id:          { type: integer, format: int64 }
+        name:        { type: string }
+        slug:        { type: string }
+        description: { type: string }
+        parent_id:   { type: integer, format: int64, nullable: true }
+
+    Tag:
+      type: object
+      properties:
+        id:   { type: integer, format: int64 }
+        name: { type: string }
+        slug: { type: string }
+
+    Page:
+      type: object
+      properties:
+        id:                  { type: integer, format: int64 }
+        title:               { type: string }
+        slug:                { type: string }
+        body:                { type: string }
+        summary:             { type: string }
+        status:              { type: string, enum: [draft, published, scheduled] }
+        page_type:           { type: string, enum: [post, page], default: post }
+        author_id:           { type: integer, format: int64 }
+        language_code:       { type: string, example: en }
+        created_at:          { type: string, format: date-time }
+        updated_at:          { type: string, format: date-time }
+        published_at:        { type: string, format: date-time, nullable: true }
+        featured_image_id:   { type: integer, format: int64, nullable: true }
+        hide_featured_image: { type: boolean }
+        exclude_from_lists:  { type: boolean }
+        meta_title:          { type: string }
+        meta_description:    { type: string }
+        meta_keywords:       { type: string }
+        og_image_id:         { type: integer, format: int64, nullable: true }
+        no_index:            { type: boolean }
+        no_follow:           { type: boolean }
+        canonical_url:       { type: string }
+        scheduled_at:        { type: string, format: date-time, nullable: true }
+        video_url:           { type: string }
+        video_title:         { type: string }
+        author:              { $ref: "#/components/schemas/Author" }
+        categories:          { type: array, items: { $ref: "#/components/schemas/Category" } }
+        tags:                { type: array, items: { $ref: "#/components/schemas/Tag" } }
+
+    CreatePageRequest:
+      type: object
+      required: [title, slug, body, status]
+      properties:
+        title:    { type: string }
+        slug:     { type: string }
+        body:     { type: string }
+        summary:  { type: string, maxLength: 500 }
+        status:   { type: string, enum: [draft, published, scheduled] }
+        page_type: { type: string, enum: [post, page], default: post }
+        language_code:       { type: string }
+        featured_image_id:   { type: integer, format: int64 }
+        hide_featured_image: { type: boolean }
+        exclude_from_lists:  { type: boolean }
+        meta_title:          { type: string }
+        meta_description:    { type: string }
+        meta_keywords:       { type: string }
+        og_image_id:         { type: integer, format: int64 }
+        no_index:            { type: boolean }
+        no_follow:           { type: boolean }
+        canonical_url:       { type: string }
+        scheduled_at:        { type: string, format: date-time }
+        category_ids:        { type: array, items: { type: integer, format: int64 } }
+        tag_ids:             { type: array, items: { type: integer, format: int64 } }
+        tags:                { type: array, items: { type: string }, description: Tag names — created if missing. }
+        video_url:           { type: string }
+        video_title:         { type: string }
+
+    UpdatePageRequest:
+      description: |
+        Partial update — only provided fields are modified. Nullable fields (like
+        `featured_image_id`) can be explicitly set to `null` to clear them.
+      type: object
+      properties:
+        title:    { type: string }
+        slug:     { type: string }
+        body:     { type: string }
+        summary:  { type: string, maxLength: 500 }
+        status:   { type: string, enum: [draft, published, scheduled] }
+        page_type: { type: string, enum: [post, page] }
+        featured_image_id:   { type: integer, format: int64, nullable: true }
+        hide_featured_image: { type: boolean }
+        exclude_from_lists:  { type: boolean }
+        meta_title:          { type: string }
+        meta_description:    { type: string }
+        meta_keywords:       { type: string }
+        og_image_id:         { type: integer, format: int64, nullable: true }
+        no_index:            { type: boolean }
+        no_follow:           { type: boolean }
+        canonical_url:       { type: string }
+        scheduled_at:        { type: string, format: date-time, nullable: true }
+        category_ids:        { type: array, items: { type: integer, format: int64 } }
+        tag_ids:             { type: array, items: { type: integer, format: int64 } }
+        video_url:           { type: string }
+        video_title:         { type: string }
+
+    PageListResponse:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Page" } }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    PageSingleResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/Page" }
+
+    Media:
+      type: object
+      properties:
+        id:            { type: integer, format: int64 }
+        filename:      { type: string }
+        mime_type:     { type: string }
+        size_bytes:    { type: integer, format: int64 }
+        alt_text:      { type: string }
+        folder_id:     { type: integer, format: int64, nullable: true }
+        original_url:  { type: string }
+        variants:      { type: array, items: { $ref: "#/components/schemas/MediaVariant" } }
+        created_at:    { type: string, format: date-time }
+        updated_at:    { type: string, format: date-time }
+
+    MediaVariant:
+      type: object
+      properties:
+        name:   { type: string, example: thumbnail }
+        url:    { type: string }
+        width:  { type: integer }
+        height: { type: integer }
+
+    UpdateMediaRequest:
+      type: object
+      properties:
+        alt_text:  { type: string }
+        folder_id: { type: integer, format: int64, nullable: true }
+
+    MediaListResponse:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Media" } }
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    MediaSingleResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/Media" }
+
+    CreateTagRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        slug: { type: string, description: Auto-derived from name if omitted. }
+
+    UpdateTagRequest:
+      type: object
+      properties:
+        name: { type: string }
+        slug: { type: string }
+
+    TagListResponse:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Tag" } }
+
+    TagSingleResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/Tag" }
+
+    CreateCategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:        { type: string }
+        slug:        { type: string }
+        description: { type: string }
+        parent_id:   { type: integer, format: int64, nullable: true }
+
+    UpdateCategoryRequest:
+      type: object
+      properties:
+        name:        { type: string }
+        slug:        { type: string }
+        description: { type: string }
+        parent_id:   { type: integer, format: int64, nullable: true }
+
+    CategoryListResponse:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Category" } }
+
+    CategorySingleResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/Category" }

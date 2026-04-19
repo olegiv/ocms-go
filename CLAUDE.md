@@ -245,7 +245,9 @@ Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 - `GET /api/v1/media` - List media
 - `GET /api/v1/tags` - List tags
 - `GET /api/v1/categories` - List categories (tree)
-- `GET /api/v1/docs` - API documentation
+- `GET /api/v1/docs` - Interactive API documentation (Swagger UI)
+- `GET /api/v1/openapi.json` - OpenAPI 3.1 spec (JSON)
+- `GET /api/v1/openapi.yaml` - OpenAPI 3.1 spec (YAML)
 
 ### Health Check Routes
 - `GET /health` - Overall health status (200 OK / 503 Service Unavailable)

@@ -7,14 +7,22 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	_ "embed"
+	"encoding/json"
 	"html/template"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"sync"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+//go:embed openapi.yaml
+var openAPISpecYAML []byte
 
 // DocsHandler handles API documentation rendering.
 type DocsHandler struct {
@@ -37,9 +45,11 @@ type DocsConfig struct {
 func NewDocsHandler(cfg DocsConfig) (*DocsHandler, error) {
 	h := &DocsHandler{
 		db:         cfg.DB,
-		queries:    store.New(cfg.DB),
 		templateFS: cfg.TemplateFS,
 		isDev:      cfg.IsDev,
+	}
+	if cfg.DB != nil {
+		h.queries = store.New(cfg.DB)
 	}
 
 	// Parse template on startup
@@ -70,6 +80,9 @@ type docsData struct {
 // getSiteName retrieves the site name from the database.
 func (h *DocsHandler) getSiteName(ctx context.Context) string {
 	siteName := "oCMS"
+	if h.queries == nil {
+		return siteName
+	}
 	cfg, err := h.queries.GetConfig(ctx, "site_name")
 	if err == nil && cfg.Value != "" {
 		siteName = cfg.Value
@@ -123,4 +136,26 @@ func (h *DocsHandler) ServeDocs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600") // Cache for 1 hour
 	_, _ = buf.WriteTo(w)
+}
+
+// ServeOpenAPIYAML returns the embedded OpenAPI 3.1 spec as YAML.
+func (h *DocsHandler) ServeOpenAPIYAML(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(openAPISpecYAML)
+}
+
+// ServeOpenAPIJSON returns the embedded OpenAPI 3.1 spec converted to JSON.
+func (h *DocsHandler) ServeOpenAPIJSON(w http.ResponseWriter, _ *http.Request) {
+	var spec any
+	if err := yaml.Unmarshal(openAPISpecYAML, &spec); err != nil {
+		slog.Error("parsing embedded OpenAPI spec", "error", err)
+		WriteInternalError(w, "Error loading API specification")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if err := json.NewEncoder(w).Encode(spec); err != nil {
+		slog.Error("encoding OpenAPI spec", "error", err)
+	}
 }
