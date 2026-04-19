@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
@@ -127,8 +128,9 @@ func Load() (*Config, error) {
 
 	applyProductionSecurityDefaults(cfg)
 
-	// Production hardening: prevent default seeding in production.
-	if cfg.Env == "production" && cfg.DoSeed {
+	// Production hardening: prevent default seeding in production
+	// (allowed when demo mode is explicitly enabled).
+	if cfg.Env == "production" && cfg.DoSeed && os.Getenv("OCMS_DEMO_MODE") != "true" {
 		return nil, fmt.Errorf("OCMS_DO_SEED must be false in production")
 	}
 	if cfg.Env == "production" && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
@@ -173,11 +175,9 @@ func Load() (*Config, error) {
 	}
 
 	// Reject known weak/default secrets
-	for _, weak := range knownWeakSecrets {
-		if cfg.SessionSecret == weak {
-			return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default value and must not be used; " +
-				"generate a secure secret with: openssl rand -base64 32")
-		}
+	if slices.Contains(knownWeakSecrets, cfg.SessionSecret) {
+		return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default value and must not be used; " +
+			"generate a secure secret with: openssl rand -base64 32")
 	}
 
 	// Warn about low-entropy secrets
