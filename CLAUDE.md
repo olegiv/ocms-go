@@ -569,6 +569,28 @@ Security audit documents are available in the `.audit/` directory (gitignored).
 
 After editing wiki files, use `/update-wiki` to publish changes.
 
+### Wiki-first Knowledge Lookup
+
+**CRITICAL**: A compiled LLM wiki for this project lives at `../llm-wiki-go/wiki/`.
+When answering any architecture, module-inventory, configuration-precedence,
+design-history, or feature-scope question, you MUST follow this lookup procedure
+**before** reading `docs/`, `wiki/`, or any source file:
+
+1. Read `../llm-wiki-go/wiki/index.md` to see all entity and topic pages.
+2. For entity questions (Page, Media, Form, Webhook, APIKey, etc.) read
+   `../llm-wiki-go/wiki/entities/<name>.md`.
+3. For topic questions (caching, security, deployment, modules, i18n, etc.) read
+   `../llm-wiki-go/wiki/topics/<name>.md`.
+4. If the page has a `## Contradictions` section, quote it — it flags real drift
+   between `docs/` and the project `wiki/`. Do not silently pick a winner.
+5. Cite the `## Sources` entries so the user can trace back to the raw file.
+6. Only fall back to `docs/` or `internal/` if the wiki has no page for the
+   question (check `wiki/index.md` first to confirm).
+
+Treat `../llm-wiki-go/wiki/` as read-only. Scope limit: "where is X in the
+code?" questions read `internal/` directly — the wiki is for aggregated
+knowledge, not line-level implementation.
+
 ## Claude Code Agents
 
 Specialized AI agents are available in `.claude/agents/` for focused development tasks:
