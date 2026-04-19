@@ -80,7 +80,7 @@ func TestStoreCategoryToResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := storeCategoryToResponse(tt.category)
+			got := StoreCategoryToResponse(tt.category)
 
 			assertIDNameSlug(t, got.ID, tt.want.ID, got.Name, tt.want.Name, got.Slug, tt.want.Slug)
 			if got.Description != tt.want.Description {
@@ -132,7 +132,7 @@ func TestStoreTagToResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := storeTagToResponse(tt.tag)
+			got := StoreTagToResponse(tt.tag)
 
 			assertIDNameSlug(t, got.ID, tt.want.ID, got.Name, tt.want.Name, got.Slug, tt.want.Slug)
 		})
@@ -335,21 +335,21 @@ func TestResolveTagNames(t *testing.T) {
 
 func TestAPIKeyHasPermission(t *testing.T) {
 	t.Run("nil key has no permissions", func(t *testing.T) {
-		if apiKeyHasPermission(nil, model.PermissionPagesRead) {
+		if ApiKeyHasPermission(nil, model.PermissionPagesRead) {
 			t.Fatal("expected false for nil key")
 		}
 	})
 
 	t.Run("matching permission returns true", func(t *testing.T) {
 		apiKey := &store.ApiKey{Permissions: `["media:read","pages:read"]`}
-		if !apiKeyHasPermission(apiKey, model.PermissionPagesRead) {
+		if !ApiKeyHasPermission(apiKey, model.PermissionPagesRead) {
 			t.Fatal("expected pages:read permission to be detected")
 		}
 	})
 
 	t.Run("non-matching permission returns false", func(t *testing.T) {
 		apiKey := &store.ApiKey{Permissions: `["media:read"]`}
-		if apiKeyHasPermission(apiKey, model.PermissionPagesRead) {
+		if ApiKeyHasPermission(apiKey, model.PermissionPagesRead) {
 			t.Fatal("expected false for missing pages:read permission")
 		}
 	})
@@ -363,7 +363,7 @@ func TestStorePageToResponseVideoURL(t *testing.T) {
 		VideoUrl:   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 		VideoTitle: "My YouTube Video",
 	}
-	resp := storePageToResponse(page)
+	resp := StorePageToResponse(page)
 	if resp.VideoURL != "https://www.youtube.com/watch?v=dQw4w9WgXcQ" {
 		t.Errorf("VideoURL = %q, want YouTube URL", resp.VideoURL)
 	}
@@ -374,7 +374,7 @@ func TestStorePageToResponseVideoURL(t *testing.T) {
 	// Empty fields should be omitted (empty string)
 	page.VideoUrl = ""
 	page.VideoTitle = ""
-	resp = storePageToResponse(page)
+	resp = StorePageToResponse(page)
 	if resp.VideoURL != "" {
 		t.Errorf("VideoURL = %q, want empty for omitempty", resp.VideoURL)
 	}
@@ -390,14 +390,14 @@ func TestStorePageToResponseSummary(t *testing.T) {
 		Slug:    "test-page",
 		Summary: "Brief description of the page",
 	}
-	resp := storePageToResponse(page)
+	resp := StorePageToResponse(page)
 	if resp.Summary != "Brief description of the page" {
 		t.Errorf("Summary = %q, want %q", resp.Summary, "Brief description of the page")
 	}
 
 	// Empty summary should be omitted (empty string)
 	page.Summary = ""
-	resp = storePageToResponse(page)
+	resp = StorePageToResponse(page)
 	if resp.Summary != "" {
 		t.Errorf("Summary = %q, want empty for omitempty", resp.Summary)
 	}

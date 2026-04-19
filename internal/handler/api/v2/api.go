@@ -60,6 +60,7 @@ func Register(r chi.Router, deps Deps) *Handler {
 
 	h := &Handler{API: api, Deps: deps}
 	registerMeta(h)
+	registerPages(h)
 	return h
 }
 

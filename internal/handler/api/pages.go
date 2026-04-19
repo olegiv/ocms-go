@@ -133,8 +133,8 @@ type UpdatePageRequest struct {
 	VideoTitle        *string   `json:"video_title,omitempty"`
 }
 
-// storeCategoryToResponse converts a store.Category to CategoryResponse.
-func storeCategoryToResponse(c store.Category) CategoryResponse {
+// StoreCategoryToResponse converts a store.Category to CategoryResponse.
+func StoreCategoryToResponse(c store.Category) CategoryResponse {
 	resp := CategoryResponse{
 		ID:   c.ID,
 		Name: c.Name,
@@ -146,8 +146,8 @@ func storeCategoryToResponse(c store.Category) CategoryResponse {
 	return resp
 }
 
-// storeTagToResponse converts a store.Tag to TagResponse.
-func storeTagToResponse(t store.Tag) TagResponse {
+// StoreTagToResponse converts a store.Tag to TagResponse.
+func StoreTagToResponse(t store.Tag) TagResponse {
 	return TagResponse{
 		ID:   t.ID,
 		Name: t.Name,
@@ -181,7 +181,7 @@ func validateAndTrimSummary(w http.ResponseWriter, summary string) (string, bool
 
 // suspiciousPageMarkupTokens and javascriptURIPattern are in internal/security.
 
-func apiKeyHasPermission(apiKey *store.ApiKey, permission string) bool {
+func ApiKeyHasPermission(apiKey *store.ApiKey, permission string) bool {
 	if apiKey == nil {
 		return false
 	}
@@ -229,8 +229,8 @@ func (h *Handler) listPagesByFilter(ctx context.Context, publishedOnly bool, fil
 	return handler.ListAndCount(listFn, countFn)
 }
 
-// storePageToResponse converts a store.Page to PageResponse.
-func storePageToResponse(p store.Page) PageResponse {
+// StorePageToResponse converts a store.Page to PageResponse.
+func StorePageToResponse(p store.Page) PageResponse {
 	resp := PageResponse{
 		ID:                p.ID,
 		Title:             p.Title,
@@ -291,7 +291,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 
 	// Check authentication for non-published access
 	apiKey := middleware.GetAPIKey(r)
-	canReadNonPublished := apiKeyHasPermission(apiKey, model.PermissionPagesRead)
+	canReadNonPublished := ApiKeyHasPermission(apiKey, model.PermissionPagesRead)
 
 	// Keys without pages:read permission can only see published pages
 	if !canReadNonPublished && status != "" && status != model.PageStatusPublished {
@@ -378,7 +378,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	// Convert to response
 	responses := make([]PageResponse, 0, len(pages))
 	for _, p := range pages {
-		resp := storePageToResponse(p)
+		resp := StorePageToResponse(p)
 
 		if includeAuthor {
 			h.populatePageAuthor(ctx, &resp, p.ID, canReadNonPublished)
@@ -417,13 +417,13 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 
 	// Check access for non-published pages
 	apiKey := middleware.GetAPIKey(r)
-	if page.Status != model.PageStatusPublished && !apiKeyHasPermission(apiKey, model.PermissionPagesRead) {
+	if page.Status != model.PageStatusPublished && !ApiKeyHasPermission(apiKey, model.PermissionPagesRead) {
 		WriteNotFound(w, "Page not found")
 		return
 	}
 
-	resp := storePageToResponse(page)
-	h.populatePageIncludes(ctx, &resp, page.ID, include, apiKeyHasPermission(apiKey, model.PermissionPagesRead))
+	resp := StorePageToResponse(page)
+	h.populatePageIncludes(ctx, &resp, page.ID, include, ApiKeyHasPermission(apiKey, model.PermissionPagesRead))
 
 	WriteSuccess(w, resp, nil)
 }
@@ -443,7 +443,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 
 	// Check authentication
 	apiKey := middleware.GetAPIKey(r)
-	canReadNonPublished := apiKeyHasPermission(apiKey, model.PermissionPagesRead)
+	canReadNonPublished := ApiKeyHasPermission(apiKey, model.PermissionPagesRead)
 
 	var page store.Page
 	var err error
@@ -465,7 +465,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := storePageToResponse(page)
+	resp := StorePageToResponse(page)
 	h.populatePageIncludes(ctx, &resp, page.ID, include, canReadNonPublished)
 
 	WriteSuccess(w, resp, nil)
@@ -622,7 +622,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 
 	txq := h.queries.WithTx(tx)
 
-	canCreateTags := apiKeyHasPermission(apiKey, model.PermissionTaxonomyWrite)
+	canCreateTags := ApiKeyHasPermission(apiKey, model.PermissionTaxonomyWrite)
 
 	// Resolve tag names to IDs inside transaction (new tags roll back on failure)
 	if len(req.Tags) > 0 {
@@ -685,7 +685,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	log.Info("API: Page created",
 		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
-	resp := storePageToResponse(page)
+	resp := StorePageToResponse(page)
 
 	// Include categories and tags in response
 	h.populatePageCategories(ctx, &resp, page.ID)
@@ -773,7 +773,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback() //nolint:errcheck
 
 	txq := h.queries.WithTx(tx)
-	canCreateTags := apiKeyHasPermission(apiKey, model.PermissionTaxonomyWrite)
+	canCreateTags := ApiKeyHasPermission(apiKey, model.PermissionTaxonomyWrite)
 
 	// Resolve tag names inside transaction (new tags roll back on failure)
 	var tagIDs []int64
@@ -853,7 +853,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	log.Info("API: Page updated",
 		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
-	resp := storePageToResponse(page)
+	resp := StorePageToResponse(page)
 
 	// Include categories and tags
 	h.populatePageCategories(ctx, &resp, page.ID)
@@ -1148,7 +1148,7 @@ func (h *Handler) populatePageCategories(ctx context.Context, resp *PageResponse
 	}
 	resp.Categories = make([]CategoryResponse, 0, len(categories))
 	for _, c := range categories {
-		resp.Categories = append(resp.Categories, storeCategoryToResponse(c))
+		resp.Categories = append(resp.Categories, StoreCategoryToResponse(c))
 	}
 }
 
@@ -1160,7 +1160,7 @@ func (h *Handler) populatePageTags(ctx context.Context, resp *PageResponse, page
 	}
 	resp.Tags = make([]TagResponse, 0, len(tags))
 	for _, t := range tags {
-		resp.Tags = append(resp.Tags, storeTagToResponse(t))
+		resp.Tags = append(resp.Tags, StoreTagToResponse(t))
 	}
 }
 
