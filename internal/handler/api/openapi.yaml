@@ -101,7 +101,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [draft, published, scheduled]
+            enum: [draft, published]
         - name: language_code
           in: query
           schema: { type: string, example: en }
@@ -135,7 +135,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PageSingleResponse"
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -173,7 +173,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PageSingleResponse"
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -218,8 +218,9 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
-        - name: folder_id
+        - name: folder
           in: query
+          description: Restrict results to a folder id.
           schema: { type: integer, format: int64 }
       responses:
         "200":
@@ -287,7 +288,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MediaSingleResponse"
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -329,7 +330,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TagSingleResponse"
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -365,7 +366,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TagSingleResponse"
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -407,7 +408,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CategorySingleResponse"
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -443,7 +444,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CategorySingleResponse"
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -498,7 +499,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
     ValidationError:
-      description: Request body failed validation.
+      description: Request body failed semantic validation. Field-level errors in `error.details`.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
@@ -522,8 +523,9 @@ components:
           properties:
             code:    { type: string, example: validation_error }
             message: { type: string }
-            fields:
+            details:
               type: object
+              description: Field-level validation errors (key = field name, value = error message).
               additionalProperties: { type: string }
 
     StatusResponse:
@@ -576,7 +578,7 @@ components:
         slug:                { type: string }
         body:                { type: string }
         summary:             { type: string }
-        status:              { type: string, enum: [draft, published, scheduled] }
+        status:              { type: string, enum: [draft, published] }
         page_type:           { type: string, enum: [post, page], default: post }
         author_id:           { type: integer, format: int64 }
         language_code:       { type: string, example: en }
@@ -608,7 +610,7 @@ components:
         slug:     { type: string }
         body:     { type: string }
         summary:  { type: string, maxLength: 500 }
-        status:   { type: string, enum: [draft, published, scheduled] }
+        status:   { type: string, enum: [draft, published] }
         page_type: { type: string, enum: [post, page], default: post }
         language_code:       { type: string }
         featured_image_id:   { type: integer, format: int64 }
@@ -638,7 +640,7 @@ components:
         slug:     { type: string }
         body:     { type: string }
         summary:  { type: string, maxLength: 500 }
-        status:   { type: string, enum: [draft, published, scheduled] }
+        status:   { type: string, enum: [draft, published] }
         page_type: { type: string, enum: [post, page] }
         featured_image_id:   { type: integer, format: int64, nullable: true }
         hide_featured_image: { type: boolean }
