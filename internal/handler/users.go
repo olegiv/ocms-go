@@ -732,16 +732,26 @@ func validateAvatarURL(rawURL string) string {
 	return validateProfileURL(rawURL)
 }
 
-// validateDomainURL checks that a URL is empty or uses http/https and matches
-// one of the allowed hosts. Returns an error message or empty string if valid.
+// validateDomainURL checks that a URL is empty or uses https and matches one
+// of the allowed hosts. Rejects embedded credentials and path traversal.
+// Returns an error message or empty string if valid.
 func validateDomainURL(rawURL string, allowedHosts []string) string {
 	if rawURL == "" {
 		return ""
 	}
-	if msg := validateProfileURL(rawURL); msg != "" {
-		return msg
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "Invalid URL format"
 	}
-	u, _ := url.Parse(rawURL) // already validated above
+	if u.Scheme != "https" {
+		return "URL must start with https://"
+	}
+	if u.User != nil {
+		return "URL must not contain credentials"
+	}
+	if strings.Contains(u.Path, "..") {
+		return "URL must not contain path traversal"
+	}
 	host := strings.ToLower(u.Hostname())
 	for _, h := range allowedHosts {
 		if host == h {

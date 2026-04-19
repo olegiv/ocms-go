@@ -477,3 +477,34 @@ func TestUserProfileFields_UpdateViaSQL(t *testing.T) {
 		t.Errorf("telegram_url = %q; want https://t.me/updated", telegramURL)
 	}
 }
+
+func TestValidateDomainURL(t *testing.T) {
+	allowed := []string{"t.me", "telegram.me"}
+	cases := []struct {
+		name    string
+		raw     string
+		wantErr bool
+	}{
+		{"empty ok", "", false},
+		{"https allowed host", "https://t.me/channel", false},
+		{"https alt allowed host", "https://telegram.me/channel", false},
+		{"http rejected", "http://t.me/channel", true},
+		{"wrong host", "https://evil.example/channel", true},
+		{"userinfo rejected", "https://user:pass@t.me/channel", true},
+		{"path traversal rejected", "https://t.me/../evil", true},
+		{"javascript scheme rejected", "javascript:alert(1)", true},
+		{"data scheme rejected", "data:text/html,<script>", true},
+		{"malformed rejected", "ht tp://broken", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := validateDomainURL(c.raw, allowed)
+			if c.wantErr && got == "" {
+				t.Errorf("validateDomainURL(%q) = ok; want rejection", c.raw)
+			}
+			if !c.wantErr && got != "" {
+				t.Errorf("validateDomainURL(%q) = %q; want ok", c.raw, got)
+			}
+		})
+	}
+}
