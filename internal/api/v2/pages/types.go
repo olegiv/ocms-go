@@ -65,9 +65,9 @@ type Tag struct {
 	Slug string `json:"slug"`
 }
 
-// CreateInput is the validated service-level input for creating a page. The
+// CreatePageBody is the validated service-level input for creating a page. The
 // huma operation parses the request body into this type via its struct tags.
-type CreateInput struct {
+type CreatePageBody struct {
 	Title             string    `json:"title" required:"true" minLength:"1" maxLength:"255"`
 	Slug              string    `json:"slug" required:"true" minLength:"1" maxLength:"255" pattern:"^[a-z0-9]+(?:-[a-z0-9]+)*$" doc:"Lowercase alphanumeric with dashes. Must be unique."`
 	Body              string    `json:"body"`
@@ -93,10 +93,10 @@ type CreateInput struct {
 	VideoTitle        string    `json:"video_title,omitempty"`
 }
 
-// UpdateInput is the patch-style input for updating a page. Pointer fields
+// UpdatePageBody is the patch-style input for updating a page. Pointer fields
 // distinguish "not provided" from zero values. CategoryIDs / TagIDs / TagNames
 // pointers let callers explicitly clear collections by sending an empty array.
-type UpdateInput struct {
+type UpdatePageBody struct {
 	Title             *string   `json:"title,omitempty" minLength:"1" maxLength:"255"`
 	Slug              *string   `json:"slug,omitempty" minLength:"1" maxLength:"255" pattern:"^[a-z0-9]+(?:-[a-z0-9]+)*$"`
 	Body              *string   `json:"body,omitempty"`

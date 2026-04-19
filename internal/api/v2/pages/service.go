@@ -243,7 +243,7 @@ func pageNotFound(ref any) error {
 }
 
 // Create inserts a new page with its category and tag links.
-func (s *Service) Create(ctx context.Context, a v2.Actor, in CreateInput) (*Page, error) {
+func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*Page, error) {
 	if err := s.requireWritePerm(a); err != nil {
 		return nil, err
 	}
@@ -353,7 +353,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreateInput) (*Page
 }
 
 // Update applies a partial update to a page.
-func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateInput) (*Page, error) {
+func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePageBody) (*Page, error) {
 	if err := s.requireWritePerm(a); err != nil {
 		return nil, err
 	}
@@ -462,8 +462,8 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateInp
 	return &dto, nil
 }
 
-// applyUpdate copies validated fields from UpdateInput onto the UpdatePageParams.
-func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdateInput, params *store.UpdatePageParams, existing store.Page) error {
+// applyUpdate copies validated fields from UpdatePageBody onto the UpdatePageParams.
+func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBody, params *store.UpdatePageParams, existing store.Page) error {
 	if in.Title != nil {
 		params.Title = *in.Title
 	}

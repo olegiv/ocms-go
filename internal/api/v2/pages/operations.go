@@ -35,8 +35,8 @@ type ListPagesInput struct {
 	Include  string `query:"include" doc:"Comma-separated relations to populate: author, categories, tags."`
 }
 
-// ListMeta carries pagination metadata in list responses.
-type ListMeta struct {
+// PagesListMeta carries pagination metadata in list responses.
+type PagesListMeta struct {
 	Total   int64 `json:"total"`
 	Page    int   `json:"page"`
 	PerPage int   `json:"per_page"`
@@ -47,7 +47,7 @@ type ListMeta struct {
 type ListPagesOutput struct {
 	Body struct {
 		Data []Page   `json:"data"`
-		Meta ListMeta `json:"meta"`
+		Meta PagesListMeta `json:"meta"`
 	}
 }
 
@@ -76,7 +76,7 @@ func registerList(api huma.API, svc *Service) {
 		}
 		out := &ListPagesOutput{}
 		out.Body.Data = result.Pages
-		out.Body.Meta = ListMeta{
+		out.Body.Meta = PagesListMeta{
 			Total:   result.Total,
 			Page:    result.Page,
 			PerPage: result.PerPage,
@@ -151,7 +151,7 @@ func registerGetBySlug(api huma.API, svc *Service) {
 
 // CreatePageInput carries the request body.
 type CreatePageInput struct {
-	Body CreateInput `contentType:"application/json"`
+	Body CreatePageBody `contentType:"application/json"`
 }
 
 func registerCreate(api huma.API, svc *Service) {
@@ -178,7 +178,7 @@ func registerCreate(api huma.API, svc *Service) {
 // UpdatePageInput carries the id path param plus the partial update body.
 type UpdatePageInput struct {
 	ID   int64       `path:"id" minimum:"1"`
-	Body UpdateInput `contentType:"application/json"`
+	Body UpdatePageBody `contentType:"application/json"`
 }
 
 func registerUpdate(api huma.API, svc *Service) {

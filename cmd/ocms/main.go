@@ -29,6 +29,7 @@ import (
 	"github.com/joho/godotenv"
 
 	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
+	apiv2media "github.com/olegiv/ocms-go/internal/api/v2/media"
 	apiv2pages "github.com/olegiv/ocms-go/internal/api/v2/pages"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
@@ -1880,15 +1881,8 @@ func run() error {
 		r.Get("/status", apiHandler.Status)
 		r.Get("/docs", apiDocsHandler.ServeDocs)
 
-		// Pages moved to /api/v2 (huma-generated spec). /api/v1 no longer exposes
-		// /pages* — clients must use /api/v2/pages.
-
-		// Media - public read endpoints (optional auth for enhanced access)
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.OptionalAPIKeyAuth(db))
-			r.Get(handler.RouteMedia, apiHandler.ListMedia)
-			r.Get(handler.RouteMediaID, apiHandler.GetMedia)
-		})
+		// Pages and Media moved to /api/v2 (huma-generated spec). /api/v1 no longer
+		// exposes /pages* or /media* — clients must use /api/v2.
 
 		// Tags - public read endpoints
 		r.Get(handler.RouteTags, apiHandler.ListTags)
@@ -1906,15 +1900,7 @@ func run() error {
 			// Auth info endpoint
 			r.Get("/auth", apiHandler.AuthInfo)
 
-			// Pages write endpoints moved to /api/v2 (huma-generated spec).
-
-			// Media - write endpoints (requires media:write permission)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission("media:write"))
-				r.Post(handler.RouteMedia, apiHandler.UploadMedia)
-				r.Put(handler.RouteMediaID, apiHandler.UpdateMedia)
-				r.Delete(handler.RouteMediaID, apiHandler.DeleteMedia)
-			})
+			// Pages + Media write endpoints moved to /api/v2 (huma-generated spec).
 
 			// Taxonomy - write endpoints (requires taxonomy:write permission)
 			r.Group(func(r chi.Router) {
@@ -1950,6 +1936,8 @@ func run() error {
 			SanitizeHTML:          cfg.SanitizePageHTML,
 		})
 		apiv2pages.Register(apiV2.API, pagesSvc)
+		mediaSvc := apiv2media.NewService(db, v2Queries, cfg.UploadsDir)
+		apiv2media.Register(apiV2.API, mediaSvc)
 		apiV2Docs, err := apiv2.NewDocsServer(templatesFS, apiV2)
 		if err != nil {
 			slog.Error("v2 docs server init", "error", err)
