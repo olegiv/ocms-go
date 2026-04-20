@@ -57,7 +57,7 @@ templ Sidebar(pc *PageContext) {
 					@navLinkPrefix(pc, "/admin/webhooks", pc.T("nav.webhooks"), pc.HasPrefix("/admin/webhooks"), iconWebhooks())
 					@navLinkPrefix(pc, "/admin/redirects", pc.T("nav.redirects"), pc.HasPrefix("/admin/redirects"), iconRedirects())
 				}
-				<a href="/api/v1/docs" class="nav-link" target="_blank">
+				<a href="/api/v2/docs" class="nav-link" target="_blank">
 					@iconAPIDocs()
 					<span>{ pc.T("nav.api_docs") }</span>
 				</a>

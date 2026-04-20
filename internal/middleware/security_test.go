@@ -99,7 +99,7 @@ func TestSecurityHeadersExcludePaths(t *testing.T) {
 	}{
 		{"/", true},
 		{"/admin", true},
-		{"/api/v1/pages", false},
+		{"/api/v2/pages", false},
 		{"/api/health", false},
 	}
 
@@ -270,5 +270,29 @@ func TestIntToStr(t *testing.T) {
 				t.Errorf("intToStr(%d) = %s, want %s", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestCSPStyleSrcDoesNotAllowUnpkg locks in the "self-hosted Swagger UI"
+// guarantee: style-src stays on 'self' + the existing trusted origins, never
+// widened to unpkg. Prevents regressing to a CDN-hosted docs page.
+func TestCSPStyleSrcDoesNotAllowUnpkg(t *testing.T) {
+	for _, isDev := range []bool{false, true} {
+		cfg := DefaultSecurityHeadersConfig(isDev)
+		csp := cfg.ContentSecurityPolicy
+		styleSrc := ""
+		for _, dir := range strings.Split(csp, ";") {
+			d := strings.TrimSpace(dir)
+			if strings.HasPrefix(d, "style-src ") {
+				styleSrc = d
+				break
+			}
+		}
+		if styleSrc == "" {
+			t.Fatalf("isDev=%v: no style-src directive in CSP: %s", isDev, csp)
+		}
+		if strings.Contains(styleSrc, "https://unpkg.com") {
+			t.Errorf("isDev=%v: style-src must not allow unpkg (Swagger UI is self-hosted), got: %s", isDev, styleSrc)
+		}
 	}
 }

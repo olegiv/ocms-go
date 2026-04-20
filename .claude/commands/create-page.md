@@ -34,12 +34,12 @@ Create one or more pages in the oCMS system. Supports two methods: API (with Bea
 
 ### `--site-url` is set → API only
 
-1. The site URL is the base URL for API requests (e.g., `https://example.com/api/v1/pages`)
+1. The site URL is the base URL for API requests (e.g., `https://example.com/api/v2/pages`)
 2. **API key is required.** Ask the user for the API key if not provided. The key must have `pages:write` permission.
 3. Test connectivity: `curl -sf "${site_url}/health"` — if unreachable, report error and stop.
 4. Create pages via POST requests:
    ```bash
-   curl -s -w "\n%{http_code}" -X POST "${site_url}/api/v1/pages" \
+   curl -s -w "\n%{http_code}" -X POST "${site_url}/api/v2/pages" \
      -H "Authorization: Bearer ${api_key}" \
      -H "Content-Type: application/json" \
      -d '{ ... }'
@@ -162,7 +162,7 @@ VALUES (:page_id, (SELECT id FROM tags WHERE slug = 'tag-slug'));
 
 3. Ask the user for the API key (Bearer token) if not already provided
 4. Test connectivity: `curl -sf "${site_url}/health"`
-5. For each page, send a POST request to `${site_url}/api/v1/pages`
+5. For each page, send a POST request to `${site_url}/api/v2/pages`
 6. Parse the JSON response — on HTTP 201, extract the created page data
 7. On error (4xx/5xx), report the status code and error message, stop
 8. Report created pages with their IDs, slugs, and URLs

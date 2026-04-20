@@ -303,9 +303,9 @@ func TestCheckAutoBanPathWithDB(t *testing.T) {
 	}
 
 	// A normal path should not match
-	matched = m.CheckAutoBanPath("/api/v1/pages")
+	matched = m.CheckAutoBanPath("/api/v2/pages")
 	if matched != "" {
-		t.Errorf("CheckAutoBanPath should return empty for /api/v1/pages, got %q", matched)
+		t.Errorf("CheckAutoBanPath should return empty for /api/v2/pages, got %q", matched)
 	}
 }
 

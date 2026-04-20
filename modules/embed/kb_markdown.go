@@ -279,11 +279,11 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 	b.WriteString("## REST API\n\n")
 	b.WriteString("The site provides a public API at ")
 	b.WriteString(siteURL)
-	b.WriteString("/api/v1:\n\n")
-	b.WriteString("- `GET /api/v1/pages` — Browse published pages\n")
-	b.WriteString("- `GET /api/v1/tags` — List tags\n")
-	b.WriteString("- `GET /api/v1/categories` — List categories\n")
-	b.WriteString("- `GET /api/v1/media` — Browse media files\n")
+	b.WriteString("/api/v2:\n\n")
+	b.WriteString("- `GET /api/v2/pages` — Browse published pages\n")
+	b.WriteString("- `GET /api/v2/tags` — List tags\n")
+	b.WriteString("- `GET /api/v2/categories` — List categories\n")
+	b.WriteString("- `GET /api/v2/media` — Browse media files\n")
 
 	return b.String(), nil
 }

@@ -6,17 +6,17 @@ Steps:
 2. Wait 3 seconds for server startup
 3. Test public endpoints:
    - Health check: `curl -s http://localhost:8080/health`
-   - API docs: `curl -s http://localhost:8080/api/v1/docs`
-   - Public pages: `curl -s http://localhost:8080/api/v1/pages?published=true`
-   - Tags: `curl -s http://localhost:8080/api/v1/tags`
-   - Categories: `curl -s http://localhost:8080/api/v1/categories`
+   - API docs: `curl -s http://localhost:8080/api/v2/docs`
+   - Public pages: `curl -s http://localhost:8080/api/v2/pages?published=true`
+   - Tags: `curl -s http://localhost:8080/api/v2/tags`
+   - Categories: `curl -s http://localhost:8080/api/v2/categories`
 4. Report response status codes and any errors
 5. Stop the server: `pkill -f "go run ./cmd/ocms" || true`
 
 For authenticated API testing (requires API key):
 ```bash
 curl -H "Authorization: Bearer YOUR_API_KEY" \
-     http://localhost:8080/api/v1/pages
+     http://localhost:8080/api/v2/pages
 ```
 
 API keys can be created via admin UI at: /admin/api-keys

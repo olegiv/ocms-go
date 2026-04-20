@@ -8,7 +8,7 @@ Steps:
 5. Report server status and URL (default: http://localhost:8080)
 6. Provide useful URLs:
    - Admin: http://localhost:8080/admin
-   - API docs: http://localhost:8080/api/v1/docs
+   - API docs: http://localhost:8080/api/v2/docs
    - Health check: http://localhost:8080/health
 
 The `make dev` command will:

@@ -493,10 +493,10 @@ func TestGenerateUserGuideMarkdown_APISection(t *testing.T) {
 
 	// API section must list the four standard endpoints.
 	for _, endpoint := range []string{
-		"/api/v1/pages",
-		"/api/v1/tags",
-		"/api/v1/categories",
-		"/api/v1/media",
+		"/api/v2/pages",
+		"/api/v2/tags",
+		"/api/v2/categories",
+		"/api/v2/media",
 	} {
 		if !strings.Contains(out, endpoint) {
 			t.Errorf("expected API endpoint %q in output", endpoint)

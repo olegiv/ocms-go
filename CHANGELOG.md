@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### REST API
+- Replace `/api/v1` with `/api/v2`: a clean surface served by [huma v2](https://huma.rocks/),
+  with the OpenAPI 3.1 document generated live from Go types (no hand-written spec,
+  no drift possible)
+- Self-host Swagger UI at `/api/v2/docs` (removes reliance on unpkg CDN)
+- Split media upload: `POST /api/v2/media` takes a single file; `POST /api/v2/media/batch`
+  accepts multiple and returns per-file errors
+- Add `/api/v2/status` (public) and `/api/v2/auth` (inspect the calling key) meta endpoints
+- Error envelope preserved (`{error: {code, message, details}}`) so existing clients keep
+  working after updating the base URL
+
+### Removed
+
+#### REST API
+- Drop the entire `/api/v1` surface and the `internal/handler/api` package — the legacy
+  spec drift that motivated the rewrite no longer has a place to hide
+
 ## [0.18.1] - 2026-04-14
 
 ### Changed

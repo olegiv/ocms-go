@@ -98,7 +98,8 @@ func TestFunctionName(t *testing.T) {
 
 ### 4. Integration Tests
 
-For API integration tests (like `internal/handler/api/api_integration_test.go`):
+For v2 API integration tests (like `internal/api/v2/drift_test.go` or domain-specific
+tests such as `internal/api/v2/taxonomy/service_test.go`):
 
 1. **Start a test server** - use `httptest.NewServer`
 2. **Set up test database** - use in-memory SQLite
@@ -115,11 +116,11 @@ For API integration tests (like `internal/handler/api/api_integration_test.go`):
 - Typed cache operations
 - Site config, menus, languages, sitemap caching
 
-### API Handlers (`internal/handler/api/`)
-- REST API endpoints
-- Authentication and permissions
-- Rate limiting
-- Response formatting
+### API v2 (`internal/api/v2/`)
+- REST API endpoints served via huma v2
+- OpenAPI 3.1 surface drift test (`drift_test.go`)
+- Domain service tests for pages / media / taxonomy
+- Authentication and permissions enforced by service-layer `requireWritePerm`
 
 ### Database Layer (`internal/store/`)
 - SQLC-generated query tests

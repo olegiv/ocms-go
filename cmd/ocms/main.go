@@ -28,11 +28,14 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 
+	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
+	apiv2media "github.com/olegiv/ocms-go/internal/api/v2/media"
+	apiv2pages "github.com/olegiv/ocms-go/internal/api/v2/pages"
+	apiv2taxonomy "github.com/olegiv/ocms-go/internal/api/v2/taxonomy"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/demo"
 	"github.com/olegiv/ocms-go/internal/handler"
-	"github.com/olegiv/ocms-go/internal/handler/api"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/logging"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -1572,18 +1575,6 @@ func run() error {
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
 	schedulerHandler := handler.NewSchedulerHandler(db, renderer, sessionManager, schedulerRegistry, taskExecutor, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
-	apiHandler := api.NewHandler(db)
-	apiHandler.SetEventService(eventService)
-	apiHandler.SetBlockSuspiciousPageMarkup(cfg.BlockSuspiciousPageHTML)
-	apiHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
-	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
-		DB:         db,
-		TemplateFS: templatesFS,
-		IsDev:      cfg.IsDevelopment(),
-	})
-	if err != nil {
-		return fmt.Errorf("initializing api docs handler: %w", err)
-	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	apiKeysHandler.SetRequireSourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
 	apiKeysHandler.SetRequireExpiry(cfg.RequireAPIKeyExpiry)
@@ -1603,7 +1594,6 @@ func run() error {
 
 	// Set cache manager on handlers that need cache invalidation
 	pagesHandler.SetCacheManager(cacheManager)
-	apiHandler.SetCacheManager(cacheManager)
 
 	// Health check routes (public, returns additional details for authenticated callers)
 	r.Get("/health", healthHandler.Health)
@@ -1868,76 +1858,91 @@ func run() error {
 
 	})
 
-	// REST API v1 routes
-	r.Route("/api/v1", func(r chi.Router) {
-		// Global rate limiting for API (100 requests per second with burst of 200)
-		apiRateLimiter := middleware.NewGlobalRateLimiter(100, 200)
-		r.Use(apiRateLimiter.Middleware())
-
-		// Public endpoints (no authentication required)
-		r.Get("/status", apiHandler.Status)
-		r.Get("/docs", apiDocsHandler.ServeDocs)
-
-		// Pages - public read endpoints (optional auth for enhanced access)
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.OptionalAPIKeyAuth(db))
-			r.Get(handler.RoutePages, apiHandler.ListPages)
-			r.Get(handler.RoutePagesID, apiHandler.GetPage)
-			r.Get(handler.RoutePages+"/slughandler.RouteParamSlug", apiHandler.GetPageBySlug)
-		})
-
-		// Media - public read endpoints (optional auth for enhanced access)
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.OptionalAPIKeyAuth(db))
-			r.Get(handler.RouteMedia, apiHandler.ListMedia)
-			r.Get(handler.RouteMediaID, apiHandler.GetMedia)
-		})
-
-		// Tags - public read endpoints
-		r.Get(handler.RouteTags, apiHandler.ListTags)
-		r.Get(handler.RouteTagsID, apiHandler.GetTag)
-
-		// Categories - public read endpoints
-		r.Get(handler.RouteCategories, apiHandler.ListCategories)
-		r.Get(handler.RouteCategoriesID, apiHandler.GetCategory)
-
-		// Protected endpoints (API key required)
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.APIKeyAuth(db))
-			r.Use(middleware.APIRateLimit(10, 20)) // 10 requests per second per API key
-
-			// Auth info endpoint
-			r.Get("/auth", apiHandler.AuthInfo)
-
-			// Pages - write endpoints (requires pages:write permission)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission("pages:write"))
-				r.Post(handler.RoutePages, apiHandler.CreatePage)
-				r.Put(handler.RoutePagesID, apiHandler.UpdatePage)
-				r.Delete(handler.RoutePagesID, apiHandler.DeletePage)
-			})
-
-			// Media - write endpoints (requires media:write permission)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission("media:write"))
-				r.Post(handler.RouteMedia, apiHandler.UploadMedia)
-				r.Put(handler.RouteMediaID, apiHandler.UpdateMedia)
-				r.Delete(handler.RouteMediaID, apiHandler.DeleteMedia)
-			})
-
-			// Taxonomy - write endpoints (requires taxonomy:write permission)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission("taxonomy:write"))
-				r.Post(handler.RouteTags, apiHandler.CreateTag)
-				r.Put(handler.RouteTagsID, apiHandler.UpdateTag)
-				r.Delete(handler.RouteTagsID, apiHandler.DeleteTag)
-				r.Post(handler.RouteCategories, apiHandler.CreateCategory)
-				r.Put(handler.RouteCategoriesID, apiHandler.UpdateCategory)
-				r.Delete(handler.RouteCategoriesID, apiHandler.DeleteCategory)
+	// REST API v2 — huma-generated OpenAPI 3.1 at /api/v2.
+	r.Route("/api/v2", func(r chi.Router) {
+		apiV2RateLimiter := middleware.NewGlobalRateLimiter(100, 200)
+		r.Use(apiV2RateLimiter.Middleware())
+		// Hard request-body cap applied to write methods, BEFORE huma's
+		// multipart/JSON parser touches the body. Two tiers matching v1:
+		//   - multipart/form-data: 100 MiB (file uploads)
+		//   - everything else (JSON, form-urlencoded): 1 MiB
+		// Keeping a blanket 100 MiB on JSON endpoints would let a caller
+		// push large objects into the decoder before rejection, a CPU/memory
+		// DoS vector on authenticated writes. GET/HEAD skip the wrap.
+		const (
+			maxV2MultipartBodyBytes int64 = 100 << 20 // 100 MiB
+			maxV2JSONBodyBytes      int64 = 1 << 20   // 1 MiB
+		)
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				switch req.Method {
+				case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+					limit := maxV2JSONBodyBytes
+					if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/") {
+						limit = maxV2MultipartBodyBytes
+					}
+					req.Body = http.MaxBytesReader(w, req.Body, limit)
+				}
+				next.ServeHTTP(w, req)
 			})
 		})
+		// Auth is required for write methods and for the authenticated-only
+		// /auth meta endpoint; other GETs accept unauthenticated calls and
+		// apply published-only visibility instead. Using ConditionalAPIKeyAuth
+		// preserves the specific rejection reasons (expired, IP policy, slot
+		// saturation, etc.) that OptionalAPIKeyAuth swallowed, while still
+		// allowing public reads of /api/v2/{status,pages,media,tags,categories}.
+		r.Use(middleware.ConditionalAPIKeyAuth(db, func(req *http.Request) bool {
+			switch req.Method {
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+				return true
+			}
+			return req.URL.Path == "/api/v2/auth"
+		}))
+		// Per-API-key throttle on mutation routes only. v1 applied this limiter
+		// to the protected write group; applying it to reads (GET /pages, etc.)
+		// would break legitimate authenticated bulk-read flows that key-holders
+		// rely on. The global IP limiter above still caps unauthenticated and
+		// read-side abuse.
+		writeThrottle := middleware.APIRateLimit(10, 20)
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				switch req.Method {
+				case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+					writeThrottle(next).ServeHTTP(w, req)
+				default:
+					next.ServeHTTP(w, req)
+				}
+			})
+		})
+
+		v2Queries := store.New(db)
+		v2Events := service.NewEventService(db)
+		apiV2 := apiv2.Register(r, apiv2.Deps{
+			DB:      db,
+			Queries: v2Queries,
+			Cache:   cacheManager,
+			Events:  v2Events,
+		})
+		pagesSvc := apiv2pages.NewService(db, v2Queries, cacheManager, v2Events, apiv2pages.Policy{
+			BlockSuspiciousMarkup: cfg.BlockSuspiciousPageHTML,
+			SanitizeHTML:          cfg.SanitizePageHTML,
+		})
+		apiv2pages.Register(apiV2.API, pagesSvc)
+		mediaSvc := apiv2media.NewService(db, v2Queries, v2Events, cfg.UploadsDir)
+		apiv2media.Register(apiV2.API, mediaSvc)
+		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries, v2Events)
+		apiv2taxonomy.Register(apiV2.API, taxonomySvc)
+		apiV2Docs, err := apiv2.NewDocsServer(templatesFS, apiV2)
+		if err != nil {
+			slog.Error("v2 docs server init", "error", err)
+			return
+		}
+		r.Get("/docs", apiV2Docs.ServeDocs)
+		r.Get("/openapi.json", apiV2Docs.ServeOpenAPIJSON)
+		r.Get("/openapi.yaml", apiV2Docs.ServeOpenAPIYAML)
 	})
-	slog.Info("REST API v1 mounted at /api/v1")
+	slog.Info("REST API v2 mounted at /api/v2")
 
 	// Public form routes (no authentication required, with CSRF protection and language detection)
 	r.Group(func(r chi.Router) {

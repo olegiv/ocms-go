@@ -155,10 +155,10 @@ The hook source is in `.claude/shared/global/hooks/`.
 
 ```
 cmd/ocms/main.go
+    ├── internal/api/v2      (huma-generated REST API surface; owns pages/media/taxonomy services)
     ├── internal/cache       (in-memory + Redis caching)
     ├── internal/config      (env var loading)
-    ├── internal/handler     (HTTP handlers)
-    │   ├── api/             (REST API handlers)
+    ├── internal/handler     (HTTP handlers for admin UI)
     │   ├── internal/render  (template rendering + helper methods)
     │   ├── internal/store   (sqlc database access)
     │   └── internal/service (business logic)
@@ -239,13 +239,20 @@ Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 - `/admin/import` - Content import
 - `/admin/docs` - Site documentation
 
-### REST API
-- `GET /api/v1/pages` - List pages (public: published only)
-- `POST /api/v1/pages` - Create page (requires `pages:write`)
-- `GET /api/v1/media` - List media
-- `GET /api/v1/tags` - List tags
-- `GET /api/v1/categories` - List categories (tree)
-- `GET /api/v1/docs` - API documentation
+### REST API (v2, huma-generated)
+- `GET /api/v2/status` - API status (public)
+- `GET /api/v2/auth` - Inspect the calling API key
+- `GET /api/v2/pages` - List pages (public: published only)
+- `POST /api/v2/pages` - Create page (requires `pages:write`)
+- `GET /api/v2/media` - List media
+- `POST /api/v2/media` - Upload a single file (requires `media:write`)
+- `POST /api/v2/media/batch` - Upload multiple files (requires `media:write`)
+- `GET /api/v2/tags` - List tags
+- `GET /api/v2/categories` - List categories (tree or `?flat=true`)
+- `GET /api/v2/openapi.json` - OpenAPI 3.1 spec (generated live from Go types)
+- `GET /api/v2/docs` - Swagger UI (self-hosted, no CDN)
+
+The spec is derived from Go types via [huma v2](https://huma.rocks/); domain services live under `internal/api/v2/{pages,media,taxonomy}` and MUST NOT import anything from the legacy v1 package (which no longer exists).
 
 ### Health Check Routes
 - `GET /health` - Overall health status (200 OK / 503 Service Unavailable)
@@ -298,18 +305,37 @@ sleep 3
 curl -s http://localhost:8080/health
 
 # Test API endpoints
-curl -s http://localhost:8080/api/v1/pages
-curl -s http://localhost:8080/api/v1/tags
+curl -s http://localhost:8080/api/v2/pages
+curl -s http://localhost:8080/api/v2/tags
 curl -s http://localhost:8080/sitemap.xml
 
 # Test with API key authentication
-curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/pages
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v2/pages
 
 # Kill server when done
 pkill -f "go run ./cmd/ocms" || true
 ```
 
 Never tell the user to "restart the server and test" - always run the tests yourself first.
+
+## Fixes Need Drift Tests
+
+**CRITICAL**: When you resolve an audit finding or review comment that targets a pattern (missing declaration, error wrapping, forbidden import, required format tag, auth/spec mismatch), you MUST add a Go test that mechanically enforces the invariant. Fixing the offending site alone is half the work — the other half is preventing the same class of bug from returning via a different code path.
+
+Before declaring an audit finding or Codex comment resolved, ask:
+
+1. **What is the invariant this fix establishes?** (e.g., "every op whose handler rejects unauthenticated callers declares Security in its OpenAPI metadata")
+2. **Where else in the codebase could that invariant be violated?** If the answer is "anywhere that matches pattern X", express pattern X as a test that walks the AST or live registration state.
+
+The test must fail on the bug state (verify by reverting your fix, running the test, seeing it fail, then restoring the fix).
+
+**Existing examples** in `internal/api/v2/drift_test.go`:
+- `TestOpenAPISurface` — fails when a domain operation is dropped or renamed
+- `TestV2DoesNotImportV1` — fails on any import of the deleted v1 package
+- `TestOpenAPISecurityMatchesRuntime` — fails when a handler gates on auth but the Operation metadata omits `Security`
+- `TestResolveLanguageCodeCallersPropagate` — fails when a caller wraps the helper's validation error as `ErrInternal`
+
+The two Security/Propagate tests both catch real Codex findings against PR #127 that I missed in my own audit-fix pass. The lesson: Codex's review on the far side of PR creation is a backstop, not a replacement for making fix invariants mechanical.
 
 ## Code Quality Requirements
 
@@ -527,8 +553,8 @@ OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/modul
 # Test API middleware
 OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/middleware/...
 
-# Test API handlers
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/handler/api/...
+# Test API handlers (v2)
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/api/v2/...
 ```
 
 ## Documentation

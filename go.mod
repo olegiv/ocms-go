@@ -13,6 +13,7 @@ require (
 	github.com/Oudwins/tailwind-merge-go v0.2.1
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
+	github.com/danielgtaylor/huma/v2 v2.37.3
 	github.com/disintegration/imaging v1.6.2
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
@@ -33,7 +34,8 @@ require (
 	golang.org/x/net v0.53.0
 	golang.org/x/text v0.36.0
 	golang.org/x/time v0.15.0
-	modernc.org/sqlite v1.48.2
+	gopkg.in/yaml.v3 v3.0.1
+	modernc.org/sqlite v1.49.1
 )
 
 require (
@@ -54,7 +56,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

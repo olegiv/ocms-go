@@ -811,6 +811,40 @@ func OptionalAPIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 	}
 }
 
+// ConditionalAPIKeyAuth creates middleware that treats auth as required for
+// requests where isRequired returns true, and optional otherwise. When
+// required, every specific rejection reason (expired key, invalid format,
+// policy violation, anomaly-driven revocation, slot saturation) surfaces to
+// the caller as a diagnostic error — the behaviour v1 had on protected routes.
+// When not required, the middleware silently skips unauthenticated requests
+// (and still stashes a valid key into context).
+//
+// Motivation: /api/v2 mounts a single subtree with mixed public reads and
+// authenticated writes. Using plain OptionalAPIKeyAuth everywhere collapses
+// all write-side auth failures into a generic 401 inside the huma layer,
+// which loses the operational signal admins need to debug deployments. This
+// middleware lets callers route "required" by method or path without needing
+// two separate chi route groups.
+func ConditionalAPIKeyAuth(db *sql.DB, isRequired func(*http.Request) bool) func(http.Handler) http.Handler {
+	queries := store.New(db)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			required := isRequired(r)
+			apiKey, errorWritten := validateAPIKey(w, r, queries, required)
+			if errorWritten {
+				return
+			}
+			if apiKey == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			updateAPIKeyLastUsed(queries, apiKey.ID)
+			addAPIKeyToContext(next, w, r, *apiKey)
+		})
+	}
+}
+
 // RequirePermission creates middleware that requires a specific API permission.
 // This should be used after APIKeyAuth middleware.
 func RequirePermission(permission string) func(http.Handler) http.Handler {
