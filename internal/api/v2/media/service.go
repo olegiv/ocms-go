@@ -366,11 +366,11 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateMed
 	if in.Caption != nil {
 		params.Caption = util.NullStringFromValue(*in.Caption)
 	}
-	if in.FolderID != nil {
-		if *in.FolderID == 0 {
+	if in.FolderID.IsSet {
+		if in.FolderID.IsNull || in.FolderID.Value == 0 {
 			params.FolderID = sql.NullInt64{}
 		} else {
-			params.FolderID = util.NullInt64FromPtr(in.FolderID)
+			params.FolderID = sql.NullInt64{Int64: in.FolderID.Value, Valid: true}
 		}
 	}
 	updated, err := s.queries.UpdateMedia(ctx, params)

@@ -5,7 +5,45 @@
 // operation end-to-end; operations.go turns huma input into service calls.
 package media
 
-import "time"
+import (
+	"bytes"
+	"encoding/json"
+	"time"
+)
+
+// NullableInt64 decodes a JSON int field that distinguishes three states:
+//   - field absent from the JSON object → IsSet=false (leave field alone)
+//   - field present with JSON `null`     → IsSet=true,  IsNull=true
+//   - field present with a number        → IsSet=true,  IsNull=false, Value=N
+//
+// Plain `*int64` cannot represent "explicitly null" separately from "absent",
+// so PATCH-style updates that advertise `null` as "clear the field" have no
+// way to honor it. OpenAPI consumers see the same schema as int64, with the
+// `nullable: true` hint via huma's SchemaProvider below.
+type NullableInt64 struct {
+	IsSet  bool
+	IsNull bool
+	Value  int64
+}
+
+// UnmarshalJSON captures the three-way present/null/value signal.
+func (n *NullableInt64) UnmarshalJSON(b []byte) error {
+	n.IsSet = true
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
+		n.IsNull = true
+		return nil
+	}
+	return json.Unmarshal(b, &n.Value)
+}
+
+// MarshalJSON round-trips the type; not used on input but keeps symmetry if
+// the struct is ever serialized.
+func (n NullableInt64) MarshalJSON() ([]byte, error) {
+	if !n.IsSet || n.IsNull {
+		return []byte("null"), nil
+	}
+	return json.Marshal(n.Value)
+}
 
 // Media is the DTO returned by every media response.
 type Media struct {
@@ -66,11 +104,15 @@ type Translation struct {
 }
 
 // UpdateMediaBody is the patch-style input for updating media metadata.
+// FolderID uses NullableInt64 so callers can distinguish "leave unchanged"
+// (omit the field) from "move to root" (send `null` or `0`) — JSON `null` on
+// a plain `*int64` would decode identically to an absent field and silently
+// no-op.
 type UpdateMediaBody struct {
-	Filename *string `json:"filename,omitempty" minLength:"1" maxLength:"255"`
-	Alt      *string `json:"alt,omitempty"`
-	Caption  *string `json:"caption,omitempty"`
-	FolderID *int64  `json:"folder_id,omitempty" doc:"Send 0 or null to move to root."`
+	Filename *string       `json:"filename,omitempty" minLength:"1" maxLength:"255"`
+	Alt      *string       `json:"alt,omitempty"`
+	Caption  *string       `json:"caption,omitempty"`
+	FolderID NullableInt64 `json:"folder_id,omitempty" doc:"Send 0 or null to move to root."`
 }
 
 // UploadMediaMetadata carries the common metadata for a single upload. File content

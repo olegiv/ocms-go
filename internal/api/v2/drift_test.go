@@ -572,31 +572,30 @@ func readAll(resp *http.Response) ([]byte, error) {
 	return buf, nil
 }
 
-// TestWriteBodyCappedBeforeParse asserts that a POST/PUT/DELETE/PATCH to the
-// /api/v2 subtree with a body exceeding the 100 MiB cap cannot be fully read
-// by the handler. Catches the class of regression Codex flagged: without
-// `http.MaxBytesReader`, a caller can force huma to spool arbitrary-sized
-// multipart bodies to tempfiles before the 20 MB file-size check in
-// MediaService.Upload runs.
+// TestWriteBodyCappedBeforeParse asserts that POST/PUT/DELETE/PATCH requests
+// to /api/v2 have tiered body caps applied BEFORE huma parses anything:
+//   - multipart/form-data: 100 MiB (file uploads)
+//   - everything else (JSON, form-urlencoded): 1 MiB
 //
-// This test does not boot the full production main.go wiring; instead it
-// exercises the same MaxBytesReader middleware shim locally with a handler
-// that reads the request body. The assertion is that a body >100 MiB reports
-// an error to the handler (MaxBytesError), while a body ≤100 MiB reads
-// cleanly. If the shim is ever deleted from main.go the test still passes
-// locally, so this is a unit test of the pattern, not a drift guard.
-// `TestSecurityDeclarationEnforcedAtRuntime`-class runtime tests would be
-// needed to guard the main.go wiring end-to-end.
+// v1 enforced both tiers; blanket-capping JSON at 100 MiB like multipart is
+// a CPU/memory DoS regression on authenticated write APIs. This test
+// exercises the same middleware shim as main.go (intentionally duplicated
+// here because lifting the shim into the middleware package would drag chi
+// into internal/middleware).
 func TestWriteBodyCappedBeforeParse(t *testing.T) {
-	const cap = 100 << 20
-	// Replicate the shim from main.go. If it is ever changed there, update
-	// here too; this is intentionally duplicative because pulling the shim
-	// out into a helper would drag chi into the middleware package.
+	const (
+		multipartCap = 100 << 20
+		jsonCap      = 1 << 20
+	)
 	shim := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			switch req.Method {
 			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-				req.Body = http.MaxBytesReader(w, req.Body, cap)
+				limit := int64(jsonCap)
+				if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/") {
+					limit = int64(multipartCap)
+				}
+				req.Body = http.MaxBytesReader(w, req.Body, limit)
 			}
 			next.ServeHTTP(w, req)
 		})
@@ -619,26 +618,37 @@ func TestWriteBodyCappedBeforeParse(t *testing.T) {
 	srv := httptest.NewServer(shim(http.HandlerFunc(drainingHandler)))
 	defer srv.Close()
 
-	// 101 MiB body — one byte over the cap.
-	overflow := strings.Repeat("A", cap+1)
-	resp, err := http.Post(srv.URL+"/api/v2/media", "application/octet-stream", strings.NewReader(overflow))
+	// 1 MiB + 1 byte JSON body — one byte over the JSON cap.
+	jsonOverflow := strings.Repeat("a", jsonCap+1)
+	resp, err := http.Post(srv.URL+"/api/v2/pages", "application/json", strings.NewReader(jsonOverflow))
 	if err != nil {
-		t.Fatalf("POST oversize: %v", err)
+		t.Fatalf("POST oversize JSON: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
-		t.Errorf("POST /media with body > %d: want 413, got %d", cap, resp.StatusCode)
+		t.Errorf("POST /pages with JSON body > %d: want 413, got %d", jsonCap, resp.StatusCode)
 	}
 
-	// 1 MiB body — well under the cap.
-	ok := strings.Repeat("A", 1<<20)
-	resp, err = http.Post(srv.URL+"/api/v2/pages", "application/octet-stream", strings.NewReader(ok))
+	// 2 MiB multipart — under the multipart cap, over the JSON cap. Must pass.
+	multipartBody := strings.Repeat("a", 2<<20)
+	resp, err = http.Post(srv.URL+"/api/v2/media", "multipart/form-data; boundary=X", strings.NewReader(multipartBody))
 	if err != nil {
-		t.Fatalf("POST small: %v", err)
+		t.Fatalf("POST 2 MiB multipart: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("POST /pages with 1 MiB body: want 200, got %d", resp.StatusCode)
+		t.Errorf("POST /media with 2 MiB multipart: want 200, got %d", resp.StatusCode)
+	}
+
+	// 101 MiB multipart — over the multipart cap.
+	multipartOverflow := strings.Repeat("a", multipartCap+1)
+	resp, err = http.Post(srv.URL+"/api/v2/media", "multipart/form-data; boundary=X", strings.NewReader(multipartOverflow))
+	if err != nil {
+		t.Fatalf("POST oversize multipart: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Errorf("POST /media with multipart body > %d: want 413, got %d", multipartCap, resp.StatusCode)
 	}
 }
 

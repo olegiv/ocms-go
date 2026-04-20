@@ -1863,17 +1863,25 @@ func run() error {
 		apiV2RateLimiter := middleware.NewGlobalRateLimiter(100, 200)
 		r.Use(apiV2RateLimiter.Middleware())
 		// Hard request-body cap applied to write methods, BEFORE huma's
-		// multipart/JSON parser touches the body. Matches v1's 100 MiB cap on
-		// /api/v1/media; without this, a caller can force huma to spool
-		// gigabytes through a tempfile before the service-layer 20 MB check
-		// runs. GET/HEAD skip the wrap so ordinary reads don't allocate the
-		// MaxBytesReader wrapper on every request.
-		const maxV2WriteBodyBytes int64 = 100 << 20 // 100 MiB
+		// multipart/JSON parser touches the body. Two tiers matching v1:
+		//   - multipart/form-data: 100 MiB (file uploads)
+		//   - everything else (JSON, form-urlencoded): 1 MiB
+		// Keeping a blanket 100 MiB on JSON endpoints would let a caller
+		// push large objects into the decoder before rejection, a CPU/memory
+		// DoS vector on authenticated writes. GET/HEAD skip the wrap.
+		const (
+			maxV2MultipartBodyBytes int64 = 100 << 20 // 100 MiB
+			maxV2JSONBodyBytes      int64 = 1 << 20   // 1 MiB
+		)
 		r.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				switch req.Method {
 				case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-					req.Body = http.MaxBytesReader(w, req.Body, maxV2WriteBodyBytes)
+					limit := maxV2JSONBodyBytes
+					if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/") {
+						limit = maxV2MultipartBodyBytes
+					}
+					req.Body = http.MaxBytesReader(w, req.Body, limit)
 				}
 				next.ServeHTTP(w, req)
 			})
