@@ -162,7 +162,7 @@ func registerCreate(api huma.API, svc *Service) {
 		Summary:       "Create a page",
 		Description:   "Requires the `pages:write` permission. Creates a page with optional category / tag links in a single transaction.",
 		Tags:          []string{"Pages"},
-		Security:      v2.APIKeyAuthSecurity,
+		Security:      v2.PagesWriteSecurity,
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *CreatePageInput) (*PageOutput, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -190,7 +190,7 @@ func registerUpdate(api huma.API, svc *Service) {
 		Summary:     "Update a page",
 		Description: "Requires the `pages:write` permission. Only provided fields are modified; nullable columns can be cleared by sending null.",
 		Tags:        []string{"Pages"},
-		Security:    v2.APIKeyAuthSecurity,
+		Security:    v2.PagesWriteSecurity,
 	}, func(ctx context.Context, in *UpdatePageInput) (*PageOutput, error) {
 		actor := v2.ActorFromContext(ctx)
 		page, err := svc.Update(ctx, actor, in.ID, in.Body)
@@ -216,7 +216,7 @@ func registerDelete(api huma.API, svc *Service) {
 		Summary:       "Delete a page",
 		Description:   "Requires the `pages:write` permission. Cascades to page categories, tags, and versions.",
 		Tags:          []string{"Pages"},
-		Security:      v2.APIKeyAuthSecurity,
+		Security:      v2.PagesWriteSecurity,
 		DefaultStatus: http.StatusNoContent,
 	}, func(ctx context.Context, in *DeletePageInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)

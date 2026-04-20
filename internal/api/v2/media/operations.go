@@ -7,6 +7,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -142,7 +143,7 @@ func registerUploadSingle(api huma.API, svc *Service) {
 		Summary:       "Upload a single media file",
 		Description:   "Requires `media:write`. For multiple files use `POST /media/batch`.",
 		Tags:          []string{"Media"},
-		Security:      v2.APIKeyAuthSecurity,
+		Security:      v2.MediaWriteSecurity,
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *UploadMediaInput) (*MediaOutput, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -194,7 +195,7 @@ func registerUploadBatch(api huma.API, svc *Service) {
 		Summary:       "Upload multiple media files",
 		Description:   "Requires `media:write`. Per-file errors are returned in `data.errors`; at least one file must succeed.",
 		Tags:          []string{"Media"},
-		Security:      v2.APIKeyAuthSecurity,
+		Security:      v2.MediaWriteSecurity,
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *UploadMediaBatchInput) (*UploadBatchOutput, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -237,7 +238,7 @@ func registerUpdate(api huma.API, svc *Service) {
 		Summary:     "Update media metadata",
 		Description: "Requires `media:write`. Pass `folder_id: 0` or null to move the item to the root folder.",
 		Tags:        []string{"Media"},
-		Security:    v2.APIKeyAuthSecurity,
+		Security:    v2.MediaWriteSecurity,
 	}, func(ctx context.Context, in *UpdateMediaInput) (*MediaOutput, error) {
 		actor := v2.ActorFromContext(ctx)
 		m, err := svc.Update(ctx, actor, in.ID, in.Body)
@@ -263,7 +264,7 @@ func registerDelete(api huma.API, svc *Service) {
 		Summary:       "Delete media",
 		Description:   "Requires `media:write`. Removes the stored file, all generated variants, and the database row.",
 		Tags:          []string{"Media"},
-		Security:      v2.APIKeyAuthSecurity,
+		Security:      v2.MediaWriteSecurity,
 		DefaultStatus: http.StatusNoContent,
 	}, func(ctx context.Context, in *DeleteMediaInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)
@@ -295,15 +296,12 @@ func parseFolderID(raw string) *int64 {
 	if raw == "" {
 		return nil
 	}
-	// Accept anything that looks like a positive integer.
-	var id int64
-	for _, c := range raw {
-		if c < '0' || c > '9' {
-			return nil
-		}
-		id = id*10 + int64(c-'0')
-	}
-	if id <= 0 {
+	// strconv.ParseInt rejects non-numeric input AND int64 overflow (returning
+	// ErrRange), both of which the old hand-rolled scan silently wrapped into
+	// bogus positive IDs that could route a caller's upload into an unrelated
+	// folder. Keep the same `nil = unset` contract for invalid input.
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
 		return nil
 	}
 	return &id

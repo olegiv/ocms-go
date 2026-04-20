@@ -26,10 +26,19 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// APIKeyAuthSecurity is the huma Security block applied to every write
-// operation: it pairs the route with the `ApiKeyAuth` scheme declared in
-// Register so the OpenAPI spec and Swagger UI show the padlock.
-var APIKeyAuthSecurity = []map[string][]string{{"ApiKeyAuth": {}}}
+// APIKeyAuthSecurity is the base Security block for any operation that just
+// needs a valid API key regardless of permission (e.g., /auth meta endpoint).
+// Write operations should use the permission-scoped variants below so the
+// runtime middleware can short-circuit a wrong-permission call BEFORE huma
+// parses the request body — a read-only key sending `POST /media` is rejected
+// with 403 without any multipart work. The scope string must match one of
+// `model.Permission*` constants so services and the OpenAPI spec stay aligned.
+var (
+	APIKeyAuthSecurity    = []map[string][]string{{"ApiKeyAuth": {}}}
+	PagesWriteSecurity    = []map[string][]string{{"ApiKeyAuth": {"pages:write"}}}
+	MediaWriteSecurity    = []map[string][]string{{"ApiKeyAuth": {"media:write"}}}
+	TaxonomyWriteSecurity = []map[string][]string{{"ApiKeyAuth": {"taxonomy:write"}}}
+)
 
 // Deps bundles dependencies that domain services may pick from.
 type Deps struct {
@@ -94,43 +103,71 @@ func Register(r chi.Router, deps Deps) *Handler {
 }
 
 // requireAPIKeyWhenDeclared returns a huma API middleware that short-circuits
-// with 401 when the current operation declares `ApiKeyAuth` Security but the
-// request has no valid API key in its context. Ties runtime enforcement to the
-// spec declaration so the two can never drift.
+// with 401/403 when the current operation declares `ApiKeyAuth` Security:
+//   - 401 if no API key is in the request context
+//   - 403 if the API key is present but lacks any of the scopes declared
+//     alongside ApiKeyAuth in the operation's Security block
+//
+// Both checks run BEFORE huma's input binding, so a wrong-permission caller
+// never causes multipart parsing, tempfile writes, or any body work. Ties
+// runtime enforcement to the spec declaration so the two can never drift.
 func requireAPIKeyWhenDeclared(api huma.API) func(ctx huma.Context, next func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		op := ctx.Operation()
-		if op == nil || !operationRequiresAPIKey(op) {
+		requiredScopes, needsKey := apiKeyScopesFor(op)
+		if !needsKey {
 			next(ctx)
 			return
 		}
-		if _, ok := ctx.Context().Value(middleware.ContextKeyAPIKey).(store.ApiKey); !ok {
+		key, ok := ctx.Context().Value(middleware.ContextKeyAPIKey).(store.ApiKey)
+		if !ok {
 			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "API key required")
 			return
+		}
+		if len(requiredScopes) > 0 {
+			perms := middleware.ParseAPIKeyPermissions(&key)
+			for _, scope := range requiredScopes {
+				if !permissionsContain(perms, scope) {
+					_ = huma.WriteErr(api, ctx, http.StatusForbidden,
+						scope+" permission required")
+					return
+				}
+			}
 		}
 		next(ctx)
 	}
 }
 
-// operationRequiresAPIKey reports whether every Security alternative requires
-// a non-empty scheme AND at least one alternative references `ApiKeyAuth`.
-// OpenAPI Security semantics: the top-level list is OR; an empty block `{}`
-// means "no auth is a valid alternative", so the operation is public.
-func operationRequiresAPIKey(op *huma.Operation) bool {
-	if len(op.Security) == 0 {
-		return false
+// apiKeyScopesFor returns the scopes required by the ApiKeyAuth Security
+// alternative on an operation, and a flag indicating whether authentication is
+// required at all. OpenAPI Security semantics: the top-level list is OR; an
+// empty block `{}` means "no auth is a valid alternative" so the operation is
+// public. If ApiKeyAuth is required, its scope array names the permissions
+// the caller's key must hold.
+func apiKeyScopesFor(op *huma.Operation) (scopes []string, needsKey bool) {
+	if op == nil || len(op.Security) == 0 {
+		return nil, false
 	}
-	hasAPIKey := false
 	for _, block := range op.Security {
 		if len(block) == 0 {
 			// Public alternative exists — do not enforce auth.
-			return false
+			return nil, false
 		}
-		if _, ok := block["ApiKeyAuth"]; ok {
-			hasAPIKey = true
+		if s, ok := block["ApiKeyAuth"]; ok {
+			scopes = s
+			needsKey = true
 		}
 	}
-	return hasAPIKey
+	return scopes, needsKey
+}
+
+func permissionsContain(perms []string, want string) bool {
+	for _, p := range perms {
+		if p == want {
+			return true
+		}
+	}
+	return false
 }
 
 // OpenAPI returns the live OpenAPI 3.1 document built from registered operations.

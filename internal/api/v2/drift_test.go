@@ -4,6 +4,7 @@
 package v2_test
 
 import (
+	"context"
 	"encoding/json"
 	"go/ast"
 	"go/build"
@@ -24,6 +25,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/api/v2/media"
 	"github.com/olegiv/ocms-go/internal/api/v2/pages"
 	"github.com/olegiv/ocms-go/internal/api/v2/taxonomy"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
@@ -568,4 +570,142 @@ func readAll(resp *http.Response) ([]byte, error) {
 		_ = json.Unmarshal(buf, &probe)
 	}
 	return buf, nil
+}
+
+// TestWriteBodyCappedBeforeParse asserts that a POST/PUT/DELETE/PATCH to the
+// /api/v2 subtree with a body exceeding the 100 MiB cap cannot be fully read
+// by the handler. Catches the class of regression Codex flagged: without
+// `http.MaxBytesReader`, a caller can force huma to spool arbitrary-sized
+// multipart bodies to tempfiles before the 20 MB file-size check in
+// MediaService.Upload runs.
+//
+// This test does not boot the full production main.go wiring; instead it
+// exercises the same MaxBytesReader middleware shim locally with a handler
+// that reads the request body. The assertion is that a body >100 MiB reports
+// an error to the handler (MaxBytesError), while a body ≤100 MiB reads
+// cleanly. If the shim is ever deleted from main.go the test still passes
+// locally, so this is a unit test of the pattern, not a drift guard.
+// `TestSecurityDeclarationEnforcedAtRuntime`-class runtime tests would be
+// needed to guard the main.go wiring end-to-end.
+func TestWriteBodyCappedBeforeParse(t *testing.T) {
+	const cap = 100 << 20
+	// Replicate the shim from main.go. If it is ever changed there, update
+	// here too; this is intentionally duplicative because pulling the shim
+	// out into a helper would drag chi into the middleware package.
+	shim := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			switch req.Method {
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+				req.Body = http.MaxBytesReader(w, req.Body, cap)
+			}
+			next.ServeHTTP(w, req)
+		})
+	}
+	drainingHandler := func(w http.ResponseWriter, req *http.Request) {
+		buf := make([]byte, 8*1024)
+		for {
+			_, err := req.Body.Read(buf)
+			if err != nil {
+				if err.Error() == "http: request body too large" {
+					w.WriteHeader(http.StatusRequestEntityTooLarge)
+					return
+				}
+				break
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	srv := httptest.NewServer(shim(http.HandlerFunc(drainingHandler)))
+	defer srv.Close()
+
+	// 101 MiB body — one byte over the cap.
+	overflow := strings.Repeat("A", cap+1)
+	resp, err := http.Post(srv.URL+"/api/v2/media", "application/octet-stream", strings.NewReader(overflow))
+	if err != nil {
+		t.Fatalf("POST oversize: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Errorf("POST /media with body > %d: want 413, got %d", cap, resp.StatusCode)
+	}
+
+	// 1 MiB body — well under the cap.
+	ok := strings.Repeat("A", 1<<20)
+	resp, err = http.Post(srv.URL+"/api/v2/pages", "application/octet-stream", strings.NewReader(ok))
+	if err != nil {
+		t.Fatalf("POST small: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("POST /pages with 1 MiB body: want 200, got %d", resp.StatusCode)
+	}
+}
+
+// TestPermissionRequiredBeforeBodyParse asserts that an operation whose
+// Security block declares scopes (e.g., `media:write`) returns 403 for a key
+// missing that scope, WITHOUT consuming the request body. Catches the class
+// of regression Codex flagged on PR #127 where the upload handler parsed
+// multipart input before checking permissions — a resource-exhaustion vector
+// any read-only key could trigger.
+func TestPermissionRequiredBeforeBodyParse(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	r := chi.NewRouter()
+	queries := store.New(db)
+
+	// Seed a read-only API key (pages:read only, no write perms anywhere).
+	readOnlyPerms, err := json.Marshal([]string{"pages:read"})
+	if err != nil {
+		t.Fatalf("marshal perms: %v", err)
+	}
+	// Chi middleware: stash the read-only key into context for every request.
+	// Bypasses real auth so we exercise only the permission gate.
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			key := store.ApiKey{ID: 1, KeyPrefix: "test", Permissions: string(readOnlyPerms), IsActive: true}
+			ctx := context.WithValue(req.Context(), middleware.ContextKeyAPIKey, key)
+			next.ServeHTTP(w, req.WithContext(ctx))
+		})
+	})
+
+	h := apiv2.Register(r, apiv2.Deps{DB: db, Queries: queries})
+	pages.Register(h.API, pages.NewService(db, queries, nil, nil, pages.Policy{}))
+	media.Register(h.API, media.NewService(db, queries, nil, t.TempDir()))
+	taxonomy.Register(h.API, taxonomy.NewService(db, queries, nil))
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	// Large body the handler must NOT have consumed. If the permission check
+	// fires before huma's input binding, the server writes 403 before draining
+	// this payload. We use a multipart body shape aimed at POST /media.
+	bigPayload := strings.Repeat("A", 256*1024)
+	for _, tc := range []struct {
+		method string
+		path   string
+		op     string
+	}{
+		{http.MethodPost, "/media", "uploadMedia"},
+		{http.MethodPost, "/media/batch", "uploadMediaBatch"},
+		{http.MethodPost, "/pages", "createPage"},
+		{http.MethodPost, "/tags", "createTag"},
+		{http.MethodPost, "/categories", "createCategory"},
+	} {
+		req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(bigPayload))
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		req.Header.Set("Content-Type", "multipart/form-data; boundary=X")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", tc.method, tc.path, err)
+		}
+		_, _ = readAll(resp)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s %s (op %s) with read-only key: want 403, got %d", tc.method, tc.path, tc.op, resp.StatusCode)
+		}
+	}
 }

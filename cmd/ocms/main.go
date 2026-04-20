@@ -1862,6 +1862,22 @@ func run() error {
 	r.Route("/api/v2", func(r chi.Router) {
 		apiV2RateLimiter := middleware.NewGlobalRateLimiter(100, 200)
 		r.Use(apiV2RateLimiter.Middleware())
+		// Hard request-body cap applied to write methods, BEFORE huma's
+		// multipart/JSON parser touches the body. Matches v1's 100 MiB cap on
+		// /api/v1/media; without this, a caller can force huma to spool
+		// gigabytes through a tempfile before the service-layer 20 MB check
+		// runs. GET/HEAD skip the wrap so ordinary reads don't allocate the
+		// MaxBytesReader wrapper on every request.
+		const maxV2WriteBodyBytes int64 = 100 << 20 // 100 MiB
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				switch req.Method {
+				case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+					req.Body = http.MaxBytesReader(w, req.Body, maxV2WriteBodyBytes)
+				}
+				next.ServeHTTP(w, req)
+			})
+		})
 		// Auth is required for write methods and for the authenticated-only
 		// /auth meta endpoint; other GETs accept unauthenticated calls and
 		// apply published-only visibility instead. Using ConditionalAPIKeyAuth
@@ -1875,10 +1891,22 @@ func run() error {
 			}
 			return req.URL.Path == "/api/v2/auth"
 		}))
-		// Per-API-key throttle layered on top of the global IP limiter so a
-		// single authenticated key cannot drive unbounded mutation throughput.
-		// Matches the v1 behaviour Codex flagged as missing after the rewrite.
-		r.Use(middleware.APIRateLimit(10, 20))
+		// Per-API-key throttle on mutation routes only. v1 applied this limiter
+		// to the protected write group; applying it to reads (GET /pages, etc.)
+		// would break legitimate authenticated bulk-read flows that key-holders
+		// rely on. The global IP limiter above still caps unauthenticated and
+		// read-side abuse.
+		writeThrottle := middleware.APIRateLimit(10, 20)
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				switch req.Method {
+				case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+					writeThrottle(next).ServeHTTP(w, req)
+				default:
+					next.ServeHTTP(w, req)
+				}
+			})
+		})
 
 		v2Queries := store.New(db)
 		v2Events := service.NewEventService(db)
