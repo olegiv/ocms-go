@@ -20,6 +20,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
+	"gopkg.in/yaml.v3"
 
 	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/api/v2/media"
@@ -571,6 +572,101 @@ func readAll(resp *http.Response) ([]byte, error) {
 	}
 	return buf, nil
 }
+
+// TestNullableInt64SchemaShape verifies that `UpdateMediaBody.folder_id`
+// appears in the generated OpenAPI document as an `integer|null` field, not
+// as the struct {IsSet,IsNull,Value} that huma would otherwise derive by
+// reflection. Without the `Schema(Registry)` override on NullableInt64,
+// generated clients that follow the published spec would send an object
+// payload and hit request validation failures — the spec/runtime drift
+// Codex flagged on PR #127. Catches regression if the override is removed.
+func TestNullableInt64SchemaShape(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	r := chi.NewRouter()
+	queries := store.New(db)
+	h := apiv2.Register(r, apiv2.Deps{DB: db, Queries: queries})
+	pages.Register(h.API, pages.NewService(db, queries, nil, nil, pages.Policy{}))
+	media.Register(h.API, media.NewService(db, queries, nil, t.TempDir()))
+	taxonomy.Register(h.API, taxonomy.NewService(db, queries, nil))
+
+	// Marshal the live OpenAPI document through huma's YAML → JSON round-trip
+	// so we see exactly what /api/v2/openapi.json would serve.
+	openapi := h.OpenAPI()
+	raw, err := openapi.YAML()
+	if err != nil {
+		t.Fatalf("openapi yaml: %v", err)
+	}
+	// Re-parse via the same yaml marshaler that the docs handler uses.
+	var doc map[string]any
+	if err := yamlUnmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse openapi: %v", err)
+	}
+	body, err := lookupSchema(doc, "UpdateMediaBody")
+	if err != nil {
+		t.Fatalf("find UpdateMediaBody: %v", err)
+	}
+	props, _ := body["properties"].(map[string]any)
+	folderID, _ := props["folder_id"].(map[string]any)
+	if folderID == nil {
+		t.Fatalf("UpdateMediaBody has no folder_id property: %v", props)
+	}
+	// Two shapes are acceptable depending on huma version:
+	//   {"type": ["integer","null"], ...}  (OpenAPI 3.1)
+	//   {"type": "integer", "nullable": true, ...}  (OpenAPI 3.0 fallback)
+	switch tt := folderID["type"].(type) {
+	case []any:
+		hasInt, hasNull := false, false
+		for _, v := range tt {
+			if v == "integer" {
+				hasInt = true
+			}
+			if v == "null" {
+				hasNull = true
+			}
+		}
+		if !hasInt || !hasNull {
+			t.Errorf("folder_id type=%v, want both integer and null", tt)
+		}
+	case string:
+		if tt != "integer" {
+			t.Errorf("folder_id type=%q, want integer", tt)
+		}
+		if folderID["nullable"] != true {
+			t.Errorf("folder_id: nullable=%v, want true", folderID["nullable"])
+		}
+	default:
+		t.Errorf("folder_id type has unexpected shape: %T (%v)", tt, tt)
+	}
+	if _, isObject := folderID["properties"]; isObject {
+		t.Errorf("folder_id has properties — schema was generated from the struct shape; override is not taking effect")
+	}
+}
+
+func yamlUnmarshal(raw []byte, out any) error {
+	return yaml.Unmarshal(raw, out)
+}
+
+func lookupSchema(doc map[string]any, name string) (map[string]any, error) {
+	components, ok := doc["components"].(map[string]any)
+	if !ok {
+		return nil, errSchemaMissing(name)
+	}
+	schemas, ok := components["schemas"].(map[string]any)
+	if !ok {
+		return nil, errSchemaMissing(name)
+	}
+	s, ok := schemas[name].(map[string]any)
+	if !ok {
+		return nil, errSchemaMissing(name)
+	}
+	return s, nil
+}
+
+type errSchemaMissing string
+
+func (e errSchemaMissing) Error() string { return "schema not found: " + string(e) }
 
 // TestWriteBodyCappedBeforeParse asserts that POST/PUT/DELETE/PATCH requests
 // to /api/v2 have tiered body caps applied BEFORE huma parses anything:

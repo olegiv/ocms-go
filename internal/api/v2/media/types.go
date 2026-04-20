@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"time"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
 // NullableInt64 decodes a JSON int field that distinguishes three states:
@@ -43,6 +45,21 @@ func (n NullableInt64) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 	return json.Marshal(n.Value)
+}
+
+// Schema overrides the OpenAPI schema huma would otherwise generate by
+// reflecting on the struct fields (IsSet/IsNull/Value). The wire shape is a
+// JSON integer or explicit null, so the published schema must match. Without
+// this override, generated clients that follow the spec would send an object
+// payload like `{"IsSet":true,"Value":42}` and hit request validation failures
+// — exactly the spec/runtime drift Codex flagged on PR #127 review.
+func (NullableInt64) Schema(r huma.Registry) *huma.Schema {
+	_ = r
+	return &huma.Schema{
+		Type:     huma.TypeInteger,
+		Format:   "int64",
+		Nullable: true,
+	}
 }
 
 // Media is the DTO returned by every media response.
