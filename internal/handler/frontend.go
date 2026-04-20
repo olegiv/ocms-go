@@ -1460,8 +1460,28 @@ func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
 		extraRules = cfg.Value
 	}
 
+	// Get Content-Signal directive value from config (contentsignals.org).
+	// When the config key is unset, fall back to a conservative default:
+	// allow search indexing and live agent inference, block training-data
+	// collection. Operators can override via the robots_content_signal
+	// config key, or set it to "off" / "none" / "disabled" to suppress the
+	// directive entirely.
+	const defaultContentSignal = "search=yes, ai-train=no, ai-input=yes"
+	contentSignal := ""
+	if h.cacheManager != nil {
+		contentSignal, _ = h.cacheManager.GetConfig(ctx, "robots_content_signal")
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, "robots_content_signal"); err == nil {
+		contentSignal = cfg.Value
+	}
+	switch strings.ToLower(strings.TrimSpace(contentSignal)) {
+	case "":
+		contentSignal = defaultContentSignal
+	case "off", "none", "disabled":
+		contentSignal = ""
+	}
+
 	// Build robots.txt
-	robotsContent := seo.GenerateRobots(siteURL, disallowAll, extraRules)
+	robotsContent := seo.GenerateRobotsWithSignal(siteURL, disallowAll, extraRules, contentSignal)
 
 	// Send response
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1518,6 +1538,53 @@ func (h *FrontendHandler) Security(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
 	_, _ = w.Write([]byte(securityContent))
+}
+
+// APICatalog serves /.well-known/api-catalog per RFC 9727, advertising the
+// oCMS v2 REST API surface (OpenAPI spec, Swagger UI, health endpoint).
+// Content-Type is application/linkset+json as required by the RFC.
+func (h *FrontendHandler) APICatalog(w http.ResponseWriter, r *http.Request) {
+	siteURL := h.getSiteURL(r.Context(), r)
+	body := seo.BuildAPICatalog(siteURL)
+
+	w.Header().Set("Content-Type", "application/linkset+json")
+	w.Header().Set("Cache-Control", "public, max-age=3600") // 1 hour
+	_, _ = w.Write(body)
+}
+
+// AgentSkillsIndex serves /.well-known/agent-skills/index.json per the
+// Agent Skills Discovery RFC (v0.2.0). The declared skill references the
+// live OpenAPI document; the sha256 field is currently empty because
+// computing it would require pulling in the huma spec at request time
+// (tracked as a follow-up in docs/agent-ready.md).
+func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Request) {
+	siteURL := h.getSiteURL(r.Context(), r)
+	// TODO(phase-2): inject precomputed SHA-256 of the OpenAPI bytes from
+	// main.go so agents can verify the skill reference against drift.
+	body := seo.BuildAgentSkillsIndex(siteURL, "")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(body)
+}
+
+// MCPServerCard serves /.well-known/mcp/server-card.json following the
+// draft SEP-1649 schema. No MCP transport is published ("transport": null)
+// — oCMS exposes a REST fallback via capabilities.rest.openapi. When a
+// real MCP transport ships, update seo.BuildMCPServerCard accordingly.
+func (h *FrontendHandler) MCPServerCard(w http.ResponseWriter, r *http.Request) {
+	siteURL := h.getSiteURL(r.Context(), r)
+	version := ""
+	if h.cacheManager != nil {
+		version, _ = h.cacheManager.GetConfig(r.Context(), "mcp_server_version")
+	} else if cfg, err := h.queries.GetConfigByKey(r.Context(), "mcp_server_version"); err == nil {
+		version = cfg.Value
+	}
+	body := seo.BuildMCPServerCard(siteURL, version)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(body)
 }
 
 // pageToView converts a store.Page to a PageView with computed fields.

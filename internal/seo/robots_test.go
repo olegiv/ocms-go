@@ -163,6 +163,84 @@ func TestRobotsBuilderBuildSiteURLWithTrailingSlash(t *testing.T) {
 	}
 }
 
+func TestRobotsBuilderBuildWithContentSignal(t *testing.T) {
+	tests := []struct {
+		name          string
+		disallowAll   bool
+		signal        string
+		wantContain   []string
+		wantExclude   []string
+		wantSignalPos string // substring that must appear before the signal line
+	}{
+		{
+			name:        "empty signal omitted",
+			disallowAll: false,
+			signal:      "",
+			wantExclude: []string{"Content-Signal:"},
+		},
+		{
+			name:          "signal emitted after allow",
+			disallowAll:   false,
+			signal:        "ai-train=no, search=yes, ai-input=yes",
+			wantContain:   []string{"Content-Signal: ai-train=no, search=yes, ai-input=yes\n"},
+			wantSignalPos: "Allow: /",
+		},
+		{
+			name:        "whitespace-only signal trimmed and omitted",
+			disallowAll: false,
+			signal:      "   \n\t",
+			wantExclude: []string{"Content-Signal:"},
+		},
+		{
+			name:        "signal suppressed when disallowing all",
+			disallowAll: true,
+			signal:      "ai-train=no",
+			wantExclude: []string{"Content-Signal:"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := NewRobotsBuilder(RobotsConfig{
+				SiteURL:       "https://example.com",
+				DisallowAll:   tt.disallowAll,
+				ContentSignal: tt.signal,
+			}).Build()
+
+			for _, want := range tt.wantContain {
+				if !strings.Contains(content, want) {
+					t.Errorf("Build() should contain %q; got:\n%s", want, content)
+				}
+			}
+			for _, exclude := range tt.wantExclude {
+				if strings.Contains(content, exclude) {
+					t.Errorf("Build() should not contain %q; got:\n%s", exclude, content)
+				}
+			}
+			if tt.wantSignalPos != "" {
+				before := strings.Index(content, tt.wantSignalPos)
+				after := strings.Index(content, "Content-Signal:")
+				if before < 0 || after < 0 || before >= after {
+					t.Errorf("Content-Signal should appear after %q; content:\n%s", tt.wantSignalPos, content)
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateRobotsWithSignal(t *testing.T) {
+	got := GenerateRobotsWithSignal("https://example.com", false, "", "search=yes, ai-train=no")
+	if !strings.Contains(got, "Content-Signal: search=yes, ai-train=no") {
+		t.Errorf("GenerateRobotsWithSignal() should emit signal; got:\n%s", got)
+	}
+	// Backward compatibility: empty signal must produce identical output to GenerateRobots.
+	base := GenerateRobots("https://example.com", false, "")
+	equiv := GenerateRobotsWithSignal("https://example.com", false, "", "")
+	if base != equiv {
+		t.Errorf("GenerateRobotsWithSignal() with empty signal must equal GenerateRobots()\nbase:\n%s\nequiv:\n%s", base, equiv)
+	}
+}
+
 func TestGenerateRobots(t *testing.T) {
 	tests := []struct {
 		name        string
