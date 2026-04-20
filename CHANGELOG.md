@@ -7,24 +7,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.19.0] - 2026-04-20
+
+### ⚠️ Breaking Changes
 
 #### REST API
-- Replace `/api/v1` with `/api/v2`: a clean surface served by [huma v2](https://huma.rocks/),
-  with the OpenAPI 3.1 document generated live from Go types (no hand-written spec,
-  no drift possible)
-- Self-host Swagger UI at `/api/v2/docs` (removes reliance on unpkg CDN)
-- Split media upload: `POST /api/v2/media` takes a single file; `POST /api/v2/media/batch`
-  accepts multiple and returns per-file errors
-- Add `/api/v2/status` (public) and `/api/v2/auth` (inspect the calling key) meta endpoints
-- Error envelope preserved (`{error: {code, message, details}}`) so existing clients keep
-  working after updating the base URL
+- `/api/v1` removed. Clients must migrate to `/api/v2`. The error envelope
+  shape (`{error: {code, message, details}}`) is preserved, so for most
+  callers only the base URL changes.
+
+### Added
+
+#### REST API v2
+- New `/api/v2` surface generated from Go types via [huma v2](https://huma.rocks/)
+  + humachi. OpenAPI 3.1 served live at `/api/v2/openapi.json` and
+  `/api/v2/openapi.yaml`; Swagger UI self-hosted at `/api/v2/docs` (no CDN).
+- `GET /api/v2/status` (public liveness) and `GET /api/v2/auth` (inspect the
+  calling API key's prefix, name, and permissions).
+- Single-file vs batch media upload: `POST /api/v2/media` accepts one file;
+  `POST /api/v2/media/batch` accepts many and returns per-file errors.
+- Per-permission OpenAPI Security scopes: every write op advertises its
+  required permission (`pages:write`, `media:write`, `taxonomy:write`) in
+  the spec, and the runtime middleware enforces the scope before huma
+  parses the request body.
+
+#### Developer Tooling
+- `/pr-prepare` slash command that runs `pr-review-toolkit:code-reviewer`
+  (and `silent-failure-hunter` when warranted) against the branch diff to
+  catch blast-radius issues locally before opening a PR.
+
+### Changed
+
+#### Dependencies
+- Update modernc.org/sqlite 1.48.2 → 1.49.1
+- Promote gopkg.in/yaml.v3 from indirect to direct (used by
+  `/api/v2/openapi.yaml` serving)
+
+#### Admin UI
+- Sidebar, API Keys page, and `/admin/docs` now link to `/api/v2` endpoints
+  instead of `/api/v1`
 
 ### Removed
 
 #### REST API
-- Drop the entire `/api/v1` surface and the `internal/handler/api` package — the legacy
-  spec drift that motivated the rewrite no longer has a place to hide
+- Drop the entire `/api/v1` surface and the `internal/handler/api` package.
+  The chronic spec drift that motivated the rewrite no longer has anywhere
+  to hide.
+
+### Security
+
+#### API v2 Hardening
+- Restore per-API-key rate limiter on write methods (10 rps / burst 20),
+  matching v1; authenticated reads stay on the global IP-level limit only
+- Mandatory API key authentication runs BEFORE huma parses the request
+  body, so unauthenticated callers cannot force multipart / tempfile work
+  on `POST /media`
+- Permission check runs before body parse: a read-only key hitting a write
+  op gets 403 without any body work
+- Tiered request-body caps: 100 MiB for multipart file uploads, 1 MiB for
+  JSON and form-urlencoded (v1-parity; v2's scaffold had no cap initially)
+- Surface specific auth rejection reasons on writes ("API key expired",
+  "access not allowed from this IP", "Too many authentication attempts"
+  for Argon2 slot saturation, "Invalid Authorization header format") —
+  v2's initial `OptionalAPIKeyAuth` collapsed them into a generic 401
+- Declare `ApiKeyAuth` in `components.securitySchemes`; every write
+  operation and `GET /auth` carry `Security` in the spec so Swagger UI
+  shows the padlock and generated clients attach the Authorization header
+
+#### Input Validation
+- Validate `canonical_url` and `video_url` on pages: scheme allowlist
+  (http/https only; `javascript:` and similar rejected) and 2048-char cap
+- Sanitize media filename on `PUT /media/{id}` — strip path separators
+  and HTML-dangerous characters (`<`, `>`, `&`, `#`, quotes, percent,
+  backslash). Previously only the upload path sanitized
+- Validate `language_code` for format (`util.IsValidLangCode`) and
+  existence (`GetLanguageByCode`) on pages, tags, and categories before
+  persisting
+- Reject `folder_id` overflow: `strconv.ParseInt` replaces the hand-rolled
+  `id * 10 + digit` scan that wrapped on 20-plus-digit inputs into bogus
+  positive IDs
+- Restrict `X-Forwarded-Proto` in the docs helper to `http` or `https`;
+  other values ignored (previously trusted any value)
+
+#### Information Disclosure
+- Scrub non-domain errors in `UploadBatch` to a generic "Upload failed"
+  message instead of passing raw filesystem / imaging library strings
+  through to the API response
+
+#### Observability
+- Reinstate audit events on every successful v2 write (pages, media, tags,
+  categories — 13 sites). v2's initial scaffold silently dropped v1's
+  audit-log calls; `/admin/events` now sees API-driven changes again
+
+#### Spec/Runtime Coherence
+- Introduce `NullableInt64` JSON sentinel with a `SchemaProvider` override,
+  so `PUT /api/v2/media/{id}` with `"folder_id": null` correctly clears
+  the folder assignment (previously silently no-opped because `*int64`
+  could not distinguish absent from null), and the OpenAPI schema
+  advertises `integer | null` instead of the reflected struct shape
+
+### Fixed
+
+#### REST API v2
+- Propagate `resolveLanguageCode` validation errors as 422 with field
+  details instead of flattening to generic 500 in pages and taxonomy
+  write paths
+- Don't silently swallow `UpdateMedia` errors from the alt/caption step
+  of `POST /media`: log via `slog.Warn` with media_id so operators can
+  reconcile, and return the DTO that actually matches the persisted row
 
 ## [0.18.1] - 2026-04-14
 
@@ -971,7 +1061,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.18.1...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/olegiv/ocms-go/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/olegiv/ocms-go/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/olegiv/ocms-go/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/olegiv/ocms-go/compare/v0.16.0...v0.17.0
