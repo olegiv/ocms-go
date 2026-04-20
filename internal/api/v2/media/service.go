@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/textproto"
 	"path/filepath"
@@ -29,16 +30,19 @@ import (
 type Service struct {
 	db        *sql.DB
 	queries   *store.Queries
+	events    *service.EventService
 	uploader  *service.MediaService
 	uploadDir string
 }
 
 // NewService constructs a v2 media Service. The uploadDir is used when the
-// underlying service.MediaService writes files to disk.
-func NewService(db *sql.DB, queries *store.Queries, uploadDir string) *Service {
+// underlying service.MediaService writes files to disk. events may be nil in
+// tests; when non-nil every successful write records an audit row.
+func NewService(db *sql.DB, queries *store.Queries, events *service.EventService, uploadDir string) *Service {
 	return &Service{
 		db:        db,
 		queries:   queries,
+		events:    events,
 		uploader:  service.NewMediaService(db, uploadDir),
 		uploadDir: uploadDir,
 	}
@@ -273,13 +277,27 @@ func (s *Service) Upload(ctx context.Context, a v2.Actor, in UploadMediaMetadata
 			LanguageCode: result.Media.LanguageCode,
 			UpdatedAt:    time.Now(),
 		}
-		if updated, err := s.queries.UpdateMedia(ctx, params); err == nil {
+		updated, err := s.queries.UpdateMedia(ctx, params)
+		if err != nil {
+			// File is on disk and the media row exists. Failing the whole upload
+			// would orphan the file; instead log so operators can reconcile and
+			// return the row without the alt/caption applied, matching the state
+			// actually persisted to the database.
+			slog.Warn("failed to apply alt/caption to uploaded media",
+				"error", err, "media_id", result.Media.ID)
+		} else {
 			result.Media = updated
 		}
 	}
 
 	dto := dtoFromStore(result.Media)
 	dto.Variants = variantsToDTOs(result.Variants, dto.UUID, dto.Filename)
+	s.logMediaAudit(ctx, a, "API: Media uploaded", map[string]any{
+		"media_id": result.Media.ID,
+		"filename": result.Media.Filename,
+		"mime":     result.Media.MimeType,
+		"size":     result.Media.Size,
+	})
 	return &dto, nil
 }
 
@@ -304,6 +322,13 @@ func (s *Service) UploadBatch(ctx context.Context, a v2.Actor, in UploadMediaMet
 	if len(res.Uploaded) == 0 {
 		return nil, v2.NewValidationError(map[string]string{"files": "All uploads failed"}, "Upload failed")
 	}
+	// Per-file uploads already logged by Upload itself; this event records the
+	// batch shape so operators see "one batch" instead of N individual entries
+	// when reconstructing a bulk import.
+	s.logMediaAudit(ctx, a, "API: Media uploaded (batch)", map[string]any{
+		"uploaded_count": len(res.Uploaded),
+		"error_count":    len(res.Errors),
+	})
 	return res, nil
 }
 
@@ -356,6 +381,10 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateMed
 	if variants, err := s.queries.GetMediaVariants(ctx, updated.ID); err == nil {
 		dto.Variants = variantsToDTOs(variants, dto.UUID, dto.Filename)
 	}
+	s.logMediaAudit(ctx, a, "API: Media updated", map[string]any{
+		"media_id": updated.ID,
+		"filename": updated.Filename,
+	})
 	return &dto, nil
 }
 
@@ -373,7 +402,21 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 	if err := s.uploader.Delete(ctx, id); err != nil {
 		return v2.NewError(v2.ErrInternal, "Failed to delete media")
 	}
+	s.logMediaAudit(ctx, a, "API: Media deleted", map[string]any{
+		"media_id": id,
+	})
 	return nil
+}
+
+// logMediaAudit records an audit-level event for a successful Media mutation.
+// Best-effort: logging failures are swallowed because the upload/delete side
+// effect is already committed; see the pages equivalent for the same rationale.
+func (s *Service) logMediaAudit(ctx context.Context, a v2.Actor, message string, meta map[string]any) {
+	if s.events == nil || a.APIKey == nil {
+		return
+	}
+	userID := a.APIKey.CreatedBy
+	_ = s.events.LogMediaEvent(ctx, model.EventLevelInfo, message, &userID, "", "", meta)
 }
 
 // variantsToDTOs converts store.MediaVariant slices to Variant DTO slices,

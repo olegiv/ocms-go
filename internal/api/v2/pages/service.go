@@ -275,6 +275,19 @@ func (s *Service) invalidatePageCache(pageID int64) {
 	}
 }
 
+// logPageAudit records an audit-level event for a successful Page mutation.
+// Best-effort: logging failures are swallowed because rolling back a completed
+// page write on a missed audit row would be worse than the audit gap. Mirrors
+// v1 `/api/v1/pages/*` event logging so admins keep seeing API-driven page
+// changes in /admin/events.
+func (s *Service) logPageAudit(ctx context.Context, a v2.Actor, message string, meta map[string]any) {
+	if s.events == nil || a.APIKey == nil {
+		return
+	}
+	userID := a.APIKey.CreatedBy
+	_ = s.events.LogPageEvent(ctx, model.EventLevelInfo, message, &userID, "", "", meta)
+}
+
 // pageNotFound is the canonical "page not found" response (used for both
 // missing rows and published-only visibility).
 func pageNotFound(ref any) error {
@@ -391,6 +404,12 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 		return nil, v2.NewError(v2.ErrInternal, "Failed to commit page")
 	}
 	s.invalidatePageCache(page.ID)
+	s.logPageAudit(ctx, a, "API: Page created", map[string]any{
+		"page_id": page.ID,
+		"slug":    page.Slug,
+		"title":   page.Title,
+		"status":  page.Status,
+	})
 
 	dto := dtoFromStore(page)
 	s.populateIncludes(ctx, &dto, page.ID, true, ListFilter{IncludeCategories: true, IncludeTags: true})
@@ -501,6 +520,12 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		return nil, v2.NewError(v2.ErrInternal, "Failed to commit page update")
 	}
 	s.invalidatePageCache(page.ID)
+	s.logPageAudit(ctx, a, "API: Page updated", map[string]any{
+		"page_id": page.ID,
+		"slug":    page.Slug,
+		"title":   page.Title,
+		"status":  page.Status,
+	})
 
 	dto := dtoFromStore(page)
 	s.populateIncludes(ctx, &dto, page.ID, true, ListFilter{IncludeCategories: true, IncludeTags: true})
@@ -644,6 +669,11 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		return v2.NewError(v2.ErrInternal, "Failed to commit delete")
 	}
 	s.invalidatePageCache(page.ID)
+	s.logPageAudit(ctx, a, "API: Page deleted", map[string]any{
+		"page_id": page.ID,
+		"slug":    page.Slug,
+		"title":   page.Title,
+	})
 	return nil
 }
 

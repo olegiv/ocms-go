@@ -18,7 +18,7 @@ import (
 func newTestService(t *testing.T) (*media.Service, func()) {
 	t.Helper()
 	db, cleanup := testutil.TestDB(t)
-	return media.NewService(db, store.New(db), t.TempDir()), cleanup
+	return media.NewService(db, store.New(db), nil, t.TempDir()), cleanup
 }
 
 func TestListMediaEmpty(t *testing.T) {

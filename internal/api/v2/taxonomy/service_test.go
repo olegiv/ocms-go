@@ -19,7 +19,7 @@ import (
 func newTestService(t *testing.T) (*taxonomy.Service, func()) {
 	t.Helper()
 	db, cleanup := testutil.TestDB(t)
-	return taxonomy.NewService(db, store.New(db)), cleanup
+	return taxonomy.NewService(db, store.New(db), nil), cleanup
 }
 
 func writerActor(t *testing.T) v2.Actor {

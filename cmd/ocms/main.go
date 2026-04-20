@@ -1862,7 +1862,19 @@ func run() error {
 	r.Route("/api/v2", func(r chi.Router) {
 		apiV2RateLimiter := middleware.NewGlobalRateLimiter(100, 200)
 		r.Use(apiV2RateLimiter.Middleware())
-		r.Use(middleware.OptionalAPIKeyAuth(db))
+		// Auth is required for write methods and for the authenticated-only
+		// /auth meta endpoint; other GETs accept unauthenticated calls and
+		// apply published-only visibility instead. Using ConditionalAPIKeyAuth
+		// preserves the specific rejection reasons (expired, IP policy, slot
+		// saturation, etc.) that OptionalAPIKeyAuth swallowed, while still
+		// allowing public reads of /api/v2/{status,pages,media,tags,categories}.
+		r.Use(middleware.ConditionalAPIKeyAuth(db, func(req *http.Request) bool {
+			switch req.Method {
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+				return true
+			}
+			return req.URL.Path == "/api/v2/auth"
+		}))
 		// Per-API-key throttle layered on top of the global IP limiter so a
 		// single authenticated key cannot drive unbounded mutation throughput.
 		// Matches the v1 behaviour Codex flagged as missing after the rewrite.
@@ -1881,9 +1893,9 @@ func run() error {
 			SanitizeHTML:          cfg.SanitizePageHTML,
 		})
 		apiv2pages.Register(apiV2.API, pagesSvc)
-		mediaSvc := apiv2media.NewService(db, v2Queries, cfg.UploadsDir)
+		mediaSvc := apiv2media.NewService(db, v2Queries, v2Events, cfg.UploadsDir)
 		apiv2media.Register(apiV2.API, mediaSvc)
-		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries)
+		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries, v2Events)
 		apiv2taxonomy.Register(apiV2.API, taxonomySvc)
 		apiV2Docs, err := apiv2.NewDocsServer(templatesFS, apiV2)
 		if err != nil {

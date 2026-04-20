@@ -28,9 +28,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
-// TestOpenAPISurface asserts every expected /api/v2 path is registered. If a
-// domain operation is dropped or its path renamed, this test breaks — clients
-// consuming the OpenAPI doc get the same visibility we do.
+// TestOpenAPISurface asserts every expected /api/v2 path AND method is
+// registered. Checking only paths would let an accidental `PATCH /pages/{id}`
+// or `HEAD /media` slip through unnoticed; tracking methods per path makes
+// the surface two-dimensional so quiet additions or removals break CI.
 func TestOpenAPISurface(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
@@ -40,32 +41,67 @@ func TestOpenAPISurface(t *testing.T) {
 	h := apiv2.Register(r, apiv2.Deps{DB: db, Queries: queries})
 
 	pages.Register(h.API, pages.NewService(db, queries, nil, nil, pages.Policy{}))
-	media.Register(h.API, media.NewService(db, queries, t.TempDir()))
-	taxonomy.Register(h.API, taxonomy.NewService(db, queries))
+	media.Register(h.API, media.NewService(db, queries, nil, t.TempDir()))
+	taxonomy.Register(h.API, taxonomy.NewService(db, queries, nil))
 
-	want := []string{
-		"/auth",
-		"/categories",
-		"/categories/{id}",
-		"/media",
-		"/media/batch",
-		"/media/{id}",
-		"/pages",
-		"/pages/slug/{slug}",
-		"/pages/{id}",
-		"/status",
-		"/tags",
-		"/tags/{id}",
+	want := map[string][]string{
+		"/auth":              {"GET"},
+		"/categories":        {"GET", "POST"},
+		"/categories/{id}":   {"DELETE", "GET", "PUT"},
+		"/media":             {"GET", "POST"},
+		"/media/batch":       {"POST"},
+		"/media/{id}":        {"DELETE", "GET", "PUT"},
+		"/pages":             {"GET", "POST"},
+		"/pages/slug/{slug}": {"GET"},
+		"/pages/{id}":        {"DELETE", "GET", "PUT"},
+		"/status":            {"GET"},
+		"/tags":              {"GET", "POST"},
+		"/tags/{id}":         {"DELETE", "GET", "PUT"},
 	}
 
-	got := make([]string, 0, len(h.OpenAPI().Paths))
-	for p := range h.OpenAPI().Paths {
-		got = append(got, p)
+	got := map[string][]string{}
+	for p, item := range h.OpenAPI().Paths {
+		if item == nil {
+			continue
+		}
+		methods := []string{}
+		for _, entry := range []struct {
+			method string
+			op     *huma.Operation
+		}{
+			{"GET", item.Get},
+			{"POST", item.Post},
+			{"PUT", item.Put},
+			{"DELETE", item.Delete},
+			{"PATCH", item.Patch},
+			{"HEAD", item.Head},
+			{"OPTIONS", item.Options},
+		} {
+			if entry.op != nil {
+				methods = append(methods, entry.method)
+			}
+		}
+		sort.Strings(methods)
+		got[p] = methods
 	}
-	sort.Strings(got)
 
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("OpenAPI paths drifted:\n  want: %v\n  got:  %v", want, got)
+	wantPaths := make([]string, 0, len(want))
+	for p := range want {
+		wantPaths = append(wantPaths, p)
+	}
+	sort.Strings(wantPaths)
+	gotPaths := make([]string, 0, len(got))
+	for p := range got {
+		gotPaths = append(gotPaths, p)
+	}
+	sort.Strings(gotPaths)
+	if strings.Join(gotPaths, ",") != strings.Join(wantPaths, ",") {
+		t.Fatalf("OpenAPI paths drifted:\n  want: %v\n  got:  %v", wantPaths, gotPaths)
+	}
+	for _, p := range wantPaths {
+		if strings.Join(got[p], ",") != strings.Join(want[p], ",") {
+			t.Errorf("OpenAPI methods drifted for %s:\n  want: %v\n  got:  %v", p, want[p], got[p])
+		}
 	}
 }
 
@@ -201,10 +237,14 @@ func extractOperationLiteral(arg ast.Expr) (*ast.CompositeLit, bool) {
 	return lit, true
 }
 
-// handlerGatesOnAuth detects the two canonical auth-rejection patterns in a
-// huma handler body:
-//  1. `if actor.APIKey == nil { return ... }` (read ops)
-//  2. `s.requireWritePerm(a)` or `svc.requireWritePerm(actor)` (write ops)
+// handlerGatesOnAuth detects the canonical auth-rejection patterns in a huma
+// handler body. v2 handlers are thin — they delegate to services — so most
+// gates live one call away:
+//  1. `if actor.APIKey == nil { return ... }` (inline check)
+//  2. `*.requireWritePerm(a)` (direct call)
+//  3. `svc.<Create|Update|Delete|Upload>(ctx, actor, ...)` (service delegation
+//     where the service method calls requireWritePerm inside). This covers
+//     every v2 write op that otherwise hides the gate behind one indirection.
 func handlerGatesOnAuth(h *ast.FuncLit) bool {
 	gated := false
 	ast.Inspect(h.Body, func(n ast.Node) bool {
@@ -217,11 +257,36 @@ func handlerGatesOnAuth(h *ast.FuncLit) bool {
 				}
 			}
 		}
-		// Pattern 2: call to a *.requireWritePerm function.
+		// Pattern 2: direct call to a *.requireWritePerm function.
 		if call, ok := n.(*ast.CallExpr); ok {
 			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "requireWritePerm" {
 				gated = true
 				return false
+			}
+		}
+		// Pattern 3: service-level write call where the 2nd argument is the
+		// actor. Any `svc.Verb(ctx, actor, ...)` whose Verb starts with a
+		// known write prefix counts: the service's first act is the auth
+		// gate via requireWritePerm.
+		if call, ok := n.(*ast.CallExpr); ok && len(call.Args) >= 2 {
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			name := sel.Sel.Name
+			isWriteVerb := strings.HasPrefix(name, "Create") ||
+				strings.HasPrefix(name, "Update") ||
+				strings.HasPrefix(name, "Delete") ||
+				strings.HasPrefix(name, "Upload")
+			if !isWriteVerb {
+				return true
+			}
+			// 2nd arg should be an identifier named "actor" or similar.
+			if id, ok := call.Args[1].(*ast.Ident); ok {
+				if id.Name == "actor" || id.Name == "a" {
+					gated = true
+					return false
+				}
 			}
 		}
 		return true
@@ -402,8 +467,8 @@ func TestSecurityDeclarationEnforcedAtRuntime(t *testing.T) {
 	queries := store.New(db)
 	h := apiv2.Register(r, apiv2.Deps{DB: db, Queries: queries})
 	pages.Register(h.API, pages.NewService(db, queries, nil, nil, pages.Policy{}))
-	media.Register(h.API, media.NewService(db, queries, t.TempDir()))
-	taxonomy.Register(h.API, taxonomy.NewService(db, queries))
+	media.Register(h.API, media.NewService(db, queries, nil, t.TempDir()))
+	taxonomy.Register(h.API, taxonomy.NewService(db, queries, nil))
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()

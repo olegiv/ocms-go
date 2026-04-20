@@ -12,6 +12,7 @@ import (
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -20,11 +21,13 @@ import (
 type Service struct {
 	db      *sql.DB
 	queries *store.Queries
+	events  *service.EventService
 }
 
-// NewService constructs a Taxonomy service.
-func NewService(db *sql.DB, queries *store.Queries) *Service {
-	return &Service{db: db, queries: queries}
+// NewService constructs a Taxonomy service. events may be nil in tests; when
+// non-nil every successful write records an audit row.
+func NewService(db *sql.DB, queries *store.Queries, events *service.EventService) *Service {
+	return &Service{db: db, queries: queries, events: events}
 }
 
 // requireWritePerm returns a domain error when the actor cannot write taxonomy.
@@ -143,6 +146,11 @@ func (s *Service) CreateTag(ctx context.Context, a v2.Actor, in CreateTagBody) (
 	if err != nil {
 		return nil, v2.NewError(v2.ErrInternal, "Failed to create tag")
 	}
+	s.logTagAudit(ctx, a, "API: Tag created", map[string]any{
+		"tag_id": tag.ID,
+		"name":   tag.Name,
+		"slug":   tag.Slug,
+	})
 	return &TaxonomyTag{
 		ID:           tag.ID,
 		Name:         tag.Name,
@@ -194,6 +202,11 @@ func (s *Service) UpdateTag(ctx context.Context, a v2.Actor, id int64, in Update
 		return nil, v2.NewError(v2.ErrInternal, "Failed to update tag")
 	}
 	count, _ := s.queries.CountPagesForTag(ctx, tag.ID)
+	s.logTagAudit(ctx, a, "API: Tag updated", map[string]any{
+		"tag_id": tag.ID,
+		"name":   tag.Name,
+		"slug":   tag.Slug,
+	})
 	return &TaxonomyTag{
 		ID:           tag.ID,
 		Name:         tag.Name,
@@ -219,6 +232,7 @@ func (s *Service) DeleteTag(ctx context.Context, a v2.Actor, id int64) error {
 	if err := s.queries.DeleteTag(ctx, id); err != nil {
 		return v2.NewError(v2.ErrInternal, "Failed to delete tag")
 	}
+	s.logTagAudit(ctx, a, "API: Tag deleted", map[string]any{"tag_id": id})
 	return nil
 }
 
@@ -319,6 +333,11 @@ func (s *Service) CreateCategory(ctx context.Context, a v2.Actor, in CreateCateg
 	if err != nil {
 		return nil, v2.NewError(v2.ErrInternal, "Failed to create category")
 	}
+	s.logCategoryAudit(ctx, a, "API: Category created", map[string]any{
+		"category_id": cat.ID,
+		"name":        cat.Name,
+		"slug":        cat.Slug,
+	})
 	dto := categoryToDTO(cat, 0)
 	return &dto, nil
 }
@@ -395,6 +414,11 @@ func (s *Service) UpdateCategory(ctx context.Context, a v2.Actor, id int64, in U
 		return nil, v2.NewError(v2.ErrInternal, "Failed to update category")
 	}
 	count, _ := s.queries.CountPagesByCategory(ctx, cat.ID)
+	s.logCategoryAudit(ctx, a, "API: Category updated", map[string]any{
+		"category_id": cat.ID,
+		"name":        cat.Name,
+		"slug":        cat.Slug,
+	})
 	dto := categoryToDTO(cat, count)
 	return &dto, nil
 }
@@ -418,7 +442,28 @@ func (s *Service) DeleteCategory(ctx context.Context, a v2.Actor, id int64) erro
 	if err := s.queries.DeleteCategory(ctx, cat.ID); err != nil {
 		return v2.NewError(v2.ErrInternal, "Failed to delete category")
 	}
+	s.logCategoryAudit(ctx, a, "API: Category deleted", map[string]any{"category_id": cat.ID})
 	return nil
+}
+
+// logTagAudit records an audit-level event for a successful tag mutation.
+// Best-effort: logging failures are swallowed. Mirrors v1 tag audit trails.
+func (s *Service) logTagAudit(ctx context.Context, a v2.Actor, message string, meta map[string]any) {
+	if s.events == nil || a.APIKey == nil {
+		return
+	}
+	userID := a.APIKey.CreatedBy
+	_ = s.events.LogTagEvent(ctx, model.EventLevelInfo, message, &userID, "", "", meta)
+}
+
+// logCategoryAudit records an audit-level event for a successful category
+// mutation. Best-effort like logTagAudit.
+func (s *Service) logCategoryAudit(ctx context.Context, a v2.Actor, message string, meta map[string]any) {
+	if s.events == nil || a.APIKey == nil {
+		return
+	}
+	userID := a.APIKey.CreatedBy
+	_ = s.events.LogCategoryEvent(ctx, model.EventLevelInfo, message, &userID, "", "", meta)
 }
 
 func (s *Service) ensureCategorySlugUnique(ctx context.Context, slug string, excludeID int64) error {
