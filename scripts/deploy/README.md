@@ -379,6 +379,8 @@ sudo /opt/ocms/healthcheck-multi.sh example_com
 
 Auto-restarts failed systemd-managed instances (max 3 attempts, 5-min cooldown). Supports optional Slack and email alerting — edit the script to configure.
 
+**Limitation:** the healthcheck only acts on sites currently reporting `systemctl is-active` with a failing `/health/ready`. It **skips** `inactive`/`failed` units — so it does not recover sites that never started (e.g., after a reboot with `disabled` units). For reboot recovery, `systemctl enable` is the only safety net; see the Troubleshooting section.
+
 ## Cron Jobs
 
 ```bash
@@ -495,6 +497,38 @@ sudo journalctl -u ocms@example_com -n 50
 # - Missing OCMS_SESSION_SECRET in .env
 # - Permission denied on data/ or uploads/
 # - Port already in use
+# - Missing systemd drop-in (see next section)
+```
+
+### Systemd Drop-In Missing
+
+Symptom: the journal shows `OCMS_SESSION_SECRET is not set` on a tight restart loop, but the `.env` file exists and contains the secret. Cause: the per-instance drop-in at `/etc/systemd/system/ocms@<site_id>.service.d/instance.conf` is gone (snapshot restore, manual cleanup, etc.), so systemd runs only the template — no `EnvironmentFile=`, no `WorkingDirectory=`, no `User=`.
+
+Diagnose:
+
+```bash
+sudo systemctl cat ocms@example_com                              # no [Service] User=/EnvironmentFile= lines?
+sudo ls /etc/systemd/system/ocms@example_com.service.d/ 2>&1     # "No such file or directory"?
+```
+
+Fix — recreate the drop-in (values come from `/etc/ocms/sites.conf`; copy the format from a working site's `instance.conf`):
+
+```bash
+sudo systemctl stop ocms@example_com
+
+sudo mkdir -p /etc/systemd/system/ocms@example_com.service.d
+sudo tee /etc/systemd/system/ocms@example_com.service.d/instance.conf > /dev/null <<'EOF'
+[Service]
+User=<system_user>
+Group=psaserv
+WorkingDirectory=/var/www/vhosts/example.com/ocms
+EnvironmentFile=/var/www/vhosts/example.com/ocms/.env
+ReadWritePaths=/var/www/vhosts/example.com/ocms
+SyslogIdentifier=ocms-example_com
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl start ocms@example_com
 ```
 
 ### 502 Bad Gateway
@@ -534,6 +568,30 @@ Also ensure **Proxy mode** is unchecked in Apache & nginx Settings.
 sudo chown -R {user}:psaserv {vhost}/ocms/data {vhost}/ocms/uploads
 sudo chmod 600 {vhost}/ocms/.env
 ```
+
+### Sites Don't Come Back After Reboot
+
+Symptom: after a server restart, every domain returns 502 from nginx and `ocmsctl list` shows every site `stopped`.
+
+Cause: the systemd units were never `systemctl enable`-d, so they don't auto-start at boot. `setup-site.sh` prints the enable command as a final step, but it's easy to skip — or to get undone by a manual `systemctl disable`.
+
+Diagnose:
+
+```bash
+sudo /opt/ocms/bin/ocmsctl list          # all "stopped"?
+sudo systemctl is-enabled 'ocms@*'       # any "disabled"?
+```
+
+Fix — enable every site registered in `sites.conf`:
+
+```bash
+sudo awk '!/^#/ && NF>0 {print $1}' /etc/ocms/sites.conf \
+  | xargs -I{} sudo systemctl enable --now ocms@{}
+```
+
+After this, all sites auto-start on every future reboot.
+
+**Note:** `healthcheck-multi.sh` does **not** revive this class of failure. It only restarts sites that are currently `active` but unhealthy; it skips `inactive`/`failed` units. `systemctl enable` is the only safety net that survives a reboot.
 
 ### Database Corruption
 
