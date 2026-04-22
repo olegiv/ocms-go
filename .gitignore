@@ -1,7 +1,8 @@
 /data/
 /web/static/dist/
 /uploads/
-.env
+.env*
+*.api_keys
 /bin/
 /logs/
 .audit
