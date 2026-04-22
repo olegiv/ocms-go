@@ -38,6 +38,16 @@ type LoginProtection struct {
 	// IP-based rate limiting (uses limiterCache from api.go)
 	ipLimiters *limiterCache[string]
 
+	// attemptsMu serializes the read-modify-write sequence in
+	// RecordFailedAttempt so concurrent failed logins for the same
+	// email cannot race and undercount (both reading count=N, both
+	// writing count=N+1 when the true answer is N+2). oCMS's default
+	// deployment is single-instance; this mutex is sufficient for
+	// that model. A multi-instance deployment with a shared SQLite
+	// file would need DB-level coordination (BEGIN IMMEDIATE + retry
+	// on SQLITE_BUSY) instead; not implemented here.
+	attemptsMu sync.Mutex
+
 	// Configuration
 	maxFailedAttempts int           // Lock account after this many failures
 	lockoutDuration   time.Duration // Base lockout duration (doubles with each lockout)
@@ -147,6 +157,12 @@ func (lp *LoginProtection) RecordFailedAttempt(email string) (bool, time.Duratio
 	if lp.db == nil {
 		return false, 0
 	}
+	// Serialize the read-modify-write so two concurrent failed logins
+	// for the same email do not both read count=N and both write count=N+1
+	// (losing the second increment). See attemptsMu comment on the struct.
+	lp.attemptsMu.Lock()
+	defer lp.attemptsMu.Unlock()
+
 	ctx := context.Background()
 	q := store.New(lp.db)
 	now := time.Now()

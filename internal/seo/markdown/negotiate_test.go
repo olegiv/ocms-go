@@ -28,6 +28,13 @@ func TestWantsMarkdown(t *testing.T) {
 		{"text wildcard only", "text/*", false},
 		{"malformed header yields no match", "not a media type", false},
 		{"json with markdown", "application/json, text/markdown", true},
+		// RFC 9110 §12.5.1: q=0 means "not acceptable". Drift test for
+		// Codex PR #129 review (P2) — a client that explicitly rejects
+		// markdown must not receive markdown, even when no HTML entry
+		// is listed.
+		{"explicit q=0 rejects markdown", "text/markdown;q=0", false},
+		{"explicit q=0 with wildcard", "text/markdown;q=0, */*", false},
+		{"explicit q=0 wins over html", "text/markdown;q=0, text/html;q=0.5", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

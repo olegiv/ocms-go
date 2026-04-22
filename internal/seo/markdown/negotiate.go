@@ -84,7 +84,11 @@ func WantsMarkdown(r *http.Request) bool {
 			}
 		}
 	}
-	if !mdSeen {
+	// RFC 9110 §12.5.1: "A value of 'q=0' means 'not acceptable'." So
+	// `Accept: text/markdown;q=0` must not cause us to serve markdown,
+	// even when no HTML media type is listed. Require mdQ > 0 before
+	// considering markdown as a candidate.
+	if !mdSeen || mdQ <= 0 {
 		return false
 	}
 	// Strict preference: markdown must beat HTML. If HTML is not listed at

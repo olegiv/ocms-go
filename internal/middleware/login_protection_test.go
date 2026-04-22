@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,12 +25,16 @@ func testLoginProtectionConfig(maxAttempts int, lockoutDuration, attemptWindow t
 	}
 }
 
-// testLoginProtectionDB opens an in-memory SQLite DB and creates the
-// login_protection table. Used by tests that exercise lockout state —
-// everything that calls NewLoginProtection with a non-nil DB.
+// testLoginProtectionDB opens a per-test in-memory SQLite DB with a
+// shared cache so concurrent goroutines using the same *sql.DB handle
+// all see the same table. Without `cache=shared`, each connection Go's
+// pool opens would get its own empty `:memory:` DB and the tests would
+// see "no such table" errors. The test-specific `&test=<name>` segment
+// isolates databases per-test so parallel tests do not collide.
 func testLoginProtectionDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:")
+	dsn := "file:" + t.Name() + "?mode=memory&cache=shared"
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -254,6 +259,42 @@ func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 	remaining = lp.GetRemainingAttempts(email)
 	if remaining != cfg.MaxFailedAttempts {
 		t.Errorf("GetRemainingAttempts() after window = %d, want %d", remaining, cfg.MaxFailedAttempts)
+	}
+}
+
+// TestRecordFailedAttemptIsSerialized is the drift test for the Codex P1
+// finding on PR #129: without serialization, concurrent failed logins for
+// the same email race in the read-modify-write cycle (both read count=N,
+// both compute and write count=N+1) and undercount attempts, weakening
+// the lockout control. With the attemptsMu mutex, every increment is
+// observed.
+//
+// The test spawns N concurrent goroutines calling RecordFailedAttempt
+// against the same email, all under a per-email window large enough that
+// no lockout is triggered. The final attempt_count must equal N exactly.
+// Removing the mutex makes this test fail intermittently with count < N.
+func TestRecordFailedAttemptIsSerialized(t *testing.T) {
+	// Large attempt count with a high lockout threshold so the loop
+	// exercises the "increment" path every time, never the "lock" path.
+	cfg := testLoginProtectionConfig(1_000_000, 1*time.Minute, 1*time.Minute)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
+	email := "race@example.com"
+
+	const parallelism = 50
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+	for range parallelism {
+		go func() {
+			defer wg.Done()
+			lp.RecordFailedAttempt(email)
+		}()
+	}
+	wg.Wait()
+
+	remaining := lp.GetRemainingAttempts(email)
+	got := cfg.MaxFailedAttempts - remaining
+	if got != parallelism {
+		t.Errorf("attempt_count after %d concurrent failures = %d, want %d (racy read-modify-write lost increments)", parallelism, got, parallelism)
 	}
 }
 
