@@ -84,7 +84,13 @@ is_systemd_active() {
 
 is_systemd_managed() {
     local site_id="$1"
-    systemctl is-enabled --quiet "ocms@${site_id}" 2>/dev/null
+    # Treat the site as systemd-managed if the unit is enabled OR currently
+    # active. is-enabled alone misses units started manually via
+    # `systemctl start` without being enabled, which would cause stop/restart
+    # to skip delegation and fall through to PID-file logic on a service
+    # systemd is already running.
+    systemctl is-enabled --quiet "ocms@${site_id}" 2>/dev/null || \
+        systemctl is-active --quiet "ocms@${site_id}" 2>/dev/null
 }
 
 # --- Commands ---
