@@ -255,10 +255,19 @@ func (lp *LoginProtection) RecordFailedAttempt(email string) (bool, time.Duratio
 }
 
 // RecordSuccessfulLogin clears failed attempt tracking for an account.
+//
+// Holds the same attemptsMu as RecordFailedAttempt so a concurrent failed
+// attempt cannot read state, have it deleted underneath, and then re-upsert
+// a stale counter — which would cause "successful login clears attempts"
+// to silently regress and potentially re-lock the user. See attemptsMu
+// comment on the struct.
 func (lp *LoginProtection) RecordSuccessfulLogin(email string) {
 	if lp.db == nil {
 		return
 	}
+	lp.attemptsMu.Lock()
+	defer lp.attemptsMu.Unlock()
+
 	if err := store.New(lp.db).DeleteLoginProtection(context.Background(), email); err != nil {
 		slog.Error("login_protection: delete", "error", err, "email", email)
 		return

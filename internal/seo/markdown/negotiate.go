@@ -82,6 +82,15 @@ func WantsMarkdown(r *http.Request) bool {
 			if q > htmlQ {
 				htmlQ = q
 			}
+		case "text/*", "*/*":
+			// Wildcards that cover HTML also cap the HTML quality.
+			// Without this, `Accept: text/markdown;q=0.2, */*;q=0.9`
+			// would serve markdown even though the wildcard puts HTML
+			// at q=0.9. Wildcards do NOT set mdSeen — markdown must
+			// be listed explicitly before we serve it.
+			if q > htmlQ {
+				htmlQ = q
+			}
 		}
 	}
 	// RFC 9110 §12.5.1: "A value of 'q=0' means 'not acceptable'." So

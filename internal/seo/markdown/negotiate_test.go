@@ -35,6 +35,13 @@ func TestWantsMarkdown(t *testing.T) {
 		{"explicit q=0 rejects markdown", "text/markdown;q=0", false},
 		{"explicit q=0 with wildcard", "text/markdown;q=0, */*", false},
 		{"explicit q=0 wins over html", "text/markdown;q=0, text/html;q=0.5", false},
+		// Drift tests for Codex PR #129 round 2: wildcard ranges that
+		// cover HTML must cap the HTML-side quality. Without this,
+		// markdown would win against any explicit HTML list simply by
+		// not mentioning text/html by name.
+		{"markdown loses to */* wildcard", "text/markdown;q=0.2, */*;q=0.9", false},
+		{"markdown loses to text/* wildcard", "text/markdown;q=0.3, text/*;q=0.8", false},
+		{"markdown wins over lower */* wildcard", "text/markdown;q=0.9, */*;q=0.2", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

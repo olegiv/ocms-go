@@ -262,6 +262,42 @@ func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 	}
 }
 
+// TestRecordSuccessfulLoginAcquiresAttemptsMu is the drift test for the
+// Codex PR #129 round-2 P2 finding: RecordSuccessfulLogin must acquire
+// the same attemptsMu as RecordFailedAttempt, otherwise a failed attempt
+// in-flight can upsert stale state after the delete has already
+// committed, leaving a "successful login" with residual attempt count.
+//
+// We prove the mutex is held by externally locking attemptsMu and
+// observing that RecordSuccessfulLogin blocks until we release it.
+// Without the fix, RecordSuccessfulLogin completes in microseconds;
+// with the fix it waits for the external hold duration.
+func TestRecordSuccessfulLoginAcquiresAttemptsMu(t *testing.T) {
+	lp := NewLoginProtection(testLoginProtectionDB(t), DefaultLoginProtectionConfig())
+	email := "clear-serialized@example.com"
+
+	const hold = 100 * time.Millisecond
+
+	lp.attemptsMu.Lock()
+
+	done := make(chan time.Duration, 1)
+	go func() {
+		start := time.Now()
+		lp.RecordSuccessfulLogin(email)
+		done <- time.Since(start)
+	}()
+
+	// Give the goroutine a chance to enter RecordSuccessfulLogin and
+	// block on the mutex, then release it.
+	time.Sleep(hold)
+	lp.attemptsMu.Unlock()
+
+	elapsed := <-done
+	if elapsed < hold {
+		t.Errorf("RecordSuccessfulLogin completed in %v (< %v hold); it did NOT wait on attemptsMu — a concurrent RecordFailedAttempt could upsert stale state after the delete", elapsed, hold)
+	}
+}
+
 // TestRecordFailedAttemptIsSerialized is the drift test for the Codex P1
 // finding on PR #129: without serialization, concurrent failed logins for
 // the same email race in the read-modify-write cycle (both read count=N,
