@@ -18,15 +18,17 @@ const (
 
 // Config keys
 const (
-	ConfigKeySiteName        = "site_name"
-	ConfigKeySiteDescription = "site_description"
-	ConfigKeySiteURL         = "site_url"
-	ConfigKeyDefaultOGImage  = "default_og_image"
-	ConfigKeyAdminEmail      = "admin_email"
-	ConfigKeyPostsPerPage    = "posts_per_page"
-	ConfigKeyPoweredBy       = "powered_by"
-	ConfigKeyCopyright       = "copyright"
-	ConfigKeyExcludedIPs     = "excluded_ips"
+	ConfigKeySiteName            = "site_name"
+	ConfigKeySiteDescription     = "site_description"
+	ConfigKeySiteURL             = "site_url"
+	ConfigKeyDefaultOGImage      = "default_og_image"
+	ConfigKeyAdminEmail          = "admin_email"
+	ConfigKeyPostsPerPage        = "posts_per_page"
+	ConfigKeyPoweredBy           = "powered_by"
+	ConfigKeyCopyright           = "copyright"
+	ConfigKeyExcludedIPs         = "excluded_ips"
+	ConfigKeyRobotsContentSignal = "robots_content_signal"
+	ConfigKeyMCPServerVersion    = "mcp_server_version"
 )
 
 // TranslatableConfigKeys is the list of config keys that support per-language translations.
@@ -58,6 +60,8 @@ var StandardConfigFields = []ConfigFieldDefinition{
 	{Key: ConfigKeyPostsPerPage, DefaultValue: "10", Type: ConfigTypeInt, Description: "Number of posts to display per page"},
 	{Key: ConfigKeyAdminEmail, DefaultValue: "admin@example.com", Type: ConfigTypeString, Description: "Administrator email address"},
 	{Key: ConfigKeyExcludedIPs, DefaultValue: "", Type: ConfigTypeText, Description: "IPs or CIDRs to exclude from analytics and event logging (one per line)"},
+	{Key: ConfigKeyRobotsContentSignal, DefaultValue: "", Type: ConfigTypeString, Description: "robots.txt Content-Signal directive (contentsignals.org). Leave empty for the default 'search=yes, ai-train=no, ai-input=yes', or set to 'off' / 'none' / 'disabled' to suppress."},
+	{Key: ConfigKeyMCPServerVersion, DefaultValue: "", Type: ConfigTypeString, Description: "Version string advertised in /.well-known/mcp/server-card.json (leave empty to omit)"},
 }
 
 // IsTranslatableConfigKey checks if a config key supports translations.

@@ -1609,12 +1609,20 @@ func run() error {
 		if internalAnalyticsModule.IsEnabled() {
 			r.Use(internalAnalyticsModule.GetTrackingMiddleware())
 		}
+		// RFC 8288 Link header on "/" advertising the API catalog and
+		// OpenAPI surface so AI agents can discover the programmable
+		// interface from a single GET of the homepage.
+		r.Use(middleware.LinkHeaders)
 
 		// Default language routes (no prefix)
 		// Specific routes first (before catch-all in registerFrontendRoutes)
 		r.Get("/sitemap.xml", frontendHandler.Sitemap)
 		r.Get("/robots.txt", frontendHandler.Robots)
 		r.Get("/.well-known/security.txt", frontendHandler.Security)
+		// Agent-Ready discovery endpoints (see docs/agent-ready.md)
+		r.Get("/.well-known/api-catalog", frontendHandler.APICatalog)
+		r.Get("/.well-known/agent-skills/index.json", frontendHandler.AgentSkillsIndex)
+		r.Get("/.well-known/mcp/server-card.json", frontendHandler.MCPServerCard)
 		// Common frontend routes (RouteParamSlug catch-all is registered last)
 		registerFrontendRoutes(r, frontendHandler)
 
@@ -1941,6 +1949,10 @@ func run() error {
 		r.Get("/docs", apiV2Docs.ServeDocs)
 		r.Get("/openapi.json", apiV2Docs.ServeOpenAPIJSON)
 		r.Get("/openapi.yaml", apiV2Docs.ServeOpenAPIYAML)
+		// Feed the agent-skills index the same OpenAPI JSON bytes the v2
+		// docs server serves, so the advertised SHA-256 matches what
+		// clients actually fetch at /api/v2/openapi.json.
+		frontendHandler.SetOpenAPISpecProvider(apiV2Docs.OpenAPIJSONBytes)
 	})
 	slog.Info("REST API v2 mounted at /api/v2")
 

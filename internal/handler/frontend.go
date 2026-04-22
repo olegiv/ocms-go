@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
@@ -412,6 +413,16 @@ type FrontendHandler struct {
 	sanitizePages       bool
 	videoRegistry       *video.Registry
 	moduleFuncsProvider ModuleTemplateFuncsProvider
+
+	// openAPISpecProvider returns the served OpenAPI 3.1 document as bytes
+	// (identical to what /api/v2/openapi.json emits). When set, the SHA-256
+	// of those bytes is advertised in /.well-known/agent-skills/index.json
+	// so agents enforcing the v0.2.0 integrity contract can verify the
+	// skill reference. Computed lazily on first request and cached for the
+	// process lifetime — the spec is deterministic from compiled-in Go types.
+	openAPISpecProvider func() ([]byte, error)
+	openAPISHA256Mu     sync.Mutex
+	openAPISHA256Val    string
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
@@ -448,6 +459,37 @@ func (h *FrontendHandler) SetSanitizePageHTML(enabled bool) {
 // per-request. This ensures toggled modules take effect immediately without server restart.
 func (h *FrontendHandler) SetModuleTemplateFuncsProvider(p ModuleTemplateFuncsProvider) {
 	h.moduleFuncsProvider = p
+}
+
+// SetOpenAPISpecProvider wires in the v2 OpenAPI JSON bytes source used to
+// compute the SHA-256 advertised in /.well-known/agent-skills/index.json.
+// Called from main.go once the v2 docs server is ready.
+func (h *FrontendHandler) SetOpenAPISpecProvider(fn func() ([]byte, error)) {
+	h.openAPISpecProvider = fn
+}
+
+// openAPISHA256 returns the cached SHA-256 of the OpenAPI JSON document, or
+// an empty string when no provider is wired / computation fails. Successful
+// digests are cached for the process lifetime; failures are NOT cached so a
+// transient marshal error doesn't permanently pin an empty hash.
+func (h *FrontendHandler) openAPISHA256() string {
+	h.openAPISHA256Mu.Lock()
+	defer h.openAPISHA256Mu.Unlock()
+	if h.openAPISHA256Val != "" {
+		return h.openAPISHA256Val
+	}
+	if h.openAPISpecProvider == nil {
+		return ""
+	}
+	raw, err := h.openAPISpecProvider()
+	if err != nil {
+		if h.logger != nil {
+			h.logger.Error("compute OpenAPI SHA-256", "error", err)
+		}
+		return ""
+	}
+	h.openAPISHA256Val = seo.ComputeSHA256Hex(raw)
+	return h.openAPISHA256Val
 }
 
 // callModuleHTMLFuncs calls named template functions and concatenates their HTML output.
@@ -1460,8 +1502,28 @@ func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
 		extraRules = cfg.Value
 	}
 
+	// Get Content-Signal directive value from config (contentsignals.org).
+	// When the config key is unset, fall back to a conservative default:
+	// allow search indexing and live agent inference, block training-data
+	// collection. Operators can override via the robots_content_signal
+	// config key, or set it to "off" / "none" / "disabled" to suppress the
+	// directive entirely.
+	const defaultContentSignal = "search=yes, ai-train=no, ai-input=yes"
+	contentSignal := ""
+	if h.cacheManager != nil {
+		contentSignal, _ = h.cacheManager.GetConfig(ctx, model.ConfigKeyRobotsContentSignal)
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, model.ConfigKeyRobotsContentSignal); err == nil {
+		contentSignal = cfg.Value
+	}
+	switch strings.ToLower(strings.TrimSpace(contentSignal)) {
+	case "":
+		contentSignal = defaultContentSignal
+	case "off", "none", "disabled":
+		contentSignal = ""
+	}
+
 	// Build robots.txt
-	robotsContent := seo.GenerateRobots(siteURL, disallowAll, extraRules)
+	robotsContent := seo.GenerateRobotsWithSignal(siteURL, disallowAll, extraRules, contentSignal)
 
 	// Send response
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1518,6 +1580,60 @@ func (h *FrontendHandler) Security(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
 	_, _ = w.Write([]byte(securityContent))
+}
+
+// APICatalog serves /.well-known/api-catalog per RFC 9727, advertising the
+// oCMS v2 REST API surface (OpenAPI spec, Swagger UI, health endpoint).
+// Content-Type is application/linkset+json as required by the RFC.
+func (h *FrontendHandler) APICatalog(w http.ResponseWriter, r *http.Request) {
+	siteURL, ok := h.requireConfiguredSiteURL(w, r, "api-catalog")
+	if !ok {
+		return
+	}
+	body := seo.BuildAPICatalog(siteURL)
+
+	w.Header().Set("Content-Type", "application/linkset+json")
+	w.Header().Set("Cache-Control", "public, max-age=3600") // 1 hour
+	_, _ = w.Write(body)
+}
+
+// AgentSkillsIndex serves /.well-known/agent-skills/index.json per the
+// Agent Skills Discovery RFC (v0.2.0). The declared skill references the
+// live OpenAPI document; the sha256 field is currently empty because
+// computing it would require pulling in the huma spec at request time
+// (tracked as a follow-up in docs/agent-ready.md).
+func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Request) {
+	siteURL, ok := h.requireConfiguredSiteURL(w, r, "agent-skills index")
+	if !ok {
+		return
+	}
+	body := seo.BuildAgentSkillsIndex(siteURL, h.openAPISHA256())
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(body)
+}
+
+// MCPServerCard serves /.well-known/mcp/server-card.json following the
+// draft SEP-1649 schema. No MCP transport is published ("transport": null)
+// — oCMS exposes a REST fallback via capabilities.rest.openapi. When a
+// real MCP transport ships, update seo.BuildMCPServerCard accordingly.
+func (h *FrontendHandler) MCPServerCard(w http.ResponseWriter, r *http.Request) {
+	siteURL, ok := h.requireConfiguredSiteURL(w, r, "MCP server card")
+	if !ok {
+		return
+	}
+	version := ""
+	if h.cacheManager != nil {
+		version, _ = h.cacheManager.GetConfig(r.Context(), model.ConfigKeyMCPServerVersion)
+	} else if cfg, err := h.queries.GetConfigByKey(r.Context(), model.ConfigKeyMCPServerVersion); err == nil {
+		version = cfg.Value
+	}
+	body := seo.BuildMCPServerCard(siteURL, version)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(body)
 }
 
 // pageToView converts a store.Page to a PageView with computed fields.
@@ -2398,6 +2514,24 @@ func (h *FrontendHandler) getSiteURL(ctx context.Context, r *http.Request) strin
 		siteURL = scheme + "://" + r.Host
 	}
 	return siteURL
+}
+
+// requireConfiguredSiteURL returns the configured site URL, or writes a 503
+// response and returns ok=false when site_url is unset. Agent-discovery
+// documents (sitemap, api-catalog, agent-skills, MCP server card) emit
+// absolute URLs that must be publicly reachable, so r.Host is not a safe
+// fallback under reverse proxies that rewrite Host to an internal upstream.
+func (h *FrontendHandler) requireConfiguredSiteURL(w http.ResponseWriter, r *http.Request, docName string) (string, bool) {
+	siteURL := h.getConfiguredSiteURL(r.Context())
+	if siteURL == "" {
+		if h.logger != nil {
+			h.logger.Warn(docName+" requested without configured site_url", "path", r.URL.Path)
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, docName+" is unavailable until site_url is configured", http.StatusServiceUnavailable)
+		return "", false
+	}
+	return siteURL, true
 }
 
 // buildPaginationPages builds the page links with ellipsis for pagination.

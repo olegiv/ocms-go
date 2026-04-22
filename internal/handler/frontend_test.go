@@ -19,6 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
@@ -956,3 +957,169 @@ func TestPickOGVariant(t *testing.T) {
 		})
 	}
 }
+
+// wellKnownHandler is the shape of the three agent-discovery handlers that
+// require a configured site_url. Keep them as a slice-driven table so adding
+// a new .well-known endpoint that emits absolute URLs re-uses the same drift
+// coverage instead of inviting fresh r.Host-fallback bugs.
+type wellKnownHandler struct {
+	name   string
+	path   string
+	invoke func(h *FrontendHandler, w http.ResponseWriter, r *http.Request)
+}
+
+func wellKnownHandlers() []wellKnownHandler {
+	return []wellKnownHandler{
+		{"APICatalog", "/.well-known/api-catalog", (*FrontendHandler).APICatalog},
+		{"AgentSkillsIndex", "/.well-known/agent-skills/index.json", (*FrontendHandler).AgentSkillsIndex},
+		{"MCPServerCard", "/.well-known/mcp/server-card.json", (*FrontendHandler).MCPServerCard},
+	}
+}
+
+func TestFrontendHandler_WellKnown_RequiresConfiguredSiteURL(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+
+	for _, tc := range wellKnownHandlers() {
+		t.Run(tc.name, func(t *testing.T) {
+			// Reverse-proxy pitfall: r.Host points at an internal upstream.
+			// Without a configured site_url the handler must refuse rather
+			// than leak internal hostnames into public discovery documents.
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Host = "internal-upstream.local"
+			w := httptest.NewRecorder()
+
+			tc.invoke(h, w, req)
+
+			resp := w.Result()
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusServiceUnavailable {
+				t.Errorf("status = %d; want %d", resp.StatusCode, http.StatusServiceUnavailable)
+			}
+			if got := resp.Header.Get("Cache-Control"); got != "no-store" {
+				t.Errorf("Cache-Control = %q; want %q", got, "no-store")
+			}
+		})
+	}
+}
+
+func TestFrontendHandler_WellKnown_ServesWhenSiteURLConfigured(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', 'https://example.com', 'string', 'en')`); err != nil {
+		t.Fatalf("seed site_url: %v", err)
+	}
+	h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+
+	for _, tc := range wellKnownHandlers() {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			w := httptest.NewRecorder()
+
+			tc.invoke(h, w, req)
+
+			resp := w.Result()
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("status = %d; want %d", resp.StatusCode, http.StatusOK)
+			}
+			body := w.Body.String()
+			if !strings.Contains(body, "https://example.com") {
+				t.Errorf("body missing configured site_url; got: %s", body)
+			}
+			if strings.Contains(body, "internal-upstream") {
+				t.Errorf("body leaked request host: %s", body)
+			}
+		})
+	}
+}
+
+// TestFrontendHandler_AgentSkillsIndex_OpenAPISHA256 verifies the lazy-cached
+// SHA-256 of the OpenAPI document is advertised when a provider is wired,
+// and that the provider is invoked only once across successive requests.
+// A silently empty sha256 would break v0.2.0 agent-skills integrity checks,
+// which is exactly the Codex round-4 finding that motivated the feature.
+func TestFrontendHandler_AgentSkillsIndex_OpenAPISHA256(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', 'https://example.com', 'string', 'en')`); err != nil {
+		t.Fatalf("seed site_url: %v", err)
+	}
+
+	specBytes := []byte(`{"openapi":"3.1.0","info":{"title":"t"}}` + "\n")
+	// Expected: sha256("{...}\n") — same helper the handler uses, so the
+	// test tracks its implementation rather than hard-coding a digest.
+	expected := seo.ComputeSHA256Hex(specBytes)
+
+	t.Run("without provider emits empty sha256", func(t *testing.T) {
+		h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+		body := fetchAgentSkills(t, h)
+		if !strings.Contains(body, `"sha256": ""`) {
+			t.Errorf("expected empty sha256 without provider; got: %s", body)
+		}
+	})
+
+	t.Run("with provider emits real sha256 and caches it", func(t *testing.T) {
+		h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+		callCount := 0
+		h.SetOpenAPISpecProvider(func() ([]byte, error) {
+			callCount++
+			return specBytes, nil
+		})
+
+		// Two requests — provider must be invoked exactly once.
+		for i := 0; i < 2; i++ {
+			body := fetchAgentSkills(t, h)
+			if !strings.Contains(body, `"sha256": "`+expected+`"`) {
+				t.Errorf("request %d: expected sha256 %q in body; got: %s", i, expected, body)
+			}
+		}
+		if callCount != 1 {
+			t.Errorf("provider called %d times; want 1 (cache should hold)", callCount)
+		}
+	})
+
+	t.Run("provider error is not cached", func(t *testing.T) {
+		h := NewFrontendHandler(db, nil, nil, slog.Default(), nil, nil)
+		attempts := 0
+		h.SetOpenAPISpecProvider(func() ([]byte, error) {
+			attempts++
+			if attempts == 1 {
+				return nil, errOpenAPIProviderTest
+			}
+			return specBytes, nil
+		})
+
+		body1 := fetchAgentSkills(t, h)
+		if !strings.Contains(body1, `"sha256": ""`) {
+			t.Errorf("first request should emit empty sha256 on provider error; got: %s", body1)
+		}
+		body2 := fetchAgentSkills(t, h)
+		if !strings.Contains(body2, `"sha256": "`+expected+`"`) {
+			t.Errorf("second request should retry the provider and emit real sha256; got: %s", body2)
+		}
+		if attempts != 2 {
+			t.Errorf("provider attempts = %d; want 2 (failures must not be cached)", attempts)
+		}
+	})
+}
+
+// errOpenAPIProviderTest is a sentinel returned by the provider-error
+// subtest above so the test doesn't instantiate a fresh errors.New per call.
+var errOpenAPIProviderTest = errTest("simulated provider failure")
+
+type errTest string
+
+func (e errTest) Error() string { return string(e) }
+
+func fetchAgentSkills(t *testing.T, h *FrontendHandler) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/agent-skills/index.json", nil)
+	w := httptest.NewRecorder()
+	h.AgentSkillsIndex(w, req)
+	resp := w.Result()
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	}
+	return w.Body.String()
+}
+

@@ -61,13 +61,30 @@ func (s *DocsServer) ServeDocs(w http.ResponseWriter, r *http.Request) {
 	_, _ = buf.WriteTo(w)
 }
 
+// OpenAPIJSONBytes returns the live huma-built OpenAPI 3.1 document as the
+// exact JSON bytes that ServeOpenAPIJSON emits (json.Encoder framing, with
+// trailing newline). Callers computing a SHA-256 for integrity advertising
+// must use THIS helper — anything else risks a framing mismatch that would
+// produce a digest clients can't reproduce from the served response.
+func (s *DocsServer) OpenAPIJSONBytes() ([]byte, error) {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(s.api.OpenAPI()); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 // ServeOpenAPIJSON emits the live huma-built OpenAPI 3.1 document as JSON.
 func (s *DocsServer) ServeOpenAPIJSON(w http.ResponseWriter, _ *http.Request) {
+	body, err := s.OpenAPIJSONBytes()
+	if err != nil {
+		slog.Error("v2 openapi.json encode", "error", err)
+		http.Error(w, "Failed to render API specification", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	if err := json.NewEncoder(w).Encode(s.api.OpenAPI()); err != nil {
-		slog.Error("v2 openapi.json encode", "error", err)
-	}
+	_, _ = w.Write(body)
 }
 
 // ServeOpenAPIYAML emits the same document as YAML, round-tripped through
