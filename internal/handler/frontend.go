@@ -1469,8 +1469,8 @@ func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
 	const defaultContentSignal = "search=yes, ai-train=no, ai-input=yes"
 	contentSignal := ""
 	if h.cacheManager != nil {
-		contentSignal, _ = h.cacheManager.GetConfig(ctx, "robots_content_signal")
-	} else if cfg, err := h.queries.GetConfigByKey(ctx, "robots_content_signal"); err == nil {
+		contentSignal, _ = h.cacheManager.GetConfig(ctx, model.ConfigKeyRobotsContentSignal)
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, model.ConfigKeyRobotsContentSignal); err == nil {
 		contentSignal = cfg.Value
 	}
 	switch strings.ToLower(strings.TrimSpace(contentSignal)) {
@@ -1544,7 +1544,10 @@ func (h *FrontendHandler) Security(w http.ResponseWriter, r *http.Request) {
 // oCMS v2 REST API surface (OpenAPI spec, Swagger UI, health endpoint).
 // Content-Type is application/linkset+json as required by the RFC.
 func (h *FrontendHandler) APICatalog(w http.ResponseWriter, r *http.Request) {
-	siteURL := h.getSiteURL(r.Context(), r)
+	siteURL, ok := h.requireConfiguredSiteURL(w, r, "api-catalog")
+	if !ok {
+		return
+	}
 	body := seo.BuildAPICatalog(siteURL)
 
 	w.Header().Set("Content-Type", "application/linkset+json")
@@ -1558,7 +1561,10 @@ func (h *FrontendHandler) APICatalog(w http.ResponseWriter, r *http.Request) {
 // computing it would require pulling in the huma spec at request time
 // (tracked as a follow-up in docs/agent-ready.md).
 func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Request) {
-	siteURL := h.getSiteURL(r.Context(), r)
+	siteURL, ok := h.requireConfiguredSiteURL(w, r, "agent-skills index")
+	if !ok {
+		return
+	}
 	// TODO(phase-2): inject precomputed SHA-256 of the OpenAPI bytes from
 	// main.go so agents can verify the skill reference against drift.
 	body := seo.BuildAgentSkillsIndex(siteURL, "")
@@ -1573,11 +1579,14 @@ func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Reques
 // — oCMS exposes a REST fallback via capabilities.rest.openapi. When a
 // real MCP transport ships, update seo.BuildMCPServerCard accordingly.
 func (h *FrontendHandler) MCPServerCard(w http.ResponseWriter, r *http.Request) {
-	siteURL := h.getSiteURL(r.Context(), r)
+	siteURL, ok := h.requireConfiguredSiteURL(w, r, "MCP server card")
+	if !ok {
+		return
+	}
 	version := ""
 	if h.cacheManager != nil {
-		version, _ = h.cacheManager.GetConfig(r.Context(), "mcp_server_version")
-	} else if cfg, err := h.queries.GetConfigByKey(r.Context(), "mcp_server_version"); err == nil {
+		version, _ = h.cacheManager.GetConfig(r.Context(), model.ConfigKeyMCPServerVersion)
+	} else if cfg, err := h.queries.GetConfigByKey(r.Context(), model.ConfigKeyMCPServerVersion); err == nil {
 		version = cfg.Value
 	}
 	body := seo.BuildMCPServerCard(siteURL, version)
@@ -2465,6 +2474,24 @@ func (h *FrontendHandler) getSiteURL(ctx context.Context, r *http.Request) strin
 		siteURL = scheme + "://" + r.Host
 	}
 	return siteURL
+}
+
+// requireConfiguredSiteURL returns the configured site URL, or writes a 503
+// response and returns ok=false when site_url is unset. Agent-discovery
+// documents (sitemap, api-catalog, agent-skills, MCP server card) emit
+// absolute URLs that must be publicly reachable, so r.Host is not a safe
+// fallback under reverse proxies that rewrite Host to an internal upstream.
+func (h *FrontendHandler) requireConfiguredSiteURL(w http.ResponseWriter, r *http.Request, docName string) (string, bool) {
+	siteURL := h.getConfiguredSiteURL(r.Context())
+	if siteURL == "" {
+		if h.logger != nil {
+			h.logger.Warn(docName+" requested without configured site_url", "path", r.URL.Path)
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, docName+" is unavailable until site_url is configured", http.StatusServiceUnavailable)
+		return "", false
+	}
+	return siteURL, true
 }
 
 // buildPaginationPages builds the page links with ellipsis for pagination.

@@ -956,3 +956,78 @@ func TestPickOGVariant(t *testing.T) {
 		})
 	}
 }
+
+// wellKnownHandler is the shape of the three agent-discovery handlers that
+// require a configured site_url. Keep them as a slice-driven table so adding
+// a new .well-known endpoint that emits absolute URLs re-uses the same drift
+// coverage instead of inviting fresh r.Host-fallback bugs.
+type wellKnownHandler struct {
+	name   string
+	path   string
+	invoke func(h *FrontendHandler, w http.ResponseWriter, r *http.Request)
+}
+
+func wellKnownHandlers() []wellKnownHandler {
+	return []wellKnownHandler{
+		{"APICatalog", "/.well-known/api-catalog", (*FrontendHandler).APICatalog},
+		{"AgentSkillsIndex", "/.well-known/agent-skills/index.json", (*FrontendHandler).AgentSkillsIndex},
+		{"MCPServerCard", "/.well-known/mcp/server-card.json", (*FrontendHandler).MCPServerCard},
+	}
+}
+
+func TestFrontendHandler_WellKnown_RequiresConfiguredSiteURL(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+
+	for _, tc := range wellKnownHandlers() {
+		t.Run(tc.name, func(t *testing.T) {
+			// Reverse-proxy pitfall: r.Host points at an internal upstream.
+			// Without a configured site_url the handler must refuse rather
+			// than leak internal hostnames into public discovery documents.
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Host = "internal-upstream.local"
+			w := httptest.NewRecorder()
+
+			tc.invoke(h, w, req)
+
+			resp := w.Result()
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusServiceUnavailable {
+				t.Errorf("status = %d; want %d", resp.StatusCode, http.StatusServiceUnavailable)
+			}
+			if got := resp.Header.Get("Cache-Control"); got != "no-store" {
+				t.Errorf("Cache-Control = %q; want %q", got, "no-store")
+			}
+		})
+	}
+}
+
+func TestFrontendHandler_WellKnown_ServesWhenSiteURLConfigured(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', 'https://example.com', 'string', 'en')`); err != nil {
+		t.Fatalf("seed site_url: %v", err)
+	}
+	h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+
+	for _, tc := range wellKnownHandlers() {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			w := httptest.NewRecorder()
+
+			tc.invoke(h, w, req)
+
+			resp := w.Result()
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("status = %d; want %d", resp.StatusCode, http.StatusOK)
+			}
+			body := w.Body.String()
+			if !strings.Contains(body, "https://example.com") {
+				t.Errorf("body missing configured site_url; got: %s", body)
+			}
+			if strings.Contains(body, "internal-upstream") {
+				t.Errorf("body leaked request host: %s", body)
+			}
+		})
+	}
+}
