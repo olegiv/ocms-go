@@ -42,6 +42,13 @@ func TestWantsMarkdown(t *testing.T) {
 		{"markdown loses to */* wildcard", "text/markdown;q=0.2, */*;q=0.9", false},
 		{"markdown loses to text/* wildcard", "text/markdown;q=0.3, text/*;q=0.8", false},
 		{"markdown wins over lower */* wildcard", "text/markdown;q=0.9, */*;q=0.2", true},
+		// Drift tests for Codex PR #129 round 3 (RFC 9110 §12.5.1
+		// specificity): explicit text/html takes precedence over
+		// text/* and */* regardless of their q-values.
+		{"explicit html beats higher */*", "text/html;q=0.2, text/markdown;q=0.8, */*;q=0.9", true},
+		{"explicit html beats higher text/*", "text/html;q=0.3, text/markdown;q=0.7, text/*;q=0.9", true},
+		{"explicit html wins when higher", "text/html;q=0.9, text/markdown;q=0.5, */*;q=0.95", false},
+		{"text/* beats */* when no explicit html", "text/*;q=0.4, text/markdown;q=0.6, */*;q=0.9", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

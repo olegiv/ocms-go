@@ -60,7 +60,20 @@ func WantsMarkdown(r *http.Request) bool {
 	if h == "" {
 		return false
 	}
-	mdQ, htmlQ, mdSeen := float64(-1), float64(-1), false
+	// Track HTML quality separately per specificity tier. RFC 9110 §12.5.1:
+	// "If more than one media range applies, the most specific reference
+	// has precedence." Explicit text/html wins over text/*, which wins
+	// over */*. Without this split, an Accept like
+	//   text/html;q=0.2, text/markdown;q=0.8, */*;q=0.9
+	// would wrongly promote htmlQ to 0.9 via the wildcard and refuse
+	// markdown, even though the client explicitly ranked text/html at
+	// 0.2 and text/markdown at 0.8.
+	mdQ := float64(-1)
+	explicitHTMLQ := float64(-1)  // text/html, application/xhtml+xml
+	typeWildcardHTMLQ := float64(-1)  // text/*
+	rangeWildcardHTMLQ := float64(-1) // */*
+	mdSeen := false
+
 	for _, raw := range strings.Split(h, ",") {
 		mediaType, params, err := mime.ParseMediaType(strings.TrimSpace(raw))
 		if err != nil {
@@ -79,29 +92,38 @@ func WantsMarkdown(r *http.Request) bool {
 				mdQ = q
 			}
 		case "text/html", "application/xhtml+xml":
-			if q > htmlQ {
-				htmlQ = q
+			if q > explicitHTMLQ {
+				explicitHTMLQ = q
 			}
-		case "text/*", "*/*":
-			// Wildcards that cover HTML also cap the HTML quality.
-			// Without this, `Accept: text/markdown;q=0.2, */*;q=0.9`
-			// would serve markdown even though the wildcard puts HTML
-			// at q=0.9. Wildcards do NOT set mdSeen — markdown must
-			// be listed explicitly before we serve it.
-			if q > htmlQ {
-				htmlQ = q
+		case "text/*":
+			if q > typeWildcardHTMLQ {
+				typeWildcardHTMLQ = q
+			}
+		case "*/*":
+			if q > rangeWildcardHTMLQ {
+				rangeWildcardHTMLQ = q
 			}
 		}
 	}
 	// RFC 9110 §12.5.1: "A value of 'q=0' means 'not acceptable'." So
 	// `Accept: text/markdown;q=0` must not cause us to serve markdown,
 	// even when no HTML media type is listed. Require mdQ > 0 before
-	// considering markdown as a candidate.
+	// considering markdown as a candidate. Markdown must also be listed
+	// explicitly — wildcards alone never flip us to markdown.
 	if !mdSeen || mdQ <= 0 {
 		return false
 	}
+	// Most-specific HTML match wins. Fall through to the next tier only
+	// when the previous tier had no match at all (< 0).
+	htmlQ := explicitHTMLQ
+	if htmlQ < 0 {
+		htmlQ = typeWildcardHTMLQ
+	}
+	if htmlQ < 0 {
+		htmlQ = rangeWildcardHTMLQ
+	}
 	// Strict preference: markdown must beat HTML. If HTML is not listed at
-	// all (htmlQ == -1) and markdown is, markdown wins.
+	// any tier (htmlQ == -1) and markdown is, markdown wins.
 	return mdQ > htmlQ
 }
 
