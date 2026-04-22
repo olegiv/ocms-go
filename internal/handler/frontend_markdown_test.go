@@ -34,11 +34,30 @@ func seedPageWithHTML(t *testing.T, db *sql.DB, slug, title, bodyHTML, summary s
 	}
 }
 
+// seedSiteURL writes site_url to the test DB config. Markdown-negotiation
+// tests that expect a text/markdown response must call this — the handler
+// refuses to emit absolute URLs (and therefore refuses markdown) until
+// site_url is configured, so that an attacker-supplied Host header cannot
+// leak into agent-consumed [Source](…) links (FIND-001).
+func seedSiteURL(t *testing.T, db *sql.DB, url string) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO config (key, value, type, language_code)
+		 VALUES ('site_url', ?, 'string', 'en')
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		url,
+	)
+	if err != nil {
+		t.Fatalf("seed site_url: %v", err)
+	}
+}
+
 // TestFrontendHandler_Page_Markdown_Negotiated verifies that a request with
 // Accept: text/markdown on a published page returns a markdown representation.
 func TestFrontendHandler_Page_Markdown_Negotiated(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
+	seedSiteURL(t, db, "https://example.com")
 	seedPageWithHTML(t, db, "hello",
 		"Hello World",
 		`<p>Welcome to <strong>oCMS</strong>.</p><ul><li>one</li><li>two</li></ul>`,
@@ -148,6 +167,7 @@ func TestFrontendHandler_Page_Markdown_DraftAnonymousGets404(t *testing.T) {
 func TestFrontendHandler_Page_Markdown_DraftEditorSeesMarkdown(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
+	seedSiteURL(t, db, "https://example.com")
 	createDraftPage(t, db, admin.ID)
 	editor := createTestUser(t, db, testUser{
 		Email: "editor-md@example.com",
@@ -175,11 +195,38 @@ func TestFrontendHandler_Page_Markdown_DraftEditorSeesMarkdown(t *testing.T) {
 	}
 }
 
+// TestFrontendHandler_Page_Markdown_RequiresConfiguredSiteURL guards
+// against FIND-001 (Host header injection in markdown canonical URLs).
+// When site_url is unset, the handler MUST fall through to HTML rather
+// than fabricate a canonical URL from the attacker-controlled Host
+// header; otherwise a crafted Host ends up in `[Source](http://evil…)`
+// presented to LLM callers.
+func TestFrontendHandler_Page_Markdown_RequiresConfiguredSiteURL(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	// deliberately DO NOT call seedSiteURL — site_url must be unset
+	seedPageWithHTML(t, db, "hello", "Hello", `<p>Body</p>`, "", admin.ID)
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := newMarkdownPageRequest("hello")
+	req.Host = "evil.example.com"
+	w := httptest.NewRecorder()
+
+	h.Page(w, req)
+	resp := w.Result()
+	defer func() { _ = resp.Body.Close() }()
+
+	if ct := resp.Header.Get("Content-Type"); strings.HasPrefix(ct, "text/markdown") {
+		t.Errorf("markdown served without configured site_url — Host=%q would leak into canonical URL; Content-Type=%q", req.Host, ct)
+	}
+}
+
 // TestFrontendHandler_Page_Markdown_ScriptsStripped verifies that scripts
 // and javascript: URLs in page HTML are not emitted in the markdown.
 func TestFrontendHandler_Page_Markdown_ScriptsStripped(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
+	seedSiteURL(t, db, "https://example.com")
 	seedPageWithHTML(t, db, "evil",
 		"Safe",
 		`<p>Hello</p><script>alert(1)</script><iframe src="javascript:evil"></iframe>`,

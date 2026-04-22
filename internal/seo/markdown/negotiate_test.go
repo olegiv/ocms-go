@@ -166,6 +166,74 @@ func TestHomeToMarkdownEmpty(t *testing.T) {
 	}
 }
 
+// TestPageToMarkdownTitleNewlineStripped guards against heading-break-out:
+// a stored title with embedded newlines must not inject additional headings
+// into the markdown output. Drift test for audit finding FIND-002.
+//
+// After sanitization the title collapses to a single line, so although the
+// literal characters "##" remain in the text, they are not at column 0 and
+// CommonMark does not interpret them as a heading.
+func TestPageToMarkdownTitleNewlineStripped(t *testing.T) {
+	got, err := PageToMarkdown(
+		"Harmless\n\n## Injected Heading\n\nExtra",
+		"", "<p>Body</p>", "", nil, Labels{},
+	)
+	if err != nil {
+		t.Fatalf("PageToMarkdown error: %v", err)
+	}
+	assertNoInjectedHeading(t, got)
+	if !strings.HasPrefix(got, "# Harmless") {
+		t.Errorf("output does not start with collapsed H1:\n%s", got)
+	}
+}
+
+// TestHomeToMarkdownSiteNameNewlineStripped is the analogue for the
+// homepage site-name heading. Drift test for audit finding FIND-002.
+func TestHomeToMarkdownSiteNameNewlineStripped(t *testing.T) {
+	got := HomeToMarkdown(
+		"Site\n\n## Injected",
+		"", "", nil, Labels{},
+	)
+	assertNoInjectedHeading(t, got)
+	if !strings.HasPrefix(got, "# Site") {
+		t.Errorf("output does not start with collapsed H1:\n%s", got)
+	}
+}
+
+// assertNoInjectedHeading fails the test if any line past the first starts
+// with '#' — the only # prefix allowed is the original H1 on line 0. This
+// is what "no heading injection" means at the CommonMark level.
+func assertNoInjectedHeading(t *testing.T, markdown string) {
+	t.Helper()
+	lines := strings.Split(markdown, "\n")
+	for i, line := range lines {
+		if i == 0 {
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			t.Errorf("line %d is an injected heading %q; full output:\n%s", i, line, markdown)
+		}
+	}
+}
+
+// TestSanitizeHeading covers the collapsing helper directly so the contract
+// is pinned regardless of which call site uses it.
+func TestSanitizeHeading(t *testing.T) {
+	cases := map[string]string{
+		"plain":              "plain",
+		"with\nnewline":      "with newline",
+		"crlf\r\nstyle":      "crlf style",
+		"bare\rcr":           "bare cr",
+		"multi\n\nnewlines":  "multi  newlines",
+		"mixed\r\n\nline":    "mixed  line",
+	}
+	for in, want := range cases {
+		if got := sanitizeHeading(in); got != want {
+			t.Errorf("sanitizeHeading(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func BenchmarkPageToMarkdown(b *testing.B) {
 	// Representative blog post: 20 paragraphs + headings + list + image.
 	var sb strings.Builder

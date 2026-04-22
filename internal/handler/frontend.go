@@ -674,20 +674,26 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 
 	// Content negotiation: serve Markdown when the client prefers it.
 	// See docs/agent-ready.md and internal/seo/markdown.
+	//
+	// Markdown emits absolute URLs to agents, so require configured site_url
+	// — never fall back to r.Host, which is attacker-controlled and would
+	// let a crafted Host header redirect LLM callers to a phishing domain.
+	// When unset, fall through to the HTML path.
 	if mdneg.WantsMarkdown(r) {
-		siteURL := strings.TrimRight(h.getSiteURL(ctx, r), "/")
-		mdRecent := make([]mdneg.RecentPost, 0, len(recentPageViews))
-		for _, pv := range recentPageViews {
-			mdRecent = append(mdRecent, mdneg.RecentPost{
-				Title:       pv.Title,
-				URL:         siteURL + pv.URL,
-				PublishedAt: pv.PublishedAt,
-				Excerpt:     pv.Excerpt,
-			})
+		if siteURL := strings.TrimRight(h.getConfiguredSiteURL(ctx), "/"); siteURL != "" {
+			mdRecent := make([]mdneg.RecentPost, 0, len(recentPageViews))
+			for _, pv := range recentPageViews {
+				mdRecent = append(mdRecent, mdneg.RecentPost{
+					Title:       pv.Title,
+					URL:         siteURL + pv.URL,
+					PublishedAt: pv.PublishedAt,
+					Excerpt:     pv.Excerpt,
+				})
+			}
+			body := mdneg.HomeToMarkdown(base.SiteName, base.Site.Description, siteURL+base.LangPrefix+"/", mdRecent, h.markdownLabels(r))
+			mdneg.WriteMarkdown(w, body)
+			return
 		}
-		body := mdneg.HomeToMarkdown(base.SiteName, base.Site.Description, siteURL+base.LangPrefix+"/", mdRecent, h.markdownLabels(r))
-		mdneg.WriteMarkdown(w, body)
-		return
 	}
 
 	// Get categories and tags filtered by language
@@ -871,19 +877,25 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	// Runs after the draft-preview guard above, so drafts stay gated to
 	// admins/editors in both representations. Falls through to HTML on
 	// conversion error so a bad payload never blanks a page.
+	//
+	// Requires configured site_url (same reasoning as Home): markdown
+	// emits absolute canonical URLs to agents, and r.Host is attacker-
+	// controlled. Without site_url we fall through to HTML.
 	if mdneg.WantsMarkdown(r) {
-		var publishedAt *time.Time
-		if page.PublishedAt.Valid {
-			t := page.PublishedAt.Time
-			publishedAt = &t
-		}
-		canonical := strings.TrimRight(h.getSiteURL(ctx, r), "/") + "/" + page.Slug
-		mdBody, mdErr := mdneg.PageToMarkdown(page.Title, page.Summary, page.Body, canonical, publishedAt, h.markdownLabels(r))
-		if mdErr != nil {
-			slog.Error("markdown conversion failed", "error", mdErr, "slug", page.Slug)
-		} else {
-			mdneg.WriteMarkdown(w, mdBody)
-			return
+		if siteURL := strings.TrimRight(h.getConfiguredSiteURL(ctx), "/"); siteURL != "" {
+			var publishedAt *time.Time
+			if page.PublishedAt.Valid {
+				t := page.PublishedAt.Time
+				publishedAt = &t
+			}
+			canonical := siteURL + "/" + page.Slug
+			mdBody, mdErr := mdneg.PageToMarkdown(page.Title, page.Summary, page.Body, canonical, publishedAt, h.markdownLabels(r))
+			if mdErr != nil {
+				slog.Error("markdown conversion failed", "error", mdErr, "slug", page.Slug)
+			} else {
+				mdneg.WriteMarkdown(w, mdBody)
+				return
+			}
 		}
 	}
 

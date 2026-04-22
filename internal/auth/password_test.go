@@ -5,6 +5,7 @@ package auth
 
 import (
 	"testing"
+	"time"
 )
 
 func TestHashPassword(t *testing.T) {
@@ -95,6 +96,46 @@ func TestNeedsRehash_InvalidHash(t *testing.T) {
 	}
 	if !NeedsRehash("") {
 		t.Fatal("empty hash should need rehash")
+	}
+}
+
+// TestVerifyDummyPassword_RunsArgon2 ensures the dummy-password timing
+// anchor actually performs Argon2id work, rather than returning early.
+// This is the drift test for audit finding FIND-003: if a future refactor
+// turns VerifyDummyPassword into a no-op, the login handler's
+// non-existent-user branch would regain its timing side channel.
+//
+// The lower bound is intentionally loose (5ms) to accommodate slow CI
+// machines; the current Argon2 parameters (m=19456, t=2, p=1) take
+// ~20ms even on a fast laptop, so a no-op implementation returning in
+// microseconds will fail this test reliably.
+func TestVerifyDummyPassword_RunsArgon2(t *testing.T) {
+	if dummyPasswordHash == "" {
+		t.Fatal("dummyPasswordHash not initialized — init() failed?")
+	}
+
+	start := time.Now()
+	VerifyDummyPassword("any-password-ignored")
+	elapsed := time.Since(start)
+
+	const minCost = 5 * time.Millisecond
+	if elapsed < minCost {
+		t.Errorf("VerifyDummyPassword completed in %v, below %v floor — Argon2 work not performed, timing enumeration possible", elapsed, minCost)
+	}
+}
+
+// TestVerifyDummyPassword_HashIsValidArgon2id pins the shape of the
+// pre-computed dummy hash so a future refactor can't silently replace it
+// with an invalid placeholder (which would make VerifyArgon2 error out
+// fast and defeat the timing normalization).
+func TestVerifyDummyPassword_HashIsValidArgon2id(t *testing.T) {
+	if dummyPasswordHash == "" {
+		t.Fatal("dummyPasswordHash not initialized")
+	}
+	// Any Argon2id hash is rejected by NeedsRehash only when parameters
+	// drift; a well-formed, current-parameter hash must not need rehash.
+	if NeedsRehash(dummyPasswordHash) {
+		t.Errorf("dummyPasswordHash reports NeedsRehash=true — it's malformed or uses stale parameters: %q", dummyPasswordHash)
 	}
 }
 

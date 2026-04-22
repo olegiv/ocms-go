@@ -134,7 +134,7 @@ func PageToMarkdown(title, excerpt, bodyHTML, canonical string, publishedAt *tim
 	var b strings.Builder
 	if title != "" {
 		b.WriteString("# ")
-		b.WriteString(title)
+		b.WriteString(sanitizeHeading(title))
 		b.WriteString("\n\n")
 	}
 	if publishedAt != nil {
@@ -170,7 +170,7 @@ func HomeToMarkdown(siteName, siteDescription, canonical string, recent []Recent
 	var b strings.Builder
 	if siteName != "" {
 		b.WriteString("# ")
-		b.WriteString(siteName)
+		b.WriteString(sanitizeHeading(siteName))
 		b.WriteString("\n\n")
 	}
 	if siteDescription != "" {
@@ -230,4 +230,17 @@ func appendVary(h http.Header, value string) {
 // approximate LLM token budget without introducing a real tokenizer.
 func tokenCount(s string) int {
 	return len(strings.Fields(s))
+}
+
+// sanitizeHeading collapses newline and carriage-return characters to spaces
+// so a stored title cannot break out of its heading context and inject
+// additional Markdown structures (e.g., a title of "Foo\n\n## Injected"
+// producing a real H2 further down). Admin-authored content is trusted, but
+// the guard is cheap and closes a defense-in-depth gap.
+func sanitizeHeading(s string) string {
+	if !strings.ContainsAny(s, "\n\r") {
+		return s
+	}
+	r := strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ")
+	return r.Replace(s)
 }
