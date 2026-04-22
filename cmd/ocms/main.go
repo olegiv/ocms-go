@@ -1949,6 +1949,10 @@ func run() error {
 		r.Get("/docs", apiV2Docs.ServeDocs)
 		r.Get("/openapi.json", apiV2Docs.ServeOpenAPIJSON)
 		r.Get("/openapi.yaml", apiV2Docs.ServeOpenAPIYAML)
+		// Feed the agent-skills index the same OpenAPI JSON bytes the v2
+		// docs server serves, so the advertised SHA-256 matches what
+		// clients actually fetch at /api/v2/openapi.json.
+		frontendHandler.SetOpenAPISpecProvider(apiV2Docs.OpenAPIJSONBytes)
 	})
 	slog.Info("REST API v2 mounted at /api/v2")
 

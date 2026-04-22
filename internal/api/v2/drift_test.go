@@ -4,12 +4,14 @@
 package v2_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"go/ast"
 	"go/build"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
@@ -814,4 +817,58 @@ func TestPermissionRequiredBeforeBodyParse(t *testing.T) {
 			t.Errorf("%s %s (op %s) with read-only key: want 403, got %d", tc.method, tc.path, tc.op, resp.StatusCode)
 		}
 	}
+}
+
+// TestOpenAPIJSONBytesMatchesServed guards the invariant that
+// DocsServer.OpenAPIJSONBytes returns byte-identical output to what
+// ServeOpenAPIJSON writes. If the two ever drift (whitespace, newline
+// framing, field ordering), the SHA-256 advertised in
+// /.well-known/agent-skills/index.json would stop matching what clients
+// download from /api/v2/openapi.json, silently breaking v0.2.0
+// integrity verification.
+func TestOpenAPIJSONBytesMatchesServed(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	r := chi.NewRouter()
+	queries := store.New(db)
+	h := apiv2.Register(r, apiv2.Deps{DB: db, Queries: queries})
+	pages.Register(h.API, pages.NewService(db, queries, nil, nil, pages.Policy{}))
+	media.Register(h.API, media.NewService(db, queries, nil, t.TempDir()))
+	taxonomy.Register(h.API, taxonomy.NewService(db, queries, nil))
+
+	stubFS := fstest.MapFS{
+		"api/docs.html": &fstest.MapFile{Data: []byte("<html></html>")},
+	}
+	docs, err := apiv2.NewDocsServer(stubFS, h)
+	if err != nil {
+		t.Fatalf("NewDocsServer: %v", err)
+	}
+
+	helperBytes, err := docs.OpenAPIJSONBytes()
+	if err != nil {
+		t.Fatalf("OpenAPIJSONBytes: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	docs.ServeOpenAPIJSON(w, httptest.NewRequest(http.MethodGet, "/api/v2/openapi.json", nil))
+	resp := w.Result()
+	defer resp.Body.Close()
+	servedBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read served body: %v", err)
+	}
+
+	if !bytes.Equal(helperBytes, servedBytes) {
+		t.Fatalf("byte mismatch between OpenAPIJSONBytes and ServeOpenAPIJSON\n  helper (%d bytes): %q...\n  served (%d bytes): %q...",
+			len(helperBytes), firstN(helperBytes, 80),
+			len(servedBytes), firstN(servedBytes, 80))
+	}
+}
+
+func firstN(b []byte, n int) string {
+	if len(b) < n {
+		return string(b)
+	}
+	return string(b[:n])
 }

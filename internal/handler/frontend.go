@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
@@ -412,6 +413,16 @@ type FrontendHandler struct {
 	sanitizePages       bool
 	videoRegistry       *video.Registry
 	moduleFuncsProvider ModuleTemplateFuncsProvider
+
+	// openAPISpecProvider returns the served OpenAPI 3.1 document as bytes
+	// (identical to what /api/v2/openapi.json emits). When set, the SHA-256
+	// of those bytes is advertised in /.well-known/agent-skills/index.json
+	// so agents enforcing the v0.2.0 integrity contract can verify the
+	// skill reference. Computed lazily on first request and cached for the
+	// process lifetime — the spec is deterministic from compiled-in Go types.
+	openAPISpecProvider func() ([]byte, error)
+	openAPISHA256Mu     sync.Mutex
+	openAPISHA256Val    string
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
@@ -448,6 +459,37 @@ func (h *FrontendHandler) SetSanitizePageHTML(enabled bool) {
 // per-request. This ensures toggled modules take effect immediately without server restart.
 func (h *FrontendHandler) SetModuleTemplateFuncsProvider(p ModuleTemplateFuncsProvider) {
 	h.moduleFuncsProvider = p
+}
+
+// SetOpenAPISpecProvider wires in the v2 OpenAPI JSON bytes source used to
+// compute the SHA-256 advertised in /.well-known/agent-skills/index.json.
+// Called from main.go once the v2 docs server is ready.
+func (h *FrontendHandler) SetOpenAPISpecProvider(fn func() ([]byte, error)) {
+	h.openAPISpecProvider = fn
+}
+
+// openAPISHA256 returns the cached SHA-256 of the OpenAPI JSON document, or
+// an empty string when no provider is wired / computation fails. Successful
+// digests are cached for the process lifetime; failures are NOT cached so a
+// transient marshal error doesn't permanently pin an empty hash.
+func (h *FrontendHandler) openAPISHA256() string {
+	h.openAPISHA256Mu.Lock()
+	defer h.openAPISHA256Mu.Unlock()
+	if h.openAPISHA256Val != "" {
+		return h.openAPISHA256Val
+	}
+	if h.openAPISpecProvider == nil {
+		return ""
+	}
+	raw, err := h.openAPISpecProvider()
+	if err != nil {
+		if h.logger != nil {
+			h.logger.Error("compute OpenAPI SHA-256", "error", err)
+		}
+		return ""
+	}
+	h.openAPISHA256Val = seo.ComputeSHA256Hex(raw)
+	return h.openAPISHA256Val
 }
 
 // callModuleHTMLFuncs calls named template functions and concatenates their HTML output.
@@ -1565,9 +1607,7 @@ func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	// TODO(phase-2): inject precomputed SHA-256 of the OpenAPI bytes from
-	// main.go so agents can verify the skill reference against drift.
-	body := seo.BuildAgentSkillsIndex(siteURL, "")
+	body := seo.BuildAgentSkillsIndex(siteURL, h.openAPISHA256())
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
