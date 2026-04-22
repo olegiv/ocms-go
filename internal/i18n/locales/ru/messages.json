@@ -5853,6 +5853,16 @@
             "translation": "Последние записи"
         },
         {
+            "id": "frontend.published_on",
+            "message": "Published",
+            "translation": "Опубликовано"
+        },
+        {
+            "id": "frontend.source",
+            "message": "Source",
+            "translation": "Источник"
+        },
+        {
             "id": "frontend.by_author",
             "message": "by",
             "translation": "автор"

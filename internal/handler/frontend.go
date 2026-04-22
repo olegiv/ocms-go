@@ -25,10 +25,12 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/seo"
+	mdneg "github.com/olegiv/ocms-go/internal/seo/markdown"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
@@ -612,6 +614,20 @@ func (h *FrontendHandler) trustedPageBody(raw string) template.HTML {
 	return template.HTML(security.SanitizePageHTML(raw))
 }
 
+// markdownLabels returns user-visible strings for markdown rendering, using
+// the language resolved from the request (falls back to default translator).
+func (h *FrontendHandler) markdownLabels(r *http.Request) mdneg.Labels {
+	lang := ""
+	if info := middleware.GetLanguage(r); info != nil {
+		lang = info.Code
+	}
+	return mdneg.Labels{
+		RecentPosts: i18n.T(lang, "frontend.recent_posts"),
+		PublishedOn: i18n.T(lang, "frontend.published_on"),
+		Source:      i18n.T(lang, "frontend.source"),
+	}
+}
+
 // Home handles the homepage.
 func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -654,6 +670,24 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	for _, p := range recentPages {
 		pv := h.pageToView(ctx, p, languageCode, base.LangPrefix)
 		recentPageViews = append(recentPageViews, pv)
+	}
+
+	// Content negotiation: serve Markdown when the client prefers it.
+	// See docs/agent-ready.md and internal/seo/markdown.
+	if mdneg.WantsMarkdown(r) {
+		siteURL := strings.TrimRight(h.getSiteURL(ctx, r), "/")
+		mdRecent := make([]mdneg.RecentPost, 0, len(recentPageViews))
+		for _, pv := range recentPageViews {
+			mdRecent = append(mdRecent, mdneg.RecentPost{
+				Title:       pv.Title,
+				URL:         siteURL + pv.URL,
+				PublishedAt: pv.PublishedAt,
+				Excerpt:     pv.Excerpt,
+			})
+		}
+		body := mdneg.HomeToMarkdown(base.SiteName, base.Site.Description, siteURL+base.LangPrefix+"/", mdRecent, h.markdownLabels(r))
+		mdneg.WriteMarkdown(w, body)
+		return
 	}
 
 	// Get categories and tags filtered by language
@@ -829,6 +863,26 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		} else {
 			h.logger.Error("failed to get page", "slug", slug, "error", err)
 			h.renderInternalError(w)
+			return
+		}
+	}
+
+	// Content negotiation: serve Markdown when the client prefers it.
+	// Runs after the draft-preview guard above, so drafts stay gated to
+	// admins/editors in both representations. Falls through to HTML on
+	// conversion error so a bad payload never blanks a page.
+	if mdneg.WantsMarkdown(r) {
+		var publishedAt *time.Time
+		if page.PublishedAt.Valid {
+			t := page.PublishedAt.Time
+			publishedAt = &t
+		}
+		canonical := strings.TrimRight(h.getSiteURL(ctx, r), "/") + "/" + page.Slug
+		mdBody, mdErr := mdneg.PageToMarkdown(page.Title, page.Summary, page.Body, canonical, publishedAt, h.markdownLabels(r))
+		if mdErr != nil {
+			slog.Error("markdown conversion failed", "error", mdErr, "slug", page.Slug)
+		} else {
+			mdneg.WriteMarkdown(w, mdBody)
 			return
 		}
 	}
@@ -2691,6 +2745,7 @@ func (h *FrontendHandler) renderTempl(w http.ResponseWriter, r *http.Request, te
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	mdneg.AddVaryAccept(w)
 	ctx := templ.WithNonce(r.Context(), middleware.GetCSPNonce(r))
 	if err := comp.Render(ctx, w); err != nil {
 		slog.Error("templ render failed", "template", templateName, "error", err)
@@ -2715,6 +2770,7 @@ func (h *FrontendHandler) renderHTML(w http.ResponseWriter, activeTheme *theme.T
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	mdneg.AddVaryAccept(w)
 	_, _ = w.Write(buf.Bytes())
 }
 
