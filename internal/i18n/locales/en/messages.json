@@ -5823,6 +5823,16 @@
             "translation": "Recent Posts"
         },
         {
+            "id": "frontend.published_on",
+            "message": "Published",
+            "translation": "Published"
+        },
+        {
+            "id": "frontend.source",
+            "message": "Source",
+            "translation": "Source"
+        },
+        {
             "id": "frontend.by_author",
             "message": "by",
             "translation": "by"

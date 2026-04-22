@@ -7,6 +7,8 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -17,29 +19,39 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// LoginProtection provides combined IP rate limiting and account lockout protection.
+// LoginProtection provides combined IP rate limiting and account lockout
+// protection. IP rate limiting is in-memory (short-lived, OK to lose on
+// restart). Account lockout state is persisted to SQLite so an attacker
+// who can trigger process restarts (OOM kill, deploy loop) cannot reset
+// the brute-force window — see audit finding FIND-005.
+//
+// If db is nil the lockout methods no-op, degrading to IP-rate-limit-only
+// protection. This keeps the type testable without a DB when only the IP
+// limiter is exercised, and makes the handler fail-open on DB outages
+// instead of locking legitimate users out.
 type LoginProtection struct {
+	db *sql.DB
+
 	// IP-based rate limiting (uses limiterCache from api.go)
 	ipLimiters *limiterCache[string]
 
-	// Account-based lockout tracking
-	failedAttempts map[string]*loginAttempt
-	attemptsMu     sync.RWMutex
+	// attemptsMu serializes the read-modify-write sequence in
+	// RecordFailedAttempt so concurrent failed logins for the same
+	// email cannot race and undercount (both reading count=N, both
+	// writing count=N+1 when the true answer is N+2). oCMS's default
+	// deployment is single-instance; this mutex is sufficient for
+	// that model. A multi-instance deployment with a shared SQLite
+	// file would need DB-level coordination (BEGIN IMMEDIATE + retry
+	// on SQLITE_BUSY) instead; not implemented here.
+	attemptsMu sync.Mutex
 
 	// Configuration
 	maxFailedAttempts int           // Lock account after this many failures
 	lockoutDuration   time.Duration // Base lockout duration (doubles with each lockout)
 	attemptWindow     time.Duration // Window to count failed attempts
-}
-
-// loginAttempt tracks failed login attempts for an account.
-type loginAttempt struct {
-	count       int
-	firstFailed time.Time
-	lockedUntil time.Time
-	lockouts    int // Number of times account has been locked (for exponential backoff)
 }
 
 var (
@@ -72,8 +84,10 @@ func DefaultLoginProtectionConfig() LoginProtectionConfig {
 	}
 }
 
-// NewLoginProtection creates a new login protection instance.
-func NewLoginProtection(cfg LoginProtectionConfig) *LoginProtection {
+// NewLoginProtection creates a new login protection instance backed by the
+// given SQLite database for persistent lockout state. Passing db=nil
+// disables persistent lockout tracking; the IP rate limiter still works.
+func NewLoginProtection(db *sql.DB, cfg LoginProtectionConfig) *LoginProtection {
 	if cfg.IPRateLimit <= 0 {
 		cfg.IPRateLimit = 0.5
 	}
@@ -91,15 +105,17 @@ func NewLoginProtection(cfg LoginProtectionConfig) *LoginProtection {
 	}
 
 	lp := &LoginProtection{
+		db:                db,
 		ipLimiters:        newLimiterCache[string](cfg.IPRateLimit, cfg.IPBurst),
-		failedAttempts:    make(map[string]*loginAttempt),
 		maxFailedAttempts: cfg.MaxFailedAttempts,
 		lockoutDuration:   cfg.LockoutDuration,
 		attemptWindow:     cfg.AttemptWindow,
 	}
 
-	// Start cleanup goroutine
-	go lp.cleanup()
+	// Start cleanup goroutine only when persistent storage is wired.
+	if db != nil {
+		go lp.cleanup()
+	}
 
 	return lp
 }
@@ -111,115 +127,174 @@ func (lp *LoginProtection) CheckIPRateLimit(ip string) bool {
 }
 
 // IsAccountLocked checks if an account is currently locked.
-// Returns (locked, remainingTime).
+// Returns (locked, remainingTime). DB errors fail-open (return not-locked)
+// so a transient database outage does not lock out legitimate users.
 func (lp *LoginProtection) IsAccountLocked(email string) (bool, time.Duration) {
-	lp.attemptsMu.RLock()
-	attempt, exists := lp.failedAttempts[email]
-	lp.attemptsMu.RUnlock()
-
-	if !exists {
+	if lp.db == nil {
 		return false, 0
 	}
-
-	if time.Now().Before(attempt.lockedUntil) {
-		return true, time.Until(attempt.lockedUntil)
+	rec, err := store.New(lp.db).GetLoginProtection(context.Background(), email)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			slog.Error("login_protection: get", "error", err, "email", email)
+		}
+		return false, 0
 	}
-
-	return false, 0
+	if !rec.LockedUntil.Valid || !time.Now().Before(rec.LockedUntil.Time) {
+		return false, 0
+	}
+	return true, time.Until(rec.LockedUntil.Time)
 }
 
 // RecordFailedAttempt records a failed login attempt.
 // Returns (locked, lockDuration) if the account is now locked.
+//
+// DB writes are best-effort: on error we log and return (false, 0) so the
+// handler still surfaces "invalid credentials" rather than a 5xx. A
+// sustained DB outage degrades to Argon2-only defense (~20ms per guess),
+// which is what the pre-persistence code already produced on restart.
 func (lp *LoginProtection) RecordFailedAttempt(email string) (bool, time.Duration) {
+	if lp.db == nil {
+		return false, 0
+	}
+	// Serialize the read-modify-write so two concurrent failed logins
+	// for the same email do not both read count=N and both write count=N+1
+	// (losing the second increment). See attemptsMu comment on the struct.
 	lp.attemptsMu.Lock()
 	defer lp.attemptsMu.Unlock()
 
+	ctx := context.Background()
+	q := store.New(lp.db)
 	now := time.Now()
-	attempt, exists := lp.failedAttempts[email]
 
-	if !exists {
-		attempt = &loginAttempt{
-			count:       1,
-			firstFailed: now,
+	rec, err := q.GetLoginProtection(ctx, email)
+	if errors.Is(err, sql.ErrNoRows) {
+		// First recorded failure for this email.
+		if err := q.UpsertLoginProtection(ctx, store.UpsertLoginProtectionParams{
+			Email:         email,
+			AttemptCount:  1,
+			FirstFailedAt: now,
+			LockedUntil:   sql.NullTime{},
+			LockoutCount:  0,
+			UpdatedAt:     now,
+		}); err != nil {
+			slog.Error("login_protection: upsert initial", "error", err, "email", email)
+		} else {
+			slog.Debug("login attempt recorded", "email", email, "count", 1)
 		}
-		lp.failedAttempts[email] = attempt
-		slog.Debug("login attempt recorded", "email", email, "count", 1)
+		return false, 0
+	}
+	if err != nil {
+		slog.Error("login_protection: get on record", "error", err, "email", email)
 		return false, 0
 	}
 
-	// If the attempt window has passed, reset the counter
-	if now.Sub(attempt.firstFailed) > lp.attemptWindow {
-		attempt.count = 1
-		attempt.firstFailed = now
-		slog.Debug("login attempt window reset", "email", email, "count", 1)
+	// Attempt window has passed: start a fresh counter but keep the
+	// historical lockout_count so exponential backoff still stiffens.
+	if now.Sub(rec.FirstFailedAt) > lp.attemptWindow {
+		if err := q.UpsertLoginProtection(ctx, store.UpsertLoginProtectionParams{
+			Email:         email,
+			AttemptCount:  1,
+			FirstFailedAt: now,
+			LockedUntil:   sql.NullTime{},
+			LockoutCount:  rec.LockoutCount,
+			UpdatedAt:     now,
+		}); err != nil {
+			slog.Error("login_protection: reset window", "error", err, "email", email)
+		} else {
+			slog.Debug("login attempt window reset", "email", email, "count", 1)
+		}
 		return false, 0
 	}
 
-	// Increment counter
-	attempt.count++
-	slog.Debug("login attempt recorded", "email", email, "count", attempt.count)
+	newCount := rec.AttemptCount + 1
+	slog.Debug("login attempt recorded", "email", email, "count", newCount)
 
-	// Check if we should lock the account
-	if attempt.count >= lp.maxFailedAttempts {
-		// Calculate lockout duration with exponential backoff
+	// Lock the account if we've crossed the threshold.
+	if int(newCount) >= lp.maxFailedAttempts {
 		lockDuration := lp.lockoutDuration
-		for i := 0; i < attempt.lockouts; i++ {
+		for range rec.LockoutCount {
 			lockDuration *= 2
-			// Cap at 24 hours
 			if lockDuration > 24*time.Hour {
 				lockDuration = 24 * time.Hour
 				break
 			}
 		}
-
-		attempt.lockedUntil = now.Add(lockDuration)
-		attempt.lockouts++
-		attempt.count = 0 // Reset count after lockout
-
+		lockedUntil := now.Add(lockDuration)
+		if err := q.UpsertLoginProtection(ctx, store.UpsertLoginProtectionParams{
+			Email:         email,
+			AttemptCount:  0, // Reset count on lockout; next failure starts over.
+			FirstFailedAt: rec.FirstFailedAt,
+			LockedUntil:   sql.NullTime{Time: lockedUntil, Valid: true},
+			LockoutCount:  rec.LockoutCount + 1,
+			UpdatedAt:     now,
+		}); err != nil {
+			slog.Error("login_protection: lock", "error", err, "email", email)
+			return false, 0
+		}
 		slog.Warn("account locked due to failed attempts",
 			"email", email,
-			"lockouts", attempt.lockouts,
+			"lockouts", rec.LockoutCount+1,
 			"duration", lockDuration,
 		)
-
 		return true, lockDuration
 	}
 
+	// Under the threshold: just increment.
+	if err := q.UpsertLoginProtection(ctx, store.UpsertLoginProtectionParams{
+		Email:         email,
+		AttemptCount:  newCount,
+		FirstFailedAt: rec.FirstFailedAt,
+		LockedUntil:   rec.LockedUntil,
+		LockoutCount:  rec.LockoutCount,
+		UpdatedAt:     now,
+	}); err != nil {
+		slog.Error("login_protection: increment", "error", err, "email", email)
+	}
 	return false, 0
 }
 
 // RecordSuccessfulLogin clears failed attempt tracking for an account.
+//
+// Holds the same attemptsMu as RecordFailedAttempt so a concurrent failed
+// attempt cannot read state, have it deleted underneath, and then re-upsert
+// a stale counter — which would cause "successful login clears attempts"
+// to silently regress and potentially re-lock the user. See attemptsMu
+// comment on the struct.
 func (lp *LoginProtection) RecordSuccessfulLogin(email string) {
+	if lp.db == nil {
+		return
+	}
 	lp.attemptsMu.Lock()
 	defer lp.attemptsMu.Unlock()
 
-	delete(lp.failedAttempts, email)
+	if err := store.New(lp.db).DeleteLoginProtection(context.Background(), email); err != nil {
+		slog.Error("login_protection: delete", "error", err, "email", email)
+		return
+	}
 	slog.Debug("login attempts cleared", "email", email)
 }
 
 // GetRemainingAttempts returns the number of remaining attempts before lockout.
 func (lp *LoginProtection) GetRemainingAttempts(email string) int {
-	lp.attemptsMu.RLock()
-	attempt, exists := lp.failedAttempts[email]
-	lp.attemptsMu.RUnlock()
-
-	if !exists {
+	if lp.db == nil {
 		return lp.maxFailedAttempts
 	}
-
-	// Check if window has passed
-	if time.Since(attempt.firstFailed) > lp.attemptWindow {
+	rec, err := store.New(lp.db).GetLoginProtection(context.Background(), email)
+	if err != nil {
 		return lp.maxFailedAttempts
 	}
-
-	remaining := lp.maxFailedAttempts - attempt.count
+	if time.Since(rec.FirstFailedAt) > lp.attemptWindow {
+		return lp.maxFailedAttempts
+	}
+	remaining := lp.maxFailedAttempts - int(rec.AttemptCount)
 	if remaining < 0 {
 		return 0
 	}
 	return remaining
 }
 
-// cleanup periodically removes stale entries.
+// cleanup periodically removes stale rows from login_protection.
 func (lp *LoginProtection) cleanup() {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
@@ -230,20 +305,17 @@ func (lp *LoginProtection) cleanup() {
 }
 
 func (lp *LoginProtection) cleanupStaleEntries() {
-	now := time.Now()
-
-	// IP rate limiters are cleaned up automatically via TTL-based eviction
-
-	// Cleanup old login attempts
-	lp.attemptsMu.Lock()
-	for email, attempt := range lp.failedAttempts {
-		// Remove if lockout has expired and no recent attempts
-		if now.After(attempt.lockedUntil) &&
-			now.Sub(attempt.firstFailed) > lp.attemptWindow {
-			delete(lp.failedAttempts, email)
-		}
+	if lp.db == nil {
+		return
 	}
-	lp.attemptsMu.Unlock()
+	now := time.Now()
+	err := store.New(lp.db).CleanupStaleLoginProtection(context.Background(), store.CleanupStaleLoginProtectionParams{
+		LockedUntil:   sql.NullTime{Time: now, Valid: true},
+		FirstFailedAt: now.Add(-lp.attemptWindow),
+	})
+	if err != nil {
+		slog.Error("login_protection cleanup", "error", err)
+	}
 }
 
 // Middleware returns HTTP middleware for IP rate limiting on login.

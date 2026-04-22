@@ -160,6 +160,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		} else {
 			slog.Error("database error during login", "error", err)
 		}
+		// Normalize timing with the existing-user wrong-password path so
+		// response latency cannot be used to enumerate valid accounts.
+		auth.VerifyDummyPassword(password)
 		// Record failed attempt even for non-existent users to prevent enumeration
 		if h.loginProtection != nil {
 			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {

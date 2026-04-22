@@ -200,6 +200,7 @@ cmd/ocms/main.go
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
+| `OCMS_HSTS_PRELOAD` | No | `false` | Add `; preload` to HSTS header in production (see `docs/reverse-proxy.md` for submission process) |
 
 ## Default Credentials
 
@@ -579,6 +580,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/demo-deployment.md` - Demo mode, Fly.io deployment, and demo content seeding
 - `docs/custom-modules.md` - Custom module creation, self-registration pattern, and module interface
 - `docs/custom-themes.md` - Custom theme creation, template structure, settings, translations, and testing
+- `docs/agent-ready.md` - Agent-Ready discovery (Link header, Markdown-for-Agents, `/.well-known/*` surfaces)
 
 Security audit documents are available in the `.audit/` directory (gitignored).
 

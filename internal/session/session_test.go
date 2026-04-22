@@ -91,8 +91,24 @@ func TestNew_SessionSettings(t *testing.T) {
 	if !sm.Cookie.HttpOnly {
 		t.Error("expected Cookie.HttpOnly = true")
 	}
-	if sm.Cookie.SameSite != http.SameSiteLaxMode {
-		t.Errorf("expected SameSite = Lax, got %v", sm.Cookie.SameSite)
+	if sm.Cookie.SameSite != http.SameSiteStrictMode {
+		t.Errorf("expected SameSite = Strict, got %v", sm.Cookie.SameSite)
+	}
+}
+
+// TestNew_SameSiteStrictInProduction is the drift test for audit finding
+// FIND-006: the production session cookie must be SameSite=Strict so a
+// crafted link in a third-party context cannot ride an authenticated
+// admin session on cross-site top-level navigation. Returning to Lax
+// would re-open the CSRF-via-link-click surface.
+func TestNew_SameSiteStrictInProduction(t *testing.T) {
+	db := setupTestDB(t)
+
+	for _, isDev := range []bool{false, true} {
+		sm := New(db, isDev)
+		if sm.Cookie.SameSite != http.SameSiteStrictMode {
+			t.Errorf("isDev=%v: SameSite = %v, want Strict", isDev, sm.Cookie.SameSite)
+		}
 	}
 }
 

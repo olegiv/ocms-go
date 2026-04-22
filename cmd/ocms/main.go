@@ -1507,9 +1507,13 @@ func run() error {
 
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.)
 	securityConfig := middleware.DefaultSecurityHeadersConfig(cfg.IsDevelopment())
+	if cfg.HSTSPreload && !cfg.IsDevelopment() {
+		securityConfig.HSTSPreload = true
+	}
 	r.Use(middleware.SecurityHeaders(securityConfig))
 	slog.Info("security headers middleware initialized",
 		"hsts", !cfg.IsDevelopment(),
+		"hsts_preload", securityConfig.HSTSPreload,
 		"x_frame_options", "SAMEORIGIN",
 	)
 
@@ -1524,7 +1528,7 @@ func run() error {
 	slog.Info("CSRF protection initialized", "secure", !cfg.IsDevelopment())
 
 	// Initialize login protection
-	loginProtection := middleware.NewLoginProtection(middleware.DefaultLoginProtectionConfig())
+	loginProtection := middleware.NewLoginProtection(db, middleware.DefaultLoginProtectionConfig())
 	slog.Info("login protection initialized",
 		"ip_rate_limit", "0.5 req/s",
 		"max_failed_attempts", 5,

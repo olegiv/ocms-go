@@ -135,6 +135,15 @@ type Language struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+type LoginProtection struct {
+	Email         string       `json:"email"`
+	AttemptCount  int64        `json:"attempt_count"`
+	FirstFailedAt time.Time    `json:"first_failed_at"`
+	LockedUntil   sql.NullTime `json:"locked_until"`
+	LockoutCount  int64        `json:"lockout_count"`
+	UpdatedAt     time.Time    `json:"updated_at"`
+}
+
 type MediaFolder struct {
 	ID        int64         `json:"id"`
 	Name      string        `json:"name"`

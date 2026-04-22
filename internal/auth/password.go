@@ -104,3 +104,37 @@ func HashPassword(password string) (string, error) {
 func CheckPassword(password, encodedHash string) (bool, error) {
 	return VerifyArgon2(password, encodedHash)
 }
+
+// dummyPasswordHash is an Argon2id hash generated once at init. It is used
+// by VerifyDummyPassword to match the CPU cost of a real password check on
+// login paths where the user lookup failed, so response timing cannot be
+// used to distinguish existing from non-existent accounts.
+// The plaintext that produced this hash is a randomly-generated sentinel
+// that never accepts any user-supplied password (no user's password_hash
+// will ever equal this value).
+var dummyPasswordHash string
+
+func init() {
+	// Pre-compute a dummy hash at package init. The plaintext is a fixed
+	// sentinel — its value doesn't matter; only its cost does.
+	if h, err := HashArgon2("dummy-timing-anchor-never-a-real-password"); err == nil {
+		dummyPasswordHash = h
+	}
+}
+
+// VerifyDummyPassword runs an Argon2id verification against a package-
+// local dummy hash, discarding the result. Call this on login paths where
+// the user lookup returned no row — it levels the response time with the
+// existing-user wrong-password path, closing a user-enumeration side
+// channel.
+//
+// Safe to call on every request: the cost is the same as a regular
+// CheckPassword (~20ms) — that's the whole point. If init() failed to
+// build the dummy hash (crypto/rand unavailable), this function returns
+// without doing work; the system is already broken at that point.
+func VerifyDummyPassword(password string) {
+	if dummyPasswordHash == "" {
+		return
+	}
+	_, _ = VerifyArgon2(password, dummyPasswordHash)
+}

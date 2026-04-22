@@ -4,10 +4,14 @@
 package middleware
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // testLoginProtectionConfig returns a config suitable for fast testing.
@@ -19,6 +23,35 @@ func testLoginProtectionConfig(maxAttempts int, lockoutDuration, attemptWindow t
 		LockoutDuration:   lockoutDuration,
 		AttemptWindow:     attemptWindow,
 	}
+}
+
+// testLoginProtectionDB opens a per-test in-memory SQLite DB with a
+// shared cache so concurrent goroutines using the same *sql.DB handle
+// all see the same table. Without `cache=shared`, each connection Go's
+// pool opens would get its own empty `:memory:` DB and the tests would
+// see "no such table" errors. The test-specific `&test=<name>` segment
+// isolates databases per-test so parallel tests do not collide.
+func testLoginProtectionDB(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn := "file:" + t.Name() + "?mode=memory&cache=shared"
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`
+		CREATE TABLE login_protection (
+			email            TEXT PRIMARY KEY,
+			attempt_count    INTEGER  NOT NULL DEFAULT 0,
+			first_failed_at  DATETIME NOT NULL,
+			locked_until     DATETIME,
+			lockout_count    INTEGER  NOT NULL DEFAULT 0,
+			updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+	`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	return db
 }
 
 func setTrustedProxiesForTest(t *testing.T, entries ...string) {
@@ -55,7 +88,7 @@ func TestDefaultLoginProtectionConfig(t *testing.T) {
 
 func TestNewLoginProtection(t *testing.T) {
 	cfg := DefaultLoginProtectionConfig()
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 
 	if lp == nil {
 		t.Fatal("NewLoginProtection() returned nil")
@@ -68,7 +101,7 @@ func TestNewLoginProtection(t *testing.T) {
 func TestNewLoginProtectionDefaultValues(t *testing.T) {
 	// Test with zero config values - should use defaults
 	cfg := LoginProtectionConfig{}
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 
 	if lp.maxFailedAttempts != 5 {
 		t.Errorf("maxFailedAttempts = %d, want 5 (default)", lp.maxFailedAttempts)
@@ -80,7 +113,7 @@ func TestNewLoginProtectionDefaultValues(t *testing.T) {
 
 func TestLoginProtectionIsAccountLocked(t *testing.T) {
 	cfg := testLoginProtectionConfig(3, 1*time.Second, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// Initially not locked
@@ -115,7 +148,7 @@ func TestLoginProtectionIsAccountLocked(t *testing.T) {
 
 func TestLoginProtectionRecordFailedAttempt(t *testing.T) {
 	cfg := testLoginProtectionConfig(3, 1*time.Second, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// First attempt should not lock
@@ -142,7 +175,7 @@ func TestLoginProtectionRecordFailedAttempt(t *testing.T) {
 
 func TestLoginProtectionRecordSuccessfulLogin(t *testing.T) {
 	cfg := testLoginProtectionConfig(3, 1*time.Minute, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// Record some failed attempts
@@ -161,7 +194,7 @@ func TestLoginProtectionRecordSuccessfulLogin(t *testing.T) {
 
 func TestLoginProtectionGetRemainingAttempts(t *testing.T) {
 	cfg := testLoginProtectionConfig(5, 1*time.Minute, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// Initial remaining should be max
@@ -188,7 +221,7 @@ func TestLoginProtectionGetRemainingAttempts(t *testing.T) {
 
 func TestLoginProtectionExponentialBackoff(t *testing.T) {
 	cfg := testLoginProtectionConfig(2, 100*time.Millisecond, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// First lockout
@@ -209,7 +242,7 @@ func TestLoginProtectionExponentialBackoff(t *testing.T) {
 
 func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 	cfg := testLoginProtectionConfig(5, 1*time.Minute, 100*time.Millisecond) // Very short window for testing
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// Record a failed attempt
@@ -226,6 +259,114 @@ func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 	remaining = lp.GetRemainingAttempts(email)
 	if remaining != cfg.MaxFailedAttempts {
 		t.Errorf("GetRemainingAttempts() after window = %d, want %d", remaining, cfg.MaxFailedAttempts)
+	}
+}
+
+// TestRecordSuccessfulLoginAcquiresAttemptsMu is the drift test for the
+// Codex PR #129 round-2 P2 finding: RecordSuccessfulLogin must acquire
+// the same attemptsMu as RecordFailedAttempt, otherwise a failed attempt
+// in-flight can upsert stale state after the delete has already
+// committed, leaving a "successful login" with residual attempt count.
+//
+// We prove the mutex is held by externally locking attemptsMu and
+// observing that RecordSuccessfulLogin blocks until we release it.
+// Without the fix, RecordSuccessfulLogin completes in microseconds;
+// with the fix it waits for the external hold duration.
+func TestRecordSuccessfulLoginAcquiresAttemptsMu(t *testing.T) {
+	lp := NewLoginProtection(testLoginProtectionDB(t), DefaultLoginProtectionConfig())
+	email := "clear-serialized@example.com"
+
+	const hold = 100 * time.Millisecond
+
+	lp.attemptsMu.Lock()
+
+	done := make(chan time.Duration, 1)
+	go func() {
+		start := time.Now()
+		lp.RecordSuccessfulLogin(email)
+		done <- time.Since(start)
+	}()
+
+	// Give the goroutine a chance to enter RecordSuccessfulLogin and
+	// block on the mutex, then release it.
+	time.Sleep(hold)
+	lp.attemptsMu.Unlock()
+
+	elapsed := <-done
+	if elapsed < hold {
+		t.Errorf("RecordSuccessfulLogin completed in %v (< %v hold); it did NOT wait on attemptsMu — a concurrent RecordFailedAttempt could upsert stale state after the delete", elapsed, hold)
+	}
+}
+
+// TestRecordFailedAttemptIsSerialized is the drift test for the Codex P1
+// finding on PR #129: without serialization, concurrent failed logins for
+// the same email race in the read-modify-write cycle (both read count=N,
+// both compute and write count=N+1) and undercount attempts, weakening
+// the lockout control. With the attemptsMu mutex, every increment is
+// observed.
+//
+// The test spawns N concurrent goroutines calling RecordFailedAttempt
+// against the same email, all under a per-email window large enough that
+// no lockout is triggered. The final attempt_count must equal N exactly.
+// Removing the mutex makes this test fail intermittently with count < N.
+func TestRecordFailedAttemptIsSerialized(t *testing.T) {
+	// Large attempt count with a high lockout threshold so the loop
+	// exercises the "increment" path every time, never the "lock" path.
+	cfg := testLoginProtectionConfig(1_000_000, 1*time.Minute, 1*time.Minute)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
+	email := "race@example.com"
+
+	const parallelism = 50
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+	for range parallelism {
+		go func() {
+			defer wg.Done()
+			lp.RecordFailedAttempt(email)
+		}()
+	}
+	wg.Wait()
+
+	remaining := lp.GetRemainingAttempts(email)
+	got := cfg.MaxFailedAttempts - remaining
+	if got != parallelism {
+		t.Errorf("attempt_count after %d concurrent failures = %d, want %d (racy read-modify-write lost increments)", parallelism, got, parallelism)
+	}
+}
+
+// TestLoginProtectionSurvivesProcessRestart is the drift test for audit
+// finding FIND-005. The previous in-memory implementation lost all lockout
+// state on restart — an attacker who could trigger a deploy/OOM/crash
+// could reset the brute-force window. The DB-backed implementation must
+// read the same state back after a fresh LoginProtection instance is
+// constructed against the same DB.
+func TestLoginProtectionSurvivesProcessRestart(t *testing.T) {
+	db := testLoginProtectionDB(t)
+	cfg := testLoginProtectionConfig(3, 10*time.Minute, 10*time.Minute)
+	email := "survivor@example.com"
+
+	// "Before restart" — record failures up to the lockout threshold.
+	before := NewLoginProtection(db, cfg)
+	for range cfg.MaxFailedAttempts {
+		before.RecordFailedAttempt(email)
+	}
+	locked, remaining := before.IsAccountLocked(email)
+	if !locked {
+		t.Fatalf("pre-restart: account should be locked after %d attempts", cfg.MaxFailedAttempts)
+	}
+	if remaining <= 0 {
+		t.Fatalf("pre-restart: remaining lockout should be positive, got %v", remaining)
+	}
+
+	// "After restart" — fresh LoginProtection, same DB. The old
+	// implementation would forget everything here; this one must not.
+	after := NewLoginProtection(db, cfg)
+	lockedAfter, remainingAfter := after.IsAccountLocked(email)
+	if !lockedAfter {
+		t.Errorf("post-restart: account MUST still be locked — lockout state did not persist to DB")
+	}
+	if remainingAfter <= 0 {
+		t.Errorf("post-restart: remaining lockout should still be positive, got %v", remainingAfter)
 	}
 }
 
@@ -388,7 +529,8 @@ func TestAnnotateTrustedProxy(t *testing.T) {
 
 func TestLoginProtectionMiddleware(t *testing.T) {
 	cfg := testLoginProtectionConfig(5, 1*time.Minute, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	// Middleware only exercises the IP rate limiter, no lockout DB needed.
+	lp := NewLoginProtection(nil, cfg)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -424,7 +566,8 @@ func TestLoginProtectionCheckIPRateLimit(t *testing.T) {
 		LockoutDuration:   1 * time.Minute,
 		AttemptWindow:     1 * time.Minute,
 	}
-	lp := NewLoginProtection(cfg)
+	// IP rate limiter is in-memory only, no lockout DB needed.
+	lp := NewLoginProtection(nil, cfg)
 	ip := "192.168.1.100"
 
 	// First several requests should be allowed (within burst)

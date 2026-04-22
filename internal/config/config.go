@@ -82,6 +82,12 @@ type Config struct {
 	RequireSanitizePageHTML        bool `env:"OCMS_REQUIRE_SANITIZE_PAGE_HTML" envDefault:"false"`         // Reject startup in production if page HTML sanitization is disabled
 	BlockSuspiciousPageHTML        bool `env:"OCMS_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"`         // Reject page create/update when suspicious HTML patterns are detected
 	RequireBlockSuspiciousPageHTML bool `env:"OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"` // Reject startup in production if suspicious page HTML blocking is disabled
+
+	// HSTS preload. When true, production responses include `; preload` in the
+	// Strict-Transport-Security header, which is required by the HSTS preload
+	// list submission process at https://hstspreload.org. Opt-in because once
+	// submitted, the preload entry is hard to roll back.
+	HSTSPreload bool `env:"OCMS_HSTS_PRELOAD" envDefault:"false"`
 }
 
 // IsDevelopment returns true if the application is running in development mode.

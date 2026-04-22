@@ -10,6 +10,7 @@ require (
 
 require (
 	filippo.io/csrf v0.2.1
+	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
 	github.com/Oudwins/tailwind-merge-go v0.2.1
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
@@ -40,6 +41,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/JohannesKaufmann/dom v0.2.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

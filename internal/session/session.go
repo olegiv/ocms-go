@@ -28,10 +28,19 @@ func New(db *sql.DB, isDev bool) *scs.SessionManager {
 	// Use SQLite store
 	sm.Store = sqlite3store.New(db)
 
-	// Configure session
+	// Configure session.
+	//
+	// SameSite=Strict refuses to send the session cookie on any cross-site
+	// top-level navigation, so a crafted link in an email or chat message
+	// cannot piggyback on an authenticated admin session. The trade-off is
+	// that arriving at /admin/... via an external link lands the user
+	// logged-out; that is the desired behavior for an admin panel, and
+	// public routes do not rely on cross-site session continuity.
+	// All mutating admin actions use POST (verified in main.go route
+	// registrations), so idempotent GETs see no functional change.
 	sm.Lifetime = 24 * time.Hour
 	sm.Cookie.HttpOnly = true
-	sm.Cookie.SameSite = http.SameSiteLaxMode
+	sm.Cookie.SameSite = http.SameSiteStrictMode
 	sm.Cookie.Secure = !isDev // Secure cookies in production only
 
 	// Production hardening: Use __Host- prefix
