@@ -4,10 +4,13 @@
 package middleware
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // testLoginProtectionConfig returns a config suitable for fast testing.
@@ -19,6 +22,31 @@ func testLoginProtectionConfig(maxAttempts int, lockoutDuration, attemptWindow t
 		LockoutDuration:   lockoutDuration,
 		AttemptWindow:     attemptWindow,
 	}
+}
+
+// testLoginProtectionDB opens an in-memory SQLite DB and creates the
+// login_protection table. Used by tests that exercise lockout state —
+// everything that calls NewLoginProtection with a non-nil DB.
+func testLoginProtectionDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`
+		CREATE TABLE login_protection (
+			email            TEXT PRIMARY KEY,
+			attempt_count    INTEGER  NOT NULL DEFAULT 0,
+			first_failed_at  DATETIME NOT NULL,
+			locked_until     DATETIME,
+			lockout_count    INTEGER  NOT NULL DEFAULT 0,
+			updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+	`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	return db
 }
 
 func setTrustedProxiesForTest(t *testing.T, entries ...string) {
@@ -55,7 +83,7 @@ func TestDefaultLoginProtectionConfig(t *testing.T) {
 
 func TestNewLoginProtection(t *testing.T) {
 	cfg := DefaultLoginProtectionConfig()
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 
 	if lp == nil {
 		t.Fatal("NewLoginProtection() returned nil")
@@ -68,7 +96,7 @@ func TestNewLoginProtection(t *testing.T) {
 func TestNewLoginProtectionDefaultValues(t *testing.T) {
 	// Test with zero config values - should use defaults
 	cfg := LoginProtectionConfig{}
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 
 	if lp.maxFailedAttempts != 5 {
 		t.Errorf("maxFailedAttempts = %d, want 5 (default)", lp.maxFailedAttempts)
@@ -80,7 +108,7 @@ func TestNewLoginProtectionDefaultValues(t *testing.T) {
 
 func TestLoginProtectionIsAccountLocked(t *testing.T) {
 	cfg := testLoginProtectionConfig(3, 1*time.Second, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// Initially not locked
@@ -115,7 +143,7 @@ func TestLoginProtectionIsAccountLocked(t *testing.T) {
 
 func TestLoginProtectionRecordFailedAttempt(t *testing.T) {
 	cfg := testLoginProtectionConfig(3, 1*time.Second, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// First attempt should not lock
@@ -142,7 +170,7 @@ func TestLoginProtectionRecordFailedAttempt(t *testing.T) {
 
 func TestLoginProtectionRecordSuccessfulLogin(t *testing.T) {
 	cfg := testLoginProtectionConfig(3, 1*time.Minute, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// Record some failed attempts
@@ -161,7 +189,7 @@ func TestLoginProtectionRecordSuccessfulLogin(t *testing.T) {
 
 func TestLoginProtectionGetRemainingAttempts(t *testing.T) {
 	cfg := testLoginProtectionConfig(5, 1*time.Minute, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// Initial remaining should be max
@@ -188,7 +216,7 @@ func TestLoginProtectionGetRemainingAttempts(t *testing.T) {
 
 func TestLoginProtectionExponentialBackoff(t *testing.T) {
 	cfg := testLoginProtectionConfig(2, 100*time.Millisecond, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// First lockout
@@ -209,7 +237,7 @@ func TestLoginProtectionExponentialBackoff(t *testing.T) {
 
 func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 	cfg := testLoginProtectionConfig(5, 1*time.Minute, 100*time.Millisecond) // Very short window for testing
-	lp := NewLoginProtection(cfg)
+	lp := NewLoginProtection(testLoginProtectionDB(t), cfg)
 	email := "test@example.com"
 
 	// Record a failed attempt
@@ -226,6 +254,42 @@ func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 	remaining = lp.GetRemainingAttempts(email)
 	if remaining != cfg.MaxFailedAttempts {
 		t.Errorf("GetRemainingAttempts() after window = %d, want %d", remaining, cfg.MaxFailedAttempts)
+	}
+}
+
+// TestLoginProtectionSurvivesProcessRestart is the drift test for audit
+// finding FIND-005. The previous in-memory implementation lost all lockout
+// state on restart — an attacker who could trigger a deploy/OOM/crash
+// could reset the brute-force window. The DB-backed implementation must
+// read the same state back after a fresh LoginProtection instance is
+// constructed against the same DB.
+func TestLoginProtectionSurvivesProcessRestart(t *testing.T) {
+	db := testLoginProtectionDB(t)
+	cfg := testLoginProtectionConfig(3, 10*time.Minute, 10*time.Minute)
+	email := "survivor@example.com"
+
+	// "Before restart" — record failures up to the lockout threshold.
+	before := NewLoginProtection(db, cfg)
+	for range cfg.MaxFailedAttempts {
+		before.RecordFailedAttempt(email)
+	}
+	locked, remaining := before.IsAccountLocked(email)
+	if !locked {
+		t.Fatalf("pre-restart: account should be locked after %d attempts", cfg.MaxFailedAttempts)
+	}
+	if remaining <= 0 {
+		t.Fatalf("pre-restart: remaining lockout should be positive, got %v", remaining)
+	}
+
+	// "After restart" — fresh LoginProtection, same DB. The old
+	// implementation would forget everything here; this one must not.
+	after := NewLoginProtection(db, cfg)
+	lockedAfter, remainingAfter := after.IsAccountLocked(email)
+	if !lockedAfter {
+		t.Errorf("post-restart: account MUST still be locked — lockout state did not persist to DB")
+	}
+	if remainingAfter <= 0 {
+		t.Errorf("post-restart: remaining lockout should still be positive, got %v", remainingAfter)
 	}
 }
 
@@ -388,7 +452,8 @@ func TestAnnotateTrustedProxy(t *testing.T) {
 
 func TestLoginProtectionMiddleware(t *testing.T) {
 	cfg := testLoginProtectionConfig(5, 1*time.Minute, 1*time.Minute)
-	lp := NewLoginProtection(cfg)
+	// Middleware only exercises the IP rate limiter, no lockout DB needed.
+	lp := NewLoginProtection(nil, cfg)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -424,7 +489,8 @@ func TestLoginProtectionCheckIPRateLimit(t *testing.T) {
 		LockoutDuration:   1 * time.Minute,
 		AttemptWindow:     1 * time.Minute,
 	}
-	lp := NewLoginProtection(cfg)
+	// IP rate limiter is in-memory only, no lockout DB needed.
+	lp := NewLoginProtection(nil, cfg)
 	ip := "192.168.1.100"
 
 	// First several requests should be allowed (within burst)

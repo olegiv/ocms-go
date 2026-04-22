@@ -1528,7 +1528,7 @@ func run() error {
 	slog.Info("CSRF protection initialized", "secure", !cfg.IsDevelopment())
 
 	// Initialize login protection
-	loginProtection := middleware.NewLoginProtection(middleware.DefaultLoginProtectionConfig())
+	loginProtection := middleware.NewLoginProtection(db, middleware.DefaultLoginProtectionConfig())
 	slog.Info("login protection initialized",
 		"ip_rate_limit", "0.5 req/s",
 		"max_failed_attempts", 5,
