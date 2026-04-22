@@ -84,11 +84,10 @@ is_systemd_active() {
 
 is_systemd_managed() {
     local site_id="$1"
-    # Treat the site as systemd-managed if the unit is enabled OR currently
-    # active. is-enabled alone misses units started manually via
-    # `systemctl start` without being enabled, which would cause stop/restart
-    # to skip delegation and fall through to PID-file logic on a service
-    # systemd is already running.
+    # Used by cmd_start only: route future starts via systemd if the unit is
+    # enabled OR currently active. stop/restart deliberately use
+    # is_systemd_active instead, so an enabled-but-inactive unit with an
+    # out-of-band PID-file process still gets stopped via the PID path.
     systemctl is-enabled --quiet "ocms@${site_id}" 2>/dev/null || \
         systemctl is-active --quiet "ocms@${site_id}" 2>/dev/null
 }
@@ -178,8 +177,11 @@ cmd_stop() {
 
     resolve_site "$site_id"
 
-    # Delegate to systemd if the unit is enabled for this site
-    if is_systemd_managed "$site_id"; then
+    # Delegate to systemd only when the unit is actually running under it.
+    # Using is_systemd_managed here (enabled OR active) would mis-delegate on
+    # enabled-but-inactive units, where `systemctl stop` is a no-op and would
+    # silently leave an out-of-band PID-file process running.
+    if is_systemd_active "$site_id"; then
         echo_info "Stopping site '$site_id' via systemd..."
         sudo systemctl stop "ocms@${site_id}"
         return
@@ -224,8 +226,9 @@ cmd_restart() {
 
     resolve_site "$site_id"
 
-    # Delegate to systemd if the unit is enabled for this site
-    if is_systemd_managed "$site_id"; then
+    # Delegate to systemd only when the unit is actually running under it
+    # (see cmd_stop for the enabled-but-inactive rationale).
+    if is_systemd_active "$site_id"; then
         echo_info "Restarting site '$site_id' via systemd..."
         sudo systemctl restart "ocms@${site_id}"
         return
