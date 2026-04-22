@@ -2,9 +2,9 @@
 # Copyright (c) 2025-2026 Oleg Ivanchenko
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# oCMS Instance Control Tool (non-systemd)
-# For testing, debugging, and quick management of oCMS instances.
-# For production, use: systemctl start/stop/restart ocms@<site-id>
+# oCMS Instance Control Tool
+# Manages oCMS instances via PID files by default; auto-delegates to
+# systemctl for sites enabled as ocms@<site-id>.service.
 #
 # Usage: ocmsctl <command> <site-id> [options]
 #
@@ -82,6 +82,11 @@ is_systemd_active() {
     systemctl is-active --quiet "ocms@${site_id}" 2>/dev/null
 }
 
+is_systemd_managed() {
+    local site_id="$1"
+    systemctl is-enabled --quiet "ocms@${site_id}" 2>/dev/null
+}
+
 # --- Commands ---
 
 cmd_start() {
@@ -90,12 +95,16 @@ cmd_start() {
 
     resolve_site "$site_id"
 
-    # Check if already running under systemd
-    if is_systemd_active "$site_id"; then
-        echo_error "Site '$site_id' is running under systemd."
-        echo "       Use: sudo systemctl stop ocms@$site_id"
-        echo "       Then retry with ocmsctl."
-        exit 1
+    # Delegate to systemd if the unit is enabled for this site
+    if is_systemd_managed "$site_id"; then
+        if [ "$foreground" = "--foreground" ]; then
+            echo_error "Site '$site_id' is managed by systemd; --foreground is not supported."
+            echo "       Run the binary directly as $SITE_USER for interactive debugging."
+            exit 1
+        fi
+        echo_info "Starting site '$site_id' via systemd..."
+        sudo systemctl start "ocms@${site_id}"
+        return
     fi
 
     # Check if already running via PID file
@@ -163,11 +172,11 @@ cmd_stop() {
 
     resolve_site "$site_id"
 
-    # Check if running under systemd
-    if is_systemd_active "$site_id"; then
-        echo_error "Site '$site_id' is managed by systemd."
-        echo "       Use: sudo systemctl stop ocms@$site_id"
-        exit 1
+    # Delegate to systemd if the unit is enabled for this site
+    if is_systemd_managed "$site_id"; then
+        echo_info "Stopping site '$site_id' via systemd..."
+        sudo systemctl stop "ocms@${site_id}"
+        return
     fi
 
     local pid
@@ -209,11 +218,11 @@ cmd_restart() {
 
     resolve_site "$site_id"
 
-    # Check if running under systemd
-    if is_systemd_active "$site_id"; then
-        echo_error "Site '$site_id' is managed by systemd."
-        echo "       Use: sudo systemctl restart ocms@$site_id"
-        exit 1
+    # Delegate to systemd if the unit is enabled for this site
+    if is_systemd_managed "$site_id"; then
+        echo_info "Restarting site '$site_id' via systemd..."
+        sudo systemctl restart "ocms@${site_id}"
+        return
     fi
 
     cmd_stop "$site_id" 2>/dev/null || true
