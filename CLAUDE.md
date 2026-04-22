@@ -200,6 +200,7 @@ cmd/ocms/main.go
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
+| `OCMS_HSTS_PRELOAD` | No | `false` | Add `; preload` to HSTS header in production (see `docs/reverse-proxy.md` for submission process) |
 
 ## Default Credentials
 

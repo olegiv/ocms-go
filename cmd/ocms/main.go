@@ -1507,9 +1507,13 @@ func run() error {
 
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.)
 	securityConfig := middleware.DefaultSecurityHeadersConfig(cfg.IsDevelopment())
+	if cfg.HSTSPreload && !cfg.IsDevelopment() {
+		securityConfig.HSTSPreload = true
+	}
 	r.Use(middleware.SecurityHeaders(securityConfig))
 	slog.Info("security headers middleware initialized",
 		"hsts", !cfg.IsDevelopment(),
+		"hsts_preload", securityConfig.HSTSPreload,
 		"x_frame_options", "SAMEORIGIN",
 	)
 

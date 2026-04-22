@@ -485,6 +485,22 @@ Header always set Referrer-Policy "strict-origin-when-cross-origin"
 Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 ```
 
+### HSTS Preload
+
+oCMS emits `Strict-Transport-Security` in production with `max-age=31536000; includeSubDomains` by default. This protects every *returning* visitor from HTTPS downgrade attacks, but new visitors remain exposed on their first connection until the header arrives.
+
+The [HSTS preload list](https://hstspreload.org) closes that gap: major browsers ship with the list baked in, so the first connection is already forced to HTTPS. To submit your domain:
+
+1. Own the domain and serve a valid HTTPS certificate on the apex and all subdomains.
+2. Set `OCMS_HSTS_PRELOAD=true` before starting oCMS in production. oCMS then emits the header as `max-age=31536000; includeSubDomains; preload`, which is the form `hstspreload.org` requires.
+3. Verify the header is present on the apex:
+   ```sh
+   curl -sI https://example.com | grep -i strict-transport-security
+   ```
+4. Submit the domain at <https://hstspreload.org>. Acceptance typically takes a few weeks.
+
+**Warning**: preload entries are effectively permanent. Removal requires a separate request and a 6–12 week propagation window during which the domain is still pinned to HTTPS in older browsers. Do not enable preload until you are certain every subdomain has a valid TLS certificate.
+
 ---
 
 ## Troubleshooting
