@@ -296,3 +296,61 @@ func TestCSPStyleSrcDoesNotAllowUnpkg(t *testing.T) {
 		}
 	}
 }
+
+// TestCSPDoesNotAllowUnusedCDNs is the drift test for audit finding FIND-007:
+// no script, fetch, or asset in this repo loads from unpkg.com or esm.sh, so
+// the CSP must not list them. If a future change reintroduces a CDN origin
+// without the matching asset, this test fails.
+func TestCSPDoesNotAllowUnusedCDNs(t *testing.T) {
+	bannedOrigins := []string{"https://unpkg.com", "https://esm.sh"}
+	for _, isDev := range []bool{false, true} {
+		csp := DefaultSecurityHeadersConfig(isDev).ContentSecurityPolicy
+		for _, origin := range bannedOrigins {
+			if strings.Contains(csp, origin) {
+				t.Errorf("isDev=%v: CSP must not allow %s (unused CDN); got: %s", isDev, origin, csp)
+			}
+		}
+	}
+}
+
+// TestCSPProductionIncludesUpgradeInsecureRequests is the drift test for
+// audit finding FIND-008: the production CSP must tell browsers to auto-
+// upgrade http:// subresources in admin-authored HTML. Dev is intentionally
+// unconstrained so http://localhost fetches still work.
+func TestCSPProductionIncludesUpgradeInsecureRequests(t *testing.T) {
+	prodCSP := DefaultSecurityHeadersConfig(false).ContentSecurityPolicy
+
+	found := false
+	for _, dir := range strings.Split(prodCSP, ";") {
+		if strings.TrimSpace(dir) == "upgrade-insecure-requests" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("production CSP must include upgrade-insecure-requests; got: %s", prodCSP)
+	}
+
+	devCSP := DefaultSecurityHeadersConfig(true).ContentSecurityPolicy
+	if strings.Contains(devCSP, "upgrade-insecure-requests") {
+		t.Errorf("development CSP should NOT include upgrade-insecure-requests (breaks http://localhost); got: %s", devCSP)
+	}
+}
+
+// TestCSPBuildEmitsBareDirectiveForEmptyValue pins the serialization shape of
+// a value-less directive: `upgrade-insecure-requests` must appear as a bare
+// token, not `upgrade-insecure-requests ` with a trailing space. A permissive
+// CSP serializer that emits the trailing-space form is accepted by modern
+// browsers but breaks hash-based CSP verifiers and audit tools.
+func TestCSPBuildEmitsBareDirectiveForEmptyValue(t *testing.T) {
+	csp := buildCSP(map[string]string{
+		"default-src":               "'self'",
+		"upgrade-insecure-requests": "",
+	})
+	if !strings.Contains(csp, "upgrade-insecure-requests") {
+		t.Fatalf("buildCSP dropped the value-less directive: %q", csp)
+	}
+	if strings.Contains(csp, "upgrade-insecure-requests ;") || strings.HasSuffix(csp, "upgrade-insecure-requests ") {
+		t.Errorf("buildCSP emitted trailing space for value-less directive: %q", csp)
+	}
+}

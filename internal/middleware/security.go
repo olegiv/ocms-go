@@ -61,16 +61,19 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		ReferrerPolicy: "strict-origin-when-cross-origin",
 	}
 
-	// Default CSP - allow self, inline styles (for CMS features), and common analytics
+	// Default CSP - allow self, inline styles (for CMS features), and common analytics.
+	// unpkg.com and esm.sh were removed from both dev and prod CSPs: no script or
+	// fetch in this repo or its embedded assets loads from them, so keeping them
+	// in the allowlist only widened the supply-chain trust surface (FIND-007).
 	if isDev {
 		// More permissive in development for easier debugging
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'nonce-{{nonce}}' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"script-src":  "'self' 'nonce-{{nonce}}' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
 			"img-src":     "'self' data: blob: https:",
 			"font-src":    "'self' data: https://fonts.gstatic.com",
-			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"connect-src": "'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app https://www.youtube.com https://www.youtube-nocookie.com",
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
@@ -78,19 +81,22 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 			"frame-ancestors":  "'self'",
 		})
 	} else {
-		// Strict CSP for production
+		// Strict CSP for production.
+		// upgrade-insecure-requests forces any http:// subresource in admin-
+		// authored HTML up to https:// at request time (FIND-008).
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'nonce-{{nonce}}' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"script-src":  "'self' 'nonce-{{nonce}}' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
 			"img-src":     "'self' data: blob: https:",
 			"font-src":    "'self' data: https://fonts.gstatic.com",
-			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"connect-src": "'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app https://www.youtube.com https://www.youtube-nocookie.com",
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
 			"form-action": "'self'",
 			"frame-ancestors":  "'self'",
+			"upgrade-insecure-requests": "",
 		})
 		cfg.HSTSIncludeSubDomains = true
 	}
@@ -113,6 +119,8 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 }
 
 // buildCSP builds a Content-Security-Policy string from a map of directives.
+// Directives with an empty value (e.g. upgrade-insecure-requests) are emitted
+// as the bare directive name with no trailing space.
 func buildCSP(directives map[string]string) string {
 	var parts []string
 	// Define order for consistent output
@@ -124,7 +132,7 @@ func buildCSP(directives map[string]string) string {
 
 	for _, key := range order {
 		if value, ok := directives[key]; ok {
-			parts = append(parts, key+" "+value)
+			parts = append(parts, cspPart(key, value))
 		}
 	}
 
@@ -138,11 +146,20 @@ func buildCSP(directives map[string]string) string {
 			}
 		}
 		if !found {
-			parts = append(parts, key+" "+value)
+			parts = append(parts, cspPart(key, value))
 		}
 	}
 
 	return strings.Join(parts, "; ")
+}
+
+// cspPart renders a single CSP directive: `name value` when value is set,
+// or just `name` for value-less directives like upgrade-insecure-requests.
+func cspPart(name, value string) string {
+	if value == "" {
+		return name
+	}
+	return name + " " + value
 }
 
 // buildPermissionsPolicy builds a Permissions-Policy string from a map.
