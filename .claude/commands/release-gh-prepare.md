@@ -1,0 +1,1 @@
+../shared/global/commands/release-gh-prepare.md
