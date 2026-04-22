@@ -7,6 +7,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-04-22
+
+### Added
+
+#### Agent-Ready Discovery
+- Publish RFC 8288 `Link` header on `/` pointing to API Catalog,
+  OpenAPI service-desc, and Swagger UI service-doc relations so agent
+  scanners can find the REST API from a single homepage hit
+- `GET /.well-known/api-catalog` (RFC 9727 linkset) declares stable
+  API surfaces with media types and doc links
+- `GET /.well-known/agent-skills/index.json` (v0.2.0) advertises the
+  REST API capability with a real OpenAPI SHA-256 digest for client
+  validation
+- `GET /.well-known/mcp/server-card.json` (draft SEP-1649) exposes MCP
+  server metadata; `transport` is `null` pending a future MCP transport
+  implementation, with REST fallback via `capabilities.rest.openapi`
+- `Content-Signal:` directive in `/robots.txt` declares training-data
+  preferences (default `search=yes, ai-train=no, ai-input=yes`,
+  configurable via `robots_content_signal` config key)
+- New config keys: `robots_content_signal` and `mcp_server_version`
+
+#### Markdown for Agents
+- Content negotiation on `/` and `/{slug}`: callers sending
+  `Accept: text/markdown` receive a plain-text Markdown representation
+  instead of HTML theme output
+- Response headers include `Content-Type: text/markdown; charset=utf-8`,
+  `Vary: Accept` (for CDN cache separation), and `X-Markdown-Tokens`
+  for agent context-budget estimation
+- Conversion from stored TinyMCE HTML via
+  `JohannesKaufmann/html-to-markdown/v2`; `<script>` and `<iframe>`
+  stripped by construction
+- 2 MB input cap to prevent CPU DoS on oversized pages; falls back to
+  HTML on overflow
+- Auth parity with the HTML path: draft pages remain admin/editor-only
+  in both representations
+
+#### Configuration
+- `OCMS_HSTS_PRELOAD` environment variable (default `false`) enables
+  the `; preload` HSTS directive in production without recompiling;
+  opt-in for operators submitting domains to hstspreload.org
+
+### Changed
+
+#### Deployment & Operations
+- `ocmsctl start|stop|restart` auto-delegates to `systemctl` when a
+  site is enabled as `ocms@<site-id>.service`, eliminating manual
+  `sudo systemctl` invocations. PID-file sites continue to work
+  unchanged
+- `ocmsctl start --foreground` still errors on systemd-enabled sites
+  (unsupported)
+- Delegation respects management intent: `start` defers to systemd
+  when the unit is enabled; `stop`/`restart` only act when the unit
+  is active, avoiding races with a PID-file process
+
+#### Documentation
+- `scripts/deploy/README.md` — new Troubleshooting sections for
+  missing systemd drop-in files and "sites don't come back after
+  reboot", plus clarification that the health-check cron only
+  restarts `active` sites
+- `docs/agent-ready.md` (new) describes discovery surfaces, Markdown
+  negotiation, config keys, and local verification
+- `docs/login-security.md` — Production Deployment Checklist calls
+  out rotating the seeded `admin@example.com / changeme1234`
+  credentials on first login
+- `docs/reverse-proxy.md` — HSTS Preload section with the
+  `OCMS_HSTS_PRELOAD` env var and hstspreload.org submission process
+
+#### Dependencies
+- Update htmx.org to 2.0.10
+- Update Tailwind CSS to 4.2.4
+
+### Fixed
+
+#### Agent-Ready Content Negotiation
+- `Accept: text/markdown;q=0` now correctly yields HTML
+- Wildcard ranges (`*/*`, `text/*`) contribute to HTML quality without
+  forcing markdown when HTML is listed with higher specificity
+- Specificity tiers (explicit media type > wildcard) defer to explicit
+  entries, so `Accept: text/html;q=0.2, text/markdown;q=0.8, */*`
+  correctly prefers markdown
+
+#### Login Protection
+- Serialize `RecordFailedAttempt` and `RecordSuccessfulLogin` under a
+  per-process mutex so concurrent requests cannot drop attempts or let
+  an upsert re-lock a just-cleared account
+
+### Security
+
+#### Markdown Rendering (FIND-001, FIND-002)
+- Markdown canonical URL requires configured `site_url`; no `r.Host`
+  fallback, blocking attacker-supplied Host headers from landing in
+  `[Source]` links (FIND-001)
+- `sanitizeHeading` collapses newlines in H1 titles before writing
+  markdown, blocking heading break-out (FIND-002)
+
+#### Authentication (FIND-003, FIND-005)
+- `auth.VerifyDummyPassword` runs constant-cost Argon2id verification
+  on the unknown-email path, eliminating timing-based email
+  enumeration (FIND-003)
+- New `login_protection` SQLite table replaces the in-memory lockout
+  map, so brute-force windows survive deploys, crashes, and OOM kills
+  (FIND-005)
+
+#### Session & CSP (FIND-006, FIND-007, FIND-008)
+- Session cookie upgraded to `SameSite=Strict` (FIND-006)
+- Remove unused `unpkg.com` and `esm.sh` from `script-src` and
+  `connect-src` in both dev and prod CSPs (FIND-007)
+- Add `upgrade-insecure-requests` to the production CSP so
+  admin-authored HTML with `http://` subresources auto-upgrades
+  (FIND-008)
+
+#### Transport & Secrets (FIND-009, FIND-010, FIND-011)
+- `OCMS_HSTS_PRELOAD` env var enables HSTS preload without
+  recompiling; docs cover the hstspreload.org submission process
+  (FIND-009)
+- Broaden `.gitignore` to `.env*` and `*.api_keys` so secret-carrying
+  files cannot be committed by accident (FIND-010)
+- Production Deployment Checklist requires operators to rotate seeded
+  admin credentials on first login (FIND-011)
+
+Each security fix ships with a drift test that fails on the bug
+state. FIND-004 (`unsafe-eval` for Alpine.js) remains open as a
+structural dependency.
+
 ## [0.19.0] - 2026-04-20
 
 ### ⚠️ Breaking Changes
@@ -1061,7 +1185,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/olegiv/ocms-go/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/olegiv/ocms-go/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/olegiv/ocms-go/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/olegiv/ocms-go/compare/v0.17.0...v0.18.0
