@@ -294,17 +294,28 @@ cmd_logs() {
         opt="${3:-}"  # shift to pick up --follow after --errors
     fi
 
-    # Under systemd: prefer the file when StandardOutput=append: routes there.
-    # Fall back to journalctl when the file is empty (older drop-ins, or pure
-    # journal mode). Error log is always a file.
-    if is_systemd_active "$site_id" && [ "$log_label" = "main" ] && [ ! -s "$log_file" ]; then
-        echo_info "Reading systemd journal for ocms@$site_id..."
-        if [ "$opt" = "--follow" ] || [ "$opt" = "-f" ]; then
-            journalctl -u "ocms@${site_id}" -f
-        else
-            journalctl -u "ocms@${site_id}" -n 100 --no-pager
-        fi
-        return
+    # For the main log under systemd, honor the unit's configured stdout
+    # destination rather than guessing from file size. `append:`, `file:`,
+    # and `truncate:` route to the path encoded after the colon; anything
+    # else (journal, null, inherit, socket, ...) goes to journald.
+    # Error log is always a file, so this branch is main-only.
+    if [ "$log_label" = "main" ] && is_systemd_active "$site_id"; then
+        local stdout_target
+        stdout_target=$(systemctl show -p StandardOutput --value "ocms@${site_id}" 2>/dev/null)
+        case "$stdout_target" in
+            append:*|file:*|truncate:*)
+                log_file="${stdout_target#*:}"
+                ;;
+            *)
+                echo_info "Reading systemd journal for ocms@$site_id..."
+                if [ "$opt" = "--follow" ] || [ "$opt" = "-f" ]; then
+                    journalctl -u "ocms@${site_id}" -f
+                else
+                    journalctl -u "ocms@${site_id}" -n 100 --no-pager
+                fi
+                return
+                ;;
+        esac
     fi
 
     # Otherwise use log file
