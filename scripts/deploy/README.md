@@ -19,7 +19,7 @@ Per site:
 ├── custom/                     ← user content (optional)
 │   └── themes/                 ← custom themes (override embedded)
 ├── backups/                    ← automated backups
-├── logs/ocms.log               ← app log (ocmsctl mode)
+├── logs/ocms.log               ← app log (stdout + stderr)
 │   └── error.log               ← error-only log (optional)
 ├── .env                        ← environment config
 └── ocms.pid                    ← PID file (ocmsctl mode)
@@ -408,6 +408,14 @@ The generated configuration:
 - Per-instance entries with correct paths and ownership (`logs/*.log` glob covers both `ocms.log` and `error.log`)
 - Rotates logs daily, keeps 30 days, compresses with gzip
 - Uses `copytruncate` to avoid restarting the service
+
+Under systemd, file logging is wired via `StandardOutput=append:.../logs/ocms.log`
+in the per-site drop-in (written by `setup-site.sh`). `copytruncate` is required
+because systemd keeps the file descriptor open across rotation. Sites provisioned
+before this directive was added will have an empty `ocms.log` and need a one-time
+manual repair: append the two `StandardOutput`/`StandardError` lines to
+`/etc/systemd/system/ocms@<site_id>.service.d/instance.conf`, then
+`systemctl daemon-reload && systemctl restart ocms@<site_id>`.
 
 ### Separate Error Log
 

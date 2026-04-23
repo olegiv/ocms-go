@@ -294,8 +294,10 @@ cmd_logs() {
         opt="${3:-}"  # shift to pick up --follow after --errors
     fi
 
-    # If running under systemd, use journalctl (error log is still a file)
-    if is_systemd_active "$site_id" && [ "$log_label" = "main" ]; then
+    # Under systemd: prefer the file when StandardOutput=append: routes there.
+    # Fall back to journalctl when the file is empty (older drop-ins, or pure
+    # journal mode). Error log is always a file.
+    if is_systemd_active "$site_id" && [ "$log_label" = "main" ] && [ ! -s "$log_file" ]; then
         echo_info "Reading systemd journal for ocms@$site_id..."
         if [ "$opt" = "--follow" ] || [ "$opt" = "-f" ]; then
             journalctl -u "ocms@${site_id}" -f

@@ -308,6 +308,8 @@ WorkingDirectory=$INSTANCE_DIR
 EnvironmentFile=$INSTANCE_DIR/.env
 ReadWritePaths=$INSTANCE_DIR
 SyslogIdentifier=ocms-$SITE_ID
+StandardOutput=append:$INSTANCE_DIR/logs/ocms.log
+StandardError=append:$INSTANCE_DIR/logs/ocms.log
 EOF
 
 systemctl daemon-reload
