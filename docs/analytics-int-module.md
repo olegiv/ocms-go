@@ -9,7 +9,7 @@ For the module's own detailed notes and JS snippets, see `modules/analytics_int/
 ### Features
 
 - Page-view tracking via chi middleware (no client-side beacon for views)
-- Read tracking — scroll-depth ≥ 60 % and time-on-page ≥ 30 s — via the `/analytics/read` beacon endpoint
+- Read tracking — scroll-depth ≥ 60 % and a content-aware time-on-page threshold (5–20 s based on word count, with a 5 s server-side floor) — via the `/analytics/read` beacon endpoint
 - Rotating salted visitor hash (default 24 h rotation) — no raw IP or user agent is stored
 - Background aggregation into hourly, daily, referrer, tech, and geo tables
 - Configurable retention with automatic cleanup

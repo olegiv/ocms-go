@@ -60,7 +60,7 @@ Public (rate-limited, origin-pinned):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/embed/dify/token` | Mint a short-lived proxy token for the current origin |
+| GET | `/embed/dify/token` | Refresh-only: requires the current (or recently-expired) token in `X-Embed-Proxy-Token` and returns a fresh one bound to the same origin. Initial tokens are minted at page-render time inside the rendered widget script — there is no public "mint a first token" call. |
 | POST | `/embed/dify/chat-messages` | Proxy Dify chat-messages API |
 | GET | `/embed/dify/messages/{messageID}/suggested` | Proxy Dify suggested-replies API |
 
