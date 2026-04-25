@@ -21,7 +21,7 @@ For the Elefant source the importer walks the source database and copies:
 - Users (password hashes not imported — users must reset)
 - Tags
 - Pages (root pages and subpages)
-- Posts (blog posts with categories, tags, publish date)
+- Posts (blog posts with tags and publish date; Elefant categories are not imported — only tags are mapped via `AddTagToPage`)
 - Media (files on disk copied into `OCMS_UPLOADS_DIR`, DB rows into `media`)
 
 Every created entity is recorded in `migrator_imported_items` (source, entity_type, entity_id) so the module can later delete the imported subset without touching original oCMS content.
