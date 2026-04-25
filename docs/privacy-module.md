@@ -8,7 +8,7 @@ Pair this module with **External Analytics** or any third-party tracker that mus
 
 ### Features
 
-- Klaro-based cookie banner with configurable theme (`light` / `dark`) and position (`bottom-left`, `bottom-right`, `top`, `top-left`, `top-right`, `bottom`)
+- Klaro-based cookie banner with configurable theme (`light` / `dark`) and corner position (`bottom-right`, `bottom-left`, `top-right`, `top-left`)
 - Google Consent Mode v2 default-state bootstrap before any analytics loads
 - Per-service consent rules (name, title, description, purposes, cookie patterns)
 - Configurable cookie name, expiry, and debug mode

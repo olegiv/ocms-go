@@ -1,6 +1,6 @@
 # Migrator Module
 
-The Migrator module imports content from other CMS platforms into oCMS. It uses a pluggable source architecture — each supported source implements the `types.Source` interface (`Name`, `DisplayName`, `ConfigFields`, `TestConnection`, `Import`, `Delete`) and registers itself during module init.
+The Migrator module imports content from other CMS platforms into oCMS. It uses a pluggable source architecture — each supported source implements the `types.Source` interface (`Name`, `DisplayName`, `Description`, `ConfigFields`, `TestConnection`, `Import`) and registers itself during module init. Deletion of imported content is handled at the module level via the `migrator_imported_items` tracking table; sources do not implement a `Delete` method.
 
 For the bulk-import/export of *oCMS-to-oCMS* content (Markdown + YAML front-matter), see [`docs/import-export.md`](import-export.md). The Migrator module is for importing from foreign systems.
 
