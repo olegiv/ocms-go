@@ -180,6 +180,7 @@ sudo dnf install vips-devel
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
 | `OCMS_ENV` | Environment mode (`development`/`production`) | `development` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
+| `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes and modules | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
@@ -216,6 +217,7 @@ sudo dnf install vips-devel
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` (`true` in production when unset) | No |
 | `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | Reject page writes containing suspicious HTML patterns | `false` (`true` in production when unset) | No |
 | `OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML` | Fail startup in production when suspicious page markup blocking is disabled or existing pages contain suspicious markers | `false` (`true` in production when unset) | No |
+| `OCMS_HSTS_PRELOAD` | Append `; preload` to the HSTS header in production; only enable after submitting to the HSTS preload list (see `docs/reverse-proxy.md`) | `false` | No |
 | `OCMS_DEMO_MODE` | Enable demo content seeding (users, pages, media) | `false` | No |
 
 ## Development

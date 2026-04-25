@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### Deployment & Operations
+- `scripts/deploy/ocmsctl` detects the active log backend by reading the
+  systemd unit drop-in configuration, so `ocmsctl logs` follows the systemd
+  journal or the configured file log depending on how each site is managed.
+- Restored file-logging support for systemd-managed oCMS instances; the
+  `ocms@<site>.service` path now honours per-site log configuration again.
+
 ## [0.20.0] - 2026-04-22
 
 ### Added

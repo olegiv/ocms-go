@@ -178,29 +178,93 @@ cmd/ocms/main.go
 
 ## Environment Variables
 
+See `README.md` for the full table with every flag annotated for production use.
+Summary (grouped by concern; source of truth: `internal/config/config.go`):
+
+### Core
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OCMS_SESSION_SECRET` | Yes | - | Min 32 bytes for session encryption |
 | `OCMS_DB_PATH` | No | `./data/ocms.db` | SQLite database path |
+| `OCMS_SERVER_HOST` | No | `localhost` | Server bind host |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
 | `OCMS_ENV` | No | `development` | Set to `production` for prod |
 | `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes/modules |
+| `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
-| `OCMS_API_RATE_LIMIT` | No | `100` | API requests per minute per key |
+| `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
+| `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
+
+### Cache
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
 | `OCMS_REDIS_URL` | No | - | Redis URL for distributed cache (e.g., `redis://localhost:6379/0`) |
 | `OCMS_CACHE_PREFIX` | No | `ocms:` | Key prefix for Redis cache entries |
 | `OCMS_CACHE_TTL` | No | `3600` | Default cache TTL in seconds |
 | `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for in-memory cache |
+
+### Auth / anti-abuse
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
 | `OCMS_HCAPTCHA_SITE_KEY` | No | - | hCaptcha site key (overrides database setting) |
 | `OCMS_HCAPTCHA_SECRET_KEY` | No | - | hCaptcha secret key (overrides database setting) |
 | `OCMS_HCAPTCHA_DISABLED` | No | `false` | Force-disable hCaptcha regardless of database settings |
 | `OCMS_GEOIP_DB_PATH` | No | - | Path to GeoLite2-Country.mmdb for country detection |
-| `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
-| `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
-| `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
 | `OCMS_HSTS_PRELOAD` | No | `false` | Add `; preload` to HSTS header in production (see `docs/reverse-proxy.md` for submission process) |
+
+### Reverse-proxy trust
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OCMS_TRUSTED_PROXIES` | No | - | Comma-separated CIDRs/IPs of trusted reverse proxies; forwarding headers ignored unless peer is trusted |
+| `OCMS_REQUIRE_TRUSTED_PROXIES` | No | `false` (effective `true` in prod) | Fail startup in production if trusted proxy CIDRs/IPs are not configured |
+
+### API key hardening
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OCMS_API_ALLOWED_CIDRS` | No | - | Global CIDRs/IPs allowed to use API keys |
+| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | No | `false` (effective `true` in prod) | Fail API key auth if global allowlist is unset |
+| `OCMS_REQUIRE_API_KEY_EXPIRY` | No | `false` (effective `true` in prod) | Reject API keys without an expiration timestamp |
+| `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | No | `false` (effective `true` in prod) | Reject API keys without per-key source CIDR restrictions |
+| `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | No | `false` (effective `true` in prod) | Deactivate API keys when source IP changes and no per-key CIDRs are set |
+| `OCMS_API_KEY_MAX_TTL_DAYS` | No | `0` (effective `90` in prod) | Maximum API key lifetime in days (`0` disables, max `365`) |
+
+### Embed proxy
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OCMS_EMBED_ALLOWED_ORIGINS` | No | - | Allowed browser origins for public embed proxy routes |
+| `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS` | No | - | Allowed upstream hosts for embed provider API endpoints |
+| `OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS` | No | `false` (effective `true` in prod) | Fail startup in production if embed proxy is active without origin allowlist |
+| `OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS` | No | `false` (effective `true` in prod) | Fail startup in production if embed proxy is active without upstream host allowlist |
+| `OCMS_EMBED_PROXY_TOKEN` | No | - | Shared secret used to mint short-lived signed embed proxy tokens |
+| `OCMS_REQUIRE_EMBED_PROXY_TOKEN` | No | `false` | Enforce embed proxy token requirement in non-production too |
+| `OCMS_REQUIRE_HTTPS_OUTBOUND` | No | `false` (effective `true` in prod) | Require HTTPS for outbound integration URLs (webhooks, scheduler, embeds) |
+
+### Webhooks
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OCMS_WEBHOOK_ALLOWED_HOSTS` | No | - | Allowed destination hosts for active webhook deliveries (exact hostname match) |
+| `OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS` | No | `false` (effective `true` in prod) | Fail startup in production when active webhooks exist without destination host allowlist |
+| `OCMS_WEBHOOK_FORM_DATA_MODE` | No | `redacted` | `form.submitted` payload mode: `redacted`, `none`, or `full` |
+| `OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION` | No | `false` (effective `true` in prod) | Fail startup in production when form webhook mode is `full` |
+
+### Form & page-HTML hardening
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OCMS_REQUIRE_FORM_CAPTCHA` | No | `false` (effective `true` in prod) | Require captcha on all public form submissions |
+| `OCMS_SANITIZE_PAGE_HTML` | No | `false` (effective `true` in prod) | Sanitize page HTML before rendering to visitors |
+| `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | No | `false` (effective `true` in prod) | Fail startup in production if page HTML sanitization is disabled |
+| `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | No | `false` (effective `true` in prod) | Reject page writes containing suspicious HTML patterns |
+| `OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML` | No | `false` (effective `true` in prod) | Fail startup in production if suspicious page HTML blocking is disabled |
 
 ## Default Credentials
 
@@ -572,6 +636,11 @@ Additional documentation is available in the `docs/` directory:
 - `docs/dbmanager-module.md` - DB Manager module for direct SQL query execution
 - `docs/forms.md` - Form builder, public forms, submissions, webhooks, captcha, multi-language
 - `docs/sentinel-module.md` - Sentinel module: IP banning, auto-ban paths, honeypot auto-ban, whitelist
+- `docs/analytics-ext-module.md` - External Analytics module: GA4, GTM, Matomo injection
+- `docs/analytics-int-module.md` - Internal Analytics module: first-party views/reads, aggregation, privacy
+- `docs/embed-module.md` - Embed module: Dify AI widget, proxy token, origin/upstream allowlists
+- `docs/migrator-module.md` - Migrator module: content import from other CMSes (Elefant)
+- `docs/privacy-module.md` - Privacy module: Klaro consent banner, Google Consent Mode v2
 - `docs/hcaptcha.md` - hCaptcha integration for bot protection on login
 - `docs/i18n.md` - Internationalization, translation file format, theme translations, and `TTheme` usage
 - `docs/csrf.md` - CSRF protection configuration, TrustedOrigins format, and troubleshooting
