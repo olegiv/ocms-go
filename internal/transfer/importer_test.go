@@ -244,7 +244,7 @@ func TestImporter_ImportFromFile_InvalidJSON(t *testing.T) {
 	// Create temp file with invalid JSON
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "invalid.json")
-	err := os.WriteFile(tmpFile, []byte("not valid json"), 0644)
+	err := os.WriteFile(tmpFile, []byte("not valid json"), 0o644)
 	require.NoError(t, err)
 
 	importer := NewImporter(nil, nil, nil)

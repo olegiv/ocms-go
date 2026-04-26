@@ -46,7 +46,7 @@ type PagesListMeta struct {
 // ListPagesOutput is the paginated response envelope.
 type ListPagesOutput struct {
 	Body struct {
-		Data []Page   `json:"data"`
+		Data []Page        `json:"data"`
 		Meta PagesListMeta `json:"meta"`
 	}
 }
@@ -178,7 +178,7 @@ func registerCreate(api huma.API, svc *Service) {
 
 // UpdatePageInput carries the id path param plus the partial update body.
 type UpdatePageInput struct {
-	ID   int64       `path:"id" minimum:"1"`
+	ID   int64          `path:"id" minimum:"1"`
 	Body UpdatePageBody `contentType:"application/json"`
 }
 

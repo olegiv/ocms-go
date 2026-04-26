@@ -701,7 +701,7 @@ func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCo
 
 	// Create directory structure for original
 	originalsDir := filepath.Join(uploadsDir, "originals", fileUUID)
-	if err := os.MkdirAll(originalsDir, 0755); err != nil {
+	if err := os.MkdirAll(originalsDir, 0o755); err != nil {
 		return 0, fmt.Errorf("failed to create originals directory: %w", err)
 	}
 
@@ -711,7 +711,7 @@ func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCo
 	if err != nil {
 		return 0, fmt.Errorf("failed to encode original PNG: %w", err)
 	}
-	if err := os.WriteFile(originalPath, originalData, 0644); err != nil {
+	if err := os.WriteFile(originalPath, originalData, 0o644); err != nil {
 		return 0, fmt.Errorf("failed to write original file: %w", err)
 	}
 
@@ -745,7 +745,7 @@ func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCo
 
 		// Create variant directory
 		variantDir := filepath.Join(uploadsDir, v.name, fileUUID)
-		if err := os.MkdirAll(variantDir, 0755); err != nil {
+		if err := os.MkdirAll(variantDir, 0o755); err != nil {
 			slog.Warn("failed to create variant directory", "variant", v.name, "error", err)
 			continue
 		}
@@ -759,7 +759,7 @@ func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCo
 
 		// Save variant file
 		variantPath := filepath.Join(variantDir, img.Filename)
-		if err := os.WriteFile(variantPath, variantData, 0644); err != nil {
+		if err := os.WriteFile(variantPath, variantData, 0o644); err != nil {
 			slog.Warn("failed to write variant file", "variant", v.name, "error", err)
 			continue
 		}

@@ -68,29 +68,29 @@ type Tag struct {
 // CreatePageBody is the validated service-level input for creating a page. The
 // huma operation parses the request body into this type via its struct tags.
 type CreatePageBody struct {
-	Title             string    `json:"title" required:"true" minLength:"1" maxLength:"255"`
-	Slug              string    `json:"slug" required:"true" minLength:"1" maxLength:"255" pattern:"^[a-z0-9]+(?:-[a-z0-9]+)*$" doc:"Lowercase alphanumeric with dashes. Must be unique."`
-	Body              string    `json:"body"`
-	Summary           string    `json:"summary,omitempty" maxLength:"500" doc:"Short plaintext summary, trimmed. Max 500 characters (runes)."`
-	Status            string    `json:"status,omitempty" enum:"draft,published" default:"draft"`
-	PageType          string    `json:"page_type,omitempty" enum:"post,page" default:"post"`
-	LanguageCode      *string   `json:"language_code,omitempty" doc:"Falls back to system default if omitted."`
-	FeaturedImageID   *int64    `json:"featured_image_id,omitempty"`
-	HideFeaturedImage bool      `json:"hide_featured_image,omitempty"`
-	ExcludeFromLists  bool      `json:"exclude_from_lists,omitempty"`
-	MetaTitle         string    `json:"meta_title,omitempty"`
-	MetaDescription   string    `json:"meta_description,omitempty"`
-	MetaKeywords      string    `json:"meta_keywords,omitempty"`
-	OGImageID         *int64    `json:"og_image_id,omitempty"`
-	NoIndex           bool      `json:"no_index,omitempty"`
-	NoFollow          bool      `json:"no_follow,omitempty"`
-	CanonicalURL      string    `json:"canonical_url,omitempty" format:"uri" maxLength:"2048"`
-	ScheduledAt       *string   `json:"scheduled_at,omitempty" format:"date-time" doc:"RFC3339 timestamp."`
-	CategoryIDs       []int64   `json:"category_ids,omitempty"`
-	TagIDs            []int64   `json:"tag_ids,omitempty"`
-	TagNames          []string  `json:"tags,omitempty" doc:"Tag names; new tags are created if the actor has taxonomy:write."`
-	VideoURL          string    `json:"video_url,omitempty" format:"uri" maxLength:"2048"`
-	VideoTitle        string    `json:"video_title,omitempty"`
+	Title             string   `json:"title" required:"true" minLength:"1" maxLength:"255"`
+	Slug              string   `json:"slug" required:"true" minLength:"1" maxLength:"255" pattern:"^[a-z0-9]+(?:-[a-z0-9]+)*$" doc:"Lowercase alphanumeric with dashes. Must be unique."`
+	Body              string   `json:"body"`
+	Summary           string   `json:"summary,omitempty" maxLength:"500" doc:"Short plaintext summary, trimmed. Max 500 characters (runes)."`
+	Status            string   `json:"status,omitempty" enum:"draft,published" default:"draft"`
+	PageType          string   `json:"page_type,omitempty" enum:"post,page" default:"post"`
+	LanguageCode      *string  `json:"language_code,omitempty" doc:"Falls back to system default if omitted."`
+	FeaturedImageID   *int64   `json:"featured_image_id,omitempty"`
+	HideFeaturedImage bool     `json:"hide_featured_image,omitempty"`
+	ExcludeFromLists  bool     `json:"exclude_from_lists,omitempty"`
+	MetaTitle         string   `json:"meta_title,omitempty"`
+	MetaDescription   string   `json:"meta_description,omitempty"`
+	MetaKeywords      string   `json:"meta_keywords,omitempty"`
+	OGImageID         *int64   `json:"og_image_id,omitempty"`
+	NoIndex           bool     `json:"no_index,omitempty"`
+	NoFollow          bool     `json:"no_follow,omitempty"`
+	CanonicalURL      string   `json:"canonical_url,omitempty" format:"uri" maxLength:"2048"`
+	ScheduledAt       *string  `json:"scheduled_at,omitempty" format:"date-time" doc:"RFC3339 timestamp."`
+	CategoryIDs       []int64  `json:"category_ids,omitempty"`
+	TagIDs            []int64  `json:"tag_ids,omitempty"`
+	TagNames          []string `json:"tags,omitempty" doc:"Tag names; new tags are created if the actor has taxonomy:write."`
+	VideoURL          string   `json:"video_url,omitempty" format:"uri" maxLength:"2048"`
+	VideoTitle        string   `json:"video_title,omitempty"`
 }
 
 // UpdatePageBody is the patch-style input for updating a page. Pointer fields

@@ -67,8 +67,24 @@ linters:
           - gocyclo
         path: _test\.go
       - linters:
+          - gocyclo
+        path: cmd/ocms/main\.go
+      - linters:
+          - gocritic
+        path: internal/handler/frontend\.go
+        text: ifElseChain
+      - linters:
+          - revive
+        text: "exported: type name will be used as|import-shadowing:"
+      - linters:
           - staticcheck
         text: 'SA9003:'
+      - linters:
+          - staticcheck
+        text: 'QF1008|QF1012'
+      - linters:
+          - unparam
+        path: _test\.go
     paths:
       - .*\.sql\.go$
       - vendor

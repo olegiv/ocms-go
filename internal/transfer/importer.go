@@ -6,8 +6,8 @@ package transfer
 import (
 	"archive/zip"
 	"bytes"
-	"crypto/rand"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -432,7 +432,7 @@ func (i *Importer) extractMediaFile(f *zip.File, parsedPath mediaZipPath) (strin
 	}
 
 	// Create directory structure
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", 0, fmt.Errorf("failed to create directory: %w", err)
 	}
 

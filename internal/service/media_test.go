@@ -94,10 +94,10 @@ func TestSanitizeFilename(t *testing.T) {
 
 func TestValidateMediaStoredFilename(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		want     string
-		wantErr  bool
+		name    string
+		input   string
+		want    string
+		wantErr bool
 	}{
 		{name: "valid filename", input: "image.jpg", want: "image.jpg"},
 		{name: "valid with spaces", input: "my image.jpg", want: "my image.jpg"},
@@ -332,11 +332,11 @@ func TestGetAdminGridPreviewURL(t *testing.T) {
 	makeVariantFile := func(t *testing.T, rootDir, variantDir, uuid, filename string) {
 		t.Helper()
 		dirPath := filepath.Join(rootDir, variantDir, uuid)
-		if err := os.MkdirAll(dirPath, 0755); err != nil {
+		if err := os.MkdirAll(dirPath, 0o755); err != nil {
 			t.Fatalf("MkdirAll(%q): %v", dirPath, err)
 		}
 		filePath := filepath.Join(dirPath, filename)
-		if err := os.WriteFile(filePath, []byte("x"), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
 			t.Fatalf("WriteFile(%q): %v", filePath, err)
 		}
 	}

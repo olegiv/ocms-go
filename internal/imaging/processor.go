@@ -460,12 +460,12 @@ func (p *Processor) saveImageFile(subDir, filename string, data []byte) (string,
 		return "", fmt.Errorf("path traversal detected")
 	}
 
-	if err := os.MkdirAll(absTarget, 0755); err != nil {
+	if err := os.MkdirAll(absTarget, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	filePath := filepath.Join(absTarget, safeFilename)
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, 0o644); err != nil {
 		return "", fmt.Errorf("failed to save image: %w", err)
 	}
 	return filePath, nil

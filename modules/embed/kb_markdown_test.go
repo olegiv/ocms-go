@@ -253,16 +253,16 @@ func seedPublishedPage(t *testing.T, q *store.Queries, authorID int64, title, sl
 	t.Helper()
 	now := time.Now()
 	p, err := q.CreatePage(context.Background(), store.CreatePageParams{
-		Title:       title,
-		Slug:        slug,
-		Body:        body,
-		Status:      "published",
-		AuthorID:    authorID,
+		Title:        title,
+		Slug:         slug,
+		Body:         body,
+		Status:       "published",
+		AuthorID:     authorID,
 		LanguageCode: "en",
-		PageType:    pageType,
-		PublishedAt: sql.NullTime{Time: now, Valid: true},
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		PageType:     pageType,
+		PublishedAt:  sql.NullTime{Time: now, Valid: true},
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("seedPublishedPage %q: %v", slug, err)

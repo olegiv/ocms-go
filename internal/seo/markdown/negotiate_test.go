@@ -241,12 +241,12 @@ func assertNoInjectedHeading(t *testing.T, markdown string) {
 // is pinned regardless of which call site uses it.
 func TestSanitizeHeading(t *testing.T) {
 	cases := map[string]string{
-		"plain":              "plain",
-		"with\nnewline":      "with newline",
-		"crlf\r\nstyle":      "crlf style",
-		"bare\rcr":           "bare cr",
-		"multi\n\nnewlines":  "multi  newlines",
-		"mixed\r\n\nline":    "mixed  line",
+		"plain":             "plain",
+		"with\nnewline":     "with newline",
+		"crlf\r\nstyle":     "crlf style",
+		"bare\rcr":          "bare cr",
+		"multi\n\nnewlines": "multi  newlines",
+		"mixed\r\n\nline":   "mixed  line",
 	}
 	for in, want := range cases {
 		if got := sanitizeHeading(in); got != want {

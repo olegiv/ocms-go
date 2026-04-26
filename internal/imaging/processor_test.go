@@ -65,7 +65,8 @@ func createPNGWithDimensions(width, height uint32) []byte {
 func runMimeTypeTests(t *testing.T, checkFn func(string) bool, tests []struct {
 	mimeType string
 	want     bool
-}) {
+},
+) {
 	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.mimeType, func(t *testing.T) {

@@ -34,8 +34,10 @@ var privateIPRanges = []string{
 }
 
 // parsedPrivateRanges holds parsed CIDRs (initialized once).
-var parsedPrivateRanges []*net.IPNet
-var requireHTTPSOutbound atomic.Bool
+var (
+	parsedPrivateRanges  []*net.IPNet
+	requireHTTPSOutbound atomic.Bool
+)
 
 func init() {
 	for _, cidr := range privateIPRanges {

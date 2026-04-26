@@ -45,7 +45,8 @@ func runRoleCheckTests(t *testing.T, checkFn func(any) bool, tests []struct {
 	name     string
 	user     any
 	expected bool
-}) {
+},
+) {
 	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

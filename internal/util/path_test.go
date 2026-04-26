@@ -87,7 +87,7 @@ func TestValidatePathWithinBase(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	uploadsDir := filepath.Join(tmpDir, "uploads")
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
 		t.Fatalf("Failed to create uploads dir: %v", err)
 	}
 

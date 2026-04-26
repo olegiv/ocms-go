@@ -70,7 +70,7 @@ func TestHandleSaveSettings_ValidationError_GA4NoID(t *testing.T) {
 	defer cleanup()
 
 	form := url.Values{
-		"ga4_enabled":       {"1"},
+		"ga4_enabled":        {"1"},
 		"ga4_measurement_id": {""},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/admin/external-analytics", strings.NewReader(form.Encode()))
@@ -91,7 +91,7 @@ func TestHandleSaveSettings_ValidationError_GTMNoID(t *testing.T) {
 	defer cleanup()
 
 	form := url.Values{
-		"gtm_enabled":    {"1"},
+		"gtm_enabled":      {"1"},
 		"gtm_container_id": {""},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/admin/external-analytics", strings.NewReader(form.Encode()))
@@ -111,9 +111,9 @@ func TestHandleSaveSettings_ValidationError_MatomoNoURL(t *testing.T) {
 	defer cleanup()
 
 	form := url.Values{
-		"matomo_enabled":  {"1"},
-		"matomo_url":      {""},
-		"matomo_site_id":  {"1"},
+		"matomo_enabled": {"1"},
+		"matomo_url":     {""},
+		"matomo_site_id": {"1"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/admin/external-analytics", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -132,9 +132,9 @@ func TestHandleSaveSettings_ValidationError_MatomoNoSiteID(t *testing.T) {
 	defer cleanup()
 
 	form := url.Values{
-		"matomo_enabled":  {"1"},
-		"matomo_url":      {"https://matomo.example.com"},
-		"matomo_site_id":  {""},
+		"matomo_enabled": {"1"},
+		"matomo_url":     {"https://matomo.example.com"},
+		"matomo_site_id": {""},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/admin/external-analytics", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

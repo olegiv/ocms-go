@@ -7,11 +7,33 @@ OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make dev
 # Run without rebuilding assets
 make run
 
-# Build production binary
+# Build fast local/dev binary
 make build
 
-# Run tests (requires session secret)
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test ./...
+# Build optimized host production binary
+make build-prod
+
+# Build optimized static Linux AMD64 production binary
+make build-linux-amd64
+
+# Build optimized Darwin ARM64 production binary
+make build-darwin-arm64
+
+# Build Linux AMD64 + Darwin ARM64 production binaries
+make build-all-platforms
+
+# Show Makefile targets
+make help
+
+# Run tests (Makefile sets local test session secret)
+make test
+
+# Run full local quality gate
+make check
+
+# Run coverage
+make coverage
+make coverage-html
 
 # Run single package tests
 OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/store/...

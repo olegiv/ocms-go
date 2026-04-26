@@ -7,9 +7,9 @@ import "testing"
 
 func TestSafeThemeImageURL(t *testing.T) {
 	tests := []struct {
-		name  string
-		in    string
-		want  string
+		name string
+		in   string
+		want string
 	}{
 		{name: "empty", in: "", want: ""},
 		{name: "uploads path", in: "/uploads/site/logo.png", want: "/uploads/site/logo.png"},

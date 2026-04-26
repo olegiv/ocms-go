@@ -17,13 +17,13 @@ func TestResetIfNeeded_MissingTimestamp(t *testing.T) {
 	uploadsDir := filepath.Join(dataDir, "uploads")
 
 	// Create a DB file and uploads
-	if err := os.WriteFile(dbPath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(dbPath, []byte("test"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(uploadsDir, "originals"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(uploadsDir, "originals"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(uploadsDir, "originals", "img.png"), []byte("img"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(uploadsDir, "originals", "img.png"), []byte("img"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -54,19 +54,19 @@ func TestResetIfNeeded_StaleTimestamp(t *testing.T) {
 	dataDir := t.TempDir()
 	dbPath := filepath.Join(dataDir, "test.db")
 	uploadsDir := filepath.Join(dataDir, "uploads")
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a DB file
-	if err := os.WriteFile(dbPath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(dbPath, []byte("test"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Write a stale timestamp (25 hours ago)
 	stale := time.Now().Add(-25 * time.Hour).Unix()
 	tsPath := filepath.Join(dataDir, timestampFile)
-	if err := os.WriteFile(tsPath, []byte(strconv.FormatInt(stale, 10)), 0644); err != nil {
+	if err := os.WriteFile(tsPath, []byte(strconv.FormatInt(stale, 10)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,19 +84,19 @@ func TestResetIfNeeded_FreshTimestamp(t *testing.T) {
 	dataDir := t.TempDir()
 	dbPath := filepath.Join(dataDir, "test.db")
 	uploadsDir := filepath.Join(dataDir, "uploads")
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a DB file
-	if err := os.WriteFile(dbPath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(dbPath, []byte("test"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Write a fresh timestamp (1 hour ago)
 	fresh := time.Now().Add(-1 * time.Hour).Unix()
 	tsPath := filepath.Join(dataDir, timestampFile)
-	if err := os.WriteFile(tsPath, []byte(strconv.FormatInt(fresh, 10)), 0644); err != nil {
+	if err := os.WriteFile(tsPath, []byte(strconv.FormatInt(fresh, 10)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -114,13 +114,13 @@ func TestReset_DeletesDBFiles(t *testing.T) {
 	dataDir := t.TempDir()
 	dbPath := filepath.Join(dataDir, "test.db")
 	uploadsDir := filepath.Join(dataDir, "uploads")
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create DB files (main, WAL, SHM)
 	for _, suffix := range []string{"", "-wal", "-shm"} {
-		if err := os.WriteFile(dbPath+suffix, []byte("data"), 0644); err != nil {
+		if err := os.WriteFile(dbPath+suffix, []byte("data"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -147,10 +147,10 @@ func TestReset_ClearsUploads(t *testing.T) {
 		filepath.Join(uploadsDir, "thumbnail", "uuid1"),
 	}
 	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
+		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(d, "img.png"), []byte("img"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(d, "img.png"), []byte("img"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -178,7 +178,7 @@ func TestReset_WritesTimestamp(t *testing.T) {
 	dataDir := t.TempDir()
 	dbPath := filepath.Join(dataDir, "test.db")
 	uploadsDir := filepath.Join(dataDir, "uploads")
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 

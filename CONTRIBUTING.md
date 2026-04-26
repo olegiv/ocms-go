@@ -50,8 +50,8 @@ OCMS_SESSION_SECRET=your-secret-key-32-bytes make dev
 ### Go Code
 
 - Follow standard Go conventions
-- Run `go fmt` before committing
-- Run `go vet ./...` to check for issues
+- Run `make fmt` before committing
+- Run `make check` to run formatting checks, vet, lint, and tests
 - Use meaningful variable and function names
 - Add comments for exported functions and complex logic
 

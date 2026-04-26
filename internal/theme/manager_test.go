@@ -23,7 +23,7 @@ func testCustomDir(t *testing.T) string {
 	t.Helper()
 	customDir := t.TempDir()
 	// Create themes subdirectory
-	if err := os.MkdirAll(filepath.Join(customDir, "themes"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(customDir, "themes"), 0o755); err != nil {
 		t.Fatalf("failed to create themes dir: %v", err)
 	}
 	return customDir
@@ -50,7 +50,7 @@ func createTestTheme(t *testing.T, customDir, themeName string, config Config) s
 	t.Helper()
 
 	themePath := filepath.Join(customDir, "themes", themeName)
-	if err := os.MkdirAll(themePath, 0755); err != nil {
+	if err := os.MkdirAll(themePath, 0o755); err != nil {
 		t.Fatalf("failed to create theme dir: %v", err)
 	}
 
@@ -59,19 +59,19 @@ func createTestTheme(t *testing.T, customDir, themeName string, config Config) s
 	if err != nil {
 		t.Fatalf("failed to marshal config: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(themePath, "theme.json"), configData, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(themePath, "theme.json"), configData, 0o644); err != nil {
 		t.Fatalf("failed to write theme.json: %v", err)
 	}
 
 	// Create templates directory
 	templatesPath := filepath.Join(themePath, "templates")
-	if err := os.MkdirAll(filepath.Join(templatesPath, "layouts"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(templatesPath, "layouts"), 0o755); err != nil {
 		t.Fatalf("failed to create layouts dir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(templatesPath, "partials"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(templatesPath, "partials"), 0o755); err != nil {
 		t.Fatalf("failed to create partials dir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(templatesPath, "pages"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(templatesPath, "pages"), 0o755); err != nil {
 		t.Fatalf("failed to create pages dir: %v", err)
 	}
 
@@ -83,13 +83,13 @@ func createTestTheme(t *testing.T, customDir, themeName string, config Config) s
 {{template "content" .}}
 </body>
 </html>`
-	if err := os.WriteFile(filepath.Join(templatesPath, "layouts", "base.html"), []byte(baseLayout), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(templatesPath, "layouts", "base.html"), []byte(baseLayout), 0o644); err != nil {
 		t.Fatalf("failed to write base.html: %v", err)
 	}
 
 	// Create header partial
 	headerPartial := `<header>Header</header>`
-	if err := os.WriteFile(filepath.Join(templatesPath, "partials", "header.html"), []byte(headerPartial), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(templatesPath, "partials", "header.html"), []byte(headerPartial), 0o644); err != nil {
 		t.Fatalf("failed to write header.html: %v", err)
 	}
 
@@ -98,13 +98,13 @@ func createTestTheme(t *testing.T, customDir, themeName string, config Config) s
 <h1>Home Page</h1>
 {{template "header.html" .}}
 {{end}}`
-	if err := os.WriteFile(filepath.Join(templatesPath, "pages", "home.html"), []byte(homePage), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(templatesPath, "pages", "home.html"), []byte(homePage), 0o644); err != nil {
 		t.Fatalf("failed to write home.html: %v", err)
 	}
 
 	// Create static directory
 	staticPath := filepath.Join(themePath, "static")
-	if err := os.MkdirAll(filepath.Join(staticPath, "css"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(staticPath, "css"), 0o755); err != nil {
 		t.Fatalf("failed to create static/css dir: %v", err)
 	}
 
@@ -331,7 +331,7 @@ func TestReloadTheme(t *testing.T) {
 	// Update config on disk
 	newConfig := Config{Name: "Updated", Version: "2.0.0"}
 	configData, _ := json.Marshal(newConfig)
-	if err := os.WriteFile(filepath.Join(customDir, "themes", "reload", "theme.json"), configData, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(customDir, "themes", "reload", "theme.json"), configData, 0o644); err != nil {
 		t.Fatalf("failed to update theme.json: %v", err)
 	}
 
@@ -375,7 +375,7 @@ func TestReloadActiveTheme(t *testing.T) {
 	// Update and reload
 	newConfig := Config{Name: "Updated Active", Version: "2.0.0"}
 	configData, _ := json.Marshal(newConfig)
-	if err := os.WriteFile(filepath.Join(customDir, "themes", "active-reload", "theme.json"), configData, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(customDir, "themes", "active-reload", "theme.json"), configData, 0o644); err != nil {
 		t.Fatalf("failed to update theme.json: %v", err)
 	}
 
@@ -431,10 +431,10 @@ func TestInvalidThemeJson(t *testing.T) {
 
 	// Create theme with invalid JSON
 	themePath := filepath.Join(customDir, "themes", "invalid")
-	if err := os.MkdirAll(themePath, 0755); err != nil {
+	if err := os.MkdirAll(themePath, 0o755); err != nil {
 		t.Fatalf("failed to create theme dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(themePath, "theme.json"), []byte("{invalid json}"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(themePath, "theme.json"), []byte("{invalid json}"), 0o644); err != nil {
 		t.Fatalf("failed to write invalid theme.json: %v", err)
 	}
 
@@ -451,7 +451,7 @@ func TestMissingThemeJson(t *testing.T) {
 	customDir := testCustomDir(t)
 
 	// Create theme directory without theme.json
-	if err := os.MkdirAll(filepath.Join(customDir, "themes", "missing"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(customDir, "themes", "missing"), 0o755); err != nil {
 		t.Fatalf("failed to create theme dir: %v", err)
 	}
 
@@ -582,7 +582,7 @@ func createTestThemeWithLocales(t *testing.T, customDir, themeName string, confi
 	// Create locales directory and translation files
 	for lang, msgs := range translations {
 		localeDir := filepath.Join(themePath, "locales", lang)
-		if err := os.MkdirAll(localeDir, 0755); err != nil {
+		if err := os.MkdirAll(localeDir, 0o755); err != nil {
 			t.Fatalf("failed to create locale dir: %v", err)
 		}
 
@@ -606,7 +606,7 @@ func createTestThemeWithLocales(t *testing.T, customDir, themeName string, confi
 			t.Fatalf("failed to marshal locale: %v", err)
 		}
 
-		if err := os.WriteFile(filepath.Join(localeDir, "messages.json"), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(localeDir, "messages.json"), data, 0o644); err != nil {
 			t.Fatalf("failed to write messages.json: %v", err)
 		}
 	}
@@ -791,10 +791,10 @@ func TestInvalidThemeLocaleJson(t *testing.T) {
 
 	// Create invalid locale file
 	localeDir := filepath.Join(customDir, "themes", "invalid-locale", "locales", "en")
-	if err := os.MkdirAll(localeDir, 0755); err != nil {
+	if err := os.MkdirAll(localeDir, 0o755); err != nil {
 		t.Fatalf("failed to create locale dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(localeDir, "messages.json"), []byte("{invalid json}"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(localeDir, "messages.json"), []byte("{invalid json}"), 0o644); err != nil {
 		t.Fatalf("failed to write invalid messages.json: %v", err)
 	}
 

@@ -1122,4 +1122,3 @@ func fetchAgentSkills(t *testing.T, h *FrontendHandler) string {
 	}
 	return w.Body.String()
 }
-

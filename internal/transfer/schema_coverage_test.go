@@ -4,16 +4,15 @@
 package transfer
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"archive/zip"
-	"log/slog"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -359,7 +358,7 @@ func TestValidateZipFile_WithFile(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, zw.Close())
 
-	err = os.WriteFile(zipPath, buf.Bytes(), 0644)
+	err = os.WriteFile(zipPath, buf.Bytes(), 0o644)
 	require.NoError(t, err)
 
 	result, err := importer.ValidateZipFile(context.Background(), zipPath)
@@ -395,7 +394,7 @@ func TestValidateFile_ValidJSON(t *testing.T) {
 	}
 	data, err := json.Marshal(exportData)
 	require.NoError(t, err)
-	err = os.WriteFile(filePath, data, 0644)
+	err = os.WriteFile(filePath, data, 0o644)
 	require.NoError(t, err)
 
 	result, err := importer.ValidateFile(context.Background(), filePath)
@@ -422,7 +421,7 @@ func TestValidateFile_InvalidJSON(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "bad.json")
-	err := os.WriteFile(filePath, []byte("not valid json"), 0644)
+	err := os.WriteFile(filePath, []byte("not valid json"), 0o644)
 	require.NoError(t, err)
 
 	result, err := importer.ValidateFile(context.Background(), filePath)
@@ -460,7 +459,7 @@ func TestImportFromZipFile(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, zw.Close())
 
-	err = os.WriteFile(zipPath, buf.Bytes(), 0644)
+	err = os.WriteFile(zipPath, buf.Bytes(), 0o644)
 	require.NoError(t, err)
 
 	opts := DefaultImportOptions()

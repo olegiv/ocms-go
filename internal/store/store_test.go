@@ -597,7 +597,7 @@ func TestPublishPage(t *testing.T) {
 		Title: "Publish Test", Slug: "publish-test", Body: "<p>Content</p>",
 		Status: "draft", AuthorID: user.ID, LanguageCode: langCode,
 		ScheduledAt: scheduledAt,
-		CreatedAt: now, UpdatedAt: now,
+		CreatedAt:   now, UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("CreatePage: %v", err)
@@ -639,7 +639,7 @@ func TestUnpublishPageClearsScheduledAt(t *testing.T) {
 		Status: "published", AuthorID: user.ID, LanguageCode: langCode,
 		ScheduledAt: scheduledAt,
 		PublishedAt: sql.NullTime{Time: publishTime, Valid: true},
-		CreatedAt: now, UpdatedAt: now,
+		CreatedAt:   now, UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("CreatePage: %v", err)

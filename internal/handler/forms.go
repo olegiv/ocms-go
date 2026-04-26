@@ -54,11 +54,14 @@ type FormsHandler struct {
 	webhookDataMode string
 }
 
-const maxPublicFormBodyBytes int64 = 64 * 1024
-const maxPublicFormFieldValueBytes = 4 * 1024
-const maxPublicFormSubmissionDataBytes = 16 * 1024
-const redactedFormValue = "[REDACTED]"
-const maxFormEventValueLen = 1024
+const (
+	maxPublicFormBodyBytes           int64 = 64 * 1024
+	maxPublicFormFieldValueBytes           = 4 * 1024
+	maxPublicFormSubmissionDataBytes       = 16 * 1024
+	redactedFormValue                      = "[REDACTED]"
+	maxFormEventValueLen                   = 1024
+)
+
 const (
 	formWebhookDataModeRedacted = "redacted"
 	formWebhookDataModeNone     = "none"

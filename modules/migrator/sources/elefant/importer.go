@@ -301,8 +301,8 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 // importMedia imports media files from Elefant's files directory.
 // It returns a map of old Elefant paths to new oCMS media URLs for replacing in post bodies.
 func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesPath, uploadDir string,
-	userID int64, result *types.ImportResult, tracker types.ImportTracker) (map[string]string, error) {
-
+	userID int64, result *types.ImportResult, tracker types.ImportTracker,
+) (map[string]string, error) {
 	// Map: old Elefant path → new oCMS URL
 	mediaMap := make(map[string]string)
 
@@ -469,7 +469,7 @@ func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename st
 		return fmt.Errorf("invalid destination directory: path traversal detected")
 	}
 
-	if err := os.MkdirAll(cleanDestDir, 0755); err != nil {
+	if err := os.MkdirAll(cleanDestDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 

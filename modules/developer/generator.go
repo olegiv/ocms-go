@@ -588,11 +588,11 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 
 		// Save original
 		originalsDir := filepath.Join(uploadDir, "originals", mediaUUID)
-		if err := os.MkdirAll(originalsDir, 0755); err != nil {
+		if err := os.MkdirAll(originalsDir, 0o755); err != nil {
 			return nil, fmt.Errorf("failed to create originals directory: %w", err)
 		}
 		originalPath := filepath.Join(originalsDir, filename)
-		if err := os.WriteFile(originalPath, imgData, 0644); err != nil {
+		if err := os.WriteFile(originalPath, imgData, 0o644); err != nil {
 			return nil, fmt.Errorf("failed to save original image: %w", err)
 		}
 
@@ -618,11 +618,11 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 			}
 
 			variantDir := filepath.Join(uploadDir, v.name, mediaUUID)
-			if err := os.MkdirAll(variantDir, 0755); err != nil {
+			if err := os.MkdirAll(variantDir, 0o755); err != nil {
 				continue
 			}
 			variantPath := filepath.Join(variantDir, filename)
-			if err := os.WriteFile(variantPath, variantData, 0644); err != nil {
+			if err := os.WriteFile(variantPath, variantData, 0o644); err != nil {
 				continue
 			}
 		}

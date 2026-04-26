@@ -30,9 +30,11 @@ import (
 // APIKeysPerPage is the number of API keys to display per page.
 const APIKeysPerPage = 10
 
-const defaultAPIKeyLifetime = 90 * 24 * time.Hour
-const maxAPIKeyLifetime = 365 * 24 * time.Hour
-const maxAPIKeySourceCIDRs = 64
+const (
+	defaultAPIKeyLifetime = 90 * 24 * time.Hour
+	maxAPIKeyLifetime     = 365 * 24 * time.Hour
+	maxAPIKeySourceCIDRs  = 64
+)
 
 var apiKeysSortableFields = map[string]SortConfig{
 	"name":         {DefaultDir: sortDirAsc},

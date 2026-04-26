@@ -23,8 +23,8 @@ type mockSource struct {
 }
 
 func (s *mockSource) Name() string        { return s.name }
-func (s *mockSource) DisplayName() string  { return "Mock " + s.name }
-func (s *mockSource) Description() string  { return "Mock source for testing" }
+func (s *mockSource) DisplayName() string { return "Mock " + s.name }
+func (s *mockSource) Description() string { return "Mock source for testing" }
 func (s *mockSource) ConfigFields() []types.ConfigField {
 	return []types.ConfigField{
 		{Name: "host", Label: "Host", Type: "text", Required: true, Default: "localhost"},

@@ -363,7 +363,7 @@ func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([
 func (s *MediaService) saveNonImageFile(file io.Reader, fileUUID, filename string) (string, int64, error) {
 	// Create directory
 	dir := filepath.Join(s.uploadDir, "originals", fileUUID)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", 0, fmt.Errorf("failed to create directory: %w", err)
 	}
 

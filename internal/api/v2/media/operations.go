@@ -47,7 +47,7 @@ type MediaListMeta struct {
 // ListMediaOutput is the paginated response envelope.
 type ListMediaOutput struct {
 	Body struct {
-		Data []Media  `json:"data"`
+		Data []Media       `json:"data"`
 		Meta MediaListMeta `json:"meta"`
 	}
 }
@@ -226,7 +226,7 @@ func registerUploadBatch(api huma.API, svc *Service) {
 
 // UpdateMediaInput carries the id path param plus the partial update body.
 type UpdateMediaInput struct {
-	ID   int64       `path:"id" minimum:"1"`
+	ID   int64           `path:"id" minimum:"1"`
 	Body UpdateMediaBody `contentType:"application/json"`
 }
 

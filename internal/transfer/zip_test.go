@@ -36,13 +36,13 @@ func TestExportWithMediaToZip(t *testing.T) {
 	// Create test media file on disk
 	testMediaUUID := "550e8400-e29b-41d4-a716-446655440000"
 	originalDir := filepath.Join(uploadDir, "originals", testMediaUUID)
-	if err := os.MkdirAll(originalDir, 0755); err != nil {
+	if err := os.MkdirAll(originalDir, 0o755); err != nil {
 		t.Fatalf("failed to create original dir: %v", err)
 	}
 
 	testFilename := "test-image.jpg"
 	testContent := []byte("fake image content for testing")
-	if err := os.WriteFile(filepath.Join(originalDir, testFilename), testContent, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(originalDir, testFilename), testContent, 0o644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -63,12 +63,12 @@ func TestExportWithMediaToZip(t *testing.T) {
 
 	// Create variant directory and file (variants use same filename as original)
 	variantDir := filepath.Join(uploadDir, "thumbnail", testMediaUUID)
-	if err := os.MkdirAll(variantDir, 0755); err != nil {
+	if err := os.MkdirAll(variantDir, 0o755); err != nil {
 		t.Fatalf("failed to create variant dir: %v", err)
 	}
 
 	variantContent := []byte("fake thumbnail content")
-	if err := os.WriteFile(filepath.Join(variantDir, testFilename), variantContent, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(variantDir, testFilename), variantContent, 0o644); err != nil {
 		t.Fatalf("failed to write variant file: %v", err)
 	}
 
@@ -183,13 +183,13 @@ func TestImportFromZip(t *testing.T) {
 	// Create test media file
 	testMediaUUID := "550e8400-e29b-41d4-a716-446655440001"
 	originalDir := filepath.Join(srcUploadDir, "originals", testMediaUUID)
-	if err := os.MkdirAll(originalDir, 0755); err != nil {
+	if err := os.MkdirAll(originalDir, 0o755); err != nil {
 		t.Fatalf("failed to create original dir: %v", err)
 	}
 
 	testFilename := "imported-image.png"
 	testContent := []byte("fake PNG image content for import test")
-	if err := os.WriteFile(filepath.Join(originalDir, testFilename), testContent, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(originalDir, testFilename), testContent, 0o644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 

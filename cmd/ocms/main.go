@@ -1182,12 +1182,12 @@ func run() error {
 	var errorLogFile *os.File
 	if cfg.ErrorLogPath != "" {
 		var err error
-		errorLogFile, err = os.OpenFile(cfg.ErrorLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		errorLogFile, err = os.OpenFile(cfg.ErrorLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 		if err != nil {
 			return fmt.Errorf("opening error log file %s: %w", cfg.ErrorLogPath, err)
 		}
 		// Enforce permissions on pre-existing files (OpenFile only sets mode on create).
-		if err = errorLogFile.Chmod(0600); err != nil {
+		if err = errorLogFile.Chmod(0o600); err != nil {
 			errorLogFile.Close()
 			return fmt.Errorf("setting error log file permissions %s: %w", cfg.ErrorLogPath, err)
 		}
@@ -1216,7 +1216,7 @@ func run() error {
 
 	// Ensure data directory exists with restricted permissions.
 	dbDir := filepath.Dir(cfg.DBPath)
-	if err := os.MkdirAll(dbDir, 0700); err != nil {
+	if err := os.MkdirAll(dbDir, 0o700); err != nil {
 		return fmt.Errorf("creating data directory: %w", err)
 	}
 
@@ -1237,7 +1237,7 @@ func run() error {
 	// Skip non-file DSNs such as ":memory:" where no real file exists on disk.
 	if dbFilePath, isFileDSN := sqliteFilePathFromDSN(cfg.DBPath); isFileDSN {
 		if info, statErr := os.Stat(dbFilePath); statErr == nil && info.Mode().IsRegular() {
-			if err := os.Chmod(dbFilePath, 0600); err != nil {
+			if err := os.Chmod(dbFilePath, 0o600); err != nil {
 				_ = db.Close()
 				return fmt.Errorf("setting database file permissions: %w", err)
 			}
@@ -1867,7 +1867,6 @@ func run() error {
 			r.Get(handler.RouteDocs, docsHandler.Overview)
 			r.Get(handler.RouteDocsSlug, docsHandler.Guide)
 		})
-
 	})
 
 	// REST API v2 — huma-generated OpenAPI 3.1 at /api/v2.

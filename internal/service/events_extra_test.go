@@ -45,11 +45,11 @@ func TestGetExcludedIPs(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name       string
-		configVal  string
-		configErr  bool
-		wantLen    int
-		wantFirst  string
+		name      string
+		configVal string
+		configErr bool
+		wantLen   int
+		wantFirst string
 	}{
 		{
 			name:      "nil getter returns nil",

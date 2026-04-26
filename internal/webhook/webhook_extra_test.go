@@ -811,8 +811,8 @@ func TestIsBlockedWebhookDeliveryHeader(t *testing.T) {
 
 func TestHasInvalidWebhookDeliveryHeaderValue(t *testing.T) {
 	tests := []struct {
-		name   string
-		value  string
+		name    string
+		value   string
 		wantBad bool
 	}{
 		{"clean value", "Bearer token", false},
@@ -935,7 +935,6 @@ func TestConfigureAllowedHosts_InvalidEntry(t *testing.T) {
 	}
 }
 
-
 // ---------------------------------------------------------------------------
 // DeliveryResult constants and fields
 // ---------------------------------------------------------------------------
@@ -998,15 +997,15 @@ func TestWebhookToModel_FromStoreWebhook(t *testing.T) {
 			wantHeaders: map[string]string{},
 		},
 		{
-			name:       "with events",
-			wh:         store.Webhook{Events: `["page.created","page.deleted"]`, Headers: ""},
-			wantEvents: []string{"page.created", "page.deleted"},
+			name:        "with events",
+			wh:          store.Webhook{Events: `["page.created","page.deleted"]`, Headers: ""},
+			wantEvents:  []string{"page.created", "page.deleted"},
 			wantHeaders: map[string]string{},
 		},
 		{
-			name:       "with headers",
-			wh:         store.Webhook{Events: "", Headers: `{"X-Token":"abc"}`},
-			wantEvents: []string{},
+			name:        "with headers",
+			wh:          store.Webhook{Events: "", Headers: `{"X-Token":"abc"}`},
+			wantEvents:  []string{},
 			wantHeaders: map[string]string{"X-Token": "abc"},
 		},
 	}

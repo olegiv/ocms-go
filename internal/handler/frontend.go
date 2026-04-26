@@ -2515,18 +2515,21 @@ func (h *FrontendHandler) fetchPagesForEntity(ctx context.Context, entityID int6
 		return fetchAndCount(
 			func() ([]store.Page, error) {
 				return h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
-					TagID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset})
+					TagID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset,
+				})
 			},
 			func() (int64, error) {
 				return h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
-					TagID: entityID, LanguageCode: langCode})
+					TagID: entityID, LanguageCode: langCode,
+				})
 			},
 		)
 	case isTag:
 		return fetchAndCount(
 			func() ([]store.Page, error) {
 				return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
-					TagID: entityID, Limit: limit, Offset: offset})
+					TagID: entityID, Limit: limit, Offset: offset,
+				})
 			},
 			func() (int64, error) { return h.queries.CountPublishedPagesForTag(ctx, entityID) },
 		)
@@ -2534,18 +2537,21 @@ func (h *FrontendHandler) fetchPagesForEntity(ctx context.Context, entityID int6
 		return fetchAndCount(
 			func() ([]store.Page, error) {
 				return h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
-					CategoryID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset})
+					CategoryID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset,
+				})
 			},
 			func() (int64, error) {
 				return h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
-					CategoryID: entityID, LanguageCode: langCode})
+					CategoryID: entityID, LanguageCode: langCode,
+				})
 			},
 		)
 	default:
 		return fetchAndCount(
 			func() ([]store.Page, error) {
 				return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
-					CategoryID: entityID, Limit: limit, Offset: offset})
+					CategoryID: entityID, Limit: limit, Offset: offset,
+				})
 			},
 			func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, entityID) },
 		)

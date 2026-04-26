@@ -16,7 +16,8 @@ func runStringExtractTests(t *testing.T, extractFn func(string) string, tests []
 	name     string
 	input    string
 	expected string
-}) {
+},
+) {
 	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -363,7 +363,6 @@ func (m *Module) GetRealTimeVisitorCount(minutes int) int {
 		FROM page_analytics_views
 		WHERE created_at >= ?
 	`, cutoff).Scan(&count)
-
 	if err != nil {
 		return 0
 	}

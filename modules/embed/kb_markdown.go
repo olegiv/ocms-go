@@ -601,4 +601,3 @@ func collapseWhitespace(s string) string {
 	}
 	return strings.TrimSpace(strings.Join(result, "\n"))
 }
-

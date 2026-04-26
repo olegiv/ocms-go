@@ -591,8 +591,8 @@ func TestGetTechStats(t *testing.T) {
 
 func TestParseDateRange_AllRanges(t *testing.T) {
 	ranges := []struct {
-		input       string
-		expectDays  int
+		input      string
+		expectDays int
 	}{
 		{"7d", 7},
 		{"30d", 30},

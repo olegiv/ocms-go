@@ -44,9 +44,9 @@ type RecentPost struct {
 // resolved from the i18n system at the call site; keeping them in a struct
 // avoids coupling this package to the translator.
 type Labels struct {
-	RecentPosts  string // e.g. "Recent Posts"
-	PublishedOn  string // e.g. "Published"
-	Source       string // e.g. "Source"
+	RecentPosts string // e.g. "Recent Posts"
+	PublishedOn string // e.g. "Published"
+	Source      string // e.g. "Source"
 }
 
 // WantsMarkdown reports whether the request's Accept header indicates a
@@ -69,7 +69,7 @@ func WantsMarkdown(r *http.Request) bool {
 	// markdown, even though the client explicitly ranked text/html at
 	// 0.2 and text/markdown at 0.8.
 	mdQ := float64(-1)
-	explicitHTMLQ := float64(-1)  // text/html, application/xhtml+xml
+	explicitHTMLQ := float64(-1)      // text/html, application/xhtml+xml
 	typeWildcardHTMLQ := float64(-1)  // text/*
 	rangeWildcardHTMLQ := float64(-1) // */*
 	mdSeen := false

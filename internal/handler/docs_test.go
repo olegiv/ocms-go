@@ -163,7 +163,7 @@ func TestDocsHandler_ListGuides(t *testing.T) {
 	}
 
 	for name, content := range testFiles {
-		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(content), 0o644); err != nil {
 			t.Fatalf("failed to create test file %s: %v", name, err)
 		}
 	}

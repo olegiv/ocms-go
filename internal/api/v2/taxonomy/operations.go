@@ -49,7 +49,7 @@ type ListTagsInput struct {
 // ListTagsOutput is the paginated tags response envelope.
 type ListTagsOutput struct {
 	Body struct {
-		Data []TaxonomyTag            `json:"data"`
+		Data []TaxonomyTag    `json:"data"`
 		Meta TaxonomyListMeta `json:"meta"`
 	}
 }

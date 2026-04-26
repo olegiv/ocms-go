@@ -18,8 +18,10 @@ const MaxWebhookURLLength = 2048
 
 // privateIPBlocks contains CIDR ranges for private/reserved IP addresses
 // per RFC 1918, RFC 4193, RFC 3927, and RFC 5737.
-var privateIPBlocks []*net.IPNet
-var requireHTTPSOutbound atomic.Bool
+var (
+	privateIPBlocks      []*net.IPNet
+	requireHTTPSOutbound atomic.Bool
+)
 
 func init() {
 	cidrs := []string{

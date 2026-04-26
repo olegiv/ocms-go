@@ -99,5 +99,5 @@ func clearDir(dir string) error {
 func writeTimestamp(dataDir string) error {
 	tsPath := filepath.Join(dataDir, timestampFile)
 	data := []byte(strconv.FormatInt(time.Now().UTC().Unix(), 10))
-	return os.WriteFile(tsPath, data, 0644)
+	return os.WriteFile(tsPath, data, 0o644)
 }

@@ -113,10 +113,10 @@ func TestScanMediaFiles(t *testing.T) {
 	for path, content := range testFiles {
 		fullPath := filepath.Join(tempDir, path)
 		dir := filepath.Dir(fullPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("failed to create directory %s: %v", dir, err)
 		}
-		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
 			t.Fatalf("failed to create test file %s: %v", path, err)
 		}
 	}
@@ -174,12 +174,12 @@ func TestScanMediaFiles_SkipsSymlinks(t *testing.T) {
 	outsideDir := t.TempDir()
 
 	regularFilePath := filepath.Join(tempDir, "valid.jpg")
-	if err := os.WriteFile(regularFilePath, []byte("regular content"), 0644); err != nil {
+	if err := os.WriteFile(regularFilePath, []byte("regular content"), 0o644); err != nil {
 		t.Fatalf("failed to create regular file: %v", err)
 	}
 
 	outsideFilePath := filepath.Join(outsideDir, "secret.jpg")
-	if err := os.WriteFile(outsideFilePath, []byte("secret content"), 0644); err != nil {
+	if err := os.WriteFile(outsideFilePath, []byte("secret content"), 0o644); err != nil {
 		t.Fatalf("failed to create outside file: %v", err)
 	}
 

@@ -30,13 +30,13 @@ import (
 )
 
 const (
-	maxDifyProxyBodyBytes    = 1 << 20
-	difyProxyTimeout         = 90 * time.Second
-	maxDifyIdentifierLen     = 128
-	maxDifyQueryLen          = 4096
-	maxDifyInputsCount       = 32
-	maxDifyInputKeyLen       = 64
-	maxDifyInputValueLen     = 512
+	maxDifyProxyBodyBytes = 1 << 20
+	difyProxyTimeout      = 90 * time.Second
+	maxDifyIdentifierLen  = 128
+	maxDifyQueryLen       = 4096
+	maxDifyInputsCount    = 32
+	maxDifyInputKeyLen    = 64
+	maxDifyInputValueLen  = 512
 	embedProxyTokenHeader = "X-Embed-Proxy-Token"
 	// embedProxyTokenTTL is long enough to cover a typical idle-then-interact
 	// session in an open tab without forcing a refresh round-trip, while
@@ -52,8 +52,10 @@ const (
 	embedProxyTokenRefreshGrace = 5 * time.Minute
 )
 
-var difyIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:@-]+$`)
-var difyInputKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+var (
+	difyIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:@-]+$`)
+	difyInputKeyPattern   = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+)
 
 type embedProxySignedTokenClaims struct {
 	Origin string `json:"origin"`

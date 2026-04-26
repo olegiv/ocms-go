@@ -12,8 +12,20 @@
 ## Build, Test, and Development Commands
 - `make dev`: build assets, generate templ files, and run the app.
 - `make run`: run server only (fast local backend iteration).
-- `make build` or `make build-prod`: build binaries into `bin/`.
-- `make test`: run all Go tests (`go test -v ./...`).
+- `make all`: build the default local/dev binary.
+- `make build`: build the fast local/dev binary into `bin/`.
+- `make build-prod`: build the optimized host production binary into `bin/`.
+- `make build-linux-amd64`: build the optimized static Linux AMD64 production binary.
+- `make build-darwin-arm64`: build the optimized Darwin ARM64 production binary.
+- `make build-all-platforms`: build Linux AMD64 + Darwin ARM64 production binaries.
+- `make test`: run all Go tests.
+- `make test-race`: run tests with race detector.
+- `make coverage` / `make coverage-html`: run coverage summary or write `coverage.html`.
+- `make fmt` / `make fmt-check`: format with gofumpt or fail if formatting is needed.
+- `make vet`, `make lint`, and `make check`: run Go vet, linters, or the full local quality gate.
+- `make deps` / `make tidy`: download or tidy Go modules.
+- `make install-tools`: install pinned `golangci-lint` and `gofumpt`.
+- `make help`: show Makefile targets.
 - `make assets`: install npm deps, copy JS libs, compile SCSS/Tailwind.
 - `make migrate-up` / `make migrate-down` / `make migrate-status`: manage SQLite migrations.
 - `make install-hooks`: enable repo hook(s) from `.githooks/`.

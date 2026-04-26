@@ -511,7 +511,6 @@ func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan files directory: %w", err)
 	}

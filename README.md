@@ -244,12 +244,26 @@ make run
 | `make run` | Run development server (no asset build) |
 | `make stop` | Stop development server on port 8080 |
 | `make restart` | Stop and restart development server |
-| `make build` | Build binary to `bin/ocms` |
-| `make build-prod` | Build optimized binary (stripped, trimmed) |
-| `make build-linux-amd64` | Cross-compile for Linux AMD64 |
-| `make build-darwin-arm64` | Cross-compile for macOS ARM64 |
-| `make build-all-platforms` | Build for Linux AMD64 and macOS ARM64 |
+| `make all` | Build the default local/dev binary |
+| `make build` | Fast local/dev build to `bin/ocms` |
+| `make build-prod` | Optimized host production build |
+| `make build-linux-amd64` | Optimized static Linux AMD64 production build |
+| `make build-darwin-arm64` | Optimized Darwin ARM64 production build |
+| `make build-all-platforms` | Build Linux AMD64 + Darwin ARM64 production binaries |
 | `make test` | Run all tests |
+| `make test-race` | Run tests with race detector |
+| `make coverage` | Run tests with coverage summary |
+| `make coverage-html` | Write `coverage.out` and `coverage.html` |
+| `make fmt` | Format with gofumpt |
+| `make fmt-check` | Fail if gofumpt would reformat files |
+| `make vet` | Run go vet |
+| `make lint` | Run all linters |
+| `make lint-go` | Run golangci-lint |
+| `make check` | Run the full local quality gate |
+| `make deps` | Download Go module dependencies |
+| `make tidy` | Tidy Go modules |
+| `make install-tools` | Install pinned developer tools |
+| `make help` | Show Makefile targets |
 | `make clean` | Remove build artifacts |
 | `make clean-db` | Remove database files |
 | `make migrate-up` | Apply pending migrations |
@@ -647,12 +661,14 @@ Modules can be enabled/disabled from the admin UI at **Admin > Modules**. When a
 
 Run all tests:
 ```bash
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test ./...
+make test
 ```
 
-Run tests with verbose output:
+Run race tests and coverage:
 ```bash
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./...
+make test-race
+make coverage
+make coverage-html
 ```
 
 Run tests for a specific package:

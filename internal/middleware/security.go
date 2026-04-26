@@ -68,34 +68,34 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 	if isDev {
 		// More permissive in development for easier debugging
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
-			"default-src": "'self'",
-			"script-src":  "'self' 'nonce-{{nonce}}' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
-			"img-src":     "'self' data: blob: https:",
-			"font-src":    "'self' data: https://fonts.gstatic.com",
-			"connect-src": "'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app https://www.youtube.com https://www.youtube-nocookie.com",
-			"object-src":  "'none'",
-			"base-uri":    "'self'",
-			"form-action": "'self'",
-			"frame-ancestors":  "'self'",
+			"default-src":     "'self'",
+			"script-src":      "'self' 'nonce-{{nonce}}' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"style-src":       "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
+			"img-src":         "'self' data: blob: https:",
+			"font-src":        "'self' data: https://fonts.gstatic.com",
+			"connect-src":     "'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"frame-src":       "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app https://www.youtube.com https://www.youtube-nocookie.com",
+			"object-src":      "'none'",
+			"base-uri":        "'self'",
+			"form-action":     "'self'",
+			"frame-ancestors": "'self'",
 		})
 	} else {
 		// Strict CSP for production.
 		// upgrade-insecure-requests forces any http:// subresource in admin-
 		// authored HTML up to https:// at request time (FIND-008).
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
-			"default-src": "'self'",
-			"script-src":  "'self' 'nonce-{{nonce}}' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
-			"img-src":     "'self' data: blob: https:",
-			"font-src":    "'self' data: https://fonts.gstatic.com",
-			"connect-src": "'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app https://www.youtube.com https://www.youtube-nocookie.com",
-			"object-src":  "'none'",
-			"base-uri":    "'self'",
-			"form-action": "'self'",
-			"frame-ancestors":  "'self'",
+			"default-src":               "'self'",
+			"script-src":                "'self' 'nonce-{{nonce}}' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"style-src":                 "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
+			"img-src":                   "'self' data: blob: https:",
+			"font-src":                  "'self' data: https://fonts.gstatic.com",
+			"connect-src":               "'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"frame-src":                 "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app https://www.youtube.com https://www.youtube-nocookie.com",
+			"object-src":                "'none'",
+			"base-uri":                  "'self'",
+			"form-action":               "'self'",
+			"frame-ancestors":           "'self'",
 			"upgrade-insecure-requests": "",
 		})
 		cfg.HSTSIncludeSubDomains = true

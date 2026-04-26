@@ -193,7 +193,8 @@ func runRoleTests(t *testing.T, mw func(http.Handler) http.Handler, path string,
 	name       string
 	role       string
 	expectCode int
-}) {
+},
+) {
 	t.Helper()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
