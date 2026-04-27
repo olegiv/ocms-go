@@ -6,6 +6,7 @@ package store
 import (
 	"image"
 	"testing"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/auth"
 )
@@ -402,6 +403,53 @@ func TestRotateDefaultAdminPassword_DisabledWhenNotDemoMode(t *testing.T) {
 	}
 	if !valid {
 		t.Fatal("expected default password to still authenticate when rotation is disabled")
+	}
+}
+
+func TestRotateDefaultAdminPassword_LeavesNonDefaultPasswordIntact(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+	t.Setenv("OCMS_DEMO_MODE", "true")
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	const operatorPassword = "operator-changed-this-1234"
+	operatorHash, err := auth.HashPassword(operatorPassword)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	admin, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail(%s): %v", DefaultAdminEmail, err)
+	}
+	if err := q.UpdateUserPassword(ctx, UpdateUserPasswordParams{
+		PasswordHash: operatorHash,
+		UpdatedAt:    time.Now(),
+		ID:           admin.ID,
+	}); err != nil {
+		t.Fatalf("UpdateUserPassword: %v", err)
+	}
+
+	password, err := RotateDefaultAdminPassword(ctx, db)
+	if err != nil {
+		t.Fatalf("RotateDefaultAdminPassword: %v", err)
+	}
+	if password != "" {
+		t.Fatalf("expected no rotation when password is non-default, got %q", password)
+	}
+
+	admin, err = q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail(%s, post): %v", DefaultAdminEmail, err)
+	}
+	valid, err := auth.CheckPassword(operatorPassword, admin.PasswordHash)
+	if err != nil {
+		t.Fatalf("CheckPassword(operator): %v", err)
+	}
+	if !valid {
+		t.Fatal("expected operator-set password to remain after rotation skip")
 	}
 }
 

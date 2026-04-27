@@ -177,7 +177,10 @@ func RotateDemoAdminPassword(ctx context.Context, db *sql.DB) (string, error) {
 }
 
 // RotateDefaultAdminPassword rotates the seeded default admin password and returns the new password.
-// Rotation only occurs when OCMS_DEMO_MODE=true and the default admin account exists.
+// Rotation only occurs when OCMS_DEMO_MODE=true, the default admin account exists, and its stored
+// hash still authenticates DefaultAdminPassword — so an operator who has rotated the account to a
+// real credential is never silently overwritten on restart.
+//
 // The production startup audit refuses to boot when default admin credentials are still active;
 // demo deploys seed those credentials on every boot, so this rotation runs ahead of the audit
 // to clear them in place. The returned password is intentionally not logged — the demo's public
@@ -196,6 +199,14 @@ func RotateDefaultAdminPassword(ctx context.Context, db *sql.DB) (string, error)
 		return "", fmt.Errorf("loading default admin account: %w", err)
 	}
 	if admin.Role != "admin" {
+		return "", nil
+	}
+
+	stillDefault, err := auth.CheckPassword(DefaultAdminPassword, admin.PasswordHash)
+	if err != nil {
+		return "", fmt.Errorf("verifying default admin credentials: %w", err)
+	}
+	if !stillDefault {
 		return "", nil
 	}
 
