@@ -1297,6 +1297,9 @@ func run() error {
 			"email", store.DemoAdminEmail,
 		)
 	}
+	if _, err := store.RotateDefaultAdminPassword(ctx, db); err != nil {
+		return fmt.Errorf("rotating default admin password: %w", err)
+	}
 
 	// Update i18n from database settings
 	queries := store.New(db)
