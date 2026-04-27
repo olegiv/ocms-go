@@ -334,6 +334,77 @@ func TestRotateDemoAdminPassword_DisabledWhenNotDemoMode(t *testing.T) {
 	}
 }
 
+func TestRotateDefaultAdminPassword(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+	t.Setenv("OCMS_DEMO_MODE", "true")
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	password, err := RotateDefaultAdminPassword(ctx, db)
+	if err != nil {
+		t.Fatalf("RotateDefaultAdminPassword: %v", err)
+	}
+	if password == "" {
+		t.Fatal("expected rotated default admin password to be returned")
+	}
+	if password == DefaultAdminPassword {
+		t.Fatal("expected rotated password to differ from seeded default admin password")
+	}
+
+	admin, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail(%s): %v", DefaultAdminEmail, err)
+	}
+	valid, err := auth.CheckPassword(password, admin.PasswordHash)
+	if err != nil {
+		t.Fatalf("CheckPassword(rotated): %v", err)
+	}
+	if !valid {
+		t.Fatal("expected rotated password to authenticate against stored hash")
+	}
+
+	stillDefault, err := auth.CheckPassword(DefaultAdminPassword, admin.PasswordHash)
+	if err != nil {
+		t.Fatalf("CheckPassword(default): %v", err)
+	}
+	if stillDefault {
+		t.Fatal("expected default password to no longer authenticate after rotation")
+	}
+}
+
+func TestRotateDefaultAdminPassword_DisabledWhenNotDemoMode(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+	t.Setenv("OCMS_DEMO_MODE", "")
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	password, err := RotateDefaultAdminPassword(ctx, db)
+	if err != nil {
+		t.Fatalf("RotateDefaultAdminPassword: %v", err)
+	}
+	if password != "" {
+		t.Fatalf("expected no rotated password outside demo mode, got %q", password)
+	}
+
+	admin, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail(%s): %v", DefaultAdminEmail, err)
+	}
+	valid, err := auth.CheckPassword(DefaultAdminPassword, admin.PasswordHash)
+	if err != nil {
+		t.Fatalf("CheckPassword: %v", err)
+	}
+	if !valid {
+		t.Fatal("expected default password to still authenticate when rotation is disabled")
+	}
+}
+
 func TestSeedDemoCategories(t *testing.T) {
 	_, cleanup, ctx, q := testSetup(t)
 	defer cleanup()
