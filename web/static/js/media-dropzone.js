@@ -3,6 +3,23 @@
  * Supports both "select" mode (choose from library) and "upload" mode (upload new files)
  */
 
+// safeRedirectTarget normalizes a redirect URL to a same-origin http(s) target,
+// returning '' when the input is missing, malformed, or points off-origin. The
+// only current call site is `data-redirect-url` in admin templates, but DOM
+// attributes are an open surface — defense-in-depth against a future caller
+// wiring an attacker-controllable value into the dataset.
+function safeRedirectTarget(raw) {
+    if (typeof raw !== 'string' || raw.trim() === '') return '';
+    try {
+        const parsed = new URL(raw, window.location.origin);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+        if (parsed.origin !== window.location.origin) return '';
+        return parsed.pathname + parsed.search + parsed.hash;
+    } catch (e) {
+        return '';
+    }
+}
+
 function mediaDropzone() {
     return {
         // Common state
@@ -57,7 +74,7 @@ function mediaDropzone() {
         initUploadMode(container) {
             this.maxSize = parseInt(container.dataset.maxSize) || 10485760;
             this.uploadUrl = container.dataset.uploadUrl || '';
-            this.redirectUrl = container.dataset.redirectUrl || '';
+            this.redirectUrl = safeRedirectTarget(container.dataset.redirectUrl);
             this.multiple = container.dataset.multiple === 'true';
 
             const typesStr = container.dataset.allowedTypes || '';

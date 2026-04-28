@@ -533,6 +533,23 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			flashAndRedirect(w, r, h.renderer, redirectAdminUsers, "User updated but password change failed", "warning")
 			return
 		}
+
+		// If the actor changed their own password, re-snapshot the
+		// bumped session_version into the current session so the auth
+		// middleware doesn't immediately log them out by their own
+		// action. Other devices/browsers for the same user will see the
+		// stale version and be invalidated on their next request, which
+		// is the intended behavior.
+		if id == currentUser.ID {
+			updated, err := h.queries.GetUserByID(r.Context(), id)
+			if err != nil {
+				slog.Error("failed to reload user after self password change", "error", err, "user_id", id)
+			} else if err := h.sessionManager.RenewToken(r.Context()); err != nil {
+				slog.Error("failed to renew session token after self password change", "error", err, "user_id", id)
+			} else {
+				h.sessionManager.Put(r.Context(), middleware.SessionKeyUserSessionVersion, updated.SessionVersion)
+			}
+		}
 	}
 
 	slog.Info("user updated", "user_id", id, "updated_by", currentUser.ID)

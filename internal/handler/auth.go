@@ -212,10 +212,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.loginProtection.RecordSuccessfulLogin(email)
 	}
 
-	// Re-hash password if it uses old/expensive parameters (e.g., 64MB → 19MB)
+	// Re-hash password if it uses old/expensive parameters (e.g., 64MB → 19MB).
+	// This is a representation change for the same credential — use
+	// UpdateUserPasswordHash so existing sessions for this user are not
+	// invalidated by their own login.
 	if auth.NeedsRehash(user.PasswordHash) {
 		if newHash, err := auth.HashPassword(password); err == nil {
-			if err := h.queries.UpdateUserPassword(r.Context(), store.UpdateUserPasswordParams{
+			if err := h.queries.UpdateUserPasswordHash(r.Context(), store.UpdateUserPasswordHashParams{
 				PasswordHash: newHash,
 				UpdatedAt:    time.Now(),
 				ID:           user.ID,
@@ -242,8 +245,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store user ID in session
+	// Store user ID in session along with the user's current session_version
+	// so the auth middleware can detect if the credential is rotated under us.
 	h.sessionManager.Put(r.Context(), middleware.SessionKeyUserID, user.ID)
+	h.sessionManager.Put(r.Context(), middleware.SessionKeyUserSessionVersion, user.SessionVersion)
 
 	slog.Info("user logged in", "user_id", user.ID, "email", user.Email)
 	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged in", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": user.Email})

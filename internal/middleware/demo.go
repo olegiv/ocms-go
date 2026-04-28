@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -139,11 +140,7 @@ func BlockInDemoMode(restriction DemoRestriction) func(http.Handler) http.Handle
 			})
 
 			// Redirect back to referrer or admin dashboard
-			referer := r.Header.Get("Referer")
-			if referer == "" {
-				referer = "/admin/"
-			}
-			http.Redirect(w, r, referer, http.StatusSeeOther)
+			safeRefererRedirect(w, r, "/admin/")
 		})
 	}
 }
@@ -177,11 +174,7 @@ func BlockDeleteInDemoMode(restriction DemoRestriction) func(http.Handler) http.
 					SameSite: http.SameSiteLaxMode,
 				})
 
-				referer := r.Header.Get("Referer")
-				if referer == "" {
-					referer = "/admin/"
-				}
-				http.Redirect(w, r, referer, http.StatusSeeOther)
+				safeRefererRedirect(w, r, "/admin/")
 				return
 			}
 
@@ -222,13 +215,38 @@ func BlockWriteInDemoMode(restriction DemoRestriction) func(http.Handler) http.H
 				Secure:   true,
 			})
 
-			referer := r.Header.Get("Referer")
-			if referer == "" {
-				referer = "/admin/"
-			}
-			http.Redirect(w, r, referer, http.StatusSeeOther)
+			safeRefererRedirect(w, r, "/admin/")
 		})
 	}
+}
+
+// safeRefererRedirect issues a 303 to the Referer header when it is same-origin
+// (relative path or absolute URL on r.Host with http(s) scheme), or to the
+// fallback path otherwise. Without this guard the bare Referer would be a
+// phishing pivot — an attacker can plant a link that triggers a blocked
+// demo-mode action, and the response forwards the admin's browser to an
+// arbitrary URL the attacker controls.
+func safeRefererRedirect(w http.ResponseWriter, r *http.Request, fallback string) {
+	target := fallback
+	if raw := r.Header.Get("Referer"); raw != "" {
+		if u, err := url.Parse(raw); err == nil {
+			relative := u.Host == "" && (u.Scheme == "" || u.Scheme == "http" || u.Scheme == "https")
+			absoluteSameOrigin := u.Host == r.Host && (u.Scheme == "http" || u.Scheme == "https")
+			if relative || absoluteSameOrigin {
+				// A same-origin Referer can still smuggle a cross-origin
+				// destination via a Path that starts with a literal "//":
+				// http.Redirect would emit a scheme-relative Location
+				// (e.g. "//evil.example/x") and the browser would navigate
+				// to the embedded host. Reject any RequestURI whose first
+				// two bytes are "//".
+				reqURI := u.RequestURI()
+				if reqURI != "" && !strings.HasPrefix(reqURI, "//") {
+					target = reqURI
+				}
+			}
+		}
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // GetDemoBlockedMessage reads and clears the demo_blocked cookie,

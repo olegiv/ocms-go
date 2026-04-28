@@ -18,6 +18,19 @@ WHERE id = ?
 RETURNING *;
 
 -- name: UpdateUserPassword :exec
+-- Updates the user's password hash and bumps session_version, invalidating
+-- every existing session for this user. Use this for any actual credential
+-- change. For rehash-on-login (parameter migration of an unchanged
+-- password) use UpdateUserPasswordHash instead so the user is not logged
+-- out by their own login.
+UPDATE users SET password_hash = ?, updated_at = ?, session_version = session_version + 1
+WHERE id = ?;
+
+-- name: UpdateUserPasswordHash :exec
+-- Updates only the password hash representation (e.g., re-hashing with
+-- updated Argon2 parameters when the user logs in with their existing
+-- password). Does not bump session_version because the credential itself
+-- has not changed.
 UPDATE users SET password_hash = ?, updated_at = ?
 WHERE id = ?;
 
