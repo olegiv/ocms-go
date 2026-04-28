@@ -297,6 +297,7 @@ func TestSafeRefererRedirect(t *testing.T) {
 		{"vbscript scheme falls back", "demo.example.com", "vbscript:msgbox", fallback},
 		{"unparseable referer falls back", "demo.example.com", "://garbage", fallback},
 		{"port-mismatched referer falls back", "demo.example.com", "https://demo.example.com:9999/x", fallback},
+		{"same-origin double-slash path falls back", "demo.example.com", "https://demo.example.com//evil.example/x", fallback},
 	}
 
 	for _, tc := range cases {

@@ -233,7 +233,14 @@ func safeRefererRedirect(w http.ResponseWriter, r *http.Request, fallback string
 			relative := u.Host == "" && (u.Scheme == "" || u.Scheme == "http" || u.Scheme == "https")
 			absoluteSameOrigin := u.Host == r.Host && (u.Scheme == "http" || u.Scheme == "https")
 			if relative || absoluteSameOrigin {
-				if reqURI := u.RequestURI(); reqURI != "" {
+				// A same-origin Referer can still smuggle a cross-origin
+				// destination via a Path that starts with a literal "//":
+				// http.Redirect would emit a scheme-relative Location
+				// (e.g. "//evil.example/x") and the browser would navigate
+				// to the embedded host. Reject any RequestURI whose first
+				// two bytes are "//".
+				reqURI := u.RequestURI()
+				if reqURI != "" && !strings.HasPrefix(reqURI, "//") {
 					target = reqURI
 				}
 			}
