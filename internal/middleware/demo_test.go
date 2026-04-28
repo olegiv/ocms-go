@@ -275,3 +275,47 @@ func TestGetDemoBlockedMessage(t *testing.T) {
 		}
 	})
 }
+
+func TestSafeRefererRedirect(t *testing.T) {
+	const fallback = "/admin/"
+	cases := []struct {
+		name    string
+		host    string
+		referer string
+		want    string
+	}{
+		{"empty referer falls back", "demo.example.com", "", fallback},
+		{"relative path passes through", "demo.example.com", "/admin/users", "/admin/users"},
+		{"relative path with query preserves query", "demo.example.com", "/admin/pages?page=2", "/admin/pages?page=2"},
+		{"same-origin absolute uses path", "demo.example.com", "https://demo.example.com/admin/x", "/admin/x"},
+		{"same-origin absolute http uses path", "demo.example.com", "http://demo.example.com/admin/x", "/admin/x"},
+		{"cross-origin absolute falls back", "demo.example.com", "https://evil.example.com/admin/x", fallback},
+		{"protocol-relative cross-origin falls back", "demo.example.com", "//evil.example.com/x", fallback},
+		{"javascript scheme falls back", "demo.example.com", "javascript:alert(1)", fallback},
+		{"data scheme falls back", "demo.example.com", "data:text/html,<h1>x</h1>", fallback},
+		{"file scheme falls back", "demo.example.com", "file:///etc/passwd", fallback},
+		{"vbscript scheme falls back", "demo.example.com", "vbscript:msgbox", fallback},
+		{"unparseable referer falls back", "demo.example.com", "://garbage", fallback},
+		{"port-mismatched referer falls back", "demo.example.com", "https://demo.example.com:9999/x", fallback},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/admin/pages", nil)
+			req.Host = tc.host
+			if tc.referer != "" {
+				req.Header.Set("Referer", tc.referer)
+			}
+			rec := httptest.NewRecorder()
+
+			safeRefererRedirect(rec, req, fallback)
+
+			if rec.Code != http.StatusSeeOther {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+			}
+			if got := rec.Header().Get("Location"); got != tc.want {
+				t.Errorf("Location = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
