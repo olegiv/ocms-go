@@ -36,7 +36,7 @@ func (q *Queries) CountUsersByRole(ctx context.Context, role string) (int64, err
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, role, name, avatar, bio, website_url, linkedin_url, github_url, telegram_url, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url
+RETURNING id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url, session_version
 `
 
 type CreateUserParams struct {
@@ -85,6 +85,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.LinkedinUrl,
 		&i.GithubUrl,
 		&i.TelegramUrl,
+		&i.SessionVersion,
 	)
 	return i, err
 }
@@ -99,7 +100,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users WHERE email = ?
+SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url, session_version FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -120,12 +121,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.LinkedinUrl,
 		&i.GithubUrl,
 		&i.TelegramUrl,
+		&i.SessionVersion,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users WHERE id = ?
+SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url, session_version FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -146,12 +148,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.LinkedinUrl,
 		&i.GithubUrl,
 		&i.TelegramUrl,
+		&i.SessionVersion,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url, session_version FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListUsersParams struct {
@@ -183,6 +186,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.LinkedinUrl,
 			&i.GithubUrl,
 			&i.TelegramUrl,
+			&i.SessionVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -200,7 +204,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET email = ?, role = ?, name = ?, avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ?, telegram_url = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url
+RETURNING id, email, password_hash, role, name, created_at, updated_at, last_login_at, avatar, bio, website_url, linkedin_url, github_url, telegram_url, session_version
 `
 
 type UpdateUserParams struct {
@@ -247,6 +251,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.LinkedinUrl,
 		&i.GithubUrl,
 		&i.TelegramUrl,
+		&i.SessionVersion,
 	)
 	return i, err
 }
@@ -266,7 +271,7 @@ func (q *Queries) UpdateUserLastLogin(ctx context.Context, arg UpdateUserLastLog
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec
-UPDATE users SET password_hash = ?, updated_at = ?
+UPDATE users SET password_hash = ?, updated_at = ?, session_version = session_version + 1
 WHERE id = ?
 `
 
@@ -276,7 +281,32 @@ type UpdateUserPasswordParams struct {
 	ID           int64     `json:"id"`
 }
 
+// Updates the user's password hash and bumps session_version, invalidating
+// every existing session for this user. Use this for any actual credential
+// change. For rehash-on-login (parameter migration of an unchanged
+// password) use UpdateUserPasswordHash instead so the user is not logged
+// out by their own login.
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const updateUserPasswordHash = `-- name: UpdateUserPasswordHash :exec
+UPDATE users SET password_hash = ?, updated_at = ?
+WHERE id = ?
+`
+
+type UpdateUserPasswordHashParams struct {
+	PasswordHash string    `json:"password_hash"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	ID           int64     `json:"id"`
+}
+
+// Updates only the password hash representation (e.g., re-hashing with
+// updated Argon2 parameters when the user logs in with their existing
+// password). Does not bump session_version because the credential itself
+// has not changed.
+func (q *Queries) UpdateUserPasswordHash(ctx context.Context, arg UpdateUserPasswordHashParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserPasswordHash, arg.PasswordHash, arg.UpdatedAt, arg.ID)
 	return err
 }

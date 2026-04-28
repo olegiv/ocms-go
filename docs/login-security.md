@@ -126,6 +126,12 @@ The login protection middleware checks headers in this order:
 2. `X-Forwarded-For`
 3. `RemoteAddr` (direct connection)
 
+## Session Invalidation on Password Change
+
+Sessions are bound to a per-user `session_version` counter that bumps on every password change — admin reset, self-service edit, and the demo's automatic admin rotation all go through the same SQL UPDATE that increments it. The login flow snapshots the live value into the session; the auth middleware (`LoadUser`) compares the snapshot against the live row on every protected request and destroys any session whose snapshot is older. The actor's own password change re-snapshots the new value into their current session so they remain logged in; sibling devices/browsers for the same account become unauthenticated on their next request.
+
+The Argon2 parameter-upgrade rehash that runs on a successful login uses a separate query that does **not** bump `session_version`, because the credential is unchanged — only its hash representation. Without this distinction, every login that triggered a rehash would also log the user out.
+
 ## Best Practices
 
 1. **Use strong passwords**: Enforce minimum password requirements

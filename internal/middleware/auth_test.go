@@ -5,9 +5,15 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/alexedwards/scs/sqlite3store"
+	"github.com/alexedwards/scs/v2"
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -180,6 +186,176 @@ func TestGetRequestPath(t *testing.T) {
 			t.Errorf("GetRequestPath() = %q, want %q", path, "/test/path")
 		}
 	})
+}
+
+// newLoadUserTestSetup spins up an in-memory sqlite with the columns LoadUser
+// touches, the sessions table SCS expects, an SCS manager, and a single user
+// row at the requested session_version. Returns the wired-up scs manager,
+// the user row, and the db (for callers that want to mutate state mid-test).
+func newLoadUserTestSetup(t *testing.T, userSessionVersion int64) (*sql.DB, *scs.SessionManager, store.User) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.Exec(`
+		CREATE TABLE users (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			email TEXT NOT NULL UNIQUE,
+			password_hash TEXT NOT NULL DEFAULT '',
+			role TEXT NOT NULL DEFAULT 'admin',
+			name TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_login_at DATETIME,
+			avatar TEXT NOT NULL DEFAULT '',
+			bio TEXT NOT NULL DEFAULT '',
+			website_url TEXT NOT NULL DEFAULT '',
+			linkedin_url TEXT NOT NULL DEFAULT '',
+			github_url TEXT NOT NULL DEFAULT '',
+			telegram_url TEXT NOT NULL DEFAULT '',
+			session_version INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE TABLE sessions (
+			token TEXT PRIMARY KEY,
+			data BLOB NOT NULL,
+			expiry REAL NOT NULL
+		);
+		CREATE INDEX sessions_expiry_idx ON sessions(expiry);
+	`); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+
+	res, err := db.Exec(
+		`INSERT INTO users (email, name, role, session_version) VALUES (?, ?, 'admin', ?)`,
+		"u@example.com", "Test", userSessionVersion,
+	)
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	user, err := store.New(db).GetUserByID(context.Background(), id)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+
+	sm := scs.New()
+	sm.Store = sqlite3store.New(db)
+	sm.Lifetime = time.Hour
+	return db, sm, user
+}
+
+// runWithSeededSession runs the given middleware after seeding the session
+// with a userID and a recorded session_version. Returns the recorder so the
+// caller can assert response code, headers, and body.
+func runWithSeededSession(t *testing.T, sm *scs.SessionManager, mw func(http.Handler) http.Handler, sessionUserID, sessionVersion int64) *httptest.ResponseRecorder {
+	t.Helper()
+
+	final := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if user := GetUser(r); user != nil {
+			w.Header().Set("X-Loaded-User", user.Email)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	wrapped := mw(final)
+
+	chain := sm.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sm.Put(r.Context(), SessionKeyUserID, sessionUserID)
+		sm.Put(r.Context(), SessionKeyUserSessionVersion, sessionVersion)
+		wrapped.ServeHTTP(w, r)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/", nil)
+	rr := httptest.NewRecorder()
+	chain.ServeHTTP(rr, req)
+	return rr
+}
+
+func TestLoadUser_DestroysSessionWhenVersionMismatch(t *testing.T) {
+	db, sm, user := newLoadUserTestSetup(t, 5)
+
+	rr := runWithSeededSession(t, sm, LoadUser(sm, db), user.ID, 3) // session is older than user
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d (redirect to login)", rr.Code, http.StatusSeeOther)
+	}
+	if loc := rr.Header().Get("Location"); loc != "/login" {
+		t.Errorf("Location = %q, want /login", loc)
+	}
+	if got := rr.Header().Get("X-Loaded-User"); got != "" {
+		t.Errorf("user was loaded into context despite stale session: %q", got)
+	}
+}
+
+func TestLoadUser_AllowsRequestWhenVersionMatches(t *testing.T) {
+	db, sm, user := newLoadUserTestSetup(t, 5)
+
+	rr := runWithSeededSession(t, sm, LoadUser(sm, db), user.ID, 5)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("X-Loaded-User"); got != user.Email {
+		t.Errorf("X-Loaded-User = %q, want %q", got, user.Email)
+	}
+}
+
+func TestLoadUser_AllowsPreMigrationSessions(t *testing.T) {
+	// Pre-migration users default to session_version=0 and pre-migration
+	// sessions also have no recorded value (zero). They must remain valid.
+	db, sm, user := newLoadUserTestSetup(t, 0)
+
+	rr := runWithSeededSession(t, sm, LoadUser(sm, db), user.ID, 0)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("X-Loaded-User"); got != user.Email {
+		t.Errorf("X-Loaded-User = %q, want %q", got, user.Email)
+	}
+}
+
+// OptionalLoadUser shares isSessionStale with LoadUser but takes a different
+// branch on stale: continue to the next handler with no user, no redirect.
+
+func TestOptionalLoadUser_DropsSessionWhenVersionMismatch(t *testing.T) {
+	db, sm, user := newLoadUserTestSetup(t, 5)
+
+	rr := runWithSeededSession(t, sm, OptionalLoadUser(sm, db), user.ID, 3)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (must continue without user, never redirect)", rr.Code, http.StatusOK)
+	}
+	if loc := rr.Header().Get("Location"); loc != "" {
+		t.Errorf("Location = %q, want empty (no redirect on optional path)", loc)
+	}
+	if got := rr.Header().Get("X-Loaded-User"); got != "" {
+		t.Errorf("user was loaded into context despite stale session: %q", got)
+	}
+}
+
+func TestOptionalLoadUser_AllowsRequestWhenVersionMatches(t *testing.T) {
+	db, sm, user := newLoadUserTestSetup(t, 5)
+
+	rr := runWithSeededSession(t, sm, OptionalLoadUser(sm, db), user.ID, 5)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("X-Loaded-User"); got != user.Email {
+		t.Errorf("X-Loaded-User = %q, want %q", got, user.Email)
+	}
+}
+
+func TestOptionalLoadUser_AllowsPreMigrationSessions(t *testing.T) {
+	db, sm, user := newLoadUserTestSetup(t, 0)
+
+	rr := runWithSeededSession(t, sm, OptionalLoadUser(sm, db), user.ID, 0)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("X-Loaded-User"); got != user.Email {
+		t.Errorf("X-Loaded-User = %q, want %q", got, user.Email)
+	}
 }
 
 func TestLoadSiteConfig(t *testing.T) {

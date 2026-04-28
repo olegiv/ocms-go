@@ -425,6 +425,72 @@ func TestHasDefaultAdminCredentials(t *testing.T) {
 	}
 }
 
+func TestUpdateUserPassword_BumpsSessionVersion(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	before, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+
+	newHash, err := auth.HashPassword("rotated-password-1234")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if err := q.UpdateUserPassword(ctx, UpdateUserPasswordParams{
+		PasswordHash: newHash,
+		UpdatedAt:    time.Now(),
+		ID:           before.ID,
+	}); err != nil {
+		t.Fatalf("UpdateUserPassword: %v", err)
+	}
+
+	after, err := q.GetUserByID(ctx, before.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if after.SessionVersion != before.SessionVersion+1 {
+		t.Fatalf("session_version = %d, want %d (before+1)", after.SessionVersion, before.SessionVersion+1)
+	}
+}
+
+func TestUpdateUserPasswordHash_DoesNotBumpSessionVersion(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	before, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+
+	rehash, err := auth.HashPassword(DefaultAdminPassword)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if err := q.UpdateUserPasswordHash(ctx, UpdateUserPasswordHashParams{
+		PasswordHash: rehash,
+		UpdatedAt:    time.Now(),
+		ID:           before.ID,
+	}); err != nil {
+		t.Fatalf("UpdateUserPasswordHash: %v", err)
+	}
+
+	after, err := q.GetUserByID(ctx, before.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if after.SessionVersion != before.SessionVersion {
+		t.Fatalf("session_version = %d, want %d (unchanged)", after.SessionVersion, before.SessionVersion)
+	}
+}
+
 // Page CRUD Tests
 
 func TestCreatePage(t *testing.T) {
@@ -597,7 +663,7 @@ func TestPublishPage(t *testing.T) {
 		Title: "Publish Test", Slug: "publish-test", Body: "<p>Content</p>",
 		Status: "draft", AuthorID: user.ID, LanguageCode: langCode,
 		ScheduledAt: scheduledAt,
-		CreatedAt: now, UpdatedAt: now,
+		CreatedAt:   now, UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("CreatePage: %v", err)
@@ -639,7 +705,7 @@ func TestUnpublishPageClearsScheduledAt(t *testing.T) {
 		Status: "published", AuthorID: user.ID, LanguageCode: langCode,
 		ScheduledAt: scheduledAt,
 		PublishedAt: sql.NullTime{Time: publishTime, Valid: true},
-		CreatedAt: now, UpdatedAt: now,
+		CreatedAt:   now, UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("CreatePage: %v", err)

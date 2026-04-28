@@ -344,6 +344,11 @@ func TestRotateDefaultAdminPassword(t *testing.T) {
 		t.Fatalf("Seed: %v", err)
 	}
 
+	before, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail (before): %v", err)
+	}
+
 	password, err := RotateDefaultAdminPassword(ctx, db)
 	if err != nil {
 		t.Fatalf("RotateDefaultAdminPassword: %v", err)
@@ -373,6 +378,12 @@ func TestRotateDefaultAdminPassword(t *testing.T) {
 	}
 	if stillDefault {
 		t.Fatal("expected default password to no longer authenticate after rotation")
+	}
+
+	// Drift guard: rotation must route through the version-bumping query so
+	// any session held under the old password is invalidated on next request.
+	if admin.SessionVersion != before.SessionVersion+1 {
+		t.Fatalf("session_version = %d, want %d (before+1) — rotation must use UpdateUserPassword (which bumps)", admin.SessionVersion, before.SessionVersion+1)
 	}
 }
 

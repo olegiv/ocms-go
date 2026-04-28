@@ -33,8 +33,9 @@ const (
 
 // Session keys for storing user data and preferences.
 const (
-	SessionKeyUserID    = "user_id"
-	SessionKeyAdminLang = "admin_lang"
+	SessionKeyUserID             = "user_id"
+	SessionKeyUserSessionVersion = "user_session_version"
+	SessionKeyAdminLang          = "admin_lang"
 )
 
 // Auth creates middleware that requires authentication.
@@ -76,6 +77,13 @@ func LoadUser(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.Handle
 				return
 			}
 
+			if isSessionStale(sm, r, user) {
+				slog.Info("session invalidated by password change", "user_id", user.ID)
+				_ = sm.Destroy(r.Context())
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+
 			// Add user to context
 			ctx := context.WithValue(r.Context(), ContextKeyUser, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -105,11 +113,28 @@ func OptionalLoadUser(sm *scs.SessionManager, db *sql.DB) func(http.Handler) htt
 				return
 			}
 
+			if isSessionStale(sm, r, user) {
+				_ = sm.Destroy(r.Context())
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Add user to context
 			ctx := context.WithValue(r.Context(), ContextKeyUser, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// isSessionStale reports whether the session's recorded user_session_version
+// is older than the user's current session_version (which is bumped on every
+// real credential change). Sessions issued before the session_version column
+// existed have no recorded value (zero), which matches the column's default
+// for never-rotated users — so they remain valid until the first password
+// change for that user.
+func isSessionStale(sm *scs.SessionManager, r *http.Request, user store.User) bool {
+	sessionVersion := sm.GetInt64(r.Context(), SessionKeyUserSessionVersion)
+	return sessionVersion < user.SessionVersion
 }
 
 // GetUser retrieves the current user from the request context.

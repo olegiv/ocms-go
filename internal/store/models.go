@@ -356,20 +356,21 @@ type Translation struct {
 }
 
 type User struct {
-	ID           int64        `json:"id"`
-	Email        string       `json:"email"`
-	PasswordHash string       `json:"password_hash"`
-	Role         string       `json:"role"`
-	Name         string       `json:"name"`
-	CreatedAt    time.Time    `json:"created_at"`
-	UpdatedAt    time.Time    `json:"updated_at"`
-	LastLoginAt  sql.NullTime `json:"last_login_at"`
-	Avatar       string       `json:"avatar"`
-	Bio          string       `json:"bio"`
-	WebsiteUrl   string       `json:"website_url"`
-	LinkedinUrl  string       `json:"linkedin_url"`
-	GithubUrl    string       `json:"github_url"`
-	TelegramUrl  string       `json:"telegram_url"`
+	ID             int64        `json:"id"`
+	Email          string       `json:"email"`
+	PasswordHash   string       `json:"password_hash"`
+	Role           string       `json:"role"`
+	Name           string       `json:"name"`
+	CreatedAt      time.Time    `json:"created_at"`
+	UpdatedAt      time.Time    `json:"updated_at"`
+	LastLoginAt    sql.NullTime `json:"last_login_at"`
+	Avatar         string       `json:"avatar"`
+	Bio            string       `json:"bio"`
+	WebsiteUrl     string       `json:"website_url"`
+	LinkedinUrl    string       `json:"linkedin_url"`
+	GithubUrl      string       `json:"github_url"`
+	TelegramUrl    string       `json:"telegram_url"`
+	SessionVersion int64        `json:"session_version"`
 }
 
 type Webhook struct {
