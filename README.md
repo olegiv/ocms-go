@@ -1,10 +1,85 @@
-# oCMS
+# ocms-go
 
+> A single-binary Go CMS with HTMX/Alpine.js admin, REST API, themes & modules. SQLite by default — drop onto a server, run the rest.
+
+[![Live demo](https://img.shields.io/badge/demo-ocms--demo.fly.dev-success?logo=fly.io)](https://ocms-demo.fly.dev/)
 [![Go](https://github.com/olegiv/ocms-go/actions/workflows/go.yml/badge.svg)](https://github.com/olegiv/ocms-go/actions/workflows/go.yml)
 [![CodeQL](https://github.com/olegiv/ocms-go/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/olegiv/ocms-go/actions/workflows/github-code-scanning/codeql)
-[![Dependency review](https://github.com/olegiv/ocms-go/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/olegiv/ocms-go/actions/workflows/dependency-review.yml)
+[![Latest release](https://img.shields.io/github/v/release/olegiv/ocms-go)](https://github.com/olegiv/ocms-go/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/olegiv/ocms-go)](https://goreportcard.com/report/github.com/olegiv/ocms-go)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-A lightweight content management system built with Go, featuring a modern admin interface, session-based authentication, SQLite storage, and extensible architecture with themes and modules.
+## Try it
+
+**Live demo:** [ocms-demo.fly.dev](https://ocms-demo.fly.dev/) · **Admin:** [/admin](https://ocms-demo.fly.dev/admin)
+
+Poke around, break things, see how it feels. The demo resets to a clean state every 24 hours (daily cron at 01:00 UTC, plus a catch-up reset on machine wake if Fly auto-stopped the instance during a quiet period). Worst-case staleness: 24h + the idle gap.
+
+Hosted on [Fly.io](https://fly.io) — see [`fly.toml`](fly.toml) and [`docs/demo-deployment.md`](docs/demo-deployment.md) for the full deployment recipe.
+
+## Why ocms-go?
+
+Most modern CMSs are PHP monoliths (WordPress, Drupal), Node-heavy with build steps (Strapi, Ghost), or fully headless and force you to build a frontend (Directus, Sanity). `ocms-go` is what falls out when you take Go's deployment model seriously and write the CMS as a single binary with an opinionated HTMX admin baked in:
+
+- **One binary.** `scp` it to a server, run it. No PHP-FPM, no Node toolchain, no Docker required.
+- **Admin UI included.** HTMX + Alpine.js, server-rendered. No SPA, no build pipeline, no JS framework lock-in.
+- **REST API for headless use.** Bearer-token auth, per-key permissions, rate limiting, source-CIDR allowlists.
+- **Security defaults that aren't opt-in.** Argon2id, CSP with nonces, CSRF, hCaptcha on forms, signed embed-proxy tokens, HMAC-signed webhooks.
+- **Production-tested.** Powers [ocms.tech](https://ocms.tech), [it-digest.info](https://it-digest.info) and [opossum.su](https://opossum.su).
+
+## Quickstart (90 seconds)
+
+```bash
+git clone https://github.com/olegiv/ocms-go.git && cd ocms-go
+make install-hooks && make assets
+OCMS_SESSION_SECRET=$(openssl rand -hex 32) OCMS_DO_SEED=true make dev
+# → http://localhost:8080/admin   admin@example.com / changeme1234
+```
+
+Or with Docker:
+
+```bash
+OCMS_SESSION_SECRET=$(openssl rand -base64 32) OCMS_DO_SEED=true \
+  docker compose up -d
+```
+
+Prerequisites (libvips, sqlc, templ, goose, Dart Sass) — see [Prerequisites](#prerequisites) below.
+
+## How it compares
+
+| Project | Lang | Single binary | Built-in admin | License | Active |
+|---|---|---|---|---|---|
+| **ocms-go** | Go | ✅ | ✅ HTMX | GPL-3.0 | ✅ |
+| [ponzu](https://github.com/ponzu-cms/ponzu) | Go | ✅ | ✅ | BSD-3 | last release 2020 |
+| [emarifer/goCMS](https://github.com/emarifer/goCMS) | Go | ✅ | basic | MIT | ✅ |
+| [gouniverse/cms](https://github.com/gouniverse/cms) | Go | (library) | partial | AGPL-3 | ✅ |
+| [Strapi](https://github.com/strapi/strapi) | Node | ❌ | ✅ | MIT | ✅ |
+| [Ghost](https://github.com/TryGhost/Ghost) | Node | ❌ | ✅ | MIT | ✅ |
+| [WordPress](https://wordpress.org) | PHP | ❌ | ✅ | GPL-2.0 | ✅ |
+
+`ocms-go` targets the gap in the Go CMS ecosystem: actively developed, production-grade, single-binary, with a real admin UI.
+
+## Production users
+
+- **[ocms.tech](https://ocms.tech)** — ocms-go official site
+- **[it-digest.info](https://it-digest.info)** — IT/dev news aggregation
+- **[opossum.su](https://opossum.su)** — feature testbed
+- **[ocms-demo.fly.dev](https://ocms-demo.fly.dev/)** — public demo, deployed on Fly.io with daily auto-reset
+
+Running `ocms-go` in production? [Tell us about it.](https://github.com/olegiv/ocms-go/issues)
+
+## Roadmap
+
+The path to v1.0 is tracked in the [Roadmap to v1.0 issue](https://github.com/olegiv/ocms-go/issues). Headlines:
+
+- RSS / Atom feeds for pages and categories
+- JSON-LD structured data in the theme layer
+- PostgreSQL adapter alongside SQLite
+- ✅ Public demo — live at [ocms-demo.fly.dev](https://ocms-demo.fly.dev/), 24h auto-reset
+
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good first issues](https://github.com/olegiv/ocms-go/issues) list.
+
+---
 
 ## Features
 
