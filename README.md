@@ -211,29 +211,24 @@ curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-am
 ./ocms -version
 ```
 
-First run:
+First run — scaffold a site and start it:
 
 ```bash
-mkdir -p data uploads custom
-
-cat > .env <<EOF
-OCMS_SESSION_SECRET=$(openssl rand -base64 32)
-OCMS_DB_PATH=./data/ocms.db
-OCMS_UPLOADS_DIR=./uploads
-OCMS_CUSTOM_DIR=./custom
-OCMS_SERVER_HOST=localhost
-OCMS_SERVER_PORT=8080
-OCMS_DO_SEED=true
-EOF
-
-./ocms
+./ocms init my-site
+cd my-site
+../ocms serve        # or put ocms on your PATH and run: ocms serve
 ```
+
+`ocms init` creates `my-site/` with a `.env` (including a freshly generated
+`OCMS_SESSION_SECRET`) plus `data/`, `uploads/`, and `custom/` directories.
+`ocms serve` starts the server, reading `./.env` from the current directory.
+Running `ocms` with no command still starts the server, so existing
+systemd/Docker setups are unaffected.
 
 Open `http://localhost:8080/admin/` and log in with
 `admin@example.com` / `changeme1234`. Change the admin email and password
 immediately. Stop the foreground process with `Ctrl+C`, set
-`OCMS_DO_SEED=false` in `.env` or remove the variable, then start `./ocms`
-again for normal runs.
+`OCMS_DO_SEED=false` in `my-site/.env`, then run `serve` again for normal runs.
 
 Keep `OCMS_SESSION_SECRET` stable; regenerating it invalidates active sessions.
 Do not set `OCMS_ENV=production` for this seeded bootstrap run. Production

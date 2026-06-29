@@ -184,7 +184,37 @@ func logSeedingSecuritySignals(ctx context.Context, cfg *config.Config, events *
 	}
 }
 
+// parseCommand routes argv (excluding the program name). A leading "-" or an
+// unknown token keeps the legacy serve behavior, so bare `ocms`, `ocms -version`,
+// and systemd/Docker invocations are unaffected.
+func parseCommand(args []string) (cmd string, rest []string) {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return "serve", args
+	}
+	switch args[0] {
+	case "init":
+		return "init", args[1:]
+	case "serve":
+		return "serve", args[1:]
+	default:
+		return "serve", args
+	}
+}
+
 func main() {
+	// Subcommand dispatch. "init" scaffolds and exits; "serve" (the default)
+	// falls through to the normal flag parsing and run() path below.
+	switch cmd, rest := parseCommand(os.Args[1:]); cmd {
+	case "init":
+		if err := runInit(rest); err != nil {
+			slog.Error("init failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	case "serve":
+		os.Args = append([]string{os.Args[0]}, rest...)
+	}
+
 	// Parse CLI flags
 	showVersion := flag.Bool("version", false, "Show version information")
 	flag.BoolVar(showVersion, "v", false, "Show version information (shorthand)")
@@ -193,7 +223,10 @@ func main() {
 
 	flag.Usage = func() {
 		_, _ = fmt.Fprintf(os.Stderr, "oCMS - Open Content Management System\n\n")
-		_, _ = fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "Usage: %s [command] [options]\n\n", os.Args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "Commands:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  init <dir>    Scaffold a new site directory (.env + data dirs) and exit\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  serve         Start the server (default when no command is given)\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 		_, _ = fmt.Fprintf(os.Stderr, "\nEnvironment Variables:\n")
