@@ -36,7 +36,9 @@ Each site runs on its own port (8081, 8082, ...) behind Nginx reverse proxy.
 
 ```bash
 # Local machine:
-make build-linux-amd64
+mkdir -p bin
+curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
+mv ocms bin/ocms-linux-amd64
 scp bin/ocms-linux-amd64 user@server:/tmp/ocms
 scp scripts/deploy/* user@server:/tmp/ocms-setup/
 
@@ -53,6 +55,8 @@ for script in setup-site.sh deploy-multi.sh backup-multi.sh healthcheck-multi.sh
 done
 sudo systemctl daemon-reload
 ```
+
+For development builds, replace the release download with `make build-linux-amd64`.
 
 **Note:** Core themes (`default`, `developer`) are embedded in the binary. No separate theme deployment is required unless you have custom themes.
 
@@ -115,7 +119,25 @@ If you use self-hosted Dify, replace `api.dify.ai` with your API hostname.
 
 Go to **Websites & Domains → example.com → Apache & nginx Settings → Additional nginx directives** and paste the snippet printed by `setup-site.sh`.
 
-### 5. Start the site
+### 5. Bootstrap the admin account
+
+Fresh binary/server installs need a one-time seeded bootstrap before the
+production service is enabled. Keep the generated `.env` production default
+`OCMS_DO_SEED=false`; override it only for this foreground bootstrap run:
+
+```bash
+cd /var/www/vhosts/example.com/ocms
+sudo -u example_com env OCMS_ENV=development OCMS_DO_SEED=true /opt/ocms/bin/ocms
+```
+
+While the process is running, open `https://example.com/admin/` and log in with:
+- Email: `admin@example.com`
+- Password: `changeme1234`
+
+Change the admin email and password, then stop the foreground process with
+`Ctrl+C`.
+
+### 6. Start the site
 
 **For testing** (manual start/stop via terminal):
 ```bash
@@ -143,14 +165,6 @@ screen -dmS ocms /opt/ocms/bin/ocms
 tmux new-session -d -s ocms '/opt/ocms/bin/ocms'
 ```
 
-### 6. Login
-
-Navigate to `https://example.com/admin/` and login with:
-- Email: `admin@example.com`
-- Password: `changeme1234`
-
-Change the password immediately.
-
 ## ocmsctl Reference
 
 ```
@@ -177,6 +191,12 @@ Use `deploy-binary.sh` for sites that use only embedded themes (no custom conten
 ```bash
 ./scripts/deploy/deploy-binary.sh <server> <instance...> [options]
 
+# Download the latest release binary, then deploy it
+mkdir -p bin
+curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
+mv ocms bin/ocms-linux-amd64
+./scripts/deploy/deploy-binary.sh server.example.com my_site --skip-build
+
 # Single instance
 ./scripts/deploy/deploy-binary.sh server.example.com my_site
 
@@ -189,11 +209,11 @@ Use `deploy-binary.sh` for sites that use only embedded themes (no custom conten
 
 Options:
 - `-u, --user USER` — SSH user (default: `root`)
-- `--skip-build` — skip `make build-linux-amd64`, use existing binary
+- `--skip-build` — skip `make build-linux-amd64`, use existing `bin/ocms-linux-amd64`
 - `--dry-run` — print commands without executing
 
 The script:
-1. Builds `bin/ocms-linux-amd64`
+1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
 2. Backs up current binary on server
 3. Stops all listed instances via `ocmsctl`
 4. Transfers binary via `scp`
@@ -225,14 +245,14 @@ Options:
 - `-g, --group GROUP` — vhost group for chown (default: `psaserv`)
 - `-u, --user USER` — SSH user (default: `root`)
 - `--sync-custom` — force sync custom/ directory even if empty
-- `--skip-build` — skip `make build-linux-amd64`, use existing binary
+- `--skip-build` — skip `make build-linux-amd64`, use existing `bin/ocms-linux-amd64`
 - `--skip-binary` — skip binary build, backup, and transfer (deploy custom content only)
 - `--dry-run` — print commands without executing
 
 Symlinked directories inside `custom/` are followed during deployment. Before syncing, all symlinks are validated: broken symlinks or links that resolve outside `custom/` abort the deploy before the instance is stopped.
 
 The script:
-1. Builds `bin/ocms-linux-amd64`
+1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
 2. Backs up current binary on server
 3. Stops the instance via `ocmsctl`
 4. Transfers binary via `scp`
@@ -247,12 +267,16 @@ For updating all instances on a server:
 
 ```bash
 # Local machine:
-make build-linux-amd64
+mkdir -p bin
+curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
+mv ocms bin/ocms-linux-amd64
 scp bin/ocms-linux-amd64 user@server:/tmp/ocms
 
 # On the server:
 sudo /opt/ocms/deploy-multi.sh /tmp/ocms
 ```
+
+For development builds, replace the release download with `make build-linux-amd64`.
 
 This backs up the current binary, stops all instances, replaces the binary, restarts all instances, and runs health checks. On failure it prints rollback instructions.
 

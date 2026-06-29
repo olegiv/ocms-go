@@ -27,7 +27,14 @@ if ! command -v npm &> /dev/null; then
     echo "Error: npm is not installed."
     exit 1
 fi
-npm install --silent
+# In CI use the immutable lockfile install so package-lock.json is never
+# mutated (a mutation would falsely fail the release "verify generated
+# sources" step); local dev keeps the convenient npm install.
+if [ "${CI:-}" = "true" ] && [ -f package-lock.json ]; then
+    npm ci --silent
+else
+    npm install --silent
+fi
 npm run copy-deps --silent
 echo "  -> $JS_DIR/htmx.min.js"
 echo "  -> $JS_DIR/alpine.min.js"

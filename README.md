@@ -43,7 +43,7 @@ OCMS_SESSION_SECRET=$(openssl rand -base64 32) OCMS_DO_SEED=true \
   docker compose up -d
 ```
 
-Prerequisites (libvips, sqlc, templ, goose, Dart Sass) — see [Prerequisites](#prerequisites) below.
+Source-build prerequisites — see [Prerequisites](#prerequisites) below.
 
 ## How it compares
 
@@ -189,32 +189,64 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 
 ## Prerequisites
 
+Prebuilt release binaries have no external runtime dependencies beyond the operating system. Set `OCMS_SESSION_SECRET` before starting the server; see [Environment Variables](#environment-variables).
+
+Building from source requires:
+
 - Go 1.26 or later
 - [Node.js](https://nodejs.org/) (npm) for frontend dependencies
 - [sqlc](https://sqlc.dev/) for SQL code generation
 - [templ](https://templ.guide/) for type-safe HTML templates
 - [goose](https://github.com/pressly/goose) for database migrations
 - [Dart Sass](https://sass-lang.com/dart-sass) for SCSS compilation
-- [libvips](https://www.libvips.org/) for image processing (required for media library)
-
-### Installing libvips
-
-**macOS:**
-```bash
-brew install vips
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get install libvips-dev
-```
-
-**Fedora:**
-```bash
-sudo dnf install vips-devel
-```
 
 ## Installation
+
+### Prebuilt binary (recommended)
+
+Download the latest release archive for your OS and architecture:
+
+```bash
+curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz
+./ocms -version
+```
+
+First run:
+
+```bash
+mkdir -p data uploads custom
+
+cat > .env <<EOF
+OCMS_SESSION_SECRET=$(openssl rand -base64 32)
+OCMS_DB_PATH=./data/ocms.db
+OCMS_UPLOADS_DIR=./uploads
+OCMS_CUSTOM_DIR=./custom
+OCMS_SERVER_HOST=localhost
+OCMS_SERVER_PORT=8080
+OCMS_DO_SEED=true
+EOF
+
+./ocms
+```
+
+Open `http://localhost:8080/admin/` and log in with
+`admin@example.com` / `changeme1234`. Change the admin email and password
+immediately. Stop the foreground process with `Ctrl+C`, set
+`OCMS_DO_SEED=false` in `.env` or remove the variable, then start `./ocms`
+again for normal runs.
+
+Keep `OCMS_SESSION_SECRET` stable; regenerating it invalidates active sessions.
+Do not set `OCMS_ENV=production` for this seeded bootstrap run. Production
+startup rejects default seeded credentials.
+
+Available release archives:
+
+- `ocms-linux-amd64.tar.gz`
+- `ocms-darwin-arm64.tar.gz`
+
+`go install` is not supported for the CMS binary because Go does not run the frontend asset pipeline before evaluating `//go:embed`.
+
+### Build from source
 
 1. Clone the repository:
    ```bash
@@ -243,6 +275,11 @@ sudo dnf install vips-devel
 5. Build assets (installs npm dependencies and compiles SCSS):
    ```bash
    make assets
+   ```
+
+6. Build the production binary:
+   ```bash
+   make build-prod
    ```
 
 ## Environment Variables
@@ -323,9 +360,9 @@ make run
 | `make restart` | Stop and restart development server |
 | `make build` | Build binary to `bin/ocms` |
 | `make build-prod` | Build optimized binary (stripped, trimmed) |
-| `make build-linux-amd64` | Cross-compile for Linux AMD64 |
-| `make build-darwin-arm64` | Cross-compile for macOS ARM64 |
-| `make build-all-platforms` | Build for Linux AMD64 and macOS ARM64 |
+| `make build-linux-amd64` | Cross-compile no-cgo Linux AMD64 binary |
+| `make build-darwin-arm64` | Cross-compile no-cgo macOS ARM64 binary |
+| `make build-all-platforms` | Build no-cgo Linux AMD64 and macOS ARM64 binaries |
 | `make test` | Run all tests |
 | `make clean` | Remove build artifacts |
 | `make clean-db` | Remove database files |
@@ -393,7 +430,7 @@ Access the admin panel at http://localhost:8080/admin with:
 | `docker compose --profile redis up -d` | Start with Redis caching |
 | `docker compose down` | Stop services |
 | `docker compose logs -f ocms` | View logs |
-| `docker compose pull && docker compose up -d` | Update to latest |
+| `docker compose build --pull ocms && docker compose up -d` | Rebuild local image and restart |
 
 ### Volume Mounts
 
@@ -404,6 +441,10 @@ Access the admin panel at http://localhost:8080/admin with:
 | `./custom` | `/app/custom` | Custom themes and modules |
 
 ### Building the Docker Image
+
+Docker builds use the repository source and generate `web/static/dist` inside the
+builder stage. GitHub release archives are for binary installs and are not used
+by Docker Compose.
 
 ```bash
 # Build with version info

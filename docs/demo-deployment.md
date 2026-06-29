@@ -100,6 +100,10 @@ fly secrets set OCMS_SESSION_SECRET="$(openssl rand -base64 32)" --app ocms-demo
 fly deploy
 ```
 
+Fly deploys with the project Dockerfile. The image build generates
+`web/static/dist` from source, so committed dist files and GitHub release
+archives are not required.
+
 ### Configuration
 
 The `fly.toml` in the project root configures:
