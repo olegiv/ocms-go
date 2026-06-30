@@ -103,6 +103,32 @@ func TestRunInitRefusesNonEmptyDir(t *testing.T) {
 	}
 }
 
+// TestRunInitTightensExistingRoot verifies init enforces owner-only perms on a
+// pre-existing site root. os.MkdirAll leaves an existing directory's mode
+// unchanged, so a user-created 0755 dir would otherwise expose the .env and DB
+// under it.
+func TestRunInitTightensExistingRoot(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "site")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil { // force 0755 regardless of umask
+		t.Fatal(err)
+	}
+
+	if err := runInit([]string{dir}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm&0o077 != 0 {
+		t.Errorf("pre-existing root not tightened: %#o (want owner-only)", perm)
+	}
+}
+
 // TestInitSecretPassesConfig is a drift test: a secret produced by init must
 // always satisfy config.Load. It fails if MinSessionSecretLength or the
 // secret-validation rules change without init keeping pace.

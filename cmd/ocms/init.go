@@ -67,8 +67,14 @@ func runInit(args []string) error {
 	// Create the directory tree (idempotent). The site root is owner-only
 	// because it holds the .env session secret and the SQLite database (with
 	// password hashes); subdirectories are protected by the 0700 root.
+	// MkdirAll does not change the mode of a pre-existing directory, so chmod
+	// the root explicitly to enforce owner-only even when init targets a
+	// directory the user already created (e.g. `mkdir my-site && ocms init`).
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return fmt.Errorf("securing %s: %w", dir, err)
 	}
 	for _, sub := range []string{"data", "uploads", "custom"} {
 		target := filepath.Join(dir, sub)
