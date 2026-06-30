@@ -7,21 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.21.0] - 2026-07-01
 
-- `ocms init <dir>` scaffolds a new site directory (generates `.env` with a
-  fresh session secret plus `data/`, `uploads/`, and `custom/` dirs), and
-  `ocms serve` starts the server. Running `ocms` with no command still serves,
-  so systemd/Docker invocations are unchanged.
+### Added
+- **`ocms init` / `ocms serve` CLI** — `ocms init <dir>` scaffolds a
+  ready-to-run site (a `0600` `.env` with a freshly generated
+  `OCMS_SESSION_SECRET`, plus `data/`, `uploads/`, `custom/` under a `0700`
+  root); `ocms serve` starts the server. Bare `ocms` still serves, so
+  systemd/Docker are unaffected.
+- **Prebuilt release binaries** — pushing a `v*` tag publishes static (no-cgo)
+  `ocms-linux-amd64.tar.gz` and `ocms-darwin-arm64.tar.gz` with
+  `checksums.txt`. Prebuilt binaries need no libvips; `go install` is
+  unsupported (the asset/embed pipeline must run first), so download-and-run is
+  the supported path.
 
 ### Changed
 
 #### Deployment & Operations
-- `scripts/deploy/ocmsctl` detects the active log backend by reading the
-  systemd unit drop-in configuration, so `ocmsctl logs` follows the systemd
-  journal or the configured file log depending on how each site is managed.
-- Restored file-logging support for systemd-managed oCMS instances; the
-  `ocms@<site>.service` path now honours per-site log configuration again.
+- `scripts/deploy/ocmsctl` detects each site's active log backend from its
+  systemd unit drop-in (journal vs. configured file log); restored per-site
+  file logging for `ocms@<site>.service`.
+- `make build-linux-amd64` / `build-darwin-arm64` / `build-all-platforms` now
+  produce static no-cgo binaries.
+
+#### Demo
+- Demo startup rotates the default admin password, skipping rotation when it is
+  already non-default.
+
+### Security
+- Invalidate all active sessions on password change.
+- Harden redirects: validate targets against the current origin and block
+  `//host` protocol-relative bypass in referer redirects.
+- Bump `golang.org/x/net` to v0.56.0 and `golang.org/x/image` to v0.43.0
+  (GO-2026-5025, GO-2026-4961), both reachable from the Markdown and
+  image-processing paths.
+- Fix brace-expansion ReDoS (CVE-2026-45149); bump js-yaml to 4.3.0 in the
+  build toolchain.
+
+### Dependencies
+- Update Go modules, npm dependencies, and swagger-ui-dist to 5.32.5.
 
 ## [0.20.0] - 2026-04-22
 
@@ -1201,7 +1225,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/olegiv/ocms-go/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/olegiv/ocms-go/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/olegiv/ocms-go/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/olegiv/ocms-go/compare/v0.18.0...v0.18.1
