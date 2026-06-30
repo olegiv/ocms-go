@@ -32,6 +32,10 @@ fly deploy
 fly open
 ```
 
+Fly deploys with the project Dockerfile. The image build generates
+`web/static/dist` from source, so committed dist files and GitHub release
+archives are not required.
+
 ## Configuration
 
 ### Environment Variables
@@ -72,7 +76,7 @@ The app uses a single 1GB volume mounted at `/app/data`:
 ./.fly/scripts/deploy.sh --reset
 
 # Or manually:
-# Deploy latest version
+# Deploy current source checkout
 fly deploy
 
 # Deploy with local Docker (if remote builder fails)
@@ -88,6 +92,10 @@ fly status
 # View logs
 fly logs
 ```
+
+`fly deploy` uses Fly's remote builder by default and still follows the same
+source Docker build path; use `--local-only` only when you need to build on the
+current machine.
 
 ### Monitoring
 

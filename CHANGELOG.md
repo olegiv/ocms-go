@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ocms init <dir>` scaffolds a new site directory (generates `.env` with a
+  fresh session secret plus `data/`, `uploads/`, and `custom/` dirs), and
+  `ocms serve` starts the server. Running `ocms` with no command still serves,
+  so systemd/Docker invocations are unchanged.
+
 ### Changed
 
 #### Deployment & Operations

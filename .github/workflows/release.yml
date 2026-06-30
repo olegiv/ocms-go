@@ -1,0 +1,134 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install Dart Sass
+        run: npm install -g sass
+
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.1020
+
+      - name: Build assets
+        run: make assets
+
+      - name: Verify generated sources are current
+        run: |
+          changes="$(git status --short --untracked-files=all -- . ':(exclude)web/static/dist')"
+          if [ -n "$changes" ]; then
+            echo "::error::make assets changed tracked or source-generated files. Run make assets and commit the result before tagging."
+            git status --short --untracked-files=all -- . ':(exclude)web/static/dist'
+            git diff --stat -- . ':(exclude)web/static/dist'
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+        env:
+          OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Vulnerability scan
+        run: govulncheck ./...
+
+      - name: Build release archives
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME}"
+          git_commit="${GITHUB_SHA::7}"
+          build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          ldflags="-s -w -X main.appVersion=${version} -X main.appGitCommit=${git_commit} -X main.appBuildTime=${build_time}"
+
+          mkdir -p release build/release
+
+          while read -r goos goarch archive; do
+            workdir="build/release/${archive}"
+            mkdir -p "${workdir}"
+
+            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build \
+              -ldflags="${ldflags}" \
+              -trimpath \
+              -o "${workdir}/ocms" \
+              ./cmd/ocms
+
+            cp LICENSE README.md "${workdir}/"
+            tar -C "${workdir}" -czf "release/${archive}.tar.gz" ocms LICENSE README.md
+          done <<'TARGETS'
+          linux amd64 ocms-linux-amd64
+          darwin arm64 ocms-darwin-arm64
+          TARGETS
+
+          (cd release && sha256sum *.tar.gz > checksums.txt)
+
+      - name: Prepare release notes
+        run: |
+          set -euo pipefail
+
+          version_no_v="${GITHUB_REF_NAME#v}"
+          mkdir -p release
+
+          awk -v ver="$version_no_v" '
+            $0 ~ "^## \\[" ver "\\]" {inblock=1; next}
+            inblock && /^## \[/ {exit}
+            inblock {print}
+          ' CHANGELOG.md > release/notes.md
+
+          if [ ! -s release/notes.md ]; then
+            echo "::notice::No CHANGELOG section for ${GITHUB_REF_NAME}; falling back to generated notes."
+          fi
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" release/*.tar.gz release/checksums.txt --clobber
+            if [ -s release/notes.md ]; then
+              gh release edit "${GITHUB_REF_NAME}" --notes-file release/notes.md
+            fi
+          else
+            if [ -s release/notes.md ]; then
+              gh release create "${GITHUB_REF_NAME}" release/*.tar.gz release/checksums.txt \
+                --verify-tag \
+                --title "${GITHUB_REF_NAME}" \
+                --notes-file release/notes.md
+            else
+              gh release create "${GITHUB_REF_NAME}" release/*.tar.gz release/checksums.txt \
+                --verify-tag \
+                --title "${GITHUB_REF_NAME}" \
+                --generate-notes
+            fi
+          fi
