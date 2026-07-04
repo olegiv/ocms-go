@@ -22,15 +22,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          git fetch --no-tags origin master
-
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/master; then
             echo "::error::Release tags must point to commits contained in origin/master."
             exit 1
           fi
 
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must match vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
+
           version_no_v="${GITHUB_REF_NAME#v}"
-          if ! awk -v ver="$version_no_v" '$0 ~ "^## \\[" ver "\\]" {found=1} END {exit found ? 0 : 1}' CHANGELOG.md; then
+          if ! awk -v ver="$version_no_v" 'index($0, "## [" ver "]") == 1 {found=1} END {exit found ? 0 : 1}' CHANGELOG.md; then
             echo "::error::CHANGELOG.md must contain a ## [${version_no_v}] section before publishing ${GITHUB_REF_NAME}."
             exit 1
           fi
@@ -127,7 +130,7 @@ jobs:
           mkdir -p release
 
           awk -v ver="$version_no_v" '
-            $0 ~ "^## \\[" ver "\\]" {inblock=1; next}
+            index($0, "## [" ver "]") == 1 {inblock=1; next}
             inblock && /^## \[/ {exit}
             inblock {print}
           ' CHANGELOG.md > release/notes.md
