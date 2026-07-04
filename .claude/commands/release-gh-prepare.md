@@ -195,7 +195,7 @@ If the run is visible, report its status and URL. Also report:
 - CHANGELOG commit SHA on `master`.
 - Pushed tag name.
 - That the release workflow will publish `ocms-linux-amd64.tar.gz`,
-  `ocms-darwin-arm64.tar.gz`, and `checksums.txt`.
+  `ocms-linux-arm64.tar.gz`, `ocms-darwin-arm64.tar.gz`, and `checksums.txt`.
 
 ## Error recovery
 

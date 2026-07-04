@@ -237,6 +237,7 @@ startup rejects default seeded credentials.
 Available release archives:
 
 - `ocms-linux-amd64.tar.gz`
+- `ocms-linux-arm64.tar.gz`
 - `ocms-darwin-arm64.tar.gz`
 
 `go install` is not supported for the CMS binary because Go does not run the frontend asset pipeline before evaluating `//go:embed`.
@@ -356,8 +357,9 @@ make run
 | `make build` | Build binary to `bin/ocms` |
 | `make build-prod` | Build optimized binary (stripped, trimmed) |
 | `make build-linux-amd64` | Cross-compile no-cgo Linux AMD64 binary |
+| `make build-linux-arm64` | Cross-compile no-cgo Linux ARM64 binary |
 | `make build-darwin-arm64` | Cross-compile no-cgo macOS ARM64 binary |
-| `make build-all-platforms` | Build no-cgo Linux AMD64 and macOS ARM64 binaries |
+| `make build-all-platforms` | Build no-cgo Linux AMD64/ARM64 and macOS ARM64 binaries |
 | `make test` | Run all tests |
 | `make clean` | Remove build artifacts |
 | `make clean-db` | Remove database files |
