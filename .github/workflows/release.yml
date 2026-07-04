@@ -1,7 +1,7 @@
 name: Release
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   push:
@@ -9,13 +9,41 @@ on:
       - "v*"
 
 jobs:
-  release:
+  validate:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate release tag
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin master
+
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/master; then
+            echo "::error::Release tags must point to commits contained in origin/master."
+            exit 1
+          fi
+
+          version_no_v="${GITHUB_REF_NAME#v}"
+          if ! awk -v ver="$version_no_v" '$0 ~ "^## \\[" ver "\\]" {found=1} END {exit found ? 0 : 1}' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md must contain a ## [${version_no_v}] section before publishing ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -104,9 +132,26 @@ jobs:
             inblock {print}
           ' CHANGELOG.md > release/notes.md
 
-          if [ ! -s release/notes.md ]; then
-            echo "::notice::No CHANGELOG section for ${GITHUB_REF_NAME}; falling back to generated notes."
-          fi
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: release/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release
 
       - name: Publish GitHub release
         env:
@@ -116,19 +161,10 @@ jobs:
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" release/*.tar.gz release/checksums.txt --clobber
-            if [ -s release/notes.md ]; then
-              gh release edit "${GITHUB_REF_NAME}" --notes-file release/notes.md
-            fi
+            gh release edit "${GITHUB_REF_NAME}" --notes-file release/notes.md
           else
-            if [ -s release/notes.md ]; then
-              gh release create "${GITHUB_REF_NAME}" release/*.tar.gz release/checksums.txt \
-                --verify-tag \
-                --title "${GITHUB_REF_NAME}" \
-                --notes-file release/notes.md
-            else
-              gh release create "${GITHUB_REF_NAME}" release/*.tar.gz release/checksums.txt \
-                --verify-tag \
-                --title "${GITHUB_REF_NAME}" \
-                --generate-notes
-            fi
+            gh release create "${GITHUB_REF_NAME}" release/*.tar.gz release/checksums.txt \
+              --verify-tag \
+              --title "${GITHUB_REF_NAME}" \
+              --notes-file release/notes.md
           fi
