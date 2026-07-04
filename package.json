@@ -12,15 +12,15 @@
     "htmx.org": "^2.0.10",
     "klaro": "^0.7.21",
     "prismjs": "^1.30.0",
-    "swagger-ui-dist": "^5.32.6",
-    "tinymce": "^8.5.1"
+    "swagger-ui-dist": "^5.32.8",
+    "tinymce": "^8.7.0"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.3.0",
-    "tailwindcss": "^4.3.0"
+    "@tailwindcss/cli": "^4.3.2",
+    "tailwindcss": "^4.3.2"
   },
   "overrides": {
-    "brace-expansion": "5.0.6",
+    "brace-expansion": "5.0.7",
     "@babel/core": "7.29.7"
   }
 }
