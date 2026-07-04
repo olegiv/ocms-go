@@ -19,11 +19,13 @@ jobs:
           persist-credentials: false
 
       - name: Validate release tag
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
 
-          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/master; then
-            echo "::error::Release tags must point to commits contained in origin/master."
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/${DEFAULT_BRANCH}"; then
+            echo "::error::Release tags must point to commits contained in origin/${DEFAULT_BRANCH}."
             exit 1
           fi
 
