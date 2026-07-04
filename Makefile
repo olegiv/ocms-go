@@ -1,4 +1,4 @@
-.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
+.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
@@ -66,6 +66,12 @@ build-linux-amd64:
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_DIR)
 
+# Build for Linux ARM64
+build-linux-arm64:
+	@echo "Building $(BINARY_NAME) $(VERSION) for Linux ARM64..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 $(MAIN_DIR)
+
 # Build for macOS ARM64 (Apple Silicon)
 build-darwin-arm64:
 	@echo "Building $(BINARY_NAME) $(VERSION) for macOS ARM64..."
@@ -73,7 +79,7 @@ build-darwin-arm64:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_DIR)
 
 # Build for all platforms
-build-all-platforms: build-linux-amd64 build-darwin-arm64
+build-all-platforms: build-linux-amd64 build-linux-arm64 build-darwin-arm64
 	@echo "All platform builds complete!"
 	@ls -lh $(BUILD_DIR)/$(BINARY_NAME)-*
 
