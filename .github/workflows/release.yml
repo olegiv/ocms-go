@@ -1,5 +1,11 @@
 name: Release
 
+# For tag pushes GitHub runs the workflow file from the tagged commit, so the
+# validation below cannot defend against a malicious tag carrying a modified
+# workflow. Primary enforcement is the "Protect release tags" repository
+# ruleset, which restricts creating v* tags to repository admins. Keep that
+# ruleset active.
+
 permissions:
   contents: read
 
@@ -13,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -35,8 +41,13 @@ jobs:
           fi
 
           version_no_v="${GITHUB_REF_NAME#v}"
-          if ! awk -v ver="$version_no_v" 'index($0, "## [" ver "]") == 1 {found=1} END {exit found ? 0 : 1}' CHANGELOG.md; then
-            echo "::error::CHANGELOG.md must contain a ## [${version_no_v}] section before publishing ${GITHUB_REF_NAME}."
+          if ! awk -v ver="$version_no_v" '
+            index($0, "## [" ver "]") == 1 {inblock=1; next}
+            inblock && /^## \[/ {exit}
+            inblock && NF {found=1}
+            END {exit found ? 0 : 1}
+          ' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md must contain a non-empty ## [${version_no_v}] section before publishing ${GITHUB_REF_NAME}."
             exit 1
           fi
 
@@ -45,18 +56,18 @@ jobs:
     needs: validate
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           cache: npm
@@ -137,8 +148,13 @@ jobs:
             inblock {print}
           ' CHANGELOG.md > release/notes.md
 
+          if [ ! -s release/notes.md ]; then
+            echo "::error::Extracted empty release notes for ${GITHUB_REF_NAME}; CHANGELOG section must have content."
+            exit 1
+          fi
+
       - name: Upload release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-assets
           path: release/
@@ -153,7 +169,7 @@ jobs:
 
     steps:
       - name: Download release assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-assets
           path: release
