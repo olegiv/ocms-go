@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-05
+
 ### Added
 - **Linux ARM64 release binary** — releases now also publish a static (no-cgo)
   `ocms-linux-arm64.tar.gz`; new `make build-linux-arm64` target.
+
+### Security
+- Harden the release workflow: strict `vMAJOR.MINOR.PATCH` tag format, tag
+  validation against the repository default branch, actions pinned to full
+  commit SHAs, and non-empty release notes enforced. Tag creation is
+  restricted to admins via a repository ruleset.
+- Fix @babel/core arbitrary file read (CVE-2026-49356) by pinning a transitive
+  override to 7.29.7; build-toolchain-only dependency, never run by the asset
+  pipeline (Dependabot alert #15).
+
+### Dependencies
+- Update Go modules: chi v5.3.0, go-redis v9.21.0, modernc.org/sqlite v1.53.0,
+  go-sqlite3 v1.14.47, goose v3.27.2, html-to-markdown v2.5.2.
+- Update npm assets: TinyMCE 8.7.0, swagger-ui-dist 5.32.8, Tailwind CSS 4.3.2.
 
 ## [0.21.0] - 2026-07-01
 
@@ -1229,7 +1245,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/olegiv/ocms-go/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/olegiv/ocms-go/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/olegiv/ocms-go/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/olegiv/ocms-go/compare/v0.18.1...v0.19.0
