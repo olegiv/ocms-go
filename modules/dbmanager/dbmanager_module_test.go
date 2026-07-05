@@ -49,6 +49,47 @@ func TestRegisterAdminRoutes(t *testing.T) {
 	// If we get here without panic, routes are registered
 }
 
+// TestRegisterAdminRoutes_RouterGatesNonAdmin asserts the RequireAdmin gate is
+// applied at the router level (M-04), not only inside the handlers. Because the
+// handlers also return 403 for editors, this test distinguishes the two layers
+// by response body: the middleware emits "insufficient permissions" while the
+// handler emits a bare "Forbidden". If the router-level RequireAdmin is removed,
+// the request falls through to the handler and the body assertion fails —
+// catching the drift the handler-level tests cannot.
+func TestRegisterAdminRoutes_RouterGatesNonAdmin(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	router := chi.NewRouter()
+	m.RegisterAdminRoutes(router)
+
+	for _, tc := range []struct {
+		method string
+		target string
+	}{
+		{http.MethodGet, "/dbmanager"},
+		{http.MethodPost, "/dbmanager/execute"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.target, nil)
+		ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, store.User{
+			ID: 2, Email: "editor@example.com", Role: "editor",
+		})
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("%s %s: status = %d; want %d", tc.method, tc.target, w.Code, http.StatusForbidden)
+		}
+		if !strings.Contains(w.Body.String(), "insufficient permissions") {
+			t.Errorf("%s %s: body = %q; want router-level RequireAdmin denial (\"insufficient permissions\")",
+				tc.method, tc.target, w.Body.String())
+		}
+	}
+}
+
 // ============================================================================
 // formatAny: cover all type branches
 // ============================================================================

@@ -6,6 +6,7 @@ package webhook
 import (
 	"context"
 	"net"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,45 @@ func setWebhookHostPolicyForTest(t *testing.T, raw string, required bool) {
 		_ = ConfigureAllowedHosts("")
 		SetRequireAllowedHosts(false)
 	})
+}
+
+// TestHTTPClientCheckRedirect_ReChecksAllowlist asserts the shared webhook HTTP
+// client re-applies the destination-host allowlist on every redirect hop
+// (finding M-01). Without this, a webhook whose approved destination later
+// 302-redirects to a non-allowlisted public host would leak the signing secret
+// and any admin-configured custom headers (Go strips only Authorization/Cookie
+// across hosts). Raw public IPs are used so ValidateWebhookURL short-circuits
+// without DNS resolution, keeping the test deterministic and network-free.
+func TestHTTPClientCheckRedirect_ReChecksAllowlist(t *testing.T) {
+	setWebhookHostPolicyForTest(t, "8.8.8.8", true)
+
+	mkReq := func(rawURL string) *http.Request {
+		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+		if err != nil {
+			t.Fatalf("NewRequest(%q): %v", rawURL, err)
+		}
+		return req
+	}
+	via := []*http.Request{mkReq("https://8.8.8.8/webhook")}
+
+	// Redirect to a non-allowlisted public host must be blocked.
+	if err := httpClient.CheckRedirect(mkReq("https://1.1.1.1/evil"), via); err == nil {
+		t.Error("CheckRedirect permitted a redirect to non-allowlisted host 1.1.1.1; want blocked")
+	}
+
+	// Redirect to an allowlisted host must still be permitted.
+	if err := httpClient.CheckRedirect(mkReq("https://8.8.8.8/next"), via); err != nil {
+		t.Errorf("CheckRedirect blocked allowlisted host 8.8.8.8: %v", err)
+	}
+
+	// The redirect-count cap must keep firing independently of the allowlist.
+	tooMany := make([]*http.Request, 10)
+	for i := range tooMany {
+		tooMany[i] = mkReq("https://8.8.8.8/loop")
+	}
+	if err := httpClient.CheckRedirect(mkReq("https://8.8.8.8/loop"), tooMany); err == nil {
+		t.Error("CheckRedirect permitted an 11th redirect; want capped at 10")
+	}
 }
 
 func TestGenerateSignature(t *testing.T) {
