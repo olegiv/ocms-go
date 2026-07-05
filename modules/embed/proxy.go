@@ -62,6 +62,13 @@ type embedProxySignedTokenClaims struct {
 	Nonce  string `json:"nonce"`
 }
 
+// upstreamHostValidatorCtxKey keys a per-request upstream-host allowlist
+// validator carried into difyProxyHTTPClient.CheckRedirect. The proxy client is
+// a package-level singleton with no reference to the *Module that owns the
+// allowlist (OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS), so the validator travels on the
+// request context, which net/http propagates to redirect follow-up requests.
+type upstreamHostValidatorCtxKey struct{}
+
 var difyProxyHTTPClient = &http.Client{
 	Timeout: difyProxyTimeout,
 	Transport: &http.Transport{
@@ -79,6 +86,14 @@ var difyProxyHTTPClient = &http.Client{
 		}
 		if err := util.ValidateWebhookURL(req.URL.String()); err != nil {
 			return fmt.Errorf("redirect blocked: %w", err)
+		}
+		// Re-check the upstream-host allowlist on every hop (finding L-01).
+		// The SSRF check above blocks private IPs, but a redirect to a
+		// non-allowlisted *public* host would otherwise still be followed.
+		if validate, ok := req.Context().Value(upstreamHostValidatorCtxKey{}).(func(string) bool); ok && validate != nil {
+			if !validate(req.URL.Hostname()) {
+				return fmt.Errorf("redirect blocked: upstream host %q not permitted by OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", req.URL.Hostname())
+			}
 		}
 		return nil
 	},
@@ -327,6 +342,9 @@ func (m *Module) proxyDifyRequest(
 
 	ctx, cancel := context.WithTimeout(r.Context(), difyProxyTimeout)
 	defer cancel()
+	// Carry the module's upstream-host allowlist into CheckRedirect so redirect
+	// hops are re-validated against OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS (L-01).
+	ctx = context.WithValue(ctx, upstreamHostValidatorCtxKey{}, m.isUpstreamHostAllowed)
 
 	var requestBody io.Reader
 	if body != nil {

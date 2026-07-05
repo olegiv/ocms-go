@@ -4,6 +4,7 @@
 package embed
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,46 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 )
+
+// TestDifyProxyCheckRedirect_ReChecksUpstreamAllowlist asserts the shared Dify
+// proxy HTTP client re-applies the upstream-host allowlist on every redirect
+// hop (finding L-01). The allowlist is module-scoped and reaches the
+// package-level client via the request context. Raw public IPs are used so
+// ValidateWebhookURL short-circuits without DNS, making the allowlist the sole
+// decider and keeping the test deterministic and network-free.
+func TestDifyProxyCheckRedirect_ReChecksUpstreamAllowlist(t *testing.T) {
+	mod := New()
+	mod.allowedUpstreamHosts = map[string]struct{}{"8.8.8.8": {}}
+
+	ctx := context.WithValue(context.Background(), upstreamHostValidatorCtxKey{}, mod.isUpstreamHostAllowed)
+	mkReq := func(rawURL string) *http.Request {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			t.Fatalf("NewRequestWithContext(%q): %v", rawURL, err)
+		}
+		return req
+	}
+	via := []*http.Request{mkReq("https://8.8.8.8/v1/chat")}
+
+	// Redirect to a non-allowlisted public host must be blocked.
+	if err := difyProxyHTTPClient.CheckRedirect(mkReq("https://1.1.1.1/evil"), via); err == nil {
+		t.Error("CheckRedirect permitted a redirect to non-allowlisted host 1.1.1.1; want blocked")
+	}
+
+	// Redirect to an allowlisted host must still be permitted.
+	if err := difyProxyHTTPClient.CheckRedirect(mkReq("https://8.8.8.8/next"), via); err != nil {
+		t.Errorf("CheckRedirect blocked allowlisted host 8.8.8.8: %v", err)
+	}
+
+	// The redirect-count cap must keep firing independently of the allowlist.
+	tooMany := make([]*http.Request, 5)
+	for i := range tooMany {
+		tooMany[i] = mkReq("https://8.8.8.8/loop")
+	}
+	if err := difyProxyHTTPClient.CheckRedirect(mkReq("https://8.8.8.8/loop"), tooMany); err == nil {
+		t.Error("CheckRedirect permitted a 6th redirect; want capped at 5")
+	}
+}
 
 func TestEmbedClientIP(t *testing.T) {
 	t.Run("uses remote address when peer is untrusted", func(t *testing.T) {

@@ -119,6 +119,15 @@ func (c Config) GeoIPEnabled() bool {
 // AES-256 requires 32 bytes minimum for secure encryption.
 const MinSessionSecretLength = 32
 
+// MinProductionSessionSecretDistinctChars is the minimum number of distinct
+// characters a session secret must contain to start in production. Real random
+// secrets clear this comfortably — 64-char `openssl rand -hex 32` has ~15-16
+// distinct characters, base64 of 32 bytes has ~30+ — while degenerate secrets
+// (a single repeated character, "abab…") fall far below it. Distinct-character
+// count is used instead of the dev-mode character-class heuristic because the
+// latter false-positives on a perfectly strong all-lowercase hex secret.
+const MinProductionSessionSecretDistinctChars = 8
+
 // MaxAPIKeyTTLDays is the maximum allowed API key max TTL policy window.
 const MaxAPIKeyTTLDays = 365
 
@@ -186,13 +195,40 @@ func Load() (*Config, error) {
 			"generate a secure secret with: openssl rand -base64 32")
 	}
 
-	// Warn about low-entropy secrets
+	// Low-entropy secrets: advisory in development, enforced in production.
+	// The dev warning uses character-class diversity (which nudges toward a
+	// base64 secret); production enforcement uses distinct-character count,
+	// which does not false-positive on a strong all-lowercase hex secret.
 	if !hasMinimumEntropy(cfg.SessionSecret) {
 		slog.Warn("OCMS_SESSION_SECRET has low character diversity; " +
 			"consider generating a random secret with: openssl rand -base64 32")
 	}
+	if cfg.Env == "production" {
+		if distinct := countDistinctChars(cfg.SessionSecret); distinct < MinProductionSessionSecretDistinctChars {
+			return nil, fmt.Errorf("OCMS_SESSION_SECRET has insufficient entropy for production "+
+				"(only %d distinct characters, need at least %d); "+
+				"generate a secure secret with: openssl rand -base64 32",
+				distinct, MinProductionSessionSecretDistinctChars)
+		}
+	}
 
 	return cfg, nil
+}
+
+// countDistinctChars returns the number of distinct bytes in s. It is a
+// deliberately simple, false-positive-resistant proxy for entropy: any random
+// secret (hex, base64, or raw) contains many distinct bytes, while a degenerate
+// secret (repeated character or short repeating pattern) contains few.
+func countDistinctChars(s string) int {
+	var seen [256]bool
+	distinct := 0
+	for i := 0; i < len(s); i++ {
+		if !seen[s[i]] {
+			seen[s[i]] = true
+			distinct++
+		}
+	}
+	return distinct
 }
 
 func applyProductionSecurityDefaults(cfg *Config) {
