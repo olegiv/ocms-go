@@ -283,6 +283,32 @@ func TestAuditRequiredSuspiciousPageHTMLPosture_AllowsCleanPages(t *testing.T) {
 	}
 }
 
+// TestAuditRequiredSuspiciousPageHTMLPosture_MatchesRuntimeBlocker locks the
+// startup audit to the same detector as the save/API blocker
+// (security.DetectSuspiciousHTMLTokens). Each payload is caught by the expanded
+// blocker (M-02) but was NOT matched by the previous hard-coded SQL LIKE
+// predicates, so this fails on the pre-fix audit and passes after it reuses the
+// detector — preventing the two from drifting apart again.
+func TestAuditRequiredSuspiciousPageHTMLPosture_MatchesRuntimeBlocker(t *testing.T) {
+	payloads := []string{
+		`<button onclick=alert(1)>x</button>`, // structural on* handler
+		`<div onmouseover=alert(1)>x</div>`,   // another on* handler
+		`<object data="evil.swf">`,            // newly-listed dangerous element
+		`<embed src="evil">`,                  // newly-listed dangerous element
+	}
+	for _, body := range payloads {
+		t.Run(body, func(t *testing.T) {
+			db := newPolicyTestDB(t)
+			if _, err := db.Exec(`INSERT INTO pages (body) VALUES (?)`, body); err != nil {
+				t.Fatalf("inserting page: %v", err)
+			}
+			if err := auditRequiredSuspiciousPageHTMLPosture(context.Background(), db); err == nil {
+				t.Errorf("expected startup audit to reject page body %q (must match runtime blocker)", body)
+			}
+		})
+	}
+}
+
 func TestAuditRequiredEmbedHTTPSPosture_RejectsNonHTTPSEndpoint(t *testing.T) {
 	db := newPolicyTestDB(t)
 

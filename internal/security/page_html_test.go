@@ -114,6 +114,14 @@ func TestDetectSuspiciousHTMLTokens(t *testing.T) {
 		// not end the tag scan early and hide a later on* handler.
 		{"quoted-gt evasion (double)", `<img alt=">" onerror=alert(1)>`, []string{"on*="}},
 		{"quoted-gt evasion (single)", `<img alt='>' onerror=alert(1)>`, []string{"on*="}},
+		// No-space-after-quote (Codex review round 2): a handler jammed directly
+		// against a closing quote is a fresh attribute a browser executes, and
+		// must still be caught.
+		{"handler after double quote", `<img src="x"onerror=alert(1)>`, []string{"on*="}},
+		{"handler after single quote", `<a href='/x'onmouseover=alert(1)>y</a>`, []string{"on*="}},
+		{"handler after quoted title", `<div title="x"onload=alert(1)>y</div>`, []string{"on*="}},
+		// Benign framework attributes that are NOT on<letter> handlers stay clean.
+		{"htmx hx-on not a handler", `<button hx-on:click="x">y</button>`, nil},
 	}
 
 	for _, tt := range tests {

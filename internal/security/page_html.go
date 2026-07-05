@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	"github.com/microcosm-cc/bluemonday"
+	"golang.org/x/net/html"
 )
 
 // SuspiciousPageHTMLTokens lists case-insensitive substrings whose presence in
 // user-supplied page HTML is a strong signal of an injection attempt. Together
-// with EventHandlerAttrPattern and JavascriptURIPattern it backs the
+// with hasEventHandlerAttr and JavascriptURIPattern it backs the
 // OCMS_BLOCK_SUSPICIOUS_PAGE_HTML pre-filter.
 //
 // This is deliberately a COARSE early-warning pre-filter, never a sanitizer: it
@@ -20,9 +21,9 @@ import (
 // sole defense. The authoritative control is SanitizePageHTML
 // (OCMS_SANITIZE_PAGE_HTML), a bluemonday allowlist that strips ALL disallowed
 // elements and every on* event-handler attribute regardless of name. Because
-// inline event handlers are matched structurally by EventHandlerAttrPattern,
-// this list only enumerates dangerous *elements* and script-bearing attributes
-// that do not rely on an on* handler.
+// inline event handlers are matched by hasEventHandlerAttr, this list only
+// enumerates dangerous *elements* and script-bearing attributes that do not
+// rely on an on* handler.
 var SuspiciousPageHTMLTokens = []string{
 	"<script",
 	"<iframe",
@@ -33,19 +34,36 @@ var SuspiciousPageHTMLTokens = []string{
 	"srcdoc=",
 }
 
-// EventHandlerAttrPattern matches an inline on* event-handler attribute inside a
-// start tag (e.g. `<img ... onerror=`, `<button autofocus onfocus=`,
-// `<svg/onload=`). Matching the whole on<name>= shape covers the open-ended set
-// of handler names (onclick, onfocus, onmouseover, onanimationstart, ontoggle,
-// …) that a fixed token list cannot keep up with, while anchoring to a start
-// tag and an attribute-name boundary ([\s/]) avoids false positives on prose
-// such as "switch it on = off".
-//
-// The tag interior is scanned quote-aware — `"[^"]*"` / `'[^']*'` consume
-// quoted attribute values whole — so a `>` inside a quoted value (the only way
-// to place one inside a start tag) does not prematurely end the scan. Without
-// this, `<img alt=">" onerror=alert(1)>` would slip past the pre-filter.
-var EventHandlerAttrPattern = regexp.MustCompile(`(?i)<[a-z](?:"[^"]*"|'[^']*'|[^>"'])*[\s/]on[a-z]+\s*=`)
+// hasEventHandlerAttr reports whether body contains an element carrying an
+// inline on* event-handler attribute (onclick, onerror, onload, onfocus,
+// onanimationstart, …). It tokenizes the HTML so attributes are delimited
+// exactly as a browser parses them, rather than matching raw bytes: a
+// byte-level regex misses handlers that are separated from the previous
+// attribute only by a closing quote (`<img src="x"onerror=…>`) or hidden behind
+// a quoted `>` (`<img alt=">" onerror=…>`) — both of which browsers execute. The
+// handler-name set is open-ended, so a fixed token list cannot keep up; the
+// tokenizer covers every `on<letter>…` attribute name.
+func hasEventHandlerAttr(body string) bool {
+	z := html.NewTokenizer(strings.NewReader(body))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			// io.EOF or a tokenizer error: nothing more to inspect.
+			return false
+		case html.StartTagToken, html.SelfClosingTagToken:
+			_, hasAttr := z.TagName()
+			for hasAttr {
+				var key []byte
+				key, _, hasAttr = z.TagAttr()
+				// TagAttr lowercases keys. Match on<letter>… (e.g. onclick) but
+				// not "on" alone or "on-" so we mirror the on[a-z]+ shape.
+				if len(key) > 2 && key[0] == 'o' && key[1] == 'n' && key[2] >= 'a' && key[2] <= 'z' {
+					return true
+				}
+			}
+		}
+	}
+}
 
 // JavascriptURIPattern matches javascript: in attribute contexts only,
 // including HTML-entity-encoded leading whitespace bypasses (tab, LF, VT,
@@ -97,7 +115,7 @@ func DetectSuspiciousHTMLTokens(body string) []string {
 			matches = append(matches, token)
 		}
 	}
-	if EventHandlerAttrPattern.MatchString(body) {
+	if hasEventHandlerAttr(body) {
 		matches = append(matches, "on*=")
 	}
 	if JavascriptURIPattern.MatchString(body) {
