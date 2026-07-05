@@ -40,7 +40,12 @@ var SuspiciousPageHTMLTokens = []string{
 // …) that a fixed token list cannot keep up with, while anchoring to a start
 // tag and an attribute-name boundary ([\s/]) avoids false positives on prose
 // such as "switch it on = off".
-var EventHandlerAttrPattern = regexp.MustCompile(`(?i)<[a-z][^>]*[\s/]on[a-z]+\s*=`)
+//
+// The tag interior is scanned quote-aware — `"[^"]*"` / `'[^']*'` consume
+// quoted attribute values whole — so a `>` inside a quoted value (the only way
+// to place one inside a start tag) does not prematurely end the scan. Without
+// this, `<img alt=">" onerror=alert(1)>` would slip past the pre-filter.
+var EventHandlerAttrPattern = regexp.MustCompile(`(?i)<[a-z](?:"[^"]*"|'[^']*'|[^>"'])*[\s/]on[a-z]+\s*=`)
 
 // JavascriptURIPattern matches javascript: in attribute contexts only,
 // including HTML-entity-encoded leading whitespace bypasses (tab, LF, VT,

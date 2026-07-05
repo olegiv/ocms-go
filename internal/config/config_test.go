@@ -299,14 +299,30 @@ func TestLoad_RejectsLowEntropySecretInProduction(t *testing.T) {
 	}
 }
 
+// TestLoad_RejectsRepeatedPatternSecretInProduction covers the Codex refinement
+// to L-06: a repeated block clears the distinct-character floor (8 distinct
+// bytes here) but is trivially guessable, so production must still reject it.
+func TestLoad_RejectsRepeatedPatternSecretInProduction(t *testing.T) {
+	os.Clearenv()
+	// "abcdefgh" repeated 4x — 8 distinct chars (passes the distinct floor) but
+	// a short repeating pattern.
+	setEnv(t, "OCMS_SESSION_SECRET", "abcdefghabcdefghabcdefghabcdefgh")
+	setProductionRequiredEnv(t)
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() should reject a repeated-pattern session secret in production")
+	}
+}
+
 // TestLoad_AllowsHexSecretInProduction guards against a false positive: a strong
 // all-lowercase hex secret has only two character classes (so it trips the
-// dev-mode advisory heuristic) but plenty of distinct characters, and must be
-// accepted in production.
+// dev-mode advisory heuristic) but plenty of distinct characters and no
+// repeating structure, and must be accepted in production.
 func TestLoad_AllowsHexSecretInProduction(t *testing.T) {
 	os.Clearenv()
-	// `openssl rand -hex 32`-style: 64 hex chars, 16 distinct, 2 char classes.
-	setEnv(t, "OCMS_SESSION_SECRET", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	// A genuinely non-repeating `openssl rand -hex 32`-style secret: 64 hex
+	// chars, 16 distinct, no short period (unlike a repeated-block pattern).
+	setEnv(t, "OCMS_SESSION_SECRET", "3f9a2b8c1d7e4056af91b2c3d4e5f6a70b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e")
 	setProductionRequiredEnv(t)
 
 	if _, err := Load(); err != nil {
@@ -339,6 +355,28 @@ func TestCountDistinctChars(t *testing.T) {
 	for _, tt := range tests {
 		if got := countDistinctChars(tt.in); got != tt.want {
 			t.Errorf("countDistinctChars(%q) = %d, want %d", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestIsRepeatedPattern(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"a", false},
+		{"abcdefgh", false}, // single block, not repeated
+		{"3f9a2b8c1d7e4056af91b2c3d4e5f6a7", false}, // random-ish, no short period
+		{"abab", true},                             // "ab" x2
+		{"abcabcab", true},                         // "abc" x2.67 (period 3 <= 4)
+		{"abcdefghabcdefgh", true},                 // "abcdefgh" x2
+		{"abcdefghabcdefghabcdefghabcdefgh", true}, // "abcdefgh" x4
+		{"aaaa", true},                             // "a" x4
+	}
+	for _, tt := range tests {
+		if got := isRepeatedPattern(tt.in); got != tt.want {
+			t.Errorf("isRepeatedPattern(%q) = %v, want %v", tt.in, got, tt.want)
 		}
 	}
 }

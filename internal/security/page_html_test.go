@@ -110,6 +110,10 @@ func TestDetectSuspiciousHTMLTokens(t *testing.T) {
 		{"iframe srcdoc", `<iframe srcdoc="&lt;script&gt;">`, []string{"<iframe", "srcdoc="}},
 		// False-positive guard: "on = " in prose (not an attribute) is clean.
 		{"prose on= not an attr", `<p>switch it on = off later</p>`, nil},
+		// Quote-aware scan (Codex): a `>` inside a quoted attribute value must
+		// not end the tag scan early and hide a later on* handler.
+		{"quoted-gt evasion (double)", `<img alt=">" onerror=alert(1)>`, []string{"on*="}},
+		{"quoted-gt evasion (single)", `<img alt='>' onerror=alert(1)>`, []string{"on*="}},
 	}
 
 	for _, tt := range tests {
