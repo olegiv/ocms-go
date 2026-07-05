@@ -180,6 +180,61 @@ func TestSafeCSS_RendersThroughTemplate(t *testing.T) {
 	}
 }
 
+func TestSanitizeFooterHTML(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		check func(t *testing.T, got string)
+	}{
+		{
+			name:  "keeps anchor and safe href",
+			input: `Read our <a href="https://example.com/privacy">privacy policy</a>.`,
+			check: func(t *testing.T, got string) {
+				if !stringContains(got, `<a href="https://example.com/privacy"`) {
+					t.Fatalf("expected sanitized output to keep link, got %q", got)
+				}
+			},
+		},
+		{
+			name:  "strips script tags",
+			input: `Hi<script>alert(1)</script> there`,
+			check: func(t *testing.T, got string) {
+				if stringContains(got, "<script") {
+					t.Fatalf("expected script to be removed, got %q", got)
+				}
+			},
+		},
+		{
+			name:  "strips javascript href",
+			input: `<a href="javascript:alert(1)">click</a>`,
+			check: func(t *testing.T, got string) {
+				if stringContains(got, "javascript:") {
+					t.Fatalf("expected javascript URL to be removed, got %q", got)
+				}
+			},
+		},
+		{
+			name:  "strips non-allowlisted tags",
+			input: `Safe <strong>bold</strong> text`,
+			check: func(t *testing.T, got string) {
+				if stringContains(got, "<strong>") {
+					t.Fatalf("expected strong tag to be removed, got %q", got)
+				}
+				if !stringContains(got, "bold") {
+					t.Fatalf("expected text content to survive, got %q", got)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := string(sanitizeFooterHTML(tt.input))
+			tt.check(t, got)
+		})
+	}
+}
+
 func stringContains(haystack, needle string) bool {
 	return bytes.Contains([]byte(haystack), []byte(needle))
 }
