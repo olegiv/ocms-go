@@ -1084,7 +1084,6 @@ templ FormsSubmissionViewPage(pc *PageContext, data SubmissionViewViewData) {
 				Attributes: templ.Attributes{
 					"hx-delete": fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, data.SubmissionID),
 					"hx-confirm": pc.T("forms.confirm_delete_submission"),
-					"hx-redirect": fmt.Sprintf("/admin/forms/%d/submissions", data.FormID),
 				},
 			}) {
 				{ pc.T("btn.delete") }

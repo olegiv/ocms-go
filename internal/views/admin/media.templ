@@ -228,7 +228,7 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 				</ul>
 				<!-- New Folder Form -->
 				<div class="new-folder-form" x-show="showNewFolder" x-cloak>
-					<form hx-post="/admin/media/folders" hx-target="#folder-list" hx-swap="beforeend" @htmx:after-request="showNewFolder = false; newFolderName = ''">
+					<form hx-post="/admin/media/folders" hx-target="#folder-list" hx-swap="beforeend" @htmx:after:request="showNewFolder = false; newFolderName = ''">
 						@input.Input(input.Props{
 							Name:        "name",
 							Type:        input.TypeText,

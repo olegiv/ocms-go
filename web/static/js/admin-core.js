@@ -349,34 +349,40 @@ function initBulkScopes() {
 initBulkScopes();
 
 // HTMX loading state handlers
-document.body.addEventListener('htmx:beforeRequest', function(e) {
+document.body.addEventListener('htmx:before:request', function(e) {
     // Add loading class to buttons
-    const trigger = e.detail.elt;
-    if (trigger.tagName === 'BUTTON' || trigger.classList.contains('btn')) {
+    const trigger = e.detail.ctx.sourceElement;
+    if (trigger && (trigger.tagName === 'BUTTON' || trigger.classList.contains('btn'))) {
         trigger.classList.add('btn-loading');
     }
 });
 
-document.body.addEventListener('htmx:afterRequest', function(e) {
+// finally:request fires after success, HTTP error and network failure alike
+document.body.addEventListener('htmx:finally:request', function(e) {
     // Remove loading class from buttons
-    const trigger = e.detail.elt;
-    if (trigger.tagName === 'BUTTON' || trigger.classList.contains('btn')) {
+    const trigger = e.detail.ctx.sourceElement;
+    if (trigger && (trigger.tagName === 'BUTTON' || trigger.classList.contains('btn'))) {
         trigger.classList.remove('btn-loading');
     }
 });
 
-// HTMX error response handler - show error messages as alerts
-document.body.addEventListener('htmx:responseError', function(e) {
-    const xhr = e.detail.xhr;
+// HTMX error response handler (HTTP >= 400) - show error messages as alerts
+document.body.addEventListener('htmx:response:error', function(e) {
+    const text = e.detail.ctx.text;
     let message = 'An error occurred';
 
     // Try to get error message from response body
-    if (xhr.responseText && xhr.responseText.trim()) {
-        message = xhr.responseText.trim();
+    if (text && text.trim()) {
+        message = text.trim();
     }
 
     // Show error alert
     showToast(message, 'error');
+});
+
+// Network-level failures (fetch rejection, timeout)
+document.body.addEventListener('htmx:error', function() {
+    showToast('Request failed', 'error');
 });
 
 // Toast notification helper

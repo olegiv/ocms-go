@@ -94,8 +94,6 @@ templ frontendBaseLayout(base BaseTemplateData) {
 				@templ.Raw(string(base.ModuleBodyTopHTML))
 			}
 			{ children... }
-			<!-- HTMX -->
-			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js"></script>
 			<!-- Alpine.js -->
 			<script nonce={ templ.GetNonce(ctx) } defer src="/static/dist/js/alpine.min.js"></script>
 			<!-- Prism.js syntax highlighting -->

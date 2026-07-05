@@ -46,12 +46,13 @@ templ AdminLayout(pc *PageContext) {
 				</main>
 			</div>
 		</div>
-		<!-- HTMX -->
-		<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js" integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz" crossorigin="anonymous"></script>
+		<!-- HTMX (htmx 2 error semantics: never swap 4xx/5xx response bodies) -->
+		<meta name="htmx-config" content={ `{"noSwap": [204, 304, "4xx", "5xx"]}` }/>
+		<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js" integrity="sha384-5dnhUXCt1hXGvYrjAnKwgNX3I8xtIJiW6eIHIbeo7oWyXv2XpWYC/rl+ZiWfuYO5" crossorigin="anonymous"></script>
 		<!-- Alpine.js Sort Plugin -->
 		<script nonce={ templ.GetNonce(ctx) } defer src="/static/dist/js/alpine-sort.min.js"></script>
 		<!-- Alpine.js -->
-		<script defer nonce={ templ.GetNonce(ctx) } src="/static/dist/js/alpine.min.js" integrity="sha384-WPtu0YHhJ3arcykfnv1JgUffWDSKRnqnDeTpJUbOc2os2moEmLkIdaeR0trPN4be" crossorigin="anonymous"></script>
+		<script defer nonce={ templ.GetNonce(ctx) } src="/static/dist/js/alpine.min.js" integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L" crossorigin="anonymous"></script>
 		<!-- Admin core utilities -->
 		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/admin-core.js") }></script>
 		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/media-dropzone.js") }></script>
