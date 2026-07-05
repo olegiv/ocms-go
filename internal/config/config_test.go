@@ -271,6 +271,116 @@ func TestLoad_RejectSeedInProduction(t *testing.T) {
 	}
 }
 
+// setProductionRequiredEnv satisfies the allowlist/proxy flags that default to
+// required in production, so Load() reaches the session-secret entropy check
+// rather than failing earlier on an unrelated missing value.
+func setProductionRequiredEnv(t *testing.T) {
+	t.Helper()
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
+	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
+	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
+	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai")
+	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com")
+}
+
+// TestLoad_RejectsLowEntropySecretInProduction covers finding L-06: a
+// sufficiently-long but degenerate secret (few distinct characters) must block
+// startup in production rather than only logging a warning.
+func TestLoad_RejectsLowEntropySecretInProduction(t *testing.T) {
+	os.Clearenv()
+	// 32 bytes, only 2 distinct characters — passes length and known-weak
+	// checks but is far below the production distinct-character floor.
+	setEnv(t, "OCMS_SESSION_SECRET", "abababababababababababababababab")
+	setProductionRequiredEnv(t)
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() should reject a low-entropy session secret in production")
+	}
+}
+
+// TestLoad_RejectsRepeatedPatternSecretInProduction covers the Codex refinement
+// to L-06: a repeated block clears the distinct-character floor (8 distinct
+// bytes here) but is trivially guessable, so production must still reject it.
+func TestLoad_RejectsRepeatedPatternSecretInProduction(t *testing.T) {
+	os.Clearenv()
+	// "abcdefgh" repeated 4x — 8 distinct chars (passes the distinct floor) but
+	// a short repeating pattern.
+	setEnv(t, "OCMS_SESSION_SECRET", "abcdefghabcdefghabcdefghabcdefgh")
+	setProductionRequiredEnv(t)
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() should reject a repeated-pattern session secret in production")
+	}
+}
+
+// TestLoad_AllowsHexSecretInProduction guards against a false positive: a strong
+// all-lowercase hex secret has only two character classes (so it trips the
+// dev-mode advisory heuristic) but plenty of distinct characters and no
+// repeating structure, and must be accepted in production.
+func TestLoad_AllowsHexSecretInProduction(t *testing.T) {
+	os.Clearenv()
+	// A genuinely non-repeating `openssl rand -hex 32`-style secret: 64 hex
+	// chars, 16 distinct, no short period (unlike a repeated-block pattern).
+	setEnv(t, "OCMS_SESSION_SECRET", "3f9a2b8c1d7e4056af91b2c3d4e5f6a70b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e")
+	setProductionRequiredEnv(t)
+
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() should accept a strong hex session secret in production, got: %v", err)
+	}
+}
+
+// TestLoad_AllowsLowEntropySecretInDevelopment confirms the entropy floor is
+// production-only: development keeps the advisory-warning behavior.
+func TestLoad_AllowsLowEntropySecretInDevelopment(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "abababababababababababababababab")
+
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() should accept a low-entropy secret in development, got: %v", err)
+	}
+}
+
+func TestCountDistinctChars(t *testing.T) {
+	tests := []struct {
+		in   string
+		want int
+	}{
+		{"", 0},
+		{"aaaa", 1},
+		{"abab", 2},
+		{"abcdefgh", 8},
+		{"0123456789abcdef0123456789abcdef", 16},
+	}
+	for _, tt := range tests {
+		if got := countDistinctChars(tt.in); got != tt.want {
+			t.Errorf("countDistinctChars(%q) = %d, want %d", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestIsRepeatedPattern(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"a", false},
+		{"abcdefgh", false}, // single block, not repeated
+		{"3f9a2b8c1d7e4056af91b2c3d4e5f6a7", false}, // random-ish, no short period
+		{"abab", true},                             // "ab" x2
+		{"abcabcab", true},                         // "abc" x2.67 (period 3 <= 4)
+		{"abcdefghabcdefgh", true},                 // "abcdefgh" x2
+		{"abcdefghabcdefghabcdefghabcdefgh", true}, // "abcdefgh" x4
+		{"aaaa", true},                             // "a" x4
+	}
+	for _, tt := range tests {
+		if got := isRepeatedPattern(tt.in); got != tt.want {
+			t.Errorf("isRepeatedPattern(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestLoad_AllowSeedInProductionWithDemoMode(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")

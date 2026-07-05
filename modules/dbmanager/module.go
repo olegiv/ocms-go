@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
 )
 
@@ -57,9 +58,15 @@ func (m *Module) RegisterRoutes(_ chi.Router) {
 }
 
 // RegisterAdminRoutes registers admin routes for the module.
+// This module executes arbitrary SQL, so the routes are gated to admins at the
+// router level as defense-in-depth beyond the per-handler role checks (the
+// module is mounted under the Editor-level module-admin route group).
 func (m *Module) RegisterAdminRoutes(r chi.Router) {
-	r.Get("/dbmanager", m.handleDashboard)
-	r.Post("/dbmanager/execute", m.handleExecute)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAdmin())
+		r.Get("/dbmanager", m.handleDashboard)
+		r.Post("/dbmanager/execute", m.handleExecute)
+	})
 }
 
 // TemplateFuncs returns template functions provided by the module.

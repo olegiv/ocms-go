@@ -119,6 +119,17 @@ func (c Config) GeoIPEnabled() bool {
 // AES-256 requires 32 bytes minimum for secure encryption.
 const MinSessionSecretLength = 32
 
+// MinProductionSessionSecretDistinctChars is the minimum number of distinct
+// characters a session secret must contain to start in production. Real random
+// secrets clear this comfortably — 64-char `openssl rand -hex 32` has ~15-16
+// distinct characters, base64 of 32 bytes has ~30+ — while degenerate secrets
+// (a single repeated character, "abab…") fall far below it. Distinct-character
+// count is used instead of the dev-mode character-class heuristic because the
+// latter false-positives on a perfectly strong all-lowercase hex secret.
+// Repeated blocks over a wider alphabet (e.g. "abcdefgh"×4) clear this floor but
+// are rejected separately by isRepeatedPattern.
+const MinProductionSessionSecretDistinctChars = 8
+
 // MaxAPIKeyTTLDays is the maximum allowed API key max TTL policy window.
 const MaxAPIKeyTTLDays = 365
 
@@ -186,13 +197,76 @@ func Load() (*Config, error) {
 			"generate a secure secret with: openssl rand -base64 32")
 	}
 
-	// Warn about low-entropy secrets
+	// Low-entropy secrets: advisory in development, enforced in production.
+	// The dev warning uses character-class diversity (which nudges toward a
+	// base64 secret); production enforcement uses distinct-character count,
+	// which does not false-positive on a strong all-lowercase hex secret.
 	if !hasMinimumEntropy(cfg.SessionSecret) {
 		slog.Warn("OCMS_SESSION_SECRET has low character diversity; " +
 			"consider generating a random secret with: openssl rand -base64 32")
 	}
+	if cfg.Env == "production" {
+		if distinct := countDistinctChars(cfg.SessionSecret); distinct < MinProductionSessionSecretDistinctChars {
+			return nil, fmt.Errorf("OCMS_SESSION_SECRET has insufficient entropy for production "+
+				"(only %d distinct characters, need at least %d); "+
+				"generate a secure secret with: openssl rand -base64 32",
+				distinct, MinProductionSessionSecretDistinctChars)
+		}
+		// A short block repeated to fill the length (e.g. "abcdefgh"×4) can clear
+		// the distinct-character floor while remaining trivially guessable.
+		if isRepeatedPattern(cfg.SessionSecret) {
+			return nil, fmt.Errorf("OCMS_SESSION_SECRET has insufficient entropy for production " +
+				"(it is a short repeating pattern); " +
+				"generate a secure secret with: openssl rand -base64 32")
+		}
+	}
 
 	return cfg, nil
+}
+
+// countDistinctChars returns the number of distinct bytes in s. It is a
+// deliberately simple, false-positive-resistant proxy for entropy: any random
+// secret (hex, base64, or raw) contains many distinct bytes, while a secret
+// built from a single character or a tiny alphabet (e.g. "abab…") contains few.
+// Repeated *blocks* over a wider alphabet are caught separately by
+// isRepeatedPattern.
+func countDistinctChars(s string) int {
+	var seen [256]bool
+	distinct := 0
+	for i := 0; i < len(s); i++ {
+		if !seen[s[i]] {
+			seen[s[i]] = true
+			distinct++
+		}
+	}
+	return distinct
+}
+
+// isRepeatedPattern reports whether s is a short block repeated to (nearly) fill
+// its length, e.g. "abcdefghabcdefgh…". Such secrets can clear the distinct-
+// character floor while remaining trivially guessable. It uses the KMP failure
+// function to find the minimal repeating period and returns true when that
+// period is at most half the length (i.e. at least two repeats). A genuinely
+// random secret has a period close to its full length, so this does not
+// false-positive on real hex/base64 secrets.
+func isRepeatedPattern(s string) bool {
+	n := len(s)
+	if n < 2 {
+		return false
+	}
+	fail := make([]int, n)
+	for i := 1; i < n; i++ {
+		j := fail[i-1]
+		for j > 0 && s[i] != s[j] {
+			j = fail[j-1]
+		}
+		if s[i] == s[j] {
+			j++
+		}
+		fail[i] = j
+	}
+	period := n - fail[n-1]
+	return period*2 <= n
 }
 
 func applyProductionSecurityDefaults(cfg *Config) {

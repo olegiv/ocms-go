@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
 )
 
@@ -152,9 +153,15 @@ func (m *Module) RegisterRoutes(_ chi.Router) {
 }
 
 // RegisterAdminRoutes registers admin routes for the module.
+// hCaptcha controls anti-bot protection on login and public forms, so the
+// routes are gated to admins at the router level (defense-in-depth beyond the
+// Editor-level module-admin route group they are mounted under).
 func (m *Module) RegisterAdminRoutes(r chi.Router) {
-	r.Get("/hcaptcha", m.handleDashboard)
-	r.Post("/hcaptcha", m.handleSaveSettings)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAdmin())
+		r.Get("/hcaptcha", m.handleDashboard)
+		r.Post("/hcaptcha", m.handleSaveSettings)
+	})
 }
 
 // TemplateFuncs returns template functions provided by the module.

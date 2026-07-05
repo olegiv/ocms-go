@@ -90,12 +90,38 @@ func TestDetectSuspiciousHTMLTokens(t *testing.T) {
 		expect []string
 	}{
 		{"script tag", `<p>Hello</p><script>alert(1)</script>`, []string{"<script"}},
-		{"onerror attr", `<img onerror="alert(1)">`, []string{"onerror="}},
+		{"onerror attr", `<img onerror="alert(1)">`, []string{"on*="}},
 		{"iframe tag", `<iframe src="evil.html">`, []string{"<iframe"}},
 		{"javascript URI", `<a href="javascript:alert(1)">x</a>`, []string{"javascript:"}},
 		{"entity bypass", `<a href="&#x09;javascript:alert(1)">x</a>`, []string{"javascript:"}},
 		{"clean HTML", `<p>Hello <strong>world</strong></p>`, nil},
-		{"multiple tokens", `<script>x</script><img onerror="y">`, []string{"<script", "onerror="}},
+		{"multiple tokens", `<script>x</script><img onerror="y">`, []string{"<script", "on*="}},
+		// Previously-missed inline event handlers (M-02): a fixed token list of
+		// onerror=/onload= let these through; the structural pattern catches them.
+		{"onfocus + autofocus", `<button autofocus onfocus=alert(1)>x</button>`, []string{"on*="}},
+		{"onclick attr", `<div onclick="steal()">x</div>`, []string{"on*="}},
+		{"onmouseover attr", `<span onmouseover=alert(1)>x</span>`, []string{"on*="}},
+		{"ontoggle attr", `<details ontoggle=alert(1)>x</details>`, []string{"on*="}},
+		{"slash-separated onload", `<svg/onload=alert(1)>`, []string{"<svg", "on*="}},
+		// Newly-covered dangerous elements.
+		{"object tag", `<object data="evil.swf">`, []string{"<object"}},
+		{"embed tag", `<embed src="evil">`, []string{"<embed"}},
+		{"base tag", `<base href="//evil">`, []string{"<base"}},
+		{"iframe srcdoc", `<iframe srcdoc="&lt;script&gt;">`, []string{"<iframe", "srcdoc="}},
+		// False-positive guard: "on = " in prose (not an attribute) is clean.
+		{"prose on= not an attr", `<p>switch it on = off later</p>`, nil},
+		// Quote-aware scan (Codex): a `>` inside a quoted attribute value must
+		// not end the tag scan early and hide a later on* handler.
+		{"quoted-gt evasion (double)", `<img alt=">" onerror=alert(1)>`, []string{"on*="}},
+		{"quoted-gt evasion (single)", `<img alt='>' onerror=alert(1)>`, []string{"on*="}},
+		// No-space-after-quote (Codex review round 2): a handler jammed directly
+		// against a closing quote is a fresh attribute a browser executes, and
+		// must still be caught.
+		{"handler after double quote", `<img src="x"onerror=alert(1)>`, []string{"on*="}},
+		{"handler after single quote", `<a href='/x'onmouseover=alert(1)>y</a>`, []string{"on*="}},
+		{"handler after quoted title", `<div title="x"onload=alert(1)>y</div>`, []string{"on*="}},
+		// Benign framework attributes that are NOT on<letter> handlers stay clean.
+		{"htmx hx-on not a handler", `<button hx-on:click="x">y</button>`, nil},
 	}
 
 	for _, tt := range tests {

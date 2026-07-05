@@ -62,6 +62,43 @@ func TestRegisterAdminRoutes(t *testing.T) {
 	// If we get here without panic, routes are registered
 }
 
+// TestRegisterAdminRoutes_EditorForbidden asserts the hCaptcha admin routes are
+// gated to admins at the router level (M-04). hCaptcha controls anti-bot
+// protection, so a non-admin Editor must not reach these handlers even though
+// they are mounted under the Editor-level module-admin route group. This test
+// fails if the RequireAdmin middleware is removed from RegisterAdminRoutes.
+func TestRegisterAdminRoutes_EditorForbidden(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	router := chi.NewRouter()
+	m.RegisterAdminRoutes(router)
+
+	for _, tc := range []struct {
+		method string
+		target string
+	}{
+		{http.MethodGet, "/hcaptcha"},
+		{http.MethodPost, "/hcaptcha"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.target, nil)
+		ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, store.User{
+			ID: 2, Email: "editor@example.com", Role: "editor",
+		})
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("%s %s: status = %d; want %d (editor must be denied)",
+				tc.method, tc.target, w.Code, http.StatusForbidden)
+		}
+	}
+}
+
 // ============================================================================
 // ReloadSettings: error path when DB is nil
 // ============================================================================

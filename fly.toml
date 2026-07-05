@@ -32,6 +32,10 @@ primary_region = 'fra'
   OCMS_REQUIRE_API_KEY_EXPIRY = 'false'
   OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS = 'false'
   OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS = 'false'
+  # No hCaptcha keys are provisioned for the demo, so form captcha cannot be
+  # required: with OCMS_REQUIRE_FORM_CAPTCHA=true every public form 503s (see
+  # internal/handler/forms.go). Leave false unless hCaptcha keys are added via
+  # `fly secrets set OCMS_HCAPTCHA_SITE_KEY=... OCMS_HCAPTCHA_SECRET_KEY=...`.
   OCMS_REQUIRE_FORM_CAPTCHA = 'false'
 
 [processes]

@@ -59,6 +59,15 @@ var httpClient = &http.Client{
 		if len(via) >= 10 {
 			return fmt.Errorf("stopped after 10 redirects")
 		}
+		// Re-apply the same SSRF + destination-host allowlist policy on every
+		// redirect hop. The SSRF-safe dialer already blocks private IPs at
+		// connect time, but without this a redirect to a non-allowlisted
+		// *public* host would still leak the webhook signing secret and any
+		// admin-configured custom headers (Go's net/http only strips
+		// Authorization/Cookie/WWW-Authenticate across hosts, not custom ones).
+		if err := ValidateDestinationURL(req.URL.String()); err != nil {
+			return fmt.Errorf("webhook redirect blocked: %w", err)
+		}
 		return nil
 	},
 }

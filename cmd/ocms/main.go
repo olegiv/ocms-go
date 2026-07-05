@@ -43,6 +43,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/session"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -719,17 +720,27 @@ func auditRequiredAPIKeySourceCIDRPosture(ctx context.Context, db *sql.DB) error
 }
 
 func auditRequiredSuspiciousPageHTMLPosture(ctx context.Context, db *sql.DB) error {
-	var suspiciousCount int
-	err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*)
-		FROM pages
-		WHERE LOWER(body) LIKE '%<script%'
-		   OR LOWER(body) LIKE '%javascript:%'
-		   OR LOWER(body) LIKE '%onerror=%'
-		   OR LOWER(body) LIKE '%onload=%'
-		   OR LOWER(body) LIKE '%<iframe%'
-	`).Scan(&suspiciousCount)
+	// Reuse the same detector as the save/API blocker (security.DetectSuspiciousHTMLTokens)
+	// rather than a hard-coded SQL predicate, so this startup audit never drifts
+	// from the runtime coverage — every pattern the blocker rejects on save is
+	// also flagged here for pre-existing pages.
+	rows, err := db.QueryContext(ctx, `SELECT body FROM pages`)
 	if err != nil {
+		return fmt.Errorf("auditing suspicious page html posture: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var suspiciousCount int
+	for rows.Next() {
+		var body string
+		if err := rows.Scan(&body); err != nil {
+			return fmt.Errorf("auditing suspicious page html posture: %w", err)
+		}
+		if len(security.DetectSuspiciousHTMLTokens(body)) > 0 {
+			suspiciousCount++
+		}
+	}
+	if err := rows.Err(); err != nil {
 		return fmt.Errorf("auditing suspicious page html posture: %w", err)
 	}
 

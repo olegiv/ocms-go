@@ -8,15 +8,61 @@ import (
 	"strings"
 
 	"github.com/microcosm-cc/bluemonday"
+	"golang.org/x/net/html"
 )
 
-// SuspiciousPageHTMLTokens lists substrings that indicate potentially
-// malicious markup in user-supplied page HTML.
+// SuspiciousPageHTMLTokens lists case-insensitive substrings whose presence in
+// user-supplied page HTML is a strong signal of an injection attempt. Together
+// with hasEventHandlerAttr and JavascriptURIPattern it backs the
+// OCMS_BLOCK_SUSPICIOUS_PAGE_HTML pre-filter.
+//
+// This is deliberately a COARSE early-warning pre-filter, never a sanitizer: it
+// cannot enumerate every dangerous construct and must not be relied on as the
+// sole defense. The authoritative control is SanitizePageHTML
+// (OCMS_SANITIZE_PAGE_HTML), a bluemonday allowlist that strips ALL disallowed
+// elements and every on* event-handler attribute regardless of name. Because
+// inline event handlers are matched by hasEventHandlerAttr, this list only
+// enumerates dangerous *elements* and script-bearing attributes that do not
+// rely on an on* handler.
 var SuspiciousPageHTMLTokens = []string{
 	"<script",
-	"onerror=",
-	"onload=",
 	"<iframe",
+	"<object",
+	"<embed",
+	"<svg",
+	"<base",
+	"srcdoc=",
+}
+
+// hasEventHandlerAttr reports whether body contains an element carrying an
+// inline on* event-handler attribute (onclick, onerror, onload, onfocus,
+// onanimationstart, …). It tokenizes the HTML so attributes are delimited
+// exactly as a browser parses them, rather than matching raw bytes: a
+// byte-level regex misses handlers that are separated from the previous
+// attribute only by a closing quote (`<img src="x"onerror=…>`) or hidden behind
+// a quoted `>` (`<img alt=">" onerror=…>`) — both of which browsers execute. The
+// handler-name set is open-ended, so a fixed token list cannot keep up; the
+// tokenizer covers every `on<letter>…` attribute name.
+func hasEventHandlerAttr(body string) bool {
+	z := html.NewTokenizer(strings.NewReader(body))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			// io.EOF or a tokenizer error: nothing more to inspect.
+			return false
+		case html.StartTagToken, html.SelfClosingTagToken:
+			_, hasAttr := z.TagName()
+			for hasAttr {
+				var key []byte
+				key, _, hasAttr = z.TagAttr()
+				// TagAttr lowercases keys. Match on<letter>… (e.g. onclick) but
+				// not "on" alone or "on-" so we mirror the on[a-z]+ shape.
+				if len(key) > 2 && key[0] == 'o' && key[1] == 'n' && key[2] >= 'a' && key[2] <= 'z' {
+					return true
+				}
+			}
+		}
+	}
 }
 
 // JavascriptURIPattern matches javascript: in attribute contexts only,
@@ -55,9 +101,12 @@ func buildPageHTMLSanitizer() *bluemonday.Policy {
 	return p
 }
 
-// DetectSuspiciousHTMLTokens returns the subset of SuspiciousPageHTMLTokens
-// found in body (case-insensitive), plus "javascript:" if the URI pattern
-// matches. Callers use the result to warn or block page saves.
+// DetectSuspiciousHTMLTokens returns diagnostic labels for suspicious markup in
+// body: the subset of SuspiciousPageHTMLTokens present (case-insensitive),
+// "on*=" if an inline event-handler attribute is present, and "javascript:" if
+// the URI pattern matches. Callers use a non-empty result to warn or block page
+// saves. See SuspiciousPageHTMLTokens for why this is a pre-filter, not a
+// sanitizer.
 func DetectSuspiciousHTMLTokens(body string) []string {
 	lower := strings.ToLower(body)
 	var matches []string
@@ -65,6 +114,9 @@ func DetectSuspiciousHTMLTokens(body string) []string {
 		if strings.Contains(lower, token) {
 			matches = append(matches, token)
 		}
+	}
+	if hasEventHandlerAttr(body) {
+		matches = append(matches, "on*=")
 	}
 	if JavascriptURIPattern.MatchString(body) {
 		matches = append(matches, "javascript:")
