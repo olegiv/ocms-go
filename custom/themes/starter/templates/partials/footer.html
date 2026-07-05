@@ -57,8 +57,8 @@
         <div class="st-footer__bottom">
             <div class="st-footer__copy">
                 <p>
-                    {{if .CopyrightText}}{{safeHTML .CopyrightText}}{{else}}&copy; {{.Year}} {{.SiteName}}. {{TTheme .LangCode "frontend.all_rights_reserved"}}{{end -}}
-                    {{if .FooterText}}<span class="st-footer__sep"> &bull; </span>{{safeHTML .FooterText}}{{end -}}
+                    {{if .CopyrightText}}{{safeFooterHTML .CopyrightText}}{{else}}&copy; {{.Year}} {{.SiteName}}. {{TTheme .LangCode "frontend.all_rights_reserved"}}{{end -}}
+                    {{if .FooterText}}<span class="st-footer__sep"> &bull; </span>{{safeFooterHTML .FooterText}}{{end -}}
                     {{with privacyFooterLink $.LangCode}}<span class="st-footer__sep"> &bull; </span>{{.}}{{end}}
                 </p>
             </div>

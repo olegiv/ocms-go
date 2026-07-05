@@ -65,6 +65,7 @@ func TestDB(t *testing.T) (*sql.DB, func()) {
 func MinimalThemeFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"safeHTML":             func(s string) string { return s },
+		"safeFooterHTML":       func(s string) string { return s },
 		"safeCSS":              func(s string) string { return s },
 		"safeURL":              func(s string) string { return s },
 		"T":                    func(lang, key string, args ...any) string { return key },

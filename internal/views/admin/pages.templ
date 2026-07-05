@@ -1952,7 +1952,15 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			if (size === 'medium' && this.selectedImage.filepath) imageUrl = this.selectedImage.filepath.replace('/originals/', '/medium/');
 			else if (size === 'small' && this.selectedImage.thumbnail) imageUrl = this.selectedImage.thumbnail;
 			if (this.insertCallback) this.insertCallback(imageUrl, { alt: alt, title: alt });
-			else if (tinymceEditor) tinymceEditor.insertContent(`<img src="${imageUrl}" alt="${alt}" title="${alt}" />`);
+			else if (tinymceEditor) {
+				// Serialize via a DOM element so filename-derived alt text
+				// cannot break out of the attribute context.
+				const insertImg = document.createElement('img');
+				insertImg.src = imageUrl;
+				insertImg.alt = alt;
+				insertImg.title = alt;
+				tinymceEditor.insertContent(insertImg.outerHTML);
+			}
 			this.close();
 		}
 	};

@@ -6,7 +6,13 @@ package render
 import (
 	"bytes"
 	"database/sql"
+	"fmt"
 	"html/template"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -237,6 +243,73 @@ func TestSanitizeFooterHTML(t *testing.T) {
 
 func stringContains(haystack, needle string) bool {
 	return bytes.Contains([]byte(haystack), []byte(needle))
+}
+
+// scanFilesForPattern walks each root and returns "file:line" locations in
+// files matching ext whose line matches re, plus the number of files scanned.
+func scanFilesForPattern(t *testing.T, roots []string, ext string, re *regexp.Regexp) (violations []string, scanned int) {
+	t.Helper()
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ext) {
+				return nil
+			}
+			scanned++
+			content, readErr := os.ReadFile(path) //nolint:gosec // Test walks repo-local template sources
+			if readErr != nil {
+				return readErr
+			}
+			for i, line := range strings.Split(string(content), "\n") {
+				if re.MatchString(line) {
+					violations = append(violations, fmt.Sprintf("%s:%d", path, i+1))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walking %s: %v", root, err)
+		}
+	}
+	return violations, scanned
+}
+
+// TestThemeFooterConfigTextIsSanitized enforces the invariant behind the
+// footer stored-XSS fix: admin-configured CopyrightText/FooterText must never
+// be rendered through the unsanitizing safeHTML helper in any theme template.
+// Themes must use safeFooterHTML, which applies a strict allowlist policy.
+func TestThemeFooterConfigTextIsSanitized(t *testing.T) {
+	re := regexp.MustCompile(`safeHTML\s+[^}]*?(CopyrightText|FooterText)`)
+	roots := []string{"../../internal/themes", "../../custom/themes"}
+	violations, scanned := scanFilesForPattern(t, roots, ".html", re)
+	if scanned == 0 {
+		t.Fatal("no theme templates scanned; check test roots")
+	}
+	if len(violations) > 0 {
+		t.Errorf("footer config text rendered via safeHTML instead of safeFooterHTML at:\n%s",
+			strings.Join(violations, "\n"))
+	}
+}
+
+// TestAdminTemplScriptsAvoidInnerHTMLTemplateLiterals enforces the invariant
+// behind the image-picker stored-XSS fix: inline scripts in templ views must
+// not assign template literals to innerHTML, because interpolated data (media
+// filenames, API responses) would be parsed as markup. Build DOM nodes and set
+// textContent or element properties instead; static single-quoted HTML strings
+// remain allowed.
+func TestAdminTemplScriptsAvoidInnerHTMLTemplateLiterals(t *testing.T) {
+	re := regexp.MustCompile("\\.innerHTML\\s*\\+?=\\s*`")
+	roots := []string{"../../internal/views", "../../modules", "../../custom/modules"}
+	violations, scanned := scanFilesForPattern(t, roots, ".templ", re)
+	if scanned == 0 {
+		t.Fatal("no templ sources scanned; check test roots")
+	}
+	if len(violations) > 0 {
+		t.Errorf("innerHTML assigned from a template literal (XSS-prone) at:\n%s",
+			strings.Join(violations, "\n"))
+	}
 }
 
 func TestFormatDateForLocale(t *testing.T) {
