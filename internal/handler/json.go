@@ -16,6 +16,10 @@ const MaxJSONBodyBytes int64 = 1 << 20
 // writeJSONError writes a JSON error response.
 func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
+	// htmx 4 swaps error response bodies into the DOM unless suppressed; the
+	// admin layouts disable that via htmx-config noSwap, and this header keeps
+	// errors unswapped even if a page renders without that meta tag.
+	w.Header().Set("HX-Reswap", "none")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": false,

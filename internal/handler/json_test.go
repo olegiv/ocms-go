@@ -59,6 +59,12 @@ func TestWriteJSONError(t *testing.T) {
 			if errMsg, ok := resp["error"].(string); !ok || errMsg != tt.message {
 				t.Errorf("error = %q, want %q", resp["error"], tt.message)
 			}
+
+			// htmx 4 swaps error bodies into the DOM unless suppressed;
+			// every JSON error response must opt out.
+			if got := w.Header().Get("HX-Reswap"); got != "none" {
+				t.Errorf("HX-Reswap = %q, want %q", got, "none")
+			}
 		})
 	}
 }

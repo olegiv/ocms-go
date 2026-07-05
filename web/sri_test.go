@@ -6,6 +6,8 @@ package web
 import (
 	"crypto/sha512"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"testing"
@@ -35,6 +37,57 @@ func extractSRIPins(html []byte) []sriPin {
 		}
 	}
 	return pins
+}
+
+// htmxConfigRe extracts the JSON payload of the htmx-config meta tag. It
+// anchors on the JSON object itself so it matches both the plain HTML form
+// (content='{...}') and the templ expression form (content={ `{...}` }).
+var htmxConfigRe = regexp.MustCompile(`name="htmx-config"[^\n]*?(\{"noSwap"[^}]*\})`)
+
+// TestHtmxConfigSuppressesErrorSwaps fails when an admin layout loses the
+// htmx-config meta tag that disables swapping of 4xx/5xx response bodies.
+// htmx 4 swaps ALL responses into the DOM by default (htmx 2 skipped errors);
+// without this config, error bodies — which handlers write via http.Error —
+// would replace the hx-target element. writeJSONError also sends
+// HX-Reswap: none as defense-in-depth, but plain-text error paths rely on
+// this client-side config alone.
+func TestHtmxConfigSuppressesErrorSwaps(t *testing.T) {
+	baseHTML, err := Templates.ReadFile("templates/layouts/base.html")
+	if err != nil {
+		t.Fatalf("read base.html: %v", err)
+	}
+	layoutTempl, err := os.ReadFile("../internal/views/admin/layout.templ")
+	if err != nil {
+		t.Fatalf("read layout.templ: %v", err)
+	}
+	sources := map[string][]byte{
+		"templates/layouts/base.html":       baseHTML,
+		"internal/views/admin/layout.templ": layoutTempl,
+	}
+
+	for name, html := range sources {
+		m := htmxConfigRe.FindSubmatch(html)
+		if m == nil {
+			t.Errorf("%s: htmx-config meta tag not found — htmx 4 will swap 4xx/5xx error bodies into the DOM", name)
+			continue
+		}
+		var cfg struct {
+			NoSwap []any `json:"noSwap"`
+		}
+		if err := json.Unmarshal(m[1], &cfg); err != nil {
+			t.Errorf("%s: htmx-config content is not valid JSON: %v", name, err)
+			continue
+		}
+		have := make(map[string]bool, len(cfg.NoSwap))
+		for _, v := range cfg.NoSwap {
+			have[fmt.Sprint(v)] = true
+		}
+		for _, want := range []string{"204", "304", "4xx", "5xx"} {
+			if !have[want] {
+				t.Errorf("%s: htmx-config noSwap missing %q (got %v)", name, want, cfg.NoSwap)
+			}
+		}
+	}
 }
 
 // TestSRIHashesMatchEmbeddedAssets fails when an integrity attribute in a
