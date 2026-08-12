@@ -296,8 +296,8 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 			pageFeaturedImages[p.ID] = &FeaturedImageData{
 				ID:        media.ID,
 				Filename:  media.Filename,
-				Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-				Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+				Filepath:  model.MediaURL(model.VariantOriginal, media.Uuid, media.Filename),
+				Thumbnail: model.MediaURL("thumbnail", media.Uuid, media.Filename),
 				Mimetype:  media.MimeType,
 			}
 		}
@@ -1665,8 +1665,8 @@ func (h *PagesHandler) loadImageData(ctx context.Context, id sql.NullInt64) *Fea
 	return &FeaturedImageData{
 		ID:        media.ID,
 		Filename:  media.Filename,
-		Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-		Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+		Filepath:  model.MediaURL(model.VariantOriginal, media.Uuid, media.Filename),
+		Thumbnail: model.MediaURL("thumbnail", media.Uuid, media.Filename),
 		Mimetype:  media.MimeType,
 	}
 }

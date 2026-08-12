@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/model"
 )
 
 // drupalMediaPattern matches the <drupal-media> and <drupal-entity> custom
@@ -138,7 +140,7 @@ var stylePathPattern = regexp.MustCompile(`^styles/[^/]+/[^/]+/`)
 // sanitizer deletes the <img> that RewriteBody just produced, so the image is
 // imported and then dropped from the body a moment later.
 func publicMediaURL(fileUUID, filename string) string {
-	return fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, url.PathEscape(filename))
+	return model.MediaURL(model.VariantOriginal, fileUUID, filename)
 }
 
 // normalizeFileRelPath turns a Drupal public-file URL path into the relative

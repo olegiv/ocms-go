@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/olegiv/ocms-go/internal/imaging"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -388,7 +389,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 			}
 
 			// Map old path to new URL
-			mediaMap["/files/"+file.Path] = fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, file.Filename)
+			mediaMap["/files/"+file.Path] = model.MediaURL(model.VariantOriginal, fileUUID, file.Filename)
 
 		} else {
 			// Non-image file - save directly without processing
@@ -428,7 +429,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 			}
 
 			// Map old path to new URL
-			mediaMap["/files/"+file.Path] = fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, file.Filename)
+			mediaMap["/files/"+file.Path] = model.MediaURL(model.VariantOriginal, fileUUID, file.Filename)
 		}
 
 		result.MediaImported++

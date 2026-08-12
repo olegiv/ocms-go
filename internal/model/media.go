@@ -5,6 +5,7 @@ package model
 
 import (
 	"database/sql"
+	"net/url"
 	"time"
 )
 
@@ -16,7 +17,28 @@ const (
 	VariantMedium    = "medium"
 	VariantLarge     = "large"
 	VariantOG        = "og"
+
+	// VariantOriginal addresses the unresized upload. Its files live under
+	// "originals", not "original", so it is not simply the variant name.
+	VariantOriginal = "original"
 )
+
+// MediaURL builds the public URL for a stored media file.
+//
+// The filename is percent-encoded, which is not cosmetic. Uploaded filenames
+// routinely contain spaces and non-ASCII characters, and html/template escapes
+// a URL differently depending on the attribute it lands in: in src it encodes
+// the spaces for you, but in srcset a space ends the URL candidate, so the
+// whole entry is replaced with "#ZgotmplZ" and the browser — which prefers
+// srcset over src — renders a broken image. Encoding here means every caller
+// gets a URL that is safe in both.
+func MediaURL(variant, uuid, filename string) string {
+	dir := variant
+	if variant == "" || variant == VariantOriginal {
+		dir = "originals"
+	}
+	return "/uploads/" + dir + "/" + uuid + "/" + url.PathEscape(filename)
+}
 
 // Minimum dimensions for featured images
 const (

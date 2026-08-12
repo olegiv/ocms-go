@@ -249,10 +249,7 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) error {
 
 // GetURL returns the URL path for a media item.
 func (s *MediaService) GetURL(media store.Medium, variant string) string {
-	if variant == "" || variant == "original" {
-		return fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename)
-	}
-	return fmt.Sprintf("/uploads/%s/%s/%s", variant, media.Uuid, media.Filename)
+	return model.MediaURL(variant, media.Uuid, media.Filename)
 }
 
 // GetThumbnailURL returns the thumbnail URL for a media item.

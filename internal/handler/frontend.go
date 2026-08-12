@@ -1429,9 +1429,9 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		if sr.FeaturedImageID.Valid {
 			media, err := h.queries.GetMediaByID(ctx, sr.FeaturedImageID.Int64)
 			if err == nil {
-				pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
-				pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
-				pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
+				pv.FeaturedImage = model.MediaURL("thumbnail", media.Uuid, media.Filename)
+				pv.FeaturedImageSmall = model.MediaURL("small", media.Uuid, media.Filename)
+				pv.FeaturedImageMedium = model.MediaURL("medium", media.Uuid, media.Filename)
 				pv.FeaturedImageID = media.ID
 				pv.FeaturedImageAlt = media.Alt.String
 			}
@@ -1748,7 +1748,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 			featuredMediaUUID = media.Uuid
 			featuredMediaFilename = media.Filename
 			featuredMediaMimeType = media.MimeType
-			pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
+			pv.FeaturedImage = model.MediaURL("thumbnail", media.Uuid, media.Filename)
 			pv.FeaturedImageID = media.ID
 			pv.FeaturedImageAlt = media.Alt.String
 
@@ -1759,13 +1759,13 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 				for _, v := range variants {
 					switch v.Type {
 					case "small":
-						pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageSmall = model.MediaURL("small", media.Uuid, media.Filename)
 					case "medium":
-						pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageMedium = model.MediaURL("medium", media.Uuid, media.Filename)
 					case "large":
-						pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageLarge = model.MediaURL("large", media.Uuid, media.Filename)
 					case "og":
-						pv.FeaturedImageOG = fmt.Sprintf("/uploads/og/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageOG = model.MediaURL("og", media.Uuid, media.Filename)
 						pv.FeaturedImageOGWidth = int(v.Width)
 						pv.FeaturedImageOGHeight = int(v.Height)
 					}
@@ -1846,14 +1846,13 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	if p.OgImageID.Valid {
 		ogMedia, err := h.queries.GetMediaByID(ctx, p.OgImageID.Int64)
 		if err == nil {
-			ogBase := fmt.Sprintf("/uploads/%%s/%s/%s", ogMedia.Uuid, ogMedia.Filename)
-			pv.OGImage = fmt.Sprintf(ogBase, "originals")
+			pv.OGImage = model.MediaURL(model.VariantOriginal, ogMedia.Uuid, ogMedia.Filename)
 			pv.OGImageType = ogMedia.MimeType
 			variants, varErr := h.queries.GetMediaVariants(ctx, ogMedia.ID)
 			if varErr == nil {
 				bestOG := pickOGVariant(variants)
 				if bestOG != nil {
-					pv.OGImage = fmt.Sprintf(ogBase, bestOG.Type)
+					pv.OGImage = model.MediaURL(bestOG.Type, ogMedia.Uuid, ogMedia.Filename)
 					pv.OGImageWidth = int(bestOG.Width)
 					pv.OGImageHeight = int(bestOG.Height)
 				}
@@ -1863,7 +1862,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		// Fall back to featured image — pick best variant for OG
 		pv.OGImageType = featuredMediaMimeType
 		if bestOG := pickOGVariant(featuredVariants); bestOG != nil {
-			pv.OGImage = fmt.Sprintf("/uploads/%s/%s/%s", bestOG.Type, featuredMediaUUID, featuredMediaFilename)
+			pv.OGImage = model.MediaURL(bestOG.Type, featuredMediaUUID, featuredMediaFilename)
 			pv.OGImageWidth = int(bestOG.Width)
 			pv.OGImageHeight = int(bestOG.Height)
 		} else {
