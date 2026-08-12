@@ -58,7 +58,7 @@ func TestImportFromElefant(t *testing.T) {
 		}
 		defer func() { _ = reader.Close() }()
 
-		posts, err := reader.GetBlogPosts()
+		posts, err := reader.GetBlogPosts(context.Background())
 		if err != nil {
 			t.Fatalf("GetBlogPosts failed: %v", err)
 		}
@@ -90,7 +90,7 @@ func TestSlugGeneration(t *testing.T) {
 	}
 	defer func() { _ = reader.Close() }()
 
-	posts, err := reader.GetBlogPosts()
+	posts, err := reader.GetBlogPosts(context.Background())
 	if err != nil {
 		t.Fatalf("GetBlogPosts failed: %v", err)
 	}

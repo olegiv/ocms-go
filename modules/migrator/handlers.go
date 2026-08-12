@@ -111,6 +111,30 @@ func applySafeDefaults(config map[string]string, fields []ConfigField) {
 	}
 }
 
+// withoutSecrets copies config minus every password-typed field.
+//
+// The form config is round-tripped through the session so a failed connection
+// test does not clear what the admin typed. The session store is SQLite-backed
+// and gob-encoded, not encrypted, so persisting the source database password
+// there would write it in plaintext into the CMS database — and it would then
+// be echoed back into the rendered form. Secrets are re-entered instead.
+func withoutSecrets(config map[string]string, fields []ConfigField) map[string]string {
+	safe := make(map[string]string, len(config))
+	secret := make(map[string]bool, len(fields))
+	for _, field := range fields {
+		if field.Type == "password" {
+			secret[field.Name] = true
+		}
+	}
+	for name, value := range config {
+		if secret[name] {
+			continue
+		}
+		safe[name] = value
+	}
+	return safe
+}
+
 // sourceRequestContext holds common data extracted from migrator handler requests.
 type sourceRequestContext struct {
 	User       *store.User
@@ -180,14 +204,14 @@ func (m *Module) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	if err := ctx.Source.TestConnection(cfg); err != nil {
 		m.ctx.Logger.Error("connection test failed", "source", ctx.SourceName, "error", err)
 		// Save config to session so form values are preserved
-		m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, cfg)
+		m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, withoutSecrets(cfg, ctx.Source.ConfigFields()))
 		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_connection")+": "+err.Error(), "error")
 		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 		return
 	}
 
 	// Save config on success too, so user can proceed with import
-	m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, cfg)
+	m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, withoutSecrets(cfg, ctx.Source.ConfigFields()))
 	m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.success_connection"), "success")
 	http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 }
@@ -249,7 +273,7 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 			m.ctx.Logger.Error("failed to start import job", "source", ctx.SourceName, "error", err)
 			m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_import")+": "+err.Error(), "error")
 		}
-		m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, cfg)
+		m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, withoutSecrets(cfg, ctx.Source.ConfigFields()))
 		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 		return
 	}
@@ -291,7 +315,7 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 
 	// The config round-trips through the session so the form stays filled in,
 	// and the status panel on the form page picks the job up on arrival.
-	m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, cfg)
+	m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, withoutSecrets(cfg, ctx.Source.ConfigFields()))
 	m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.import_started"), "success")
 	http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 }

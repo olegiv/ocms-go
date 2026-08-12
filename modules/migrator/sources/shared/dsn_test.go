@@ -1,0 +1,258 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package shared
+
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/go-sql-driver/mysql"
+)
+
+// baseCfg returns a valid source-database configuration.
+func baseCfg() map[string]string {
+	return map[string]string{
+		"mysql_host":     "db.internal",
+		"mysql_port":     "3306",
+		"mysql_user":     "someuser",
+		"mysql_password": "somepass",
+		"mysql_database": "sourcedb",
+	}
+}
+
+// TestBuildMySQLDSNRejectsParameterInjection is the regression test for the
+// DSN parameter injection that let a database name such as
+// "db?allowAllFiles=true" turn on the driver's LOCAL INFILE handling, giving a
+// hostile MySQL server arbitrary local file read on this host.
+//
+// It fails on the pre-fix state, where the DSN was assembled with fmt.Sprintf.
+func TestBuildMySQLDSNRejectsParameterInjection(t *testing.T) {
+	injections := []struct {
+		name  string
+		field string
+		value string
+	}{
+		{"allowAllFiles via database", "mysql_database", "sourcedb?allowAllFiles=true&charset=utf8mb4,x"},
+		{"multiStatements via database", "mysql_database", "sourcedb?multiStatements=true"},
+		{"interpolateParams via database", "mysql_database", "sourcedb?interpolateParams=true"},
+		{"allowAllFiles via user", "mysql_user", "u?allowAllFiles=true"},
+		{"allowAllFiles via password", "mysql_password", "p?allowAllFiles=true"},
+		{"protocol switch via host", "mysql_host", "x@unix(/var/run/mysqld/mysqld.sock"},
+	}
+
+	for _, tc := range injections {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := baseCfg()
+			cfg[tc.field] = tc.value
+
+			dsn, err := BuildMySQLDSN(cfg, MySQLDSNOptions{})
+			if err != nil {
+				// Rejecting outright is an acceptable outcome.
+				return
+			}
+
+			parsed, err := mysql.ParseDSN(dsn)
+			if err != nil {
+				t.Fatalf("BuildMySQLDSN produced an unparseable DSN: %v", err)
+			}
+			if parsed.AllowAllFiles {
+				t.Errorf("AllowAllFiles was injected via %s=%q\nDSN: %s", tc.field, tc.value, dsn)
+			}
+			if parsed.MultiStatements {
+				t.Errorf("MultiStatements was injected via %s=%q\nDSN: %s", tc.field, tc.value, dsn)
+			}
+			if parsed.InterpolateParams {
+				t.Errorf("InterpolateParams was injected via %s=%q\nDSN: %s", tc.field, tc.value, dsn)
+			}
+			if parsed.Net != "tcp" {
+				t.Errorf("Net was switched to %q via %s=%q\nDSN: %s", parsed.Net, tc.field, tc.value, dsn)
+			}
+		})
+	}
+}
+
+// TestBuildMySQLDSNEnforcesHostAllowlist proves the allowlist is enforced
+// inside the shared builder, so no source can opt out of it.
+func TestBuildMySQLDSNEnforcesHostAllowlist(t *testing.T) {
+	t.Setenv(EnvAllowedDBHosts, "allowed.example.com")
+
+	cfg := baseCfg()
+	cfg["mysql_host"] = "evil.example.com"
+	if _, err := BuildMySQLDSN(cfg, MySQLDSNOptions{}); err == nil {
+		t.Fatal("BuildMySQLDSN accepted a host outside the allowlist")
+	}
+
+	cfg["mysql_host"] = "allowed.example.com"
+	if _, err := BuildMySQLDSN(cfg, MySQLDSNOptions{}); err != nil {
+		t.Fatalf("BuildMySQLDSN rejected an allowlisted host: %v", err)
+	}
+}
+
+// TestBuildMySQLDSNJoinsIPv6HostsCorrectly guards the net.JoinHostPort fix:
+// "::1" passes the allowlist (normalizeHost strips brackets) and previously
+// produced the unparseable address "::1:3306".
+func TestBuildMySQLDSNJoinsIPv6HostsCorrectly(t *testing.T) {
+	cfg := baseCfg()
+	cfg["mysql_host"] = "::1"
+
+	dsn, err := BuildMySQLDSN(cfg, MySQLDSNOptions{})
+	if err != nil {
+		t.Fatalf("BuildMySQLDSN(::1) returned an error: %v", err)
+	}
+	parsed, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		t.Fatalf("BuildMySQLDSN(::1) produced an unparseable DSN %q: %v", dsn, err)
+	}
+	if parsed.Addr != "[::1]:3306" {
+		t.Errorf("Addr = %q, want %q", parsed.Addr, "[::1]:3306")
+	}
+}
+
+// TestBuildMySQLDSNAlwaysSetsTimeouts ensures no source can produce an
+// unbounded connection, which previously let a black-holed host pin a
+// goroutine and socket for the OS TCP timeout.
+func TestBuildMySQLDSNAlwaysSetsTimeouts(t *testing.T) {
+	dsn, err := BuildMySQLDSN(baseCfg(), MySQLDSNOptions{})
+	if err != nil {
+		t.Fatalf("BuildMySQLDSN returned an error: %v", err)
+	}
+	parsed, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		t.Fatalf("unparseable DSN: %v", err)
+	}
+	if parsed.Timeout <= 0 {
+		t.Error("connect Timeout is not set")
+	}
+	if parsed.ReadTimeout <= 0 {
+		t.Error("ReadTimeout is not set")
+	}
+}
+
+// sourcesDir walks up to the migrator sources tree.
+func sourcesDir(t *testing.T) string {
+	t.Helper()
+	// This test file lives in .../modules/migrator/sources/shared.
+	abs, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatalf("resolving sources dir: %v", err)
+	}
+	return abs
+}
+
+// walkSourceFiles calls fn for every non-test Go file under the sources tree.
+func walkSourceFiles(t *testing.T, fn func(rel string, file *ast.File, fset *token.FileSet)) {
+	t.Helper()
+	root := sourcesDir(t)
+	fset := token.NewFileSet()
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		parsed, perr := parser.ParseFile(fset, path, nil, 0)
+		if perr != nil {
+			return nil //nolint:nilerr // unparseable files are the compiler's problem
+		}
+		rel, rerr := filepath.Rel(root, path)
+		if rerr != nil {
+			return rerr
+		}
+		fn(rel, parsed, fset)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking sources: %v", err)
+	}
+}
+
+// TestNoSourceBuildsDSNByStringFormatting fails if any migrator source goes
+// back to assembling a MySQL DSN with string formatting instead of
+// BuildMySQLDSN. That is what made parameter injection possible, and a new
+// source could reintroduce it without touching any existing file.
+func TestNoSourceBuildsDSNByStringFormatting(t *testing.T) {
+	var offenders []string
+
+	walkSourceFiles(t, func(rel string, file *ast.File, fset *token.FileSet) {
+		ast.Inspect(file, func(n ast.Node) bool {
+			lit, ok := n.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			value, err := strconv.Unquote(lit.Value)
+			if err != nil {
+				return true
+			}
+			// "@tcp(" only ever appears inside a hand-built MySQL DSN.
+			if strings.Contains(value, "@tcp(") {
+				offenders = append(offenders, rel+":"+
+					strconv.Itoa(fset.Position(lit.Pos()).Line)+"  "+lit.Value)
+			}
+			return true
+		})
+	})
+
+	if len(offenders) > 0 {
+		t.Errorf("migrator sources must build DSNs via shared.BuildMySQLDSN, "+
+			"which escapes parameters and enforces %s.\nHand-built DSNs found:\n  %s",
+			EnvAllowedDBHosts, strings.Join(offenders, "\n  "))
+	}
+}
+
+// TestSourceReadersUseContextAwareQueries fails on any database call that
+// cannot be cancelled. A migration runs for up to six hours in a detached
+// goroutine; a query without a context ignores both shutdown and the job
+// deadline, and a Ping without one blocks for the OS TCP timeout.
+func TestSourceReadersUseContextAwareQueries(t *testing.T) {
+	// Non-context database calls on *sql.DB / *sql.Tx.
+	banned := map[string]string{
+		"Query":    "QueryContext",
+		"QueryRow": "QueryRowContext",
+		"Exec":     "ExecContext",
+		"Ping":     "PingContext",
+		"Prepare":  "PrepareContext",
+		"Begin":    "BeginTx",
+	}
+
+	var offenders []string
+
+	walkSourceFiles(t, func(rel string, file *ast.File, fset *token.FileSet) {
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			want, banned := banned[sel.Sel.Name]
+			if !banned {
+				return true
+			}
+			// Only flag calls on something named like a DB handle, so that
+			// unrelated helpers named Query() are not swept up.
+			recv, ok := sel.X.(*ast.SelectorExpr)
+			if !ok || recv.Sel.Name != "db" {
+				return true
+			}
+			offenders = append(offenders, rel+":"+
+				strconv.Itoa(fset.Position(call.Pos()).Line)+"  ."+sel.Sel.Name+"() should be ."+want+"()")
+			return true
+		})
+	})
+
+	if len(offenders) > 0 {
+		t.Errorf("migrator source database calls must be context-aware:\n  %s",
+			strings.Join(offenders, "\n  "))
+	}
+}

@@ -479,7 +479,10 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 										}
 									</label>
 									if field.Type == "password" {
-										<input type="password" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } class="form-control"/>
+										// No value= and no autocomplete: the secret is never
+										// round-tripped through the session, so there is nothing
+										// to repopulate and nothing to leak into the DOM.
+										<input type="password" id={ field.Name } name={ field.Name } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } autocomplete="off" class="form-control"/>
 									} else if field.Type == "number" {
 										<input type="number" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } class="form-control"/>
 									} else {

@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
+	// Registers the "mysql" driver used by sql.Open below; the DSN itself is
+	// built by shared.BuildMySQLDSN.
+	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
@@ -104,46 +105,14 @@ type Reader struct {
 
 // BuildDSN assembles a MySQL DSN from the submitted configuration.
 //
-// It uses mysql.Config.FormatDSN rather than string formatting so that
-// passwords containing '@', '/', ':' or '?' are escaped correctly instead of
-// silently producing a malformed DSN — and so timeouts are always set.
+// The assembly itself lives in shared.BuildMySQLDSN so that every source shares
+// one hardened path: parameter-injection-safe escaping via mysql.Config, and a
+// mandatory OCMS_MIGRATOR_ALLOWED_DB_HOSTS check.
 func BuildDSN(cfg map[string]string) (string, error) {
-	port := strings.TrimSpace(cfg["mysql_port"])
-	if port == "" {
-		port = "3306"
-	}
-	portNum, err := strconv.Atoi(port)
-	if err != nil || portNum < 1 || portNum > 65535 {
-		return "", fmt.Errorf("invalid MySQL port %q", cfg["mysql_port"])
-	}
-
-	host := strings.TrimSpace(cfg["mysql_host"])
-	if host == "" {
-		return "", fmt.Errorf("MySQL host is required")
-	}
-	if err := shared.CheckDBHostAllowed(host); err != nil {
-		return "", err
-	}
-
-	database := strings.TrimSpace(cfg["mysql_database"])
-	if database == "" {
-		return "", fmt.Errorf("MySQL database name is required")
-	}
-
-	mycfg := mysql.NewConfig()
-	mycfg.User = cfg["mysql_user"]
-	mycfg.Passwd = cfg["mysql_password"]
-	mycfg.Net = "tcp"
-	mycfg.Addr = fmt.Sprintf("%s:%d", host, portNum)
-	mycfg.DBName = database
-	mycfg.ParseTime = true
-	mycfg.Loc = time.UTC
-	mycfg.Timeout = connectTimeout
-	mycfg.ReadTimeout = readTimeout
-	mycfg.AllowNativePasswords = true
-	mycfg.Params = map[string]string{"charset": "utf8mb4"}
-
-	return mycfg.FormatDSN(), nil
+	return shared.BuildMySQLDSN(cfg, shared.MySQLDSNOptions{
+		ConnectTimeout: connectTimeout,
+		ReadTimeout:    readTimeout,
+	})
 }
 
 // NewReader opens a connection to the Drupal database and detects its schema.

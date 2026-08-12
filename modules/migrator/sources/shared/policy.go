@@ -26,8 +26,34 @@ func CheckDBHostAllowed(host string) error {
 	return checkHostAgainstList(host, os.Getenv(EnvAllowedDBHosts))
 }
 
-// checkHostAgainstList validates host against a comma-separated allowlist.
+// hostForbiddenChars are characters that never appear in a hostname or IP
+// literal but are structurally meaningful inside a MySQL DSN.
+//
+// mysql.Config.FormatDSN escapes DBName and parameter values but writes Addr
+// verbatim between "(" and ")". Since ParseDSN scans backwards for the last
+// "@" and forwards for the first "(", a host such as
+// "x@unix(/var/run/mysqld/mysqld.sock" re-parses with Net == "unix" instead of
+// the intended "tcp". Rejecting these characters keeps the address a plain
+// host, so the escaping guarantees of FormatDSN hold for the whole DSN.
+const hostForbiddenChars = "@()/\\?#& \t\r\n"
+
+// validateHostShape rejects hosts that could alter DSN structure.
+func validateHostShape(host string) error {
+	if strings.ContainsAny(host, hostForbiddenChars) {
+		return fmt.Errorf("invalid database host %q: must be a bare hostname or IP", host)
+	}
+	return nil
+}
+
+// checkHostAgainstList validates host shape, then checks it against a
+// comma-separated allowlist.
 func checkHostAgainstList(host, raw string) error {
+	// Shape is validated even when the allowlist is empty: an empty allowlist
+	// means "any host", not "any string".
+	if err := validateHostShape(host); err != nil {
+		return err
+	}
+
 	allowed, err := ParseAllowedHosts(raw)
 	if err != nil {
 		return err

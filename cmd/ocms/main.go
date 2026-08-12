@@ -974,6 +974,13 @@ func runPostModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql
 			return err
 		}
 	}
+	if cfg.RequireMigratorAllowedDBHosts &&
+		strings.TrimSpace(cfg.MigratorAllowedDBHosts) == "" &&
+		moduleRegistry.IsActive("migrator") {
+		return fmt.Errorf(
+			"refusing to start in production: migrator module is active but OCMS_MIGRATOR_ALLOWED_DB_HOSTS is not configured",
+		)
+	}
 	return nil
 }
 

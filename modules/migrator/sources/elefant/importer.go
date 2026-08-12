@@ -66,44 +66,64 @@ func (s *Source) ConfigFields() []types.ConfigField {
 // envOrDefault returns the environment variable value or the default if not set.
 var envOrDefault = shared.EnvOrDefault
 
+// Connection bounds for the source database. Mirrors the Drupal source: a
+// migration is a long sequence of modest reads, so the pool stays small and
+// every statement is bounded.
+const (
+	connectTimeout  = 10 * time.Second
+	readTimeout     = 60 * time.Second
+	maxOpenConns    = 4
+	connMaxLifetime = 30 * time.Minute
+)
+
 // buildDSN builds a MySQL DSN from the config.
-func (s *Source) buildDSN(cfg map[string]string) string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
-		cfg["mysql_user"],
-		cfg["mysql_password"],
-		cfg["mysql_host"],
-		cfg["mysql_port"],
-		cfg["mysql_database"],
-	)
+//
+// It delegates to shared.BuildMySQLDSN rather than formatting a string: raw
+// interpolation let a database name such as "db?allowAllFiles=true" inject
+// driver parameters and turn on LOCAL INFILE handling, and it bypassed the
+// OCMS_MIGRATOR_ALLOWED_DB_HOSTS allowlist entirely.
+func (s *Source) buildDSN(cfg map[string]string) (string, error) {
+	return shared.BuildMySQLDSN(cfg, shared.MySQLDSNOptions{
+		ConnectTimeout: connectTimeout,
+		ReadTimeout:    readTimeout,
+	})
+}
+
+// openReader builds the DSN and opens a bounded connection to the source.
+func (s *Source) openReader(ctx context.Context, cfg map[string]string) (*Reader, error) {
+	dsn, err := s.buildDSN(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return NewReader(ctx, dsn, cfg["table_prefix"])
+}
+
+// closeReader closes a reader, logging rather than dropping a close failure.
+func closeReader(reader *Reader) {
+	if err := reader.Close(); err != nil {
+		slog.Error("failed to close elefant reader", "error", err)
+	}
 }
 
 // TestConnection tests the connection to the Elefant database.
 func (s *Source) TestConnection(cfg map[string]string) error {
-	dsn := s.buildDSN(cfg)
+	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout+readTimeout)
+	defer cancel()
+
 	prefix := cfg["table_prefix"]
-	reader, err := NewReader(dsn, prefix)
+	reader, err := s.openReader(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := reader.Close(); err != nil {
-			slog.Error("failed to close elefant reader", "error", err)
-		}
-	}()
+	defer closeReader(reader)
 
-	// Try to get counts to verify tables exist
-	postCount, err := reader.GetPostCount()
-	if err != nil {
+	// Query both counts to verify the expected tables exist.
+	if _, err := reader.GetPostCount(ctx); err != nil {
 		return fmt.Errorf("failed to query %sblog_post table: %w", prefix, err)
 	}
-
-	tagCount, err := reader.GetTagCount()
-	if err != nil {
+	if _, err := reader.GetTagCount(ctx); err != nil {
 		return fmt.Errorf("failed to query %sblog_tag table: %w", prefix, err)
 	}
-
-	_ = postCount
-	_ = tagCount
 
 	return nil
 }
@@ -116,17 +136,11 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	result := &types.ImportResult{}
 
 	// Connect to Elefant database
-	dsn := s.buildDSN(cfg)
-	prefix := cfg["table_prefix"]
-	reader, err := NewReader(dsn, prefix)
+	reader, err := s.openReader(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Elefant database: %w", err)
 	}
-	defer func() {
-		if err := reader.Close(); err != nil {
-			slog.Error("failed to close elefant reader", "error", err)
-		}
-	}()
+	defer closeReader(reader)
 
 	// Get oCMS store
 	queries := store.New(db)
@@ -234,7 +248,7 @@ func (s *Source) buildExistingTagMap(ctx context.Context, queries *store.Queries
 
 // importTags imports tags from Elefant.
 func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader *Reader, defaultLangCode string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) (map[string]int64, error) {
-	elefantTags, err := reader.GetTags()
+	elefantTags, err := reader.GetTags(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tags from Elefant: %w", err)
 	}
@@ -446,7 +460,7 @@ func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename st
 
 // importPosts imports blog posts from Elefant.
 func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, defaultLangCode string, tagMap map[string]int64, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
-	posts, err := reader.GetBlogPosts()
+	posts, err := reader.GetBlogPosts(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get posts from Elefant: %w", err)
 	}
@@ -562,7 +576,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 
 // importPages imports static webpages from Elefant.
 func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, defaultLangCode string, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
-	pages, err := reader.GetWebpages()
+	pages, err := reader.GetWebpages(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get webpages from Elefant: %w", err)
 	}
@@ -701,7 +715,7 @@ var nullStringToString = shared.NullString
 // so new random passwords are generated for imported users.
 // Users will need to use "forgot password" to set their own passwords.
 func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader *Reader, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
-	users, err := reader.GetUsers()
+	users, err := reader.GetUsers(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get users from Elefant: %w", err)
 	}

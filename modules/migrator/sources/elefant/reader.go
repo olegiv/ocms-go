@@ -4,14 +4,19 @@
 package elefant
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
+
+// pingTimeout bounds the initial connectivity check.
+const pingTimeout = 10 * time.Second
 
 // Reader reads data from an Elefant CMS MySQL database.
 type Reader struct {
@@ -30,7 +35,7 @@ type Reader struct {
 var sanitizeTablePrefix = shared.SanitizeTablePrefix
 
 // NewReader creates a new Elefant database reader.
-func NewReader(dsn string, tablePrefix string) (*Reader, error) {
+func NewReader(ctx context.Context, dsn string, tablePrefix string) (*Reader, error) {
 	// Validate table prefix to prevent SQL injection
 	if _, err := sanitizeTablePrefix(tablePrefix); err != nil {
 		return nil, fmt.Errorf("invalid table prefix: %w", err)
@@ -40,9 +45,14 @@ func NewReader(dsn string, tablePrefix string) (*Reader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetConnMaxLifetime(connMaxLifetime)
 
-	// Test connection
-	if err := db.Ping(); err != nil {
+	// Test connection under its own deadline so a black-holed host cannot pin
+	// this goroutine and its socket for the OS TCP timeout.
+	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
+	defer cancel()
+	if err := db.PingContext(pingCtx); err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			slog.Error("failed to close database after ping failure", "error", closeErr)
 		}
@@ -52,6 +62,21 @@ func NewReader(dsn string, tablePrefix string) (*Reader, error) {
 	return &Reader{db: db, prefix: tablePrefix}, nil
 }
 
+// countRows runs a COUNT(*) against a prefixed table under the caller's context.
+func (r *Reader) countRows(ctx context.Context, table, whereClause, failMsg string) (int, error) {
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return 0, fmt.Errorf("invalid table prefix: %w", err)
+	}
+
+	var count int
+	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s%s`%s", safePrefix, table, whereClause)
+	if err := r.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
+		return 0, fmt.Errorf("%s: %w", failMsg, err)
+	}
+	return count, nil
+}
+
 // Close closes the database connection.
 func (r *Reader) Close() error {
 	return r.db.Close()
@@ -59,7 +84,7 @@ func (r *Reader) Close() error {
 
 // detectColumns checks which columns exist in the blog_post table.
 // Columns slug, description, and keywords were added in Elefant v1.1.5.
-func (r *Reader) detectColumns() error {
+func (r *Reader) detectColumns(ctx context.Context) error {
 	if r.schemaDetected {
 		return nil
 	}
@@ -72,7 +97,7 @@ func (r *Reader) detectColumns() error {
 	`
 
 	tableName := r.prefix + "blog_post"
-	rows, err := r.db.Query(query, tableName)
+	rows, err := r.db.QueryContext(ctx, query, tableName)
 	if err != nil {
 		return fmt.Errorf("failed to query column information: %w", err)
 	}
@@ -162,7 +187,7 @@ func (r *Reader) scanBlogPost(rows *sql.Rows) (BlogPost, error) {
 }
 
 // queryBlogPosts executes a blog post query and returns the results.
-func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
+func (r *Reader) queryBlogPosts(ctx context.Context, whereClause string) ([]BlogPost, error) {
 	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
@@ -170,14 +195,14 @@ func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
 	}
 
 	// Detect schema to know which columns exist
-	if err := r.detectColumns(); err != nil {
+	if err := r.detectColumns(ctx); err != nil {
 		return nil, fmt.Errorf("failed to detect schema: %w", err)
 	}
 
 	cols := r.buildBlogPostColumns()
 	query := fmt.Sprintf("SELECT %s FROM `%sblog_post` %s ORDER BY ts DESC", cols, safePrefix, whereClause)
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query blog posts: %w", err)
 	}
@@ -204,17 +229,17 @@ func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
 }
 
 // GetBlogPosts retrieves all blog posts from the database.
-func (r *Reader) GetBlogPosts() ([]BlogPost, error) {
-	return r.queryBlogPosts("")
+func (r *Reader) GetBlogPosts(ctx context.Context) ([]BlogPost, error) {
+	return r.queryBlogPosts(ctx, "")
 }
 
 // GetPublishedBlogPosts retrieves only published blog posts.
-func (r *Reader) GetPublishedBlogPosts() ([]BlogPost, error) {
-	return r.queryBlogPosts(" WHERE published = 'yes'")
+func (r *Reader) GetPublishedBlogPosts(ctx context.Context) ([]BlogPost, error) {
+	return r.queryBlogPosts(ctx, " WHERE published = 'yes'")
 }
 
 // GetWebpages retrieves all webpages from the database.
-func (r *Reader) GetWebpages() ([]Webpage, error) {
+func (r *Reader) GetWebpages(ctx context.Context) ([]Webpage, error) {
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
 		return nil, fmt.Errorf("invalid table prefix: %w", err)
@@ -225,7 +250,7 @@ func (r *Reader) GetWebpages() ([]Webpage, error) {
 		safePrefix,
 	)
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query webpages: %w", err)
 	}
@@ -252,23 +277,12 @@ func (r *Reader) GetWebpages() ([]Webpage, error) {
 }
 
 // GetWebpageCount returns the total number of webpages.
-func (r *Reader) GetWebpageCount() (int, error) {
-	safePrefix, err := sanitizeTablePrefix(r.prefix)
-	if err != nil {
-		return 0, fmt.Errorf("invalid table prefix: %w", err)
-	}
-
-	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%swebpage`", safePrefix)
-	err = r.db.QueryRow(query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count webpages: %w", err)
-	}
-	return count, nil
+func (r *Reader) GetWebpageCount(ctx context.Context) (int, error) {
+	return r.countRows(ctx, "webpage", "", "failed to count webpages")
 }
 
 // GetTags retrieves all unique tags from the blog_tag table.
-func (r *Reader) GetTags() ([]BlogTag, error) {
+func (r *Reader) GetTags(ctx context.Context) ([]BlogTag, error) {
 	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
@@ -277,7 +291,7 @@ func (r *Reader) GetTags() ([]BlogTag, error) {
 
 	query := fmt.Sprintf("SELECT id FROM `%sblog_tag` ORDER BY id", safePrefix)
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tags: %w", err)
 	}
@@ -304,7 +318,7 @@ func (r *Reader) GetTags() ([]BlogTag, error) {
 }
 
 // GetUsers retrieves all users from the database.
-func (r *Reader) GetUsers() ([]User, error) {
+func (r *Reader) GetUsers(ctx context.Context) ([]User, error) {
 	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
@@ -313,7 +327,7 @@ func (r *Reader) GetUsers() ([]User, error) {
 
 	query := fmt.Sprintf("SELECT id, email, name FROM `%suser` ORDER BY id", safePrefix)
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
@@ -340,54 +354,18 @@ func (r *Reader) GetUsers() ([]User, error) {
 }
 
 // GetPostCount returns the total number of blog posts.
-func (r *Reader) GetPostCount() (int, error) {
-	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
-	safePrefix, err := sanitizeTablePrefix(r.prefix)
-	if err != nil {
-		return 0, fmt.Errorf("invalid table prefix: %w", err)
-	}
-
-	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%sblog_post`", safePrefix)
-	err = r.db.QueryRow(query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count posts: %w", err)
-	}
-	return count, nil
+func (r *Reader) GetPostCount(ctx context.Context) (int, error) {
+	return r.countRows(ctx, "blog_post", "", "failed to count posts")
 }
 
 // GetPublishedPostCount returns the number of published blog posts.
-func (r *Reader) GetPublishedPostCount() (int, error) {
-	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
-	safePrefix, err := sanitizeTablePrefix(r.prefix)
-	if err != nil {
-		return 0, fmt.Errorf("invalid table prefix: %w", err)
-	}
-
-	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%sblog_post` WHERE published = 'yes'", safePrefix)
-	err = r.db.QueryRow(query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count published posts: %w", err)
-	}
-	return count, nil
+func (r *Reader) GetPublishedPostCount(ctx context.Context) (int, error) {
+	return r.countRows(ctx, "blog_post", " WHERE published = 'yes'", "failed to count published posts")
 }
 
 // GetTagCount returns the total number of tags.
-func (r *Reader) GetTagCount() (int, error) {
-	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
-	safePrefix, err := sanitizeTablePrefix(r.prefix)
-	if err != nil {
-		return 0, fmt.Errorf("invalid table prefix: %w", err)
-	}
-
-	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%sblog_tag`", safePrefix)
-	err = r.db.QueryRow(query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count tags: %w", err)
-	}
-	return count, nil
+func (r *Reader) GetTagCount(ctx context.Context) (int, error) {
+	return r.countRows(ctx, "blog_tag", "", "failed to count tags")
 }
 
 // allowedMediaMimeTypes defines MIME types that can be imported.
