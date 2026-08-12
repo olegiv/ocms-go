@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"embed"
 	"html/template"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -222,5 +223,51 @@ func (m *Module) Migrations() []module.Migration {
 				return err
 			},
 		},
+		{
+			Version:     3,
+			Description: "Separate informational notices from errors on import jobs",
+			Up: func(db *sql.DB) error {
+				// Notices are things the operator does not need to act on — an
+				// optional source table the site does not have, content
+				// deliberately out of scope. Storing them alongside errors made
+				// a healthy import report failures it had not had.
+				if columnExists(db, "migrator_import_jobs", "notices") {
+					return nil
+				}
+				_, err := db.Exec(
+					`ALTER TABLE migrator_import_jobs ADD COLUMN notices TEXT NOT NULL DEFAULT '[]'`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				// SQLite before 3.35 cannot drop a column, and losing the
+				// notices is harmless, so this is intentionally a no-op.
+				return nil
+			},
+		},
 	}
+}
+
+// columnExists reports whether a table already has the named column, so the
+// migration is safe to re-run against a database that has it.
+func columnExists(db *sql.DB, table, column string) bool {
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return false
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
+
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return false
+		}
+		if name == column {
+			return true
+		}
+	}
+	return false
 }

@@ -267,7 +267,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	}
 
 	for _, missing := range reader.Schema().MissingOptional() {
-		result.AddError("optional table %q not found in source database; related content skipped", missing)
+		result.AddNotice("optional table %q not found in source database; related content skipped", missing)
 	}
 
 	stages := []struct {
@@ -297,7 +297,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	}
 
 	if translations, err := reader.TranslationCount(ctx); err == nil && translations > 0 {
-		result.AddError("%d non-default-language node translations were not imported", translations)
+		result.AddNotice("%d non-default-language node translations were not imported", translations)
 	}
 
 	types.Report(ctx, tracker, types.Progress{Source: s.Name(), Phase: types.EntityPage})
@@ -656,7 +656,7 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 		return nil
 	}
 	if st.filesPath == "" {
-		st.result.AddError("no files path configured; media was not imported")
+		st.result.AddNotice("no files path configured; media was not imported")
 		return nil
 	}
 
@@ -692,7 +692,7 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 
 		fullPath, err := resolveFilePath(f, cleanRoot, realRoot)
 		if err != nil {
-			st.result.AddError("%s: %v", f.Filename, err)
+			st.result.AddNotice("%s: %v", f.Filename, err)
 			st.result.MediaSkipped++
 			continue
 		}
@@ -1105,7 +1105,7 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 		}
 		pageID, url, err := s.resolveMenuTarget(st, l)
 		if err != nil {
-			st.result.AddError("menu %q: %v", menuName, err)
+			st.result.AddNotice("menu %q: %v", menuName, err)
 			continue
 		}
 

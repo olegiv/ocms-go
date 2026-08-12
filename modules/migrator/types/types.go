@@ -164,23 +164,48 @@ type ImportResult struct {
 	MenusSkipped      int `json:"menus_skipped"`
 	UsersSkipped      int `json:"users_skipped"`
 
+	// Errors records things that failed but should have worked: a row that
+	// could not be created, a table that exists but could not be read.
 	Errors []string `json:"errors,omitempty"`
+
+	// Notices records expected, informational outcomes: an optional source
+	// table the site does not have, content deliberately out of scope, a link
+	// form with no oCMS equivalent.
+	//
+	// These are kept apart from Errors because reporting them as errors makes a
+	// perfectly healthy import look broken — a stock Drupal site with no body
+	// field and some translations would report "3 errors" having done exactly
+	// what it was asked to.
+	Notices []string `json:"notices,omitempty"`
 }
 
-// MaxTrackedErrors caps the number of retained per-item errors so a badly
-// broken source database cannot grow the result — and the persisted job row —
-// without bound.
-const MaxTrackedErrors = 100
+// MaxTrackedMessages caps the number of retained per-item errors and notices so
+// a badly broken source database cannot grow the result — and the persisted job
+// row — without bound.
+const MaxTrackedMessages = 100
 
 // AddError appends a per-item error, capping the retained list. Once the cap is
-// reached the final entry becomes a truncation notice, so "no more errors" is
+// reached the final entry becomes a truncation marker, so "no more errors" is
 // distinguishable from "we stopped recording them".
 func (r *ImportResult) AddError(format string, args ...any) {
-	if len(r.Errors) >= MaxTrackedErrors {
-		r.Errors[MaxTrackedErrors-1] = "additional errors omitted"
-		return
+	r.Errors = appendCapped(r.Errors, "additional errors omitted", format, args...)
+}
+
+// AddNotice appends an informational message about expected, non-fatal
+// behaviour. Use this rather than AddError for anything the operator does not
+// need to act on.
+func (r *ImportResult) AddNotice(format string, args ...any) {
+	r.Notices = appendCapped(r.Notices, "additional notices omitted", format, args...)
+}
+
+// appendCapped appends a formatted message, replacing the last entry with a
+// truncation marker once the cap is reached.
+func appendCapped(messages []string, truncation, format string, args ...any) []string {
+	if len(messages) >= MaxTrackedMessages {
+		messages[MaxTrackedMessages-1] = truncation
+		return messages
 	}
-	r.Errors = append(r.Errors, fmt.Sprintf(format, args...))
+	return append(messages, fmt.Sprintf(format, args...))
 }
 
 // Counters returns imported counts keyed by entity type.
@@ -222,9 +247,14 @@ func (r *ImportResult) TotalSkipped() int {
 	return sumCounters(r.SkippedCounters())
 }
 
-// HasErrors returns true if there were any errors during import.
+// HasErrors returns true if anything failed during the import.
 func (r *ImportResult) HasErrors() bool {
 	return len(r.Errors) > 0
+}
+
+// HasNotices returns true if the import recorded informational messages.
+func (r *ImportResult) HasNotices() bool {
+	return len(r.Notices) > 0
 }
 
 // sumCounters totals a counter map.

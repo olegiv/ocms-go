@@ -65,6 +65,7 @@ type ImportJob struct {
 	Total          int
 	Counters       map[string]int
 	Errors         []string
+	Notices        []string
 	FatalError     string
 	StartedByEmail string
 	StartedAt      time.Time
@@ -83,6 +84,9 @@ func (j *ImportJob) IsTerminal() bool {
 func (j *ImportJob) IsStale(now time.Time) bool {
 	return j.Status == JobRunning && now.Sub(j.UpdatedAt) > staleJobThreshold
 }
+
+// HasNotices reports whether the job recorded informational messages.
+func (j *ImportJob) HasNotices() bool { return len(j.Notices) > 0 }
 
 // Count returns the imported count for an entity type.
 func (j *ImportJob) Count(entityType types.EntityType) int {
@@ -210,7 +214,7 @@ func (m *Module) startJob(ctx context.Context, source, startedByEmail string, us
 // latestJob returns the most recent job for a source, or nil when none exists.
 func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, error) {
 	row := m.ctx.DB.QueryRowContext(ctx, `
-		SELECT id, source, status, phase, processed, total, counters, errors,
+		SELECT id, source, status, phase, processed, total, counters, errors, notices,
 		       fatal_error, started_by_email, started_at, updated_at, finished_at
 		FROM migrator_import_jobs
 		WHERE source = ?
@@ -222,9 +226,10 @@ func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, erro
 		status       string
 		countersJSON string
 		errorsJSON   string
+		noticesJSON  string
 	)
 	err := row.Scan(&job.ID, &job.Source, &status, &job.Phase, &job.Processed, &job.Total,
-		&countersJSON, &errorsJSON, &job.FatalError, &job.StartedByEmail,
+		&countersJSON, &errorsJSON, &noticesJSON, &job.FatalError, &job.StartedByEmail,
 		&job.StartedAt, &job.UpdatedAt, &job.FinishedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -239,6 +244,9 @@ func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, erro
 	}
 	if err := json.Unmarshal([]byte(errorsJSON), &job.Errors); err != nil {
 		job.Errors = nil
+	}
+	if err := json.Unmarshal([]byte(noticesJSON), &job.Notices); err != nil {
+		job.Notices = nil
 	}
 	return &job, nil
 }
@@ -270,10 +278,11 @@ func (m *Module) flushJobProgress(ctx context.Context, jobID int64, snap progres
 // than merges with the live tally.
 func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, result *ImportResult, fatal error) error {
 	counters := map[string]int{}
-	var jobErrors []string
+	var jobErrors, jobNotices []string
 	if result != nil {
 		counters = stringKeyed(result.Counters())
 		jobErrors = result.Errors
+		jobNotices = result.Notices
 	}
 
 	countersJSON, err := json.Marshal(counters)
@@ -284,6 +293,10 @@ func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, r
 	if err != nil {
 		return fmt.Errorf("failed to encode import errors: %w", err)
 	}
+	noticesJSON, err := json.Marshal(jobNotices)
+	if err != nil {
+		return fmt.Errorf("failed to encode import notices: %w", err)
+	}
 
 	fatalText := ""
 	if fatal != nil {
@@ -293,9 +306,10 @@ func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, r
 	now := time.Now()
 	_, err = m.ctx.DB.ExecContext(ctx, `
 		UPDATE migrator_import_jobs
-		SET status = ?, counters = ?, errors = ?, fatal_error = ?, updated_at = ?, finished_at = ?
+		SET status = ?, counters = ?, errors = ?, notices = ?, fatal_error = ?, updated_at = ?, finished_at = ?
 		WHERE id = ?`,
-		string(status), string(countersJSON), string(errorsJSON), fatalText, now, now, jobID)
+		string(status), string(countersJSON), string(errorsJSON), string(noticesJSON),
+		fatalText, now, now, jobID)
 	if err != nil {
 		return fmt.Errorf("failed to finalize import job: %w", err)
 	}

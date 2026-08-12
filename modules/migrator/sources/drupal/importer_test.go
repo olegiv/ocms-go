@@ -601,8 +601,13 @@ func TestImportMenusResolvesTargetsAndHierarchy(t *testing.T) {
 	if st.result.MenuItemsImported != 3 {
 		t.Errorf("MenuItemsImported = %d, want 3", st.result.MenuItemsImported)
 	}
-	if !st.result.HasErrors() {
-		t.Error("the unsupported route: link should have been reported as an error")
+	// A route: link has no oCMS equivalent — that is an expected limitation of
+	// the mapping, not a failure, so it must not be reported as an error.
+	if st.result.HasErrors() {
+		t.Errorf("unsupported link forms must not be errors, got: %v", st.result.Errors)
+	}
+	if !st.result.HasNotices() {
+		t.Error("the unsupported route: link should have been reported as a notice")
 	}
 
 	menu, err := queries.GetMenuBySlug(ctx, "main")
@@ -708,8 +713,12 @@ func TestImportMediaWithoutFilesPathIsReported(t *testing.T) {
 	if err := (&Source{}).importMedia(context.Background(), st); err != nil {
 		t.Fatalf("importMedia() error = %v", err)
 	}
-	if !st.result.HasErrors() {
-		t.Error("importing media with no files path configured should be reported")
+	// Not having configured a files path is a choice, not a failure.
+	if st.result.HasErrors() {
+		t.Errorf("a missing files path must not be an error, got: %v", st.result.Errors)
+	}
+	if !st.result.HasNotices() {
+		t.Error("importing media with no files path configured should be reported as a notice")
 	}
 	if st.result.MediaImported != 0 {
 		t.Errorf("MediaImported = %d, want 0", st.result.MediaImported)
@@ -749,5 +758,50 @@ func TestReportProgressReachesTracker(t *testing.T) {
 	}
 	if last.Total != 1 {
 		t.Errorf("progress total = %d, want 1", last.Total)
+	}
+}
+
+// TestExpectedOutcomesAreNoticesNotErrors pins the classification of the
+// messages a healthy Drupal import routinely produces.
+//
+// A real migration reported "3 errors" while having done exactly what it was
+// asked to: the site had no body field, no image field, and 19 translations
+// that are deliberately out of scope. None of those need the operator to act,
+// and calling them errors makes a clean import look broken.
+func TestExpectedOutcomesAreNoticesNotErrors(t *testing.T) {
+	result := &types.ImportResult{}
+
+	// The two sites that produced the misleading report, driven exactly as
+	// Import drives them for an install with no optional tables.
+	missing := (Schema{}).MissingOptional()
+	for _, table := range missing {
+		result.AddNotice("optional table %q not found in source database; related content skipped", table)
+	}
+	result.AddNotice("%d non-default-language node translations were not imported", 19)
+
+	if result.HasErrors() {
+		t.Errorf("expected outcomes were classified as errors: %v", result.Errors)
+	}
+	if !result.HasNotices() {
+		t.Fatal("expected outcomes must still be surfaced to the operator, as notices")
+	}
+	if len(result.Notices) != len(missing)+1 {
+		t.Errorf("got %d notices, want one per missing table (%d) plus the translation count",
+			len(result.Notices), len(missing))
+	}
+
+	// node__body is the table whose absence originally aborted the node stage;
+	// it must now be reported, and reported as a notice.
+	var namesBody bool
+	for _, msg := range result.Notices {
+		if strings.Contains(msg, tableNodeBody) {
+			namesBody = true
+		}
+		if strings.Contains(strings.ToLower(msg), "failed") {
+			t.Errorf("notice reads like a failure: %q", msg)
+		}
+	}
+	if !namesBody {
+		t.Errorf("notices should name %s: %v", tableNodeBody, result.Notices)
 	}
 }

@@ -496,3 +496,121 @@ func TestSourceLabelsAreTranslated(t *testing.T) {
 		}
 	}
 }
+
+// informationalPhrases mark a message describing an expected outcome rather
+// than a failure. A message containing one of these belongs in Notices.
+var informationalPhrases = []string{
+	"not found in source database",
+	"were not imported",
+	"was not imported",
+	"no ocms equivalent",
+	"no files path configured",
+	"deliberately",
+}
+
+// failurePhrases mark a message describing something that went wrong. A message
+// containing one of these belongs in Errors.
+var failurePhrases = []string{
+	"failed to",
+}
+
+// TestImportMessagesAreClassifiedCorrectly enforces the split between things
+// that failed and things the operator simply needs to know.
+//
+// A real migration reported "3 errors" for a healthy import: an optional source
+// table the site does not have, a second one, and translations that are out of
+// scope by design. Fixing the three call sites alone would leave the next one
+// free to regress, so the rule is enforced over the source text.
+//
+// Bug state: change any AddNotice describing an expected outcome back to
+// AddError and this names the file, line and message.
+func TestImportMessagesAreClassifiedCorrectly(t *testing.T) {
+	calls := resultMessageCalls(t)
+	if len(calls) == 0 {
+		t.Fatal("found no AddError/AddNotice call sites; the AST walk is broken")
+	}
+
+	for _, call := range calls {
+		lower := strings.ToLower(call.format)
+
+		if call.method == "AddError" {
+			for _, phrase := range informationalPhrases {
+				if strings.Contains(lower, phrase) {
+					t.Errorf("%s: AddError(%q) describes an expected outcome (%q); "+
+						"use AddNotice, or a healthy import reports it as a failure",
+						call.pos, call.format, phrase)
+				}
+			}
+			continue
+		}
+
+		for _, phrase := range failurePhrases {
+			if strings.Contains(lower, phrase) {
+				t.Errorf("%s: AddNotice(%q) describes a failure (%q); "+
+					"use AddError, or a real problem is hidden as an informational message",
+					call.pos, call.format, phrase)
+			}
+		}
+	}
+}
+
+// messageCall is one ImportResult.AddError / AddNotice call site.
+type messageCall struct {
+	method string
+	format string
+	pos    string
+}
+
+// resultMessageCalls AST-walks the migrator tree and returns every AddError and
+// AddNotice call whose format string is a literal.
+func resultMessageCalls(t *testing.T) []messageCall {
+	t.Helper()
+	var calls []messageCall
+	fset := token.NewFileSet()
+
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return err
+		}
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if sel.Sel.Name != "AddError" && sel.Sel.Name != "AddNotice" {
+				return true
+			}
+			if len(call.Args) == 0 {
+				return true
+			}
+			lit, ok := call.Args[0].(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			calls = append(calls, messageCall{
+				method: sel.Sel.Name,
+				format: strings.Trim(lit.Value, `"`),
+				pos:    fset.Position(call.Pos()).String(),
+			})
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to walk migrator sources: %v", err)
+	}
+	return calls
+}

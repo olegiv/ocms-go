@@ -392,6 +392,11 @@ func (m *Module) finalizeJob(ctx context.Context, run jobRun, status JobStatus, 
 		for i, errMsg := range result.Errors {
 			m.ctx.Logger.Error("import error", "source", run.SourceName, "index", i, "message", errMsg)
 		}
+		// Notices are expected outcomes, not failures — logging them at error
+		// level is what made a healthy import look broken in the first place.
+		for i, notice := range result.Notices {
+			m.ctx.Logger.Info("import notice", "source", run.SourceName, "index", i, "message", notice)
+		}
 		m.ctx.Logger.Info("import completed",
 			"source", run.SourceName,
 			"job_id", run.ID,
@@ -399,6 +404,7 @@ func (m *Module) finalizeJob(ctx context.Context, run jobRun, status JobStatus, 
 			"imported", result.TotalImported(),
 			"skipped", result.TotalSkipped(),
 			"errors", len(result.Errors),
+			"notices", len(result.Notices),
 		)
 	}
 
@@ -412,6 +418,7 @@ func (m *Module) finalizeJob(ctx context.Context, run jobRun, status JobStatus, 
 			}
 			metadata["skipped"] = result.TotalSkipped()
 			metadata["errors"] = len(result.Errors)
+			metadata["notices"] = len(result.Notices)
 		}
 		userID := run.UserID
 		_ = m.ctx.Events.LogMigratorEvent(finishCtx, "info",

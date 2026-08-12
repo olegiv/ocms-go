@@ -138,6 +138,15 @@ Stage order is forced by referential integrity and by body rewriting:
 
 Per-item failures are appended to the result and the import continues; only connection, author, and language failures abort.
 
+### Errors versus notices
+
+The result separates two kinds of message, because conflating them made a healthy import look broken — a stock site with no body field and some translations reported "3 errors" having done exactly what it was asked to.
+
+- **Errors** are things that failed but should have worked: a row that could not be created, a table that exists but could not be read.
+- **Notices** are expected, informational outcomes: an optional source table the site does not have, content deliberately out of scope, a link form with no oCMS equivalent, a `private://` file.
+
+Errors are logged at error level and shown in a red block; notices are logged at info level and shown in a muted block. `TestImportMessagesAreClassifiedCorrectly` enforces the split over the source text, so a new message cannot quietly land in the wrong bucket.
+
 ### Body HTML
 
 Drupal bodies are rewritten before storage, in this order:
@@ -177,6 +186,8 @@ CREATE TABLE migrator_imported_items (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+Migration 3 adds a `notices` column to the job table, keeping informational messages apart from failures.
 
 Migration 2 creates the job table. Counters live in a single JSON column deliberately: `ImportResult` gains fields as sources learn new entity classes, and a blob avoids a schema migration per counter.
 
@@ -261,3 +272,6 @@ DRUPAL_FILES=/var/www/html/sites/default/files \
 | `TestLocaleCoversEntityTypesAndJobStatuses` | an entity type or job status with no label, rendering as a raw i18n key |
 | `TestSourceLabelsAreTranslated` | a source shipping an untranslated field label |
 | `TestAdminRoutesAreGatedToAdmins` | a route registered outside the `RequireAdmin` group |
+| `TestImportMessagesAreClassifiedCorrectly` | an expected outcome reported as an error, or a real failure hidden as a notice |
+| `TestOptionalTableGettersShortCircuit` | an optional source table queried without its schema guard (nil `*sql.DB` makes the missing guard panic) |
+| `TestBuildNodeQueryOmitsBodyJoinWhenAbsent` | the node query joining a body table the site does not have |

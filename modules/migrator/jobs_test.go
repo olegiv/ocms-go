@@ -665,3 +665,86 @@ func TestAdminRoutesAreGatedToAdmins(t *testing.T) {
 		}
 	}
 }
+
+// TestFinishJobKeepsNoticesSeparateFromErrors proves the two message classes
+// survive the round trip through the job row independently.
+//
+// They shared a column before, which is how an import with three informational
+// messages and zero failures came to report "3 errors".
+func TestFinishJobKeepsNoticesSeparateFromErrors(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+
+	jobID, err := m.startJob(ctx, "drupal", "admin@example.com", 1, ImportOptions{})
+	if err != nil {
+		t.Fatalf("startJob() error = %v", err)
+	}
+
+	result := &ImportResult{PagesImported: 2}
+	result.AddNotice("optional table %q not found in source database; related content skipped", "node__body")
+	result.AddNotice("%d non-default-language node translations were not imported", 19)
+
+	if err := m.finishJob(ctx, jobID, JobCompleted, result, nil); err != nil {
+		t.Fatalf("finishJob() error = %v", err)
+	}
+
+	job, err := m.latestJob(ctx, "drupal")
+	if err != nil {
+		t.Fatalf("latestJob() error = %v", err)
+	}
+	if len(job.Errors) != 0 {
+		t.Errorf("job reports %d errors, want 0: %v", len(job.Errors), job.Errors)
+	}
+	if len(job.Notices) != 2 {
+		t.Errorf("job reports %d notices, want 2: %v", len(job.Notices), job.Notices)
+	}
+	if !job.HasNotices() {
+		t.Error("HasNotices() should be true")
+	}
+	if job.Status != JobCompleted {
+		t.Errorf("Status = %q, want %q — notices must not affect the outcome", job.Status, JobCompleted)
+	}
+}
+
+// TestMigrationV3AddsNoticesColumn covers the added column and its idempotence,
+// since the migration runs against databases that already have the job table.
+func TestMigrationV3AddsNoticesColumn(t *testing.T) {
+	m := testModule(t)
+
+	var count int
+	if err := m.ctx.DB.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('migrator_import_jobs') WHERE name = 'notices'`,
+	).Scan(&count); err != nil {
+		t.Fatalf("failed to inspect job table: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("migrator_import_jobs has %d 'notices' columns, want 1", count)
+	}
+
+	// Re-running must not fail on a database that already has the column.
+	for _, mig := range m.Migrations() {
+		if mig.Version == 3 {
+			if err := mig.Up(m.ctx.DB); err != nil {
+				t.Errorf("re-running migration 3 failed: %v", err)
+			}
+		}
+	}
+}
+
+// TestJobStatusFragmentSeparatesNoticesFromErrors keeps the two classes visually
+// distinct in the admin UI.
+func TestJobStatusFragmentSeparatesNoticesFromErrors(t *testing.T) {
+	markup := renderJobStatus(t, &ImportJob{
+		Status:    JobCompleted,
+		UpdatedAt: time.Now(),
+		Counters:  map[string]int{string(types.EntityPage): 2},
+		Notices:   []string{"optional table \"node__body\" not found"},
+	})
+
+	if !strings.Contains(markup, "job-status-notices") {
+		t.Errorf("notices should render in their own block:\n%s", markup)
+	}
+	if strings.Contains(markup, "job-status-errors") {
+		t.Errorf("a job with only notices must not render an errors block:\n%s", markup)
+	}
+}

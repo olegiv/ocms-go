@@ -333,6 +333,16 @@ templ migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVi
 				</ul>
 			</details>
 		}
+		if len(data.Job.Notices) > 0 {
+			<details class="job-status-notices">
+				<summary>{ pc.T("migrator.job_notices", len(data.Job.Notices)) }</summary>
+				<ul>
+					for _, msg := range data.Job.Notices {
+						<li>{ msg }</li>
+					}
+				</ul>
+			</details>
+		}
 	}
 }
 
@@ -581,6 +591,93 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 
 			.btn-danger:hover {
 				background-color: #dc2626;
+			}
+
+			/* Import job status card */
+			.job-status {
+				border: 1px solid var(--border-color, #e5e7eb);
+				border-left-width: 4px;
+				border-radius: 8px;
+				padding: 1rem 1.25rem;
+				margin-bottom: 1.5rem;
+				background: var(--card-bg, #fff);
+			}
+
+			.job-status-idle { display: none; }
+			.job-status-running { border-left-color: var(--primary-color, #3b82f6); }
+			.job-status-completed { border-left-color: var(--success-color, #10b981); }
+			.job-status-failed { border-left-color: var(--danger-color, #ef4444); }
+			.job-status-interrupted { border-left-color: var(--warning-color, #f59e0b); }
+
+			.job-status-header {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+
+			.job-status-label { font-weight: 500; }
+			.job-status-value { font-weight: 600; }
+
+			.job-status-spinner {
+				width: 12px;
+				height: 12px;
+				border: 2px solid var(--primary-color, #3b82f6);
+				border-top-color: transparent;
+				border-radius: 50%;
+				animation: job-status-spin 0.8s linear infinite;
+			}
+
+			@keyframes job-status-spin {
+				to { transform: rotate(360deg); }
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				.job-status-spinner { animation: none; }
+			}
+
+			.job-status-phase,
+			.job-status-progress {
+				margin: 0.35rem 0 0 0;
+				color: var(--text-muted, #6b7280);
+				font-size: 0.875rem;
+			}
+
+			.job-status-counts {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				margin-top: 0.6rem;
+			}
+
+			.job-status-count {
+				background: var(--bg-subtle, #f3f4f6);
+				border-radius: 999px;
+				padding: 0.15rem 0.6rem;
+				font-size: 0.8125rem;
+			}
+
+			.job-status-error {
+				margin: 0.6rem 0 0 0;
+				color: var(--danger-color, #ef4444);
+				font-size: 0.875rem;
+			}
+
+			.job-status-errors,
+			.job-status-notices {
+				margin-top: 0.6rem;
+				font-size: 0.875rem;
+			}
+
+			.job-status-errors > summary { color: var(--danger-color, #ef4444); }
+
+			/* Notices are expected outcomes, not failures — a missing optional
+			   source table or out-of-scope content. They must not read as errors. */
+			.job-status-notices > summary { color: var(--text-muted, #6b7280); }
+
+			.job-status-errors ul,
+			.job-status-notices ul {
+				margin: 0.4rem 0 0 1.1rem;
+				padding: 0;
 			}
 		</style>
 		<script nonce={ templ.GetNonce(ctx) }>
