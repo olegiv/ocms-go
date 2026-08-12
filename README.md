@@ -322,6 +322,7 @@ Available release archives:
 | `OCMS_WEBHOOK_ALLOWED_HOSTS` | Allowed destination hosts for active webhook deliveries (exact hostname match) | - | No |
 | `OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS` | Fail startup in production when active webhooks exist without destination host allowlist | `false` (`true` in production when unset) | No |
 | `OCMS_MIGRATOR_ALLOWED_DB_HOSTS` | Allowed source-database hosts for the Migrator module (bare hostnames or IPs, no port). Empty = no restriction; migrator routes are admin-only regardless (see `docs/migrator-module.md`) | - | No |
+| `OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS` | Fail startup in production when the Migrator module is active without a source-database host allowlist | `false` (`true` in production when unset) | No |
 | `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` (`true` in production when unset) | No |
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` (`true` in production when unset) | No |
 | `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | Reject page writes containing suspicious HTML patterns | `false` (`true` in production when unset) | No |
