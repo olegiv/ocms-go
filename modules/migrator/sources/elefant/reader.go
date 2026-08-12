@@ -7,12 +7,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"mime"
-	"os"
-	"path/filepath"
-	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
 // Reader reads data from an Elefant CMS MySQL database.
@@ -27,32 +25,9 @@ type Reader struct {
 	schemaDetected bool
 }
 
-// maxTablePrefixLength is the maximum allowed length for a table prefix.
-const maxTablePrefixLength = 20
-
-// sanitizeTablePrefix validates that a table prefix contains only safe SQL identifier characters
-// (alphanumeric and underscore, max 20 characters) and returns the sanitized value.
-// This prevents SQL injection when the prefix is used in query building.
-func sanitizeTablePrefix(prefix string) (string, error) {
-	if prefix == "" {
-		return "", nil
-	}
-	if len(prefix) > maxTablePrefixLength {
-		return "", fmt.Errorf("invalid table prefix: exceeds maximum length of %d characters", maxTablePrefixLength)
-	}
-	// Create a new string by only copying valid characters.
-	// This helps break the taint trace in some static analysis tools.
-	var builder strings.Builder
-	for _, c := range prefix {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '_' {
-			builder.WriteRune(c)
-		} else {
-			return "", fmt.Errorf("invalid table prefix: contains invalid character %q", c)
-		}
-	}
-	return builder.String(), nil
-}
+// sanitizeTablePrefix validates a table prefix and returns the sanitized value.
+// The implementation is shared with every other migrator source.
+var sanitizeTablePrefix = shared.SanitizeTablePrefix
 
 // NewReader creates a new Elefant database reader.
 func NewReader(dsn string, tablePrefix string) (*Reader, error) {
@@ -416,144 +391,10 @@ func (r *Reader) GetTagCount() (int, error) {
 }
 
 // allowedMediaMimeTypes defines MIME types that can be imported.
-var allowedMediaMimeTypes = map[string]bool{
-	"image/jpeg":      true,
-	"image/png":       true,
-	"image/gif":       true,
-	"image/webp":      true,
-	"application/pdf": true,
-	"video/mp4":       true,
-	"video/webm":      true,
-}
+var allowedMediaMimeTypes = shared.AllowedMediaMimeTypes
 
 // ScanMediaFiles scans the Elefant files directory for media files.
-// It returns a list of MediaFile structs for files that match allowed MIME types.
-// Note: filesPath comes from admin configuration, reducing injection risk,
-// but we still validate it for defense in depth.
-func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
-	if filesPath == "" {
-		return nil, fmt.Errorf("files path is empty")
-	}
-
-	// Clean the path and check for traversal attempts
-	cleanPath := filepath.Clean(filesPath)
-	if strings.Contains(cleanPath, "..") {
-		return nil, fmt.Errorf("invalid files path: path traversal detected")
-	}
-
-	// Verify directory exists
-	info, err := os.Stat(cleanPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to access files directory: %w", err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("files path is not a directory: %s", cleanPath)
-	}
-
-	realRoot, err := filepath.EvalSymlinks(cleanPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve files directory: %w", err)
-	}
-	realRoot, err = filepath.Abs(realRoot)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve files directory absolute path: %w", err)
-	}
-
-	var files []MediaFile
-
-	err = filepath.Walk(cleanPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Skip symlinks to prevent importing files outside filesPath.
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil
-		}
-
-		resolvedPath, err := filepath.EvalSymlinks(path)
-		if err != nil {
-			return nil
-		}
-		resolvedPath, err = filepath.Abs(resolvedPath)
-		if err != nil {
-			return nil
-		}
-		relResolvedPath, err := filepath.Rel(realRoot, resolvedPath)
-		if err != nil || relResolvedPath == ".." || strings.HasPrefix(relResolvedPath, ".."+string(os.PathSeparator)) {
-			return nil
-		}
-
-		// Get MIME type from extension
-		mimeType := getMimeTypeFromExt(path)
-		if mimeType == "" || !allowedMediaMimeTypes[mimeType] {
-			return nil
-		}
-
-		// Get relative path from cleanPath
-		relPath, err := filepath.Rel(cleanPath, path)
-		if err != nil {
-			relPath = filepath.Base(path)
-		}
-
-		files = append(files, MediaFile{
-			Path:     relPath,
-			FullPath: resolvedPath,
-			Filename: info.Name(),
-			Size:     info.Size(),
-			MimeType: mimeType,
-		})
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan files directory: %w", err)
-	}
-
-	return files, nil
-}
+var ScanMediaFiles = shared.ScanMediaFiles
 
 // getMimeTypeFromExt returns the MIME type for a file based on its extension.
-func getMimeTypeFromExt(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == "" {
-		return ""
-	}
-
-	// Known types first for consistent cross-platform results
-	// (e.g., mime.TypeByExtension(".webm") returns "audio/webm" on some OS)
-	switch ext {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".gif":
-		return "image/gif"
-	case ".webp":
-		return "image/webp"
-	case ".pdf":
-		return "application/pdf"
-	case ".mp4":
-		return "video/mp4"
-	case ".webm":
-		return "video/webm"
-	}
-
-	// Fall back to standard library for other types
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType != "" {
-		// Strip charset suffix if present (e.g., "text/plain; charset=utf-8")
-		if idx := strings.Index(mimeType, ";"); idx != -1 {
-			mimeType = strings.TrimSpace(mimeType[:idx])
-		}
-		return mimeType
-	}
-
-	return ""
-}
+var getMimeTypeFromExt = shared.MimeTypeFromExt

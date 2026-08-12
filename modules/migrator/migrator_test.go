@@ -58,8 +58,8 @@ func TestModuleProperties(t *testing.T) {
 	if m.Name() != "migrator" {
 		t.Errorf("Name() = %q, want %q", m.Name(), "migrator")
 	}
-	if m.Version() != "1.0.0" {
-		t.Errorf("Version() = %q, want %q", m.Version(), "1.0.0")
+	if m.Version() != "1.1.0" {
+		t.Errorf("Version() = %q, want %q", m.Version(), "1.1.0")
 	}
 	if m.Description() == "" {
 		t.Error("Description() should not be empty")
@@ -83,7 +83,7 @@ func TestModuleProperties(t *testing.T) {
 
 func TestMigrations(t *testing.T) {
 	m := New()
-	moduleutil.AssertMigrations(t, m.Migrations(), 1)
+	moduleutil.AssertMigrations(t, m.Migrations(), 2)
 }
 
 func TestMigrationUp(t *testing.T) {

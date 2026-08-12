@@ -1443,6 +1443,7 @@ func run() error {
 		Events:            eventService,
 		Hooks:             hookRegistry,
 		SchedulerRegistry: schedulerRegistry,
+		Cache:             cacheManager,
 	}
 
 	// Register all modules

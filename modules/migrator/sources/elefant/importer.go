@@ -8,11 +8,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -65,12 +63,7 @@ func (s *Source) ConfigFields() []types.ConfigField {
 }
 
 // envOrDefault returns the environment variable value or the default if not set.
-func envOrDefault(key, defaultValue string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return defaultValue
-}
+var envOrDefault = shared.EnvOrDefault
 
 // buildDSN builds a MySQL DSN from the config.
 func (s *Source) buildDSN(cfg map[string]string) string {
@@ -115,12 +108,7 @@ func (s *Source) TestConnection(cfg map[string]string) error {
 }
 
 // getUploadDir returns the oCMS uploads directory from env or default.
-func getUploadDir() string {
-	if dir := os.Getenv("OCMS_UPLOADS_DIR"); dir != "" {
-		return dir
-	}
-	return "./uploads"
-}
+var getUploadDir = shared.UploadDir
 
 // Import imports content from Elefant CMS into oCMS.
 func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, opts types.ImportOptions, tracker types.ImportTracker) (*types.ImportResult, error) {
@@ -449,70 +437,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 // saveNonImageFile saves a non-image file to the uploads directory.
 // The filename is sanitized to prevent path traversal attacks.
 func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename string) error {
-	// Sanitize filename to prevent path traversal (e.g., "../../../etc/passwd")
-	safeFilename, err := util.SanitizeFilename(filename)
-	if err != nil {
-		return fmt.Errorf("invalid filename %q: %w", filename, err)
-	}
-
-	// Create directory structure using safe path construction
-	destDir := filepath.Join(uploadDir, "originals", fileUUID)
-
-	// Validate destination is within upload directory
-	if err := util.ValidatePathWithinBase(uploadDir, destDir); err != nil {
-		return fmt.Errorf("invalid destination directory: %w", err)
-	}
-
-	// Additional inline validation for CodeQL
-	cleanDestDir := filepath.Clean(destDir)
-	if strings.Contains(cleanDestDir, "..") || filepath.IsAbs(fileUUID) {
-		return fmt.Errorf("invalid destination directory: path traversal detected")
-	}
-
-	if err := os.MkdirAll(cleanDestDir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	// Create destination file with sanitized filename
-	destPath := filepath.Join(cleanDestDir, safeFilename)
-
-	// Double-check the final path is still within uploadDir
-	if err := util.ValidatePathWithinBase(uploadDir, destPath); err != nil {
-		return fmt.Errorf("invalid destination path: %w", err)
-	}
-
-	dest, err := os.Create(destPath)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer func() {
-		if err := dest.Close(); err != nil {
-			slog.Error("failed to close destination file", "path", destPath, "error", err)
-		}
-	}()
-
-	// Copy file content
-	if _, err := src.Seek(0, 0); err != nil {
-		return fmt.Errorf("failed to seek source file: %w", err)
-	}
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, readErr := src.Read(buf)
-		if n > 0 {
-			if _, writeErr := dest.Write(buf[:n]); writeErr != nil {
-				return fmt.Errorf("failed to write file: %w", writeErr)
-			}
-		}
-		if readErr != nil {
-			if readErr == io.EOF {
-				break
-			}
-			return fmt.Errorf("failed to read file: %w", readErr)
-		}
-	}
-
-	return nil
+	return shared.SaveNonImageFile(src, uploadDir, fileUUID, filename)
 }
 
 // importPosts imports blog posts from Elefant.
@@ -740,37 +665,10 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 }
 
 // replaceMediaURLs replaces Elefant file paths with oCMS media URLs in HTML content.
-func replaceMediaURLs(body string, mediaMap map[string]string) string {
-	for oldPath, newPath := range mediaMap {
-		body = strings.ReplaceAll(body, oldPath, newPath)
-	}
-	return body
-}
+var replaceMediaURLs = shared.ReplaceURLs
 
 // makeUniqueSlug generates a unique slug by appending -2, -3, etc. if needed.
-func makeUniqueSlug(ctx context.Context, queries *store.Queries, baseSlug string) string {
-	slug := baseSlug
-
-	// Try the base slug first
-	_, err := queries.GetPageBySlug(ctx, slug)
-	if err != nil {
-		// Slug doesn't exist, use it
-		return slug
-	}
-
-	// Slug exists, try with suffix
-	for i := 2; i <= 100; i++ {
-		slug = baseSlug + "-" + strconv.Itoa(i)
-		_, err := queries.GetPageBySlug(ctx, slug)
-		if err != nil {
-			// This slug is available
-			return slug
-		}
-	}
-
-	// Fallback: append timestamp
-	return baseSlug + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-}
+var makeUniqueSlug = shared.MakeUniqueSlug
 
 // parseElefantTags parses the JSON array of tags from Elefant.
 func parseElefantTags(tagsJSON string) []string {
@@ -792,12 +690,7 @@ func parseElefantTags(tagsJSON string) []string {
 }
 
 // nullStringToString converts sql.NullString to string.
-func nullStringToString(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return ""
-}
+var nullStringToString = shared.NullString
 
 // importUsers imports users from Elefant as public users.
 // Note: Passwords cannot be migrated due to different hashing algorithms,

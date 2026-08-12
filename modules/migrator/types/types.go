@@ -8,12 +8,78 @@ package types
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
+
+// EntityType identifies a kind of imported entity. Values are the strings
+// stored in migrator_imported_items.entity_type.
+type EntityType string
+
+const (
+	EntityMenuItem EntityType = "menu_item"
+	EntityMenu     EntityType = "menu"
+	EntityAlias    EntityType = "alias"
+	EntityPost     EntityType = "post"
+	EntityPage     EntityType = "page"
+	EntityTag      EntityType = "tag"
+	EntityCategory EntityType = "category"
+	EntityMedia    EntityType = "media"
+	EntityUser     EntityType = "user"
+)
+
+// AllEntityTypes lists every trackable entity type in dependency-safe deletion
+// order: dependents first, dependencies last. The order is derived from the
+// foreign keys in 00003_create_pages.sql (pages.author_id ... ON DELETE
+// RESTRICT, so pages must go before users), 00011_create_menus.sql
+// (menu_items.menu_id ... ON DELETE CASCADE) and 00008_create_categories.sql
+// (categories.parent_id ... ON DELETE SET NULL, so categories are unordered).
+var AllEntityTypes = []EntityType{
+	EntityMenuItem,
+	EntityMenu,
+	EntityAlias,
+	EntityPost,
+	EntityPage,
+	EntityTag,
+	EntityCategory,
+	EntityMedia,
+	EntityUser,
+}
 
 // ImportTracker tracks imported items for later deletion.
 type ImportTracker interface {
 	// TrackImportedItem records an imported item.
 	TrackImportedItem(ctx context.Context, source, entityType string, entityID int64) error
+}
+
+// Progress is a live progress sample published by a source during Import.
+// Total is 0 when the source cannot know the denominator up front.
+type Progress struct {
+	Source    string
+	Phase     EntityType
+	Processed int
+	Total     int
+}
+
+// ProgressReporter is an optional capability of an ImportTracker. Sources must
+// not depend on it directly — call Report, which is a no-op when the tracker
+// does not implement it.
+//
+// It is deliberately a separate interface rather than a method on
+// ImportTracker: adding a method there would break every implementer,
+// including test doubles and any out-of-tree module.
+type ProgressReporter interface {
+	ReportProgress(ctx context.Context, p Progress)
+}
+
+// Report publishes progress when the tracker supports it. Nil-safe and a no-op
+// for trackers that do not implement ProgressReporter, so sources written
+// against the original interface keep working unchanged.
+func Report(ctx context.Context, tracker ImportTracker, p Progress) {
+	reporter, ok := tracker.(ProgressReporter)
+	if !ok {
+		return
+	}
+	reporter.ReportProgress(ctx, p)
 }
 
 // Source defines the interface that all migration sources must implement.
@@ -35,6 +101,11 @@ type Source interface {
 
 	// Import performs the actual import using the provided configuration and options.
 	// The tracker can be used to record imported items for later deletion.
+	//
+	// Implementations must not wrap the whole import in a single transaction:
+	// oCMS runs SQLite with a 5s busy_timeout, so holding the write lock for
+	// the duration of an import starves every other writer. Write per entity
+	// and let the tracking table provide the undo path instead.
 	Import(ctx context.Context, db *sql.DB, cfg map[string]string, opts ImportOptions, tracker ImportTracker) (*ImportResult, error)
 }
 
@@ -49,41 +120,118 @@ type ConfigField struct {
 }
 
 // ImportOptions contains options for the import operation.
+//
+// Every Import* field must have a matching checkbox in the migrator view and a
+// matching read in parseImportOptions; TestImportOptionsHaveFormCheckboxes
+// enforces both mechanically.
+//
+// URL aliases intentionally have no option: an alias without its page is
+// meaningless, so they always follow pages and posts.
 type ImportOptions struct {
-	ImportTags   bool
-	ImportMedia  bool
-	ImportPosts  bool
-	ImportPages  bool
-	ImportUsers  bool
-	SkipExisting bool
+	ImportTags       bool
+	ImportCategories bool
+	ImportMedia      bool
+	ImportPosts      bool
+	ImportPages      bool
+	ImportMenus      bool
+	ImportUsers      bool
+	SkipExisting     bool
 }
 
 // ImportResult contains the results of an import operation.
+//
+// Counters and SkippedCounters are the single place that maps these fields onto
+// entity types — the totals, the persisted job blob, the admin stats panel and
+// the event metadata all derive from them, so adding a counter is a one-site
+// edit. TestImportResultCountersCoverAllImportedFields fails if a new field is
+// added without extending the map.
 type ImportResult struct {
-	TagsImported  int
-	MediaImported int
-	PostsImported int
-	PagesImported int
-	UsersImported int
-	TagsSkipped   int
-	MediaSkipped  int
-	PostsSkipped  int
-	PagesSkipped  int
-	UsersSkipped  int
-	Errors        []string
+	TagsImported       int `json:"tags_imported"`
+	CategoriesImported int `json:"categories_imported"`
+	MediaImported      int `json:"media_imported"`
+	PostsImported      int `json:"posts_imported"`
+	PagesImported      int `json:"pages_imported"`
+	MenusImported      int `json:"menus_imported"`
+	MenuItemsImported  int `json:"menu_items_imported"`
+	AliasesImported    int `json:"aliases_imported"`
+	UsersImported      int `json:"users_imported"`
+
+	TagsSkipped       int `json:"tags_skipped"`
+	CategoriesSkipped int `json:"categories_skipped"`
+	MediaSkipped      int `json:"media_skipped"`
+	PostsSkipped      int `json:"posts_skipped"`
+	PagesSkipped      int `json:"pages_skipped"`
+	MenusSkipped      int `json:"menus_skipped"`
+	UsersSkipped      int `json:"users_skipped"`
+
+	Errors []string `json:"errors,omitempty"`
+}
+
+// MaxTrackedErrors caps the number of retained per-item errors so a badly
+// broken source database cannot grow the result — and the persisted job row —
+// without bound.
+const MaxTrackedErrors = 100
+
+// AddError appends a per-item error, capping the retained list. Once the cap is
+// reached the final entry becomes a truncation notice, so "no more errors" is
+// distinguishable from "we stopped recording them".
+func (r *ImportResult) AddError(format string, args ...any) {
+	if len(r.Errors) >= MaxTrackedErrors {
+		r.Errors[MaxTrackedErrors-1] = "additional errors omitted"
+		return
+	}
+	r.Errors = append(r.Errors, fmt.Sprintf(format, args...))
+}
+
+// Counters returns imported counts keyed by entity type.
+func (r *ImportResult) Counters() map[EntityType]int {
+	return map[EntityType]int{
+		EntityMenuItem: r.MenuItemsImported,
+		EntityMenu:     r.MenusImported,
+		EntityAlias:    r.AliasesImported,
+		EntityPost:     r.PostsImported,
+		EntityPage:     r.PagesImported,
+		EntityTag:      r.TagsImported,
+		EntityCategory: r.CategoriesImported,
+		EntityMedia:    r.MediaImported,
+		EntityUser:     r.UsersImported,
+	}
+}
+
+// SkippedCounters returns skipped counts keyed by entity type. Menu items and
+// aliases are never skipped independently of their parent, so they are absent.
+func (r *ImportResult) SkippedCounters() map[EntityType]int {
+	return map[EntityType]int{
+		EntityMenu:     r.MenusSkipped,
+		EntityPost:     r.PostsSkipped,
+		EntityPage:     r.PagesSkipped,
+		EntityTag:      r.TagsSkipped,
+		EntityCategory: r.CategoriesSkipped,
+		EntityMedia:    r.MediaSkipped,
+		EntityUser:     r.UsersSkipped,
+	}
 }
 
 // TotalImported returns the total number of items imported.
 func (r *ImportResult) TotalImported() int {
-	return r.TagsImported + r.MediaImported + r.PostsImported + r.PagesImported + r.UsersImported
+	return sumCounters(r.Counters())
 }
 
 // TotalSkipped returns the total number of items skipped.
 func (r *ImportResult) TotalSkipped() int {
-	return r.TagsSkipped + r.MediaSkipped + r.PostsSkipped + r.PagesSkipped + r.UsersSkipped
+	return sumCounters(r.SkippedCounters())
 }
 
 // HasErrors returns true if there were any errors during import.
 func (r *ImportResult) HasErrors() bool {
 	return len(r.Errors) > 0
+}
+
+// sumCounters totals a counter map.
+func sumCounters(counters map[EntityType]int) int {
+	total := 0
+	for _, n := range counters {
+		total += n
+	}
+	return total
 }

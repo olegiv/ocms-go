@@ -1,0 +1,498 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package migrator
+
+import (
+	"context"
+	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"unicode"
+
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/modules/migrator/types"
+)
+
+// These tests enforce invariants mechanically rather than by review. Each one
+// documents the bug state it catches; fixing only the site that first broke an
+// invariant leaves the same class of bug reachable through another code path.
+
+// TestTrackedEntityTypesAreDeletable is the highest-value drift test here.
+//
+// Every source records what it created via TrackImportedItem so that "Delete
+// All Imported Content" can undo the import. If a source starts tracking an
+// entity type the delete path does not handle, the button silently leaves that
+// content behind while reporting success.
+//
+// Bug state: add tracker.TrackImportedItem(ctx, name, "widget", id) to any
+// source without extending deleters() and this fails naming "widget".
+func TestTrackedEntityTypesAreDeletable(t *testing.T) {
+	tracked := trackedEntityTypeLiterals(t)
+	if len(tracked) == 0 {
+		t.Fatal("found no TrackImportedItem call sites; the AST walk is broken")
+	}
+
+	m := New()
+	handled := make(map[string]bool)
+	for _, d := range m.deleters() {
+		handled[string(d.entityType)] = true
+	}
+
+	for entityType, location := range tracked {
+		if !handled[entityType] {
+			t.Errorf("entity type %q is tracked at %s but has no entry in deleters(); "+
+				"deleting imported content would leave it orphaned", entityType, location)
+		}
+	}
+}
+
+// trackedEntityTypeLiterals AST-walks the migrator tree and returns every
+// entity type a source can record, keyed to where it was found.
+//
+// Two shapes are collected, because sources legitimately use both: a literal
+// passed straight to TrackImportedItem (as sources/elefant does), and a
+// types.EntityXxx constant referenced anywhere in a source package, which is
+// how a source that tracks through its own helper spells it (as sources/drupal
+// does). Missing the second shape would make this test blind to exactly the
+// code style it most needs to police.
+func trackedEntityTypeLiterals(t *testing.T) map[string]string {
+	t.Helper()
+	found := make(map[string]string)
+	fset := token.NewFileSet()
+
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return err
+		}
+		inSourcePkg := strings.Contains(filepath.ToSlash(path), "sources/")
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			// Shape 1: a types.EntityXxx constant referenced in a source package.
+			if inSourcePkg {
+				if name, ok := entityConstName(n); ok {
+					found[name] = fset.Position(n.Pos()).String()
+					return true
+				}
+			}
+
+			// Shape 2: a literal passed to TrackImportedItem.
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "TrackImportedItem" {
+				return true
+			}
+			// Signature: TrackImportedItem(ctx, source, entityType, id)
+			if len(call.Args) != 4 {
+				return true
+			}
+			if lit, ok := call.Args[2].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				name := strings.Trim(lit.Value, `"`)
+				found[name] = fset.Position(call.Pos()).String()
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to walk migrator sources: %v", err)
+	}
+	return found
+}
+
+// entityConstName resolves a types.EntityXxx selector to its string value.
+func entityConstName(node ast.Node) (string, bool) {
+	sel, ok := node.(*ast.SelectorExpr)
+	if !ok {
+		return "", false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok || pkg.Name != "types" {
+		return "", false
+	}
+	for _, entityType := range types.AllEntityTypes {
+		if sel.Sel.Name == "Entity"+pascalCase(string(entityType)) {
+			return string(entityType), true
+		}
+	}
+	return "", false
+}
+
+// pascalCase turns "menu_item" into "MenuItem".
+func pascalCase(s string) string {
+	var out strings.Builder
+	upper := true
+	for _, r := range s {
+		if r == '_' {
+			upper = true
+			continue
+		}
+		if upper {
+			out.WriteRune(unicode.ToUpper(r))
+			upper = false
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
+// TestDeleteImportedItemsCoversAllEntityTypes checks the delete table is
+// complete and well-formed.
+//
+// Bug state: add an entity type to types.AllEntityTypes without a deleters()
+// entry and this fails; give an entry both a deleter and a cascade source (or
+// neither) and it fails too.
+func TestDeleteImportedItemsCoversAllEntityTypes(t *testing.T) {
+	m := New()
+	deleters := m.deleters()
+
+	if len(deleters) != len(types.AllEntityTypes) {
+		t.Fatalf("deleters() has %d entries, want %d (one per types.AllEntityTypes)",
+			len(deleters), len(types.AllEntityTypes))
+	}
+
+	for i, d := range deleters {
+		if d.entityType != types.AllEntityTypes[i] {
+			t.Errorf("deleters()[%d] = %q, want %q — the deletion order must match "+
+				"types.AllEntityTypes, which encodes the foreign-key dependencies",
+				i, d.entityType, types.AllEntityTypes[i])
+		}
+		hasDeleter := d.del != nil
+		hasCascade := d.cascadesFrom != ""
+		if hasDeleter == hasCascade {
+			t.Errorf("entity type %q must have exactly one of del or cascadesFrom "+
+				"(has del=%v, cascadesFrom=%q)", d.entityType, hasDeleter, d.cascadesFrom)
+		}
+	}
+}
+
+// TestImportOptionsHaveFormCheckboxes proves every import option is reachable
+// from the UI and parsed back correctly.
+//
+// Bug state (a): add a field to ImportOptions without a checkbox and the option
+// can never be enabled — a silently dead feature flag. Bug state (b):
+// copy-paste a form key in parseImportOptions and two fields flip together.
+func TestImportOptionsHaveFormCheckboxes(t *testing.T) {
+	optionsType := reflect.TypeOf(types.ImportOptions{})
+	markup := renderImportOptions(t)
+
+	for i := 0; i < optionsType.NumField(); i++ {
+		field := optionsType.Field(i)
+		key := snakeCase(field.Name)
+
+		t.Run(field.Name, func(t *testing.T) {
+			if !strings.Contains(markup, `name="`+key+`"`) {
+				t.Errorf("ImportOptions.%s has no checkbox named %q in MigratorImportOptions; "+
+					"the option could never be enabled from the admin UI", field.Name, key)
+			}
+
+			req := httptest.NewRequest("POST", "/?"+key+"=on", nil)
+			opts := parseImportOptions(req)
+
+			value := reflect.ValueOf(opts)
+			for j := 0; j < optionsType.NumField(); j++ {
+				want := j == i
+				if got := value.Field(j).Bool(); got != want {
+					t.Errorf("submitting only %q set ImportOptions.%s = %v, want %v; "+
+						"parseImportOptions maps this form key to the wrong field",
+						key, optionsType.Field(j).Name, got, want)
+				}
+			}
+		})
+	}
+}
+
+// renderImportOptions renders the options component to a string.
+func renderImportOptions(t *testing.T) string {
+	t.Helper()
+	var sb strings.Builder
+	pc := &adminviews.PageContext{}
+	if err := MigratorImportOptions(pc).Render(context.Background(), &sb); err != nil {
+		t.Fatalf("failed to render import options: %v", err)
+	}
+	return sb.String()
+}
+
+// snakeCase turns "ImportCategories" into "import_categories".
+func snakeCase(s string) string {
+	var out strings.Builder
+	for i, r := range s {
+		if unicode.IsUpper(r) {
+			if i > 0 {
+				out.WriteRune('_')
+			}
+			out.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
+// TestImportResultCountersCoverAllImportedFields proves Counters() maps every
+// *Imported field, so totals, the persisted job blob and the stats panel all
+// stay complete.
+//
+// Bug state: add MenusImported to ImportResult without extending Counters() and
+// the count vanishes from the totals and the admin UI while the importer still
+// increments it.
+func TestImportResultCountersCoverAllImportedFields(t *testing.T) {
+	assertCountersCoverFields(t, "Imported", func(r *types.ImportResult) map[types.EntityType]int {
+		return r.Counters()
+	})
+}
+
+// TestImportResultSkippedCountersAreDeclared proves SkippedCounters() only
+// reports declared entity types and sums into TotalSkipped.
+func TestImportResultSkippedCountersAreDeclared(t *testing.T) {
+	result := &types.ImportResult{}
+	value := reflect.ValueOf(result).Elem()
+	fieldType := value.Type()
+
+	total := 0
+	for i := 0; i < fieldType.NumField(); i++ {
+		if strings.HasSuffix(fieldType.Field(i).Name, "Skipped") {
+			n := (i + 1) * 3
+			value.Field(i).SetInt(int64(n))
+			total += n
+		}
+	}
+
+	if got := result.TotalSkipped(); got != total {
+		t.Errorf("TotalSkipped() = %d, want %d; a *Skipped field is missing from SkippedCounters()", got, total)
+	}
+	for entityType := range result.SkippedCounters() {
+		if !isDeclaredEntityType(entityType) {
+			t.Errorf("SkippedCounters() has key %q, which is not in types.AllEntityTypes", entityType)
+		}
+	}
+}
+
+// assertCountersCoverFields assigns a distinct value to every field with the
+// given suffix and asserts the counter map reports each exactly once.
+func assertCountersCoverFields(t *testing.T, suffix string, counters func(*types.ImportResult) map[types.EntityType]int) {
+	t.Helper()
+
+	result := &types.ImportResult{}
+	value := reflect.ValueOf(result).Elem()
+	fieldType := value.Type()
+
+	expected := make(map[int]string)
+	for i := 0; i < fieldType.NumField(); i++ {
+		name := fieldType.Field(i).Name
+		if !strings.HasSuffix(name, suffix) {
+			continue
+		}
+		n := (i + 1) * 7
+		value.Field(i).SetInt(int64(n))
+		expected[n] = name
+	}
+	if len(expected) == 0 {
+		t.Fatalf("found no *%s fields on ImportResult; the reflection is broken", suffix)
+	}
+
+	seen := make(map[int]bool)
+	for entityType, count := range counters(result) {
+		if !isDeclaredEntityType(entityType) {
+			t.Errorf("Counters() has key %q, which is not in types.AllEntityTypes", entityType)
+		}
+		seen[count] = true
+	}
+
+	for n, name := range expected {
+		if !seen[n] {
+			t.Errorf("ImportResult.%s is not reported by Counters(); its count would never "+
+				"reach the totals, the job row, or the admin stats panel", name)
+		}
+	}
+
+	sum := 0
+	for n := range expected {
+		sum += n
+	}
+	if got := result.TotalImported(); suffix == "Imported" && got != sum {
+		t.Errorf("TotalImported() = %d, want %d", got, sum)
+	}
+}
+
+// isDeclaredEntityType reports whether an entity type is in AllEntityTypes.
+func isDeclaredEntityType(entityType types.EntityType) bool {
+	for _, declared := range types.AllEntityTypes {
+		if declared == entityType {
+			return true
+		}
+	}
+	return false
+}
+
+// localeMessages is the on-disk shape of a module translation file.
+type localeMessages struct {
+	Language string `json:"language"`
+	Messages []struct {
+		ID          string `json:"id"`
+		Translation string `json:"translation"`
+	} `json:"messages"`
+}
+
+// loadLocale reads and parses one locale file.
+func loadLocale(t *testing.T, lang string) map[string]string {
+	t.Helper()
+
+	raw, err := os.ReadFile(filepath.Join("locales", lang, "messages.json"))
+	if err != nil {
+		t.Fatalf("failed to read %s locale: %v", lang, err)
+	}
+
+	var parsed localeMessages
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("failed to parse %s locale: %v", lang, err)
+	}
+
+	out := make(map[string]string, len(parsed.Messages))
+	for _, msg := range parsed.Messages {
+		if _, dup := out[msg.ID]; dup {
+			t.Errorf("%s locale declares %q more than once", lang, msg.ID)
+		}
+		out[msg.ID] = msg.Translation
+	}
+	return out
+}
+
+// TestLocaleKeyParity keeps the translation files in step.
+//
+// Bug state: add a key to en and forget ru, and Russian admins see a raw i18n
+// key in the UI.
+func TestLocaleKeyParity(t *testing.T) {
+	en := loadLocale(t, "en")
+	ru := loadLocale(t, "ru")
+
+	for key := range en {
+		if _, ok := ru[key]; !ok {
+			t.Errorf("key %q exists in en but is missing from ru", key)
+		}
+	}
+	for key := range ru {
+		if _, ok := en[key]; !ok {
+			t.Errorf("key %q exists in ru but is missing from en", key)
+		}
+	}
+}
+
+// TestLocaleFormatVerbsMatch keeps printf verbs aligned across languages.
+//
+// i18n.T is a bare fmt.Sprintf, so a translation that drops or reorders a verb
+// renders as "%!d(MISSING)" for that language only — invisible in English-only
+// testing.
+func TestLocaleFormatVerbsMatch(t *testing.T) {
+	en := loadLocale(t, "en")
+	ru := loadLocale(t, "ru")
+
+	for key, enText := range en {
+		ruText, ok := ru[key]
+		if !ok {
+			continue
+		}
+		enVerbs := formatVerbs(enText)
+		ruVerbs := formatVerbs(ruText)
+		if !reflect.DeepEqual(enVerbs, ruVerbs) {
+			t.Errorf("key %q has verbs %v in en but %v in ru; the mismatched language "+
+				"would render a %%!verb(MISSING) placeholder", key, enVerbs, ruVerbs)
+		}
+	}
+}
+
+// formatVerbs extracts the ordered printf verbs from a format string.
+func formatVerbs(s string) []string {
+	var verbs []string
+	for i := 0; i < len(s); i++ {
+		if s[i] != '%' || i+1 >= len(s) {
+			continue
+		}
+		next := s[i+1]
+		if next == '%' {
+			i++
+			continue
+		}
+		verbs = append(verbs, "%"+string(next))
+		i++
+	}
+	return verbs
+}
+
+// TestLocaleCoversEntityTypesAndJobStatuses proves the UI can label everything
+// it may be asked to display.
+//
+// Bug state: add an entity type or job status without its labels and the admin
+// sees the raw key, e.g. "migrator.imported_widget".
+func TestLocaleCoversEntityTypesAndJobStatuses(t *testing.T) {
+	for _, lang := range []string{"en", "ru"} {
+		messages := loadLocale(t, lang)
+
+		for _, entityType := range types.AllEntityTypes {
+			for _, prefix := range []string{"migrator.imported_", "migrator.phase_"} {
+				key := prefix + string(entityType)
+				if _, ok := messages[key]; !ok {
+					t.Errorf("%s locale is missing %q", lang, key)
+				}
+			}
+		}
+
+		for _, status := range AllJobStatuses {
+			key := "migrator.job_" + string(status)
+			if _, ok := messages[key]; !ok {
+				t.Errorf("%s locale is missing %q", lang, key)
+			}
+		}
+	}
+}
+
+// TestSourceLabelsAreTranslated proves every registered source's admin-facing
+// strings resolve.
+//
+// Bug state: ship a source whose ConfigField.Label is a key with no translation
+// and the form renders "drupal.field_mysql_host" as its label.
+func TestSourceLabelsAreTranslated(t *testing.T) {
+	en := loadLocale(t, "en")
+	ru := loadLocale(t, "ru")
+
+	// Init registers every built-in source into the shared registry.
+	_ = testModule(t)
+
+	for _, src := range ListSources() {
+		keys := []string{src.Description()}
+		for _, field := range src.ConfigFields() {
+			keys = append(keys, field.Label)
+			if field.Placeholder != "" {
+				keys = append(keys, field.Placeholder)
+			}
+		}
+
+		for _, key := range keys {
+			if _, ok := en[key]; !ok {
+				t.Errorf("source %q uses i18n key %q with no en translation", src.Name(), key)
+			}
+			if _, ok := ru[key]; !ok {
+				t.Errorf("source %q uses i18n key %q with no ru translation", src.Name(), key)
+			}
+		}
+	}
+}

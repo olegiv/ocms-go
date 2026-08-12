@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
@@ -22,6 +23,11 @@ import (
 )
 
 // Context provides access to application services for modules.
+//
+// Every field must be populated where the context is built in cmd/ocms; the
+// drift test TestModuleContextFieldsWiredInMain enforces that, because a field
+// added here but forgotten there fails silently at runtime rather than at
+// compile time.
 type Context struct {
 	DB                *sql.DB
 	Store             *store.Queries
@@ -31,6 +37,10 @@ type Context struct {
 	Events            *service.EventService
 	Hooks             *HookRegistry
 	SchedulerRegistry *scheduler.Registry
+	// Cache lets a module invalidate cached content after a bulk write. It may
+	// be nil in tests and in embedders that do not wire it, so every use must
+	// be nil-guarded.
+	Cache *cache.Manager
 }
 
 // Module defines the interface that all modules must implement.
