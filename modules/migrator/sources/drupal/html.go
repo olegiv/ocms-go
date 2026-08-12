@@ -6,6 +6,7 @@ package drupal
 import (
 	"fmt"
 	"html"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -42,6 +43,12 @@ type MediaRefs struct {
 	ByUUID map[string]string // Drupal file or media UUID    -> new URL
 	AltMap map[string]string // new URL -> alt text
 	IsImg  map[string]bool   // new URL -> true when the file is an image
+
+	// Unresolved collects the UUIDs of <drupal-media> embeds that matched no
+	// imported file, so the importer can report them. An embed that cannot be
+	// resolved is deleted from the body, and deleting content without telling
+	// anyone is how these went unnoticed in the first place.
+	Unresolved []string
 }
 
 // NewMediaRefs returns an empty, ready-to-use MediaRefs.
@@ -84,6 +91,7 @@ func replaceDrupalMedia(body string, refs *MediaRefs) string {
 		}
 		url, ok := refs.ByUUID[uuid]
 		if !ok {
+			refs.Unresolved = append(refs.Unresolved, uuid)
 			return ""
 		}
 
@@ -118,6 +126,44 @@ var drupalFilePrefixes = []string{
 	"/system/files/",
 }
 
+// stylePathPattern matches the leading segments of an image-style derivative
+// path: "styles/<style>/<scheme>/<relpath>".
+var stylePathPattern = regexp.MustCompile(`^styles/[^/]+/[^/]+/`)
+
+// publicMediaURL builds the oCMS URL for an imported file.
+//
+// The filename is percent-encoded because Drupal filenames routinely carry
+// spaces and non-ASCII characters, and bluemonday's URL policy rejects any src
+// or href containing a literal space outright. Without the encoding the page
+// sanitizer deletes the <img> that RewriteBody just produced, so the image is
+// imported and then dropped from the body a moment later.
+func publicMediaURL(fileUUID, filename string) string {
+	return fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, url.PathEscape(filename))
+}
+
+// normalizeFileRelPath turns a Drupal public-file URL path into the relative
+// path stored in file_managed.uri.
+//
+// Three shapes have to collapse onto the same key. An image-style derivative
+// ("styles/large/public/2026-01/a.jpg") is a generated thumbnail of
+// "2026-01/a.jpg" and belongs to the same managed file. An "?itok=…" token is a
+// derivative signature, not part of the path. And CKEditor percent-encodes
+// spaces and non-ASCII while file_managed.uri stores them raw — which matters a
+// great deal on a site with Cyrillic filenames.
+//
+// Unescaping happens last on purpose: doing it first would let a literal %2F
+// manufacture path segments and defeat the styles trim above it.
+func normalizeFileRelPath(rel string) string {
+	if i := strings.IndexAny(rel, "?#"); i >= 0 {
+		rel = rel[:i]
+	}
+	rel = stylePathPattern.ReplaceAllString(rel, "")
+	if unescaped, err := url.PathUnescape(rel); err == nil {
+		rel = unescaped
+	}
+	return rel
+}
+
 // rewriteFileURLs replaces Drupal public-file URLs with their new oCMS URLs.
 //
 // Lookups go through the relative path rather than a blind string replace of
@@ -147,7 +193,7 @@ func rewritePrefixedURLs(body, prefix string, refs *MediaRefs) string {
 		end := urlEnd(rest)
 		candidate := rest[:end]
 		relPath := strings.TrimPrefix(candidate, prefix)
-		if newURL, ok := refs.ByPath[relPath]; ok {
+		if newURL, ok := lookupByPath(refs, relPath); ok {
 			out.WriteString(newURL)
 		} else {
 			out.WriteString(candidate)
@@ -155,6 +201,24 @@ func rewritePrefixedURLs(body, prefix string, refs *MediaRefs) string {
 		body = rest[end:]
 	}
 	return out.String()
+}
+
+// lookupByPath resolves a Drupal relative file path to its new oCMS URL.
+//
+// ByPath is keyed on the raw file_managed.uri path, so normalization happens
+// on the lookup side only. The raw path is tried first so an exact match always
+// wins, then the normalized form, which is what lets a style derivative or a
+// percent-encoded URL find the original file.
+func lookupByPath(refs *MediaRefs, relPath string) (string, bool) {
+	if newURL, ok := refs.ByPath[relPath]; ok {
+		return newURL, true
+	}
+	if normalized := normalizeFileRelPath(relPath); normalized != relPath {
+		if newURL, ok := refs.ByPath[normalized]; ok {
+			return newURL, true
+		}
+	}
+	return "", false
 }
 
 // urlEnd returns the index just past the end of a URL starting at s[0].

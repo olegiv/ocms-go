@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
@@ -397,6 +398,106 @@ func TestRewriteBodyLongestPathWins(t *testing.T) {
 	}
 }
 
+// TestRewriteBodyImageStyleDerivatives covers URLs that point at a generated
+// thumbnail rather than the managed file.
+//
+// Bug state: look the raw path up in ByPath and nothing else, and every styles
+// row here stays pointing at the old Drupal domain — silently, because an
+// unmapped path is left alone by design.
+func TestRewriteBodyImageStyleDerivatives(t *testing.T) {
+	const want = "/uploads/originals/uuid-1/photo.jpg"
+
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"plain path", "/sites/default/files/2026-01/photo.jpg"},
+		{"style derivative", "/sites/default/files/styles/large/public/2026-01/photo.jpg"},
+		{"style with itok", "/sites/default/files/styles/large/public/2026-01/photo.jpg?itok=AbC123"},
+		{"private scheme style", "/system/files/styles/medium/private/2026-01/photo.jpg"},
+		{"thumbnail style", "/sites/default/files/styles/thumbnail/public/2026-01/photo.jpg"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			refs := NewMediaRefs()
+			refs.ByPath["2026-01/photo.jpg"] = want
+
+			got := RewriteBody(`<img src="`+tt.src+`">`, refs)
+			if !strings.Contains(got, want) {
+				t.Errorf("RewriteBody(%q) = %q, want it rewritten to %q", tt.src, got, want)
+			}
+		})
+	}
+
+	t.Run("unmapped style path is left alone", func(t *testing.T) {
+		refs := NewMediaRefs()
+		refs.ByPath["2026-01/photo.jpg"] = want
+
+		src := "/sites/default/files/styles/large/public/2026-01/other.jpg"
+		got := RewriteBody(`<img src="`+src+`">`, refs)
+		if !strings.Contains(got, src) {
+			t.Errorf("an unmapped derivative should be left untouched, got: %s", got)
+		}
+	})
+}
+
+// TestRewriteBodyPercentEncodedPaths covers CKEditor's percent-encoded URLs
+// against the raw paths file_managed stores. This matters most on sites with
+// non-ASCII filenames, where every inline image would otherwise be missed.
+func TestRewriteBodyPercentEncodedPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		relPath string
+		src     string
+	}{
+		{"encoded space", "my photo.jpg", "/sites/default/files/my%20photo.jpg"},
+		{"cyrillic", "фото.jpg", "/sites/default/files/%D1%84%D0%BE%D1%82%D0%BE.jpg"},
+		{"cyrillic in a folder", "2026-01/фото.jpg", "/sites/default/files/2026-01/%D1%84%D0%BE%D1%82%D0%BE.jpg"},
+		{"encoded style derivative", "my photo.jpg", "/sites/default/files/styles/large/public/my%20photo.jpg"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			refs := NewMediaRefs()
+			refs.ByPath[tt.relPath] = "/uploads/originals/uuid-1/x.jpg"
+
+			got := RewriteBody(`<img src="`+tt.src+`">`, refs)
+			if !strings.Contains(got, "/uploads/originals/uuid-1/x.jpg") {
+				t.Errorf("RewriteBody(%q) = %q, want it rewritten", tt.src, got)
+			}
+		})
+	}
+}
+
+// TestPublicMediaURLSurvivesSanitizer pins the reason imported URLs are
+// percent-encoded at construction.
+//
+// bluemonday rejects any src containing a literal space before it even parses
+// the URL, and page bodies are sanitized immediately after rewriting. An
+// unencoded URL therefore means the <img> is built and then deleted, so the
+// image vanishes from a body that references it by name.
+func TestPublicMediaURLSurvivesSanitizer(t *testing.T) {
+	newURL := publicMediaURL("uuid-1", "my photo.jpg")
+	if strings.Contains(newURL, " ") {
+		t.Fatalf("publicMediaURL(%q) = %q, still contains a literal space", "my photo.jpg", newURL)
+	}
+
+	refs := NewMediaRefs()
+	refs.ByPath["my photo.jpg"] = newURL
+
+	body := RewriteBody(`<img src="/sites/default/files/my%20photo.jpg">`, refs)
+	if !strings.Contains(body, newURL) {
+		t.Fatalf("RewriteBody did not produce the new URL, got: %s", body)
+	}
+
+	sanitized := security.SanitizePageHTML(body)
+	if !strings.Contains(sanitized, newURL) {
+		t.Errorf("the sanitizer dropped the imported image URL:\n  before: %s\n  after:  %s",
+			body, sanitized)
+	}
+}
+
 func TestRewriteBodyDrupalMediaEmbeds(t *testing.T) {
 	refs := NewMediaRefs()
 	refs.ByUUID["uuid-img"] = "/uploads/originals/m1/photo.jpg"
@@ -588,6 +689,18 @@ func TestOptionalTableGettersShortCircuit(t *testing.T) {
 			t.Errorf("GetTerms() = (%v, %v), want (nil, nil)", terms, err)
 		}
 	})
+	t.Run("MediaUUIDsByFile", func(t *testing.T) {
+		// A classic image-field Drupal has no media table at all. Reaching the
+		// database here would panic on the nil *sql.DB.
+		if got, err := r.MediaUUIDsByFile(ctx); err != nil || len(got) != 0 {
+			t.Errorf("MediaUUIDsByFile() = (%v, %v), want an empty map and nil", got, err)
+		}
+	})
+	t.Run("fileAltText", func(t *testing.T) {
+		if got, err := r.fileAltText(ctx); err != nil || len(got) != 0 {
+			t.Errorf("fileAltText() = (%v, %v), want an empty map and nil", got, err)
+		}
+	})
 	t.Run("GetFiles", func(t *testing.T) {
 		if files, err := r.GetFiles(ctx); err != nil || files != nil {
 			t.Errorf("GetFiles() = (%v, %v), want (nil, nil)", files, err)
@@ -604,9 +717,9 @@ func TestOptionalTableGettersShortCircuit(t *testing.T) {
 		}
 	})
 	t.Run("NodeImages", func(t *testing.T) {
-		images, alts, err := r.NodeImages(ctx)
-		if err != nil || len(images) != 0 || len(alts) != 0 {
-			t.Errorf("NodeImages() = (%v, %v, %v), want empty maps and nil", images, alts, err)
+		images, err := r.NodeImages(ctx)
+		if err != nil || len(images) != 0 {
+			t.Errorf("NodeImages() = (%v, %v), want an empty map and nil", images, err)
 		}
 	})
 	t.Run("NodeTerms", func(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ const (
 	tableTermData     = "taxonomy_term_field_data"
 	tableTermParent   = "taxonomy_term__parent"
 	tableFileManaged  = "file_managed"
+	tableMedia        = "media"
 	tableMediaImage   = "media__field_media_image"
 	tableUserData     = "users_field_data"
 	tablePathAlias    = "path_alias"
@@ -57,6 +59,7 @@ type Schema struct {
 	HasTermPar   bool
 	HasFiles     bool
 	HasMediaImg  bool
+	HasMedia     bool
 	HasAliases   bool
 	HasMenuLinks bool
 }
@@ -76,6 +79,7 @@ func (s Schema) MissingOptional() []string {
 		{s.HasTermPar, tableTermParent},
 		{s.HasFiles, tableFileManaged},
 		{s.HasMediaImg, tableMediaImage},
+		{s.HasMedia, tableMedia},
 		{s.HasAliases, tablePathAlias},
 		{s.HasMenuLinks, tableMenuLinkData},
 	} {
@@ -91,6 +95,11 @@ type Reader struct {
 	db     *sql.DB
 	prefix string
 	schema Schema
+
+	// present holds every table name in the source database, lowercased, so
+	// per-bundle field tables can be probed without a round trip each.
+	present    map[string]bool
+	safePrefix string
 }
 
 // BuildDSN assembles a MySQL DSN from the submitted configuration.
@@ -228,6 +237,8 @@ func (r *Reader) detectSchema(ctx context.Context) error {
 		return fmt.Errorf("table %s%s not found — is this a Drupal 8+ database?", safePrefix, tableNodeData)
 	}
 
+	r.present = present
+	r.safePrefix = safePrefix
 	r.schema = Schema{
 		HasNodeBody:  has(tableNodeBody),
 		HasNodeImage: has(tableNodeImage),
@@ -236,10 +247,24 @@ func (r *Reader) detectSchema(ctx context.Context) error {
 		HasTermPar:   has(tableTermParent),
 		HasFiles:     has(tableFileManaged),
 		HasMediaImg:  has(tableMediaImage),
+		HasMedia:     has(tableMedia),
 		HasAliases:   has(tablePathAlias),
 		HasMenuLinks: has(tableMenuLinkData),
 	}
 	return nil
+}
+
+// hasTable reports whether the source database has the prefixed table.
+//
+// This backs probes for tables that vary per media bundle. They are too
+// numerous and too site-specific to each earn a Schema flag, which would spam
+// every classic image-field site with irrelevant "optional table not found"
+// notices.
+func (r *Reader) hasTable(name string) bool {
+	if r.present == nil {
+		return false
+	}
+	return r.present[strings.ToLower(r.safePrefix+name)]
 }
 
 // NodeCount returns the number of default-language nodes.
@@ -482,25 +507,27 @@ func (r *Reader) GetFiles(ctx context.Context) ([]File, error) {
 	return files, nil
 }
 
-// fileAltText maps file ID to alt text from the image media field.
-func (r *Reader) fileAltText(ctx context.Context) (map[int64]string, error) {
+// buildAltQuery assembles a "(file id, alt text)" query over an image field
+// table. Both shapes are identical apart from their column names, so they share
+// one builder rather than two near-copies.
+func buildAltQuery(tbl, idColumn, altColumn string) string {
+	return fmt.Sprintf(`
+		SELECT %s, COALESCE(%s, '')
+		FROM %s
+		WHERE %s IS NOT NULL`, idColumn, altColumn, tbl, idColumn)
+}
+
+// readAltMap runs an alt-text query and returns file ID -> first non-empty alt.
+func (r *Reader) readAltMap(ctx context.Context, table, idColumn, altColumn string) (map[int64]string, error) {
 	alts := make(map[int64]string)
-	if !r.schema.HasMediaImg {
-		return alts, nil
-	}
-	tbl, err := r.table(tableMediaImage)
+	tbl, err := r.table(table)
 	if err != nil {
 		return nil, err
 	}
 
-	query := fmt.Sprintf(`
-		SELECT field_media_image_target_id, COALESCE(field_media_image_alt, '')
-		FROM %s
-		WHERE field_media_image_target_id IS NOT NULL`, tbl)
-
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, buildAltQuery(tbl, idColumn, altColumn))
 	if err != nil {
-		return nil, fmt.Errorf("failed to query media image field: %w", err)
+		return nil, fmt.Errorf("failed to query %s: %w", table, err)
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
@@ -512,15 +539,135 @@ func (r *Reader) fileAltText(ctx context.Context) (map[int64]string, error) {
 		var fid int64
 		var alt string
 		if err := rows.Scan(&fid, &alt); err != nil {
-			return nil, fmt.Errorf("failed to scan media image field: %w", err)
+			return nil, fmt.Errorf("failed to scan %s: %w", table, err)
 		}
 		if alt != "" {
-			alts[fid] = alt
+			if _, seen := alts[fid]; !seen {
+				alts[fid] = alt
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating media image field: %w", err)
+		return nil, fmt.Errorf("error iterating %s: %w", table, err)
 	}
+	return alts, nil
+}
+
+// mediaFileFieldTables lists the media__field_media_* tables that reference a
+// file_managed row. A site has whichever tables its media bundles declare, so
+// each is probed rather than assumed.
+var mediaFileFieldTables = []struct{ table, column string }{
+	{"media__field_media_image", "field_media_image_target_id"},
+	{"media__field_media_document", "field_media_document_target_id"},
+	{"media__field_media_file", "field_media_file_target_id"},
+	{"media__field_media_audio_file", "field_media_audio_file_target_id"},
+	{"media__field_media_video_file", "field_media_video_file_target_id"},
+}
+
+// MediaUUIDsByFile maps a file ID to the UUIDs of the media entities that
+// reference it.
+//
+// Drupal 9/10/11's CKEditor 5 emits <drupal-media data-entity-uuid="…">
+// carrying the MEDIA entity UUID, not the file UUID. Resolving those embeds
+// against file UUIDs alone never matches, and an unresolved embed is deleted
+// from the body — so every media-library image vanishes with no error and no
+// notice. Reading this mapping is what makes those embeds resolvable.
+//
+// A site with no media module has no media table; this returns an empty map and
+// the file-UUID path continues to work unchanged.
+func (r *Reader) MediaUUIDsByFile(ctx context.Context) (map[int64][]string, error) {
+	byFile := make(map[int64][]string)
+	if !r.schema.HasMedia {
+		return byFile, nil
+	}
+	mediaTbl, err := r.table(tableMedia)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, field := range mediaFileFieldTables {
+		if !r.hasTable(field.table) {
+			continue
+		}
+		fieldTbl, err := r.table(field.table)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := r.collectMediaUUIDs(ctx, mediaTbl, fieldTbl, field.column, field.table, byFile); err != nil {
+			return nil, err
+		}
+	}
+	return byFile, nil
+}
+
+// collectMediaUUIDs adds one media field table's file references to byFile.
+func (r *Reader) collectMediaUUIDs(ctx context.Context, mediaTbl, fieldTbl, column, label string,
+	byFile map[int64][]string) error {
+
+	query := fmt.Sprintf(`
+		SELECT m.uuid, f.%s
+		FROM %s m
+		JOIN %s f ON f.entity_id = m.mid
+		WHERE f.%s IS NOT NULL AND m.uuid <> ''`, column, mediaTbl, fieldTbl, column)
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to query %s: %w", label, err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
+
+	for rows.Next() {
+		var mediaUUID string
+		var fid int64
+		if err := rows.Scan(&mediaUUID, &fid); err != nil {
+			return fmt.Errorf("failed to scan %s: %w", label, err)
+		}
+		byFile[fid] = append(byFile[fid], mediaUUID)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating %s: %w", label, err)
+	}
+	return nil
+}
+
+// fileAltText maps file ID to alt text.
+//
+// Alt text lives in two places depending on how the site stores images.
+// media__field_media_image is the Drupal 8+ media-entity shape; a classic
+// image-field site has no media entities at all and keeps its alt on
+// node__field_image, keyed by the same file ID. Reading only the media field
+// silently drops every alt on a classic site, so both are read and merged with
+// the media field winning — a site can carry a media library and legacy image
+// fields at once.
+//
+// Drupal's alt is per field instance, so two nodes may describe one shared file
+// differently; oCMS stores one alt per media row, so the first non-empty value
+// wins. On the 1:1 sites this fallback exists for, there is nothing to lose.
+func (r *Reader) fileAltText(ctx context.Context) (map[int64]string, error) {
+	alts := make(map[int64]string)
+
+	if r.schema.HasNodeImage {
+		nodeAlts, err := r.readAltMap(ctx, tableNodeImage, "field_image_target_id", "field_image_alt")
+		if err != nil {
+			return nil, err
+		}
+		maps.Copy(alts, nodeAlts)
+	}
+
+	if r.schema.HasMediaImg {
+		mediaAlts, err := r.readAltMap(ctx, tableMediaImage,
+			"field_media_image_target_id", "field_media_image_alt")
+		if err != nil {
+			return nil, err
+		}
+		maps.Copy(alts, mediaAlts)
+	}
+
 	return alts, nil
 }
 
@@ -596,26 +743,30 @@ func (r *Reader) GetNodes(ctx context.Context, offset int) ([]Node, error) {
 	return nodes, nil
 }
 
-// NodeImages maps node ID to its featured-image file ID and alt text.
-func (r *Reader) NodeImages(ctx context.Context) (map[int64]int64, map[int64]string, error) {
+// NodeImages maps node ID to its featured-image file ID.
+//
+// Alt text is deliberately not returned here. It belongs to the file, not the
+// node, and reaches the media row through fileAltText; returning it from this
+// function too produced a second copy that every caller ignored, which is how
+// alt text came to be dropped silently.
+func (r *Reader) NodeImages(ctx context.Context) (map[int64]int64, error) {
 	images := make(map[int64]int64)
-	alts := make(map[int64]string)
 	if !r.schema.HasNodeImage {
-		return images, alts, nil
+		return images, nil
 	}
 	tbl, err := r.table(tableNodeImage)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	query := fmt.Sprintf(`
-		SELECT entity_id, field_image_target_id, COALESCE(field_image_alt, '')
+		SELECT entity_id, field_image_target_id
 		FROM %s
 		WHERE delta = 0 AND field_image_target_id IS NOT NULL`, tbl)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to query node images: %w", err)
+		return nil, fmt.Errorf("failed to query node images: %w", err)
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
@@ -625,19 +776,15 @@ func (r *Reader) NodeImages(ctx context.Context) (map[int64]int64, map[int64]str
 
 	for rows.Next() {
 		var nid, fid int64
-		var alt string
-		if err := rows.Scan(&nid, &fid, &alt); err != nil {
-			return nil, nil, fmt.Errorf("failed to scan node image: %w", err)
+		if err := rows.Scan(&nid, &fid); err != nil {
+			return nil, fmt.Errorf("failed to scan node image: %w", err)
 		}
 		images[nid] = fid
-		if alt != "" {
-			alts[nid] = alt
-		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, nil, fmt.Errorf("error iterating node images: %w", err)
+		return nil, fmt.Errorf("error iterating node images: %w", err)
 	}
-	return images, alts, nil
+	return images, nil
 }
 
 // NodeTerms maps node ID to the taxonomy term IDs it references.

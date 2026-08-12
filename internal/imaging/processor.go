@@ -11,6 +11,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,11 +24,39 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
+// MaxImageWidth and MaxImageHeight are the stored-image dimension caps. They
+// are exported so callers that downscale can report the limit they fitted to.
 const (
-	maxImageWidth  = 10000
-	maxImageHeight = 10000
-	maxImagePixels = 50000000 // 50 megapixels
+	MaxImageWidth  = 10000
+	MaxImageHeight = 10000
 )
+
+const (
+	maxImageWidth  = MaxImageWidth
+	maxImageHeight = MaxImageHeight
+	maxImagePixels = 50000000 // 50 megapixels
+
+	// maxDecodablePixels and maxDecodableDimension bound a decode even when the
+	// caller opts into downscaling.
+	//
+	// Peak allocation is the decoded source plus the NRGBA working image, so
+	// roughly 5-8 bytes per pixel: 120 MP is a ~0.7-1.0 GB transient. That
+	// clears the largest real files a CMS migration carries (a 102 MP
+	// medium-format frame; the worst seen here was 84 MP) while keeping a
+	// decode bomb from exhausting memory. The per-side limit stops an absurd
+	// aspect ratio (100000x1000) from slipping under the pixel count.
+	maxDecodablePixels    = 120000000 // 120 megapixels
+	maxDecodableDimension = 30000
+)
+
+// ProcessOptions controls how ProcessImageWithOptions treats an image that
+// exceeds the dimension caps.
+type ProcessOptions struct {
+	// DownscaleOversized fits an oversized image inside the caps instead of
+	// rejecting it. Intended for trusted local files (content migrations), not
+	// for untrusted uploads, which must keep the strict reject.
+	DownscaleOversized bool
+}
 
 // ProcessResult contains the result of processing an uploaded image.
 type ProcessResult struct {
@@ -36,6 +65,13 @@ type ProcessResult struct {
 	MimeType string
 	Size     int64
 	FilePath string
+
+	// Downscaled reports whether the image was fitted to the caps. When true,
+	// OriginalWidth and OriginalHeight hold the pre-fit dimensions so callers
+	// can tell the user what happened.
+	Downscaled     bool
+	OriginalWidth  int
+	OriginalHeight int
 }
 
 // VariantResult contains the result of creating an image variant.
@@ -61,7 +97,22 @@ func NewProcessor(uploadDir string) *Processor {
 
 // ProcessImage reads an uploaded image file and returns its metadata.
 // It saves the original file and returns processing results.
+//
+// Oversized images are rejected. This is the entry point for untrusted uploads;
+// callers handling trusted local files can opt into downscaling with
+// ProcessImageWithOptions.
 func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*ProcessResult, error) {
+	return p.ProcessImageWithOptions(reader, uuid, filename, ProcessOptions{})
+}
+
+// ProcessImageWithOptions reads an image file and returns its metadata, saving
+// the processed original.
+//
+// With opts.DownscaleOversized the image is fitted inside the dimension caps
+// rather than rejected, so a content migration does not lose an oversized
+// photo. maxDecodablePixels still applies: past that point the file is refused
+// whatever the caller asked for, because the decode itself is the risk.
+func (p *Processor) ProcessImageWithOptions(reader io.Reader, uuid, filename string, opts ProcessOptions) (*ProcessResult, error) {
 	// Read all data from reader
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -79,7 +130,8 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 	if err != nil {
 		return nil, fmt.Errorf("failed to read image config: %w", err)
 	}
-	if err := validateImageDimensions(cfg.Width, cfg.Height); err != nil {
+	fit, err := validateDecodable(cfg.Width, cfg.Height, opts)
+	if err != nil {
 		return nil, err
 	}
 
@@ -92,6 +144,17 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 	// Read EXIF orientation and auto-rotate
 	orientation := readExifOrientation(bytes.NewReader(data))
 	img = applyOrientation(img, orientation)
+
+	// Record the pre-fit size, then fit. Fitting after the rotation matters:
+	// a 90-degree turn swaps the axes, so fitting first could leave the stored
+	// image back over the cap on its long side.
+	origBounds := img.Bounds()
+	origWidth := origBounds.Dx()
+	origHeight := origBounds.Dy()
+	if fit {
+		fitW, fitH := fitBounds(origWidth, origHeight)
+		img = imaging.Fit(img, fitW, fitH, imaging.Lanczos)
+	}
 
 	// Get final dimensions
 	bounds := img.Bounds()
@@ -112,11 +175,14 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 	}
 
 	return &ProcessResult{
-		Width:    width,
-		Height:   height,
-		MimeType: formatToMimeType(format),
-		Size:     int64(len(processed)),
-		FilePath: filePath,
+		Width:          width,
+		Height:         height,
+		MimeType:       formatToMimeType(format),
+		Size:           int64(len(processed)),
+		FilePath:       filePath,
+		Downscaled:     width != origWidth || height != origHeight,
+		OriginalWidth:  origWidth,
+		OriginalHeight: origHeight,
 	}, nil
 }
 
@@ -415,6 +481,58 @@ func formatToMimeType(format string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// fitBounds returns the largest box, in the image's own aspect ratio, that
+// satisfies every dimension cap.
+//
+// imaging.Fit alone is not enough: it bounds each side, but maxImagePixels
+// constrains the area, and an image can sit inside 10000x10000 while still
+// being over 50 MP (9422x6486 is 61 MP). Scaling by sqrt of the area ratio is
+// what brings the pixel count under the cap.
+func fitBounds(width, height int) (int, int) {
+	scale := 1.0
+	if s := float64(maxImageWidth) / float64(width); s < scale {
+		scale = s
+	}
+	if s := float64(maxImageHeight) / float64(height); s < scale {
+		scale = s
+	}
+	area := float64(width) * float64(height)
+	if s := math.Sqrt(float64(maxImagePixels) / area); s < scale {
+		scale = s
+	}
+
+	// Floor rather than round so rounding can never land back over a cap.
+	w := int(math.Floor(float64(width) * scale))
+	h := int(math.Floor(float64(height) * scale))
+	return max(w, 1), max(h, 1)
+}
+
+// validateDecodable decides whether an image of these dimensions may be
+// decoded, and whether it must be downscaled afterwards.
+//
+// It returns fit=true when the image is over the caps and the caller opted into
+// downscaling. Without that opt-in the caps are hard limits, so untrusted
+// uploads behave exactly as before.
+func validateDecodable(width, height int, opts ProcessOptions) (fit bool, err error) {
+	if width <= 0 || height <= 0 {
+		return false, fmt.Errorf("invalid image dimensions: %dx%d", width, height)
+	}
+	if err := validateImageDimensions(width, height); err == nil {
+		return false, nil
+	} else if !opts.DownscaleOversized {
+		return false, err
+	}
+	if width > maxDecodableDimension || height > maxDecodableDimension {
+		return false, fmt.Errorf("image dimensions exceed maximum decodable: %dx%d (max %dx%d)",
+			width, height, maxDecodableDimension, maxDecodableDimension)
+	}
+	if int64(width)*int64(height) > maxDecodablePixels {
+		return false, fmt.Errorf("image pixel count exceeds maximum decodable: %d (max %d)",
+			int64(width)*int64(height), maxDecodablePixels)
+	}
+	return true, nil
 }
 
 func validateImageDimensions(width, height int) error {

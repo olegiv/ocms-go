@@ -11,21 +11,19 @@ import (
 // Node is one row of node_field_data — a single content item in its default
 // language. Drupal stores created/changed as Unix timestamps.
 type Node struct {
-	NID       int64
-	Type      string // bundle: "article", "page", …
-	Langcode  string
-	Title     string
-	Status    int64 // 1 = published
-	UID       int64
-	Created   int64
-	Changed   int64
-	Body      sql.NullString
-	Summary   sql.NullString
-	Format    sql.NullString
-	ImageFID  sql.NullInt64
-	ImageAlt  sql.NullString
-	TermIDs   []int64 // taxonomy terms referenced by this node
-	AliasPath sql.NullString
+	NID      int64
+	Type     string // bundle: "article", "page", …
+	Langcode string
+	Title    string
+	Status   int64 // 1 = published
+	UID      int64
+	Created  int64
+	Changed  int64
+	Body     sql.NullString
+	Summary  sql.NullString
+	Format   sql.NullString
+	ImageFID sql.NullInt64
+	TermIDs  []int64 // taxonomy terms referenced by this node
 }
 
 // IsPublished reports whether the node is published.

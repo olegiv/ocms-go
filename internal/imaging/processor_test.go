@@ -312,6 +312,142 @@ func TestProcessImage_RejectsOversizedDimensions(t *testing.T) {
 	}
 }
 
+// encodeOversizedPNG returns a real, decodable PNG that is over MaxImageWidth
+// but cheap to decode: it exceeds the width cap without approaching the pixel
+// cap, so the test stays fast.
+func encodeOversizedPNG(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, createTestImage(MaxImageWidth+1, 100)); err != nil {
+		t.Fatalf("png.Encode: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// TestProcessImageWithOptions_DownscaleOptIn pins the split between untrusted
+// uploads and trusted migration files.
+//
+// Bug state: drop the DownscaleOversized branch from validateDecodable and the
+// downscale case fails, which is how oversized Drupal images were silently lost
+// during migration.
+func TestProcessImageWithOptions_DownscaleOptIn(t *testing.T) {
+	oversized := encodeOversizedPNG(t)
+
+	t.Run("rejects without opt-in", func(t *testing.T) {
+		p := NewProcessor(t.TempDir())
+		_, err := p.ProcessImage(bytes.NewReader(oversized), "u", "wide.png")
+		if err == nil {
+			t.Fatal("ProcessImage should reject an oversized image by default")
+		}
+		if !strings.Contains(err.Error(), "exceed maximum allowed") {
+			t.Fatalf("error = %v, want dimensions limit error", err)
+		}
+	})
+
+	t.Run("downscales with opt-in", func(t *testing.T) {
+		p := NewProcessor(t.TempDir())
+		got, err := p.ProcessImageWithOptions(bytes.NewReader(oversized), "u", "wide.png",
+			ProcessOptions{DownscaleOversized: true})
+		if err != nil {
+			t.Fatalf("ProcessImageWithOptions: %v", err)
+		}
+		if !got.Downscaled {
+			t.Error("Downscaled = false, want true")
+		}
+		if got.Width > MaxImageWidth || got.Height > MaxImageHeight {
+			t.Errorf("stored size %dx%d exceeds cap %dx%d",
+				got.Width, got.Height, MaxImageWidth, MaxImageHeight)
+		}
+		if got.OriginalWidth != MaxImageWidth+1 {
+			t.Errorf("OriginalWidth = %d, want %d", got.OriginalWidth, MaxImageWidth+1)
+		}
+	})
+}
+
+// TestFitBoundsSatisfiesEveryCap is the cheap, exact guard on the downscale
+// geometry — building 50 MP fixtures to prove this through ProcessImage would
+// cost seconds per case.
+//
+// Bug state: fit to maxImageWidth/maxImageHeight alone (the obvious
+// imaging.Fit call) and the "over pixel cap only" rows fail. That is a real
+// regression, not a hypothetical: eco-energy.jpg is 9422x6486, which sits
+// inside 10000x10000 while being 61 MP, so a per-side-only fit stores it
+// unchanged and still over the cap.
+func TestFitBoundsSatisfiesEveryCap(t *testing.T) {
+	tests := []struct {
+		name          string
+		width, height int
+	}{
+		{"over pixel cap only", 9422, 6486}, // 61.1 MP, real: eco-energy.jpg
+		{"over both caps", 11232, 7488},     // 84.1 MP, real: Graphic Bulldozer
+		{"over width cap only", MaxImageWidth + 1, 100},
+		{"extreme aspect ratio", 29000, 900},
+		{"square over pixel cap", 9000, 9000}, // 81 MP, both sides legal
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, h := fitBounds(tt.width, tt.height)
+			if w > maxImageWidth || h > maxImageHeight {
+				t.Errorf("fitBounds(%d,%d) = %dx%d, exceeds side cap %dx%d",
+					tt.width, tt.height, w, h, maxImageWidth, maxImageHeight)
+			}
+			if got := int64(w) * int64(h); got > maxImagePixels {
+				t.Errorf("fitBounds(%d,%d) = %dx%d = %d px, exceeds pixel cap %d",
+					tt.width, tt.height, w, h, got, maxImagePixels)
+			}
+			if w < 1 || h < 1 {
+				t.Errorf("fitBounds(%d,%d) = %dx%d, degenerate", tt.width, tt.height, w, h)
+			}
+			// Aspect ratio must survive the fit. The tolerance is relative and
+			// generous because flooring is applied per side: on a 100 px side,
+			// losing the fractional pixel is already a 1% shift, which is
+			// inherent to integer bounds rather than a fault in the scaling.
+			srcRatio := float64(tt.width) / float64(tt.height)
+			gotRatio := float64(w) / float64(h)
+			if drift := (gotRatio - srcRatio) / srcRatio; drift > 0.02 || drift < -0.02 {
+				t.Errorf("aspect ratio drifted %.2f%%: %.4f -> %.4f",
+					drift*100, srcRatio, gotRatio)
+			}
+		})
+	}
+}
+
+// TestProcessImageWithOptions_HonorsDecodableCeiling checks that opting into
+// downscaling does not disarm the decode-bomb guard: past maxDecodablePixels
+// the file is refused however the caller asked.
+func TestProcessImageWithOptions_HonorsDecodableCeiling(t *testing.T) {
+	p := NewProcessor(t.TempDir())
+
+	bomb := createPNGWithDimensions(40000, 40000) // 1.6e9 px, far above the ceiling
+	_, err := p.ProcessImageWithOptions(bytes.NewReader(bomb), "u", "bomb.png",
+		ProcessOptions{DownscaleOversized: true})
+	if err == nil {
+		t.Fatal("ProcessImageWithOptions should reject a decode bomb even when downscaling")
+	}
+	if !strings.Contains(err.Error(), "maximum decodable") {
+		t.Fatalf("error = %v, want decodable ceiling error", err)
+	}
+}
+
+// TestProcessImageKeepsUploadPathStrict guards the boundary the downscale work
+// must not cross: the untrusted upload path calls ProcessImage, which must stay
+// equivalent to the zero-value options.
+func TestProcessImageKeepsUploadPathStrict(t *testing.T) {
+	p := NewProcessor(t.TempDir())
+	oversized := encodeOversizedPNG(t)
+
+	_, viaPlain := p.ProcessImage(bytes.NewReader(oversized), "u", "wide.png")
+	_, viaZeroOpts := p.ProcessImageWithOptions(bytes.NewReader(oversized), "u", "wide.png", ProcessOptions{})
+	if (viaPlain == nil) != (viaZeroOpts == nil) {
+		t.Fatalf("ProcessImage and zero-option ProcessImageWithOptions disagree: %v vs %v",
+			viaPlain, viaZeroOpts)
+	}
+	if viaPlain == nil {
+		t.Fatal("ProcessImage must keep rejecting oversized images")
+	}
+}
+
 func TestCreateVariant_RejectsOversizedDimensions(t *testing.T) {
 	uploadsDir := t.TempDir()
 	p := NewProcessor(uploadsDir)

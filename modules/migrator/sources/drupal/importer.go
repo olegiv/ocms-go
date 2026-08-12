@@ -181,8 +181,9 @@ type sourceReader interface {
 	GetUsers(ctx context.Context) ([]User, error)
 	GetTerms(ctx context.Context) ([]Term, error)
 	GetFiles(ctx context.Context) ([]File, error)
+	MediaUUIDsByFile(ctx context.Context) (map[int64][]string, error)
 	GetNodes(ctx context.Context, offset int) ([]Node, error)
-	NodeImages(ctx context.Context) (map[int64]int64, map[int64]string, error)
+	NodeImages(ctx context.Context) (map[int64]int64, error)
 	NodeTerms(ctx context.Context) (map[int64][]int64, error)
 	GetPathAliases(ctx context.Context) ([]PathAlias, error)
 	GetMenuLinks(ctx context.Context) ([]MenuLink, error)
@@ -673,8 +674,18 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 		return err
 	}
 
+	// A media-library site addresses embeds by media UUID, not file UUID, so
+	// both have to land in ByUUID. A classic image-field site has no media
+	// table and this is simply empty.
+	mediaUUIDs, err := st.reader.MediaUUIDsByFile(ctx)
+	if err != nil {
+		st.result.AddError("failed to read media entity references: %v", err)
+		mediaUUIDs = map[int64][]string{}
+	}
+
 	processor := imaging.NewProcessor(st.uploadDir)
 	now := time.Now()
+	skippedMimes := make(map[string]int)
 
 	for i, f := range files {
 		if err := ctx.Err(); err != nil {
@@ -686,6 +697,10 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 			mimeType = shared.MimeTypeFromExt(f.Filename)
 		}
 		if !shared.IsAllowedMediaMime(mimeType) {
+			// Counted and reported after the loop: one notice per file would
+			// exhaust the tracked-message cap on a site with many SVGs and bury
+			// the per-file messages that carry more information.
+			skippedMimes[mimeType]++
 			st.result.MediaSkipped++
 			continue
 		}
@@ -708,6 +723,9 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 		if f.UUID != "" {
 			st.refs.ByUUID[f.UUID] = publicURL
 		}
+		for _, mediaUUID := range mediaUUIDs[f.FID] {
+			st.refs.ByUUID[mediaUUID] = publicURL
+		}
 		st.refs.IsImg[publicURL] = processor.IsImage(mimeType)
 		if f.Alt.Valid && f.Alt.String != "" {
 			st.refs.AltMap[publicURL] = f.Alt.String
@@ -717,7 +735,26 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 		st.report(ctx, types.EntityMedia, i+1, len(files))
 	}
 
+	reportSkippedMimes(st, skippedMimes)
 	return nil
+}
+
+// reportSkippedMimes turns the per-type skip tally into one notice per type.
+//
+// Without this a file skipped for its type left no trace at all: not an error,
+// not a notice, and MediaSkipped is not rendered anywhere, so an SVG logo
+// simply failed to appear with nothing to explain why.
+func reportSkippedMimes(st *importState, skipped map[string]int) {
+	mimeTypes := make([]string, 0, len(skipped))
+	for mimeType := range skipped {
+		mimeTypes = append(mimeTypes, mimeType)
+	}
+	sort.Strings(mimeTypes)
+
+	for _, mimeType := range mimeTypes {
+		st.result.AddNotice("%d file(s) of type %q were skipped; the type is not in the media allowlist",
+			skipped[mimeType], mimeType)
+	}
 }
 
 // importOneFile copies a single file onto disk and creates its media row.
@@ -746,10 +783,19 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 
 	var variantSource string
 	if processor.IsImage(mimeType) {
-		processed, err := processor.ProcessImage(src, fileUUID, f.Filename)
+		// Migration files come from a trusted local directory, so an oversized
+		// photo is downscaled rather than dropped; the upload path keeps the
+		// strict reject.
+		processed, err := processor.ProcessImageWithOptions(src, fileUUID, f.Filename,
+			imaging.ProcessOptions{DownscaleOversized: true})
 		closeFile(src, fullPath)
 		if err != nil {
 			return 0, "", fmt.Errorf("failed to process image: %w", err)
+		}
+		if processed.Downscaled {
+			st.result.AddNotice("%s: downscaled from %dx%d to %dx%d to fit the %dx%d limit",
+				f.Filename, processed.OriginalWidth, processed.OriginalHeight,
+				processed.Width, processed.Height, imaging.MaxImageWidth, imaging.MaxImageHeight)
 		}
 		params.MimeType = processed.MimeType
 		params.Size = processed.Size
@@ -787,7 +833,7 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 		}
 	}
 
-	return media.ID, fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, f.Filename), nil
+	return media.ID, publicMediaURL(fileUUID, f.Filename), nil
 }
 
 // closeFile closes a source file, logging failures.
@@ -808,7 +854,7 @@ func (s *Source) importNodes(ctx context.Context, st *importState) error {
 		st.result.AddError("failed to read path aliases: %v", err)
 	}
 
-	images, imageAlts, err := st.reader.NodeImages(ctx)
+	images, err := st.reader.NodeImages(ctx)
 	if err != nil {
 		st.result.AddError("failed to read node images: %v", err)
 	}
@@ -842,9 +888,6 @@ func (s *Source) importNodes(ctx context.Context, st *importState) error {
 				return err
 			}
 			n.ImageFID = nullInt64From(images[n.NID])
-			if alt, ok := imageAlts[n.NID]; ok {
-				n.ImageAlt = sql.NullString{String: alt, Valid: true}
-			}
 			n.TermIDs = nodeTerms[n.NID]
 			s.importNode(ctx, st, n, now)
 			processed++
@@ -856,8 +899,27 @@ func (s *Source) importNodes(ctx context.Context, st *importState) error {
 		}
 	}
 
+	reportUnresolvedEmbeds(st)
 	s.importAliases(ctx, st, now)
 	return nil
+}
+
+// reportUnresolvedEmbeds tells the admin how many media embeds were dropped.
+//
+// The count is aggregated rather than listed per UUID: a body full of embeds
+// from a media library the importer could not read would otherwise fill the
+// tracked-message budget with opaque identifiers.
+func reportUnresolvedEmbeds(st *importState) {
+	if len(st.refs.Unresolved) == 0 {
+		return
+	}
+	unique := make(map[string]bool, len(st.refs.Unresolved))
+	for _, uuid := range st.refs.Unresolved {
+		unique[uuid] = true
+	}
+	st.result.AddNotice("%d media embed(s) referencing %d unknown media item(s) were removed "+
+		"from page bodies; the referenced files were not imported",
+		len(st.refs.Unresolved), len(unique))
 }
 
 // loadNodeAliases records the best path alias per node. Drupal keeps every

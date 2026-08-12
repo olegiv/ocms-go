@@ -83,7 +83,7 @@ func TestModuleProperties(t *testing.T) {
 
 func TestMigrations(t *testing.T) {
 	m := New()
-	moduleutil.AssertMigrations(t, m.Migrations(), 3)
+	moduleutil.AssertMigrations(t, m.Migrations(), 4)
 }
 
 func TestMigrationUp(t *testing.T) {

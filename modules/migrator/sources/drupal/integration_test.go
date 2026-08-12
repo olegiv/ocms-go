@@ -108,10 +108,65 @@ func TestLiveReaderReadsCoreTables(t *testing.T) {
 	if _, err := reader.GetMenuLinks(ctx); err != nil {
 		t.Errorf("GetMenuLinks() error = %v", err)
 	}
-	if _, _, err := reader.NodeImages(ctx); err != nil {
+	if _, err := reader.NodeImages(ctx); err != nil {
 		t.Errorf("NodeImages() error = %v", err)
 	}
 	if _, err := reader.NodeTerms(ctx); err != nil {
 		t.Errorf("NodeTerms() error = %v", err)
+	}
+}
+
+// TestLiveFileAltTextIsPopulated catches the regression that made every
+// imported image lose its alt text: alt was read only from
+// media__field_media_image, which a classic image-field site does not have, so
+// a site whose alt all lives on node__field_image imported none of it.
+//
+// Bug state: drop the node__field_image branch from fileAltText and this fails
+// against any classic Drupal site.
+func TestLiveFileAltTextIsPopulated(t *testing.T) {
+	cfg := liveConfig(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	dsn, err := BuildDSN(cfg)
+	if err != nil {
+		t.Fatalf("BuildDSN() error = %v", err)
+	}
+	reader, err := NewReader(ctx, dsn, cfg["table_prefix"])
+	if err != nil {
+		t.Fatalf("NewReader() error = %v", err)
+	}
+	defer closeReader(reader)
+
+	schema := reader.Schema()
+	if !schema.HasNodeImage && !schema.HasMediaImg {
+		t.Skip("source has neither an image field nor a media image field")
+	}
+
+	alts, err := reader.fileAltText(ctx)
+	if err != nil {
+		t.Fatalf("fileAltText() error = %v", err)
+	}
+	t.Logf("read alt text for %d file(s)", len(alts))
+
+	if len(alts) == 0 {
+		t.Error("fileAltText() returned no alt text despite an image field being present")
+	}
+
+	// The alt must be keyed by file ID, not node ID. Every key has to resolve
+	// to a real managed file, which is what caught the original mis-keying.
+	files, err := reader.GetFiles(ctx)
+	if err != nil {
+		t.Fatalf("GetFiles() error = %v", err)
+	}
+	known := make(map[int64]bool, len(files))
+	for _, f := range files {
+		known[f.FID] = true
+	}
+	for fid := range alts {
+		if !known[fid] {
+			t.Errorf("alt text keyed by %d, which is not a file ID in file_managed", fid)
+		}
 	}
 }

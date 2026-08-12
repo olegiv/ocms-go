@@ -64,6 +64,7 @@ type ImportJob struct {
 	Processed      int
 	Total          int
 	Counters       map[string]int
+	Skipped        map[string]int
 	Errors         []string
 	Notices        []string
 	FatalError     string
@@ -91,6 +92,16 @@ func (j *ImportJob) HasNotices() bool { return len(j.Notices) > 0 }
 // Count returns the imported count for an entity type.
 func (j *ImportJob) Count(entityType types.EntityType) int {
 	return j.Counters[string(entityType)]
+}
+
+// SkippedCount returns how many items of a type the import declined to handle.
+//
+// Skipped is not the same as failed: a file whose type is not in the media
+// allowlist is skipped deliberately. Surfacing it matters anyway, because an
+// operator comparing counts against the source site otherwise has no way to
+// account for the difference.
+func (j *ImportJob) SkippedCount(entityType types.EntityType) int {
+	return j.Skipped[string(entityType)]
 }
 
 // jobProgress accumulates live progress for one running import. It is written
@@ -214,7 +225,7 @@ func (m *Module) startJob(ctx context.Context, source, startedByEmail string, us
 // latestJob returns the most recent job for a source, or nil when none exists.
 func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, error) {
 	row := m.ctx.DB.QueryRowContext(ctx, `
-		SELECT id, source, status, phase, processed, total, counters, errors, notices,
+		SELECT id, source, status, phase, processed, total, counters, skipped, errors, notices,
 		       fatal_error, started_by_email, started_at, updated_at, finished_at
 		FROM migrator_import_jobs
 		WHERE source = ?
@@ -225,11 +236,12 @@ func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, erro
 		job          ImportJob
 		status       string
 		countersJSON string
+		skippedJSON  string
 		errorsJSON   string
 		noticesJSON  string
 	)
 	err := row.Scan(&job.ID, &job.Source, &status, &job.Phase, &job.Processed, &job.Total,
-		&countersJSON, &errorsJSON, &noticesJSON, &job.FatalError, &job.StartedByEmail,
+		&countersJSON, &skippedJSON, &errorsJSON, &noticesJSON, &job.FatalError, &job.StartedByEmail,
 		&job.StartedAt, &job.UpdatedAt, &job.FinishedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -241,6 +253,9 @@ func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, erro
 	job.Status = JobStatus(status)
 	if err := json.Unmarshal([]byte(countersJSON), &job.Counters); err != nil {
 		job.Counters = map[string]int{}
+	}
+	if err := json.Unmarshal([]byte(skippedJSON), &job.Skipped); err != nil {
+		job.Skipped = map[string]int{}
 	}
 	if err := json.Unmarshal([]byte(errorsJSON), &job.Errors); err != nil {
 		job.Errors = nil
@@ -278,9 +293,11 @@ func (m *Module) flushJobProgress(ctx context.Context, jobID int64, snap progres
 // than merges with the live tally.
 func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, result *ImportResult, fatal error) error {
 	counters := map[string]int{}
+	skipped := map[string]int{}
 	var jobErrors, jobNotices []string
 	if result != nil {
 		counters = stringKeyed(result.Counters())
+		skipped = stringKeyed(result.SkippedCounters())
 		jobErrors = result.Errors
 		jobNotices = result.Notices
 	}
@@ -288,6 +305,10 @@ func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, r
 	countersJSON, err := json.Marshal(counters)
 	if err != nil {
 		return fmt.Errorf("failed to encode import counters: %w", err)
+	}
+	skippedJSON, err := json.Marshal(skipped)
+	if err != nil {
+		return fmt.Errorf("failed to encode import skipped counts: %w", err)
 	}
 	errorsJSON, err := json.Marshal(jobErrors)
 	if err != nil {
@@ -306,9 +327,10 @@ func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, r
 	now := time.Now()
 	_, err = m.ctx.DB.ExecContext(ctx, `
 		UPDATE migrator_import_jobs
-		SET status = ?, counters = ?, errors = ?, notices = ?, fatal_error = ?, updated_at = ?, finished_at = ?
+		SET status = ?, counters = ?, skipped = ?, errors = ?, notices = ?,
+		    fatal_error = ?, updated_at = ?, finished_at = ?
 		WHERE id = ?`,
-		string(status), string(countersJSON), string(errorsJSON), string(noticesJSON),
+		string(status), string(countersJSON), string(skippedJSON), string(errorsJSON), string(noticesJSON),
 		fatalText, now, now, jobID)
 	if err != nil {
 		return fmt.Errorf("failed to finalize import job: %w", err)

@@ -335,8 +335,11 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 
 		// Process based on type
 		if processor.IsImage(file.MimeType) {
-			// Process image - creates original and variants
-			processResult, err := processor.ProcessImage(srcFile, fileUUID, file.Filename)
+			// Process image - creates original and variants. Migration files
+			// come from a trusted local directory, so an oversized photo is
+			// downscaled rather than dropped.
+			processResult, err := processor.ProcessImageWithOptions(srcFile, fileUUID, file.Filename,
+				imaging.ProcessOptions{DownscaleOversized: true})
 			if closeErr := srcFile.Close(); closeErr != nil {
 				slog.Error("failed to close source file", "path", file.Path, "error", closeErr)
 			}

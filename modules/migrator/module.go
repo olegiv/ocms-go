@@ -244,6 +244,26 @@ func (m *Module) Migrations() []module.Migration {
 				return nil
 			},
 		},
+		{
+			Version:     4,
+			Description: "Record skipped counts on import jobs",
+			Up: func(db *sql.DB) error {
+				// Skipped counts were computed by every import and then thrown
+				// away, so a file the importer declined to handle left no trace
+				// anywhere the operator could see it.
+				if columnExists(db, "migrator_import_jobs", "skipped") {
+					return nil
+				}
+				_, err := db.Exec(
+					`ALTER TABLE migrator_import_jobs ADD COLUMN skipped TEXT NOT NULL DEFAULT '{}'`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				// As with notices: dropping a column is not portable and the
+				// counts are reconstructable by re-running the import.
+				return nil
+			},
+		},
 	}
 }
 

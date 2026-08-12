@@ -4,8 +4,14 @@
 package drupal
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"image"
+	"image/color"
+	"image/png"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -25,9 +31,9 @@ type fakeReader struct {
 	users        []User
 	terms        []Term
 	files        []File
+	mediaUUIDs   map[int64][]string
 	nodes        []Node
 	nodeImages   map[int64]int64
-	nodeAlts     map[int64]string
 	nodeTerms    map[int64][]int64
 	aliases      []PathAlias
 	menuLinks    []MenuLink
@@ -47,6 +53,13 @@ func (f *fakeReader) GetTerms(context.Context) ([]Term, error) { return f.terms,
 
 func (f *fakeReader) GetFiles(context.Context) ([]File, error) { return f.files, f.err }
 
+func (f *fakeReader) MediaUUIDsByFile(context.Context) (map[int64][]string, error) {
+	if f.mediaUUIDs == nil {
+		return map[int64][]string{}, nil
+	}
+	return f.mediaUUIDs, nil
+}
+
 func (f *fakeReader) GetNodes(_ context.Context, offset int) ([]Node, error) {
 	if f.err != nil {
 		return nil, f.err
@@ -61,16 +74,12 @@ func (f *fakeReader) GetNodes(_ context.Context, offset int) ([]Node, error) {
 	return f.nodes[offset:end], nil
 }
 
-func (f *fakeReader) NodeImages(context.Context) (map[int64]int64, map[int64]string, error) {
+func (f *fakeReader) NodeImages(context.Context) (map[int64]int64, error) {
 	images := f.nodeImages
 	if images == nil {
 		images = map[int64]int64{}
 	}
-	alts := f.nodeAlts
-	if alts == nil {
-		alts = map[int64]string{}
-	}
-	return images, alts, nil
+	return images, nil
 }
 
 func (f *fakeReader) NodeTerms(context.Context) (map[int64][]int64, error) {
@@ -722,6 +731,150 @@ func TestImportMediaWithoutFilesPathIsReported(t *testing.T) {
 	}
 	if st.result.MediaImported != 0 {
 		t.Errorf("MediaImported = %d, want 0", st.result.MediaImported)
+	}
+}
+
+// writeTestPNG writes a small real PNG at relPath under root.
+func writeTestPNG(t *testing.T, root, relPath string) {
+	t.Helper()
+
+	full := filepath.Join(root, relPath)
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for y := range 8 {
+		for x := range 8 {
+			img.Set(x, y, color.RGBA{R: uint8(x * 8), G: uint8(y * 8), B: 200, A: 255})
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("png.Encode: %v", err)
+	}
+	if err := os.WriteFile(full, buf.Bytes(), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+}
+
+// TestImportMediaCreatesMediaAndRefs is the successful-path coverage importMedia
+// never had — the whole stage was only exercised through its "no files path"
+// early return, which is why several defects in it went unnoticed at once.
+//
+// It pins three of them together:
+//   - alt text reaches the media row (it was read and then discarded);
+//   - ByUUID carries the MEDIA entity uuid as well as the file uuid, without
+//     which every <drupal-media> embed on a Drupal 9+ site is deleted;
+//   - the emitted URL is percent-encoded, without which the page sanitizer
+//     removes the <img> that was just built.
+func TestImportMediaCreatesMediaAndRefs(t *testing.T) {
+	filesRoot := t.TempDir()
+	const relPath = "2026-01/фото с пробелом.png"
+	writeTestPNG(t, filesRoot, relPath)
+
+	reader := &fakeReader{
+		schema: Schema{HasFiles: true, HasMedia: true},
+		files: []File{{
+			FID:      7,
+			UUID:     "file-uuid-7",
+			Filename: "фото с пробелом.png",
+			URI:      "public://" + relPath,
+			MimeType: "image/png",
+			Alt:      sql.NullString{String: "Самолёт Tunisair", Valid: true},
+		}},
+		mediaUUIDs: map[int64][]string{7: {"media-uuid-42"}},
+	}
+
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMedia: true})
+	st.filesPath = filesRoot
+
+	if err := (&Source{}).importMedia(context.Background(), st); err != nil {
+		t.Fatalf("importMedia() error = %v", err)
+	}
+	if st.result.HasErrors() {
+		t.Fatalf("importMedia reported errors: %v", st.result.Errors)
+	}
+	if st.result.MediaImported != 1 {
+		t.Fatalf("MediaImported = %d, want 1", st.result.MediaImported)
+	}
+
+	mediaID, ok := st.mediaByFID[7]
+	if !ok {
+		t.Fatal("file 7 was not recorded in mediaByFID")
+	}
+	media, err := queries.GetMediaByID(context.Background(), mediaID)
+	if err != nil {
+		t.Fatalf("GetMedia: %v", err)
+	}
+	if media.Alt.String != "Самолёт Tunisair" {
+		t.Errorf("media.Alt = %q, want the source alt text", media.Alt.String)
+	}
+	if media.Width.Int64 == 0 || media.Height.Int64 == 0 {
+		t.Errorf("media dimensions = %dx%d, want them recorded",
+			media.Width.Int64, media.Height.Int64)
+	}
+
+	newURL, ok := st.refs.ByPath[relPath]
+	if !ok {
+		t.Fatalf("ByPath is missing the raw relative path %q; keys = %v", relPath, st.refs.ByPath)
+	}
+	if strings.Contains(newURL, " ") {
+		t.Errorf("the emitted URL %q contains a literal space; the sanitizer will drop it", newURL)
+	}
+
+	if got := st.refs.ByUUID["file-uuid-7"]; got != newURL {
+		t.Errorf("ByUUID[file uuid] = %q, want %q", got, newURL)
+	}
+	if got := st.refs.ByUUID["media-uuid-42"]; got != newURL {
+		t.Errorf("ByUUID[media uuid] = %q, want %q — <drupal-media> embeds "+
+			"reference the media entity uuid, not the file uuid", got, newURL)
+	}
+
+	if !st.refs.IsImg[newURL] {
+		t.Error("IsImg was not set for the imported image")
+	}
+	if st.refs.AltMap[newURL] != "Самолёт Tunisair" {
+		t.Errorf("AltMap[%q] = %q, want the source alt text", newURL, st.refs.AltMap[newURL])
+	}
+}
+
+// TestImportMediaReportsSkippedTypes checks that declining a file leaves a
+// trace. A file skipped for its type used to produce no error, no notice, and a
+// counter that was never persisted or rendered — so an SVG logo simply failed
+// to appear with nothing anywhere to explain why.
+func TestImportMediaReportsSkippedTypes(t *testing.T) {
+	filesRoot := t.TempDir()
+
+	reader := &fakeReader{
+		schema: Schema{HasFiles: true},
+		files: []File{
+			{FID: 1, Filename: "logo.svg", URI: "public://logo.svg", MimeType: "image/svg+xml"},
+			{FID: 2, Filename: "icon.svg", URI: "public://icon.svg", MimeType: "image/svg+xml"},
+		},
+	}
+
+	st, _, _ := newTestState(t, reader, types.ImportOptions{ImportMedia: true})
+	st.filesPath = filesRoot
+
+	if err := (&Source{}).importMedia(context.Background(), st); err != nil {
+		t.Fatalf("importMedia() error = %v", err)
+	}
+
+	if st.result.MediaSkipped != 2 {
+		t.Errorf("MediaSkipped = %d, want 2", st.result.MediaSkipped)
+	}
+	if !st.result.HasNotices() {
+		t.Fatal("skipping files for their type must be reported, got no notices")
+	}
+	// Aggregated, not one per file: a site with many SVGs would otherwise fill
+	// the tracked-message budget and bury the per-file notices.
+	if len(st.result.Notices) != 1 {
+		t.Errorf("notices = %v, want a single aggregated notice", st.result.Notices)
+	}
+	if !strings.Contains(st.result.Notices[0], "image/svg+xml") {
+		t.Errorf("notice %q does not name the skipped type", st.result.Notices[0])
 	}
 }
 

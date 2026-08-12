@@ -448,7 +448,7 @@ func TestLocaleCoversEntityTypesAndJobStatuses(t *testing.T) {
 		messages := loadLocale(t, lang)
 
 		for _, entityType := range types.AllEntityTypes {
-			for _, prefix := range []string{"migrator.imported_", "migrator.phase_"} {
+			for _, prefix := range []string{"migrator.imported_", "migrator.phase_", "migrator.skipped_"} {
 				key := prefix + string(entityType)
 				if _, ok := messages[key]; !ok {
 					t.Errorf("%s locale is missing %q", lang, key)
@@ -462,6 +462,46 @@ func TestLocaleCoversEntityTypesAndJobStatuses(t *testing.T) {
 				t.Errorf("%s locale is missing %q", lang, key)
 			}
 		}
+	}
+}
+
+// TestFinishJobPersistsSkippedCounters checks that a finished job records what
+// it declined to import, not only what it imported.
+//
+// ImportResult has carried SkippedCounters all along, and finishJob's own
+// comment claims the result "alone carries the skipped counts" — but only
+// Counters() was ever written to the row, so a file skipped for its type
+// vanished with no number anywhere to account for it.
+//
+// Bug state: drop the skipped column from the UPDATE in finishJob and this
+// fails with a zero count.
+func TestFinishJobPersistsSkippedCounters(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+
+	jobID, err := m.startJob(ctx, "drupal", "tester@example.com", 0, ImportOptions{ImportMedia: true})
+	if err != nil {
+		t.Fatalf("startJob: %v", err)
+	}
+
+	result := &ImportResult{MediaImported: 3, MediaSkipped: 5}
+	if err := m.finishJob(ctx, jobID, JobCompleted, result, nil); err != nil {
+		t.Fatalf("finishJob: %v", err)
+	}
+
+	job, err := m.latestJob(ctx, "drupal")
+	if err != nil {
+		t.Fatalf("latestJob: %v", err)
+	}
+	if job == nil {
+		t.Fatal("latestJob returned no job")
+	}
+
+	if got := job.SkippedCount(types.EntityMedia); got != 5 {
+		t.Errorf("SkippedCount(media) = %d, want 5", got)
+	}
+	if got := job.Count(types.EntityMedia); got != 3 {
+		t.Errorf("Count(media) = %d, want 3", got)
 	}
 }
 

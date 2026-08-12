@@ -409,6 +409,13 @@ templ migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVi
 					</span>
 				}
 			}
+			for _, entityType := range data.EntityTypes() {
+				if data.Job.SkippedCount(entityType) > 0 {
+					<span class="job-status-count job-status-count-skipped">
+						{ fmt.Sprintf("%d", data.Job.SkippedCount(entityType)) } { pc.T("migrator.skipped_" + string(entityType)) }
+					</span>
+				}
+			}
 		</div>
 		if data.Job.FatalError != "" {
 			<p class="job-status-error">{ data.Job.FatalError }</p>
