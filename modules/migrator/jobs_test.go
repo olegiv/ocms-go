@@ -7,8 +7,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -747,4 +752,139 @@ func TestJobStatusFragmentSeparatesNoticesFromErrors(t *testing.T) {
 	if strings.Contains(markup, "job-status-errors") {
 		t.Errorf("a job with only notices must not render an errors block:\n%s", markup)
 	}
+}
+
+// --- Status response: out-of-band refresh and flash safety ---
+
+// TestStatusResponseCarriesImportedContentOOB proves one poll refreshes both
+// regions of the page.
+//
+// The Imported Content card sits outside the polled fragment, so without the
+// out-of-band copy a finished import still showed pre-import counts — and on a
+// first import, no Delete button at all — until the operator refreshed by hand.
+// That was the reported complaint.
+func TestStatusResponseCarriesImportedContentOOB(t *testing.T) {
+	var sb strings.Builder
+	data := buildJobStatusView("drupal", &ImportJob{
+		Status: JobCompleted, UpdatedAt: time.Now(),
+		Counters: map[string]int{string(types.EntityPage): 2},
+	})
+	counts := map[string]int{string(types.EntityPage): 2, string(types.EntityMedia): 42}
+
+	err := MigratorJobStatusResponse(&adminviews.PageContext{}, data, counts).
+		Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render status response: %v", err)
+	}
+	markup := sb.String()
+
+	if !strings.Contains(markup, `id="migrator-job-status"`) {
+		t.Error("status response is missing the job card")
+	}
+	if !strings.Contains(markup, `id="migrator-imported-content"`) {
+		t.Fatalf("status response is missing the imported-content card:\n%s", markup)
+	}
+	if !strings.Contains(markup, `hx-swap-oob="true"`) {
+		t.Errorf("imported-content card is not marked for an out-of-band swap, so it "+
+			"would never reach the page:\n%s", markup)
+	}
+	if !strings.Contains(markup, "42") {
+		t.Errorf("imported-content card does not carry the fresh counts:\n%s", markup)
+	}
+	// The Delete button only exists once something has been imported.
+	if !strings.Contains(markup, "delete-imported-form") {
+		t.Errorf("imported-content card should offer the delete form once counts exist:\n%s", markup)
+	}
+}
+
+// TestImportedContentOmitsOOBMarkerOnFullPage keeps the same component reusable
+// for the page render, where an out-of-band marker would be wrong.
+func TestImportedContentOmitsOOBMarkerOnFullPage(t *testing.T) {
+	var sb strings.Builder
+	err := MigratorImportedContent(&adminviews.PageContext{}, "drupal",
+		map[string]int{string(types.EntityPage): 1}, false).
+		Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render imported content: %v", err)
+	}
+	// The attribute must be absent, not empty: htmx treats any present
+	// hx-swap-oob as an out-of-band element, so hx-swap-oob="" would make the
+	// page's own card try to swap itself away on load.
+	if strings.Contains(sb.String(), "hx-swap-oob") {
+		t.Errorf("the page copy must carry no hx-swap-oob attribute at all:\n%s", sb.String())
+	}
+}
+
+// TestRunningCardOffersManualRefresh covers the degraded-mode escape hatch: a
+// frozen card and a slow import look identical, so a running card always offers
+// a way to check by hand.
+func TestRunningCardOffersManualRefresh(t *testing.T) {
+	running := renderJobStatus(t, &ImportJob{Status: JobRunning, UpdatedAt: time.Now()})
+	if !strings.Contains(running, "/admin/migrator/drupal") {
+		t.Errorf("a running card should link back to the form for a manual refresh:\n%s", running)
+	}
+
+	done := renderJobStatus(t, &ImportJob{Status: JobCompleted, UpdatedAt: time.Now()})
+	if strings.Contains(done, "job-status-refresh") {
+		t.Errorf("a finished card does not need a refresh link:\n%s", done)
+	}
+}
+
+// TestJobStatusPollDoesNotConsumeFlash guards a bug the status endpoint
+// introduced: it built a full page context, and BuildPageContext pops the flash
+// out of the session. Since the fragment never renders the alert, a poll every
+// two seconds silently swallowed messages the operator was meant to see.
+//
+// This walks the AST rather than the source text, so the explanatory comment in
+// handleJobStatus naming BuildPageContext does not count as a call.
+func TestJobStatusPollDoesNotConsumeFlash(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filepath.Join(repoRoot(t), "modules/migrator/handlers.go"), nil, 0)
+	if err != nil {
+		t.Fatalf("failed to parse handlers.go: %v", err)
+	}
+
+	var handler *ast.FuncDecl
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Name.Name == "handleJobStatus" {
+			handler = fn
+			break
+		}
+	}
+	if handler == nil {
+		t.Fatal("could not locate handleJobStatus; has it been renamed?")
+	}
+
+	ast.Inspect(handler, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "BuildPageContext" {
+			t.Errorf("%s: handleJobStatus calls BuildPageContext, which pops the session "+
+				"flash. The polled fragment does not render @Alert, so every poll would "+
+				"discard a pending flash message. Build a minimal PageContext instead.",
+				fset.Position(call.Pos()))
+		}
+		return true
+	})
+}
+
+// repoRoot walks up from the test's working directory to the module root.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to determine working directory: %v", err)
+	}
+	for i := 0; i < 6; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		dir = filepath.Dir(dir)
+	}
+	t.Fatal("could not locate the repository root")
+	return ""
 }

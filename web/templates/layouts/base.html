@@ -14,11 +14,11 @@
     {{block "body" .}}{{end}}
 
     <!-- HTMX (vendored with SRI) -->
-    <script nonce="{{.CSPNonce}}" src="/static/dist/js/htmx.min.js" integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz" crossorigin="anonymous"></script>
+    <script nonce="{{.CSPNonce}}" src="{{ scriptURL "/static/dist/js/htmx.min.js" }}" integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
     <!-- Alpine.js Sort Plugin (must load before Alpine) -->
-    <script nonce="{{.CSPNonce}}" defer src="/static/dist/js/alpine-sort.min.js"></script>
+    <script nonce="{{.CSPNonce}}" defer src="{{ scriptURL "/static/dist/js/alpine-sort.min.js" }}" integrity="sha384-hqiYD2WaUm+VsLVKEqRzzkJ7HQownCb0Mjq/GQJUDyzwA+vztNBwFqsWkbRGZCv+" crossorigin="anonymous"></script>
     <!-- Alpine.js -->
-    <script nonce="{{.CSPNonce}}" defer src="/static/dist/js/alpine.min.js" integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L" crossorigin="anonymous"></script>
+    <script nonce="{{.CSPNonce}}" defer src="{{ scriptURL "/static/dist/js/alpine.min.js" }}" integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L" crossorigin="anonymous"></script>
 
     <!-- Admin core utilities: keyboard shortcuts, HTMX handlers, toast notifications, form validation -->
     <script nonce="{{.CSPNonce}}" src="/static/dist/js/admin-core.js"></script>

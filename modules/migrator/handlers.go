@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
 
@@ -465,10 +466,21 @@ func (m *Module) handleJobStatus(w http.ResponseWriter, r *http.Request) {
 		m.ctx.Logger.Error("failed to read import job", "source", ctx.SourceName, "error", err)
 	}
 
+	counts, err := m.getImportedCounts(r.Context(), ctx.SourceName)
+	if err != nil {
+		m.ctx.Logger.Error("failed to read imported counts", "source", ctx.SourceName, "error", err)
+	}
+
+	// Deliberately not Render.BuildPageContext: that pops the flash out of the
+	// session, and this fragment never renders @Alert. A poll every two seconds
+	// would swallow every flash the operator was meant to see, including ones
+	// set in their other tabs. The fragment only needs translations.
+	pc := &adminviews.PageContext{AdminLang: ctx.Lang}
+
 	// Always 200 with a fragment: htmx treats 204 as "no swap", which would
 	// strand a stale running card on screen forever.
 	w.Header().Set("Cache-Control", "no-store")
-	render.Templ(w, r, MigratorJobStatus(m.ctx.Render.BuildPageContext(r, "", nil), buildJobStatusView(ctx.SourceName, job)))
+	render.Templ(w, r, MigratorJobStatusResponse(pc, buildJobStatusView(ctx.SourceName, job), counts))
 }
 
 // buildJobStatusView assembles the status fragment's view data.

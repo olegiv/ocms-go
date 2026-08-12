@@ -41,6 +41,14 @@ The router installs a 30-second request timeout (`middleware.Timeout` in `cmd/oc
 
 Progress is written to the job row on a one-second ticker and rendered by a status card that htmx polls every two seconds. Polling stops without any JavaScript: the terminal fragment is the same element without `hx-trigger`, and `hx-swap="outerHTML"` replaces the poller with it.
 
+The poll refreshes **two** regions. The Imported Content card sits outside the status card, so the status response also returns it carrying `hx-swap-oob="true"`; one poll updates both. Without that, a finished import still showed pre-import counts — and on a first import, no Delete button at all — until the operator refreshed by hand. The page copy of that card must carry no `hx-swap-oob` attribute at all, since htmx treats any present value as out-of-band.
+
+While a job is running the card also offers a plain **Refresh** link. A frozen card and a slow import look identical, so this gives the operator a way to check without knowing to reload.
+
+The status endpoint deliberately does not build a full page context: `BuildPageContext` pops the flash out of the session, and since the fragment never renders the alert, a two-second poll would swallow every flash message.
+
+**Verifying changes to this card requires a browser.** `curl` and `httptest` neither enforce Subresource Integrity nor execute JavaScript, so a fragment with correct `hx-*` attributes passes every HTTP-level check while doing nothing at all — which is exactly how a stale htmx integrity hash disabled this card, and every other htmx feature in the admin UI, unnoticed for weeks. `internal/views/admin/sri_test.go` now guards the hashes mechanically.
+
 Because a goroutine cannot outlive its process, a `running` row owned by a different run ID with a stale heartbeat is marked `interrupted` at startup. The `owner_run_id` guard means a second process sharing the database does not kill its sibling's live import.
 
 ### Concurrency

@@ -48,6 +48,7 @@
         {"id": "migrator.job_progress_unknown", "message": "%d processed", "translation": "%d processed"},
         {"id": "migrator.job_errors", "message": "%d errors", "translation": "%d errors"},
         {"id": "migrator.job_notices", "message": "%d notices", "translation": "%d notices"},
+        {"id": "migrator.job_refresh", "message": "Refresh", "translation": "Refresh"},
 
         {"id": "migrator.phase_menu_item", "message": "Importing menu items…", "translation": "Importing menu items…"},
         {"id": "migrator.phase_menu", "message": "Importing menus…", "translation": "Importing menus…"},
