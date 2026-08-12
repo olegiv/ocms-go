@@ -51,6 +51,7 @@ const (
 // field simply has no node__field_image table — that is normal, not an error.
 type Schema struct {
 	HasNodeImage bool
+	HasNodeBody  bool
 	HasNodeTags  bool
 	HasTermData  bool
 	HasTermPar   bool
@@ -68,6 +69,7 @@ func (s Schema) MissingOptional() []string {
 		present bool
 		name    string
 	}{
+		{s.HasNodeBody, tableNodeBody},
 		{s.HasNodeImage, tableNodeImage},
 		{s.HasNodeTags, tableNodeTags},
 		{s.HasTermData, tableTermData},
@@ -227,6 +229,7 @@ func (r *Reader) detectSchema(ctx context.Context) error {
 	}
 
 	r.schema = Schema{
+		HasNodeBody:  has(tableNodeBody),
 		HasNodeImage: has(tableNodeImage),
 		HasNodeTags:  has(tableNodeTags),
 		HasTermData:  has(tableTermData),
@@ -521,8 +524,41 @@ func (r *Reader) fileAltText(ctx context.Context) (map[int64]string, error) {
 	return alts, nil
 }
 
+// buildNodeQuery assembles the node batch query.
+//
+// node__body is a *field* table, not core: a site whose content types carry no
+// body field simply does not have it, and joining it unconditionally makes the
+// entire node import fail with "table doesn't exist". When it is absent the
+// body columns are selected as NULL so the scan arity stays the same and nodes
+// still import — titles, slugs, aliases and taxonomy links are worth having
+// even without body text.
+func buildNodeQuery(nodeTbl, bodyTbl string, hasBody bool) string {
+	const baseColumns = `n.nid, n.type, COALESCE(n.langcode, ''), COALESCE(n.title, ''),
+		       COALESCE(n.status, 0), COALESCE(n.uid, 0),
+		       COALESCE(n.created, 0), COALESCE(n.changed, 0)`
+
+	if !hasBody {
+		return fmt.Sprintf(`
+		SELECT %s,
+		       NULL, NULL, NULL
+		FROM %s n
+		WHERE n.default_langcode = 1
+		ORDER BY n.nid
+		LIMIT ? OFFSET ?`, baseColumns, nodeTbl)
+	}
+
+	return fmt.Sprintf(`
+		SELECT %s,
+		       b.body_value, b.body_summary, b.body_format
+		FROM %s n
+		LEFT JOIN %s b ON b.entity_id = n.nid AND b.langcode = n.langcode AND b.delta = 0
+		WHERE n.default_langcode = 1
+		ORDER BY n.nid
+		LIMIT ? OFFSET ?`, baseColumns, nodeTbl, bodyTbl)
+}
+
 // GetNodes returns one batch of default-language nodes ordered by nid, with
-// body, image and tag references joined in.
+// body text joined in when the site has a body field.
 func (r *Reader) GetNodes(ctx context.Context, offset int) ([]Node, error) {
 	nodeTbl, err := r.table(tableNodeData)
 	if err != nil {
@@ -533,16 +569,7 @@ func (r *Reader) GetNodes(ctx context.Context, offset int) ([]Node, error) {
 		return nil, err
 	}
 
-	query := fmt.Sprintf(`
-		SELECT n.nid, n.type, COALESCE(n.langcode, ''), COALESCE(n.title, ''),
-		       COALESCE(n.status, 0), COALESCE(n.uid, 0),
-		       COALESCE(n.created, 0), COALESCE(n.changed, 0),
-		       b.body_value, b.body_summary, b.body_format
-		FROM %s n
-		LEFT JOIN %s b ON b.entity_id = n.nid AND b.langcode = n.langcode AND b.delta = 0
-		WHERE n.default_langcode = 1
-		ORDER BY n.nid
-		LIMIT ? OFFSET ?`, nodeTbl, bodyTbl)
+	query := buildNodeQuery(nodeTbl, bodyTbl, r.schema.HasNodeBody)
 
 	rows, err := r.db.QueryContext(ctx, query, batchSize, offset)
 	if err != nil {

@@ -4,9 +4,11 @@
 package drupal
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -464,18 +466,21 @@ func TestRewriteBodyEmptyAndNilSafe(t *testing.T) {
 }
 
 func TestSchemaMissingOptional(t *testing.T) {
-	full := Schema{
-		HasNodeImage: true, HasNodeTags: true, HasTermData: true, HasTermPar: true,
-		HasFiles: true, HasMediaImg: true, HasAliases: true, HasMenuLinks: true,
-	}
+	// Built reflectively rather than as a literal: a new Schema flag would
+	// otherwise silently drop out of this "everything present" case.
+	full := fullSchema()
 	if missing := full.MissingOptional(); len(missing) != 0 {
 		t.Errorf("MissingOptional() = %v, want none", missing)
 	}
 
+	// Counting is deliberately relative rather than a hardcoded number, so
+	// adding an optional table does not break this test for no reason.
+	all := Schema{}.MissingOptional()
 	partial := Schema{HasFiles: true}
 	missing := partial.MissingOptional()
-	if len(missing) != 7 {
-		t.Errorf("MissingOptional() reported %d tables, want 7: %v", len(missing), missing)
+
+	if len(missing) != len(all)-1 {
+		t.Errorf("MissingOptional() reported %d tables, want %d: %v", len(missing), len(all)-1, missing)
 	}
 	for _, name := range missing {
 		if name == tableFileManaged {
@@ -500,4 +505,127 @@ func TestUnixOrNow(t *testing.T) {
 // timeFixture returns a stable timestamp for tests.
 func timeFixture() time.Time {
 	return time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC)
+}
+
+// TestBuildNodeQueryOmitsBodyJoinWhenAbsent is the direct regression test for a
+// real migration failure: node__body is a field table, not core, and a site
+// whose content types carry no body field does not have it. Joining it
+// unconditionally aborted the entire node stage with
+// "Table 'drupal11.node__body' doesn't exist", so 0 pages were created while
+// tags, categories and media imported fine.
+func TestBuildNodeQueryOmitsBodyJoinWhenAbsent(t *testing.T) {
+	const nodeTbl, bodyTbl = "`node_field_data`", "`node__body`"
+
+	withBody := buildNodeQuery(nodeTbl, bodyTbl, true)
+	if !strings.Contains(withBody, "LEFT JOIN "+bodyTbl) {
+		t.Errorf("query should join the body table when it exists:\n%s", withBody)
+	}
+	if !strings.Contains(withBody, "b.body_value") {
+		t.Errorf("query should select body_value when the table exists:\n%s", withBody)
+	}
+
+	withoutBody := buildNodeQuery(nodeTbl, bodyTbl, false)
+	if strings.Contains(withoutBody, bodyTbl) {
+		t.Errorf("query must not reference the body table when it is absent:\n%s", withoutBody)
+	}
+	if strings.Contains(withoutBody, "b.body_value") {
+		t.Errorf("query must not select body columns when the table is absent:\n%s", withoutBody)
+	}
+
+	// Both shapes must scan identically, or GetNodes' rows.Scan breaks on the
+	// path the tests exercise least.
+	if got, want := strings.Count(withoutBody, ","), strings.Count(withBody, ","); got != want {
+		t.Errorf("column count differs between shapes: %d vs %d\nwithout:\n%s\nwith:\n%s",
+			got, want, withoutBody, withBody)
+	}
+	for _, q := range []string{withBody, withoutBody} {
+		if !strings.Contains(q, "LIMIT ? OFFSET ?") {
+			t.Errorf("query lost its batching clause:\n%s", q)
+		}
+		if !strings.Contains(q, "n.default_langcode = 1") {
+			t.Errorf("query lost its default-language filter:\n%s", q)
+		}
+	}
+}
+
+// TestZeroSchemaReportsEveryOptionalTable ties the schema flags to the report
+// the admin sees. A new optional table added to the reader without a Schema
+// field would otherwise be silently required.
+func TestZeroSchemaReportsEveryOptionalTable(t *testing.T) {
+	missing := Schema{}.MissingOptional()
+
+	for _, want := range []string{
+		tableNodeBody, tableNodeImage, tableNodeTags, tableTermData,
+		tableTermParent, tableFileManaged, tableMediaImage,
+		tablePathAlias, tableMenuLinkData,
+	} {
+		found := false
+		for _, got := range missing {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("optional table %q is not reported by MissingOptional(); "+
+				"an install without it would fail rather than degrade", want)
+		}
+	}
+}
+
+// TestOptionalTableGettersShortCircuit enforces that every reader method for an
+// optional table checks its schema flag *before* touching the database.
+//
+// The reader here has a nil *sql.DB on purpose: if a guard is removed, the
+// method reaches r.db.QueryContext and panics, so this fails loudly rather than
+// waiting for a live Drupal install that happens to lack the table.
+func TestOptionalTableGettersShortCircuit(t *testing.T) {
+	r := &Reader{db: nil, schema: Schema{}}
+	ctx := context.Background()
+
+	t.Run("GetTerms", func(t *testing.T) {
+		if terms, err := r.GetTerms(ctx); err != nil || terms != nil {
+			t.Errorf("GetTerms() = (%v, %v), want (nil, nil)", terms, err)
+		}
+	})
+	t.Run("GetFiles", func(t *testing.T) {
+		if files, err := r.GetFiles(ctx); err != nil || files != nil {
+			t.Errorf("GetFiles() = (%v, %v), want (nil, nil)", files, err)
+		}
+	})
+	t.Run("GetPathAliases", func(t *testing.T) {
+		if aliases, err := r.GetPathAliases(ctx); err != nil || aliases != nil {
+			t.Errorf("GetPathAliases() = (%v, %v), want (nil, nil)", aliases, err)
+		}
+	})
+	t.Run("GetMenuLinks", func(t *testing.T) {
+		if links, err := r.GetMenuLinks(ctx); err != nil || links != nil {
+			t.Errorf("GetMenuLinks() = (%v, %v), want (nil, nil)", links, err)
+		}
+	})
+	t.Run("NodeImages", func(t *testing.T) {
+		images, alts, err := r.NodeImages(ctx)
+		if err != nil || len(images) != 0 || len(alts) != 0 {
+			t.Errorf("NodeImages() = (%v, %v, %v), want empty maps and nil", images, alts, err)
+		}
+	})
+	t.Run("NodeTerms", func(t *testing.T) {
+		terms, err := r.NodeTerms(ctx)
+		if err != nil || len(terms) != 0 {
+			t.Errorf("NodeTerms() = (%v, %v), want an empty map and nil", terms, err)
+		}
+	})
+}
+
+// fullSchema returns a Schema with every detection flag set, so tests covering
+// the "everything present" case stay correct as flags are added.
+func fullSchema() Schema {
+	var s Schema
+	v := reflect.ValueOf(&s).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		if v.Field(i).Kind() == reflect.Bool {
+			v.Field(i).SetBool(true)
+		}
+	}
+	return s
 }
