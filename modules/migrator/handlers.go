@@ -352,12 +352,27 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 
 	// chi's Recoverer middleware does not reach this goroutine, so without an
 	// explicit recover a panic inside any source would take down the server.
+	// progress is captured by the recover defer below, so it must be declared
+	// before it. It is assigned once the accumulator exists.
+	var progress *jobProgress
+
 	defer func() {
 		if rec := recover(); rec != nil {
 			m.ctx.Logger.Error("import panicked", "source", run.SourceName, "job_id", run.ID, "panic", rec)
-			// nil is correct here: Import never returned, so there is no
-			// result. finishJob preserves the counters already flushed to the
-			// row rather than overwriting them with empty maps.
+			// Persist whatever the accumulator holds before finalizing.
+			// finishJob preserves already-flushed counters when the result is
+			// nil, but the flush ticker runs only once a second — a panic
+			// inside the first interval, or after work done since the last
+			// tick, would otherwise lose those counts entirely.
+			if progress != nil {
+				if snap, changed := progress.snapshot(); changed {
+					flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
+					if err := m.flushJobProgress(flushCtx, run.ID, snap); err != nil {
+						m.ctx.Logger.Warn("failed to flush progress after panic", "job_id", run.ID, "error", err)
+					}
+					cancel()
+				}
+			}
 			m.finalizeJob(ctx, run, JobFailed, nil, fmt.Errorf("import panicked: %v", rec))
 		}
 	}()
@@ -373,7 +388,7 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 		}
 	}()
 
-	progress := newJobProgress()
+	progress = newJobProgress()
 	m.jobsMu.Lock()
 	m.live[run.SourceName] = progress
 	m.jobsMu.Unlock()
@@ -446,13 +461,22 @@ func (m *Module) startProgressFlush(ctx context.Context, jobID int64, progress *
 				return
 			case <-ticker.C:
 				snap, changed := progress.snapshot()
-				if !changed {
-					continue
-				}
 				// Progress writes use a detached context so a cancelled import
 				// can still record how far it got.
 				flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
-				if err := m.flushJobProgress(flushCtx, jobID, snap); err != nil {
+				var err error
+				if changed {
+					err = m.flushJobProgress(flushCtx, jobID, snap)
+				} else {
+					// Still touch updated_at. A stage that publishes no
+					// progress for two minutes — a long index rebuild, a slow
+					// streaming query — otherwise looks orphaned to a second
+					// process sharing the database, which would reap the row
+					// and start a competing import for the same source while
+					// this goroutine is still writing.
+					err = m.touchJobHeartbeat(flushCtx, jobID)
+				}
+				if err != nil {
 					m.ctx.Logger.Warn("failed to flush import progress", "job_id", jobID, "error", err)
 				}
 				cancel()
@@ -608,6 +632,22 @@ func buildJobStatusView(sourceName string, job *ImportJob, readErr error) Migrat
 func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 	ctx, ok := m.getSourceContext(w, r)
 	if !ok {
+		return
+	}
+
+	// Refuse while an import is in flight. The status poll renders the delete
+	// form as soon as the running job tracks its first item, so without this an
+	// admin can delete rows the goroutine is still using: it keeps its in-memory
+	// user, taxonomy and media IDs, so later stages hit foreign-key failures or
+	// leave only the tail of the import tracked for a future delete.
+	if job, err := m.latestJob(r.Context(), ctx.SourceName); err != nil {
+		m.ctx.Logger.Error("failed to read import job before delete", "source", ctx.SourceName, "error", err)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_delete"), "error")
+		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
+		return
+	} else if job != nil && job.Status == JobRunning && !job.IsStale(time.Now()) {
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_delete_while_running"), "error")
+		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 		return
 	}
 

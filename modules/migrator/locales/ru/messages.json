@@ -28,6 +28,7 @@
         {"id": "migrator.error_source_not_found", "message": "Migration source not found", "translation": "Источник миграции не найден"},
         {"id": "migrator.error_parse_form", "message": "Failed to parse form data", "translation": "Не удалось обработать данные формы"},
         {"id": "migrator.error_connection", "message": "Connection failed", "translation": "Ошибка подключения"},
+        {"id": "migrator.error_delete_while_running", "message": "An import is currently running. Wait for it to finish before deleting imported content.", "translation": "Импорт выполняется. Дождитесь завершения перед удалением импортированного содержимого."},
         {"id": "migrator.error_import", "message": "Import failed", "translation": "Ошибка импорта"},
         {"id": "migrator.error_import_running", "message": "An import is already running for this source. Wait for it to finish before starting another.", "translation": "Импорт из этого источника уже выполняется. Дождитесь его завершения, прежде чем запускать новый."},
 

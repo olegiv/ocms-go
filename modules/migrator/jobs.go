@@ -317,6 +317,20 @@ func (m *Module) flushJobProgress(ctx context.Context, jobID int64, snap progres
 	return nil
 }
 
+// touchJobHeartbeat refreshes updated_at without changing progress, so a stage
+// that reports nothing is not mistaken for an orphaned job.
+func (m *Module) touchJobHeartbeat(ctx context.Context, jobID int64) error {
+	_, err := m.ctx.DB.ExecContext(ctx, `
+		UPDATE migrator_import_jobs
+		SET updated_at = ?
+		WHERE id = ? AND status = ?`,
+		time.Now(), jobID, string(JobRunning))
+	if err != nil {
+		return fmt.Errorf("failed to update import job heartbeat: %w", err)
+	}
+	return nil
+}
+
 // finishJob records the terminal state of a job.
 //
 // The result returned by the source is authoritative here: it alone carries the
