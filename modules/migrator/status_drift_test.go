@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
 
@@ -193,5 +195,48 @@ func TestFinishJobPreservesCountersWithoutResult(t *testing.T) {
 	}
 	if job.FatalError == "" {
 		t.Error("fatal error was not recorded")
+	}
+}
+
+// TestCheckActivationUsesTheRegistryContext covers the activation guard in the
+// state it actually runs in.
+//
+// SetActive calls the guard before Init, so a module that was inactive at
+// startup has m.ctx == nil at that moment. The first version of this guard read
+// m.ctx and returned "allow" on nil, which made it a no-op in precisely the
+// scenario it exists for: activating the migrator in production with no host
+// allowlist configured.
+func TestCheckActivationUsesTheRegistryContext(t *testing.T) {
+	prodNoAllowlist := &module.Context{Config: &config.Config{
+		Env:                           "production",
+		RequireMigratorAllowedDBHosts: true,
+		MigratorAllowedDBHosts:        "",
+	}}
+
+	// A brand-new module, exactly as SetActive sees it: Init has not run.
+	m := New()
+	if m.ctx != nil {
+		t.Fatal("precondition failed: a fresh module should have no context")
+	}
+
+	if err := m.CheckActivation(prodNoAllowlist); err == nil {
+		t.Error("activation was allowed in production with an empty allowlist; " +
+			"the guard must read the passed context, not the module's own nil one")
+	}
+
+	// Configured allowlist: activation proceeds.
+	prodWithAllowlist := &module.Context{Config: &config.Config{
+		Env:                           "production",
+		RequireMigratorAllowedDBHosts: true,
+		MigratorAllowedDBHosts:        "db.internal",
+	}}
+	if err := m.CheckActivation(prodWithAllowlist); err != nil {
+		t.Errorf("activation refused despite a configured allowlist: %v", err)
+	}
+
+	// Development is unaffected.
+	dev := &module.Context{Config: &config.Config{Env: "development"}}
+	if err := m.CheckActivation(dev); err != nil {
+		t.Errorf("activation refused outside production: %v", err)
 	}
 }

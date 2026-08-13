@@ -51,9 +51,12 @@ type Context struct {
 // those checks re-running — the policy held only until someone toggled it.
 type ActivationGuard interface {
 	// CheckActivation returns an error explaining why the module must not be
-	// activated right now. It is called before Init and before the row is
-	// marked active.
-	CheckActivation() error
+	// activated right now. It runs before Init and before the row is marked
+	// active, so the module's own context is not wired yet — the registry
+	// context is passed in instead. Reading m.ctx here would observe nil for
+	// precisely the module this guard exists to stop: one that was inactive at
+	// startup.
+	CheckActivation(ctx *Context) error
 }
 
 // Module defines the interface that all modules must implement.

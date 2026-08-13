@@ -94,11 +94,14 @@ func (m *Module) Init(ctx *module.Context) error {
 // from the admin UI with an empty allowlist, and CheckDBHostAllowed treats an
 // empty list as unrestricted — so the production policy silently lapsed until
 // the next restart.
-func (m *Module) CheckActivation() error {
-	if m.ctx == nil || m.ctx.Config == nil {
+func (m *Module) CheckActivation(ctx *module.Context) error {
+	// Read the registry's context, not m.ctx: this runs before Init, so the
+	// module's own context is still nil whenever it was inactive at startup —
+	// the exact case this guard is for.
+	if ctx == nil || ctx.Config == nil {
 		return nil
 	}
-	cfg := m.ctx.Config
+	cfg := ctx.Config
 	if cfg.Env != "production" || !cfg.RequireMigratorAllowedDBHosts {
 		return nil
 	}
