@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/go-sql-driver/mysql"
+
+	"github.com/olegiv/ocms-go/internal/auth"
 )
 
 // baseCfg returns a valid source-database configuration.
@@ -349,5 +351,76 @@ func TestSanitizeIdentifier(t *testing.T) {
 				t.Errorf("SanitizeIdentifier(%q) = %q, want an error", tc.input, got)
 			}
 		})
+	}
+}
+
+// TestPlaceholderHashIsUnguessable proves the imported-account placeholder is
+// not derived from anything in the source tree.
+func TestPlaceholderHashIsUnguessable(t *testing.T) {
+	first, err := UnguessablePlaceholderHash()
+	if err != nil {
+		t.Fatalf("UnguessablePlaceholderHash: %v", err)
+	}
+	second, err := UnguessablePlaceholderHash()
+	if err != nil {
+		t.Fatalf("UnguessablePlaceholderHash: %v", err)
+	}
+	if first == "" {
+		t.Fatal("empty hash: imported accounts would have no credential at all")
+	}
+	if first == second {
+		t.Error("two calls produced the same hash; the secret is not random")
+	}
+	// The string this replaced, plus the obvious variants.
+	for _, guess := range []string{"imported-user-must-reset", "", "password", "changeme"} {
+		if ok, _ := auth.CheckPassword(guess, first); ok {
+			t.Errorf("placeholder hash verifies against the known string %q", guess)
+		}
+	}
+}
+
+// TestNoSourceHashesAConstantCredential fails if any source goes back to
+// hashing a literal as an account password.
+//
+// The Drupal and Elefant sources both shipped hashing the constant
+// "imported-user-must-reset", which put the plaintext in the repository and let
+// anyone sign in as any imported user. A new source could reintroduce that
+// without touching either existing file.
+func TestNoSourceHashesAConstantCredential(t *testing.T) {
+	hashCalls := map[string]bool{
+		"HashPassword":         true,
+		"GenerateFromPassword": true,
+	}
+
+	var offenders []string
+
+	walkSourceFiles(t, func(rel string, file *ast.File, fset *token.FileSet) {
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || !hashCalls[sel.Sel.Name] {
+				return true
+			}
+			// Flag a string literal argument, including one wrapped in a
+			// conversion such as []byte("...").
+			arg := call.Args[0]
+			if conv, isConv := arg.(*ast.CallExpr); isConv && len(conv.Args) == 1 {
+				arg = conv.Args[0]
+			}
+			if lit, isLit := arg.(*ast.BasicLit); isLit && lit.Kind == token.STRING {
+				offenders = append(offenders, rel+":"+
+					strconv.Itoa(fset.Position(call.Pos()).Line)+"  "+sel.Sel.Name+"("+lit.Value+")")
+			}
+			return true
+		})
+	})
+
+	if len(offenders) > 0 {
+		t.Errorf("imported-account credentials must be random, never a literal in the "+
+			"source tree — use shared.UnguessablePlaceholderHash:\n  %s",
+			strings.Join(offenders, "\n  "))
 	}
 }

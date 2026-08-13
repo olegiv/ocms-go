@@ -12,7 +12,9 @@ package shared
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
@@ -23,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -395,4 +398,30 @@ func SaveNonImageFile(src io.ReadSeeker, uploadDir, fileUUID, filename string) e
 	}
 
 	return nil
+}
+
+// UnguessablePlaceholderHash returns a password hash that nobody can log in
+// with.
+//
+// Imported accounts need *some* password hash: the source CMS stores phpass,
+// bcrypt or SHA-512 digests that oCMS's Argon2id verifier cannot check, so the
+// account always requires a reset before its owner can sign in.
+//
+// The obvious implementation — hash a fixed string like "imported-user-must-reset"
+// — is an authentication bypass, because the plaintext is right there in the
+// source code and the login handler applies no forced-reset or disabled-account
+// gate. Anyone who knew an imported user's email address could sign in as them.
+// Hashing a fresh random secret keeps the "hash once per run" performance
+// property while making the credential unguessable, since the plaintext is
+// discarded and never leaves this function.
+func UnguessablePlaceholderHash() (string, error) {
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return "", fmt.Errorf("failed to generate placeholder secret: %w", err)
+	}
+	hash, err := auth.HashPassword(base64.RawURLEncoding.EncodeToString(secret))
+	if err != nil {
+		return "", fmt.Errorf("failed to hash placeholder secret: %w", err)
+	}
+	return hash, nil
 }

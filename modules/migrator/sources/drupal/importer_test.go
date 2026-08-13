@@ -162,23 +162,24 @@ func newTestState(t *testing.T, reader *fakeReader, opts types.ImportOptions) (*
 
 	tracker := &recordingTracker{}
 	return &importState{
-		queries:     queries,
-		reader:      reader,
-		result:      &types.ImportResult{},
-		tracker:     tracker,
-		opts:        opts,
-		defaultLang: lang.Code,
-		authorID:    owner.ID,
-		typeMap:     ParseTypeMap(""),
-		tagVocabs:   parseVocabularyList("tags"),
-		uploadDir:   t.TempDir(),
-		users:       make(map[int64]int64),
-		tags:        make(map[int64]int64),
-		categories:  make(map[int64]int64),
-		mediaByFID:  make(map[int64]int64),
-		nodes:       make(map[int64]int64),
-		aliasByNode: make(map[int64]string),
-		refs:        NewMediaRefs(),
+		queries:           queries,
+		reader:            reader,
+		result:            &types.ImportResult{},
+		tracker:           tracker,
+		opts:              opts,
+		defaultLang:       lang.Code,
+		authorID:          owner.ID,
+		typeMap:           ParseTypeMap(""),
+		tagVocabs:         parseVocabularyList("tags"),
+		uploadDir:         t.TempDir(),
+		users:             make(map[int64]int64),
+		tags:              make(map[int64]int64),
+		categories:        make(map[int64]int64),
+		createdCategories: make(map[int64]bool),
+		mediaByFID:        make(map[int64]int64),
+		nodes:             make(map[int64]int64),
+		aliasByNode:       make(map[int64]map[string]string),
+		refs:              NewMediaRefs(),
 	}, tracker, queries
 }
 
@@ -210,9 +211,27 @@ func TestImportUsersCreatesPublicAccounts(t *testing.T) {
 		t.Errorf("Role = %q, want %q", ada.Role, model.RolePublic)
 	}
 	// Drupal's phpass hashes cannot be verified by oCMS's Argon2id verifier, so
-	// imported accounts must carry a placeholder they can never log in with.
-	if ok, _ := auth.CheckPassword("imported-user-must-reset", ada.PasswordHash); !ok {
-		t.Error("imported user should carry the shared Argon2id placeholder hash")
+	// imported accounts carry a placeholder they can never log in with.
+	//
+	// This assertion used to be the exact opposite — it required the constant
+	// "imported-user-must-reset" to verify against the stored hash, which meant
+	// the plaintext was in the source tree and anyone knowing an imported email
+	// could authenticate as that user. The login handler applies no
+	// forced-reset gate, so that was a live account-takeover path.
+	if ok, _ := auth.CheckPassword("imported-user-must-reset", ada.PasswordHash); ok {
+		t.Error("the documented placeholder string authenticates against an imported " +
+			"account; the placeholder secret must be random and never exposed")
+	}
+	if ada.PasswordHash == "" {
+		t.Error("imported user has no password hash at all")
+	}
+
+	// Two users imported in the same run share one hash (hashing per user would
+	// add Argon2id's cost per row for no benefit) — but it must be unguessable.
+	if grace, err := queries.GetUserByEmail(context.Background(), "grace@example.com"); err == nil {
+		if grace.PasswordHash != ada.PasswordHash {
+			t.Error("expected one shared placeholder hash per import run")
+		}
 	}
 
 	grace, err := queries.GetUserByEmail(context.Background(), "grace@example.com")

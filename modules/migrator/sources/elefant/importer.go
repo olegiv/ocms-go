@@ -23,7 +23,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Source implements the migrator.Source interface for Elefant CMS.
@@ -735,15 +734,15 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 
 	now := time.Now()
 
-	// Pre-generate a single password hash to use for all imported users.
-	// This is much faster than hashing individually, and since users need
-	// to reset their passwords anyway, using the same placeholder is fine.
-	// We use MinCost since this is just a placeholder password.
-	placeholderHash, err := bcrypt.GenerateFromPassword([]byte("imported-user-must-reset"), bcrypt.MinCost)
+	// One hash for every user in this run — hashing per user is needlessly
+	// expensive when nobody can use the credential anyway. It must be random,
+	// though: this previously bcrypt-hashed the constant
+	// "imported-user-must-reset" at MinCost, which let anyone sign in as any
+	// imported account.
+	passwordHash, err := shared.UnguessablePlaceholderHash()
 	if err != nil {
-		return fmt.Errorf("failed to generate placeholder password hash: %w", err)
+		return err
 	}
-	passwordHash := string(placeholderHash)
 
 	for _, user := range users {
 		// Check context for cancellation

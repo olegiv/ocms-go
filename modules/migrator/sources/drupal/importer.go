@@ -25,7 +25,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/security"
@@ -35,12 +34,6 @@ import (
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
-
-// placeholderPassword is hashed once and shared by every imported user. Drupal
-// stores phpass/SHA-512 hashes that oCMS's Argon2id verifier cannot check, so
-// imported accounts always need a password reset; hashing per user would only
-// add Argon2id's cost (19 MB, 2 passes) to every row for no benefit.
-const placeholderPassword = "imported-user-must-reset"
 
 // defaultTypeMap maps stock Drupal bundles onto oCMS page types.
 const defaultTypeMap = "article:post,page:page"
@@ -206,12 +199,21 @@ type importState struct {
 	tagVocabs   map[string]bool
 	uploadDir   string
 	filesPath   string
-	users       map[int64]int64  // Drupal uid -> oCMS user id
-	tags        map[int64]int64  // Drupal tid -> oCMS tag id
-	categories  map[int64]int64  // Drupal tid -> oCMS category id
-	mediaByFID  map[int64]int64  // Drupal fid -> oCMS media id
-	nodes       map[int64]int64  // Drupal nid -> oCMS page id
-	aliasByNode map[int64]string // Drupal nid -> canonical path alias
+	users       map[int64]int64 // Drupal uid -> oCMS user id
+	tags        map[int64]int64 // Drupal tid -> oCMS tag id
+	categories  map[int64]int64 // Drupal tid -> oCMS category id
+	// createdCategories holds only the categories this run created. Parent
+	// links are applied to those alone: a pre-existing category matched by slug
+	// is mapped so content can reference it, but reparenting it would rewrite a
+	// hierarchy the import does not own and cannot restore on delete.
+	createdCategories map[int64]bool
+	mediaByFID        map[int64]int64 // Drupal fid -> oCMS media id
+	nodes             map[int64]int64 // Drupal nid -> oCMS page id
+	// aliasByNode maps a Drupal nid to its aliases keyed by langcode. Aliases
+	// are per-language, and only default-language nodes are imported, so
+	// collapsing them to one entry let a translation's alias overwrite the
+	// canonical slug of the page actually being imported.
+	aliasByNode map[int64]map[string]string
 	refs        *MediaRefs
 }
 
@@ -248,24 +250,25 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	}
 
 	st := &importState{
-		queries:     queries,
-		reader:      reader,
-		result:      result,
-		tracker:     tracker,
-		opts:        opts,
-		defaultLang: defaultLang.Code,
-		authorID:    authorID,
-		typeMap:     ParseTypeMap(cfg["type_map"]),
-		tagVocabs:   parseVocabularyList(cfg["tag_vocabularies"]),
-		uploadDir:   shared.UploadDir(),
-		filesPath:   strings.TrimSpace(cfg["files_path"]),
-		users:       make(map[int64]int64),
-		tags:        make(map[int64]int64),
-		categories:  make(map[int64]int64),
-		mediaByFID:  make(map[int64]int64),
-		nodes:       make(map[int64]int64),
-		aliasByNode: make(map[int64]string),
-		refs:        NewMediaRefs(),
+		queries:           queries,
+		reader:            reader,
+		result:            result,
+		tracker:           tracker,
+		opts:              opts,
+		defaultLang:       defaultLang.Code,
+		authorID:          authorID,
+		typeMap:           ParseTypeMap(cfg["type_map"]),
+		tagVocabs:         parseVocabularyList(cfg["tag_vocabularies"]),
+		uploadDir:         shared.UploadDir(),
+		filesPath:         strings.TrimSpace(cfg["files_path"]),
+		users:             make(map[int64]int64),
+		tags:              make(map[int64]int64),
+		categories:        make(map[int64]int64),
+		createdCategories: make(map[int64]bool),
+		mediaByFID:        make(map[int64]int64),
+		nodes:             make(map[int64]int64),
+		aliasByNode:       make(map[int64]map[string]string),
+		refs:              NewMediaRefs(),
 	}
 
 	for _, missing := range reader.Schema().MissingOptional() {
@@ -400,9 +403,13 @@ func (s *Source) importUsers(ctx context.Context, st *importState) error {
 		return nil
 	}
 
-	passwordHash, err := auth.HashPassword(placeholderPassword)
+	// One unguessable hash shared by every user in this run: hashing per user
+	// would add Argon2id's cost (19 MB, 2 passes) per row for no benefit, but
+	// the secret must be random rather than a constant — see
+	// shared.UnguessablePlaceholderHash.
+	passwordHash, err := shared.UnguessablePlaceholderHash()
 	if err != nil {
-		return fmt.Errorf("failed to generate placeholder password hash: %w", err)
+		return err
 	}
 
 	now := time.Now()
@@ -563,6 +570,7 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 	}
 
 	st.categories[t.TID] = category.ID
+	st.createdCategories[t.TID] = true
 	st.track(ctx, types.EntityCategory, category.ID)
 	st.result.CategoriesImported++
 }
@@ -572,6 +580,10 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 func (s *Source) linkCategoryParents(ctx context.Context, st *importState, terms []Term, now time.Time) {
 	for _, t := range terms {
 		if t.ParentTID == 0 {
+			continue
+		}
+		// Only reparent categories this import created.
+		if !st.createdCategories[t.TID] {
 			continue
 		}
 		childID, ok := st.categories[t.TID]
@@ -972,9 +984,35 @@ func (s *Source) loadNodeAliases(ctx context.Context, st *importState) error {
 		if !ok {
 			continue
 		}
-		st.aliasByNode[nid] = strings.TrimPrefix(a.Alias, "/")
+		if st.aliasByNode[nid] == nil {
+			st.aliasByNode[nid] = make(map[string]string)
+		}
+		// Highest id wins per language: Drupal keeps every historical alias and
+		// the most recent is canonical.
+		st.aliasByNode[nid][a.Langcode] = strings.TrimPrefix(a.Alias, "/")
 	}
 	return nil
+}
+
+// aliasFor returns the canonical alias for a node in its own language.
+//
+// Drupal's language-neutral values (und, zxx) and an empty langcode all apply
+// to any node, so they are accepted as a fallback when no alias exists for the
+// node's own language.
+func (st *importState) aliasFor(n Node) string {
+	byLang := st.aliasByNode[n.NID]
+	if byLang == nil {
+		return ""
+	}
+	if alias := byLang[n.Langcode]; alias != "" {
+		return alias
+	}
+	for _, neutral := range []string{"und", "zxx", ""} {
+		if alias := byLang[neutral]; alias != "" {
+			return alias
+		}
+	}
+	return ""
 }
 
 // importNode converts one Drupal node into an oCMS page.
@@ -994,9 +1032,14 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 	}
 
 	if st.opts.SkipExisting {
-		_, err := st.queries.GetPageBySlug(ctx, baseSlug)
+		existing, err := st.queries.GetPageBySlug(ctx, baseSlug)
 		switch {
 		case err == nil:
+			// Map the node to the page that is already there. Discarding the ID
+			// made resolveMenuTarget treat every link to a skipped node as
+			// pointing at uncreated content, so the menu item was dropped even
+			// though its destination existed.
+			st.nodes[n.NID] = existing.ID
 			countSkipped(st.result, pageType)
 			return
 		case !errors.Is(err, sql.ErrNoRows):
@@ -1052,7 +1095,7 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 // slugForNode picks a node's slug: its Drupal alias when it has one, so URLs
 // carry over, otherwise a slug derived from the title.
 func (s *Source) slugForNode(st *importState, n Node) string {
-	if alias, ok := st.aliasByNode[n.NID]; ok && alias != "" {
+	if alias := st.aliasFor(n); alias != "" {
 		segments := strings.Split(strings.Trim(alias, "/"), "/")
 		candidate := util.Slugify(segments[len(segments)-1])
 		if candidate != "" {
