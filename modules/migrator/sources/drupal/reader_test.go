@@ -134,3 +134,48 @@ func TestPHPSerializedString(t *testing.T) {
 		})
 	}
 }
+
+// TestIsSafeAliasPath covers which Drupal path aliases survive the import.
+//
+// util.IsValidAlias requires every segment to be a lowercase oCMS slug, which
+// discarded aliases Drupal produces routinely — "About_Us", "News/Archive",
+// anything non-ASCII — even though page_aliases stores arbitrary text and the
+// frontend matches it exactly. Applying the admin form's grammar to imported
+// data turned established URLs into 404s for no benefit.
+func TestIsSafeAliasPath(t *testing.T) {
+	for _, tc := range []struct {
+		alias string
+		want  bool
+	}{
+		// Ordinary Drupal aliases the slug grammar used to reject.
+		{"about-us", true},
+		{"About_Us", true},
+		{"News/Archive", true},
+		{"blog/2024/my-post", true},
+		{"о-компании", true},
+		{"produkte/grün", true},
+		{"a.b.c", true},
+
+		{"", false},
+		{"/leading", false},
+		{"trailing/", false},
+		{"double//slash", false},
+		{"has space", false},
+		{"tab\there", false},
+		{"query?x=1", false},
+		{"frag#ment", false},
+		{"back\\slash", false},
+		{"http://evil.example/x", false},
+		{"../escape", false},
+		{"a/../b", false},
+		{"a/./b", false},
+		{"ctrl\x01char", false},
+		{strings.Repeat("x", maxAliasLength+1), false},
+	} {
+		t.Run(tc.alias, func(t *testing.T) {
+			if got := isSafeAliasPath(tc.alias); got != tc.want {
+				t.Errorf("isSafeAliasPath(%q) = %v, want %v", tc.alias, got, tc.want)
+			}
+		})
+	}
+}

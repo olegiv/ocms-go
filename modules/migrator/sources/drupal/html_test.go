@@ -163,7 +163,7 @@ func TestFilePrefixesInHandlesMultisite(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := filePrefixesIn(tc.body)
+			got := filePrefixesIn(tc.body, "")
 			if len(got) != len(tc.want) {
 				t.Fatalf("filePrefixesIn() = %v, want %v", got, tc.want)
 			}
@@ -171,6 +171,96 @@ func TestFilePrefixesInHandlesMultisite(t *testing.T) {
 				if got[i] != tc.want[i] {
 					t.Fatalf("filePrefixesIn() = %v, want %v", got, tc.want)
 				}
+			}
+		})
+	}
+}
+
+// TestNormalizeFilePrefixAndCustomPublicPath covers a source whose
+// file_public_path is not a /sites/<x>/files/ path at all.
+//
+// Drupal's file_public_path can be set to anything — "/assets/", say — and it
+// lives in settings.php, not in the database, so nothing in the source can
+// reveal it. The operator supplies it; these are the shapes they might type.
+func TestNormalizeFilePrefixAndCustomPublicPath(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"", ""},
+		{"   ", ""},
+		{"/", ""},
+		{"///", ""},
+		{"assets", "/assets/"},
+		{"/assets", "/assets/"},
+		{"/assets/", "/assets/"},
+		{"  /assets/  ", "/assets/"},
+		{"files/public", "/files/public/"},
+		{"https://old.example/assets/", "/assets/"},
+		{"http://old.example/sites/x/files", "/sites/x/files/"},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := NormalizeFilePrefix(tc.in); got != tc.want {
+				t.Errorf("NormalizeFilePrefix(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+
+	// The configured prefix reaches the rewriter alongside the discovered ones.
+	got := filePrefixesIn(`<img src="/assets/photo.jpg">`, "/assets/")
+	want := []string{"/assets/", "/system/files/"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("filePrefixesIn() = %v, want %v", got, want)
+	}
+}
+
+// TestRenderSourceBodyRespectsTextFormat covers Drupal's text formats.
+//
+// body_value is only HTML for some of them. A plain_text body was fed straight
+// to the HTML rewriter and sanitizer, so "2 < 3" became a broken tag and a
+// literal <script> example — the kind a documentation page shows on purpose —
+// was deleted outright.
+func TestRenderSourceBodyRespectsTextFormat(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		body     string
+		format   string
+		want     string
+		handling BodyFormatHandling
+	}{
+		{
+			name: "plain text is escaped", body: "2 < 3 & 4 > 1", format: "plain_text",
+			want: "<p>2 &lt; 3 &amp; 4 &gt; 1</p>", handling: BodyFormatEscaped,
+		},
+		{
+			name: "plain text keeps a literal tag visible", body: "<script>alert(1)</script>", format: "plain_text",
+			want: "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>", handling: BodyFormatEscaped,
+		},
+		{
+			name: "plain text paragraphs and line breaks", body: "one\ntwo\n\nthree", format: "plain_text",
+			want: "<p>one<br>two</p><p>three</p>", handling: BodyFormatEscaped,
+		},
+		{
+			name: "basic_html passes through", body: "<p>hi</p>", format: "basic_html",
+			want: "<p>hi</p>", handling: BodyFormatHTML,
+		},
+		{
+			name: "full_html passes through", body: "<p>hi</p>", format: "full_html",
+			want: "<p>hi</p>", handling: BodyFormatHTML,
+		},
+		{
+			name: "empty format is treated as HTML", body: "<p>hi</p>", format: "",
+			want: "<p>hi</p>", handling: BodyFormatHTML,
+		},
+		{
+			name: "contrib format is reported, not mangled", body: "# Heading", format: "markdown",
+			want: "# Heading", handling: BodyFormatUnknown,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, handling := RenderSourceBody(tc.body, tc.format)
+			if got != tc.want {
+				t.Errorf("RenderSourceBody() = %q, want %q", got, tc.want)
+			}
+			if handling != tc.handling {
+				t.Errorf("handling = %v, want %v", handling, tc.handling)
 			}
 		})
 	}

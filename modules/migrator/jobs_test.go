@@ -1417,3 +1417,155 @@ func TestRetainTrackingRowsKeepsFailedItemsFindable(t *testing.T) {
 		t.Errorf("tracking rows = %v, want none when nothing failed", ids)
 	}
 }
+
+// TestDeleteImportedItemsKeepsMenusHoldingAdminItems covers a menu the import
+// created that an administrator later added their own item to.
+//
+// menu_items.menu_id is ON DELETE CASCADE, so deleting the menu takes every
+// item in it. The parent_id reparenting hook does not help: it protects
+// descendants of a deleted item, not root items that merely belong to the menu.
+// An item cannot be moved out of the way either — menu_id is NOT NULL — so the
+// menu is kept and untracked instead.
+func TestDeleteImportedItemsKeepsMenusHoldingAdminItems(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	queries := store.New(m.ctx.DB)
+	now := time.Now()
+
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+
+	sharedMenu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Imported", Slug: "imported-menu", LanguageCode: lang.Code,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu: %v", err)
+	}
+	emptyMenu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Empty", Slug: "empty-menu", LanguageCode: lang.Code,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu: %v", err)
+	}
+
+	importedItem, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: sharedMenu.ID, Title: "Imported link", IsActive: true,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu item: %v", err)
+	}
+	// The administrator's own root item in the imported menu.
+	adminItem, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: sharedMenu.ID, Title: "Admin link", IsActive: true,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu item: %v", err)
+	}
+
+	for _, tracked := range []struct {
+		entityType types.EntityType
+		id         int64
+	}{
+		{types.EntityMenuItem, importedItem.ID},
+		{types.EntityMenu, sharedMenu.ID},
+		{types.EntityMenu, emptyMenu.ID},
+	} {
+		if err := m.TrackImportedItem(ctx, "drupal", string(tracked.entityType), tracked.id); err != nil {
+			t.Fatalf("failed to track %s: %v", tracked.entityType, err)
+		}
+	}
+
+	if _, err := m.deleteImportedItems(ctx, "drupal"); err != nil {
+		t.Fatalf("deleteImportedItems() error = %v", err)
+	}
+
+	if _, err := queries.GetMenuItemByID(ctx, adminItem.ID); err != nil {
+		t.Errorf("the administrator's menu item was cascade-deleted with the menu: %v", err)
+	}
+	if _, err := queries.GetMenuByID(ctx, sharedMenu.ID); err != nil {
+		t.Errorf("the menu holding it was deleted, so the item could not have survived: %v", err)
+	}
+	if _, err := queries.GetMenuByID(ctx, emptyMenu.ID); err == nil {
+		t.Error("an imported menu with nothing left in it survived; only shared menus should be kept")
+	}
+}
+
+// TestDeleteImportedMediaQueuesFilesOnlyAfterTheRowIsGone pins the ordering
+// between removing a media row and scheduling its files for deletion.
+//
+// The UUID was queued before DeleteMedia ran, so a media row that survived —
+// correctly, and retryably — had its files deleted anyway once the transaction
+// committed, leaving a row pointing at nothing.
+//
+// The collect callback asserts the row is already gone when it is called, which
+// is what makes this fail on the old ordering rather than merely describing it.
+// The delete-fails branch itself needs fault injection to reach; what is pinned
+// here is the contract that makes that branch safe.
+func TestDeleteImportedMediaQueuesFilesOnlyAfterTheRowIsGone(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	queries := store.New(m.ctx.DB)
+	now := time.Now()
+
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "order@example.com", PasswordHash: "x", Role: "admin",
+		Name: "Order", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", Filename: "a.jpg",
+		MimeType: "image/jpeg", Size: 1, UploadedBy: author.ID,
+		LanguageCode: lang.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create media: %v", err)
+	}
+
+	var queued []string
+	collect := func(uuid string) {
+		queued = append(queued, uuid)
+		if _, err := queries.GetMediaByID(ctx, media.ID); err == nil {
+			t.Errorf("files for %s were queued while its media row still existed; "+
+				"a failed delete would then leave the row pointing at nothing", uuid)
+		}
+	}
+
+	var mediaDeleter func(context.Context, *store.Queries, int64) error
+	for _, d := range m.deleters(collect) {
+		if d.entityType == types.EntityMedia {
+			mediaDeleter = d.del
+		}
+	}
+	if mediaDeleter == nil {
+		t.Fatal("no media deleter found")
+	}
+
+	if err := mediaDeleter(ctx, queries, media.ID); err != nil {
+		t.Fatalf("media deleter returned %v", err)
+	}
+	if len(queued) != 1 || queued[0] != media.Uuid {
+		t.Errorf("queued = %v, want the deleted media UUID", queued)
+	}
+
+	// A row that is already gone is not an error, and queues nothing: there is
+	// no UUID to schedule and no files to find it by.
+	queued = nil
+	if err := mediaDeleter(ctx, queries, media.ID); err != nil {
+		t.Errorf("deleting an absent media row returned %v, want nil", err)
+	}
+	if len(queued) != 0 {
+		t.Errorf("queued = %v, want nothing for an absent row", queued)
+	}
+}

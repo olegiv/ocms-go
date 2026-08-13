@@ -47,6 +47,12 @@ type MediaRefs struct {
 	AltMap map[string]string // new URL -> alt text
 	IsImg  map[string]bool   // new URL -> true when the file is an image
 
+	// ExtraPrefix is the source site's public files URL prefix when it is not a
+	// /sites/<x>/files/ path. Drupal's file_public_path can be set to anything —
+	// "/assets/", say — and it lives in settings.php, not in the database, so
+	// there is nothing to discover it from: the operator supplies it.
+	ExtraPrefix string
+
 	// Unresolved collects the UUIDs of <drupal-media> embeds that matched no
 	// imported file, so the importer can report them. An embed that cannot be
 	// resolved is deleted from the body, and deleting content without telling
@@ -139,10 +145,13 @@ var sitesFilesPattern = regexp.MustCompile(`/sites/[^/"'\s<>]+/files/`)
 // Discovering them from the body rather than taking them from configuration
 // keeps this working for a source whose settings.php is not in the database at
 // all — file_public_path lives there, not in the config table.
-func filePrefixesIn(body string) []string {
+func filePrefixesIn(body, extraPrefix string) []string {
 	seen := map[string]bool{systemFilesPrefix: true}
 	for _, match := range sitesFilesPattern.FindAllString(body, -1) {
 		seen[match] = true
+	}
+	if extraPrefix != "" {
+		seen[extraPrefix] = true
 	}
 	prefixes := make([]string, 0, len(seen))
 	for prefix := range seen {
@@ -151,6 +160,28 @@ func filePrefixesIn(body string) []string {
 	// Deterministic order keeps the rewritten output stable.
 	sort.Strings(prefixes)
 	return prefixes
+}
+
+// NormalizeFilePrefix turns an operator-supplied public files URL into the
+// "/prefix/" form the rewriter searches for. An empty or root value yields "",
+// which disables the extra prefix: rewriting every "/" in a body would be
+// catastrophic rather than helpful.
+func NormalizeFilePrefix(raw string) string {
+	prefix := strings.TrimSpace(raw)
+	if prefix == "" {
+		return ""
+	}
+	// Accept a full URL, a path, or a bare directory name.
+	if parsed, err := url.Parse(prefix); err == nil && parsed.Path != "" {
+		prefix = parsed.Path
+	}
+	trimmed := strings.Trim(prefix, "/")
+	if trimmed == "" {
+		// "/" would match every path in the body. Rewriting on it would be
+		// catastrophic rather than helpful, so an empty prefix disables it.
+		return ""
+	}
+	return "/" + trimmed + "/"
 }
 
 // stylePathPattern matches the leading segments of an image-style derivative
@@ -200,7 +231,7 @@ func rewriteFileURLs(body string, refs *MediaRefs) string {
 	if len(refs.ByPath) == 0 {
 		return body
 	}
-	for _, prefix := range filePrefixesIn(body) {
+	for _, prefix := range filePrefixesIn(body, refs.ExtraPrefix) {
 		body = rewritePrefixedURLs(body, prefix, refs)
 	}
 	return body
@@ -372,4 +403,71 @@ func isAllowedAbsoluteURI(uri string) bool {
 		return false
 	}
 	return model.IsAllowedMenuURLScheme(scheme)
+}
+
+// Drupal core text formats. A format decides whether body_value is HTML at all,
+// which the importer ignored: a plain_text body was fed straight to the HTML
+// rewriter and sanitizer, so "2 < 3" became a broken tag and a literal <script>
+// example — the kind a documentation page shows on purpose — was deleted.
+var (
+	// plainTextFormats store raw text, not markup.
+	plainTextFormats = map[string]bool{"plain_text": true}
+	// htmlFormats store HTML and pass through unchanged.
+	htmlFormats = map[string]bool{
+		"basic_html":      true,
+		"restricted_html": true,
+		"full_html":       true,
+	}
+)
+
+// BodyFormatHandling describes what was done with a source body.
+type BodyFormatHandling int
+
+const (
+	// BodyFormatHTML means the value was already HTML.
+	BodyFormatHTML BodyFormatHandling = iota
+	// BodyFormatEscaped means plain text was escaped and paragraphed.
+	BodyFormatEscaped
+	// BodyFormatUnknown means the format is a contrib one — Markdown, say — and
+	// the value was passed through as HTML because there is nothing better to
+	// do with it. The caller reports these so the operator knows which pages to
+	// look at.
+	BodyFormatUnknown
+)
+
+// RenderSourceBody converts a Drupal body into HTML according to its text
+// format, returning what it had to do to get there.
+func RenderSourceBody(body, format string) (string, BodyFormatHandling) {
+	switch key := strings.ToLower(strings.TrimSpace(format)); {
+	case plainTextFormats[key]:
+		return plainTextToHTML(body), BodyFormatEscaped
+	case key == "" || htmlFormats[key]:
+		// An empty format is Drupal's own fallback for a body stored before a
+		// format was assigned; those are HTML.
+		return body, BodyFormatHTML
+	default:
+		return body, BodyFormatUnknown
+	}
+}
+
+// plainTextToHTML escapes text and gives it the paragraph and line-break
+// structure Drupal's plain_text filter renders.
+//
+// URLs are deliberately not linkified. Drupal's filter does that at render
+// time; doing it here would invent markup the source never stored.
+func plainTextToHTML(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+
+	var out strings.Builder
+	for _, paragraph := range strings.Split(text, "\n\n") {
+		paragraph = strings.TrimSpace(paragraph)
+		if paragraph == "" {
+			continue
+		}
+		out.WriteString("<p>")
+		out.WriteString(strings.ReplaceAll(html.EscapeString(paragraph), "\n", "<br>"))
+		out.WriteString("</p>")
+	}
+	return out.String()
 }

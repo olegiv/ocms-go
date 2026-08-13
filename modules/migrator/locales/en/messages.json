@@ -111,6 +111,8 @@
         {"id": "drupal.field_tag_vocabularies", "message": "Tag Vocabularies", "translation": "Tag Vocabularies"},
         {"id": "drupal.placeholder_table_prefix", "message": "e.g. drupal_", "translation": "e.g. drupal_"},
         {"id": "drupal.placeholder_files_path", "message": "/path/to/drupal/sites/default/files", "translation": "/path/to/drupal/sites/default/files"},
+        {"id": "drupal.field_public_files_url", "message": "Public Files URL", "translation": "Public Files URL"},
+        {"id": "drupal.placeholder_public_files_url", "message": "/sites/default/files/", "translation": "/sites/default/files/"},
         {"id": "drupal.placeholder_type_map", "message": "article:post,page:page", "translation": "article:post,page:page"},
         {"id": "drupal.placeholder_tag_vocabularies", "message": "tags (others become categories)", "translation": "tags (others become categories)"}
     ]

@@ -874,16 +874,31 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 		return q.DeletePage(ctx, id)
 	}
 
+	// The UUID is queued only after the row is gone. Queuing it up front meant a
+	// failed DeleteMedia kept the media row — correctly, and retryably — while
+	// its files were deleted anyway once the transaction committed, leaving a
+	// row pointing at nothing. A lookup failure is propagated rather than
+	// swallowed, because deleting a row whose UUID we never read would orphan
+	// its files with nothing left to find them by.
 	deleteMedia := func(ctx context.Context, q *store.Queries, id int64) error {
-		if media, err := q.GetMediaByID(ctx, id); err == nil {
-			if collectMediaUUID != nil {
-				collectMediaUUID(media.Uuid)
+		media, err := q.GetMediaByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				// Already gone; nothing to delete and no files to schedule.
+				return nil
 			}
-			if err := q.DeleteMediaVariants(ctx, id); err != nil {
-				m.ctx.Logger.Warn("failed to delete media variants", "id", id, "error", err)
-			}
+			return fmt.Errorf("failed to read media %d before deleting it: %w", id, err)
 		}
-		return q.DeleteMedia(ctx, id)
+		if err := q.DeleteMediaVariants(ctx, id); err != nil {
+			m.ctx.Logger.Warn("failed to delete media variants", "id", id, "error", err)
+		}
+		if err := q.DeleteMedia(ctx, id); err != nil {
+			return err
+		}
+		if collectMediaUUID != nil {
+			collectMediaUUID(media.Uuid)
+		}
+		return nil
 	}
 
 	// menu_items.page_id is ON DELETE SET NULL and a page-backed item stores no
@@ -947,6 +962,22 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 		}},
 		{entityType: types.EntityMenu, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteMenu(ctx, id)
+		}, beforeDelete: func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
+			// menu_items.menu_id is ON DELETE CASCADE, so deleting a menu the
+			// import created takes every item in it — including ones an
+			// administrator added afterwards. The parent_id reparenting hook
+			// does not help here: it protects descendants of a deleted item,
+			// not root items that merely belong to this menu.
+			//
+			// Unlike a menu item, an item cannot be moved out of the way —
+			// menu_id is NOT NULL — so the menu is kept instead. By this point
+			// every tracked item is already deleted, so anything left belongs
+			// to the administrator.
+			items, err := q.ListMenuItems(ctx, id)
+			if err != nil {
+				return false, err
+			}
+			return len(items) > 0, nil
 		}},
 		{entityType: types.EntityAlias, cascadesFrom: types.EntityPage},
 		{entityType: types.EntityPost, del: deletePage, beforeDelete: detachMenuItems},

@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 
@@ -72,6 +73,7 @@ func (s *Source) ConfigFields() []types.ConfigField {
 		{Name: "mysql_database", Label: "drupal.field_mysql_database", Type: "text", Required: true, Default: os.Getenv("DRUPAL_DB")},
 		{Name: "table_prefix", Label: "drupal.field_table_prefix", Type: "text", Required: false, Default: os.Getenv("DRUPAL_PREFIX"), Placeholder: "drupal.placeholder_table_prefix"},
 		{Name: "files_path", Label: "drupal.field_files_path", Type: "text", Required: false, Default: os.Getenv("DRUPAL_FILES"), Placeholder: "drupal.placeholder_files_path"},
+		{Name: "public_files_url", Label: "drupal.field_public_files_url", Type: "text", Required: false, Default: os.Getenv("DRUPAL_PUBLIC_FILES_URL"), Placeholder: "drupal.placeholder_public_files_url"},
 		{Name: "type_map", Label: "drupal.field_type_map", Type: "text", Required: false, Default: shared.EnvOrDefault("DRUPAL_TYPE_MAP", defaultTypeMap), Placeholder: "drupal.placeholder_type_map"},
 		{Name: "tag_vocabularies", Label: "drupal.field_tag_vocabularies", Type: "text", Required: false, Default: shared.EnvOrDefault("DRUPAL_TAG_VOCABULARIES", "tags"), Placeholder: "drupal.placeholder_tag_vocabularies"},
 	}
@@ -224,6 +226,10 @@ type importState struct {
 	// unmappedLangs counts nodes whose source language has no oCMS language, so
 	// the fallback is reported once rather than per node.
 	unmappedLangs map[string]int
+	// unknownFormats counts nodes whose Drupal text format is neither core HTML
+	// nor plain text — a contrib format such as Markdown, which arrives
+	// unrendered. Counted so it is reported once per format.
+	unknownFormats map[string]int
 	// createdCategorySlugs records the slugs this run has already taken, so a
 	// second Drupal term that slugifies the same way gets its own row rather
 	// than being folded into the first.
@@ -277,6 +283,7 @@ func newImportState(queries *store.Queries, reader sourceReader, result *types.I
 		nodeLang:             make(map[int64]string),
 		availableLangs:       make(map[string]bool),
 		unmappedLangs:        make(map[string]int),
+		unknownFormats:       make(map[string]int),
 		refs:                 NewMediaRefs(),
 	}
 }
@@ -326,6 +333,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	st.tagVocabs = parseVocabularyList(cfg["tag_vocabularies"])
 	st.uploadDir = shared.UploadDir()
 	st.filesPath = strings.TrimSpace(cfg["files_path"])
+	st.refs.ExtraPrefix = NormalizeFilePrefix(cfg["public_files_url"])
 
 	for _, missing := range reader.Schema().MissingOptional() {
 		result.AddNotice("optional table %q not found in source database; related content skipped", missing)
@@ -1051,6 +1059,7 @@ func (s *Source) importNodes(ctx context.Context, st *importState) error {
 
 	reportUnresolvedEmbeds(st)
 	st.reportUnmappedLanguages()
+	st.reportUnknownFormats()
 	s.importAliases(ctx, st, now)
 	return nil
 }
@@ -1175,6 +1184,21 @@ func (st *importState) reportUnmappedLanguages() {
 	}
 }
 
+// reportUnknownFormats tells the operator which text formats arrived unrendered.
+func (st *importState) reportUnknownFormats() {
+	formats := make([]string, 0, len(st.unknownFormats))
+	for format := range st.unknownFormats {
+		formats = append(formats, format)
+	}
+	sort.Strings(formats)
+	for _, format := range formats {
+		st.result.AddSummary(
+			"%d node(s) use the Drupal text format %q, which oCMS cannot render; "+
+				"their bodies were imported as-is and may need review",
+			st.unknownFormats[format], format)
+	}
+}
+
 // importNode converts one Drupal node into an oCMS page.
 func (s *Source) importNode(ctx context.Context, st *importState, n Node, now time.Time) {
 	pageType := PageTypeFor(st.typeMap, n.Type)
@@ -1209,7 +1233,17 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 	}
 	slug := shared.MakeUniqueSlug(ctx, st.queries, baseSlug)
 
-	body := RewriteBody(shared.NullString(n.Body), st.refs)
+	// The source format decides whether the body is HTML at all. Plain text is
+	// escaped and paragraphed, and skips the media rewriter: a path inside it is
+	// text the author typed, not a link, so turning it into one would invent
+	// markup the source never had.
+	body, handling := RenderSourceBody(shared.NullString(n.Body), shared.NullString(n.Format))
+	if handling == BodyFormatUnknown {
+		st.unknownFormats[strings.ToLower(strings.TrimSpace(shared.NullString(n.Format)))]++
+	}
+	if handling != BodyFormatEscaped {
+		body = RewriteBody(body, st.refs)
+	}
 	body = security.SanitizePageHTML(body)
 
 	status := model.PageStatusDraft
@@ -1376,7 +1410,14 @@ func (s *Source) importNodePathAliases(ctx context.Context, st *importState, now
 // createPageAlias writes one alias row, skipping the cases that are expected
 // rather than failures.
 func (s *Source) createPageAlias(ctx context.Context, st *importState, pageID int64, alias string, now time.Time) {
-	if alias == "" || !util.IsValidAlias(alias) {
+	if alias == "" {
+		return
+	}
+	if !isSafeAliasPath(alias) {
+		// Reported rather than dropped in silence: this is an established URL
+		// that will 404 after the migration, and the operator can add a
+		// redirect for it if they know it existed.
+		st.result.AddNotice("path alias %q was not imported: it is not a usable URL path", alias)
 		return
 	}
 
@@ -1406,6 +1447,53 @@ func (s *Source) createPageAlias(ctx context.Context, st *importState, pageID in
 	}
 	st.track(ctx, types.EntityAlias, pageID)
 	st.result.AliasesImported++
+}
+
+// aliasUnsafeRunes are characters that would change how a stored alias is
+// routed, or that cannot appear in a path at all.
+const aliasUnsafeRunes = "?#\\"
+
+// maxAliasLength bounds an imported alias. Drupal's own column is 255.
+const maxAliasLength = 255
+
+// isSafeAliasPath reports whether a Drupal alias can be stored and served as-is.
+//
+// util.IsValidAlias is deliberately not used here. It requires every segment to
+// be a lowercase oCMS slug, which discards aliases Drupal produces routinely —
+// "About_Us", "News/Archive", anything with non-ASCII — even though page_aliases
+// stores arbitrary text and the frontend looks it up by exact match. Applying
+// the admin form's grammar to imported data turned established URLs into 404s
+// for no benefit.
+//
+// What is rejected is what would misroute or is not a path: a scheme or host, a
+// query or fragment, traversal, empty or duplicated segments, control
+// characters and whitespace.
+func isSafeAliasPath(alias string) bool {
+	if alias == "" || len(alias) > maxAliasLength {
+		return false
+	}
+	if strings.ContainsAny(alias, aliasUnsafeRunes) {
+		return false
+	}
+	if strings.HasPrefix(alias, "/") || strings.HasSuffix(alias, "/") {
+		return false
+	}
+	// "//example.com/x" is protocol-relative, and "http://…" is absolute; both
+	// would send a visitor off-site if ever echoed into a link.
+	if strings.Contains(alias, "//") || strings.Contains(alias, ":") {
+		return false
+	}
+	for _, r := range alias {
+		if r < 0x20 || r == 0x7f || unicode.IsSpace(r) {
+			return false
+		}
+	}
+	for _, segment := range strings.Split(alias, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // isUniqueConstraintErr reports whether err is SQLite's uniqueness violation,

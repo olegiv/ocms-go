@@ -1300,3 +1300,59 @@ func TestImportNodesUsesEachNodesSourceLanguage(t *testing.T) {
 		t.Errorf("summaries = %v, want one naming the unmapped language tlh", st.result.Summaries)
 	}
 }
+
+// TestImportAliasesKeepsNonSlugPaths is the end-to-end half of
+// TestIsSafeAliasPath: an established Drupal URL outside oCMS's slug grammar
+// must still be stored, because page_aliases holds arbitrary text and the
+// frontend matches it exactly.
+func TestImportAliasesKeepsNonSlugPaths(t *testing.T) {
+	reader := &fakeReader{
+		schema: Schema{HasAliases: true},
+		nodes:  []Node{{NID: 1, Type: "page", Title: "About", Status: 1, Langcode: "en"}},
+		aliases: []PathAlias{
+			{ID: 1, Path: "/node/1", Alias: "/About_Us", Langcode: "en"},
+			{ID: 2, Path: "/node/1", Alias: "/News/Archive", Langcode: "en"},
+			{ID: 3, Path: "/node/1", Alias: "/о-компании", Langcode: "en"},
+			// Still rejected: not a usable path.
+			{ID: 4, Path: "/node/1", Alias: "/has space", Langcode: "en"},
+			{ID: 5, Path: "/node/1", Alias: "/a/../b", Langcode: "en"},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	ctx := context.Background()
+
+	if err := (&Source{}).importNodes(ctx, st); err != nil {
+		t.Fatalf("importNodes() error = %v", err)
+	}
+
+	aliases, err := queries.GetAliasesForPage(ctx, st.nodes[1])
+	if err != nil {
+		t.Fatalf("failed to read page aliases: %v", err)
+	}
+	got := make(map[string]bool, len(aliases))
+	for _, a := range aliases {
+		got[a.Alias] = true
+	}
+	for _, want := range []string{"About_Us", "News/Archive", "о-компании"} {
+		if !got[want] {
+			t.Errorf("aliases = %v, want %q kept: it is an established URL that "+
+				"oCMS can store and serve", aliases, want)
+		}
+	}
+	for _, unwanted := range []string{"has space", "a/../b"} {
+		if got[unwanted] {
+			t.Errorf("aliases = %v, want %q rejected", aliases, unwanted)
+		}
+	}
+	// A rejected alias is reported, not dropped in silence.
+	var reported bool
+	for _, msg := range st.result.Notices {
+		if strings.Contains(msg, "has space") {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Errorf("notices = %v, want one naming the alias that could not be imported",
+			st.result.Notices)
+	}
+}
