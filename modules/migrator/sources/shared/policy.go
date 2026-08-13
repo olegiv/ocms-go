@@ -94,6 +94,17 @@ func ParseAllowedHosts(raw string) (map[string]struct{}, error) {
 	return allowed, nil
 }
 
+// NormalizeHost canonicalizes a host for both the allowlist comparison and the
+// address that is actually dialed.
+//
+// Using it for both is the point: when the allowlist checked the normalized
+// form but the DSN was built from the raw string, "[::1]" passed the check and
+// then produced the undialable address "[[[::1]]:3306]:3306", because
+// net.JoinHostPort re-brackets anything containing a colon.
+func NormalizeHost(host string) (string, error) {
+	return normalizeHost(host)
+}
+
 // normalizeHost lowercases a hostname, trims a trailing dot, and canonicalizes
 // IP literals so that "::1", "[::1]" and "0:0:0:0:0:0:0:1" all compare equal.
 func normalizeHost(host string) (string, error) {

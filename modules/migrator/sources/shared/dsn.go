@@ -57,6 +57,13 @@ func BuildMySQLDSN(cfg map[string]string, opts MySQLDSNOptions) (string, error) 
 	if err := CheckDBHostAllowed(host); err != nil {
 		return "", err
 	}
+	// Dial the same canonical form the allowlist approved. Checking one string
+	// and dialing another is how "[::1]" passed the allowlist and then became
+	// the undialable "[[[::1]]:3306]:3306".
+	host, err = NormalizeHost(host)
+	if err != nil {
+		return "", err
+	}
 
 	database := strings.TrimSpace(cfg["mysql_database"])
 	if database == "" {

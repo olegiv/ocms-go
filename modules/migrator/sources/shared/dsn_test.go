@@ -95,23 +95,48 @@ func TestBuildMySQLDSNEnforcesHostAllowlist(t *testing.T) {
 	}
 }
 
-// TestBuildMySQLDSNJoinsIPv6HostsCorrectly guards the net.JoinHostPort fix:
-// "::1" passes the allowlist (normalizeHost strips brackets) and previously
-// produced the unparseable address "::1:3306".
+// TestBuildMySQLDSNJoinsIPv6HostsCorrectly guards the host-canonicalization
+// fix. Two distinct bugs live here:
+//
+//   - "::1" without net.JoinHostPort produced the unparseable "::1:3306".
+//   - "[::1]" — the form an admin copies out of a connection string — passed
+//     the allowlist (normalizeHost strips brackets) and was then dialed raw,
+//     so JoinHostPort re-bracketed it into "[[[::1]]:3306]:3306".
+//
+// The second is why the allowlist and the dial target must be the same
+// canonical string. Testing only the bare "::1" passed on that bug.
 func TestBuildMySQLDSNJoinsIPv6HostsCorrectly(t *testing.T) {
-	cfg := baseCfg()
-	cfg["mysql_host"] = "::1"
+	cases := []struct {
+		host string
+		want string
+	}{
+		{"::1", "[::1]:3306"},
+		{"[::1]", "[::1]:3306"},
+		{"2001:db8::1", "[2001:db8::1]:3306"},
+		{"[2001:db8::1]", "[2001:db8::1]:3306"},
+		{"0:0:0:0:0:0:0:1", "[::1]:3306"},
+		{"localhost", "localhost:3306"},
+		{"db.example.com.", "db.example.com:3306"},
+		{"DB.Example.COM", "db.example.com:3306"},
+	}
 
-	dsn, err := BuildMySQLDSN(cfg, MySQLDSNOptions{})
-	if err != nil {
-		t.Fatalf("BuildMySQLDSN(::1) returned an error: %v", err)
-	}
-	parsed, err := mysql.ParseDSN(dsn)
-	if err != nil {
-		t.Fatalf("BuildMySQLDSN(::1) produced an unparseable DSN %q: %v", dsn, err)
-	}
-	if parsed.Addr != "[::1]:3306" {
-		t.Errorf("Addr = %q, want %q", parsed.Addr, "[::1]:3306")
+	for _, tc := range cases {
+		t.Run(tc.host, func(t *testing.T) {
+			cfg := baseCfg()
+			cfg["mysql_host"] = tc.host
+
+			dsn, err := BuildMySQLDSN(cfg, MySQLDSNOptions{})
+			if err != nil {
+				t.Fatalf("BuildMySQLDSN(%q) returned an error: %v", tc.host, err)
+			}
+			parsed, err := mysql.ParseDSN(dsn)
+			if err != nil {
+				t.Fatalf("BuildMySQLDSN(%q) produced an unparseable DSN %q: %v", tc.host, dsn, err)
+			}
+			if parsed.Addr != tc.want {
+				t.Errorf("host %q: Addr = %q, want %q", tc.host, parsed.Addr, tc.want)
+			}
+		})
 	}
 }
 
@@ -212,6 +237,14 @@ func TestNoSourceBuildsDSNByStringFormatting(t *testing.T) {
 // cannot be cancelled. A migration runs for up to six hours in a detached
 // goroutine; a query without a context ignores both shutdown and the job
 // deadline, and a Ping without one blocks for the OS TCP timeout.
+// dbHandleNames are the identifiers a *sql.DB / *sql.Tx is held under in this
+// module, as a field or as a local. Name-based matching is a deliberate
+// trade-off: it keeps the test dependency-free, at the cost of missing a handle
+// stored under an unconventional name.
+var dbHandleNames = map[string]bool{
+	"db": true, "conn": true, "tx": true, "sqlDB": true,
+}
+
 func TestSourceReadersUseContextAwareQueries(t *testing.T) {
 	// Non-context database calls on *sql.DB / *sql.Tx.
 	banned := map[string]string{
@@ -235,14 +268,24 @@ func TestSourceReadersUseContextAwareQueries(t *testing.T) {
 			if !ok {
 				return true
 			}
-			want, banned := banned[sel.Sel.Name]
-			if !banned {
+			want, isBanned := banned[sel.Sel.Name]
+			if !isBanned {
 				return true
 			}
-			// Only flag calls on something named like a DB handle, so that
-			// unrelated helpers named Query() are not swept up.
-			recv, ok := sel.X.(*ast.SelectorExpr)
-			if !ok || recv.Sel.Name != "db" {
+			// Match a DB handle whether it is a field (r.db.Query) or a local
+			// variable (db.Ping, as in the pre-fix NewReader). Requiring a
+			// selector receiver made this test blind to the local-variable
+			// form — which is the exact shape of the bug it was written for.
+			var recvName string
+			switch recv := sel.X.(type) {
+			case *ast.SelectorExpr:
+				recvName = recv.Sel.Name
+			case *ast.Ident:
+				recvName = recv.Name
+			default:
+				return true
+			}
+			if !dbHandleNames[recvName] {
 				return true
 			}
 			offenders = append(offenders, rel+":"+
