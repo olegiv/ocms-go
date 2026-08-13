@@ -30,14 +30,6 @@ import (
 // MaxTablePrefixLength is the maximum allowed length for a source table prefix.
 const MaxTablePrefixLength = 20
 
-// SanitizeTablePrefix validates that a table prefix contains only safe SQL
-// identifier characters (alphanumeric and underscore, max MaxTablePrefixLength)
-// and returns the sanitized value.
-//
-// Source table names cannot be bound as query parameters, so the prefix is
-// interpolated into SQL; this is what keeps that safe. Callers must use the
-// returned value rather than the input — the string is rebuilt rune by rune so
-// static analysis can see the taint is broken.
 // MaxIdentifierLength is MySQL's limit for a column or table name.
 const MaxIdentifierLength = 64
 
@@ -73,6 +65,14 @@ func SanitizeIdentifier(name string) (string, error) {
 	return builder.String(), nil
 }
 
+// SanitizeTablePrefix validates that a table prefix contains only safe SQL
+// identifier characters (alphanumeric and underscore, max MaxTablePrefixLength)
+// and returns the sanitized value.
+//
+// Source table names cannot be bound as query parameters, so the prefix is
+// interpolated into SQL; this is what keeps that safe. Callers must use the
+// returned value rather than the input — the string is rebuilt rune by rune so
+// static analysis can see the taint is broken.
 func SanitizeTablePrefix(prefix string) (string, error) {
 	if prefix == "" {
 		return "", nil

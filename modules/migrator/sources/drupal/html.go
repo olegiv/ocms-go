@@ -91,7 +91,7 @@ func replaceDrupalMedia(body string, refs *MediaRefs) string {
 		if uuid == "" {
 			return ""
 		}
-		url, ok := refs.ByUUID[uuid]
+		mediaURL, ok := refs.ByUUID[uuid]
 		if !ok {
 			refs.Unresolved = append(refs.Unresolved, uuid)
 			return ""
@@ -99,17 +99,17 @@ func replaceDrupalMedia(body string, refs *MediaRefs) string {
 
 		alt := attrs["alt"]
 		if alt == "" {
-			alt = refs.AltMap[url]
+			alt = refs.AltMap[mediaURL]
 		}
 
-		if refs.IsImg[url] {
-			return fmt.Sprintf(`<img src="%s" alt="%s">`, html.EscapeString(url), html.EscapeString(alt))
+		if refs.IsImg[mediaURL] {
+			return fmt.Sprintf(`<img src="%s" alt="%s">`, html.EscapeString(mediaURL), html.EscapeString(alt))
 		}
 		label := alt
 		if label == "" {
-			label = url
+			label = mediaURL
 		}
-		return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(url), html.EscapeString(label))
+		return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(mediaURL), html.EscapeString(label))
 	})
 }
 
@@ -240,7 +240,7 @@ func urlEnd(s string) int {
 // point at content, "internal:/some/path" at an arbitrary local path, and
 // "http(s)://…" at an external site. "route:<name>" refers to a Drupal routing
 // entry that has no oCMS equivalent, so it is reported rather than guessed at.
-func ResolveLinkURI(uri string) (nodeID int64, url string, err error) {
+func ResolveLinkURI(uri string) (nodeID int64, linkURL string, err error) {
 	uri = strings.TrimSpace(uri)
 	if uri == "" {
 		return 0, "", fmt.Errorf("empty link URI")
