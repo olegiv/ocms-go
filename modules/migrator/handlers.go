@@ -79,9 +79,9 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 
 	// Rendering the current job here means a page refresh — or a second admin's
 	// browser — picks up an in-flight import and starts polling immediately.
-	job, err := m.latestJob(r.Context(), sourceName)
-	if err != nil {
-		m.ctx.Logger.Error("failed to read import job", "source", sourceName, "error", err)
+	job, jobErr := m.latestJob(r.Context(), sourceName)
+	if jobErr != nil {
+		m.ctx.Logger.Error("failed to read import job", "source", sourceName, "error", jobErr)
 	}
 
 	config := make(map[string]string)
@@ -99,6 +99,7 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 		Config:           config,
 		ImportedCounts:   importedCounts,
 		Job:              job,
+		JobReadErr:       jobErr,
 		SupportedOptions: types.SupportedImportOptionSet(source),
 	}
 
@@ -974,8 +975,51 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 			})},
 		{entityType: types.EntityUser, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteUser(ctx, id)
-		}},
+		}, beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
+			// pages.author_id and page_versions.changed_by are ON DELETE
+			// RESTRICT, and media.uploaded_by carries no action clause, which
+			// enforces the same way — so a user who still owns any of them
+			// cannot be deleted at all. Two imports sharing an email is the
+			// ordinary way to reach this: the second reuses the account the
+			// first created, and deleting the first import then hit a foreign
+			// key error that was logged and otherwise ignored.
+			return q.CountUserOwnedContent(ctx, store.CountUserOwnedContentParams{
+				AuthorID:    id,
+				ChangedBy:   id,
+				UploadedBy:  id,
+				CreatedBy:   id,
+				CreatedBy_2: id,
+			})
+		})},
 	}
+}
+
+// trackedItem identifies one row in migrator_imported_items.
+type trackedItem struct {
+	entityType string
+	id         int64
+}
+
+// retainTrackingRows re-inserts tracking rows for items whose delete failed.
+//
+// The delete clears the source's tracking rows wholesale, which is right for
+// everything it removed or deliberately preserved. It was wrong for a failure:
+// the row stayed in the database while its only record of being imported was
+// discarded, so nothing could find it again — not the Imported Content panel,
+// not a retry. Every current blocking foreign key is covered by a reference
+// check, so this is the net for the ones that are not: a transient database
+// error, or a constraint added later.
+func retainTrackingRows(ctx context.Context, tx *sql.Tx, source string, failed []trackedItem) error {
+	now := time.Now()
+	for _, item := range failed {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO migrator_imported_items (source, entity_type, entity_id, created_at)
+			VALUES (?, ?, ?, ?)`, source, item.entityType, item.id, now); err != nil {
+			return fmt.Errorf("failed to retain tracking row for %s %d: %w",
+				item.entityType, item.id, err)
+		}
+	}
+	return nil
 }
 
 // deleteImportedItems deletes all content imported from a source.
@@ -1021,6 +1065,9 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 	// so deleting during the transaction would leave media rows pointing at
 	// missing files if anything later forced a rollback.
 	var mediaUUIDs []string
+	// Items whose delete failed. Their tracking rows survive so the operator can
+	// retry, and so the Imported Content panel keeps showing what is left.
+	var failed []trackedItem
 	queries := store.New(m.ctx.DB).WithTx(tx)
 	deleted := make(map[string]int)
 
@@ -1036,21 +1083,36 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 		}
 		for _, id := range ids {
 			if m.preserveShared(ctx, queries, d, id) {
+				// Deliberately kept, permanently: retrying would keep it too,
+				// so its tracking row goes.
 				continue
 			}
 			if err := d.del(ctx, queries, id); err != nil {
-				m.ctx.Logger.Warn("failed to delete imported item",
+				// Keep the tracking row. Clearing it was the more damaging half
+				// of this: the row stayed in the database, untracked, while the
+				// UI reported a clean delete — so nothing could ever find it
+				// again, not even a retry.
+				m.ctx.Logger.Warn("failed to delete imported item; keeping it tracked so a retry can find it",
 					"type", string(d.entityType), "id", id, "error", err)
+				failed = append(failed, trackedItem{entityType: string(d.entityType), id: id})
 				continue
 			}
 			deleted[string(d.entityType)]++
 		}
 	}
 
-	// Clear tracking table for this source
+	// Clear tracking for this source, except the items that could not be
+	// deleted — those stay tracked so a retry can still find them.
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM migrator_imported_items WHERE source = ?`, source); err != nil {
 		return nil, fmt.Errorf("failed to clear import tracking rows: %w", err)
+	}
+	if err := retainTrackingRows(ctx, tx, source, failed); err != nil {
+		return nil, err
+	}
+	if len(failed) > 0 {
+		m.ctx.Logger.Warn("some imported items could not be deleted and remain tracked",
+			"source", source, "count", len(failed))
 	}
 
 	if err := tx.Commit(); err != nil {

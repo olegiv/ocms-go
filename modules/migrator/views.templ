@@ -30,6 +30,11 @@ type MigratorSourceFormViewData struct {
 	Config         map[string]string
 	ImportedCounts map[string]int
 	Job            *ImportJob
+	// JobReadErr carries a failed job lookup into the initial render. Passing
+	// nil said "no import has ever run" and dropped hx-trigger, so a transient
+	// error while the page loaded hid a running import until a manual reload —
+	// the status endpoint already keeps polling in exactly this case.
+	JobReadErr error
 	// SupportedOptions maps an import option's form key to whether this source
 	// acts on it. Options the source ignores are not rendered at all, so the
 	// form cannot promise content it will not import.
@@ -513,7 +518,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 		</div>
 		<div id="migrator-data" data-confirm-import={ pc.T("migrator.confirm_import") } data-confirm-delete={ pc.T("migrator.confirm_delete") } data-source-name={ data.SourceName } style="display:none"></div>
 		<div class="migrator-form-container">
-			@MigratorJobStatus(pc, buildJobStatusView(data.SourceName, data.Job, nil))
+			@MigratorJobStatus(pc, buildJobStatusView(data.SourceName, data.Job, data.JobReadErr))
 			<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/import") } id="import-form" data-confirm={ pc.T("migrator.confirm_import") }>
 				<div class="card">
 					<div class="card-header">

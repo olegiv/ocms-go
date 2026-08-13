@@ -39,6 +39,11 @@ type MigratorSourceFormViewData struct {
 	Config         map[string]string
 	ImportedCounts map[string]int
 	Job            *ImportJob
+	// JobReadErr carries a failed job lookup into the initial render. Passing
+	// nil said "no import has ever run" and dropped hx-trigger, so a transient
+	// error while the page loaded hid a running import until a manual reload —
+	// the status endpoint already keeps polling in exactly this case.
+	JobReadErr error
 	// SupportedOptions maps an import option's form key to whether this source
 	// acts on it. Options the source ignores are not rendered at all, so the
 	// form cannot promise content it will not import.
@@ -197,7 +202,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.title"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 155, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 160, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -210,7 +215,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.description"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 156, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 161, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -223,7 +228,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.select_source"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 161, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 166, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -236,7 +241,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.select_source_description"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 162, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 167, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -255,7 +260,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(src.DisplayName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 178, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 183, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
@@ -268,7 +273,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(src.Description))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 179, Col: 36}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 36}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 					if templ_7745c5c3_Err != nil {
@@ -281,7 +286,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 					var templ_7745c5c3_Var9 templ.SafeURL
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/admin/migrator/" + src.Name))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 183, Col: 59}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -294,7 +299,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 					var templ_7745c5c3_Var10 string
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.import_button"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 189, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 194, Col: 42}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 					if templ_7745c5c3_Err != nil {
@@ -313,7 +318,7 @@ func MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) tem
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.no_sources"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 197, Col: 38}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 202, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -380,7 +385,7 @@ func MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_tags"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 281, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 286, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -399,7 +404,7 @@ func MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_categories"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 287, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 292, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -418,7 +423,7 @@ func MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_media"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 293, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 298, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
@@ -437,7 +442,7 @@ func MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_posts"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 299, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 304, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
@@ -456,7 +461,7 @@ func MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_pages"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 305, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 310, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -475,7 +480,7 @@ func MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_menus"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 311, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 316, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -494,7 +499,7 @@ func MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_users"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 317, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 322, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -513,7 +518,7 @@ func MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_skip_existing"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 323, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 328, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -585,7 +590,7 @@ func MigratorImportedContent(pc *adminviews.PageContext, sourceName string, coun
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_content"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 350, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 355, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
@@ -609,7 +614,7 @@ func MigratorImportedContent(pc *adminviews.PageContext, sourceName string, coun
 					var templ_7745c5c3_Var23 string
 					templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_" + string(entityType)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 358, Col: 92}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 363, Col: 92}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 					if templ_7745c5c3_Err != nil {
@@ -622,7 +627,7 @@ func MigratorImportedContent(pc *adminviews.PageContext, sourceName string, coun
 					var templ_7745c5c3_Var24 string
 					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", counts[string(entityType)]))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 359, Col: 90}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 364, Col: 90}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 					if templ_7745c5c3_Err != nil {
@@ -641,7 +646,7 @@ func MigratorImportedContent(pc *adminviews.PageContext, sourceName string, coun
 			var templ_7745c5c3_Var25 templ.SafeURL
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/admin/migrator/" + sourceName + "/delete"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 364, Col: 88}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 369, Col: 88}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -654,7 +659,7 @@ func MigratorImportedContent(pc *adminviews.PageContext, sourceName string, coun
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("migrator.confirm_delete"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 364, Col: 163}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 369, Col: 163}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
@@ -667,7 +672,7 @@ func MigratorImportedContent(pc *adminviews.PageContext, sourceName string, coun
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.delete_imported"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 373, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 378, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
@@ -685,7 +690,7 @@ func MigratorImportedContent(pc *adminviews.PageContext, sourceName string, coun
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.no_imported_content"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 377, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 382, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -798,7 +803,7 @@ func MigratorJobStatus(pc *adminviews.PageContext, data MigratorJobStatusViewDat
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.StatusURL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 408, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 413, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 			if templ_7745c5c3_Err != nil {
@@ -882,7 +887,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.job_status"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 429, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 434, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 			if templ_7745c5c3_Err != nil {
@@ -895,7 +900,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.job_read_failed"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 430, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 435, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
@@ -913,7 +918,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.job_status"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 435, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 440, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 			if templ_7745c5c3_Err != nil {
@@ -926,7 +931,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(data.StatusKey()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 436, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 441, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 			if templ_7745c5c3_Err != nil {
@@ -954,7 +959,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(data.PhaseKey()))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 442, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 447, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -977,7 +982,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 				var templ_7745c5c3_Var42 templ.SafeURL
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(data.FormURL()))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 449, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 454, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 				if templ_7745c5c3_Err != nil {
@@ -990,7 +995,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.job_refresh"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 449, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 454, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
@@ -1013,7 +1018,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 				var templ_7745c5c3_Var44 string
 				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(data.ProgressText(pc))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 453, Col: 57}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 458, Col: 57}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 				if templ_7745c5c3_Err != nil {
@@ -1037,7 +1042,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 					var templ_7745c5c3_Var45 string
 					templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.Job.Count(entityType)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 459, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 464, Col: 53}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 					if templ_7745c5c3_Err != nil {
@@ -1050,7 +1055,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 					var templ_7745c5c3_Var46 string
 					templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_" + string(entityType)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 459, Col: 105}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 464, Col: 105}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 					if templ_7745c5c3_Err != nil {
@@ -1071,7 +1076,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 					var templ_7745c5c3_Var47 string
 					templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.Job.SkippedCount(entityType)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 466, Col: 60}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 471, Col: 60}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 					if templ_7745c5c3_Err != nil {
@@ -1084,7 +1089,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 					var templ_7745c5c3_Var48 string
 					templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.skipped_" + string(entityType)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 466, Col: 111}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 471, Col: 111}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 					if templ_7745c5c3_Err != nil {
@@ -1108,7 +1113,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 				var templ_7745c5c3_Var49 string
 				templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(data.Job.FatalError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 472, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 477, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 				if templ_7745c5c3_Err != nil {
@@ -1131,7 +1136,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 				var templ_7745c5c3_Var50 string
 				templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.job_errors", len(data.Job.Errors)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 476, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 481, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 				if templ_7745c5c3_Err != nil {
@@ -1149,7 +1154,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 					var templ_7745c5c3_Var51 string
 					templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 479, Col: 15}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 484, Col: 15}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 					if templ_7745c5c3_Err != nil {
@@ -1177,7 +1182,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 				var templ_7745c5c3_Var52 string
 				templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.job_notices", len(data.Job.Notices)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 486, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 491, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 				if templ_7745c5c3_Err != nil {
@@ -1195,7 +1200,7 @@ func migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusVie
 					var templ_7745c5c3_Var53 string
 					templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 489, Col: 15}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 494, Col: 15}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 					if templ_7745c5c3_Err != nil {
@@ -1256,7 +1261,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var56 string
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(pc.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 501, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 506, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 			if templ_7745c5c3_Err != nil {
@@ -1269,7 +1274,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var57 string
 			templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(data.Description))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 502, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 507, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 			if templ_7745c5c3_Err != nil {
@@ -1282,7 +1287,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var58 string
 			templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.back_to_sources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 510, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 515, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 			if templ_7745c5c3_Err != nil {
@@ -1295,7 +1300,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var59 string
 			templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("migrator.confirm_import"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 514, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 519, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 			if templ_7745c5c3_Err != nil {
@@ -1308,7 +1313,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var60 string
 			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("migrator.confirm_delete"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 514, Col: 135}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 519, Col: 135}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 			if templ_7745c5c3_Err != nil {
@@ -1321,7 +1326,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var61 string
 			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.SourceName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 514, Col: 172}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 519, Col: 172}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var61)
 			if templ_7745c5c3_Err != nil {
@@ -1331,7 +1336,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = MigratorJobStatus(pc, buildJobStatusView(data.SourceName, data.Job, nil)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = MigratorJobStatus(pc, buildJobStatusView(data.SourceName, data.Job, data.JobReadErr)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1342,7 +1347,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var62 templ.SafeURL
 			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/admin/migrator/" + data.SourceName + "/import"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 517, Col: 91}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 522, Col: 91}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 			if templ_7745c5c3_Err != nil {
@@ -1355,7 +1360,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var63 string
 			templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("migrator.confirm_import"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 517, Col: 157}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 522, Col: 157}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 			if templ_7745c5c3_Err != nil {
@@ -1368,7 +1373,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var64 string
 			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.connection_settings"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 520, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 525, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 			if templ_7745c5c3_Err != nil {
@@ -1404,7 +1409,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 				var templ_7745c5c3_Var67 string
 				templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 526, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 531, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var67)
 				if templ_7745c5c3_Err != nil {
@@ -1417,7 +1422,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 				var templ_7745c5c3_Var68 string
 				templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(field.Label))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 527, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 532, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 				if templ_7745c5c3_Err != nil {
@@ -1445,7 +1450,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var69 string
 					templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 536, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 541, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 					if templ_7745c5c3_Err != nil {
@@ -1458,7 +1463,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var70 string
 					templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 536, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 541, Col: 68}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 					if templ_7745c5c3_Err != nil {
@@ -1481,7 +1486,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var71 string
 					templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T(field.Placeholder))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 536, Col: 137}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 541, Col: 137}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 					if templ_7745c5c3_Err != nil {
@@ -1499,7 +1504,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var72 string
 					templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 538, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 543, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 					if templ_7745c5c3_Err != nil {
@@ -1512,7 +1517,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var73 string
 					templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 538, Col: 66}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 543, Col: 66}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var73)
 					if templ_7745c5c3_Err != nil {
@@ -1525,7 +1530,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var74 string
 					templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Config[field.Name])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 538, Col: 100}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 543, Col: 100}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var74)
 					if templ_7745c5c3_Err != nil {
@@ -1548,7 +1553,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var75 string
 					templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T(field.Placeholder))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 538, Col: 169}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 543, Col: 169}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var75)
 					if templ_7745c5c3_Err != nil {
@@ -1566,7 +1571,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var76 string
 					templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 540, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 545, Col: 44}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var76)
 					if templ_7745c5c3_Err != nil {
@@ -1579,7 +1584,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var77 string
 					templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 540, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 545, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var77)
 					if templ_7745c5c3_Err != nil {
@@ -1592,7 +1597,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var78 string
 					templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Config[field.Name])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 540, Col: 98}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 545, Col: 98}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var78)
 					if templ_7745c5c3_Err != nil {
@@ -1615,7 +1620,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 					var templ_7745c5c3_Var79 string
 					templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T(field.Placeholder))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 540, Col: 167}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 545, Col: 167}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var79)
 					if templ_7745c5c3_Err != nil {
@@ -1638,7 +1643,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var80 string
 			templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.test_connection"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 551, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 556, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 			if templ_7745c5c3_Err != nil {
@@ -1651,7 +1656,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var81 string
 			templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.import_options"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 558, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 563, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 			if templ_7745c5c3_Err != nil {
@@ -1672,7 +1677,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var82 string
 			templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.start_import"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 571, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 576, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 			if templ_7745c5c3_Err != nil {
@@ -1693,7 +1698,7 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			var templ_7745c5c3_Var83 string
 			templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 805, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 810, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var83)
 			if templ_7745c5c3_Err != nil {

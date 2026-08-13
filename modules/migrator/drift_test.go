@@ -6,6 +6,7 @@ package migrator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -832,5 +833,44 @@ func TestImportFormHidesUnsupportedOptions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestSourceFormKeepsPollingWhenJobReadFails checks the initial render, not just
+// the status endpoint.
+//
+// The page passed a literal nil for the job lookup error, so a transient failure
+// while it loaded rendered the idle card — no hx-trigger — and an import running
+// in the background stayed invisible until someone reloaded by hand. The status
+// endpoint already treats an unknown state as "keep polling"; the first render
+// has to agree, or there is never a second one.
+func TestSourceFormKeepsPollingWhenJobReadFails(t *testing.T) {
+	pc := &adminviews.PageContext{}
+	data := MigratorSourceFormViewData{
+		SourceName: "drupal",
+		JobReadErr: errors.New("database is locked"),
+	}
+
+	var sb strings.Builder
+	if err := MigratorSourceFormPage(pc, data).Render(context.Background(), &sb); err != nil {
+		t.Fatalf("failed to render source form: %v", err)
+	}
+	markup := sb.String()
+
+	if !strings.Contains(markup, `hx-trigger="every 2s"`) {
+		t.Error("the status card does not poll after a failed job lookup; a running " +
+			"import would stay invisible until a manual reload")
+	}
+
+	// And the opposite: a clean read with no job renders the idle card, which
+	// must not poll forever.
+	var idle strings.Builder
+	if err := MigratorSourceFormPage(pc, MigratorSourceFormViewData{
+		SourceName: "drupal",
+	}).Render(context.Background(), &idle); err != nil {
+		t.Fatalf("failed to render idle source form: %v", err)
+	}
+	if strings.Contains(idle.String(), `hx-trigger="every 2s"`) {
+		t.Error("the idle card polls; only an unknown or running state should")
 	}
 }

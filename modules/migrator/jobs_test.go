@@ -1281,3 +1281,139 @@ func TestDeleteImportedItemsDetachesAdminMenuItemsFromDeletedPages(t *testing.T)
 			"empty destination and silently goes nowhere", after.Url)
 	}
 }
+
+// TestDeleteImportedItemsKeepsSharedUsersAndRetainsFailedTracking covers the
+// two halves of a user shared between imports.
+//
+// A second import reusing an account the first created — same email — is the
+// ordinary way to reach this. pages.author_id is ON DELETE RESTRICT, so the
+// delete cannot remove that user at all.
+//
+// The more damaging half was the tracking cleanup: every row for the source was
+// cleared regardless of whether its delete succeeded, so a user the database
+// had refused to delete became untracked while the UI reported a clean delete.
+// Nothing could find it again, not even a retry. Rows for failed deletes are
+// now retained.
+func TestDeleteImportedItemsKeepsSharedUsersAndRetainsFailedTracking(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	queries := store.New(m.ctx.DB)
+	now := time.Now()
+
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+
+	// Imported by "elefant", then reused as the author of a "drupal" page.
+	shared, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "shared@example.com", PasswordHash: "x", Role: "public",
+		Name: "Shared", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	lonely, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "lonely@example.com", PasswordHash: "x", Role: "public",
+		Name: "Lonely", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	if _, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Drupal page", Slug: "drupal-page", Status: "published",
+		AuthorID: shared.ID, LanguageCode: lang.Code, PageType: "page",
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("failed to create page: %v", err)
+	}
+
+	for _, id := range []int64{shared.ID, lonely.ID} {
+		if err := m.TrackImportedItem(ctx, "elefant", string(types.EntityUser), id); err != nil {
+			t.Fatalf("failed to track user: %v", err)
+		}
+	}
+
+	if _, err := m.deleteImportedItems(ctx, "elefant"); err != nil {
+		t.Fatalf("deleteImportedItems() error = %v", err)
+	}
+
+	if _, err := queries.GetUserByID(ctx, shared.ID); err != nil {
+		t.Errorf("a user still authoring a page was deleted: %v", err)
+	}
+	if _, err := queries.GetUserByID(ctx, lonely.ID); err == nil {
+		t.Error("an unreferenced imported user survived; only shared ones should be kept")
+	}
+
+	// The shared user is deliberately preserved, so its tracking row goes: a
+	// retry would preserve it again.
+	ids, err := m.getImportedItems(ctx, m.ctx.DB, "elefant", string(types.EntityUser))
+	if err != nil {
+		t.Fatalf("failed to read tracking rows: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("tracking rows = %v, want none: both users reached a final state", ids)
+	}
+}
+
+// TestRetainTrackingRowsKeepsFailedItemsFindable tests the retention step on its
+// own, because no current foreign key can reach it end to end: every blocking
+// constraint is covered by a reference check, so a failure here means a
+// transient database error or a constraint added later.
+//
+// The bug it guards was the damaging half of the shared-user finding. The
+// delete cleared every tracking row for the source regardless of outcome, so a
+// row the database had refused to delete became untracked while the UI reported
+// success — invisible to the Imported Content panel and to any retry.
+func TestRetainTrackingRowsKeepsFailedItemsFindable(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+
+	failed := []trackedItem{
+		{entityType: string(types.EntityUser), id: 4242},
+		{entityType: string(types.EntityMenu), id: 77},
+	}
+
+	tx, err := m.ctx.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %v", err)
+	}
+	if err := retainTrackingRows(ctx, tx, "drupal", failed); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("retainTrackingRows() error = %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("failed to commit: %v", err)
+	}
+
+	for _, item := range failed {
+		ids, err := m.getImportedItems(ctx, m.ctx.DB, "drupal", item.entityType)
+		if err != nil {
+			t.Fatalf("failed to read tracking rows: %v", err)
+		}
+		if len(ids) != 1 || ids[0] != item.id {
+			t.Errorf("tracking rows for %s = %v, want [%d]; an item that could not be "+
+				"deleted must stay findable", item.entityType, ids, item.id)
+		}
+	}
+
+	// Nothing is retained when every delete succeeded.
+	tx2, err := m.ctx.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %v", err)
+	}
+	if err := retainTrackingRows(ctx, tx2, "elefant", nil); err != nil {
+		_ = tx2.Rollback()
+		t.Fatalf("retainTrackingRows(nil) error = %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("failed to commit: %v", err)
+	}
+	ids, err := m.getImportedItems(ctx, m.ctx.DB, "elefant", string(types.EntityUser))
+	if err != nil {
+		t.Fatalf("failed to read tracking rows: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("tracking rows = %v, want none when nothing failed", ids)
+	}
+}

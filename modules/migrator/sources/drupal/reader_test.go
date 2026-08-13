@@ -108,3 +108,29 @@ func TestTaxonomyTargetMarkerMatchesDrupalSerialization(t *testing.T) {
 		}
 	}
 }
+
+// TestPHPSerializedString covers the extractor that reads Drupal's config blobs.
+//
+// The lengths are part of the format, so an off-by-one here silently returns ""
+// and every discovery falls back — a failure that produces no error at all.
+func TestPHPSerializedString(t *testing.T) {
+	imageType := `a:2:{s:6:"source";s:5:"image";s:20:"source_configuration";a:1:{s:12:"source_field";s:17:"field_media_image";}}`
+	customType := `a:2:{s:6:"source";s:5:"image";s:20:"source_configuration";a:1:{s:12:"source_field";s:11:"field_photo";}}`
+
+	for _, tc := range []struct {
+		name, data, key, want string
+	}{
+		{"core image type", imageType, "source_field", "field_media_image"},
+		{"custom source field", customType, "source_field", "field_photo"},
+		{"absent key", imageType, "target_type", ""},
+		{"empty data", "", "source_field", ""},
+		{"truncated value", `s:12:"source_field";s:11:"field`, "source_field", ""},
+		{"malformed length", `s:12:"source_field";s:xx:"field_photo";`, "source_field", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := phpSerializedString(tc.data, tc.key); got != tc.want {
+				t.Errorf("phpSerializedString(%q) = %q, want %q", tc.key, got, tc.want)
+			}
+		})
+	}
+}

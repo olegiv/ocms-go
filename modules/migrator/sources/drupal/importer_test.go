@@ -1231,3 +1231,72 @@ func TestHasTraversalSegment(t *testing.T) {
 		})
 	}
 }
+
+// TestImportNodesUsesEachNodesSourceLanguage covers a multilingual source.
+//
+// Drupal's default_langcode = 1 marks each entity's own source translation, not
+// the site's one default language, so a multilingual site returns English,
+// French and other originals together. Filing every one of them under the oCMS
+// default language served French content under the English locale in
+// language-filtered listings and URLs.
+func TestImportNodesUsesEachNodesSourceLanguage(t *testing.T) {
+	reader := &fakeReader{
+		nodes: []Node{
+			{NID: 1, Type: "page", Title: "About", Status: 1, Langcode: "en"},
+			{NID: 2, Type: "page", Title: "A propos", Status: 1, Langcode: "fr"},
+			{NID: 3, Type: "page", Title: "Neutral", Status: 1, Langcode: "und"},
+			{NID: 4, Type: "page", Title: "Klingon", Status: 1, Langcode: "tlh"},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	ctx := context.Background()
+
+	// oCMS knows English and French, but not Klingon.
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", Direction: "ltr",
+		IsActive: true, IsDefault: false, Position: 2,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to create language: %v", err)
+	}
+	langs, err := queries.ListActiveLanguages(ctx)
+	if err != nil {
+		t.Fatalf("failed to list languages: %v", err)
+	}
+	for _, l := range langs {
+		st.availableLangs[strings.ToLower(l.Code)] = true
+	}
+
+	if err := (&Source{}).importNodes(ctx, st); err != nil {
+		t.Fatalf("importNodes() error = %v", err)
+	}
+
+	for _, tc := range []struct {
+		nid  int64
+		want string
+	}{
+		{1, "en"},
+		{2, "fr"},
+		{3, st.defaultLang}, // language-neutral
+		{4, st.defaultLang}, // no oCMS language for it
+	} {
+		page, err := queries.GetPageByID(ctx, st.nodes[tc.nid])
+		if err != nil {
+			t.Fatalf("node %d was not imported: %v", tc.nid, err)
+		}
+		if page.LanguageCode != tc.want {
+			t.Errorf("node %d language = %q, want %q", tc.nid, page.LanguageCode, tc.want)
+		}
+	}
+
+	// The unmapped language must be reported, not silently absorbed.
+	var reported bool
+	for _, msg := range st.result.Summaries {
+		if strings.Contains(msg, "tlh") {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Errorf("summaries = %v, want one naming the unmapped language tlh", st.result.Summaries)
+	}
+}

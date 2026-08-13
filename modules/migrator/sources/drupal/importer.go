@@ -215,6 +215,15 @@ type importState struct {
 	// default-language page made a translated URL redirect to unrelated
 	// content and could consume an alias another imported page needed.
 	nodeLang map[int64]string
+	// availableLangs are the oCMS language codes an imported node may be
+	// assigned to, lowercased. Drupal's default_langcode = 1 marks each
+	// entity's *source* translation, not the site's one default language, so a
+	// multilingual site returns English, French and other originals together —
+	// filing them all under defaultLang put content under the wrong locale.
+	availableLangs map[string]bool
+	// unmappedLangs counts nodes whose source language has no oCMS language, so
+	// the fallback is reported once rather than per node.
+	unmappedLangs map[string]int
 	// createdCategorySlugs records the slugs this run has already taken, so a
 	// second Drupal term that slugifies the same way gets its own row rather
 	// than being folded into the first.
@@ -266,6 +275,8 @@ func newImportState(queries *store.Queries, reader sourceReader, result *types.I
 		nodes:                make(map[int64]int64),
 		aliasByNode:          make(map[int64]map[string]string),
 		nodeLang:             make(map[int64]string),
+		availableLangs:       make(map[string]bool),
+		unmappedLangs:        make(map[string]int),
 		refs:                 NewMediaRefs(),
 	}
 }
@@ -303,6 +314,14 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	}
 
 	st := newImportState(queries, reader, result, tracker, opts, defaultLang.Code, authorID)
+	if langs, err := queries.ListActiveLanguages(ctx); err != nil {
+		result.AddError("failed to read configured languages; all content will use %q: %v",
+			defaultLang.Code, err)
+	} else {
+		for _, l := range langs {
+			st.availableLangs[strings.ToLower(l.Code)] = true
+		}
+	}
 	st.typeMap = ParseTypeMap(cfg["type_map"])
 	st.tagVocabs = parseVocabularyList(cfg["tag_vocabularies"])
 	st.uploadDir = shared.UploadDir()
@@ -1031,6 +1050,7 @@ func (s *Source) importNodes(ctx context.Context, st *importState) error {
 	}
 
 	reportUnresolvedEmbeds(st)
+	st.reportUnmappedLanguages()
 	s.importAliases(ctx, st, now)
 	return nil
 }
@@ -1117,6 +1137,44 @@ func langcodeApplies(aliasLang, nodeLang string) bool {
 	return false
 }
 
+// languageFor maps a Drupal node's source language onto an oCMS language code.
+//
+// Drupal marks each entity's source translation with default_langcode = 1, so a
+// multilingual site's nodes arrive in several languages and are all "default"
+// in Drupal's sense. Assigning st.defaultLang to every one of them filed
+// French originals as English, which language-filtered listings and URLs then
+// served under the wrong locale.
+//
+// A language oCMS does not have falls back to the default and is counted, so
+// the operator is told once rather than silently getting mislabelled content.
+func (st *importState) languageFor(n Node) string {
+	code := strings.ToLower(strings.TrimSpace(n.Langcode))
+	// "und" and "zxx" mean the content is not in any particular language.
+	if code == "" || code == "und" || code == "zxx" {
+		return st.defaultLang
+	}
+	if st.availableLangs[code] {
+		return code
+	}
+	st.unmappedLangs[code]++
+	return st.defaultLang
+}
+
+// reportUnmappedLanguages tells the operator which source languages had no oCMS
+// equivalent, once per language rather than once per node.
+func (st *importState) reportUnmappedLanguages() {
+	codes := make([]string, 0, len(st.unmappedLangs))
+	for code := range st.unmappedLangs {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	for _, code := range codes {
+		st.result.AddSummary(
+			"%d node(s) are in Drupal language %q, which is not configured in oCMS; "+
+				"they were imported as %q", st.unmappedLangs[code], code, st.defaultLang)
+	}
+}
+
 // importNode converts one Drupal node into an oCMS page.
 func (s *Source) importNode(ctx context.Context, st *importState, n Node, now time.Time) {
 	pageType := PageTypeFor(st.typeMap, n.Type)
@@ -1176,7 +1234,7 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 		FeaturedImageID: st.featuredImageID(n),
 		MetaTitle:       n.Title,
 		MetaDescription: summaryFor(n),
-		LanguageCode:    st.defaultLang,
+		LanguageCode:    st.languageFor(n),
 		PageType:        pageType,
 		PublishedAt:     publishedAt,
 		CreatedAt:       unixOrNow(n.Created, now),

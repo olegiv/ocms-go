@@ -118,3 +118,60 @@ func TestResolveLinkURIRejectsForeignSchemes(t *testing.T) {
 		})
 	}
 }
+
+// TestFilePrefixesInHandlesMultisite covers a source whose public files are not
+// under sites/default.
+//
+// A multisite install, or any site with a customised file_public_path, had its
+// files copied successfully and then kept the source URLs in every body — so
+// the media existed in oCMS and the page still pointed at the old host.
+func TestFilePrefixesInHandlesMultisite(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "stock install",
+			body: `<img src="/sites/default/files/a.jpg">`,
+			want: []string{"/sites/default/files/", "/system/files/"},
+		},
+		{
+			name: "multisite by domain",
+			body: `<img src="/sites/example.com/files/a.jpg">`,
+			want: []string{"/sites/example.com/files/", "/system/files/"},
+		},
+		{
+			name: "several sites in one body",
+			body: `<img src="/sites/a.example/files/1.jpg"><img src="/sites/b.example/files/2.jpg">`,
+			want: []string{"/sites/a.example/files/", "/sites/b.example/files/", "/system/files/"},
+		},
+		{
+			name: "absolute URL",
+			body: `<img src="https://old.example/sites/mysite/files/a.jpg">`,
+			want: []string{"/sites/mysite/files/", "/system/files/"},
+		},
+		{
+			name: "no file URLs at all",
+			body: `<p>plain text</p>`,
+			want: []string{"/system/files/"},
+		},
+		{
+			name: "not a files path",
+			body: `<a href="/sites/example.com/about">x</a>`,
+			want: []string{"/system/files/"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := filePrefixesIn(tc.body)
+			if len(got) != len(tc.want) {
+				t.Fatalf("filePrefixesIn() = %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("filePrefixesIn() = %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}

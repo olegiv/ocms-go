@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -631,15 +633,116 @@ func (r *Reader) readAltMap(ctx context.Context, table, idColumn, altColumn stri
 	return alts, nil
 }
 
-// mediaFileFieldTables lists the media__field_media_* tables that reference a
-// file_managed row. A site has whichever tables its media bundles declare, so
-// each is probed rather than assumed.
-var mediaFileFieldTables = []struct{ table, column string }{
-	{"media__field_media_image", "field_media_image_target_id"},
-	{"media__field_media_document", "field_media_document_target_id"},
-	{"media__field_media_file", "field_media_file_target_id"},
-	{"media__field_media_audio_file", "field_media_audio_file_target_id"},
-	{"media__field_media_video_file", "field_media_video_file_target_id"},
+// coreMediaSourceFields are the source fields Drupal core's own media types
+// declare. They are the fallback when media type configuration cannot be read;
+// their target type is fixed by core, so using them is safe even unverified.
+var coreMediaSourceFields = []string{
+	"field_media_image",
+	"field_media_document",
+	"field_media_file",
+	"field_media_audio_file",
+	"field_media_video_file",
+}
+
+// mediaSourceFieldMarkerKey is the config key naming a media type's source
+// field. Drupal stores media.type.<bundle> as PHP-serialized data.
+const mediaSourceFieldMarkerKey = "source_field"
+
+// mediaSourceFields returns the field names this site's media types use to hold
+// their file, discovered from media.type.* configuration.
+//
+// A fixed allowlist of core field names missed any media type with a custom
+// source field — field_photo, say. CKEditor embeds carry the MEDIA entity UUID,
+// so a media entity whose source field was not read never entered the UUID map,
+// and replaceDrupalMedia deleted every one of its embeds from the body even
+// though the underlying file had been copied.
+//
+// The names come from configuration rather than from table shape for the same
+// reason taxonomy fields do: a media__field_* table with a *_target_id column
+// may point at terms or other media, and Drupal's entity IDs are independent
+// sequences, so nothing about the shape distinguishes them.
+func (r *Reader) mediaSourceFields(ctx context.Context) []string {
+	if !r.schema.HasConfig {
+		return coreMediaSourceFields
+	}
+	tbl, err := r.table(tableConfig)
+	if err != nil {
+		return coreMediaSourceFields
+	}
+
+	query := fmt.Sprintf(`
+		SELECT data FROM %s
+		WHERE collection = '' AND name LIKE 'media.type.%%'`, tbl)
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		slog.Warn("failed to read media type configuration", "error", err)
+		r.warnings = append(r.warnings, fmt.Sprintf(
+			"media type configuration could not be read (%v); only Drupal core's "+
+				"media fields were used, so embeds of custom media types may be dropped", err))
+		return coreMediaSourceFields
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
+
+	seen := make(map[string]bool, len(coreMediaSourceFields))
+	fields := make([]string, 0, len(coreMediaSourceFields))
+	add := func(name string) {
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		fields = append(fields, name)
+	}
+	// Core's fields stay in the list: a bundle can exist without its config row
+	// being readable, and an absent table is skipped harmlessly below.
+	for _, name := range coreMediaSourceFields {
+		add(name)
+	}
+
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			slog.Warn("failed to scan media type configuration", "error", err)
+			return fields
+		}
+		add(phpSerializedString(data, mediaSourceFieldMarkerKey))
+	}
+	if err := rows.Err(); err != nil {
+		slog.Warn("error iterating media type configuration", "error", err)
+	}
+	sort.Strings(fields)
+	return fields
+}
+
+// phpSerializedString extracts a string value from PHP-serialized data by key.
+//
+// Only the one shape Drupal writes is handled: s:<len>:"<key>";s:<len>:"<value>".
+// An unparseable or absent key yields "", which callers treat as "not found"
+// rather than guessing.
+func phpSerializedString(data, key string) string {
+	marker := fmt.Sprintf(`s:%d:"%s";s:`, len(key), key)
+	idx := strings.Index(data, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := data[idx+len(marker):]
+	colon := strings.Index(rest, ":")
+	if colon < 0 {
+		return ""
+	}
+	length, err := strconv.Atoi(rest[:colon])
+	if err != nil || length < 0 {
+		return ""
+	}
+	rest = rest[colon+1:]
+	if len(rest) < length+2 || rest[0] != '"' {
+		return ""
+	}
+	return rest[1 : length+1]
 }
 
 // MediaUUIDsByFile maps a file ID to the UUIDs of the media entities that
@@ -663,16 +766,17 @@ func (r *Reader) MediaUUIDsByFile(ctx context.Context) (map[int64][]string, erro
 		return nil, err
 	}
 
-	for _, field := range mediaFileFieldTables {
-		if !r.hasTable(field.table) {
+	for _, field := range r.mediaSourceFields(ctx) {
+		table := "media__" + field
+		if !r.hasTable(table) {
 			continue
 		}
-		fieldTbl, err := r.table(field.table)
+		fieldTbl, err := r.table(table)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := r.collectMediaUUIDs(ctx, mediaTbl, fieldTbl, field.column, field.table, byFile); err != nil {
+		if err := r.collectMediaUUIDs(ctx, mediaTbl, fieldTbl, field+"_target_id", table, byFile); err != nil {
 			return nil, err
 		}
 	}

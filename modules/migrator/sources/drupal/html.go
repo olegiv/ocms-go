@@ -8,6 +8,7 @@ import (
 	"html"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -122,10 +123,34 @@ func parseAttrs(tag string) map[string]string {
 	return attrs
 }
 
-// drupalFilePrefixes are the public URL forms Drupal serves managed files under.
-var drupalFilePrefixes = []string{
-	"/sites/default/files/",
-	"/system/files/",
+// systemFilesPrefix is Drupal's private/served-file route, identical on every
+// site.
+const systemFilesPrefix = "/system/files/"
+
+// sitesFilesPattern matches the public files URL prefix for any site directory.
+// Assuming "sites/default" meant a multisite install, or any site with a
+// customised file_public_path, copied its files successfully and then left
+// every body URL pointing at the old host.
+var sitesFilesPattern = regexp.MustCompile(`/sites/[^/"'\s<>]+/files/`)
+
+// filePrefixesIn returns the distinct Drupal public-file URL prefixes appearing
+// in a body, so the literal rewriter can be run once per prefix.
+//
+// Discovering them from the body rather than taking them from configuration
+// keeps this working for a source whose settings.php is not in the database at
+// all — file_public_path lives there, not in the config table.
+func filePrefixesIn(body string) []string {
+	seen := map[string]bool{systemFilesPrefix: true}
+	for _, match := range sitesFilesPattern.FindAllString(body, -1) {
+		seen[match] = true
+	}
+	prefixes := make([]string, 0, len(seen))
+	for prefix := range seen {
+		prefixes = append(prefixes, prefix)
+	}
+	// Deterministic order keeps the rewritten output stable.
+	sort.Strings(prefixes)
+	return prefixes
 }
 
 // stylePathPattern matches the leading segments of an image-style derivative
@@ -175,7 +200,7 @@ func rewriteFileURLs(body string, refs *MediaRefs) string {
 	if len(refs.ByPath) == 0 {
 		return body
 	}
-	for _, prefix := range drupalFilePrefixes {
+	for _, prefix := range filePrefixesIn(body) {
 		body = rewritePrefixedURLs(body, prefix, refs)
 	}
 	return body

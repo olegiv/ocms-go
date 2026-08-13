@@ -11,6 +11,39 @@ import (
 	"time"
 )
 
+const countUserOwnedContent = `-- name: CountUserOwnedContent :one
+SELECT
+    (SELECT COUNT(*) FROM pages WHERE author_id = ?) +
+    (SELECT COUNT(*) FROM page_versions WHERE changed_by = ?) +
+    (SELECT COUNT(*) FROM media WHERE uploaded_by = ?) +
+    (SELECT COUNT(*) FROM api_keys k WHERE k.created_by = ?) +
+    (SELECT COUNT(*) FROM webhooks w WHERE w.created_by = ?)
+`
+
+type CountUserOwnedContentParams struct {
+	AuthorID    int64 `json:"author_id"`
+	ChangedBy   int64 `json:"changed_by"`
+	UploadedBy  int64 `json:"uploaded_by"`
+	CreatedBy   int64 `json:"created_by"`
+	CreatedBy_2 int64 `json:"created_by_2"`
+}
+
+// Everything that blocks or would be silently re-attributed by deleting a user.
+// pages.author_id and page_versions.changed_by are ON DELETE RESTRICT, and
+// media.uploaded_by has no action clause, which enforces the same way.
+func (q *Queries) CountUserOwnedContent(ctx context.Context, arg CountUserOwnedContentParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUserOwnedContent,
+		arg.AuthorID,
+		arg.ChangedBy,
+		arg.UploadedBy,
+		arg.CreatedBy,
+		arg.CreatedBy_2,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countUsers = `-- name: CountUsers :one
 SELECT COUNT(*) FROM users
 `
