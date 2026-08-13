@@ -211,7 +211,7 @@ Drupal blocks, views, custom field types beyond body/image/tags, revisions, comm
 
 One subtlety worth knowing: when the importer adds links to a menu that already existed in oCMS, it tracks only the menu *items*, never the menu itself — so deleting the import cannot destroy a menu you built by hand.
 
-Deleting imported media removes every directory the uploads root can hold for that UUID, derived from `model.MediaStorageDirs()` — the originals plus one per entry in `model.ImageVariants`. That list used to be hardcoded here and had fallen behind: it omitted `og`, so every imported image left an orphaned `/uploads/og/<uuid>` after deletion, with the media row and its tracking row both gone and nothing left to find the directory from. Adding a variant to `model.ImageVariants` now extends creation and deletion together.
+Deleting imported media removes every directory the uploads root can hold for that UUID, derived from `model.MediaStorageDirs()` — the originals plus one per entry in `model.ImageVariants`. That list used to be hardcoded here and had fallen behind: it omitted `og`, so every imported image left an orphaned `/uploads/og/<uuid>` after deletion, with the media row and its tracking row both gone and nothing left to find the directory from. The Drupal source's `removeOrphanedUpload` — the path that cleans up after a failed media insert — carried the same drifted copy. Four call sites in total now derive from `model.ImageVariants`, and `TestNoHardcodedVariantLists` fails on any new hand-written copy, so adding a variant extends creation and deletion together.
 
 ## Database
 

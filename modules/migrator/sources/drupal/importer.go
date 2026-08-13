@@ -821,7 +821,7 @@ func reportSkippedMimes(st *importState, skipped map[string]int) {
 // removeOrphanedUpload deletes the variant directories written for a media UUID
 // whose database row was never created.
 func removeOrphanedUpload(uploadDir, fileUUID string) {
-	for _, variant := range []string{"originals", "thumbnail", "grid", "small", "medium", "large"} {
+	for _, variant := range model.MediaStorageDirs() {
 		dir := filepath.Join(uploadDir, variant, fileUUID)
 		if err := os.RemoveAll(dir); err != nil {
 			slog.Warn("failed to remove orphaned upload", "dir", dir, "error", err)
