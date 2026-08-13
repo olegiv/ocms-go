@@ -114,7 +114,7 @@
     {{/* Theme Scripts */}}
     <script nonce="{{.CSPNonce}}" src="/themes/default/static/js/theme.js"></script>
     {{/* Prism.js syntax highlighting */}}
-    <script nonce="{{.CSPNonce}}" src="/static/dist/js/prism-bundle.min.js"></script>
+    <script nonce="{{.CSPNonce}}" src="{{ scriptURL "/static/dist/js/prism-bundle.min.js" }}" integrity="sha384-/HRXpyLsWgi91NKkl3jPRfbRhgj2vlv4f6wwxcmGEe9hKePmXqpOaPf9B1uk1jeL" crossorigin="anonymous"></script>
     {{/* Image lightbox */}}
     <script nonce="{{.CSPNonce}}" src="/static/dist/js/lightbox.js"></script>
 

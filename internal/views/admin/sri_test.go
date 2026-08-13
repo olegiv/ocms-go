@@ -17,9 +17,17 @@ import (
 
 // layoutsWithVendoredScripts are the layouts that load vendored JavaScript with
 // a Subresource Integrity hash. Paths are relative to the repository root.
+// Every layout that loads vendored JavaScript belongs here. Listing only the
+// two admin layouts is what let the public frontend and three themes ship
+// third-party scripts with no integrity attribute at all: the test passed
+// because it never looked at them.
 var layoutsWithVendoredScripts = []string{
 	"internal/views/admin/layout.templ",
 	"web/templates/layouts/base.html",
+	"internal/handler/frontend_layout.templ",
+	"internal/themes/default/templates/layouts/base.html",
+	"internal/themes/developer/templates/layouts/base.html",
+	"custom/themes/starter/templates/layouts/base.html",
 }
 
 // vendoredScripts are the third-party libraries copied out of node_modules by
@@ -35,6 +43,9 @@ var vendoredScripts = map[string]bool{
 	"/static/dist/js/alpine.min.js":          true,
 	"/static/dist/js/alpine-sort.min.js":     true,
 	"/static/dist/js/alpine-collapse.min.js": true,
+	// Concatenated from node_modules/prismjs by the copy-deps script, so its
+	// bytes change on a prismjs upgrade exactly like the others.
+	"/static/dist/js/prism-bundle.min.js": true,
 }
 
 // scriptTagPattern matches an opening <script> tag. The asset path is located

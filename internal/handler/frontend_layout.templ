@@ -6,6 +6,8 @@ package handler
 import (
 	"fmt"
 
+	"github.com/olegiv/ocms-go/internal/views/utils"
+
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
@@ -95,11 +97,11 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			}
 			{ children... }
 			<!-- HTMX -->
-			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js"></script>
+			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/htmx.min.js") } integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
 			<!-- Alpine.js -->
-			<script nonce={ templ.GetNonce(ctx) } defer src="/static/dist/js/alpine.min.js"></script>
+			<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L" crossorigin="anonymous"></script>
 			<!-- Prism.js syntax highlighting -->
-			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/prism-bundle.min.js"></script>
+			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/prism-bundle.min.js") } integrity="sha384-/HRXpyLsWgi91NKkl3jPRfbRhgj2vlv4f6wwxcmGEe9hKePmXqpOaPf9B1uk1jeL" crossorigin="anonymous"></script>
 			<!-- Image lightbox -->
 			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/lightbox.js"></script>
 			if base.ModuleBodyEndHTML != "" {
