@@ -314,7 +314,11 @@ func ResolveLinkURI(uri string) (nodeID int64, linkURL string, err error) {
 		}
 		return 0, path, nil
 
-	case strings.HasPrefix(uri, "http://"), strings.HasPrefix(uri, "https://"):
+	case isAllowedAbsoluteURI(uri):
+		// Every scheme the oCMS menu validator accepts, not just http(s):
+		// mailto: and tel: links used to fall through to the unsupported-URI
+		// error below and were dropped, although oCMS stores them happily.
+		// TestMenuURISchemesMatchMenuValidator ties the two together.
 		return 0, uri, nil
 
 	case strings.HasPrefix(uri, "route:"):
@@ -329,4 +333,18 @@ func ResolveLinkURI(uri string) (nodeID int64, linkURL string, err error) {
 	}
 
 	return 0, "", fmt.Errorf("unsupported link URI %q", uri)
+}
+
+// isAllowedAbsoluteURI reports whether uri is an absolute URL whose scheme oCMS
+// accepts for a menu item.
+//
+// Matching on the scheme prefix rather than parsing keeps mailto: and tel:
+// working: neither is hierarchical, so url.Parse gives them an empty Host and a
+// scheme-specific opaque part, and a "://" check would reject both.
+func isAllowedAbsoluteURI(uri string) bool {
+	scheme, _, found := strings.Cut(uri, ":")
+	if !found || scheme == "" {
+		return false
+	}
+	return model.IsAllowedMenuURLScheme(scheme)
 }

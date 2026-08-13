@@ -296,7 +296,7 @@ func TestGetImportedItems(t *testing.T) {
 	_ = m.TrackImportedItem(ctx, "test-src2", "media", 100)
 	_ = m.TrackImportedItem(ctx, "test-src2", "media", 200)
 
-	ids, err := m.getImportedItems(ctx, "test-src2", "media")
+	ids, err := m.getImportedItems(ctx, m.ctx.DB, "test-src2", "media")
 	if err != nil {
 		t.Fatalf("getImportedItems: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestGetImportedItems(t *testing.T) {
 
 func TestGetImportedItems_Empty(t *testing.T) {
 	m := testModule(t)
-	ids, err := m.getImportedItems(context.Background(), "nonexistent", "page")
+	ids, err := m.getImportedItems(context.Background(), m.ctx.DB, "nonexistent", "page")
 	if err != nil {
 		t.Fatalf("getImportedItems error: %v", err)
 	}

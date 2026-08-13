@@ -44,7 +44,7 @@ func TestTrackedEntityTypesAreDeletable(t *testing.T) {
 
 	m := New()
 	handled := make(map[string]bool)
-	for _, d := range m.deleters() {
+	for _, d := range m.deleters(nil) {
 		handled[string(d.entityType)] = true
 	}
 
@@ -165,7 +165,7 @@ func pascalCase(s string) string {
 // neither) and it fails too.
 func TestDeleteImportedItemsCoversAllEntityTypes(t *testing.T) {
 	m := New()
-	deleters := m.deleters()
+	deleters := m.deleters(nil)
 
 	if len(deleters) != len(types.AllEntityTypes) {
 		t.Fatalf("deleters() has %d entries, want %d (one per types.AllEntityTypes)",

@@ -647,6 +647,11 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 	// admin can delete rows the goroutine is still using: it keeps its in-memory
 	// user, taxonomy and media IDs, so later stages hit foreign-key failures or
 	// leave only the tail of the import tracked for a future delete.
+	//
+	// This check exists for the error message. The guarantee is in
+	// deleteImportedItems, which re-checks inside the transaction that
+	// serializes against startJob — a read here can always be overtaken by an
+	// import starting a moment later.
 	if job, err := m.latestJob(r.Context(), ctx.SourceName); err != nil {
 		m.ctx.Logger.Error("failed to read import job before delete", "source", ctx.SourceName, "error", err)
 		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_delete"), "error")
@@ -663,6 +668,12 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 	// Delete all imported items for this source
 	deleted, err := m.deleteImportedItems(r.Context(), ctx.SourceName)
 	if err != nil {
+		// An import that started between the check above and the transaction.
+		if errors.Is(err, errImportRunning) {
+			m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_delete_while_running"), "error")
+			http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
+			return
+		}
 		m.ctx.Logger.Error("delete failed", "source", ctx.SourceName, "error", err)
 		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_delete")+": "+err.Error(), "error")
 		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
@@ -767,8 +778,12 @@ func (m *Module) getImportedCounts(ctx context.Context, source string) (map[stri
 }
 
 // getImportedItems returns all imported item IDs of a given type for a source.
-func (m *Module) getImportedItems(ctx context.Context, source, entityType string) ([]int64, error) {
-	rows, err := m.ctx.DB.QueryContext(ctx, `
+//
+// db is a store.DBTX so the delete path can read through its own transaction:
+// reading on another connection would see the pre-transaction tracking rows and
+// defeat the point of doing the delete atomically.
+func (m *Module) getImportedItems(ctx context.Context, db store.DBTX, source, entityType string) ([]int64, error) {
+	rows, err := db.QueryContext(ctx, `
 		SELECT entity_id FROM migrator_imported_items
 		WHERE source = ? AND entity_type = ?
 	`, source, entityType)
@@ -796,10 +811,14 @@ func (m *Module) getImportedItems(ctx context.Context, source, entityType string
 //
 // Exactly one of del and cascadesFrom is set: cascadesFrom marks a type whose
 // rows are removed by a database cascade rather than by an explicit delete.
+//
+// references, when set, counts what still points at the row. A non-zero count
+// means the row outlived the import and must be kept — see referenceCounters.
 type entityDeleter struct {
 	entityType   types.EntityType
 	del          func(ctx context.Context, q *store.Queries, id int64) error
 	cascadesFrom types.EntityType
+	references   func(ctx context.Context, q *store.Queries, id int64) (int64, error)
 }
 
 // deleters returns every trackable entity type in dependency-safe deletion
@@ -813,9 +832,21 @@ type entityDeleter struct {
 //     their own — they vanish with their page
 //   - categories.parent_id is ON DELETE SET NULL, so category order is free
 //
+// Tags and categories additionally declare a reference count. They are the only
+// entity types an *original* oCMS page can start using after the import: by the
+// time their turn comes every imported page is already deleted, so any join row
+// left behind belongs to a page this import does not own. Deleting the row then
+// cascades that association away — page_tags.tag_id and page_categories.
+// category_id are both ON DELETE CASCADE — which would break the module's
+// documented promise that original content is untouched.
+//
 // TestDeleteImportedItemsCoversAllEntityTypes fails if a type in
 // types.AllEntityTypes has neither a deleter nor a cascade source.
-func (m *Module) deleters() []entityDeleter {
+//
+// collectMediaUUID receives the UUID of every media row about to be removed, so
+// its files can be deleted after the transaction commits rather than during it.
+// It may be nil.
+func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 	deletePage := func(ctx context.Context, q *store.Queries, id int64) error {
 		if err := q.ClearPageTags(ctx, id); err != nil {
 			return err
@@ -824,6 +855,18 @@ func (m *Module) deleters() []entityDeleter {
 			return err
 		}
 		return q.DeletePage(ctx, id)
+	}
+
+	deleteMedia := func(ctx context.Context, q *store.Queries, id int64) error {
+		if media, err := q.GetMediaByID(ctx, id); err == nil {
+			if collectMediaUUID != nil {
+				collectMediaUUID(media.Uuid)
+			}
+			if err := q.DeleteMediaVariants(ctx, id); err != nil {
+				m.ctx.Logger.Warn("failed to delete media variants", "id", id, "error", err)
+			}
+		}
+		return q.DeleteMedia(ctx, id)
 	}
 
 	return []entityDeleter{
@@ -838,26 +881,19 @@ func (m *Module) deleters() []entityDeleter {
 		{entityType: types.EntityPage, del: deletePage},
 		{entityType: types.EntityTag, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteTag(ctx, id)
+		}, references: func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
+			return q.CountPagesForTag(ctx, id)
 		}},
 		{entityType: types.EntityCategory, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteCategory(ctx, id)
+		}, references: func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
+			return q.CountPagesByCategory(ctx, id)
 		}},
-		{entityType: types.EntityMedia, del: m.deleteImportedMedia},
+		{entityType: types.EntityMedia, del: deleteMedia},
 		{entityType: types.EntityUser, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteUser(ctx, id)
 		}},
 	}
-}
-
-// deleteImportedMedia removes one media row, its variants and its files on disk.
-func (m *Module) deleteImportedMedia(ctx context.Context, q *store.Queries, id int64) error {
-	if media, err := q.GetMediaByID(ctx, id); err == nil {
-		m.deleteMediaFiles(media.Uuid)
-		if err := q.DeleteMediaVariants(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete media variants", "id", id, "error", err)
-		}
-	}
-	return q.DeleteMedia(ctx, id)
 }
 
 // deleteImportedItems deletes all content imported from a source.
@@ -865,12 +901,49 @@ func (m *Module) deleteImportedMedia(ctx context.Context, q *store.Queries, id i
 // The returned counts are "tracked items of this type that were removed". A
 // cascade can delete a child before its own turn comes — a nested menu item, for
 // instance — and that still counts, which is what an admin wants to read.
+//
+// The whole delete runs in one transaction, and that is what serializes it
+// against a starting import. oCMS opens SQLite with _txlock=immediate, so the
+// write lock is taken at BEGIN: this transaction and startJob's cannot
+// interleave, which is the only thing that makes the running-job check below
+// mean anything. handleDeleteImported's own check is a nicety for the error
+// message — on its own it is a read that startJob can slip past, after which
+// the delete would strip rows the importer was still using and then clear the
+// tracking rows of the job that had just started, leaving its content with no
+// undo path.
+//
+// Holding the write lock for the duration is acceptable here in a way it is not
+// for an import: a delete is bounded by what one import created and is a rare,
+// deliberate admin action, whereas an import can run for hours.
 func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[string]int, error) {
-	queries := store.New(m.ctx.DB)
+	tx, err := m.ctx.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin delete transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// A stale row is not a live import — the same rule ImportJob.IsStale
+	// applies — so an abandoned job must not block deletion forever.
+	var running int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM migrator_import_jobs
+		WHERE source = ? AND status = ? AND updated_at >= ?`,
+		source, string(JobRunning), time.Now().Add(-staleJobThreshold)).Scan(&running); err != nil {
+		return nil, fmt.Errorf("failed to check for a running import: %w", err)
+	}
+	if running > 0 {
+		return nil, errImportRunning
+	}
+
+	// Files are removed after the commit: os.RemoveAll cannot be rolled back,
+	// so deleting during the transaction would leave media rows pointing at
+	// missing files if anything later forced a rollback.
+	var mediaUUIDs []string
+	queries := store.New(m.ctx.DB).WithTx(tx)
 	deleted := make(map[string]int)
 
-	for _, d := range m.deleters() {
-		ids, err := m.getImportedItems(ctx, source, string(d.entityType))
+	for _, d := range m.deleters(func(uuid string) { mediaUUIDs = append(mediaUUIDs, uuid) }) {
+		ids, err := m.getImportedItems(ctx, tx, source, string(d.entityType))
 		if err != nil {
 			return nil, err
 		}
@@ -880,6 +953,9 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 			continue
 		}
 		for _, id := range ids {
+			if m.preserveShared(ctx, queries, d, id) {
+				continue
+			}
 			if err := d.del(ctx, queries, id); err != nil {
 				m.ctx.Logger.Warn("failed to delete imported item",
 					"type", string(d.entityType), "id", id, "error", err)
@@ -890,11 +966,45 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 	}
 
 	// Clear tracking table for this source
-	if _, err := m.ctx.DB.ExecContext(ctx, `DELETE FROM migrator_imported_items WHERE source = ?`, source); err != nil {
-		return deleted, err
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM migrator_imported_items WHERE source = ?`, source); err != nil {
+		return nil, fmt.Errorf("failed to clear import tracking rows: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit delete: %w", err)
+	}
+
+	for _, uuid := range mediaUUIDs {
+		m.deleteMediaFiles(uuid)
 	}
 
 	return deleted, nil
+}
+
+// preserveShared reports whether a row must be kept because content this import
+// does not own still points at it.
+//
+// A count failure preserves too. The two outcomes are not symmetric: keeping an
+// imported tag costs the operator one row they can delete by hand, while
+// removing a shared one silently strips the association from an original page
+// and cannot be undone.
+func (m *Module) preserveShared(ctx context.Context, queries *store.Queries, d entityDeleter, id int64) bool {
+	if d.references == nil {
+		return false
+	}
+	refs, err := d.references(ctx, queries, id)
+	if err != nil {
+		m.ctx.Logger.Warn("could not count references before deleting imported item; keeping it",
+			"type", string(d.entityType), "id", id, "error", err)
+		return true
+	}
+	if refs == 0 {
+		return false
+	}
+	m.ctx.Logger.Info("keeping imported item still used by content this import did not create",
+		"type", string(d.entityType), "id", id, "referencing_pages", refs)
+	return true
 }
 
 // deleteMediaFiles removes media files from disk.

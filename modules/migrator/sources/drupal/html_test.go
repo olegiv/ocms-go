@@ -3,7 +3,11 @@
 
 package drupal
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/olegiv/ocms-go/internal/model"
+)
 
 // TestRewriteAbsoluteDrupalURLs covers body HTML that references files by their
 // full old-site URL rather than by path.
@@ -51,6 +55,65 @@ func TestRewriteAbsoluteDrupalURLs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := rewritePrefixedURLs(tc.body, "/sites/default/files/", refs); got != tc.want {
 				t.Errorf("rewritePrefixedURLs()\n got: %s\nwant: %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMenuURISchemesMatchMenuValidator ties the Drupal menu-link resolver to the
+// schemes oCMS itself accepts for a menu item.
+//
+// Bug state: the resolver matched only "http://" and "https://", so a Drupal
+// menu containing a mailto: or tel: link hit the unsupported-URI branch and
+// importMenu dropped the item — silent data loss with no destination-side
+// reason for it, since internal/handler/menus.go stores both.
+//
+// Driving the loop from model.AllowedMenuURLSchemes rather than a list of its
+// own is the point: adding a scheme to the validator without teaching the
+// importer about it fails here.
+func TestMenuURISchemesMatchMenuValidator(t *testing.T) {
+	samples := map[string]string{
+		"http":   "http://example.com/page",
+		"https":  "https://example.com/page",
+		"mailto": "mailto:hello@example.com",
+		"tel":    "tel:+15551234567",
+	}
+
+	for _, scheme := range model.AllowedMenuURLSchemes {
+		uri, ok := samples[scheme]
+		if !ok {
+			t.Fatalf("model.AllowedMenuURLSchemes gained %q with no sample here; "+
+				"add one so the importer is actually exercised for it", scheme)
+		}
+		t.Run(scheme, func(t *testing.T) {
+			nodeID, linkURL, err := ResolveLinkURI(uri)
+			if err != nil {
+				t.Fatalf("ResolveLinkURI(%q) = error %v, want it accepted: "+
+					"oCMS stores this scheme, so dropping the menu item loses data", uri, err)
+			}
+			if nodeID != 0 {
+				t.Errorf("ResolveLinkURI(%q) nodeID = %d, want 0", uri, nodeID)
+			}
+			if linkURL != uri {
+				t.Errorf("ResolveLinkURI(%q) url = %q, want it passed through unchanged", uri, linkURL)
+			}
+		})
+	}
+}
+
+// TestResolveLinkURIRejectsForeignSchemes keeps the widened scheme match from
+// turning into "anything with a colon is an external link".
+func TestResolveLinkURIRejectsForeignSchemes(t *testing.T) {
+	for _, uri := range []string{
+		"javascript:alert(1)",
+		"data:text/html;base64,PHNjcmlwdD4=",
+		"route:<front>",
+		"ftp://example.com/file",
+		"file:///etc/passwd",
+	} {
+		t.Run(uri, func(t *testing.T) {
+			if _, _, err := ResolveLinkURI(uri); err == nil {
+				t.Errorf("ResolveLinkURI(%q) = nil error, want it rejected", uri)
 			}
 		})
 	}

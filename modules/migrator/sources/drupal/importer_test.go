@@ -482,19 +482,89 @@ func TestImportNodesWritesAliasesForOldURLs(t *testing.T) {
 		t.Fatalf("importNodes() error = %v", err)
 	}
 
-	if st.result.AliasesImported != 1 {
-		t.Errorf("AliasesImported = %d, want 1", st.result.AliasesImported)
+	// Two aliases: the Drupal path alias, and the canonical node path.
+	if st.result.AliasesImported != 2 {
+		t.Errorf("AliasesImported = %d, want 2", st.result.AliasesImported)
 	}
-	if tracker.countOf(types.EntityAlias) != 1 {
-		t.Errorf("tracked %d aliases, want 1", tracker.countOf(types.EntityAlias))
+	if tracker.countOf(types.EntityAlias) != 2 {
+		t.Errorf("tracked %d aliases, want 2", tracker.countOf(types.EntityAlias))
 	}
 
 	aliases, err := queries.GetAliasesForPage(ctx, st.nodes[1])
 	if err != nil {
 		t.Fatalf("failed to read page aliases: %v", err)
 	}
-	if len(aliases) != 1 || aliases[0].Alias != "company/about" {
+	got := make(map[string]bool, len(aliases))
+	for _, a := range aliases {
+		got[a.Alias] = true
+	}
+	if !got["company/about"] {
 		t.Errorf("aliases = %v, want the multi-segment Drupal path", aliases)
+	}
+	if !got["node/1"] {
+		t.Errorf("aliases = %v, want the canonical Drupal node path: bodies and menus "+
+			"link to /node/N, and oCMS has no such route", aliases)
+	}
+}
+
+// TestImportNodesAliasesCanonicalNodePath covers a site with no path aliases at
+// all. Drupal bodies still link to /node/N, so those links 404 after migration
+// unless the canonical path is registered as an alias in its own right.
+func TestImportNodesAliasesCanonicalNodePath(t *testing.T) {
+	reader := &fakeReader{
+		nodes: []Node{{NID: 42, Type: "page", Title: "About", Status: 1}},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	ctx := context.Background()
+
+	if err := (&Source{}).importNodes(ctx, st); err != nil {
+		t.Fatalf("importNodes() error = %v", err)
+	}
+
+	aliases, err := queries.GetAliasesForPage(ctx, st.nodes[42])
+	if err != nil {
+		t.Fatalf("failed to read page aliases: %v", err)
+	}
+	if len(aliases) != 1 || aliases[0].Alias != "node/42" {
+		t.Errorf("aliases = %v, want exactly node/42", aliases)
+	}
+}
+
+// TestImportNodesDoesNotAliasSkippedPages keeps the canonical-path pass under
+// the same rule as the Drupal alias pass: never write an alias onto a page this
+// import did not create, because aliases are only removed by cascade from a
+// deleted page and would outlive the import.
+func TestImportNodesDoesNotAliasSkippedPages(t *testing.T) {
+	reader := &fakeReader{
+		nodes: []Node{{NID: 7, Type: "page", Title: "Duplicate", Status: 1}},
+	}
+	st, _, queries := newTestState(t, reader,
+		types.ImportOptions{ImportPages: true, SkipExisting: true})
+	ctx := context.Background()
+
+	// Pre-create a page owning the slug the import would generate.
+	if _, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Duplicate", Slug: "duplicate", Body: "", Status: "published",
+		AuthorID: st.authorID, LanguageCode: st.defaultLang, PageType: "page",
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to pre-create page: %v", err)
+	}
+
+	if err := (&Source{}).importNodes(ctx, st); err != nil {
+		t.Fatalf("importNodes() error = %v", err)
+	}
+
+	pageID, ok := st.nodes[7]
+	if !ok {
+		t.Fatal("the skipped node should still be mapped, for menu resolution")
+	}
+	aliases, err := queries.GetAliasesForPage(ctx, pageID)
+	if err != nil {
+		t.Fatalf("failed to read page aliases: %v", err)
+	}
+	if len(aliases) != 0 {
+		t.Errorf("aliases = %v, want none on a page the import did not create", aliases)
 	}
 }
 
@@ -521,8 +591,18 @@ func TestImportNodesSkipsRedundantAlias(t *testing.T) {
 	if page.Slug != "about" {
 		t.Fatalf("Slug = %q, want %q", page.Slug, "about")
 	}
-	if st.result.AliasesImported != 0 {
-		t.Errorf("AliasesImported = %d, want 0 — the alias equals the slug", st.result.AliasesImported)
+	// Only the canonical node path: the Drupal alias equals the slug, so
+	// writing it again would collide with the unique alias index.
+	if st.result.AliasesImported != 1 {
+		t.Errorf("AliasesImported = %d, want 1 — the redundant alias is skipped, "+
+			"the canonical node path is not", st.result.AliasesImported)
+	}
+	aliases, err := queries.GetAliasesForPage(ctx, st.nodes[1])
+	if err != nil {
+		t.Fatalf("failed to read page aliases: %v", err)
+	}
+	if len(aliases) != 1 || aliases[0].Alias != "node/1" {
+		t.Errorf("aliases = %v, want only node/1", aliases)
 	}
 }
 
@@ -987,5 +1067,70 @@ func TestExpectedOutcomesAreNoticesNotErrors(t *testing.T) {
 	}
 	if !namesBody {
 		t.Errorf("notices should name %s: %v", tableNodeBody, result.Notices)
+	}
+}
+
+// TestImportMenusKeepsHierarchyThroughSkippedParents covers a rerun, or an
+// import into a menu an administrator had already populated, where the parent
+// link is already present but the child is not.
+//
+// Bug state: the dedup pass recorded only that a matching item existed, not its
+// ID, so the skipped parent never entered itemByUUID. linkMenuParents then
+// could not resolve the child's parentUUID and left it at the menu root,
+// flattening the imported navigation.
+func TestImportMenusKeepsHierarchyThroughSkippedParents(t *testing.T) {
+	reader := &fakeReader{
+		schema: Schema{HasMenuLinks: true},
+		menuLinks: []MenuLink{
+			{ID: 1, UUID: "parent", Title: "Docs", MenuName: "main", LinkURI: "internal:/docs", Enabled: 1},
+			{ID: 2, UUID: "child", Title: "Guide", MenuName: "main", LinkURI: "internal:/docs/guide",
+				Parent: sql.NullString{String: "menu_link_content:parent", Valid: true}, Enabled: 1},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	ctx := context.Background()
+
+	menu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Main", Slug: "main", LanguageCode: st.defaultLang,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("failed to create existing menu: %v", err)
+	}
+	// The parent already exists, matching on title and target; the child does not.
+	parent, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: menu.ID, Title: "Docs", Url: sql.NullString{String: "/docs", Valid: true},
+		Target:   sql.NullString{String: "_self", Valid: true},
+		IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("failed to create existing menu item: %v", err)
+	}
+
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+
+	if st.result.MenuItemsSkipped != 1 {
+		t.Errorf("MenuItemsSkipped = %d, want 1 (the pre-existing parent)", st.result.MenuItemsSkipped)
+	}
+
+	items, err := queries.ListMenuItems(ctx, menu.ID)
+	if err != nil {
+		t.Fatalf("failed to list menu items: %v", err)
+	}
+	var child *store.MenuItem
+	for i := range items {
+		if items[i].Title == "Guide" {
+			child = &items[i]
+		}
+	}
+	if child == nil {
+		t.Fatal("the child link was not imported at all")
+	}
+	if !child.ParentID.Valid || child.ParentID.Int64 != parent.ID {
+		t.Errorf("child ParentID = %v, want %d — a link skipped as already present "+
+			"must still be resolvable as a parent, or the hierarchy is flattened",
+			child.ParentID, parent.ID)
 	}
 }

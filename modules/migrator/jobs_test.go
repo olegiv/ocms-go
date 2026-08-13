@@ -888,3 +888,179 @@ func repoRoot(t *testing.T) string {
 	t.Fatal("could not locate the repository root")
 	return ""
 }
+
+// TestDeleteImportedItemsRefusesWhileImportRunning pins the guarantee at the
+// layer that can actually hold it.
+//
+// handleDeleteImported checks for a running job too, but that is a bare read:
+// startJob can insert its row a moment later, and the delete would then strip
+// content the importer is still using and clear the tracking rows of the job
+// that had just begun, leaving its content with no undo path. The check that
+// matters lives inside deleteImportedItems' own transaction, which SQLite's
+// immediate write lock serializes against startJob's.
+//
+// Bug state: drop the in-transaction check and this deletes the tracked page
+// while the job row says the source is importing.
+func TestDeleteImportedItemsRefusesWhileImportRunning(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	queries := store.New(m.ctx.DB)
+	now := time.Now()
+
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+	user, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "race@example.com", PasswordHash: "x", Role: "public",
+		Name: "Race", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Imported", Slug: "imported-race", Status: "published",
+		AuthorID: user.ID, LanguageCode: lang.Code, PageType: "page",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create page: %v", err)
+	}
+	if err := m.TrackImportedItem(ctx, "drupal", string(types.EntityPage), page.ID); err != nil {
+		t.Fatalf("failed to track page: %v", err)
+	}
+
+	// An import claims the source, exactly as a request racing this one would.
+	if _, err := m.startJob(ctx, "drupal", "admin@example.com", user.ID, ImportOptions{}); err != nil {
+		t.Fatalf("startJob() error = %v", err)
+	}
+
+	if _, err := m.deleteImportedItems(ctx, "drupal"); !errors.Is(err, errImportRunning) {
+		t.Fatalf("deleteImportedItems() error = %v, want errImportRunning", err)
+	}
+
+	if _, err := queries.GetPageByID(ctx, page.ID); err != nil {
+		t.Errorf("the imported page was deleted while its import was running: %v", err)
+	}
+	ids, err := m.getImportedItems(ctx, m.ctx.DB, "drupal", string(types.EntityPage))
+	if err != nil {
+		t.Fatalf("failed to read tracking rows: %v", err)
+	}
+	if len(ids) != 1 {
+		t.Errorf("tracking rows = %d, want 1 — a refused delete must not clear them", len(ids))
+	}
+}
+
+// TestDeleteImportedItemsKeepsTaxonomyUsedByOriginalPages covers an imported
+// tag or category that an administrator later assigns to a page of their own.
+//
+// page_tags.tag_id and page_categories.category_id are both ON DELETE CASCADE,
+// so removing the imported row silently strips that association from the
+// original page — breaking the module's documented promise that original oCMS
+// content is not touched, and with no way to undo it.
+//
+// By the time tags and categories are deleted every imported page is already
+// gone, so any join row still present belongs to a page this import does not
+// own. That is what makes the reference count a reliable test for "shared".
+func TestDeleteImportedItemsKeepsTaxonomyUsedByOriginalPages(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	queries := store.New(m.ctx.DB)
+	now := time.Now()
+
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "owner@example.com", PasswordHash: "x", Role: "admin",
+		Name: "Owner", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	// An original page, never imported and never tracked.
+	original, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Original", Slug: "original", Status: "published",
+		AuthorID: author.ID, LanguageCode: lang.Code, PageType: "page",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create original page: %v", err)
+	}
+
+	sharedTag, err := queries.CreateTag(ctx, store.CreateTagParams{
+		Name: "Shared", Slug: "shared", LanguageCode: lang.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create tag: %v", err)
+	}
+	lonelyTag, err := queries.CreateTag(ctx, store.CreateTagParams{
+		Name: "Lonely", Slug: "lonely", LanguageCode: lang.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create tag: %v", err)
+	}
+	sharedCat, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
+		Name: "Shared", Slug: "shared-cat", LanguageCode: lang.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create category: %v", err)
+	}
+
+	// The administrator assigns the imported taxonomy to their own page.
+	if err := queries.AddTagToPage(ctx, store.AddTagToPageParams{
+		PageID: original.ID, TagID: sharedTag.ID,
+	}); err != nil {
+		t.Fatalf("failed to link tag: %v", err)
+	}
+	if err := queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
+		PageID: original.ID, CategoryID: sharedCat.ID,
+	}); err != nil {
+		t.Fatalf("failed to link category: %v", err)
+	}
+
+	for _, tracked := range []struct {
+		entityType types.EntityType
+		id         int64
+	}{
+		{types.EntityTag, sharedTag.ID},
+		{types.EntityTag, lonelyTag.ID},
+		{types.EntityCategory, sharedCat.ID},
+	} {
+		if err := m.TrackImportedItem(ctx, "drupal", string(tracked.entityType), tracked.id); err != nil {
+			t.Fatalf("failed to track %s: %v", tracked.entityType, err)
+		}
+	}
+
+	if _, err := m.deleteImportedItems(ctx, "drupal"); err != nil {
+		t.Fatalf("deleteImportedItems() error = %v", err)
+	}
+
+	if _, err := queries.GetTagByID(ctx, sharedTag.ID); err != nil {
+		t.Errorf("a tag an original page still uses was deleted: %v", err)
+	}
+	if _, err := queries.GetCategoryByID(ctx, sharedCat.ID); err != nil {
+		t.Errorf("a category an original page still uses was deleted: %v", err)
+	}
+	if _, err := queries.GetTagByID(ctx, lonelyTag.ID); err == nil {
+		t.Error("an unreferenced imported tag survived; only shared rows should be kept")
+	}
+
+	tags, err := queries.GetTagsForPage(ctx, original.ID)
+	if err != nil {
+		t.Fatalf("failed to read original page tags: %v", err)
+	}
+	if len(tags) != 1 {
+		t.Errorf("original page has %d tags, want 1 — deleting the import must not "+
+			"cascade its associations away", len(tags))
+	}
+	cats, err := queries.GetCategoriesForPage(ctx, original.ID)
+	if err != nil {
+		t.Fatalf("failed to read original page categories: %v", err)
+	}
+	if len(cats) != 1 {
+		t.Errorf("original page has %d categories, want 1", len(cats))
+	}
+}

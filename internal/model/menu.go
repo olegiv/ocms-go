@@ -5,6 +5,7 @@ package model
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -13,6 +14,25 @@ const (
 	MenuMain   = "main"
 	MenuFooter = "footer"
 )
+
+// AllowedMenuURLSchemes are the absolute-URL schemes a menu item may point at.
+//
+// This is the single list: the admin form validator accepts exactly these, and
+// any importer producing menu items must too. Keeping a second copy is what let
+// the Drupal source reject mailto: and tel: links as unsupported and drop those
+// items, even though oCMS stores them happily.
+var AllowedMenuURLSchemes = []string{"http", "https", "mailto", "tel"}
+
+// IsAllowedMenuURLScheme reports whether an absolute URL's scheme may be used
+// as a menu item target. The scheme is compared case-insensitively.
+func IsAllowedMenuURLScheme(scheme string) bool {
+	for _, allowed := range AllowedMenuURLSchemes {
+		if strings.EqualFold(scheme, allowed) {
+			return true
+		}
+	}
+	return false
+}
 
 // Menu target values
 const (

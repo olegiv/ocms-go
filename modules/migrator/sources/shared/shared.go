@@ -135,19 +135,42 @@ const maxSlugSuffix = 100
 // MakeUniqueSlug returns baseSlug, or baseSlug with a -2, -3, … suffix when the
 // slug is already taken. After maxSlugSuffix attempts it falls back to a base36
 // nanosecond suffix, which always terminates.
+//
+// "Taken" means taken by a page slug *or* by an existing page alias. Checking
+// only slugs let an imported page claim a value that was already some other
+// page's alias: the frontend resolves a slug first and only falls back to
+// GetPublishedPageByAlias, so the old URL silently began serving the imported
+// page instead of its real destination.
 func MakeUniqueSlug(ctx context.Context, queries *store.Queries, baseSlug string) string {
-	if _, err := queries.GetPageBySlug(ctx, baseSlug); err != nil {
+	if slugIsFree(ctx, queries, baseSlug) {
 		return baseSlug
 	}
 
 	for i := 2; i <= maxSlugSuffix; i++ {
 		slug := baseSlug + "-" + strconv.Itoa(i)
-		if _, err := queries.GetPageBySlug(ctx, slug); err != nil {
+		if slugIsFree(ctx, queries, slug) {
 			return slug
 		}
 	}
 
 	return baseSlug + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+}
+
+// slugIsFree reports whether a slug is claimed by neither a page nor an alias.
+//
+// A lookup failure counts as "taken" rather than "free". The previous form read
+// any error — including a transient SQLite BUSY — as "no such page" and handed
+// the caller a slug that was already in use, turning a momentary database blip
+// into a permanently shadowed URL. Treating it as taken costs only a suffix.
+func slugIsFree(ctx context.Context, queries *store.Queries, slug string) bool {
+	exists, err := queries.SlugOrAliasExists(ctx, store.SlugOrAliasExistsParams{
+		Slug:  slug,
+		Alias: slug,
+	})
+	if err != nil {
+		return false
+	}
+	return exists == 0
 }
 
 // ReplaceURLs rewrites every old media path in body to its new oCMS URL.

@@ -5,14 +5,13 @@ package elefant
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
-
-	_ "github.com/mattn/go-sqlite3"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
 func TestGetMimeTypeFromExt(t *testing.T) {
@@ -391,55 +390,21 @@ func TestConfigFields_FilesPath(t *testing.T) {
 }
 
 func TestMakeUniqueSlug(t *testing.T) {
-	// Create test database with pages table
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	// Create full pages table matching the schema
-	_, err = db.Exec(`
-		CREATE TABLE pages (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL DEFAULT '',
-			slug TEXT NOT NULL UNIQUE,
-			body TEXT NOT NULL DEFAULT '',
-			status TEXT NOT NULL DEFAULT 'draft',
-			author_id INTEGER NOT NULL DEFAULT 1,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			published_at DATETIME,
-			featured_image_id INTEGER,
-			meta_title TEXT NOT NULL DEFAULT '',
-			meta_description TEXT NOT NULL DEFAULT '',
-			meta_keywords TEXT NOT NULL DEFAULT '',
-			og_image_id INTEGER,
-			no_index INTEGER NOT NULL DEFAULT 0,
-			no_follow INTEGER NOT NULL DEFAULT 0,
-			canonical_url TEXT NOT NULL DEFAULT '',
-			scheduled_at DATETIME,
-			language_code TEXT NOT NULL DEFAULT '',
-			hide_featured_image INTEGER NOT NULL DEFAULT 0,
-			page_type TEXT NOT NULL DEFAULT 'page',
-			exclude_from_lists INTEGER NOT NULL DEFAULT 0,
-			summary TEXT NOT NULL DEFAULT '',
-			video_url TEXT NOT NULL DEFAULT '',
-			video_title TEXT NOT NULL DEFAULT ''
-		)
-	`)
-	if err != nil {
-		t.Fatalf("failed to create pages table: %v", err)
-	}
+	// The real schema, not a hand-rolled pages table: MakeUniqueSlug now also
+	// probes page_aliases, and a fixture missing that table made every candidate
+	// look taken and every slug fall through to the timestamp suffix.
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
 
 	queries := store.New(db)
 	ctx := context.Background()
 
 	tests := []struct {
-		name          string
-		baseSlug      string
-		existingSlugs []string
-		expected      string
+		name            string
+		baseSlug        string
+		existingSlugs   []string
+		existingAliases []string
+		expected        string
 	}{
 		{
 			name:          "no existing slug",
@@ -465,18 +430,63 @@ func TestMakeUniqueSlug(t *testing.T) {
 			existingSlugs: []string{"gap", "gap-3"},
 			expected:      "gap-2",
 		},
+		{
+			// An imported page must not claim a value that is already some
+			// other page's alias: the frontend resolves slugs first and only
+			// then falls back to the alias table, so the old URL would
+			// silently start serving the imported page instead.
+			name:            "slug taken by an existing alias",
+			baseSlug:        "shadowed",
+			existingSlugs:   []string{"other"},
+			existingAliases: []string{"shadowed"},
+			expected:        "shadowed-2",
+		},
+		{
+			name:            "suffix also taken by an alias",
+			baseSlug:        "clash",
+			existingSlugs:   []string{"clash"},
+			existingAliases: []string{"clash-2"},
+			expected:        "clash-3",
+		},
+	}
+
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email:        "slug-test@example.com",
+		PasswordHash: "x",
+		Role:         "admin",
+		Name:         "Slug Test",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("failed to create author: %v", err)
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clean up pages table
-			_, _ = db.Exec("DELETE FROM pages")
+			if _, err := db.Exec("DELETE FROM page_aliases"); err != nil {
+				t.Fatalf("failed to clear page_aliases: %v", err)
+			}
+			if _, err := db.Exec("DELETE FROM pages"); err != nil {
+				t.Fatalf("failed to clear pages: %v", err)
+			}
 
-			// Insert existing pages
 			for _, slug := range tt.existingSlugs {
-				_, err := db.Exec("INSERT INTO pages (slug, title) VALUES (?, ?)", slug, "Test")
-				if err != nil {
+				if _, err := db.Exec(
+					`INSERT INTO pages (slug, title, author_id, language_code) VALUES (?, ?, ?, 'en')`,
+					slug, "Test", author.ID); err != nil {
 					t.Fatalf("failed to insert existing page: %v", err)
+				}
+			}
+			for _, alias := range tt.existingAliases {
+				var pageID int64
+				if err := db.QueryRow(`SELECT id FROM pages LIMIT 1`).Scan(&pageID); err != nil {
+					t.Fatalf("an alias case needs at least one page: %v", err)
+				}
+				if _, err := db.Exec(
+					`INSERT INTO page_aliases (page_id, alias, created_at) VALUES (?, ?, ?)`,
+					pageID, alias, time.Now()); err != nil {
+					t.Fatalf("failed to insert existing alias: %v", err)
 				}
 			}
 

@@ -787,12 +787,10 @@ func validateMenuItemURL(rawURL string) error {
 	}
 
 	if parsed.IsAbs() {
-		switch strings.ToLower(parsed.Scheme) {
-		case "http", "https", "mailto", "tel":
+		if model.IsAllowedMenuURLScheme(parsed.Scheme) {
 			return nil
-		default:
-			return errors.New("invalid URL scheme")
 		}
+		return errors.New("invalid URL scheme")
 	}
 
 	if strings.HasPrefix(rawURL, "/") || strings.HasPrefix(rawURL, "#") || strings.HasPrefix(rawURL, "?") {

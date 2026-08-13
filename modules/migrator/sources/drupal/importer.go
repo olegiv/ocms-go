@@ -1201,8 +1201,9 @@ func (s *Source) linkNodeTerms(ctx context.Context, st *importState, n Node, pag
 func (s *Source) importAliases(ctx context.Context, st *importState, now time.Time) {
 	aliases, err := st.reader.GetPathAliases(ctx)
 	if err != nil {
+		// Reported, not fatal: the canonical node paths below are worth writing
+		// even when the alias table could not be read.
 		st.result.AddError("failed to read path aliases: %v", err)
-		return
 	}
 
 	for _, a := range aliases {
@@ -1218,37 +1219,72 @@ func (s *Source) importAliases(ctx context.Context, st *importState, now time.Ti
 		if !st.createdNodes[nid] {
 			continue
 		}
-
-		alias := strings.Trim(a.Alias, "/")
-		if alias == "" || !util.IsValidAlias(alias) {
-			continue
-		}
-
-		page, err := st.queries.GetPageByID(ctx, pageID)
-		if err == nil && page.Slug == alias {
-			continue
-		}
-
-		if _, err := st.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
-			PageID:    pageID,
-			Alias:     alias,
-			CreatedAt: now,
-		}); err != nil {
-			// A duplicate alias is expected when two Drupal nodes shared one
-			// path over time, and is not worth failing the import over. Any
-			// other failure is: with menus disabled this is the last step, so
-			// a database problem here could otherwise lose every legacy URL
-			// while the job still reported "completed".
-			if isUniqueConstraintErr(err) {
-				slog.Warn("duplicate page alias skipped", "page_id", pageID, "alias", alias)
-			} else {
-				st.result.AddError("failed to create alias %q: %v", alias, err)
-			}
-			continue
-		}
-		st.track(ctx, types.EntityAlias, pageID)
-		st.result.AliasesImported++
+		s.createPageAlias(ctx, st, pageID, strings.Trim(a.Alias, "/"), now)
 	}
+
+	s.importNodePathAliases(ctx, st, now)
+}
+
+// importNodePathAliases gives every page this run created an alias for its
+// Drupal canonical path, "node/<nid>".
+//
+// Drupal bodies routinely link to /node/42 rather than to an alias, and oCMS has
+// no /node/{nid} route, so those links became 404s on every migrated site.
+// Registering the canonical path as an alias fixes them wherever they appear —
+// page bodies, menus, other sites' inbound links and bookmarks — which
+// rewriting body HTML would not. renderNotFound resolves an arbitrary
+// multi-segment path through GetPublishedPageByAlias and 301s to the real slug.
+func (s *Source) importNodePathAliases(ctx context.Context, st *importState, now time.Time) {
+	nids := make([]int64, 0, len(st.createdNodes))
+	for nid := range st.createdNodes {
+		nids = append(nids, nid)
+	}
+	// Map order is random; sorting keeps the alias-creation order, and so the
+	// reported counts on a partial failure, reproducible.
+	sort.Slice(nids, func(i, j int) bool { return nids[i] < nids[j] })
+
+	for _, nid := range nids {
+		pageID, ok := st.nodes[nid]
+		if !ok {
+			continue
+		}
+		s.createPageAlias(ctx, st, pageID, fmt.Sprintf("node/%d", nid), now)
+	}
+}
+
+// createPageAlias writes one alias row, skipping the cases that are expected
+// rather than failures.
+func (s *Source) createPageAlias(ctx context.Context, st *importState, pageID int64, alias string, now time.Time) {
+	if alias == "" || !util.IsValidAlias(alias) {
+		return
+	}
+
+	// An alias equal to the page's own slug would be a redundant row that also
+	// collides with the globally-unique alias index.
+	page, err := st.queries.GetPageByID(ctx, pageID)
+	if err == nil && page.Slug == alias {
+		return
+	}
+
+	if _, err := st.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+		PageID:    pageID,
+		Alias:     alias,
+		CreatedAt: now,
+	}); err != nil {
+		// A duplicate alias is expected when two Drupal nodes shared one path
+		// over time, and is not worth failing the import over. Any other
+		// failure is: with menus disabled this is the last step, so a database
+		// problem here could otherwise lose every legacy URL while the job
+		// still reported "completed".
+		if isUniqueConstraintErr(err) {
+			slog.Warn("duplicate page alias skipped", "page_id", pageID, "alias", alias)
+		} else {
+			st.result.AddError("failed to create alias %q: %v", alias, err)
+		}
+		return
+	}
+	st.track(ctx, types.EntityAlias, pageID)
+	st.result.AliasesImported++
 }
 
 // isUniqueConstraintErr reports whether err is SQLite's uniqueness violation,
@@ -1362,7 +1398,11 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 	// Keyed on title AND target: Drupal menus legitimately repeat labels like
 	// "Home" or "Learn more" pointing at different pages, so matching on the
 	// title alone silently dropped distinct entries.
-	existingItems := make(map[string]bool)
+	//
+	// The value is the existing item's ID, not just presence: a skipped link
+	// still has to enter itemByUUID, or linkMenuParents cannot resolve any
+	// child pointing at it and the whole subtree is flattened to the menu root.
+	existingItems := make(map[string]int64)
 	if !created {
 		items, err := st.queries.ListMenuItems(ctx, menuID)
 		if err != nil {
@@ -1371,7 +1411,7 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 			return
 		}
 		for _, item := range items {
-			existingItems[menuItemKey(item.Title, item.PageID, item.Url)] = true
+			existingItems[menuItemKey(item.Title, item.PageID, item.Url)] = item.ID
 		}
 	}
 
@@ -1386,7 +1426,12 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 			st.result.AddNotice("menu %q: %v", menuName, err)
 			continue
 		}
-		if existingItems[menuItemKey(l.Title, pageID, url)] {
+		if existingID, ok := existingItems[menuItemKey(l.Title, pageID, url)]; ok {
+			// Map the source UUID onto the item already there, so a child of
+			// this link still finds its parent in the second pass.
+			if l.UUID != "" {
+				itemByUUID[l.UUID] = existingID
+			}
 			st.result.MenuItemsSkipped++
 			continue
 		}
