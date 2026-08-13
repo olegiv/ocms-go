@@ -335,13 +335,6 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 // The goroutine cannot set a flash message — there is no request or session
 // here — so completion surfaces through the status fragment and the event log.
 func (m *Module) runImportJob(ctx context.Context, run jobRun) {
-	// result is declared before the recover defer so a panic can still persist
-	// whatever the run had accomplished. Passing nil here zeroed the counters
-	// the flush goroutine had already written, so a panic at item 4201 reported
-	// "0 imported" while 4200 rows sat in the database — inviting an operator
-	// to re-run and duplicate all of them.
-	var result *ImportResult
-
 	defer m.jobsWG.Done()
 	defer func() {
 		m.jobsMu.Lock()
@@ -362,7 +355,10 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			m.ctx.Logger.Error("import panicked", "source", run.SourceName, "job_id", run.ID, "panic", rec)
-			m.finalizeJob(ctx, run, JobFailed, result, fmt.Errorf("import panicked: %v", rec))
+			// nil is correct here: Import never returned, so there is no
+			// result. finishJob preserves the counters already flushed to the
+			// row rather than overwriting them with empty maps.
+			m.finalizeJob(ctx, run, JobFailed, nil, fmt.Errorf("import panicked: %v", rec))
 		}
 	}()
 

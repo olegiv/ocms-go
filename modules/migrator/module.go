@@ -9,8 +9,10 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"html/template"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/drupal"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/elefant"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
 //go:embed locales
@@ -80,6 +83,30 @@ func (m *Module) Init(ctx *module.Context) error {
 	}
 
 	m.ctx.Logger.Info("Migrator module initialized", "sources", len(sources))
+	return nil
+}
+
+// CheckActivation refuses runtime activation when production requires a source
+// database host allowlist and none is configured.
+//
+// runPostModulePostureAudits performs the same check, but only at startup. A
+// deployment whose migrator was inactive at boot could otherwise be switched on
+// from the admin UI with an empty allowlist, and CheckDBHostAllowed treats an
+// empty list as unrestricted — so the production policy silently lapsed until
+// the next restart.
+func (m *Module) CheckActivation() error {
+	if m.ctx == nil || m.ctx.Config == nil {
+		return nil
+	}
+	cfg := m.ctx.Config
+	if cfg.Env != "production" || !cfg.RequireMigratorAllowedDBHosts {
+		return nil
+	}
+	if strings.TrimSpace(cfg.MigratorAllowedDBHosts) == "" {
+		return fmt.Errorf(
+			"%s must be configured in production before the migrator can be activated",
+			shared.EnvAllowedDBHosts)
+	}
 	return nil
 }
 
@@ -196,7 +223,7 @@ func (m *Module) Migrations() []module.Migration {
 						id INTEGER PRIMARY KEY AUTOINCREMENT,
 						source TEXT NOT NULL,
 						status TEXT NOT NULL DEFAULT 'running'
-							CHECK (status IN ('running','completed','failed','interrupted')),
+							CHECK (status IN ('running','completed','failed','partial','interrupted')),
 						phase TEXT NOT NULL DEFAULT '',
 						processed INTEGER NOT NULL DEFAULT 0,
 						total INTEGER NOT NULL DEFAULT 0,
@@ -264,7 +291,81 @@ func (m *Module) Migrations() []module.Migration {
 				return nil
 			},
 		},
+		{
+			Version:     5,
+			Description: "Allow the partial job status",
+			Up: func(db *sql.DB) error {
+				// The v2 CHECK constraint predates the 'partial' status, so on
+				// any database created before this migration a run that
+				// recorded per-item errors failed its terminal UPDATE. The row
+				// then stayed 'running' and the partial unique index blocked
+				// every subsequent import for that source.
+				//
+				// SQLite cannot alter a CHECK constraint, so the table is
+				// rebuilt. Columns are listed explicitly because v3 and v4
+				// appended theirs, making positional copying order-dependent.
+				if statusCheckAllows(db, "partial") {
+					return nil
+				}
+				_, err := db.Exec(`
+					CREATE TABLE migrator_import_jobs_new (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						source TEXT NOT NULL,
+						status TEXT NOT NULL DEFAULT 'running'
+							CHECK (status IN ('running','completed','failed','partial','interrupted')),
+						phase TEXT NOT NULL DEFAULT '',
+						processed INTEGER NOT NULL DEFAULT 0,
+						total INTEGER NOT NULL DEFAULT 0,
+						counters TEXT NOT NULL DEFAULT '{}',
+						options TEXT NOT NULL DEFAULT '{}',
+						errors TEXT NOT NULL DEFAULT '[]',
+						fatal_error TEXT NOT NULL DEFAULT '',
+						started_by INTEGER,
+						started_by_email TEXT NOT NULL DEFAULT '',
+						owner_run_id TEXT NOT NULL DEFAULT '',
+						started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						finished_at DATETIME,
+						notices TEXT NOT NULL DEFAULT '[]',
+						skipped TEXT NOT NULL DEFAULT '{}'
+					);
+					INSERT INTO migrator_import_jobs_new
+						(id, source, status, phase, processed, total, counters, options, errors,
+						 fatal_error, started_by, started_by_email, owner_run_id,
+						 started_at, updated_at, finished_at, notices, skipped)
+					SELECT id, source, status, phase, processed, total, counters, options, errors,
+						 fatal_error, started_by, started_by_email, owner_run_id,
+						 started_at, updated_at, finished_at, notices, skipped
+					FROM migrator_import_jobs;
+					DROP TABLE migrator_import_jobs;
+					ALTER TABLE migrator_import_jobs_new RENAME TO migrator_import_jobs;
+					CREATE UNIQUE INDEX IF NOT EXISTS idx_migrator_jobs_one_running
+						ON migrator_import_jobs(source) WHERE status = 'running';
+					CREATE INDEX IF NOT EXISTS idx_migrator_jobs_source_started
+						ON migrator_import_jobs(source, started_at DESC);
+				`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				// Narrowing the constraint again would reject rows that are
+				// already stored as 'partial'.
+				return nil
+			},
+		},
 	}
+}
+
+// statusCheckAllows reports whether the jobs table's CHECK constraint already
+// permits a status value, so the rebuild is safe to re-run.
+func statusCheckAllows(db *sql.DB, status string) bool {
+	var ddl string
+	err := db.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'migrator_import_jobs'`,
+	).Scan(&ddl)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(ddl, "'"+status+"'")
 }
 
 // columnExists reports whether a table already has the named column, so the

@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
 
 // TestDeriveJobStatus pins the two ordering mistakes that shipped in the
@@ -94,5 +96,102 @@ func TestJobStatusViewKeepsPollingOnReadError(t *testing.T) {
 	}
 	if idle.Polling {
 		t.Error("Polling = true for an idle source; nothing is running to poll for")
+	}
+}
+
+// TestFinishJobPersistsEveryStatus writes each terminal status through the real
+// schema and reads it back.
+//
+// This is the test that was missing when JobPartial was introduced. The status
+// was added to the Go constants but not to the table's CHECK constraint, so
+// every partial run failed its terminal UPDATE, the row stayed 'running', and
+// the partial unique index then blocked all future imports for that source.
+// TestDeriveJobStatus could not catch it: it exercises the pure function, never
+// the write. Any future status is covered automatically by iterating
+// AllJobStatuses.
+func TestFinishJobPersistsEveryStatus(t *testing.T) {
+	for _, status := range AllJobStatuses {
+		if status == JobRunning {
+			continue // not a terminal state; finishJob is never called with it
+		}
+		t.Run(string(status), func(t *testing.T) {
+			m := testModule(t)
+			ctx := context.Background()
+
+			jobID, err := m.startJob(ctx, "drupal", "tester@example.com", 0, ImportOptions{})
+			if err != nil {
+				t.Fatalf("startJob: %v", err)
+			}
+
+			result := &ImportResult{PagesImported: 7}
+			if err := m.finishJob(ctx, jobID, status, result, nil); err != nil {
+				t.Fatalf("finishJob(%s): %v — the schema CHECK constraint most likely "+
+					"does not allow this status", status, err)
+			}
+
+			job, err := m.latestJob(ctx, "drupal")
+			if err != nil {
+				t.Fatalf("latestJob: %v", err)
+			}
+			if job.Status != status {
+				t.Errorf("persisted status = %q, want %q; the row was left in a "+
+					"non-terminal state and the running-job index will block "+
+					"every future import for this source", job.Status, status)
+			}
+			if job.Counters[string(types.EntityPage)] != 7 {
+				t.Errorf("counters were not persisted: %v", job.Counters)
+			}
+		})
+	}
+}
+
+// TestFinishJobPreservesCountersWithoutResult covers the panic path.
+//
+// Bug state: finishJob unconditionally wrote counters built from the result,
+// so a nil result (a panic, most often) replaced the counters the flush
+// goroutine had already persisted with an empty map. A run that had created
+// 4200 pages before panicking reported "0 imported", which invites a re-run
+// that duplicates all of them.
+//
+// The earlier attempt at this fix — hoisting `result` above the recover defer —
+// did nothing, because a panic means the assignment never executes.
+func TestFinishJobPreservesCountersWithoutResult(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+
+	jobID, err := m.startJob(ctx, "drupal", "tester@example.com", 0, ImportOptions{})
+	if err != nil {
+		t.Fatalf("startJob: %v", err)
+	}
+
+	// Simulate the progress the flush goroutine writes mid-run.
+	progress := newJobProgress()
+	for range 4200 {
+		progress.addItem(types.EntityPage)
+	}
+	snap, _ := progress.snapshot()
+	if err := m.flushJobProgress(ctx, jobID, snap); err != nil {
+		t.Fatalf("flushJobProgress: %v", err)
+	}
+
+	// Now finish as a panic would: terminal status, no result.
+	if err := m.finishJob(ctx, jobID, JobFailed, nil, errors.New("import panicked: boom")); err != nil {
+		t.Fatalf("finishJob: %v", err)
+	}
+
+	job, err := m.latestJob(ctx, "drupal")
+	if err != nil {
+		t.Fatalf("latestJob: %v", err)
+	}
+	if job.Status != JobFailed {
+		t.Errorf("status = %q, want %q", job.Status, JobFailed)
+	}
+	if got := job.Counters[string(types.EntityPage)]; got != 4200 {
+		t.Errorf("persisted page count = %d, want 4200; the work already done was "+
+			"erased, so the operator sees a failed import that appears to have "+
+			"created nothing", got)
+	}
+	if job.FatalError == "" {
+		t.Error("fatal error was not recorded")
 	}
 }

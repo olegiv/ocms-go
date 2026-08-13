@@ -195,6 +195,26 @@ func (m *Module) startJob(ctx context.Context, source, startedByEmail string, us
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Reap orphaned rows inside the same transaction as the guard check.
+	//
+	// Reaping only at startup was not enough: a normal fast restart happens
+	// well inside staleJobThreshold, so a row abandoned by the previous process
+	// was still 'running' when Init ran and nothing revisited it afterwards.
+	// The partial unique index then rejected every future import for that
+	// source until another restart happened to land late enough.
+	//
+	// The owner_run_id guard is what makes this safe to run here: a row owned
+	// by a different run has no goroutine behind it, while one owned by this
+	// process is live even if a slow stage has not published a heartbeat.
+	cutoff := time.Now().Add(-staleJobThreshold)
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE migrator_import_jobs
+		SET status = ?, fatal_error = 'interrupted by server restart', finished_at = ?, updated_at = ?
+		WHERE status = ? AND owner_run_id <> ? AND updated_at < ?`,
+		string(JobInterrupted), time.Now(), time.Now(), string(JobRunning), m.runID, cutoff); err != nil {
+		return 0, fmt.Errorf("failed to reap stale import jobs: %w", err)
+	}
+
 	var existing int
 	if err := tx.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM migrator_import_jobs WHERE source = ? AND status = ?`,
@@ -352,6 +372,24 @@ func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, r
 	}
 
 	now := time.Now()
+
+	// With no result — a panic, most often — the counters the flush goroutine
+	// already wrote are the only record of what the run accomplished. Writing
+	// the empty maps built above would erase them, so a panic at item 4201
+	// reported "0 imported" while 4200 rows sat in the database, inviting an
+	// operator to re-run and duplicate every one of them.
+	if result == nil {
+		_, err = m.ctx.DB.ExecContext(ctx, `
+			UPDATE migrator_import_jobs
+			SET status = ?, fatal_error = ?, updated_at = ?, finished_at = ?
+			WHERE id = ? AND status = ?`,
+			string(status), fatalText, now, now, jobID, string(JobRunning))
+		if err != nil {
+			return fmt.Errorf("failed to finalize import job: %w", err)
+		}
+		return nil
+	}
+
 	// Guarded on status = 'running', like flushJobProgress. Without it a job
 	// that outlived Shutdown's drain timeout could overwrite the "interrupted"
 	// row that markJobsInterruptedForRun had already written, reporting a clean
