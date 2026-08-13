@@ -35,17 +35,22 @@ const (
 
 // Drupal core table names, before the optional site prefix.
 const (
-	tableNodeData     = "node_field_data"
-	tableNodeBody     = "node__body"
-	tableNodeImage    = "node__field_image"
-	tableNodeTags     = "node__field_tags"
-	tableTermData     = "taxonomy_term_field_data"
-	tableTermParent   = "taxonomy_term__parent"
-	tableFileManaged  = "file_managed"
-	tableMedia        = "media"
-	tableMediaImage   = "media__field_media_image"
-	tableUserData     = "users_field_data"
-	tablePathAlias    = "path_alias"
+	tableNodeData    = "node_field_data"
+	tableNodeBody    = "node__body"
+	tableNodeImage   = "node__field_image"
+	tableNodeTags    = "node__field_tags"
+	tableTermData    = "taxonomy_term_field_data"
+	tableTermParent  = "taxonomy_term__parent"
+	tableFileManaged = "file_managed"
+	tableMedia       = "media"
+	tableMediaImage  = "media__field_media_image"
+	tableUserData    = "users_field_data"
+	tablePathAlias   = "path_alias"
+	// tableURLAlias is the pre-8.8 name. Drupal moved aliases to a content
+	// entity in 8.8; on an older 8.x database only this table exists, and
+	// treating that as "no aliases" regenerated every slug from its title and
+	// dropped all legacy redirects.
+	tableURLAlias     = "url_alias"
 	tableMenuLinkData = "menu_link_content_data"
 )
 
@@ -62,7 +67,9 @@ type Schema struct {
 	HasMediaImg  bool
 	HasMedia     bool
 	HasAliases   bool
-	HasMenuLinks bool
+	// LegacyAliases is true when only the pre-8.8 url_alias table is present.
+	LegacyAliases bool
+	HasMenuLinks  bool
 }
 
 // MissingOptional returns the optional tables that were not found, so the admin
@@ -234,16 +241,17 @@ func (r *Reader) detectSchema(ctx context.Context) error {
 	r.present = present
 	r.safePrefix = safePrefix
 	r.schema = Schema{
-		HasNodeBody:  has(tableNodeBody),
-		HasNodeImage: has(tableNodeImage),
-		HasNodeTags:  has(tableNodeTags),
-		HasTermData:  has(tableTermData),
-		HasTermPar:   has(tableTermParent),
-		HasFiles:     has(tableFileManaged),
-		HasMediaImg:  has(tableMediaImage),
-		HasMedia:     has(tableMedia),
-		HasAliases:   has(tablePathAlias),
-		HasMenuLinks: has(tableMenuLinkData),
+		HasNodeBody:   has(tableNodeBody),
+		HasNodeImage:  has(tableNodeImage),
+		HasNodeTags:   has(tableNodeTags),
+		HasTermData:   has(tableTermData),
+		HasTermPar:    has(tableTermParent),
+		HasFiles:      has(tableFileManaged),
+		HasMediaImg:   has(tableMediaImage),
+		HasMedia:      has(tableMedia),
+		HasAliases:    has(tablePathAlias) || has(tableURLAlias),
+		LegacyAliases: !has(tablePathAlias) && has(tableURLAlias),
+		HasMenuLinks:  has(tableMenuLinkData),
 	}
 	return nil
 }
@@ -868,21 +876,41 @@ func (r *Reader) NodeTerms(ctx context.Context) (map[int64][]int64, error) {
 	return terms, nil
 }
 
+// aliasSourceColumn returns the column holding the system path. Drupal 8.8
+// renamed url_alias.source to path_alias.path.
+func aliasSourceColumn(schema Schema) string {
+	if schema.LegacyAliases {
+		return "source"
+	}
+	return "path"
+}
+
 // GetPathAliases returns published path aliases in the default language.
 func (r *Reader) GetPathAliases(ctx context.Context) ([]PathAlias, error) {
 	if !r.schema.HasAliases {
 		return nil, nil
 	}
-	tbl, err := r.table(tablePathAlias)
+	// The pre-8.8 url_alias table has no status column and names its key "pid"
+	// rather than "id"; everything else lines up, so one query shape covers
+	// both once those two differences are papered over.
+	name, idCol, statusExpr, whereClause := tablePathAlias, "id", "COALESCE(status, 1)", "WHERE status = 1"
+	if r.schema.LegacyAliases {
+		name, idCol, statusExpr, whereClause = tableURLAlias, "pid", "1", ""
+	}
+	tbl, err := r.table(name)
+	if err != nil {
+		return nil, err
+	}
+	safeID, err := shared.SanitizeIdentifier(idCol)
 	if err != nil {
 		return nil, err
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, COALESCE(path, ''), COALESCE(alias, ''), COALESCE(langcode, ''), COALESCE(status, 1)
+		SELECT %s, COALESCE(%s, ''), COALESCE(alias, ''), COALESCE(langcode, ''), %s
 		FROM %s
-		WHERE status = 1
-		ORDER BY id`, tbl)
+		%s
+		ORDER BY %s`, safeID, aliasSourceColumn(r.schema), statusExpr, tbl, whereClause, safeID)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {

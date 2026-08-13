@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -208,6 +209,10 @@ type importState struct {
 	// aliases attached to a page the import does not own survive the delete,
 	// because aliases are removed only by cascade from a deleted page.
 	createdNodes map[int64]bool
+	// createdCategorySlugs records the slugs this run has already taken, so a
+	// second Drupal term that slugifies the same way gets its own row rather
+	// than being folded into the first.
+	createdCategorySlugs map[string]bool
 	// createdCategories holds only the categories this run created. Parent
 	// links are applied to those alone: a pre-existing category matched by slug
 	// is mapped so content can reference it, but reparenting it would rewrite a
@@ -256,26 +261,27 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	}
 
 	st := &importState{
-		queries:           queries,
-		reader:            reader,
-		result:            result,
-		tracker:           tracker,
-		opts:              opts,
-		defaultLang:       defaultLang.Code,
-		authorID:          authorID,
-		typeMap:           ParseTypeMap(cfg["type_map"]),
-		tagVocabs:         parseVocabularyList(cfg["tag_vocabularies"]),
-		uploadDir:         shared.UploadDir(),
-		filesPath:         strings.TrimSpace(cfg["files_path"]),
-		users:             make(map[int64]int64),
-		tags:              make(map[int64]int64),
-		categories:        make(map[int64]int64),
-		createdNodes:      make(map[int64]bool),
-		createdCategories: make(map[int64]bool),
-		mediaByFID:        make(map[int64]int64),
-		nodes:             make(map[int64]int64),
-		aliasByNode:       make(map[int64]map[string]string),
-		refs:              NewMediaRefs(),
+		queries:              queries,
+		reader:               reader,
+		result:               result,
+		tracker:              tracker,
+		opts:                 opts,
+		defaultLang:          defaultLang.Code,
+		authorID:             authorID,
+		typeMap:              ParseTypeMap(cfg["type_map"]),
+		tagVocabs:            parseVocabularyList(cfg["tag_vocabularies"]),
+		uploadDir:            shared.UploadDir(),
+		filesPath:            strings.TrimSpace(cfg["files_path"]),
+		users:                make(map[int64]int64),
+		tags:                 make(map[int64]int64),
+		categories:           make(map[int64]int64),
+		createdNodes:         make(map[int64]bool),
+		createdCategories:    make(map[int64]bool),
+		createdCategorySlugs: make(map[string]bool),
+		mediaByFID:           make(map[int64]int64),
+		nodes:                make(map[int64]int64),
+		aliasByNode:          make(map[int64]map[string]string),
+		refs:                 NewMediaRefs(),
 	}
 
 	for _, missing := range reader.Schema().MissingOptional() {
@@ -553,6 +559,14 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 	existing, err := st.queries.GetCategoryBySlug(ctx, slug)
 	switch {
 	case err == nil:
+		// Reuse only a category that pre-existed this import. Two Drupal terms
+		// in different vocabularies can share a name and so slugify alike;
+		// treating the second as "already imported" merged their page
+		// associations and silently discarded its hierarchy.
+		if st.createdCategorySlugs[slug] {
+			slug = uniqueCategorySlug(ctx, st, slug)
+			break
+		}
 		st.categories[t.TID] = existing.ID
 		st.result.CategoriesSkipped++
 		return
@@ -578,6 +592,7 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 
 	st.categories[t.TID] = category.ID
 	st.createdCategories[t.TID] = true
+	st.createdCategorySlugs[slug] = true
 	st.track(ctx, types.EntityCategory, category.ID)
 	st.result.CategoriesImported++
 }
@@ -1145,18 +1160,31 @@ func (st *importState) featuredImageID(n Node) sql.NullInt64 {
 	return sql.NullInt64{}
 }
 
+// uniqueCategorySlug appends -2, -3, … until the slug is free.
+func uniqueCategorySlug(ctx context.Context, st *importState, base string) string {
+	for i := 2; i < 100; i++ {
+		candidate := base + "-" + strconv.Itoa(i)
+		if _, err := st.queries.GetCategoryBySlug(ctx, candidate); errors.Is(err, sql.ErrNoRows) {
+			return candidate
+		}
+	}
+	return base + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+}
+
 // linkNodeTerms attaches a node's taxonomy references to its oCMS page.
 func (s *Source) linkNodeTerms(ctx context.Context, st *importState, n Node, pageID int64) {
 	for _, tid := range n.TermIDs {
 		if tagID, ok := st.tags[tid]; ok {
 			if err := st.queries.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pageID, TagID: tagID}); err != nil {
 				slog.Warn("failed to link tag to page", "page_id", pageID, "tag_id", tagID, "error", err)
+				st.result.AddError("page %d kept none of its Drupal tag %d: %v", pageID, tagID, err)
 			}
 			continue
 		}
 		if categoryID, ok := st.categories[tid]; ok {
 			if err := st.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: pageID, CategoryID: categoryID}); err != nil {
 				slog.Warn("failed to link category to page", "page_id", pageID, "category_id", categoryID, "error", err)
+				st.result.AddError("page %d was not linked to category %d: %v", pageID, categoryID, err)
 			}
 		}
 	}
@@ -1294,10 +1322,30 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 
 	itemByUUID := make(map[string]int64, len(links))
 
+	// Titles already present in a reused menu. Menu items carry no uniqueness
+	// constraint, so re-running an import — or importing into a menu an admin
+	// had already created — appended a second copy of every link.
+	existingTitles := make(map[string]bool)
+	if !created {
+		items, err := st.queries.ListMenuItems(ctx, menuID)
+		if err != nil {
+			st.result.AddError("could not read existing items of menu %q, skipping it to "+
+				"avoid duplicating links: %v", menuName, err)
+			return
+		}
+		for _, item := range items {
+			existingTitles[item.Title] = true
+		}
+	}
+
 	// First pass: create every item at the root so a child whose parent appears
 	// later in the list still gets created.
 	for _, l := range links {
 		if l.Title == "" {
+			continue
+		}
+		if existingTitles[l.Title] {
+			st.result.MenuItemsSkipped++
 			continue
 		}
 		pageID, url, err := s.resolveMenuTarget(st, l)

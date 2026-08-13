@@ -162,7 +162,11 @@ type ImportResult struct {
 	PostsSkipped      int `json:"posts_skipped"`
 	PagesSkipped      int `json:"pages_skipped"`
 	MenusSkipped      int `json:"menus_skipped"`
-	UsersSkipped      int `json:"users_skipped"`
+	// MenuItemsSkipped counts links already present in a reused menu. Menu
+	// items have no uniqueness constraint, so a re-run would otherwise append
+	// a second copy of every link.
+	MenuItemsSkipped int `json:"menu_items_skipped"`
+	UsersSkipped     int `json:"users_skipped"`
 
 	// Errors records things that failed but should have worked: a row that
 	// could not be created, a table that exists but could not be read.
@@ -246,10 +250,11 @@ func (r *ImportResult) Counters() map[EntityType]int {
 	}
 }
 
-// SkippedCounters returns skipped counts keyed by entity type. Menu items and
-// aliases are never skipped independently of their parent, so they are absent.
+// SkippedCounters returns skipped counts keyed by entity type. Aliases are
+// never skipped independently of their parent, so they are absent.
 func (r *ImportResult) SkippedCounters() map[EntityType]int {
 	return map[EntityType]int{
+		EntityMenuItem: r.MenuItemsSkipped,
 		EntityMenu:     r.MenusSkipped,
 		EntityPost:     r.PostsSkipped,
 		EntityPage:     r.PagesSkipped,
