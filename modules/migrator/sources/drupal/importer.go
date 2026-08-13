@@ -628,6 +628,11 @@ func (st *importState) track(ctx context.Context, entityType types.EntityType, i
 	}
 	if err := st.tracker.TrackImportedItem(ctx, "drupal", string(entityType), id); err != nil {
 		slog.Warn("failed to track imported item", "type", entityType, "id", id, "error", err)
+		// Untracked means "delete imported content" can never remove this row,
+		// so the operator must be told: a log line is not part of the job
+		// record they will actually read.
+		st.result.AddError("%s %d was created but could not be tracked, so it will "+
+			"not be removed by deleting the import: %v", entityType, id, err)
 	}
 }
 
@@ -1199,13 +1204,30 @@ func (s *Source) importAliases(ctx context.Context, st *importState, now time.Ti
 			CreatedAt: now,
 		}); err != nil {
 			// A duplicate alias is expected when two Drupal nodes shared one
-			// path over time; it is not worth failing the import over.
-			slog.Warn("failed to create page alias", "page_id", pageID, "alias", alias, "error", err)
+			// path over time, and is not worth failing the import over. Any
+			// other failure is: with menus disabled this is the last step, so
+			// a database problem here could otherwise lose every legacy URL
+			// while the job still reported "completed".
+			if isUniqueConstraintErr(err) {
+				slog.Warn("duplicate page alias skipped", "page_id", pageID, "alias", alias)
+			} else {
+				st.result.AddError("failed to create alias %q: %v", alias, err)
+			}
 			continue
 		}
 		st.track(ctx, types.EntityAlias, pageID)
 		st.result.AliasesImported++
 	}
+}
+
+// isUniqueConstraintErr reports whether err is SQLite's uniqueness violation,
+// which for aliases is an expected collision rather than a failure.
+func isUniqueConstraintErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique constraint") || strings.Contains(msg, "constraint failed: unique")
 }
 
 // importMenus copies Drupal custom menu links into oCMS menus.

@@ -334,6 +334,7 @@ func (r *Reader) GetUsers(ctx context.Context) ([]User, error) {
 		SELECT uid, COALESCE(name, ''), COALESCE(mail, ''), COALESCE(status, 0), COALESCE(created, 0)
 		FROM %s
 		WHERE uid > 0 AND default_langcode = 1 AND mail IS NOT NULL AND mail <> ''
+		  AND status = 1
 		ORDER BY uid`, tbl)
 
 	rows, err := r.db.QueryContext(ctx, query)
