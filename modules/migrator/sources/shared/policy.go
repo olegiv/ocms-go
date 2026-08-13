@@ -42,6 +42,19 @@ func validateHostShape(host string) error {
 	if strings.ContainsAny(host, hostForbiddenChars) {
 		return fmt.Errorf("invalid database host %q: must be a bare hostname or IP", host)
 	}
+	// A colon is legitimate only in an IPv6 literal. In anything else it is a
+	// port the caller should have put in the port field — and it used to pass
+	// this check, then reach net.JoinHostPort, producing an address like
+	// "[db.example.com:3306]:3306" that fails to dial with a misleading error
+	// rather than being rejected as the misconfiguration it is.
+	if strings.Contains(host, ":") {
+		bare := strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+		if net.ParseIP(bare) == nil {
+			return fmt.Errorf(
+				"invalid database host %q: a colon is only valid in an IPv6 literal; "+
+					"put the port in the port field", host)
+		}
+	}
 	return nil
 }
 

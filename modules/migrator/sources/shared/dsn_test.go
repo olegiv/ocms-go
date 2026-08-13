@@ -424,3 +424,27 @@ func TestNoSourceHashesAConstantCredential(t *testing.T) {
 			strings.Join(offenders, "\n  "))
 	}
 }
+
+// TestBuildMySQLDSNRejectsHostWithPort covers the misconfiguration the shape
+// check used to wave through.
+//
+// "db.example.com:3306" passed validation, then net.JoinHostPort produced
+// "[db.example.com:3306]:3306" — an address that fails to dial with an error
+// that says nothing about the real problem. IPv6 literals must still work.
+func TestBuildMySQLDSNRejectsHostWithPort(t *testing.T) {
+	for _, host := range []string{"db.example.com:3306", "localhost:3306", "10.0.0.5:3306"} {
+		cfg := baseCfg()
+		cfg["mysql_host"] = host
+		if _, err := BuildMySQLDSN(cfg, MySQLDSNOptions{}); err == nil {
+			t.Errorf("BuildMySQLDSN accepted host %q, which carries a port", host)
+		}
+	}
+	// Not a regression for IPv6, bracketed or bare.
+	for _, host := range []string{"::1", "[::1]", "2001:db8::1"} {
+		cfg := baseCfg()
+		cfg["mysql_host"] = host
+		if _, err := BuildMySQLDSN(cfg, MySQLDSNOptions{}); err != nil {
+			t.Errorf("BuildMySQLDSN rejected the IPv6 literal %q: %v", host, err)
+		}
+	}
+}

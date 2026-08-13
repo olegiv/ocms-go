@@ -805,23 +805,24 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 				testForm.submit();
 			}
 
-			function bindConfirm(form) {
+			// Delegated, not bound per element. The status poll replaces the
+			// imported-content card out of band on every tick, so a listener
+			// attached at DOMContentLoaded was lost with the first swap and the
+			// destructive delete button then submitted with no confirmation at
+			// all. Delegation survives any number of swaps.
+			document.addEventListener('submit', function(event) {
+				const form = event.target.closest('[data-confirm]');
 				if (!form) return;
-				form.addEventListener('submit', function(event) {
-					const message = form.dataset.confirm || 'Are you sure?';
-					if (!confirm(message)) {
-						event.preventDefault();
-					}
-				});
-			}
+				if (!confirm(form.dataset.confirm)) {
+					event.preventDefault();
+				}
+			}, true);
 
 			document.addEventListener('DOMContentLoaded', function() {
 				const testButton = document.getElementById('test-connection-btn');
 				if (testButton) {
 					testButton.addEventListener('click', testConnection);
 				}
-				bindConfirm(document.getElementById('import-form'));
-				bindConfirm(document.getElementById('delete-imported-form'));
 			});
 		</script>
 	}

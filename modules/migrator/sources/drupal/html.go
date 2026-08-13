@@ -190,19 +190,66 @@ func rewritePrefixedURLs(body, prefix string, refs *MediaRefs) string {
 			out.WriteString(body)
 			break
 		}
-		out.WriteString(body[:idx])
+		head := body[:idx]
 		rest := body[idx:]
 		end := urlEnd(rest)
 		candidate := rest[:end]
 		relPath := strings.TrimPrefix(candidate, prefix)
 		if newURL, ok := lookupByPath(refs, relPath); ok {
+			// Drop the old site's origin along with the path. Rewriting only
+			// the path turned "https://old.example/sites/default/files/a.jpg"
+			// into "https://old.example/uploads/originals/…", so migrated pages
+			// kept requesting a URL that does not exist on the old host.
+			head = head[:len(head)-absoluteOriginLen(head)]
+			out.WriteString(head)
 			out.WriteString(newURL)
 		} else {
+			out.WriteString(head)
 			out.WriteString(candidate)
 		}
 		body = rest[end:]
 	}
 	return out.String()
+}
+
+// absoluteOriginLen returns how many trailing bytes of head form a
+// "scheme://authority" origin, or 0 when the matched path is already relative.
+//
+// The authority may not contain a slash or any character that would have ended
+// the URL, which is what keeps this from swallowing unrelated text that merely
+// happens to contain "://" earlier in the document.
+func absoluteOriginLen(head string) int {
+	const authorityStoppers = "/\"'<> \t\n"
+
+	if sep := strings.LastIndex(head, "://"); sep >= 0 {
+		authority := head[sep+3:]
+		if authority != "" && !strings.ContainsAny(authority, authorityStoppers) {
+			start := sep
+			for start > 0 && isSchemeByte(head[start-1]) {
+				start--
+			}
+			if start < sep { // there is a scheme in front of "://"
+				return len(head) - start
+			}
+		}
+		return 0
+	}
+
+	// Protocol-relative ("//old.example/sites/default/files/a.jpg"). Drupal
+	// emits these when the source site was served over both schemes.
+	if sep := strings.LastIndex(head, "//"); sep >= 0 {
+		authority := head[sep+2:]
+		if authority != "" && !strings.ContainsAny(authority, authorityStoppers) {
+			return len(head) - sep
+		}
+	}
+	return 0
+}
+
+// isSchemeByte reports whether b may appear in a URL scheme.
+func isSchemeByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') ||
+		(b >= '0' && b <= '9') || b == '+' || b == '-' || b == '.'
 }
 
 // lookupByPath resolves a Drupal relative file path to its new oCMS URL.
