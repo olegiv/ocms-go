@@ -67,3 +67,32 @@ func TestJobPartialIsAKnownStatus(t *testing.T) {
 	}
 	t.Error("JobPartial is missing from AllJobStatuses; its label will not be translated")
 }
+
+// TestJobStatusViewKeepsPollingOnReadError pins the recovery behaviour of the
+// status fragment.
+//
+// Bug state: a failed job lookup produced a nil Job, which rendered as "no
+// import has run" AND set Polling=false. Because the poller swaps itself
+// outerHTML, one transient SQLite BUSY replaced the polling element with a
+// non-polling one — the panel went blank mid-import and never came back
+// without a manual refresh.
+func TestJobStatusViewKeepsPollingOnReadError(t *testing.T) {
+	data := buildJobStatusView("drupal", nil, errors.New("database is locked"))
+
+	if !data.ReadFailed {
+		t.Error("ReadFailed = false; a failed lookup must be distinguishable from an idle source")
+	}
+	if !data.Polling {
+		t.Error("Polling = false after a read error; the fragment would stop polling " +
+			"and strand the panel until a manual page reload")
+	}
+
+	// A genuinely idle source still must not poll.
+	idle := buildJobStatusView("drupal", nil, nil)
+	if idle.ReadFailed {
+		t.Error("ReadFailed = true for a source that has simply never been imported")
+	}
+	if idle.Polling {
+		t.Error("Polling = true for an idle source; nothing is running to poll for")
+	}
+}

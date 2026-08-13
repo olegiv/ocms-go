@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -263,10 +264,14 @@ func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, erro
 	if err := json.Unmarshal([]byte(skippedJSON), &job.Skipped); err != nil {
 		job.Skipped = map[string]int{}
 	}
+	// A corrupt blob falls back to empty, but says so: otherwise a failed job
+	// renders as clean and the operator has no way to know the record is bad.
 	if err := json.Unmarshal([]byte(errorsJSON), &job.Errors); err != nil {
+		slog.Warn("import job has unreadable errors payload", "job_id", job.ID, "error", err)
 		job.Errors = nil
 	}
 	if err := json.Unmarshal([]byte(noticesJSON), &job.Notices); err != nil {
+		slog.Warn("import job has unreadable notices payload", "job_id", job.ID, "error", err)
 		job.Notices = nil
 	}
 	return &job, nil
@@ -347,13 +352,17 @@ func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, r
 	}
 
 	now := time.Now()
+	// Guarded on status = 'running', like flushJobProgress. Without it a job
+	// that outlived Shutdown's drain timeout could overwrite the "interrupted"
+	// row that markJobsInterruptedForRun had already written, reporting a clean
+	// completion for a run the process abandoned.
 	_, err = m.ctx.DB.ExecContext(ctx, `
 		UPDATE migrator_import_jobs
 		SET status = ?, counters = ?, skipped = ?, errors = ?, notices = ?,
 		    fatal_error = ?, updated_at = ?, finished_at = ?
-		WHERE id = ?`,
+		WHERE id = ? AND status = ?`,
 		string(status), string(countersJSON), string(skippedJSON), string(errorsJSON), string(noticesJSON),
-		fatalText, now, now, jobID)
+		fatalText, now, now, jobID, string(JobRunning))
 	if err != nil {
 		return fmt.Errorf("failed to finalize import job: %w", err)
 	}
@@ -378,7 +387,10 @@ func (m *Module) reapStaleJobs(ctx context.Context) (int64, error) {
 	}
 	affected, err := res.RowsAffected()
 	if err != nil {
-		return 0, nil
+		// The reap itself succeeded; only the count is unavailable. Returning
+		// (0, nil) reported that as "nothing was stale", silently suppressing
+		// Init's "marked orphaned jobs as interrupted" log.
+		return 0, fmt.Errorf("failed to read reaped job count: %w", err)
 	}
 	return affected, nil
 }

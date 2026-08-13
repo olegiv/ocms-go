@@ -101,6 +101,19 @@ type Reader struct {
 	// per-bundle field tables can be probed without a round trip each.
 	present    map[string]bool
 	safePrefix string
+
+	// warnings collects degraded-read notices the importer should surface. The
+	// reader has no access to ImportResult, so without this an alt-text read
+	// failure was visible only in the server log — a whole media library
+	// imported with no alt attributes, reported as "0 errors, 0 notices".
+	warnings []string
+}
+
+// Warnings returns and clears degraded-read notices accumulated so far.
+func (r *Reader) Warnings() []string {
+	w := r.warnings
+	r.warnings = nil
+	return w
 }
 
 // BuildDSN assembles a MySQL DSN from the submitted configuration.
@@ -476,8 +489,11 @@ func (r *Reader) GetFiles(ctx context.Context) ([]File, error) {
 	alts, err := r.fileAltText(ctx)
 	if err != nil {
 		// Alt text is a nice-to-have; a missing or malformed media field must
-		// not cost the admin their entire media import.
+		// not cost the admin their entire media import. It is recorded as a
+		// warning so the operator learns why every image arrived without one.
 		slog.Warn("failed to read drupal media alt text", "error", err)
+		r.warnings = append(r.warnings,
+			fmt.Sprintf("alt text could not be read (%v); imported media has no alt attributes", err))
 		return files, nil
 	}
 	for i := range files {

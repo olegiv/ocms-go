@@ -66,8 +66,14 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get imported item counts for this source
-	importedCounts, _ := m.getImportedCounts(r.Context(), sourceName)
+	// Get imported item counts for this source. A read failure is logged rather
+	// than dropped: nil counts render as "no imported content" and hide the
+	// delete form, so the operator would silently lose the only undo path for
+	// an import that did happen.
+	importedCounts, err := m.getImportedCounts(r.Context(), sourceName)
+	if err != nil {
+		m.ctx.Logger.Error("failed to read imported counts", "source", sourceName, "error", err)
+	}
 
 	// Rendering the current job here means a page refresh — or a second admin's
 	// browser — picks up an in-flight import and starts polling immediately.
@@ -557,9 +563,9 @@ func (m *Module) handleJobStatus(w http.ResponseWriter, r *http.Request) {
 		m.ctx.Logger.Error("failed to read import job", "source", ctx.SourceName, "error", err)
 	}
 
-	counts, err := m.getImportedCounts(r.Context(), ctx.SourceName)
-	if err != nil {
-		m.ctx.Logger.Error("failed to read imported counts", "source", ctx.SourceName, "error", err)
+	counts, countsErr := m.getImportedCounts(r.Context(), ctx.SourceName)
+	if countsErr != nil {
+		m.ctx.Logger.Error("failed to read imported counts", "source", ctx.SourceName, "error", countsErr)
 	}
 
 	// Deliberately not Render.BuildPageContext: that pops the flash out of the
@@ -571,15 +577,29 @@ func (m *Module) handleJobStatus(w http.ResponseWriter, r *http.Request) {
 	// Always 200 with a fragment: htmx treats 204 as "no swap", which would
 	// strand a stale running card on screen forever.
 	w.Header().Set("Cache-Control", "no-store")
-	render.Templ(w, r, MigratorJobStatusResponse(pc, buildJobStatusView(ctx.SourceName, job), counts))
+	// On a counts read failure the out-of-band swap is suppressed: swapping in
+	// nil counts would replace the Imported Content card with "nothing
+	// imported" and remove the delete form, destroying the only undo path for
+	// an import that did happen.
+	render.Templ(w, r, MigratorJobStatusResponse(
+		pc, buildJobStatusView(ctx.SourceName, job, err), counts, countsErr == nil))
 }
 
 // buildJobStatusView assembles the status fragment's view data.
-func buildJobStatusView(sourceName string, job *ImportJob) MigratorJobStatusViewData {
+//
+// readErr is the job lookup's error. A failed lookup keeps polling on purpose:
+// the state is unknown rather than idle, so stopping would strand the panel on
+// a blank card after a single transient error, with no way back except F5.
+func buildJobStatusView(sourceName string, job *ImportJob, readErr error) MigratorJobStatusViewData {
 	data := MigratorJobStatusViewData{
 		SourceName: sourceName,
 		StatusURL:  "/admin/migrator/" + sourceName + "/status",
 		Job:        job,
+		ReadFailed: readErr != nil,
+	}
+	if readErr != nil {
+		data.Polling = true
+		return data
 	}
 	if job != nil {
 		data.Stale = job.IsStale(time.Now())

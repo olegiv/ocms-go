@@ -28,6 +28,7 @@ import (
 // the real ones, only the source database is substituted.
 type fakeReader struct {
 	schema       Schema
+	warnings     []string
 	users        []User
 	terms        []Term
 	files        []File
@@ -52,6 +53,9 @@ func (f *fakeReader) GetUsers(context.Context) ([]User, error) { return f.users,
 func (f *fakeReader) GetTerms(context.Context) ([]Term, error) { return f.terms, f.err }
 
 func (f *fakeReader) GetFiles(context.Context) ([]File, error) { return f.files, f.err }
+
+// Warnings satisfies sourceReader; the fake replays whatever was seeded.
+func (f *fakeReader) Warnings() []string { return f.warnings }
 
 func (f *fakeReader) MediaUUIDsByFile(context.Context) (map[int64][]string, error) {
 	if f.mediaUUIDs == nil {

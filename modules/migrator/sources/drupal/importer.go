@@ -181,6 +181,7 @@ type sourceReader interface {
 	GetUsers(ctx context.Context) ([]User, error)
 	GetTerms(ctx context.Context) ([]Term, error)
 	GetFiles(ctx context.Context) ([]File, error)
+	Warnings() []string
 	MediaUUIDsByFile(ctx context.Context) (map[int64][]string, error)
 	GetNodes(ctx context.Context, offset int) ([]Node, error)
 	NodeImages(ctx context.Context) (map[int64]int64, error)
@@ -496,9 +497,17 @@ func (s *Source) importTag(ctx context.Context, st *importState, t Term, now tim
 		return
 	}
 
-	if existing, err := st.queries.GetTagBySlug(ctx, slug); err == nil {
+	existing, err := st.queries.GetTagBySlug(ctx, slug)
+	switch {
+	case err == nil:
 		st.tags[t.TID] = existing.ID
 		st.result.TagsSkipped++
+		return
+	case !errors.Is(err, sql.ErrNoRows):
+		// A failed lookup is not "the row is absent". Treating it as such made
+		// the importer proceed to create, so a transient database error
+		// surfaced later as a confusing unique-constraint failure.
+		st.result.AddError("could not check for existing tag %q: %v", slug, err)
 		return
 	}
 
@@ -527,9 +536,14 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 		return
 	}
 
-	if existing, err := st.queries.GetCategoryBySlug(ctx, slug); err == nil {
+	existing, err := st.queries.GetCategoryBySlug(ctx, slug)
+	switch {
+	case err == nil:
 		st.categories[t.TID] = existing.ID
 		st.result.CategoriesSkipped++
+		return
+	case !errors.Is(err, sql.ErrNoRows):
+		st.result.AddError("could not check for existing category %q: %v", slug, err)
 		return
 	}
 
@@ -664,6 +678,11 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 	files, err := st.reader.GetFiles(ctx)
 	if err != nil {
 		return err
+	}
+	// Surface degraded reads (missing alt text, for instance) as summaries so
+	// they survive the per-item message cap.
+	for _, warning := range st.reader.Warnings() {
+		st.result.AddSummary("%s", warning)
 	}
 	if len(files) == 0 {
 		return nil
@@ -975,8 +994,13 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 	}
 
 	if st.opts.SkipExisting {
-		if _, err := st.queries.GetPageBySlug(ctx, baseSlug); err == nil {
+		_, err := st.queries.GetPageBySlug(ctx, baseSlug)
+		switch {
+		case err == nil:
 			countSkipped(st.result, pageType)
+			return
+		case !errors.Is(err, sql.ErrNoRows):
+			st.result.AddError("could not check for existing page %q: %v", baseSlug, err)
 			return
 		}
 	}
@@ -1221,8 +1245,12 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 // ensureMenu returns the ID of the oCMS menu for a Drupal menu name, creating
 // it when absent. created reports whether this import made the row.
 func (s *Source) ensureMenu(ctx context.Context, st *importState, menuName, slug string, now time.Time) (int64, bool, error) {
-	if existing, err := st.queries.GetMenuBySlug(ctx, slug); err == nil {
+	existing, err := st.queries.GetMenuBySlug(ctx, slug)
+	switch {
+	case err == nil:
 		return existing.ID, false, nil
+	case !errors.Is(err, sql.ErrNoRows):
+		return 0, false, fmt.Errorf("failed to check for existing menu %q: %w", slug, err)
 	}
 
 	menu, err := st.queries.CreateMenu(ctx, store.CreateMenuParams{

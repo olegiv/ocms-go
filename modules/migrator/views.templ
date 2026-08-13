@@ -60,6 +60,11 @@ type MigratorJobStatusViewData struct {
 	Job        *ImportJob // nil when no import has ever run for this source
 	Stale      bool
 	Polling    bool
+	// ReadFailed marks a job lookup that errored, as distinct from a source
+	// that has never been imported. Both used to render as "no import has run",
+	// and because the poller stopped on the empty result a single transient
+	// SQLite BUSY stranded the panel until a manual refresh.
+	ReadFailed bool
 }
 
 // StatusKey returns the i18n key for the job's status label.
@@ -344,9 +349,11 @@ templ MigratorImportedContent(pc *adminviews.PageContext, sourceName string, cou
 // MigratorJobStatusResponse is the body of the status endpoint: the job card
 // plus an out-of-band copy of the Imported Content card, so a single poll keeps
 // both regions current without reloading the page.
-templ MigratorJobStatusResponse(pc *adminviews.PageContext, data MigratorJobStatusViewData, counts map[string]int) {
+templ MigratorJobStatusResponse(pc *adminviews.PageContext, data MigratorJobStatusViewData, counts map[string]int, countsOK bool) {
 	@MigratorJobStatus(pc, data)
-	@MigratorImportedContent(pc, data.SourceName, counts, true)
+	if countsOK {
+		@MigratorImportedContent(pc, data.SourceName, counts, true)
+	}
 }
 
 // MigratorJobStatus renders the import job status card.
@@ -379,7 +386,16 @@ templ MigratorJobStatus(pc *adminviews.PageContext, data MigratorJobStatusViewDa
 
 // migratorJobStatusBody renders the inner content of the status card.
 templ migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusViewData) {
-	if data.Job != nil {
+	if data.ReadFailed {
+		// Say so rather than rendering an empty card. Polling continues, so a
+		// transient read error recovers on the next tick instead of stranding
+		// the panel until someone reloads the page.
+		<div class="job-status-header">
+			<span class="job-status-label">{ pc.T("migrator.job_status") }:</span>
+			<span class="job-status-value">{ pc.T("migrator.job_read_failed") }</span>
+			<span class="job-status-spinner" aria-hidden="true"></span>
+		</div>
+	} else if data.Job != nil {
 		<div class="job-status-header">
 			<span class="job-status-label">{ pc.T("migrator.job_status") }:</span>
 			<span class="job-status-value">{ pc.T(data.StatusKey()) }</span>
@@ -462,7 +478,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 		</div>
 		<div id="migrator-data" data-confirm-import={ pc.T("migrator.confirm_import") } data-confirm-delete={ pc.T("migrator.confirm_delete") } data-source-name={ data.SourceName } style="display:none"></div>
 		<div class="migrator-form-container">
-			@MigratorJobStatus(pc, buildJobStatusView(data.SourceName, data.Job))
+			@MigratorJobStatus(pc, buildJobStatusView(data.SourceName, data.Job, nil))
 			<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/import") } id="import-form" data-confirm={ pc.T("migrator.confirm_import") }>
 				<div class="card">
 					<div class="card-header">

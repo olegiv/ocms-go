@@ -40,6 +40,7 @@
 
         {"id": "migrator.job_status", "message": "Import status", "translation": "Статус импорта"},
         {"id": "migrator.job_idle", "message": "No import has run yet", "translation": "Импорт ещё не запускался"},
+        {"id": "migrator.job_read_failed", "message": "Status unavailable, retrying", "translation": "Статус недоступен, повтор"},
         {"id": "migrator.job_running", "message": "Running", "translation": "Выполняется"},
         {"id": "migrator.job_completed", "message": "Completed", "translation": "Завершён"},
         {"id": "migrator.job_failed", "message": "Failed", "translation": "Ошибка"},

@@ -532,7 +532,7 @@ func TestModuleImplementsTrackerAndReporter(t *testing.T) {
 func renderJobStatus(t *testing.T, job *ImportJob) string {
 	t.Helper()
 	var sb strings.Builder
-	data := buildJobStatusView("drupal", job)
+	data := buildJobStatusView("drupal", job, nil)
 	if err := MigratorJobStatus(&adminviews.PageContext{}, data).Render(context.Background(), &sb); err != nil {
 		t.Fatalf("failed to render job status: %v", err)
 	}
@@ -768,10 +768,10 @@ func TestStatusResponseCarriesImportedContentOOB(t *testing.T) {
 	data := buildJobStatusView("drupal", &ImportJob{
 		Status: JobCompleted, UpdatedAt: time.Now(),
 		Counters: map[string]int{string(types.EntityPage): 2},
-	})
+	}, nil)
 	counts := map[string]int{string(types.EntityPage): 2, string(types.EntityMedia): 42}
 
-	err := MigratorJobStatusResponse(&adminviews.PageContext{}, data, counts).
+	err := MigratorJobStatusResponse(&adminviews.PageContext{}, data, counts, true).
 		Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render status response: %v", err)
