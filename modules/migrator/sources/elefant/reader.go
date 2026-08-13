@@ -36,14 +36,16 @@ var sanitizeTablePrefix = shared.SanitizeTablePrefix
 
 // NewReader creates a new Elefant database reader.
 func NewReader(ctx context.Context, dsn string, tablePrefix string) (*Reader, error) {
-	// Validate table prefix to prevent SQL injection
-	if _, err := sanitizeTablePrefix(tablePrefix); err != nil {
+	// Validate the table prefix and keep the sanitizer's own output, never the
+	// raw config string, so a tainted value cannot survive on the struct.
+	safePrefix, err := sanitizeTablePrefix(tablePrefix)
+	if err != nil {
 		return nil, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+	db, openErr := sql.Open("mysql", dsn)
+	if openErr != nil {
+		return nil, fmt.Errorf("failed to open database: %w", openErr)
 	}
 	db.SetMaxOpenConns(maxOpenConns)
 	db.SetConnMaxLifetime(connMaxLifetime)
@@ -59,7 +61,7 @@ func NewReader(ctx context.Context, dsn string, tablePrefix string) (*Reader, er
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	return &Reader{db: db, prefix: tablePrefix}, nil
+	return &Reader{db: db, prefix: safePrefix}, nil
 }
 
 // countRows runs a COUNT(*) against a prefixed table under the caller's context.

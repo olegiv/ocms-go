@@ -86,11 +86,11 @@ func dtoFromStore(m store.Medium) Media {
 	if m.FolderID.Valid {
 		dto.FolderID = &m.FolderID.Int64
 	}
-	dto.URLs = &URLs{Original: "/uploads/originals/" + m.Uuid + "/" + m.Filename}
+	dto.URLs = &URLs{Original: model.MediaURL(model.VariantOriginal, m.Uuid, m.Filename)}
 	if handler.IsImageMime(m.MimeType) {
-		dto.URLs.Thumbnail = "/uploads/thumbnail/" + m.Uuid + "/" + m.Filename
-		dto.URLs.Medium = "/uploads/medium/" + m.Uuid + "/" + m.Filename
-		dto.URLs.Large = "/uploads/large/" + m.Uuid + "/" + m.Filename
+		dto.URLs.Thumbnail = model.MediaURL("thumbnail", m.Uuid, m.Filename)
+		dto.URLs.Medium = model.MediaURL("medium", m.Uuid, m.Filename)
+		dto.URLs.Large = model.MediaURL("large", m.Uuid, m.Filename)
 	}
 	return dto
 }
@@ -107,7 +107,7 @@ func (s *Service) populateIncludes(ctx context.Context, dto *Media, mediaID int6
 					Width:     v.Width,
 					Height:    v.Height,
 					Size:      v.Size,
-					URL:       "/uploads/" + v.Type + "/" + dto.UUID + "/" + dto.Filename,
+					URL:       model.MediaURL(v.Type, dto.UUID, dto.Filename),
 					CreatedAt: v.CreatedAt,
 				})
 			}
@@ -433,7 +433,7 @@ func variantsToDTOs(variants []store.MediaVariant, uuid, filename string) []Vari
 			Width:     v.Width,
 			Height:    v.Height,
 			Size:      v.Size,
-			URL:       "/uploads/" + v.Type + "/" + uuid + "/" + filename,
+			URL:       model.MediaURL(v.Type, uuid, filename),
 			CreatedAt: v.CreatedAt,
 		})
 	}

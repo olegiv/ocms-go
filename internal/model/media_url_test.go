@@ -127,9 +127,17 @@ func TestUploadURLsAreBuiltByHelper(t *testing.T) {
 			if !ok || lit.Kind != token.STRING {
 				return true
 			}
-			// Only flag format strings that interpolate a filename into an
-			// /uploads/ path; a bare "/uploads/" prefix is fine.
-			if strings.Contains(lit.Value, "/uploads/") && strings.Contains(lit.Value, "%s/%s") {
+			if !strings.Contains(lit.Value, "/uploads/") {
+				return true
+			}
+			// Two ways to hand-roll the path, both of which skip the encoding:
+			//   fmt.Sprintf("/uploads/%s/%s/%s", …)   — a format string, and
+			//   "/uploads/" + variant + "/" + uuid    — plain concatenation.
+			// Matching only the first is what let the v2 media service drift.
+			// A bare "/uploads/" that is not being joined to anything is fine.
+			formatted := strings.Contains(lit.Value, "%s/%s")
+			concatenated := isOperandOfStringConcat(file, lit)
+			if formatted || concatenated {
 				offenders = append(offenders, rel+":"+
 					itoa(fset.Position(lit.Pos()).Line)+"  "+lit.Value)
 			}
@@ -145,6 +153,28 @@ func TestUploadURLsAreBuiltByHelper(t *testing.T) {
 		t.Errorf("media URLs are built without model.MediaURL, so the filename is not "+
 			"percent-encoded and srcset will break:\n  %s", strings.Join(offenders, "\n  "))
 	}
+}
+
+// isOperandOfStringConcat reports whether lit appears as an operand of a `+`
+// expression, i.e. a path being assembled by concatenation rather than by
+// model.MediaURL.
+func isOperandOfStringConcat(file *ast.File, lit *ast.BasicLit) bool {
+	found := false
+	ast.Inspect(file, func(n ast.Node) bool {
+		bin, ok := n.(*ast.BinaryExpr)
+		if !ok || bin.Op != token.ADD {
+			return true
+		}
+		// Walk the whole `+` chain: the literal may sit at any depth.
+		ast.Inspect(bin, func(inner ast.Node) bool {
+			if inner == lit {
+				found = true
+			}
+			return !found
+		})
+		return !found
+	})
+	return found
 }
 
 // itoa avoids pulling strconv in for a single conversion.

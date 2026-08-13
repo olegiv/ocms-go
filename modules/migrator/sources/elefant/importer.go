@@ -105,6 +105,21 @@ func closeReader(reader *Reader) {
 	}
 }
 
+// track records a created entity so the module can undo the import later.
+//
+// A tracking failure does not abort the import, but it must not be silent: an
+// untracked item is invisible to "delete imported content" and is left behind
+// as an orphan with no record of where it came from.
+func (s *Source) track(ctx context.Context, tracker types.ImportTracker, entityType string, id int64) {
+	if tracker == nil {
+		return
+	}
+	if err := tracker.TrackImportedItem(ctx, s.Name(), entityType, id); err != nil {
+		slog.Warn("failed to track imported item",
+			"source", s.Name(), "type", entityType, "id", id, "error", err)
+	}
+}
+
 // TestConnection tests the connection to the Elefant database.
 func (s *Source) TestConnection(cfg map[string]string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout+readTimeout)
@@ -290,9 +305,7 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 		}
 
 		// Track imported tag for later deletion
-		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "tag", tag.ID)
-		}
+		s.track(ctx, tracker, "tag", tag.ID)
 
 		tagMap[slug] = tag.ID
 		result.TagsImported++
@@ -387,20 +400,21 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 			// Create variants (best effort - don't fail if variants fail)
 			variants, _ := processor.CreateAllVariants(processResult.FilePath, fileUUID, file.Filename)
 			for _, v := range variants {
-				_, _ = queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+				if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
 					MediaID:   media.ID,
 					Type:      v.Type,
 					Width:     int64(v.Width),
 					Height:    int64(v.Height),
 					Size:      v.Size,
 					CreatedAt: now,
-				})
+				}); err != nil {
+					slog.Warn("failed to record media variant",
+						"media_id", media.ID, "variant", v.Type, "error", err)
+				}
 			}
 
 			// Track imported media for later deletion
-			if tracker != nil {
-				_ = tracker.TrackImportedItem(ctx, s.Name(), "media", media.ID)
-			}
+			s.track(ctx, tracker, "media", media.ID)
 
 			// Map old path to new URL
 			mediaMap["/files/"+file.Path] = model.MediaURL(model.VariantOriginal, fileUUID, file.Filename)
@@ -438,9 +452,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 			}
 
 			// Track imported media for later deletion
-			if tracker != nil {
-				_ = tracker.TrackImportedItem(ctx, s.Name(), "media", media.ID)
-			}
+			s.track(ctx, tracker, "media", media.ID)
 
 			// Map old path to new URL
 			mediaMap["/files/"+file.Path] = model.MediaURL(model.VariantOriginal, fileUUID, file.Filename)
@@ -522,9 +534,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 		}
 
 		// Track imported post for later deletion
-		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "post", page.ID)
-		}
+		s.track(ctx, tracker, "post", page.ID)
 
 		// Create page alias for old Elefant URL (blog/post/{id})
 		alias := fmt.Sprintf("blog/post/%d", post.ID)
@@ -642,9 +652,7 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 		}
 
 		// Track imported page for later deletion
-		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "page", page.ID)
-		}
+		s.track(ctx, tracker, "page", page.ID)
 
 		// Create page alias for old Elefant URL path (only if it is a safe alias format)
 		if wp.ID != slug && util.IsValidAlias(wp.ID) {
@@ -765,9 +773,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 		}
 
 		// Track imported user for later deletion
-		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "user", createdUser.ID)
-		}
+		s.track(ctx, tracker, "user", createdUser.ID)
 
 		result.UsersImported++
 	}

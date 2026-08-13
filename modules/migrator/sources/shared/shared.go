@@ -38,6 +38,34 @@ const MaxTablePrefixLength = 20
 // interpolated into SQL; this is what keeps that safe. Callers must use the
 // returned value rather than the input — the string is rebuilt rune by rune so
 // static analysis can see the taint is broken.
+// MaxIdentifierLength is MySQL's limit for a column or table name.
+const MaxIdentifierLength = 64
+
+// SanitizeIdentifier validates a SQL identifier — a column or table name — and
+// returns it unchanged, or an error.
+//
+// Identifiers cannot be bound as parameters, so anything interpolated into a
+// query must be proven safe first. Today every caller passes a Go literal or a
+// value from a package-level table, which is why this was not exploitable; the
+// point is that the guarantee now lives in the function rather than in the
+// discipline of each call site.
+func SanitizeIdentifier(name string) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("invalid identifier: empty")
+	}
+	if len(name) > MaxIdentifierLength {
+		return "", fmt.Errorf("invalid identifier: exceeds maximum length of %d characters", MaxIdentifierLength)
+	}
+	for _, c := range name {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' {
+			continue
+		}
+		return "", fmt.Errorf("invalid identifier %q: contains invalid character %q", name, c)
+	}
+	return name, nil
+}
+
 func SanitizeTablePrefix(prefix string) (string, error) {
 	if prefix == "" {
 		return "", nil

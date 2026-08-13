@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
@@ -344,12 +346,23 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 		}
 	}()
 
+	// Backstop for the flush goroutine. The explicit stopFlush() below handles
+	// the normal path, but a panic in Import would otherwise skip it and leave
+	// the ticker running until the job context expires — up to six hours.
+	// stopFlush is idempotent, so calling it twice is safe.
+	var stopFlush func()
+	defer func() {
+		if stopFlush != nil {
+			stopFlush()
+		}
+	}()
+
 	progress := newJobProgress()
 	m.jobsMu.Lock()
 	m.live[run.SourceName] = progress
 	m.jobsMu.Unlock()
 
-	stopFlush := m.startProgressFlush(ctx, run.ID, progress)
+	stopFlush = m.startProgressFlush(ctx, run.ID, progress)
 
 	result, err := run.Source.Import(ctx, m.ctx.DB, run.Cfg, run.Opts, m)
 	stopFlush()
@@ -367,11 +380,18 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 }
 
 // startProgressFlush persists progress on a ticker and returns a stop function.
+//
+// The goroutine joins jobsWG so Shutdown cannot return while it is mid-write.
+// Its writes use a detached context, so cancellation alone would not stop it
+// racing the database being closed. Registering here is safe: the caller
+// (runImportJob) is already counted in the group, so Wait cannot have returned.
 func (m *Module) startProgressFlush(ctx context.Context, jobID int64, progress *jobProgress) func() {
 	done := make(chan struct{})
 	var once sync.Once
 
+	m.jobsWG.Add(1)
 	go func() {
+		defer m.jobsWG.Done()
 		ticker := time.NewTicker(progressFlushInterval)
 		defer ticker.Stop()
 		for {
@@ -446,8 +466,13 @@ func (m *Module) finalizeJob(ctx context.Context, run jobRun, status JobStatus, 
 			metadata["notices"] = len(result.Notices)
 		}
 		userID := run.UserID
-		_ = m.ctx.Events.LogMigratorEvent(finishCtx, "info",
-			"Content imported from "+run.SourceName, &userID, run.ClientIP, run.RequestURL, metadata)
+		// This is the only durable record that the import happened; a failure
+		// to write it must be visible in the log, not swallowed.
+		if err := m.ctx.Events.LogMigratorEvent(finishCtx, "info",
+			"Content imported from "+run.SourceName, &userID, run.ClientIP, run.RequestURL, metadata); err != nil {
+			m.ctx.Logger.Error("failed to record import audit event",
+				"source", run.SourceName, "job_id", run.ID, "error", err)
+		}
 	}
 }
 
@@ -548,7 +573,13 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 			metadata[entityType+"_deleted"] = count
 		}
 		clientIP := middleware.GetClientIP(r)
-		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Imported content deleted from "+ctx.SourceName, &ctx.User.ID, clientIP, middleware.GetRequestURL(r), metadata)
+		// As above: the only durable record that content was deleted.
+		if err := m.ctx.Events.LogMigratorEvent(r.Context(), "info",
+			"Imported content deleted from "+ctx.SourceName, &ctx.User.ID, clientIP,
+			middleware.GetRequestURL(r), metadata); err != nil {
+			m.ctx.Logger.Error("failed to record delete audit event",
+				"source", ctx.SourceName, "error", err)
+		}
 	}
 
 	m.invalidateCaches(ImportOptions{ImportMenus: true})
@@ -762,7 +793,18 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 }
 
 // deleteMediaFiles removes media files from disk.
+//
+// The UUID is validated before it reaches os.RemoveAll. Media UUIDs are
+// normally server-generated, but internal/transfer/importer.go carries the UUID
+// over from an uploaded archive, so "the value came from our own database" is
+// not a strong enough guarantee for a recursive delete. Each path is then
+// joined properly and confirmed to sit inside the uploads root.
 func (m *Module) deleteMediaFiles(mediaUUID string) {
+	if !isMediaUUID(mediaUUID) {
+		m.ctx.Logger.Warn("refusing to delete media directory for malformed uuid", "uuid", mediaUUID)
+		return
+	}
+
 	uploadDir := os.Getenv("OCMS_UPLOADS_DIR")
 	if uploadDir == "" {
 		uploadDir = "./uploads"
@@ -770,9 +812,35 @@ func (m *Module) deleteMediaFiles(mediaUUID string) {
 	variants := []string{"originals", "thumbnail", "grid", "small", "medium", "large"}
 
 	for _, variant := range variants {
-		dir := uploadDir + "/" + variant + "/" + mediaUUID
+		dir := filepath.Join(uploadDir, variant, mediaUUID)
+		if err := util.ValidatePathWithinBase(uploadDir, dir); err != nil {
+			m.ctx.Logger.Warn("refusing to delete path outside uploads root", "dir", dir, "error", err)
+			continue
+		}
 		if err := os.RemoveAll(dir); err != nil {
 			m.ctx.Logger.Warn("failed to delete media directory", "dir", dir, "error", err)
 		}
 	}
+}
+
+// isMediaUUID reports whether s is a canonical hyphenated UUID. Deliberately
+// stricter than uuid.Parse, which also accepts unhyphenated and URN forms.
+func isMediaUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, r := range s {
+		switch i {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return false
+			}
+		default:
+			isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+			if !isHex {
+				return false
+			}
+		}
+	}
+	return true
 }

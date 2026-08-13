@@ -47,6 +47,18 @@ const (
 	// aspect ratio (100000x1000) from slipping under the pixel count.
 	maxDecodablePixels    = 120000000 // 120 megapixels
 	maxDecodableDimension = 30000
+
+	// maxDecodableBytes caps how many bytes are read into memory before the
+	// dimension checks above can even run.
+	//
+	// The HTTP upload path is already bounded by a 100 MiB request body limit,
+	// but that bound lives in the router, not here — so a caller that does not
+	// arrive over HTTP inherits nothing. The migrator opens files straight off
+	// disk with os.Open, so without this a single oversized file in a source
+	// install is read fully into memory before any validation happens, and the
+	// byte slice stays live through decode. Matching the HTTP limit keeps the
+	// two paths consistent.
+	maxDecodableBytes = 100 << 20 // 100 MiB
 )
 
 // ProcessOptions controls how ProcessImageWithOptions treats an image that
@@ -113,10 +125,14 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 // photo. maxDecodablePixels still applies: past that point the file is refused
 // whatever the caller asked for, because the decode itself is the risk.
 func (p *Processor) ProcessImageWithOptions(reader io.Reader, uuid, filename string, opts ProcessOptions) (*ProcessResult, error) {
-	// Read all data from reader
-	data, err := io.ReadAll(reader)
+	// Read at most maxDecodableBytes, plus one byte so an oversized file is
+	// detected rather than silently truncated into a corrupt image.
+	data, err := io.ReadAll(io.LimitReader(reader, maxDecodableBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read image data: %w", err)
+	}
+	if len(data) > maxDecodableBytes {
+		return nil, fmt.Errorf("image exceeds maximum size of %d bytes", int64(maxDecodableBytes))
 	}
 
 	// Detect format

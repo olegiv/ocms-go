@@ -117,13 +117,17 @@ func BuildDSN(cfg map[string]string) (string, error) {
 
 // NewReader opens a connection to the Drupal database and detects its schema.
 func NewReader(ctx context.Context, dsn, tablePrefix string) (*Reader, error) {
-	if _, err := shared.SanitizeTablePrefix(tablePrefix); err != nil {
+	// Store the sanitizer's own output, never the raw config string, so the
+	// tainted value cannot survive on the struct waiting for a future query
+	// that forgets to re-sanitize.
+	safePrefix, err := shared.SanitizeTablePrefix(tablePrefix)
+	if err != nil {
 		return nil, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+	db, openErr := sql.Open("mysql", dsn)
+	if openErr != nil {
+		return nil, fmt.Errorf("failed to open database: %w", openErr)
 	}
 	db.SetMaxOpenConns(maxOpenConns)
 	db.SetConnMaxLifetime(connMaxLifetime)
@@ -137,7 +141,7 @@ func NewReader(ctx context.Context, dsn, tablePrefix string) (*Reader, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	r := &Reader{db: db, prefix: tablePrefix}
+	r := &Reader{db: db, prefix: safePrefix}
 	if err := r.detectSchema(ctx); err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			slog.Error("failed to close drupal database after schema detection failure", "error", closeErr)
@@ -479,11 +483,24 @@ func (r *Reader) GetFiles(ctx context.Context) ([]File, error) {
 // buildAltQuery assembles a "(file id, alt text)" query over an image field
 // table. Both shapes are identical apart from their column names, so they share
 // one builder rather than two near-copies.
-func buildAltQuery(tbl, idColumn, altColumn string) string {
+//
+// Column names cannot be bound as parameters, so they are validated here rather
+// than trusted from the caller. Every caller currently passes a literal, which
+// is what kept this safe; validating makes that a property of the function
+// instead of a property of the call sites.
+func buildAltQuery(tbl, idColumn, altColumn string) (string, error) {
+	safeID, err := shared.SanitizeIdentifier(idColumn)
+	if err != nil {
+		return "", err
+	}
+	safeAlt, err := shared.SanitizeIdentifier(altColumn)
+	if err != nil {
+		return "", err
+	}
 	return fmt.Sprintf(`
 		SELECT %s, COALESCE(%s, '')
 		FROM %s
-		WHERE %s IS NOT NULL`, idColumn, altColumn, tbl, idColumn)
+		WHERE %s IS NOT NULL`, safeID, safeAlt, tbl, safeID), nil
 }
 
 // readAltMap runs an alt-text query and returns file ID -> first non-empty alt.
@@ -494,7 +511,12 @@ func (r *Reader) readAltMap(ctx context.Context, table, idColumn, altColumn stri
 		return nil, err
 	}
 
-	rows, err := r.db.QueryContext(ctx, buildAltQuery(tbl, idColumn, altColumn))
+	query, err := buildAltQuery(tbl, idColumn, altColumn)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query %s: %w", table, err)
 	}
@@ -574,11 +596,18 @@ func (r *Reader) MediaUUIDsByFile(ctx context.Context) (map[int64][]string, erro
 func (r *Reader) collectMediaUUIDs(ctx context.Context, mediaTbl, fieldTbl, column, label string,
 	byFile map[int64][]string) error {
 
+	// As in buildAltQuery: the column name is interpolated, so validate it here
+	// rather than relying on every caller to pass a literal.
+	safeColumn, err := shared.SanitizeIdentifier(column)
+	if err != nil {
+		return err
+	}
+
 	query := fmt.Sprintf(`
 		SELECT m.uuid, f.%s
 		FROM %s m
 		JOIN %s f ON f.entity_id = m.mid
-		WHERE f.%s IS NOT NULL AND m.uuid <> ''`, column, mediaTbl, fieldTbl, column)
+		WHERE f.%s IS NOT NULL AND m.uuid <> ''`, safeColumn, mediaTbl, fieldTbl, safeColumn)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {

@@ -761,6 +761,17 @@ func reportSkippedMimes(st *importState, skipped map[string]int) {
 func (s *Source) importOneFile(ctx context.Context, st *importState, processor *imaging.Processor,
 	f File, fullPath, mimeType string, now time.Time) (int64, string, error) {
 
+	// Sanitize once, here, and use the result for both the database row and the
+	// disk write. The writers already apply filepath.Base themselves, so
+	// storing f.Filename raw let the two diverge: a source row naming
+	// "../../evil.jpg" wrote to <uuid>/evil.jpg on disk while the database
+	// recorded the traversal string, which then went into every rendered URL.
+	safeFilename, err := util.SanitizeFilename(f.Filename)
+	if err != nil {
+		return 0, "", fmt.Errorf("invalid source filename %q: %w", f.Filename, err)
+	}
+	f.Filename = safeFilename
+
 	src, err := os.Open(fullPath) // #nosec G304 -- path validated by resolveFilePath
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to open file: %w", err)
@@ -769,7 +780,7 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 	fileUUID := uuid.New().String()
 	params := store.CreateMediaParams{
 		Uuid:         fileUUID,
-		Filename:     f.Filename,
+		Filename:     safeFilename,
 		MimeType:     mimeType,
 		Size:         f.Size,
 		Alt:          sql.NullString{String: shared.NullString(f.Alt), Valid: true},
