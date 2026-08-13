@@ -122,3 +122,9 @@ SELECT id FROM menu_items WHERE parent_id = ?;
 
 -- name: ReparentMenuItemChildren :exec
 UPDATE menu_items SET parent_id = ?, updated_at = ? WHERE parent_id = ?;
+
+-- name: ListMenuItemIDsForPage :many
+SELECT id FROM menu_items WHERE page_id = ?;
+
+-- name: ConvertMenuItemToURL :exec
+UPDATE menu_items SET page_id = NULL, url = ?, updated_at = ? WHERE id = ?;

@@ -885,6 +885,34 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 		return q.DeleteMedia(ctx, id)
 	}
 
+	// menu_items.page_id is ON DELETE SET NULL and a page-backed item stores no
+	// fallback URL, so deleting an imported page left any administrator-created
+	// item pointing at it present but with an empty destination. Tracked menu
+	// items are already gone by the time pages are deleted, so everything still
+	// pointing at the page belongs to the administrator: those items are given
+	// the page's URL. It will 404 — the page really is being removed — but a
+	// visible, editable link beats one that silently goes nowhere.
+	detachMenuItems := func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
+		page, err := q.GetPageByID(ctx, id)
+		if err != nil {
+			return false, err
+		}
+		items, err := q.ListMenuItemIDsForPage(ctx, sql.NullInt64{Int64: id, Valid: true})
+		if err != nil {
+			return false, err
+		}
+		for _, itemID := range items {
+			if err := q.ConvertMenuItemToURL(ctx, store.ConvertMenuItemToURLParams{
+				Url:       sql.NullString{String: "/" + page.Slug, Valid: true},
+				UpdatedAt: time.Now(),
+				ID:        itemID,
+			}); err != nil {
+				return false, err
+			}
+		}
+		return false, nil
+	}
+
 	return []entityDeleter{
 		{entityType: types.EntityMenuItem, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteMenuItem(ctx, id)
@@ -920,8 +948,8 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 			return q.DeleteMenu(ctx, id)
 		}},
 		{entityType: types.EntityAlias, cascadesFrom: types.EntityPage},
-		{entityType: types.EntityPost, del: deletePage},
-		{entityType: types.EntityPage, del: deletePage},
+		{entityType: types.EntityPost, del: deletePage, beforeDelete: detachMenuItems},
+		{entityType: types.EntityPage, del: deletePage, beforeDelete: detachMenuItems},
 		{entityType: types.EntityTag, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteTag(ctx, id)
 		}, beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {

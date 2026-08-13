@@ -11,6 +11,21 @@ import (
 	"time"
 )
 
+const convertMenuItemToURL = `-- name: ConvertMenuItemToURL :exec
+UPDATE menu_items SET page_id = NULL, url = ?, updated_at = ? WHERE id = ?
+`
+
+type ConvertMenuItemToURLParams struct {
+	Url       sql.NullString `json:"url"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	ID        int64          `json:"id"`
+}
+
+func (q *Queries) ConvertMenuItemToURL(ctx context.Context, arg ConvertMenuItemToURLParams) error {
+	_, err := q.db.ExecContext(ctx, convertMenuItemToURL, arg.Url, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const countMenuItems = `-- name: CountMenuItems :one
 SELECT COUNT(*) FROM menu_items WHERE menu_id = ?
 `
@@ -334,6 +349,33 @@ func (q *Queries) ListChildMenuItems(ctx context.Context, parentID sql.NullInt64
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMenuItemIDsForPage = `-- name: ListMenuItemIDsForPage :many
+SELECT id FROM menu_items WHERE page_id = ?
+`
+
+func (q *Queries) ListMenuItemIDsForPage(ctx context.Context, pageID sql.NullInt64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listMenuItemIDsForPage, pageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

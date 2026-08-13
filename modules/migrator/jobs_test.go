@@ -1206,3 +1206,78 @@ func TestDeleteImportedItemsKeepsAdminChildrenAndSharedMedia(t *testing.T) {
 		t.Error("the original page lost its featured image; ON DELETE SET NULL fired")
 	}
 }
+
+// TestDeleteImportedItemsDetachesAdminMenuItemsFromDeletedPages covers an
+// administrator pointing one of their own menu items at an imported page.
+//
+// menu_items.page_id is ON DELETE SET NULL and a page-backed item stores no
+// fallback URL, so deleting the import left that item present with an empty
+// destination — a link that silently goes nowhere. Tracked menu items are
+// already deleted by the time pages are, so anything still pointing at the page
+// belongs to the administrator and is given the page's URL instead.
+func TestDeleteImportedItemsDetachesAdminMenuItemsFromDeletedPages(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	queries := store.New(m.ctx.DB)
+	now := time.Now()
+
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "menus@example.com", PasswordHash: "x", Role: "admin",
+		Name: "Menus", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	imported, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Imported", Slug: "imported-page", Status: "published",
+		AuthorID: author.ID, LanguageCode: lang.Code, PageType: "page",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create page: %v", err)
+	}
+
+	menu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Main", Slug: "main-detach", LanguageCode: lang.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu: %v", err)
+	}
+	// The administrator's own item, never tracked, pointing at the imported page.
+	adminItem, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: menu.ID, Title: "Read this", IsActive: true,
+		PageID:    sql.NullInt64{Int64: imported.ID, Valid: true},
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu item: %v", err)
+	}
+
+	if err := m.TrackImportedItem(ctx, "drupal", string(types.EntityPage), imported.ID); err != nil {
+		t.Fatalf("failed to track page: %v", err)
+	}
+
+	if _, err := m.deleteImportedItems(ctx, "drupal"); err != nil {
+		t.Fatalf("deleteImportedItems() error = %v", err)
+	}
+
+	if _, err := queries.GetPageByID(ctx, imported.ID); err == nil {
+		t.Error("the imported page survived; it was tracked and unreferenced by anything preserved")
+	}
+
+	after, err := queries.GetMenuItemByID(ctx, adminItem.ID)
+	if err != nil {
+		t.Fatalf("the administrator's menu item disappeared: %v", err)
+	}
+	if after.PageID.Valid {
+		t.Errorf("menu item still references page %d after it was deleted", after.PageID.Int64)
+	}
+	if !after.Url.Valid || after.Url.String != "/imported-page" {
+		t.Errorf("menu item URL = %v, want /imported-page; without it the link has an "+
+			"empty destination and silently goes nowhere", after.Url)
+	}
+}

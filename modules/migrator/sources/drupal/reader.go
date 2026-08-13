@@ -52,6 +52,12 @@ const (
 	// dropped all legacy redirects.
 	tableURLAlias     = "url_alias"
 	tableMenuLinkData = "menu_link_content_data"
+	// tableConfig holds Drupal's active configuration, which is the only place
+	// a reference field's target entity type is recorded.
+	tableConfig = "config"
+	// tableMediaData carries media's translatable fields, including
+	// default_langcode.
+	tableMediaData = "media_field_data"
 )
 
 // Schema records which optional Drupal tables exist in the source database.
@@ -70,6 +76,8 @@ type Schema struct {
 	// LegacyAliases is true when only the pre-8.8 url_alias table is present.
 	LegacyAliases bool
 	HasMenuLinks  bool
+	HasConfig     bool
+	HasMediaData  bool
 }
 
 // MissingOptional returns the optional tables that were not found, so the admin
@@ -252,6 +260,8 @@ func (r *Reader) detectSchema(ctx context.Context) error {
 		HasAliases:    has(tablePathAlias) || has(tableURLAlias),
 		LegacyAliases: !has(tablePathAlias) && has(tableURLAlias),
 		HasMenuLinks:  has(tableMenuLinkData),
+		HasConfig:     has(tableConfig),
+		HasMediaData:  has(tableMediaData),
 	}
 	return nil
 }
@@ -521,7 +531,7 @@ func (r *Reader) GetFiles(ctx context.Context) ([]File, error) {
 // than trusted from the caller. Every caller currently passes a literal, which
 // is what kept this safe; validating makes that a property of the function
 // instead of a property of the call sites.
-func buildAltQuery(tbl, idColumn, altColumn string) (string, error) {
+func buildAltQuery(tbl, idColumn, altColumn string, entity entityJoin) (string, error) {
 	safeID, err := shared.SanitizeIdentifier(idColumn)
 	if err != nil {
 		return "", err
@@ -530,21 +540,65 @@ func buildAltQuery(tbl, idColumn, altColumn string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	// Without the join the field table is read across every language and
+	// readAltMap keeps whichever row came back first, so a translated alt could
+	// land on media even though only default-language content is imported —
+	// and which one won was not even deterministic.
+	if entity.Table == "" {
+		return fmt.Sprintf(`
+		SELECT f.%s, COALESCE(f.%s, '')
+		FROM %s f
+		WHERE f.%s IS NOT NULL`, safeID, safeAlt, tbl, safeID), nil
+	}
 	return fmt.Sprintf(`
-		SELECT %s, COALESCE(%s, '')
-		FROM %s
-		WHERE %s IS NOT NULL`, safeID, safeAlt, tbl, safeID), nil
+		SELECT f.%s, COALESCE(f.%s, '')
+		FROM %s f
+		JOIN %s e ON e.%s = f.entity_id AND e.default_langcode = 1 AND f.langcode = e.langcode
+		WHERE f.%s IS NOT NULL`,
+		safeID, safeAlt, tbl, entity.Table, entity.IDColumn, safeID), nil
+}
+
+// entityJoin names the entity data table a field table belongs to, so a field
+// row can be restricted to the entity's default-language revision. A zero value
+// means "no join available", which is the pre-8 shape and a site whose media
+// data table is absent.
+type entityJoin struct {
+	Table    string // fully prefixed and sanitized
+	IDColumn string
+}
+
+// entityJoinFor builds the join describing a field table's owning entity.
+//
+// present is false when the site has no such table — a Drupal 8 install without
+// the media module, for instance. The alt text is then read unfiltered, which
+// is the old behaviour and only matters on a multilingual site.
+func (r *Reader) entityJoinFor(table, idColumn string, present bool) (entityJoin, error) {
+	if !present {
+		return entityJoin{}, nil
+	}
+	tbl, err := r.table(table)
+	if err != nil {
+		return entityJoin{}, err
+	}
+	safeID, err := shared.SanitizeIdentifier(idColumn)
+	if err != nil {
+		return entityJoin{}, err
+	}
+	return entityJoin{Table: tbl, IDColumn: safeID}, nil
 }
 
 // readAltMap runs an alt-text query and returns file ID -> first non-empty alt.
-func (r *Reader) readAltMap(ctx context.Context, table, idColumn, altColumn string) (map[int64]string, error) {
+func (r *Reader) readAltMap(ctx context.Context, table, idColumn, altColumn string,
+	entity entityJoin) (map[int64]string, error) {
+
 	alts := make(map[int64]string)
 	tbl, err := r.table(table)
 	if err != nil {
 		return nil, err
 	}
 
-	query, err := buildAltQuery(tbl, idColumn, altColumn)
+	query, err := buildAltQuery(tbl, idColumn, altColumn, entity)
 	if err != nil {
 		return nil, err
 	}
@@ -683,7 +737,12 @@ func (r *Reader) fileAltText(ctx context.Context) (map[int64]string, error) {
 	alts := make(map[int64]string)
 
 	if r.schema.HasNodeImage {
-		nodeAlts, err := r.readAltMap(ctx, tableNodeImage, "field_image_target_id", "field_image_alt")
+		nodeEntity, err := r.entityJoinFor(tableNodeData, "nid", true)
+		if err != nil {
+			return nil, err
+		}
+		nodeAlts, err := r.readAltMap(ctx, tableNodeImage,
+			"field_image_target_id", "field_image_alt", nodeEntity)
 		if err != nil {
 			return nil, err
 		}
@@ -691,8 +750,12 @@ func (r *Reader) fileAltText(ctx context.Context) (map[int64]string, error) {
 	}
 
 	if r.schema.HasMediaImg {
+		mediaEntity, err := r.entityJoinFor(tableMediaData, "mid", r.schema.HasMediaData)
+		if err != nil {
+			return nil, err
+		}
 		mediaAlts, err := r.readAltMap(ctx, tableMediaImage,
-			"field_media_image_target_id", "field_media_image_alt")
+			"field_media_image_target_id", "field_media_image_alt", mediaEntity)
 		if err != nil {
 			return nil, err
 		}
@@ -834,19 +897,100 @@ type taxonomyRefField struct {
 	Column string // sanitized "field_<name>_target_id"
 }
 
-// taxonomyRefFields discovers every node entity-reference field table.
+// taxonomyTargetMarker is how Drupal's PHP-serialized field storage config
+// records that a reference field points at taxonomy terms. The "11" and "13"
+// are the fixed lengths of "target_type" and "taxonomy_term".
+const taxonomyTargetMarker = `s:11:"target_type";s:13:"taxonomy_term"`
+
+// taxonomyFieldNames returns the node field names whose storage config declares
+// taxonomy_term as its target entity type.
 //
-// Reading only node__field_tags was wrong on any site that references a
-// vocabulary through a differently named field — field_category is the common
-// one. Its terms were imported and then had no page associations at all, so
-// ticking "categories" produced a set of detached categories.
+// This has to be read from configuration. The previous version discovered every
+// node__field_*_target_id column and relied on a join to taxonomy_term_field_data
+// to discard non-term references — which does not work: Drupal allocates file,
+// media, user and term IDs from independent sequences, so a node referencing
+// file 7 was assigned term 7 whenever term 7 existed. On any site with an image
+// field and a vocabulary that silently corrupts the tags and categories of most
+// pages, which is far worse than the missing associations it set out to fix.
+func (r *Reader) taxonomyFieldNames(ctx context.Context) (map[string]bool, error) {
+	if !r.schema.HasConfig {
+		return nil, fmt.Errorf("table %s not found", tableConfig)
+	}
+	tbl, err := r.table(tableConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Active config lives in the database by default. The collection filter
+	// keeps language overrides out; they carry no target_type of their own.
+	query := fmt.Sprintf(`
+		SELECT name, data
+		FROM %s
+		WHERE collection = '' AND name LIKE 'field.storage.node.%%'`, tbl)
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read field storage config: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
+
+	names := make(map[string]bool)
+	for rows.Next() {
+		var name, data string
+		if err := rows.Scan(&name, &data); err != nil {
+			return nil, fmt.Errorf("failed to scan field storage config: %w", err)
+		}
+		if !strings.Contains(data, taxonomyTargetMarker) {
+			continue
+		}
+		if field := fieldNameFromStorageConfig(name); field != "" {
+			names[field] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating field storage config: %w", err)
+	}
+	return names, nil
+}
+
+// fieldNameFromStorageConfig extracts "field_category" from
+// "field.storage.node.field_category".
+func fieldNameFromStorageConfig(configName string) string {
+	const prefix = "field.storage.node."
+	if !strings.HasPrefix(configName, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(configName, prefix)
+}
+
+// taxonomyRefFields returns the field tables holding this site's node-to-term
+// references.
 //
-// Field tables are per-site, so they are discovered rather than assumed, the
-// same way the rest of the schema is. A reference column alone does not prove a
-// taxonomy field — node__field_image has field_image_target_id, pointing at a
-// file — so NodeTerms joins the taxonomy table and lets non-term references
-// fall out of the result instead of guessing from names.
+// Table names are discovered rather than derived from the field name, because
+// Drupal truncates and hashes names over 48 characters; the column name is what
+// ties a table back to its field.
 func (r *Reader) taxonomyRefFields(ctx context.Context) ([]taxonomyRefField, error) {
+	taxonomyFields, err := r.taxonomyFieldNames(ctx)
+	if err != nil {
+		// Without the field configuration there is no way to tell a term
+		// reference from a file one, so fall back to the single field whose
+		// target type is fixed by Drupal core rather than guessing. Importing
+		// fewer associations is recoverable; importing wrong ones is not.
+		slog.Warn("failed to read taxonomy field configuration", "error", err)
+		r.warnings = append(r.warnings, fmt.Sprintf(
+			"taxonomy field configuration could not be read (%v); only %s was used, "+
+				"so pages may be missing categories from other reference fields",
+			err, tableNodeTags))
+		taxonomyFields = map[string]bool{"field_tags": true}
+	}
+	if len(taxonomyFields) == 0 {
+		return nil, nil
+	}
+
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT TABLE_NAME, COLUMN_NAME
 		FROM INFORMATION_SCHEMA.COLUMNS
@@ -871,7 +1015,7 @@ func (r *Reader) taxonomyRefFields(ctx context.Context) ([]taxonomyRefField, err
 		if err := rows.Scan(&table, &column); err != nil {
 			return nil, fmt.Errorf("failed to scan reference field: %w", err)
 		}
-		if f, ok := matchTaxonomyRefField(table, column, wantPrefix); ok {
+		if f, ok := matchTaxonomyRefField(table, column, wantPrefix, taxonomyFields); ok {
 			fields = append(fields, f)
 		}
 	}
@@ -882,14 +1026,17 @@ func (r *Reader) taxonomyRefFields(ctx context.Context) ([]taxonomyRefField, err
 }
 
 // matchTaxonomyRefField decides whether one (table, column) pair is a node
-// entity-reference field this reader can query.
+// reference field that points at taxonomy terms.
 //
-// It deliberately does not try to tell a taxonomy reference from a file or user
-// one by name: node__field_image looks identical to node__field_category here.
-// NodeTerms joins the taxonomy table instead, so a non-term reference produces
-// no rows rather than a wrong association.
-func matchTaxonomyRefField(table, column, wantPrefix string) (taxonomyRefField, bool) {
+// taxonomyFields is the authority. Matching on shape alone accepts
+// node__field_image, whose field_image_target_id holds file IDs from a separate
+// sequence, and no amount of joining can tell those apart from term IDs.
+func matchTaxonomyRefField(table, column, wantPrefix string, taxonomyFields map[string]bool) (taxonomyRefField, bool) {
 	if !strings.HasPrefix(strings.ToLower(table), wantPrefix) {
+		return taxonomyRefField{}, false
+	}
+	field := strings.TrimSuffix(strings.ToLower(column), "_target_id")
+	if field == strings.ToLower(column) || !taxonomyFields[field] {
 		return taxonomyRefField{}, false
 	}
 	safeTable, err := shared.SanitizeIdentifier(table)
@@ -932,11 +1079,11 @@ func (r *Reader) NodeTerms(ctx context.Context) (map[int64][]int64, error) {
 
 	seen := make(map[int64]map[int64]bool)
 	for _, f := range fields {
-		// The join to the taxonomy table is what makes discovery safe: a
-		// reference to a file or a user has no matching tid and drops out.
-		// The node join filters to the imported language, as NodeImages does —
-		// unfiltered, this appended the terms of every translation onto the
-		// default-language page.
+		// The taxonomy join only drops references to terms that no longer
+		// exist; it is not what makes discovery safe. Field configuration is
+		// — see taxonomyFieldNames. The node join filters to the imported
+		// language, as NodeImages does: unfiltered, this appended the terms of
+		// every translation onto the default-language page.
 		query := fmt.Sprintf(`
 			SELECT f.entity_id, f.%s
 			FROM %s f
