@@ -177,6 +177,16 @@ type ImportResult struct {
 	// field and some translations would report "3 errors" having done exactly
 	// what it was asked to.
 	Notices []string `json:"notices,omitempty"`
+
+	// Summaries records end-of-stage aggregates, uncapped. See AddSummary for
+	// why these must not share the per-item budget.
+	Summaries []string `json:"summaries,omitempty"`
+
+	// ErrorsOmitted and NoticesOmitted count messages dropped past the cap.
+	// Without them 101 failures and 100,000 failures both rendered as "100
+	// errors", so a total failure read as a 1% failure.
+	ErrorsOmitted  int `json:"errors_omitted,omitempty"`
+	NoticesOmitted int `json:"notices_omitted,omitempty"`
 }
 
 // MaxTrackedMessages caps the number of retained per-item errors and notices so
@@ -188,21 +198,34 @@ const MaxTrackedMessages = 100
 // reached the final entry becomes a truncation marker, so "no more errors" is
 // distinguishable from "we stopped recording them".
 func (r *ImportResult) AddError(format string, args ...any) {
-	r.Errors = appendCapped(r.Errors, "additional errors omitted", format, args...)
+	r.Errors = appendCapped(r.Errors, &r.ErrorsOmitted, format, args...)
 }
 
 // AddNotice appends an informational message about expected, non-fatal
 // behaviour. Use this rather than AddError for anything the operator does not
 // need to act on.
 func (r *ImportResult) AddNotice(format string, args ...any) {
-	r.Notices = appendCapped(r.Notices, "additional notices omitted", format, args...)
+	r.Notices = appendCapped(r.Notices, &r.NoticesOmitted, format, args...)
 }
 
-// appendCapped appends a formatted message, replacing the last entry with a
-// truncation marker once the cap is reached.
-func appendCapped(messages []string, truncation, format string, args ...any) []string {
+// AddSummary records an end-of-stage aggregate — "N files were skipped", "N
+// embeds were removed from page bodies".
+//
+// Summaries are kept outside the capped list on purpose. They are emitted after
+// the per-item loops, so when a systematic failure produced a per-item message
+// for every file the cap was already exhausted and precisely the messages that
+// explained the failure were the ones dropped. One of them reports that
+// unresolvable media embeds were deleted from page bodies, which is the exact
+// silent content loss the importer sets out to make visible.
+func (r *ImportResult) AddSummary(format string, args ...any) {
+	r.Summaries = append(r.Summaries, fmt.Sprintf(format, args...))
+}
+
+// appendCapped appends a formatted message, counting anything dropped past the
+// cap so "no more errors" stays distinguishable from "we stopped recording".
+func appendCapped(messages []string, omitted *int, format string, args ...any) []string {
 	if len(messages) >= MaxTrackedMessages {
-		messages[MaxTrackedMessages-1] = truncation
+		*omitted++
 		return messages
 	}
 	return append(messages, fmt.Sprintf(format, args...))
@@ -253,8 +276,12 @@ func (r *ImportResult) HasErrors() bool {
 }
 
 // HasNotices returns true if the import recorded informational messages.
+//
+// Summaries count: they are notices that were moved off the capped list so a
+// systematic per-item failure could not bury them, not a different kind of
+// message. finishJob folds them back in ahead of the per-item notices.
 func (r *ImportResult) HasNotices() bool {
-	return len(r.Notices) > 0
+	return len(r.Notices) > 0 || len(r.Summaries) > 0
 }
 
 // sumCounters totals a counter map.

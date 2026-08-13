@@ -870,11 +870,16 @@ func TestImportMediaReportsSkippedTypes(t *testing.T) {
 	}
 	// Aggregated, not one per file: a site with many SVGs would otherwise fill
 	// the tracked-message budget and bury the per-file notices.
-	if len(st.result.Notices) != 1 {
-		t.Errorf("notices = %v, want a single aggregated notice", st.result.Notices)
+	//
+	// It is recorded as a Summary rather than a Notice because aggregates are
+	// emitted after the per-item loops — on a systematically failing import the
+	// capped list is already full by then, and the aggregate was the message
+	// being dropped.
+	if len(st.result.Summaries) != 1 {
+		t.Errorf("summaries = %v, want a single aggregated summary", st.result.Summaries)
 	}
-	if !strings.Contains(st.result.Notices[0], "image/svg+xml") {
-		t.Errorf("notice %q does not name the skipped type", st.result.Notices[0])
+	if !strings.Contains(st.result.Summaries[0], "image/svg+xml") {
+		t.Errorf("summary %q does not name the skipped type", st.result.Summaries[0])
 	}
 }
 

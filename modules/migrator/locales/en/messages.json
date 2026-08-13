@@ -43,6 +43,7 @@
         {"id": "migrator.job_running", "message": "Running", "translation": "Running"},
         {"id": "migrator.job_completed", "message": "Completed", "translation": "Completed"},
         {"id": "migrator.job_failed", "message": "Failed", "translation": "Failed"},
+        {"id": "migrator.job_partial", "message": "Completed with errors", "translation": "Completed with errors"},
         {"id": "migrator.job_interrupted", "message": "Interrupted", "translation": "Interrupted"},
         {"id": "migrator.job_progress", "message": "%d of %d", "translation": "%d of %d"},
         {"id": "migrator.job_progress_unknown", "message": "%d processed", "translation": "%d processed"},

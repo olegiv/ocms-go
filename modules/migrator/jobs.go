@@ -19,14 +19,20 @@ import (
 type JobStatus string
 
 const (
-	JobRunning     JobStatus = "running"
-	JobCompleted   JobStatus = "completed"
-	JobFailed      JobStatus = "failed"
+	JobRunning   JobStatus = "running"
+	JobCompleted JobStatus = "completed"
+	JobFailed    JobStatus = "failed"
+	// JobPartial is a run that finished but recorded per-item errors.
+	//
+	// Sources report per-item failures on ImportResult, not as the returned
+	// error, so deriving status from the error alone reported an import where
+	// every single item failed as a clean "completed".
+	JobPartial     JobStatus = "partial"
 	JobInterrupted JobStatus = "interrupted"
 )
 
 // AllJobStatuses lists every job status, for translation-coverage tests.
-var AllJobStatuses = []JobStatus{JobRunning, JobCompleted, JobFailed, JobInterrupted}
+var AllJobStatuses = []JobStatus{JobRunning, JobCompleted, JobFailed, JobPartial, JobInterrupted}
 
 const (
 	// importJobTimeout bounds a single import run. It is generous because the
@@ -298,8 +304,24 @@ func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, r
 	if result != nil {
 		counters = stringKeyed(result.Counters())
 		skipped = stringKeyed(result.SkippedCounters())
+
 		jobErrors = result.Errors
-		jobNotices = result.Notices
+		// Report what the cap dropped. Without this 101 failures and 100,000
+		// failures both rendered as "100 errors", so a total failure looked
+		// like a 1% failure.
+		if result.ErrorsOmitted > 0 {
+			jobErrors = append(append([]string{}, jobErrors...),
+				fmt.Sprintf("%d additional error(s) omitted", result.ErrorsOmitted))
+		}
+
+		// End-of-stage summaries lead, because they are the messages that
+		// explain a systematic failure and they are emitted after the per-item
+		// loops that would otherwise have exhausted the budget.
+		jobNotices = append(append([]string{}, result.Summaries...), result.Notices...)
+		if result.NoticesOmitted > 0 {
+			jobNotices = append(jobNotices,
+				fmt.Sprintf("%d additional notice(s) omitted", result.NoticesOmitted))
+		}
 	}
 
 	countersJSON, err := json.Marshal(counters)

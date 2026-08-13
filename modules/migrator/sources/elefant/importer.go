@@ -177,7 +177,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if opts.ImportTags {
 		tagMap, err = s.importTags(ctx, queries, reader, defaultLang.Code, opts, result, tracker)
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Tags import error: %v", err))
+			result.AddError("Tags import error: %v", err)
 		}
 	} else {
 		// Build tag map from existing tags
@@ -195,7 +195,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 			uploadDir := getUploadDir()
 			mediaMap, err = s.importMedia(ctx, queries, filesPath, uploadDir, authorID, result, tracker)
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Media import error: %v", err))
+				result.AddError("Media import error: %v", err)
 			}
 		}
 	}
@@ -203,21 +203,21 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	// Import posts
 	if opts.ImportPosts {
 		if err := s.importPosts(ctx, queries, reader, authorID, defaultLang.Code, tagMap, mediaMap, opts, result, tracker); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Posts import error: %v", err))
+			result.AddError("Posts import error: %v", err)
 		}
 	}
 
 	// Import pages (static webpages)
 	if opts.ImportPages {
 		if err := s.importPages(ctx, queries, reader, authorID, defaultLang.Code, mediaMap, opts, result, tracker); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Pages import error: %v", err))
+			result.AddError("Pages import error: %v", err)
 		}
 	}
 
 	// Import users (as public users only)
 	if opts.ImportUsers {
 		if err := s.importUsers(ctx, queries, reader, opts, result, tracker); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Users import error: %v", err))
+			result.AddError("Users import error: %v", err)
 		}
 	}
 
@@ -225,7 +225,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if opts.ImportPosts || opts.ImportPages {
 		searchService := service.NewSearchService(db)
 		if err := searchService.RebuildIndex(ctx); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("FTS index rebuild error: %v", err))
+			result.AddError("FTS index rebuild error: %v", err)
 		}
 	}
 
@@ -300,7 +300,7 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 			UpdatedAt:    now,
 		})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create tag '%s': %v", name, err))
+			result.AddError("Failed to create tag '%s': %v", name, err)
 			continue
 		}
 
@@ -355,7 +355,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 		// Open source file
 		srcFile, err := os.Open(file.FullPath)
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to open %s: %v", file.Path, err))
+			result.AddError("Failed to open %s: %v", file.Path, err)
 			continue
 		}
 
@@ -372,7 +372,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				slog.Error("failed to close source file", "path", file.Path, "error", closeErr)
 			}
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to process %s: %v", file.Path, err))
+				result.AddError("Failed to process %s: %v", file.Path, err)
 				continue
 			}
 
@@ -393,12 +393,17 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				UpdatedAt:    now,
 			})
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create media record for %s: %v", file.Path, err))
+				result.AddError("Failed to create media record for %s: %v", file.Path, err)
 				continue
 			}
 
-			// Create variants (best effort - don't fail if variants fail)
-			variants, _ := processor.CreateAllVariants(processResult.FilePath, fileUUID, file.Filename)
+			// Best effort for a partial failure, but CreateAllVariants errors
+			// only when every variant failed — the signal that the whole
+			// library will have no thumbnails. See the Drupal source.
+			variants, varErr := processor.CreateAllVariants(processResult.FilePath, fileUUID, file.Filename)
+			if varErr != nil {
+				result.AddError("%s: no resized variants could be created: %v", file.Filename, varErr)
+			}
 			for _, v := range variants {
 				if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
 					MediaID:   media.ID,
@@ -426,7 +431,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				slog.Error("failed to close source file", "path", file.Path, "error", closeErr)
 			}
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to save %s: %v", file.Path, err))
+				result.AddError("Failed to save %s: %v", file.Path, err)
 				continue
 			}
 
@@ -447,7 +452,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				UpdatedAt:    now,
 			})
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create media record for %s: %v", file.Path, err))
+				result.AddError("Failed to create media record for %s: %v", file.Path, err)
 				continue
 			}
 
@@ -529,7 +534,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			UpdatedAt:       now,
 		})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create page '%s': %v", post.Title, err))
+			result.AddError("Failed to create page '%s': %v", post.Title, err)
 			continue
 		}
 
@@ -558,7 +563,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 				UpdatedAt:   now,
 				ID:          page.ID,
 			}); err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to set published_at for '%s': %v", post.Title, err))
+				result.AddError("Failed to set published_at for '%s': %v", post.Title, err)
 			}
 		}
 
@@ -572,7 +577,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 						PageID: page.ID,
 						TagID:  tagID,
 					}); err != nil {
-						result.Errors = append(result.Errors, fmt.Sprintf("Failed to add tag '%s' to page '%s': %v", tagSlug, post.Title, err))
+						result.AddError("Failed to add tag '%s' to page '%s': %v", tagSlug, post.Title, err)
 					}
 				}
 			}
@@ -647,7 +652,7 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 			UpdatedAt:       now,
 		})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create page '%s': %v", wp.Title, err))
+			result.AddError("Failed to create page '%s': %v", wp.Title, err)
 			continue
 		}
 
@@ -680,7 +685,7 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 				UpdatedAt:   now,
 				ID:          page.ID,
 			}); err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to set published_at for page '%s': %v", wp.Title, err))
+				result.AddError("Failed to set published_at for page '%s': %v", wp.Title, err)
 			}
 		}
 
@@ -768,7 +773,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 			UpdatedAt:    now,
 		})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create user '%s': %v", user.Email, err))
+			result.AddError("Failed to create user '%s': %v", user.Email, err)
 			continue
 		}
 

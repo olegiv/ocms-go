@@ -752,7 +752,7 @@ func reportSkippedMimes(st *importState, skipped map[string]int) {
 	sort.Strings(mimeTypes)
 
 	for _, mimeType := range mimeTypes {
-		st.result.AddNotice("%d file(s) of type %q were skipped; the type is not in the media allowlist",
+		st.result.AddSummary("%d file(s) of type %q were skipped; the type is not in the media allowlist",
 			skipped[mimeType], mimeType)
 	}
 }
@@ -828,8 +828,15 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 	st.track(ctx, types.EntityMedia, media.ID)
 
 	if variantSource != "" {
-		// Variants are best-effort: a failure here costs a thumbnail, not the file.
-		variants, _ := processor.CreateAllVariants(variantSource, fileUUID, f.Filename)
+		// Variants are best-effort: a partial failure costs a thumbnail, not the
+		// file. But CreateAllVariants returns an error ONLY when every variant
+		// failed, so discarding it hid the one case that matters — a full disk
+		// or an unwritable variant directory leaving the entire library with no
+		// thumbnails and the job still reporting a clean import.
+		variants, varErr := processor.CreateAllVariants(variantSource, fileUUID, f.Filename)
+		if varErr != nil {
+			st.result.AddError("%s: no resized variants could be created: %v", f.Filename, varErr)
+		}
 		for _, v := range variants {
 			if _, err := st.queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
 				MediaID:   media.ID,
@@ -928,7 +935,7 @@ func reportUnresolvedEmbeds(st *importState) {
 	for _, uuid := range st.refs.Unresolved {
 		unique[uuid] = true
 	}
-	st.result.AddNotice("%d media embed(s) referencing %d unknown media item(s) were removed "+
+	st.result.AddSummary("%d media embed(s) referencing %d unknown media item(s) were removed "+
 		"from page bodies; the referenced files were not imported",
 		len(st.refs.Unresolved), len(unique))
 }

@@ -329,12 +329,26 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 // The goroutine cannot set a flash message — there is no request or session
 // here — so completion surfaces through the status fragment and the event log.
 func (m *Module) runImportJob(ctx context.Context, run jobRun) {
+	// result is declared before the recover defer so a panic can still persist
+	// whatever the run had accomplished. Passing nil here zeroed the counters
+	// the flush goroutine had already written, so a panic at item 4201 reported
+	// "0 imported" while 4200 rows sat in the database — inviting an operator
+	// to re-run and duplicate all of them.
+	var result *ImportResult
+
 	defer m.jobsWG.Done()
 	defer func() {
 		m.jobsMu.Lock()
+		cancel := m.cancel[run.ID]
 		delete(m.cancel, run.ID)
 		delete(m.live, run.SourceName)
 		m.jobsMu.Unlock()
+		// Release the 6h timer and the retained request-scoped context values.
+		// Only Shutdown ever called these, so every completed import used to
+		// pin its whole context chain until the timeout expired.
+		if cancel != nil {
+			cancel()
+		}
 	}()
 
 	// chi's Recoverer middleware does not reach this goroutine, so without an
@@ -342,7 +356,7 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			m.ctx.Logger.Error("import panicked", "source", run.SourceName, "job_id", run.ID, "panic", rec)
-			m.finalizeJob(ctx, run, JobFailed, nil, fmt.Errorf("import panicked: %v", rec))
+			m.finalizeJob(ctx, run, JobFailed, result, fmt.Errorf("import panicked: %v", rec))
 		}
 	}()
 
@@ -367,16 +381,44 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 	result, err := run.Source.Import(ctx, m.ctx.DB, run.Cfg, run.Opts, m)
 	stopFlush()
 
-	status := JobCompleted
-	switch {
-	case err != nil:
-		status = JobFailed
+	status := deriveJobStatus(err, ctx.Err(), result)
+	switch status {
+	case JobFailed:
 		m.ctx.Logger.Error("import failed", "source", run.SourceName, "job_id", run.ID, "error", err)
-	case ctx.Err() != nil:
-		status = JobInterrupted
+	case JobPartial:
+		m.ctx.Logger.Warn("import completed with errors",
+			"source", run.SourceName, "job_id", run.ID,
+			"errors", len(result.Errors), "imported", result.TotalImported())
+	case JobRunning, JobCompleted, JobInterrupted:
+		// No extra logging; finalizeJob records the outcome.
 	}
 
 	m.finalizeJob(ctx, run, status, result, err)
+}
+
+// deriveJobStatus maps an import outcome onto a terminal job status.
+//
+// Two mistakes are baked into the ordering here, both of which shipped:
+//
+//   - Testing `err != nil` before the context made JobInterrupted unreachable
+//     for any source that correctly propagates context.Canceled, so a routine
+//     restart mid-import was reported as a hard "Failed — context canceled".
+//   - Sources report per-item failures on the result, never as the returned
+//     error, so deriving status from the error alone reported an import in
+//     which every single item failed as a clean "Completed".
+func deriveJobStatus(err, ctxErr error, result *ImportResult) JobStatus {
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return JobInterrupted
+	case err != nil:
+		return JobFailed
+	case ctxErr != nil:
+		return JobInterrupted
+	case result != nil && result.HasErrors():
+		return JobPartial
+	default:
+		return JobCompleted
+	}
 }
 
 // startProgressFlush persists progress on a ticker and returns a stop function.

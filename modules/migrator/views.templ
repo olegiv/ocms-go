@@ -675,6 +675,9 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 			.job-status-running { border-left-color: var(--primary-color, #3b82f6); }
 			.job-status-completed { border-left-color: var(--success-color, #10b981); }
 			.job-status-failed { border-left-color: var(--danger-color, #ef4444); }
+			/* A run that finished but recorded per-item errors. Deliberately
+			   warning-coloured, not success: it used to render green. */
+			.job-status-partial { border-left-color: var(--warning-color, #f59e0b); }
 			.job-status-interrupted { border-left-color: var(--warning-color, #f59e0b); }
 
 			.job-status-header {
