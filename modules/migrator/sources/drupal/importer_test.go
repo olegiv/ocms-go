@@ -178,6 +178,7 @@ func newTestState(t *testing.T, reader *fakeReader, opts types.ImportOptions) (*
 		createdNodes:         make(map[int64]bool),
 		createdCategories:    make(map[int64]bool),
 		createdCategorySlugs: make(map[string]bool),
+		createdMenuSlugs:     make(map[string]bool),
 		mediaByFID:           make(map[int64]int64),
 		nodes:                make(map[int64]int64),
 		aliasByNode:          make(map[int64]map[string]string),

@@ -1821,6 +1821,7 @@ templ editorImageModal(pc *PageContext) {
 
 templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	<!-- TinyMCE Editor Scripts -->
+	<div id="tinymce-config" data-cache-suffix={ "?v=" + utils.ScriptVersion } style="display:none"></div>
 	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js") } integrity="sha384-g2H58OoUcLyeq1GVAL/DpTIo0uwFVTMvuLTS0DR1wosEpBnw06SvK/yyBmyPXg6H" crossorigin="anonymous"></script>
 	<script nonce={ templ.GetNonce(ctx) }>
 	// Store TinyMCE editor instance
@@ -1977,6 +1978,12 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			promotion: false,
 			branding: false,
 			base_url: '/static/dist/js/tinymce',
+			// TinyMCE resolves plugins, themes, models, icons and skins from
+			// base_url at runtime. /static/dist/ is served with a one-year
+			// lifetime, so without a suffix a returning browser could pair a
+			// freshly upgraded core with year-old plugin assets. cache_suffix
+			// is TinyMCE's own hook for exactly this.
+			cache_suffix: document.getElementById('tinymce-config').dataset.cacheSuffix,
 			convert_urls: false,
 			codesample_languages: [
 				{ text: 'C', value: 'c' },

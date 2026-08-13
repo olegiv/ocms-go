@@ -213,6 +213,8 @@ type importState struct {
 	// second Drupal term that slugifies the same way gets its own row rather
 	// than being folded into the first.
 	createdCategorySlugs map[string]bool
+	// createdMenuSlugs mirrors createdCategorySlugs for menus.
+	createdMenuSlugs map[string]bool
 	// createdCategories holds only the categories this run created. Parent
 	// links are applied to those alone: a pre-existing category matched by slug
 	// is mapped so content can reference it, but reparenting it would rewrite a
@@ -278,6 +280,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 		createdNodes:         make(map[int64]bool),
 		createdCategories:    make(map[int64]bool),
 		createdCategorySlugs: make(map[string]bool),
+		createdMenuSlugs:     make(map[string]bool),
 		mediaByFID:           make(map[int64]int64),
 		nodes:                make(map[int64]int64),
 		aliasByNode:          make(map[int64]map[string]string),
@@ -1301,11 +1304,41 @@ func (s *Source) importMenus(ctx context.Context, st *importState) error {
 	return nil
 }
 
+// menuItemKey identifies a menu item by what it shows and where it points.
+func menuItemKey(title string, pageID sql.NullInt64, url sql.NullString) string {
+	target := ""
+	switch {
+	case pageID.Valid:
+		target = "page:" + strconv.FormatInt(pageID.Int64, 10)
+	case url.Valid:
+		target = "url:" + url.String
+	}
+	return title + "\x00" + target
+}
+
+// uniqueMenuSlug appends -2, -3, … until the slug is free.
+func uniqueMenuSlug(ctx context.Context, st *importState, base string) string {
+	for i := 2; i < 100; i++ {
+		candidate := base + "-" + strconv.Itoa(i)
+		if _, err := st.queries.GetMenuBySlug(ctx, candidate); errors.Is(err, sql.ErrNoRows) {
+			return candidate
+		}
+	}
+	return base + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+}
+
 // importMenu creates or reuses one menu and imports its links.
 func (s *Source) importMenu(ctx context.Context, st *importState, menuName string, links []MenuLink, now time.Time) {
 	slug := util.Slugify(menuName)
 	if slug == "" {
 		return
+	}
+
+	// Two distinct Drupal menu names can normalize to the same slug ("foo_bar"
+	// and "foobar"). Without this the second reuses the first's menu and both
+	// sets of links land in one navigation.
+	if st.createdMenuSlugs[slug] {
+		slug = uniqueMenuSlug(ctx, st, slug)
 	}
 
 	menuID, created, err := s.ensureMenu(ctx, st, menuName, slug, now)
@@ -1314,6 +1347,7 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 		return
 	}
 	if created {
+		st.createdMenuSlugs[slug] = true
 		st.track(ctx, types.EntityMenu, menuID)
 		st.result.MenusImported++
 	} else {
@@ -1325,7 +1359,10 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 	// Titles already present in a reused menu. Menu items carry no uniqueness
 	// constraint, so re-running an import — or importing into a menu an admin
 	// had already created — appended a second copy of every link.
-	existingTitles := make(map[string]bool)
+	// Keyed on title AND target: Drupal menus legitimately repeat labels like
+	// "Home" or "Learn more" pointing at different pages, so matching on the
+	// title alone silently dropped distinct entries.
+	existingItems := make(map[string]bool)
 	if !created {
 		items, err := st.queries.ListMenuItems(ctx, menuID)
 		if err != nil {
@@ -1334,7 +1371,7 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 			return
 		}
 		for _, item := range items {
-			existingTitles[item.Title] = true
+			existingItems[menuItemKey(item.Title, item.PageID, item.Url)] = true
 		}
 	}
 
@@ -1344,13 +1381,13 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 		if l.Title == "" {
 			continue
 		}
-		if existingTitles[l.Title] {
-			st.result.MenuItemsSkipped++
-			continue
-		}
 		pageID, url, err := s.resolveMenuTarget(st, l)
 		if err != nil {
 			st.result.AddNotice("menu %q: %v", menuName, err)
+			continue
+		}
+		if existingItems[menuItemKey(l.Title, pageID, url)] {
+			st.result.MenuItemsSkipped++
 			continue
 		}
 
