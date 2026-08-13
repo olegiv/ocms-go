@@ -269,7 +269,7 @@ func (m *Module) renderHeadScripts(nonce string) template.HTML {
 `, m.buildKlaroConfig()))
 
 	// 6. Klaro script
-	scripts.WriteString(`<script defer src="/static/dist/js/klaro.min.js"></script>
+	scripts.WriteString(`<script defer src="/static/dist/js/klaro.min.js" integrity="sha384-Ic9lh4j2DStMyU7efUMc+JhotSEr4FuO24wWW401qG38mAPzx46ZGO464HmCsOmg" crossorigin="anonymous"></script>
 `)
 
 	// 7. Footer link behavior (avoids inline onclick handlers)

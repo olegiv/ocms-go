@@ -7,6 +7,7 @@ import "fmt"
 import "strings"
 import "net/url"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/utils"
 import "github.com/olegiv/ocms-go/internal/views/components/alert"
 import "github.com/olegiv/ocms-go/internal/views/components/badge"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
@@ -1820,7 +1821,7 @@ templ editorImageModal(pc *PageContext) {
 
 templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	<!-- TinyMCE Editor Scripts -->
-	<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/tinymce/tinymce.min.js"></script>
+	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js") } integrity="sha384-g2H58OoUcLyeq1GVAL/DpTIo0uwFVTMvuLTS0DR1wosEpBnw06SvK/yyBmyPXg6H" crossorigin="anonymous"></script>
 	<script nonce={ templ.GetNonce(ctx) }>
 	// Store TinyMCE editor instance
 	let tinymceEditor = null;
