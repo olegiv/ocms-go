@@ -344,6 +344,16 @@ func (r *Registry) SetActive(name string, active bool) error {
 	ctx := r.ctx
 	r.mu.Unlock()
 
+	// A module may veto its own activation. Startup posture audits cannot cover
+	// this path: they ran before the operator flipped the switch.
+	if active {
+		if guard, ok := m.(ActivationGuard); ok {
+			if err := guard.CheckActivation(); err != nil {
+				return fmt.Errorf("refusing to activate module %q: %w", name, err)
+			}
+		}
+	}
+
 	// Initialize the module if needed (outside lock, matching InitAll pattern)
 	if needsInit {
 		r.logger.Info("initializing module on activation", "name", name)
