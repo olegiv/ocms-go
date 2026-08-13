@@ -161,29 +161,9 @@ func newTestState(t *testing.T, reader *fakeReader, opts types.ImportOptions) (*
 	}
 
 	tracker := &recordingTracker{}
-	return &importState{
-		queries:              queries,
-		reader:               reader,
-		result:               &types.ImportResult{},
-		tracker:              tracker,
-		opts:                 opts,
-		defaultLang:          lang.Code,
-		authorID:             owner.ID,
-		typeMap:              ParseTypeMap(""),
-		tagVocabs:            parseVocabularyList("tags"),
-		uploadDir:            t.TempDir(),
-		users:                make(map[int64]int64),
-		tags:                 make(map[int64]int64),
-		categories:           make(map[int64]int64),
-		createdNodes:         make(map[int64]bool),
-		createdCategories:    make(map[int64]bool),
-		createdCategorySlugs: make(map[string]bool),
-		createdMenuSlugs:     make(map[string]bool),
-		mediaByFID:           make(map[int64]int64),
-		nodes:                make(map[int64]int64),
-		aliasByNode:          make(map[int64]map[string]string),
-		refs:                 NewMediaRefs(),
-	}, tracker, queries
+	st := newImportState(queries, reader, &types.ImportResult{}, tracker, opts, lang.Code, owner.ID)
+	st.uploadDir = t.TempDir()
+	return st, tracker, queries
 }
 
 func TestImportUsersCreatesPublicAccounts(t *testing.T) {
@@ -1132,5 +1112,122 @@ func TestImportMenusKeepsHierarchyThroughSkippedParents(t *testing.T) {
 		t.Errorf("child ParentID = %v, want %d — a link skipped as already present "+
 			"must still be resolvable as a parent, or the hierarchy is flattened",
 			child.ParentID, parent.ID)
+	}
+}
+
+// TestImportMenusDoesNotReparentExistingItems is the other half of
+// TestImportMenusKeepsHierarchyThroughSkippedParents.
+//
+// That fix put pre-existing items into itemByUUID so a child could resolve them
+// as a parent — and thereby made the second pass eligible to rewrite their own
+// parent_id. Those rows belong to the administrator and are not tracked, so a
+// hierarchy the import changed could never be restored by deleting it.
+//
+// Bug state: drop the createdItems check in linkMenuParents and the existing
+// item is moved under the imported one.
+func TestImportMenusDoesNotReparentExistingItems(t *testing.T) {
+	reader := &fakeReader{
+		schema: Schema{HasMenuLinks: true},
+		menuLinks: []MenuLink{
+			{ID: 1, UUID: "top", Title: "Products", MenuName: "main", LinkURI: "internal:/products", Enabled: 1},
+			// Already present in the menu, and Drupal says it belongs under "top".
+			{ID: 2, UUID: "existing", Title: "Docs", MenuName: "main", LinkURI: "internal:/docs",
+				Parent: sql.NullString{String: "menu_link_content:top", Valid: true}, Enabled: 1},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	ctx := context.Background()
+
+	menu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Main", Slug: "main", LanguageCode: st.defaultLang,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("failed to create existing menu: %v", err)
+	}
+	existing, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: menu.ID, Title: "Docs", Url: sql.NullString{String: "/docs", Valid: true},
+		Target:   sql.NullString{String: "_self", Valid: true},
+		IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("failed to create existing menu item: %v", err)
+	}
+
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+
+	after, err := queries.GetMenuItemByID(ctx, existing.ID)
+	if err != nil {
+		t.Fatalf("the pre-existing item disappeared: %v", err)
+	}
+	if after.ParentID.Valid {
+		t.Errorf("the administrator's own menu item was reparented to %d; the import "+
+			"must not rewrite the hierarchy of rows it does not own", after.ParentID.Int64)
+	}
+}
+
+// TestImportAliasesFiltersByNodeLanguage covers a multilingual source.
+//
+// Drupal stores one alias row per language. Only default-language nodes are
+// imported, so attaching every language's alias to that one page made a
+// translated URL redirect to unrelated content — and could consume an alias
+// another imported page needed.
+func TestImportAliasesFiltersByNodeLanguage(t *testing.T) {
+	reader := &fakeReader{
+		schema: Schema{HasAliases: true},
+		nodes:  []Node{{NID: 1, Type: "page", Title: "About", Status: 1, Langcode: "en"}},
+		aliases: []PathAlias{
+			{ID: 1, Path: "/node/1", Alias: "/company/about", Langcode: "en"},
+			{ID: 2, Path: "/node/1", Alias: "/entreprise/a-propos", Langcode: "fr"},
+			{ID: 3, Path: "/node/1", Alias: "/neutral/about", Langcode: "und"},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	ctx := context.Background()
+
+	if err := (&Source{}).importNodes(ctx, st); err != nil {
+		t.Fatalf("importNodes() error = %v", err)
+	}
+
+	aliases, err := queries.GetAliasesForPage(ctx, st.nodes[1])
+	if err != nil {
+		t.Fatalf("failed to read page aliases: %v", err)
+	}
+	got := make(map[string]bool, len(aliases))
+	for _, a := range aliases {
+		got[a.Alias] = true
+	}
+	if !got["neutral/about"] {
+		t.Errorf("aliases = %v, want the language-neutral alias kept", aliases)
+	}
+	if got["entreprise/a-propos"] {
+		t.Errorf("aliases = %v, want the French alias rejected: it belongs to a "+
+			"translation that was never imported", aliases)
+	}
+}
+
+func TestHasTraversalSegment(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		// Legitimate names that the old substring check rejected outright.
+		{"report..pdf", false},
+		{"2024/annual..report.pdf", false},
+		{"a..b/c..d.jpg", false},
+		{"photo.jpg", false},
+
+		{"../secret", true},
+		{"a/../../etc/passwd", true},
+		{"..", true},
+		{"nested/..", true},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := hasTraversalSegment(tc.path); got != tc.want {
+				t.Errorf("hasTraversalSegment(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
 	}
 }

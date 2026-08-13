@@ -209,6 +209,12 @@ type importState struct {
 	// aliases attached to a page the import does not own survive the delete,
 	// because aliases are removed only by cascade from a deleted page.
 	createdNodes map[int64]bool
+	// nodeLang records the langcode of each node this run imported, so the
+	// redirect-alias pass can accept only that node's own aliases. Drupal
+	// stores one alias row per language; attaching them all to the single
+	// default-language page made a translated URL redirect to unrelated
+	// content and could consume an alias another imported page needed.
+	nodeLang map[int64]string
 	// createdCategorySlugs records the slugs this run has already taken, so a
 	// second Drupal term that slugifies the same way gets its own row rather
 	// than being folded into the first.
@@ -228,6 +234,40 @@ type importState struct {
 	// canonical slug of the page actually being imported.
 	aliasByNode map[int64]map[string]string
 	refs        *MediaRefs
+}
+
+// newImportState builds an import state with every lookup allocated.
+//
+// It exists so the maps are initialized in exactly one place. There were two
+// hand-maintained literals — one here, one in the test helper — and adding a
+// field to the struct silently left the test's copy nil until an import
+// panicked on the first write to it.
+func newImportState(queries *store.Queries, reader sourceReader, result *types.ImportResult,
+	tracker types.ImportTracker, opts types.ImportOptions, defaultLang string, authorID int64) *importState {
+
+	return &importState{
+		queries:              queries,
+		reader:               reader,
+		result:               result,
+		tracker:              tracker,
+		opts:                 opts,
+		defaultLang:          defaultLang,
+		authorID:             authorID,
+		typeMap:              ParseTypeMap(""),
+		tagVocabs:            parseVocabularyList("tags"),
+		users:                make(map[int64]int64),
+		tags:                 make(map[int64]int64),
+		categories:           make(map[int64]int64),
+		createdNodes:         make(map[int64]bool),
+		createdCategories:    make(map[int64]bool),
+		createdCategorySlugs: make(map[string]bool),
+		createdMenuSlugs:     make(map[string]bool),
+		mediaByFID:           make(map[int64]int64),
+		nodes:                make(map[int64]int64),
+		aliasByNode:          make(map[int64]map[string]string),
+		nodeLang:             make(map[int64]string),
+		refs:                 NewMediaRefs(),
+	}
 }
 
 // Import copies content from Drupal into oCMS.
@@ -262,30 +302,11 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 		return nil, fmt.Errorf("failed to get default language: %w", err)
 	}
 
-	st := &importState{
-		queries:              queries,
-		reader:               reader,
-		result:               result,
-		tracker:              tracker,
-		opts:                 opts,
-		defaultLang:          defaultLang.Code,
-		authorID:             authorID,
-		typeMap:              ParseTypeMap(cfg["type_map"]),
-		tagVocabs:            parseVocabularyList(cfg["tag_vocabularies"]),
-		uploadDir:            shared.UploadDir(),
-		filesPath:            strings.TrimSpace(cfg["files_path"]),
-		users:                make(map[int64]int64),
-		tags:                 make(map[int64]int64),
-		categories:           make(map[int64]int64),
-		createdNodes:         make(map[int64]bool),
-		createdCategories:    make(map[int64]bool),
-		createdCategorySlugs: make(map[string]bool),
-		createdMenuSlugs:     make(map[string]bool),
-		mediaByFID:           make(map[int64]int64),
-		nodes:                make(map[int64]int64),
-		aliasByNode:          make(map[int64]map[string]string),
-		refs:                 NewMediaRefs(),
-	}
+	st := newImportState(queries, reader, result, tracker, opts, defaultLang.Code, authorID)
+	st.typeMap = ParseTypeMap(cfg["type_map"])
+	st.tagVocabs = parseVocabularyList(cfg["tag_vocabularies"])
+	st.uploadDir = shared.UploadDir()
+	st.filesPath = strings.TrimSpace(cfg["files_path"])
 
 	for _, missing := range reader.Schema().MissingOptional() {
 		result.AddNotice("optional table %q not found in source database; related content skipped", missing)
@@ -677,6 +698,21 @@ func unixOrNow(ts int64, now time.Time) time.Time {
 //
 // Only the public:// stream is importable — private:// and temporary:// live
 // outside the public files directory and are reported rather than guessed at.
+// hasTraversalSegment reports whether any path segment is exactly "..".
+//
+// Checking for the substring instead rejected legitimate Drupal filenames:
+// "report..pdf" contains ".." but escapes nothing, and the file was skipped
+// even though the resolved-path containment check below would have kept it
+// inside the files root anyway.
+func hasTraversalSegment(rel string) bool {
+	for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
+		if segment == ".." {
+			return true
+		}
+	}
+	return false
+}
+
 func resolveFilePath(f File, cleanRoot, realRoot string) (string, error) {
 	switch f.Scheme() {
 	case "public", "":
@@ -690,7 +726,7 @@ func resolveFilePath(f File, cleanRoot, realRoot string) (string, error) {
 	if rel == "" {
 		return "", fmt.Errorf("file has an empty path")
 	}
-	if strings.Contains(rel, "..") {
+	if hasTraversalSegment(rel) {
 		return "", fmt.Errorf("file path %q contains a traversal sequence", rel)
 	}
 
@@ -1053,12 +1089,32 @@ func (st *importState) aliasFor(n Node) string {
 	if alias := byLang[n.Langcode]; alias != "" {
 		return alias
 	}
-	for _, neutral := range []string{"und", "zxx", ""} {
+	for _, neutral := range neutralLangcodes {
 		if alias := byLang[neutral]; alias != "" {
 			return alias
 		}
 	}
 	return ""
+}
+
+// neutralLangcodes are Drupal's "applies to any language" values. "und" is
+// LANGCODE_NOT_SPECIFIED, "zxx" is LANGCODE_NOT_APPLICABLE, and an empty value
+// appears on rows written before a site was made multilingual.
+var neutralLangcodes = []string{"und", "zxx", ""}
+
+// langcodeApplies reports whether a row in aliasLang applies to a node in
+// nodeLang. Both aliasFor and the redirect-alias pass use it, so the canonical
+// slug and the redirects that point at it cannot disagree about language.
+func langcodeApplies(aliasLang, nodeLang string) bool {
+	if aliasLang == nodeLang {
+		return true
+	}
+	for _, neutral := range neutralLangcodes {
+		if aliasLang == neutral {
+			return true
+		}
+	}
+	return false
 }
 
 // importNode converts one Drupal node into an oCMS page.
@@ -1133,6 +1189,7 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 
 	st.nodes[n.NID] = page.ID
 	st.createdNodes[n.NID] = true
+	st.nodeLang[n.NID] = n.Langcode
 	st.track(ctx, entityTypeFor(pageType), page.ID)
 	countImported(st.result, pageType)
 
@@ -1217,6 +1274,12 @@ func (s *Source) importAliases(ctx context.Context, st *importState, now time.Ti
 		}
 		// Never write aliases onto a page this import did not create.
 		if !st.createdNodes[nid] {
+			continue
+		}
+		// Only the node's own language. Drupal keeps one alias row per
+		// language and only default-language nodes are imported, so taking
+		// them all would point a translated URL at unrelated content.
+		if !langcodeApplies(a.Langcode, st.nodeLang[nid]) {
 			continue
 		}
 		s.createPageAlias(ctx, st, pageID, strings.Trim(a.Alias, "/"), now)
@@ -1391,6 +1454,12 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 	}
 
 	itemByUUID := make(map[string]int64, len(links))
+	// Items this run created. itemByUUID also holds pre-existing rows matched
+	// during dedup — needed so a child can resolve them as a *parent* — but
+	// their own parent_id must never be rewritten: that row belongs to the
+	// administrator, is not tracked, and deleting the import could not restore
+	// a hierarchy the import had changed.
+	createdItems := make(map[int64]bool, len(links))
 
 	// Titles already present in a reused menu. Menu items carry no uniqueness
 	// constraint, so re-running an import — or importing into a menu an admin
@@ -1457,12 +1526,13 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 		if l.UUID != "" {
 			itemByUUID[l.UUID] = item.ID
 		}
+		createdItems[item.ID] = true
 		st.track(ctx, types.EntityMenuItem, item.ID)
 		st.result.MenuItemsImported++
 	}
 
 	// Second pass: apply the hierarchy now that every item exists.
-	s.linkMenuParents(ctx, st, links, itemByUUID, menuID, now)
+	s.linkMenuParents(ctx, st, links, itemByUUID, createdItems, now)
 }
 
 // ensureMenu returns the ID of the oCMS menu for a Drupal menu name, creating
@@ -1509,7 +1579,7 @@ func (s *Source) resolveMenuTarget(st *importState, l MenuLink) (sql.NullInt64, 
 
 // linkMenuParents applies the Drupal menu hierarchy to the created items.
 func (s *Source) linkMenuParents(ctx context.Context, st *importState, links []MenuLink,
-	itemByUUID map[string]int64, menuID int64, now time.Time) {
+	itemByUUID map[string]int64, createdItems map[int64]bool, now time.Time) {
 
 	for _, l := range links {
 		parentUUID := l.ParentUUID()
@@ -1518,6 +1588,11 @@ func (s *Source) linkMenuParents(ctx context.Context, st *importState, links []M
 		}
 		childID, ok := itemByUUID[l.UUID]
 		if !ok {
+			continue
+		}
+		// Only items this run created. A pre-existing item matched during
+		// dedup is a valid *parent* but must keep its own place in the menu.
+		if !createdItems[childID] {
 			continue
 		}
 		parentID, ok := itemByUUID[parentUUID]

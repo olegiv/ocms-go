@@ -116,3 +116,9 @@ LEFT JOIN languages l ON m.language_code = l.code
 WHERE m.slug = ? AND (m.language_code = ? OR l.is_default = 1)
 ORDER BY CASE WHEN m.language_code = ? THEN 0 ELSE 1 END
 LIMIT 1;
+
+-- name: ListChildMenuItemIDs :many
+SELECT id FROM menu_items WHERE parent_id = ?;
+
+-- name: ReparentMenuItemChildren :exec
+UPDATE menu_items SET parent_id = ?, updated_at = ? WHERE parent_id = ?;

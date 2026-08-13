@@ -277,6 +277,33 @@ func (q *Queries) GetMenuItemByID(ctx context.Context, id int64) (MenuItem, erro
 	return i, err
 }
 
+const listChildMenuItemIDs = `-- name: ListChildMenuItemIDs :many
+SELECT id FROM menu_items WHERE parent_id = ?
+`
+
+func (q *Queries) ListChildMenuItemIDs(ctx context.Context, parentID sql.NullInt64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listChildMenuItemIDs, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChildMenuItems = `-- name: ListChildMenuItems :many
 SELECT id, menu_id, parent_id, title, url, target, page_id, position, css_class, is_active, created_at, updated_at FROM menu_items WHERE parent_id = ? ORDER BY position
 `
@@ -661,6 +688,21 @@ func (q *Queries) MenuSlugExistsForLanguageExcluding(ctx context.Context, arg Me
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const reparentMenuItemChildren = `-- name: ReparentMenuItemChildren :exec
+UPDATE menu_items SET parent_id = ?, updated_at = ? WHERE parent_id = ?
+`
+
+type ReparentMenuItemChildrenParams struct {
+	ParentID   sql.NullInt64 `json:"parent_id"`
+	UpdatedAt  time.Time     `json:"updated_at"`
+	ParentID_2 sql.NullInt64 `json:"parent_id_2"`
+}
+
+func (q *Queries) ReparentMenuItemChildren(ctx context.Context, arg ReparentMenuItemChildrenParams) error {
+	_, err := q.db.ExecContext(ctx, reparentMenuItemChildren, arg.ParentID, arg.UpdatedAt, arg.ParentID_2)
+	return err
 }
 
 const updateMenu = `-- name: UpdateMenu :one

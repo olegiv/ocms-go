@@ -828,34 +828,140 @@ func (r *Reader) NodeImages(ctx context.Context) (map[int64]int64, error) {
 	return images, nil
 }
 
-// NodeTerms maps node ID to the taxonomy term IDs it references.
+// taxonomyRefField is one discovered entity-reference field table.
+type taxonomyRefField struct {
+	Table  string // fully prefixed and sanitized
+	Column string // sanitized "field_<name>_target_id"
+}
+
+// taxonomyRefFields discovers every node entity-reference field table.
+//
+// Reading only node__field_tags was wrong on any site that references a
+// vocabulary through a differently named field — field_category is the common
+// one. Its terms were imported and then had no page associations at all, so
+// ticking "categories" produced a set of detached categories.
+//
+// Field tables are per-site, so they are discovered rather than assumed, the
+// same way the rest of the schema is. A reference column alone does not prove a
+// taxonomy field — node__field_image has field_image_target_id, pointing at a
+// file — so NodeTerms joins the taxonomy table and lets non-term references
+// fall out of the result instead of guessing from names.
+func (r *Reader) taxonomyRefFields(ctx context.Context) ([]taxonomyRefField, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT TABLE_NAME, COLUMN_NAME
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME LIKE '%_target_id'
+		ORDER BY TABLE_NAME, COLUMN_NAME`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover taxonomy reference fields: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
+
+	// Matching in Go rather than in the LIKE keeps the prefix out of a pattern
+	// where "_" is a wildcard.
+	wantPrefix := strings.ToLower(r.safePrefix + "node__field_")
+
+	var fields []taxonomyRefField
+	for rows.Next() {
+		var table, column string
+		if err := rows.Scan(&table, &column); err != nil {
+			return nil, fmt.Errorf("failed to scan reference field: %w", err)
+		}
+		if f, ok := matchTaxonomyRefField(table, column, wantPrefix); ok {
+			fields = append(fields, f)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating reference fields: %w", err)
+	}
+	return fields, nil
+}
+
+// matchTaxonomyRefField decides whether one (table, column) pair is a node
+// entity-reference field this reader can query.
+//
+// It deliberately does not try to tell a taxonomy reference from a file or user
+// one by name: node__field_image looks identical to node__field_category here.
+// NodeTerms joins the taxonomy table instead, so a non-term reference produces
+// no rows rather than a wrong association.
+func matchTaxonomyRefField(table, column, wantPrefix string) (taxonomyRefField, bool) {
+	if !strings.HasPrefix(strings.ToLower(table), wantPrefix) {
+		return taxonomyRefField{}, false
+	}
+	safeTable, err := shared.SanitizeIdentifier(table)
+	if err != nil {
+		return taxonomyRefField{}, false
+	}
+	safeColumn, err := shared.SanitizeIdentifier(column)
+	if err != nil {
+		return taxonomyRefField{}, false
+	}
+	return taxonomyRefField{Table: safeTable, Column: safeColumn}, true
+}
+
+// NodeTerms maps node ID to the taxonomy term IDs it references, across every
+// entity-reference field the site defines.
 func (r *Reader) NodeTerms(ctx context.Context) (map[int64][]int64, error) {
 	terms := make(map[int64][]int64)
-	if !r.schema.HasNodeTags {
+	// Without the taxonomy table there is nothing to join against, and no terms
+	// were imported either.
+	if !r.schema.HasTermData {
 		return terms, nil
 	}
-	tbl, err := r.table(tableNodeTags)
+
+	fields, err := r.taxonomyRefFields(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if len(fields) == 0 {
+		return terms, nil
 	}
 
 	nodeTbl, err := r.table(tableNodeData)
 	if err != nil {
 		return nil, err
 	}
+	termTbl, err := r.table(tableTermData)
+	if err != nil {
+		return nil, err
+	}
 
-	// As with NodeImages: unfiltered, this appended the terms of every
-	// translation onto the default-language page.
-	query := fmt.Sprintf(`
-		SELECT f.entity_id, f.field_tags_target_id
-		FROM %s f
-		JOIN %s n ON n.nid = f.entity_id AND n.default_langcode = 1 AND f.langcode = n.langcode
-		WHERE f.field_tags_target_id IS NOT NULL
-		ORDER BY f.entity_id, f.delta`, tbl, nodeTbl)
+	seen := make(map[int64]map[int64]bool)
+	for _, f := range fields {
+		// The join to the taxonomy table is what makes discovery safe: a
+		// reference to a file or a user has no matching tid and drops out.
+		// The node join filters to the imported language, as NodeImages does —
+		// unfiltered, this appended the terms of every translation onto the
+		// default-language page.
+		query := fmt.Sprintf(`
+			SELECT f.entity_id, f.%s
+			FROM %s f
+			JOIN %s n ON n.nid = f.entity_id AND n.default_langcode = 1 AND f.langcode = n.langcode
+			JOIN %s t ON t.tid = f.%s
+			WHERE f.%s IS NOT NULL
+			ORDER BY f.entity_id, f.delta`,
+			f.Column, f.Table, nodeTbl, termTbl, f.Column, f.Column)
+
+		if err := r.collectNodeTerms(ctx, query, terms, seen); err != nil {
+			return nil, err
+		}
+	}
+	return terms, nil
+}
+
+// collectNodeTerms runs one field table's query and merges its rows, skipping
+// a term already recorded for that node so two fields referencing the same term
+// do not associate it twice.
+func (r *Reader) collectNodeTerms(ctx context.Context, query string,
+	terms map[int64][]int64, seen map[int64]map[int64]bool) error {
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query node tags: %w", err)
+		return fmt.Errorf("failed to query node taxonomy references: %w", err)
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
@@ -866,14 +972,21 @@ func (r *Reader) NodeTerms(ctx context.Context) (map[int64][]int64, error) {
 	for rows.Next() {
 		var nid, tid int64
 		if err := rows.Scan(&nid, &tid); err != nil {
-			return nil, fmt.Errorf("failed to scan node tag: %w", err)
+			return fmt.Errorf("failed to scan node taxonomy reference: %w", err)
 		}
+		if seen[nid] == nil {
+			seen[nid] = make(map[int64]bool)
+		}
+		if seen[nid][tid] {
+			continue
+		}
+		seen[nid][tid] = true
 		terms[nid] = append(terms[nid], tid)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating node tags: %w", err)
+		return fmt.Errorf("error iterating node taxonomy references: %w", err)
 	}
-	return terms, nil
+	return nil
 }
 
 // aliasSourceColumn returns the column holding the system path. Drupal 8.8

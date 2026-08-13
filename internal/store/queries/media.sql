@@ -127,3 +127,7 @@ WHERE mt.media_id = ? AND l.code = ? AND mt.alt != '';
 SELECT mt.caption FROM media_translations mt
 JOIN languages l ON l.id = mt.language_id
 WHERE mt.media_id = ? AND l.code = ? AND mt.caption != '';
+
+-- name: CountPagesUsingMedia :one
+SELECT COUNT(*) FROM pages
+WHERE featured_image_id = ? OR og_image_id = ?;

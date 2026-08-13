@@ -66,6 +66,23 @@ func (q *Queries) CountMediaInRootFolder(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countPagesUsingMedia = `-- name: CountPagesUsingMedia :one
+SELECT COUNT(*) FROM pages
+WHERE featured_image_id = ? OR og_image_id = ?
+`
+
+type CountPagesUsingMediaParams struct {
+	FeaturedImageID sql.NullInt64 `json:"featured_image_id"`
+	OgImageID       sql.NullInt64 `json:"og_image_id"`
+}
+
+func (q *Queries) CountPagesUsingMedia(ctx context.Context, arg CountPagesUsingMediaParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPagesUsingMedia, arg.FeaturedImageID, arg.OgImageID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMedia = `-- name: CreateMedia :one
 INSERT INTO media (uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

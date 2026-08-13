@@ -1064,3 +1064,145 @@ func TestDeleteImportedItemsKeepsTaxonomyUsedByOriginalPages(t *testing.T) {
 		t.Errorf("original page has %d categories, want 1", len(cats))
 	}
 }
+
+// TestDeleteImportedItemsKeepsAdminChildrenAndSharedMedia extends the
+// preserve-shared rule to the two remaining cascade paths out of an import.
+//
+//   - menu_items.parent_id is ON DELETE CASCADE, so deleting an imported menu
+//     item takes any child with it, including one an administrator added under
+//     it afterwards.
+//   - pages.featured_image_id and og_image_id are ON DELETE SET NULL, so
+//     deleting imported media silently strips the image from an original page
+//     that had started using it.
+//
+// The imported item's children are lifted to its own parent and the item is then
+// deleted: preserving it instead would leave an imported entry in the site's
+// navigation permanently, which is the content the operator asked to remove.
+func TestDeleteImportedItemsKeepsAdminChildrenAndSharedMedia(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	queries := store.New(m.ctx.DB)
+	now := time.Now()
+
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "keeper@example.com", PasswordHash: "x", Role: "admin",
+		Name: "Keeper", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	sharedMedia, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: "11111111-2222-3333-4444-555555555555", Filename: "hero.jpg",
+		MimeType: "image/jpeg", Size: 1, UploadedBy: author.ID,
+		LanguageCode: lang.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create media: %v", err)
+	}
+	lonelyMedia, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: "66666666-7777-8888-9999-000000000000", Filename: "unused.jpg",
+		MimeType: "image/jpeg", Size: 1, UploadedBy: author.ID,
+		LanguageCode: lang.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create media: %v", err)
+	}
+
+	// An original page adopts the imported media as its featured image.
+	original, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Original", Slug: "original-keeps", Status: "published",
+		AuthorID: author.ID, LanguageCode: lang.Code, PageType: "page",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create page: %v", err)
+	}
+	if _, err := m.ctx.DB.ExecContext(ctx,
+		`UPDATE pages SET featured_image_id = ? WHERE id = ?`, sharedMedia.ID, original.ID); err != nil {
+		t.Fatalf("failed to set featured image: %v", err)
+	}
+
+	menu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Main", Slug: "main-keeps", LanguageCode: lang.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu: %v", err)
+	}
+	importedParent, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: menu.ID, Title: "Imported parent", IsActive: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu item: %v", err)
+	}
+	importedChild, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: menu.ID, Title: "Imported child", IsActive: true,
+		ParentID:  sql.NullInt64{Int64: importedParent.ID, Valid: true},
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu item: %v", err)
+	}
+	// The administrator hangs their own link off the imported parent.
+	adminChild, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: menu.ID, Title: "Admin child", IsActive: true,
+		ParentID:  sql.NullInt64{Int64: importedParent.ID, Valid: true},
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("failed to create menu item: %v", err)
+	}
+
+	for _, tracked := range []struct {
+		entityType types.EntityType
+		id         int64
+	}{
+		{types.EntityMenuItem, importedParent.ID},
+		{types.EntityMenuItem, importedChild.ID},
+		{types.EntityMedia, sharedMedia.ID},
+		{types.EntityMedia, lonelyMedia.ID},
+	} {
+		if err := m.TrackImportedItem(ctx, "drupal", string(tracked.entityType), tracked.id); err != nil {
+			t.Fatalf("failed to track %s: %v", tracked.entityType, err)
+		}
+	}
+
+	if _, err := m.deleteImportedItems(ctx, "drupal"); err != nil {
+		t.Fatalf("deleteImportedItems() error = %v", err)
+	}
+
+	survivor, err := queries.GetMenuItemByID(ctx, adminChild.ID)
+	if err != nil {
+		t.Fatalf("the administrator's menu item was cascade-deleted with its imported parent: %v", err)
+	}
+	if survivor.ParentID.Valid {
+		t.Errorf("the administrator's item is still parented to %d; it should have been "+
+			"lifted to the deleted item's own parent", survivor.ParentID.Int64)
+	}
+	if _, err := queries.GetMenuItemByID(ctx, importedParent.ID); err == nil {
+		t.Error("the imported parent survived; leaving it would keep an imported entry " +
+			"in the navigation the operator asked to clear")
+	}
+	if _, err := queries.GetMenuItemByID(ctx, importedChild.ID); err == nil {
+		t.Error("the imported child survived; a tracked child must not preserve its tracked parent")
+	}
+
+	if _, err := queries.GetMediaByID(ctx, sharedMedia.ID); err != nil {
+		t.Errorf("media an original page uses as its featured image was deleted: %v", err)
+	}
+	if _, err := queries.GetMediaByID(ctx, lonelyMedia.ID); err == nil {
+		t.Error("unreferenced imported media survived; only shared rows should be kept")
+	}
+
+	page, err := queries.GetPageByID(ctx, original.ID)
+	if err != nil {
+		t.Fatalf("failed to re-read the original page: %v", err)
+	}
+	if !page.FeaturedImageID.Valid {
+		t.Error("the original page lost its featured image; ON DELETE SET NULL fired")
+	}
+}

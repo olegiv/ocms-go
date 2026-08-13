@@ -5,6 +5,7 @@ package migrator
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -812,13 +813,28 @@ func (m *Module) getImportedItems(ctx context.Context, db store.DBTX, source, en
 // Exactly one of del and cascadesFrom is set: cascadesFrom marks a type whose
 // rows are removed by a database cascade rather than by an explicit delete.
 //
-// references, when set, counts what still points at the row. A non-zero count
-// means the row outlived the import and must be kept — see referenceCounters.
+// beforeDelete, when set, runs immediately before del. It returns keep=true to
+// leave the row in place, and may first adjust rows that the delete would
+// otherwise take with it through a cascade.
+//
+// Both cases exist because a cascade out of an imported row can reach content
+// the import does not own, which would break the module's promise that original
+// content is untouched.
 type entityDeleter struct {
 	entityType   types.EntityType
 	del          func(ctx context.Context, q *store.Queries, id int64) error
 	cascadesFrom types.EntityType
-	references   func(ctx context.Context, q *store.Queries, id int64) (int64, error)
+	beforeDelete func(ctx context.Context, q *store.Queries, id int64) (keep bool, err error)
+}
+
+// keepIfReferenced turns a reference count into a beforeDelete hook.
+func keepIfReferenced(count func(ctx context.Context, q *store.Queries, id int64) (int64, error)) func(
+	ctx context.Context, q *store.Queries, id int64) (bool, error) {
+
+	return func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
+		refs, err := count(ctx, q, id)
+		return refs > 0, err
+	}
 }
 
 // deleters returns every trackable entity type in dependency-safe deletion
@@ -872,6 +888,33 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 	return []entityDeleter{
 		{entityType: types.EntityMenuItem, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteMenuItem(ctx, id)
+		}, beforeDelete: func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
+			// menu_items.parent_id is ON DELETE CASCADE, so removing an
+			// imported item would take any child with it — including one an
+			// administrator hung off it after the import.
+			//
+			// Children are lifted to the item's own parent rather than the
+			// item being preserved: keeping it would leave an imported entry
+			// in the site's navigation permanently, which is the content the
+			// operator asked to remove. Tracked children are moved too and are
+			// then deleted by their own tracking rows, so no ordering
+			// assumption is needed.
+			item, err := q.GetMenuItemByID(ctx, id)
+			if err != nil {
+				return false, err
+			}
+			children, err := q.ListChildMenuItemIDs(ctx, sql.NullInt64{Int64: id, Valid: true})
+			if err != nil {
+				return false, err
+			}
+			if len(children) == 0 {
+				return false, nil
+			}
+			return false, q.ReparentMenuItemChildren(ctx, store.ReparentMenuItemChildrenParams{
+				ParentID:   item.ParentID,
+				UpdatedAt:  time.Now(),
+				ParentID_2: sql.NullInt64{Int64: id, Valid: true},
+			})
 		}},
 		{entityType: types.EntityMenu, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteMenu(ctx, id)
@@ -881,15 +924,26 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 		{entityType: types.EntityPage, del: deletePage},
 		{entityType: types.EntityTag, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteTag(ctx, id)
-		}, references: func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
+		}, beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
 			return q.CountPagesForTag(ctx, id)
-		}},
+		})},
 		{entityType: types.EntityCategory, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteCategory(ctx, id)
-		}, references: func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
+		}, beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
 			return q.CountPagesByCategory(ctx, id)
-		}},
-		{entityType: types.EntityMedia, del: deleteMedia},
+		})},
+		{entityType: types.EntityMedia, del: deleteMedia,
+			beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
+				// pages.featured_image_id and og_image_id are ON DELETE SET
+				// NULL, so deleting imported media silently strips the image
+				// from any page still using it. Imported pages are already
+				// gone by the time media is deleted, so a remaining reference
+				// is an original page.
+				return q.CountPagesUsingMedia(ctx, store.CountPagesUsingMediaParams{
+					FeaturedImageID: sql.NullInt64{Int64: id, Valid: true},
+					OgImageID:       sql.NullInt64{Int64: id, Valid: true},
+				})
+			})},
 		{entityType: types.EntityUser, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteUser(ctx, id)
 		}},
@@ -990,20 +1044,20 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 // removing a shared one silently strips the association from an original page
 // and cannot be undone.
 func (m *Module) preserveShared(ctx context.Context, queries *store.Queries, d entityDeleter, id int64) bool {
-	if d.references == nil {
+	if d.beforeDelete == nil {
 		return false
 	}
-	refs, err := d.references(ctx, queries, id)
+	keep, err := d.beforeDelete(ctx, queries, id)
 	if err != nil {
-		m.ctx.Logger.Warn("could not count references before deleting imported item; keeping it",
+		m.ctx.Logger.Warn("could not check an imported item before deleting it; keeping it",
 			"type", string(d.entityType), "id", id, "error", err)
 		return true
 	}
-	if refs == 0 {
+	if !keep {
 		return false
 	}
 	m.ctx.Logger.Info("keeping imported item still used by content this import did not create",
-		"type", string(d.entityType), "id", id, "referencing_pages", refs)
+		"type", string(d.entityType), "id", id)
 	return true
 }
 
