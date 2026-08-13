@@ -30,6 +30,10 @@ type MigratorSourceFormViewData struct {
 	Config         map[string]string
 	ImportedCounts map[string]int
 	Job            *ImportJob
+	// SupportedOptions maps an import option's form key to whether this source
+	// acts on it. Options the source ignores are not rendered at all, so the
+	// form cannot promise content it will not import.
+	SupportedOptions map[string]bool
 }
 
 // HasImportedContent reports whether anything was imported from this source.
@@ -263,41 +267,72 @@ templ MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) {
 // MigratorImportOptions renders the import-option checkboxes. It is a separate
 // component so TestImportOptionsHaveFormCheckboxes can render it in isolation
 // and assert every ImportOptions field has a control.
-templ MigratorImportOptions(pc *adminviews.PageContext) {
+//
+// supported maps a form key to whether the selected source acts on it. An
+// option the source ignores is omitted entirely rather than shown disabled: a
+// greyed-out control still reads as "this source could do that", and it could
+// not. A nil map means every option is supported, which is what the isolated
+// render in the drift test passes.
+templ MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool) {
 	<div class="form-checkboxes">
-		<label class="checkbox-label">
-			<input type="checkbox" name="import_tags" checked/>
-			<span>{ pc.T("migrator.option_import_tags") }</span>
-		</label>
-		<label class="checkbox-label">
-			<input type="checkbox" name="import_categories" checked/>
-			<span>{ pc.T("migrator.option_import_categories") }</span>
-		</label>
-		<label class="checkbox-label">
-			<input type="checkbox" name="import_media" checked/>
-			<span>{ pc.T("migrator.option_import_media") }</span>
-		</label>
-		<label class="checkbox-label">
-			<input type="checkbox" name="import_posts" checked/>
-			<span>{ pc.T("migrator.option_import_posts") }</span>
-		</label>
-		<label class="checkbox-label">
-			<input type="checkbox" name="import_pages" checked/>
-			<span>{ pc.T("migrator.option_import_pages") }</span>
-		</label>
-		<label class="checkbox-label">
-			<input type="checkbox" name="import_menus" checked/>
-			<span>{ pc.T("migrator.option_import_menus") }</span>
-		</label>
-		<label class="checkbox-label">
-			<input type="checkbox" name="import_users"/>
-			<span>{ pc.T("migrator.option_import_users") }</span>
-		</label>
-		<label class="checkbox-label">
-			<input type="checkbox" name="skip_existing"/>
-			<span>{ pc.T("migrator.option_skip_existing") }</span>
-		</label>
+		if optionEnabled(supported, "import_tags") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_tags" checked/>
+				<span>{ pc.T("migrator.option_import_tags") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_categories") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_categories" checked/>
+				<span>{ pc.T("migrator.option_import_categories") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_media") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_media" checked/>
+				<span>{ pc.T("migrator.option_import_media") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_posts") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_posts" checked/>
+				<span>{ pc.T("migrator.option_import_posts") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_pages") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_pages" checked/>
+				<span>{ pc.T("migrator.option_import_pages") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_menus") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_menus" checked/>
+				<span>{ pc.T("migrator.option_import_menus") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_users") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_users"/>
+				<span>{ pc.T("migrator.option_import_users") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "skip_existing") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="skip_existing"/>
+				<span>{ pc.T("migrator.option_skip_existing") }</span>
+			</label>
+		}
 	</div>
+}
+
+// optionEnabled reports whether an import option should be offered. A nil map
+// means "no source-specific restriction", so every option renders.
+func optionEnabled(supported map[string]bool, formKey string) bool {
+	if supported == nil {
+		return true
+	}
+	return supported[formKey]
 }
 
 // MigratorImportedContent renders the Imported Content card.
@@ -523,7 +558,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 						<h2>{ pc.T("migrator.import_options") }</h2>
 					</div>
 					<div class="card-body">
-						@MigratorImportOptions(pc)
+						@MigratorImportOptions(pc, data.SupportedOptions)
 					</div>
 				</div>
 				<div class="form-submit">

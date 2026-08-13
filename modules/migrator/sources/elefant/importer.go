@@ -62,6 +62,25 @@ func (s *Source) ConfigFields() []types.ConfigField {
 	}
 }
 
+// SupportedImportOptions declares the import options this source acts on.
+//
+// Elefant has no vocabulary or navigation tables to read, so ImportCategories
+// and ImportMenus are absent — Import does not consult either. They used to be
+// offered anyway, checked by default, which made every Elefant run promise
+// categories and menus and silently deliver neither.
+//
+// TestSourcesDeclareTheOptionsTheyRead keeps this in step with the code.
+func (s *Source) SupportedImportOptions() []string {
+	return []string{
+		"import_tags",
+		"import_media",
+		"import_posts",
+		"import_pages",
+		"import_users",
+		"skip_existing",
+	}
+}
+
 // envOrDefault returns the environment variable value or the default if not set.
 var envOrDefault = shared.EnvOrDefault
 

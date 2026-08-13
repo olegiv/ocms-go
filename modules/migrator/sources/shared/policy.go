@@ -37,23 +37,38 @@ func CheckDBHostAllowed(host string) error {
 // host, so the escaping guarantees of FormatDSN hold for the whole DSN.
 const hostForbiddenChars = "@()/\\?#& \t\r\n"
 
+// rejectEmbeddedPort rejects a colon that is not part of an IPv6 literal.
+//
+// A colon is legitimate only in an IPv6 literal. In anything else it is a port
+// the caller should have put in the port field — and it used to pass, then
+// reach net.JoinHostPort, producing an address like "[db.example.com:3306]:3306"
+// that fails to dial with a misleading error rather than being rejected as the
+// misconfiguration it is.
+//
+// Both the submitted host and every allowlist entry go through this, because
+// they have to agree on what a host is: while only the submitted side checked,
+// an entry of "db.example.com:3306" was stored verbatim as an allowlist key
+// that no normalized host could ever equal, so the allowlist silently denied
+// every import and the error named the host rather than the bad entry.
+func rejectEmbeddedPort(value string) error {
+	if !strings.Contains(value, ":") {
+		return nil
+	}
+	bare := strings.TrimSuffix(strings.TrimPrefix(value, "["), "]")
+	if net.ParseIP(bare) != nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"a colon is only valid in an IPv6 literal; put the port in the port field")
+}
+
 // validateHostShape rejects hosts that could alter DSN structure.
 func validateHostShape(host string) error {
 	if strings.ContainsAny(host, hostForbiddenChars) {
 		return fmt.Errorf("invalid database host %q: must be a bare hostname or IP", host)
 	}
-	// A colon is legitimate only in an IPv6 literal. In anything else it is a
-	// port the caller should have put in the port field — and it used to pass
-	// this check, then reach net.JoinHostPort, producing an address like
-	// "[db.example.com:3306]:3306" that fails to dial with a misleading error
-	// rather than being rejected as the misconfiguration it is.
-	if strings.Contains(host, ":") {
-		bare := strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
-		if net.ParseIP(bare) == nil {
-			return fmt.Errorf(
-				"invalid database host %q: a colon is only valid in an IPv6 literal; "+
-					"put the port in the port field", host)
-		}
+	if err := rejectEmbeddedPort(host); err != nil {
+		return fmt.Errorf("invalid database host %q: %w", host, err)
 	}
 	return nil
 }
@@ -97,6 +112,9 @@ func ParseAllowedHosts(raw string) (map[string]struct{}, error) {
 		}
 		if strings.ContainsAny(entry, "/?#@\\ ") {
 			return nil, fmt.Errorf("invalid host entry %q in %s: must be a bare hostname or IP", entry, EnvAllowedDBHosts)
+		}
+		if err := rejectEmbeddedPort(entry); err != nil {
+			return nil, fmt.Errorf("invalid host entry %q in %s: %w", entry, EnvAllowedDBHosts, err)
 		}
 		normalized, err := normalizeHost(entry)
 		if err != nil {

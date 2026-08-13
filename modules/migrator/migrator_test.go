@@ -8,10 +8,14 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
@@ -396,6 +400,52 @@ func TestDeleteMediaFiles_NoPanic(t *testing.T) {
 	m := testModule(t)
 	// Random UUID that doesn't exist on disk — os.RemoveAll on missing dirs is a no-op.
 	m.deleteMediaFiles("00000000-0000-0000-0000-000000000000")
+}
+
+// TestDeleteMediaFilesRemovesEveryStorageDir asserts that deleting a media item
+// removes everything creating one can produce.
+//
+// It walks model.MediaStorageDirs rather than a list of its own, so a variant
+// added to model.ImageVariants is covered here the moment it exists. The
+// hardcoded list this replaced had already drifted: it omitted "og", and since
+// deleting an import also removes the media row and its tracking row, every
+// imported image left an /uploads/og/<uuid> directory that nothing could ever
+// find again.
+func TestDeleteMediaFilesRemovesEveryStorageDir(t *testing.T) {
+	uploadDir := t.TempDir()
+	t.Setenv("OCMS_UPLOADS_DIR", uploadDir)
+
+	m := testModule(t)
+	const mediaUUID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+
+	dirs := model.MediaStorageDirs()
+	if len(dirs) < 2 {
+		t.Fatalf("model.MediaStorageDirs() = %v, want originals plus every variant", dirs)
+	}
+	// The bug was a missing variant, so fail loudly if the source of truth
+	// itself ever stops naming the one this test exists for.
+	if !slices.Contains(dirs, model.VariantOG) {
+		t.Fatalf("model.MediaStorageDirs() = %v, want it to include %q", dirs, model.VariantOG)
+	}
+
+	for _, dir := range dirs {
+		path := filepath.Join(uploadDir, dir, mediaUUID)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("failed to create %s: %v", path, err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "photo.jpg"), []byte("x"), 0o644); err != nil {
+			t.Fatalf("failed to write into %s: %v", path, err)
+		}
+	}
+
+	m.deleteMediaFiles(mediaUUID)
+
+	for _, dir := range dirs {
+		path := filepath.Join(uploadDir, dir, mediaUUID)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("%s survived deletion (stat err = %v); every media storage dir must be removed", path, err)
+		}
+	}
 }
 
 // --- View structs ---

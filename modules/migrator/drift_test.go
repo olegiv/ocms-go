@@ -18,6 +18,8 @@ import (
 	"unicode"
 
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/drupal"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/elefant"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
 
@@ -222,11 +224,22 @@ func TestImportOptionsHaveFormCheckboxes(t *testing.T) {
 }
 
 // renderImportOptions renders the options component to a string.
+//
+// supported is nil, meaning "no source-specific restriction", so this still
+// asserts that every ImportOptions field has a control somewhere in the
+// component. Per-source filtering is covered by
+// TestSourcesDeclareTheOptionsTheyRead and TestImportFormHidesUnsupportedOptions.
 func renderImportOptions(t *testing.T) string {
+	t.Helper()
+	return renderImportOptionsFor(t, nil)
+}
+
+// renderImportOptionsFor renders the options component for a given support set.
+func renderImportOptionsFor(t *testing.T, supported map[string]bool) string {
 	t.Helper()
 	var sb strings.Builder
 	pc := &adminviews.PageContext{}
-	if err := MigratorImportOptions(pc).Render(context.Background(), &sb); err != nil {
+	if err := MigratorImportOptions(pc, supported).Render(context.Background(), &sb); err != nil {
 		t.Fatalf("failed to render import options: %v", err)
 	}
 	return sb.String()
@@ -653,4 +666,171 @@ func resultMessageCalls(t *testing.T) []messageCall {
 		t.Fatalf("failed to walk migrator sources: %v", err)
 	}
 	return calls
+}
+
+// TestSourcesDeclareTheOptionsTheyRead ties each source's declared
+// SupportedImportOptions to the ImportOptions fields its code actually reads.
+//
+// Bug state: the import form rendered all eight checkboxes for every source,
+// with import_menus and import_categories checked by default, while
+// elefant.Source.Import consults neither. An Elefant run therefore promised
+// menus and categories, imported neither, and still reported "Completed".
+// Fixing only Elefant's declaration would leave the next source free to drift
+// the same way, so the invariant is enforced over the source tree rather than
+// at the one site that broke.
+//
+// It fails in both directions: an option offered but never read, and an option
+// read but not declared (which would hide a working feature from the UI).
+func TestSourcesDeclareTheOptionsTheyRead(t *testing.T) {
+	// Every source package must appear here. A new source with no entry fails
+	// the test rather than silently escaping it.
+	declared := map[string]Source{
+		"drupal":  drupal.NewSource(),
+		"elefant": elefant.NewSource(),
+	}
+
+	optionFields := make(map[string]bool)
+	optionsType := reflect.TypeOf(types.ImportOptions{})
+	for i := 0; i < optionsType.NumField(); i++ {
+		optionFields[optionsType.Field(i).Name] = true
+	}
+
+	read := optionFieldsReadPerSource(t, optionFields)
+
+	for pkg := range read {
+		if _, ok := declared[pkg]; !ok {
+			t.Errorf("source package %q reads ImportOptions but is not listed in this test; "+
+				"add it so its declared options stay tied to the code", pkg)
+		}
+	}
+
+	for pkg, src := range declared {
+		t.Run(pkg, func(t *testing.T) {
+			supporter, ok := src.(types.OptionSupporter)
+			if !ok {
+				// Not implementing the interface means "supports everything",
+				// which is only honest if the source really does read them all.
+				for key := range read[pkg] {
+					_ = key
+				}
+				for _, key := range types.ImportOptionKeys() {
+					if !read[pkg][key] {
+						t.Errorf("%s does not implement OptionSupporter, so the form offers %q, "+
+							"but no code in the package reads it", pkg, key)
+					}
+				}
+				return
+			}
+
+			declaredKeys := make(map[string]bool, len(supporter.SupportedImportOptions()))
+			for _, key := range supporter.SupportedImportOptions() {
+				declaredKeys[key] = true
+			}
+
+			for _, key := range types.ImportOptionKeys() {
+				switch {
+				case declaredKeys[key] && !read[pkg][key]:
+					t.Errorf("%s declares support for %q but no code in the package reads it; "+
+						"the form would offer content the import silently drops", pkg, key)
+				case !declaredKeys[key] && read[pkg][key]:
+					t.Errorf("%s reads %q but does not declare it; "+
+						"the form hides an option the import honours", pkg, key)
+				}
+			}
+		})
+	}
+}
+
+// optionFieldsReadPerSource AST-walks modules/migrator/sources and returns, per
+// source package, the set of ImportOptions form keys its non-test code reads.
+func optionFieldsReadPerSource(t *testing.T, optionFields map[string]bool) map[string]map[string]bool {
+	t.Helper()
+	read := make(map[string]map[string]bool)
+	fset := token.NewFileSet()
+
+	root := "sources"
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		pkg := filepath.Dir(rel)
+		if pkg == "." || pkg == "shared" {
+			return nil
+		}
+
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return err
+		}
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok || !optionFields[sel.Sel.Name] {
+				return true
+			}
+			// Only count reads off an options value: "opts.ImportMenus" and
+			// "st.opts.ImportMenus", not an unrelated struct that happens to
+			// carry a field of the same name.
+			if !isOptionsReceiver(sel.X) {
+				return true
+			}
+			if read[pkg] == nil {
+				read[pkg] = make(map[string]bool)
+			}
+			read[pkg][types.ImportOptionFormKey(sel.Sel.Name)] = true
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to walk migrator sources: %v", err)
+	}
+	return read
+}
+
+// isOptionsReceiver reports whether an expression names an ImportOptions value.
+func isOptionsReceiver(expr ast.Expr) bool {
+	var name string
+	switch recv := expr.(type) {
+	case *ast.Ident:
+		name = recv.Name
+	case *ast.SelectorExpr:
+		name = recv.Sel.Name
+	default:
+		return false
+	}
+	name = strings.ToLower(name)
+	return strings.Contains(name, "opts") || strings.Contains(name, "options")
+}
+
+// TestImportFormHidesUnsupportedOptions checks the rendered form, not just the
+// declaration: the capability set has to reach the markup.
+func TestImportFormHidesUnsupportedOptions(t *testing.T) {
+	for _, tc := range []struct {
+		source Source
+		name   string
+	}{
+		{drupal.NewSource(), "drupal"},
+		{elefant.NewSource(), "elefant"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			supported := types.SupportedImportOptionSet(tc.source)
+			markup := renderImportOptionsFor(t, supported)
+
+			for _, key := range types.ImportOptionKeys() {
+				present := strings.Contains(markup, `name="`+key+`"`)
+				if present != supported[key] {
+					t.Errorf("checkbox %q present = %v, want %v for source %q",
+						key, present, supported[key], tc.name)
+				}
+			}
+		})
+	}
 }

@@ -1081,15 +1081,12 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 	return m.clearTrackedItems(ctx)
 }
 
-// deleteMediaFiles removes all files associated with a media item
+// deleteMediaFiles removes all files associated with a media item.
+//
+// The directory list comes from model.MediaStorageDirs so it cannot fall behind
+// the variants generateMedia actually creates.
 func deleteMediaFiles(uploadDir, mediaUUID string) {
-	// Delete original
-	originalsDir := filepath.Join(uploadDir, "originals", mediaUUID)
-	_ = os.RemoveAll(originalsDir)
-
-	// Delete variants (must match variants created in generateMedia)
-	for _, variant := range []string{"thumbnail", "grid", "small", "medium", "large", "og"} {
-		variantDir := filepath.Join(uploadDir, variant, mediaUUID)
-		_ = os.RemoveAll(variantDir)
+	for _, dir := range model.MediaStorageDirs() {
+		_ = os.RemoveAll(filepath.Join(uploadDir, dir, mediaUUID))
 	}
 }

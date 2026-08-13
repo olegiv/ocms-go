@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -90,13 +91,14 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	viewData := MigratorSourceFormViewData{
-		SourceName:     sourceName,
-		DisplayName:    source.DisplayName(),
-		Description:    source.Description(),
-		ConfigFields:   source.ConfigFields(),
-		Config:         config,
-		ImportedCounts: importedCounts,
-		Job:            job,
+		SourceName:       sourceName,
+		DisplayName:      source.DisplayName(),
+		Description:      source.Description(),
+		ConfigFields:     source.ConfigFields(),
+		Config:           config,
+		ImportedCounts:   importedCounts,
+		Job:              job,
+		SupportedOptions: types.SupportedImportOptionSet(source),
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "migrator.import_from", source.DisplayName()), []render.Breadcrumb{
@@ -271,7 +273,12 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 	if ctx == nil {
 		return
 	}
-	opts := parseImportOptions(r)
+	// Options the source ignores are cleared rather than recorded. The form no
+	// longer offers them, so this only bites a hand-crafted POST — but the
+	// options blob is persisted on the job row and read back by the admin UI,
+	// and ImportMenus drives cache invalidation, so recording one the source
+	// never read would misreport what the run was asked to do.
+	opts := types.MaskUnsupportedImportOptions(ctx.Source, parseImportOptions(r))
 
 	jobID, err := m.startJob(r.Context(), ctx.SourceName, ctx.User.Email, ctx.User.ID, opts)
 	if err != nil {
@@ -907,9 +914,12 @@ func (m *Module) deleteMediaFiles(mediaUUID string) {
 	if uploadDir == "" {
 		uploadDir = "./uploads"
 	}
-	variants := []string{"originals", "thumbnail", "grid", "small", "medium", "large"}
 
-	for _, variant := range variants {
+	// Derived from model.ImageVariants rather than listed here. This was a
+	// hardcoded copy and it had drifted: it omitted "og", so deleting an import
+	// left /uploads/og/<uuid> behind for every image, with the media row and its
+	// tracking row both gone and nothing left to find the directory from.
+	for _, variant := range model.MediaStorageDirs() {
 		dir := filepath.Join(uploadDir, variant, mediaUUID)
 		if err := util.ValidatePathWithinBase(uploadDir, dir); err != nil {
 			m.ctx.Logger.Warn("refusing to delete path outside uploads root", "dir", dir, "error", err)

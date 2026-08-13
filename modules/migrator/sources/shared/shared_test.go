@@ -347,10 +347,11 @@ func TestCheckDBHostAllowedNormalizesIPv6(t *testing.T) {
 	}
 }
 
-// TestParseAllowedHostsRejectsPorts pins the rule that an entry carrying a port
-// is an error rather than being silently reinterpreted — "example.com:3306"
-// would otherwise read as a wildcard over every port on that host.
-func TestParseAllowedHostsRejectsPorts(t *testing.T) {
+// TestParseAllowedHostsRejectsMalformedEntries pins the rule that an entry
+// carrying a scheme, path or port is an error rather than being silently
+// reinterpreted — "example.com:3306" would otherwise read as a wildcard over
+// every port on that host.
+func TestParseAllowedHostsRejectsMalformedEntries(t *testing.T) {
 	for _, entry := range []string{
 		"https://db.example.com",
 		"db.example.com/path",
@@ -371,5 +372,62 @@ func TestParseAllowedHostsRejectsPorts(t *testing.T) {
 	}
 	if len(allowed) != 1 {
 		t.Errorf("ParseAllowedHosts() = %v, want a single entry with blanks dropped", allowed)
+	}
+}
+
+// TestHostShapeRulesAgreeOnBothSides drives one table through both places a
+// host is validated: the submitted host and an allowlist entry.
+//
+// The two are only useful if they agree on what a host is. They did not: the
+// submitted side rejected "db.example.com:3306" while ParseAllowedHosts stored
+// it verbatim as a key no normalized host could ever equal, so an operator who
+// wrote the port into the allowlist got every import refused with an error
+// naming the host rather than the bad entry — fail-closed, but invisible.
+//
+// The old TestParseAllowedHostsRejectsPorts promised this rule in its name and
+// never exercised it: all five of its cases were caught by the "/?#@\\ " check,
+// and not one contained a colon.
+func TestHostShapeRulesAgreeOnBothSides(t *testing.T) {
+	cases := []struct {
+		host string
+		want bool // true = accepted by both sides
+	}{
+		{"db.example.com", true},
+		{"localhost", true},
+		{"10.0.0.5", true},
+		{"::1", true},
+		{"[::1]", true},
+		{"2001:db8::1", true},
+		{"[2001:db8::1]", true},
+
+		{"db.example.com:3306", false},
+		{"[db.example.com]:3306", false},
+		{"10.0.0.5:3306", false},
+		{"localhost:3306", false},
+		{"[::1]:3306", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.host, func(t *testing.T) {
+			// Submitted-host side. The allowlist is set to the same value so
+			// an accepted host also has to match, isolating shape from policy.
+			t.Setenv(EnvAllowedDBHosts, tc.host)
+			gotHost := CheckDBHostAllowed(tc.host) == nil
+
+			// Allowlist-entry side.
+			_, entryErr := ParseAllowedHosts(tc.host)
+			gotEntry := entryErr == nil
+
+			if gotHost != tc.want {
+				t.Errorf("CheckDBHostAllowed(%q) accepted = %v, want %v", tc.host, gotHost, tc.want)
+			}
+			if gotEntry != tc.want {
+				t.Errorf("ParseAllowedHosts(%q) accepted = %v, want %v", tc.host, gotEntry, tc.want)
+			}
+			if gotHost != gotEntry {
+				t.Errorf("host %q: submitted-host side accepted = %v but allowlist-entry side accepted = %v; "+
+					"the two validators must agree on what a host is", tc.host, gotHost, gotEntry)
+			}
+		})
 	}
 }

@@ -29,6 +29,36 @@ menu_item, menu, alias, post, page, tag, category, media, user
 
 That order is dictated by the schema's foreign keys — `pages.author_id` is `ON DELETE RESTRICT`, so pages must be deleted before their authors; `page_aliases.page_id` is `ON DELETE CASCADE`, so aliases have no deleter of their own. Adding an entity type means adding it to that list, to `deleters()`, and to the locale files; drift tests fail if any of the three is missed.
 
+### Import options per source
+
+Not every source can import every entity class. The import form renders only the options the selected source actually acts on:
+
+| Option | Elefant | Drupal |
+|--------|:-------:|:------:|
+| `import_tags` | ✅ | ✅ |
+| `import_categories` | — | ✅ |
+| `import_media` | ✅ | ✅ |
+| `import_posts` | ✅ | ✅ |
+| `import_pages` | ✅ | ✅ |
+| `import_menus` | — | ✅ |
+| `import_users` | ✅ | ✅ |
+| `skip_existing` | ✅ | ✅ |
+
+Elefant has no vocabulary or navigation tables to read, so categories and menus are absent. They used to be offered anyway and checked by default, which made every Elefant run promise both, import neither, and still report **Completed**.
+
+A source declares its capabilities through the optional `types.OptionSupporter` interface:
+
+```go
+func (s *Source) SupportedImportOptions() []string {
+	return []string{"import_tags", "import_media", "import_posts",
+		"import_pages", "import_users", "skip_existing"}
+}
+```
+
+It is optional in the same way and for the same reason as `types.ProgressReporter`: a source that does not implement it is treated as supporting everything, so existing and out-of-tree sources keep working unchanged. Options a source does not declare are cleared server-side in `handleImport` as well as omitted from the form, so a hand-crafted POST cannot record an option the source never read on the job row.
+
+`TestSourcesDeclareTheOptionsTheyRead` AST-walks each source package for `opts.<Field>` reads and fails in both directions — an option offered but never read, or read but not declared.
+
 ## Background imports
 
 An import runs as a **detached background job**, not inline in the request.
@@ -181,6 +211,8 @@ Drupal blocks, views, custom field types beyond body/image/tags, revisions, comm
 
 One subtlety worth knowing: when the importer adds links to a menu that already existed in oCMS, it tracks only the menu *items*, never the menu itself — so deleting the import cannot destroy a menu you built by hand.
 
+Deleting imported media removes every directory the uploads root can hold for that UUID, derived from `model.MediaStorageDirs()` — the originals plus one per entry in `model.ImageVariants`. That list used to be hardcoded here and had fallen behind: it omitted `og`, so every imported image left an orphaned `/uploads/og/<uuid>` after deletion, with the media row and its tracking row both gone and nothing left to find the directory from. Adding a variant to `model.ImageVariants` now extends creation and deletion together.
+
 ## Database
 
 Migration 1 creates the tracking table:
@@ -227,7 +259,7 @@ No credentials are ever written to either table. History is trimmed to the newes
 
 ## Security notes
 
-- **Source database host.** `OCMS_MIGRATOR_ALLOWED_DB_HOSTS` optionally restricts which hosts a source may connect to (comma-separated bare hostnames or IPs; no scheme, no port). It is an allowlist rather than the private-IP denylist used for webhooks, because a CMS database being migrated from almost always lives on a private address — denying RFC1918 would break the feature's main use case. An empty value means no restriction; routes are admin-only regardless. In production, `OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS` defaults to `true` and refuses startup when the module is active with an empty allowlist; set it to `false` to opt out deliberately.
+- **Source database host.** `OCMS_MIGRATOR_ALLOWED_DB_HOSTS` optionally restricts which hosts a source may connect to (comma-separated bare hostnames or IPs; no scheme, no port — an entry carrying a port is rejected at parse time rather than stored as a key nothing can match, and the same rule is applied to the submitted host, so the two cannot disagree; a bare IPv6 literal such as `::1` or `[::1]` is still accepted). It is an allowlist rather than the private-IP denylist used for webhooks, because a CMS database being migrated from almost always lives on a private address — denying RFC1918 would break the feature's main use case. An empty value means no restriction; routes are admin-only regardless. In production, `OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS` defaults to `true` and refuses startup when the module is active with an empty allowlist; set it to `false` to opt out deliberately.
 - **DSNs are never built by string formatting.** Every source must go through `shared.BuildMySQLDSN`, which assembles the DSN with `mysql.Config.FormatDSN` and enforces the host allowlist. This is not cosmetic: raw interpolation let a submitted database name such as `db?allowAllFiles=true` inject driver parameters and turn on the driver's `LOCAL INFILE` handling, which lets a hostile MySQL server read arbitrary files readable by the oCMS process. `TestNoSourceBuildsDSNByStringFormatting` fails the build if a source reintroduces hand-built DSNs.
 - **Host values are shape-checked** before being placed in the DSN. `FormatDSN` writes the address verbatim, so a host containing `@`, `(`, `/` or whitespace could otherwise re-parse as a different protocol (for example a `unix` socket).
 - **Table prefixes** are sanitized to `[A-Za-z0-9_]{0,20}` before being interpolated into SQL. Every other value is a bound parameter.

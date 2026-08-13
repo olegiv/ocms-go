@@ -343,20 +343,11 @@ func (p *Processor) DetectMimeType(data []byte) string {
 
 // DeleteMediaFiles removes all files associated with a media item.
 func (p *Processor) DeleteMediaFiles(uuid string) error {
-	// Delete original
-	originalsDir := filepath.Join(p.uploadDir, "originals", uuid)
-	if err := os.RemoveAll(originalsDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete originals: %w", err)
-	}
-
-	// Delete all variants
-	for variantType := range model.ImageVariants {
-		variantDir := filepath.Join(p.uploadDir, variantType, uuid)
-		if err := os.RemoveAll(variantDir); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to delete %s variant: %w", variantType, err)
+	for _, dir := range model.MediaStorageDirs() {
+		if err := os.RemoveAll(filepath.Join(p.uploadDir, dir, uuid)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to delete %s files: %w", dir, err)
 		}
 	}
-
 	return nil
 }
 

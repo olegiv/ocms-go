@@ -9,6 +9,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"slices"
+	"strings"
+	"unicode"
 )
 
 // EntityType identifies a kind of imported entity. Values are the strings
@@ -107,6 +111,94 @@ type Source interface {
 	// the duration of an import starves every other writer. Write per entity
 	// and let the tracking table provide the undo path instead.
 	Import(ctx context.Context, db *sql.DB, cfg map[string]string, opts ImportOptions, tracker ImportTracker) (*ImportResult, error)
+}
+
+// OptionSupporter is an optional capability of a Source: it declares which
+// import options the source actually acts on, as form keys.
+//
+// Like ProgressReporter above, it is a separate interface rather than a method
+// on Source so that adding it does not break every implementer, including test
+// doubles and any out-of-tree module. A source that does not implement it is
+// treated as supporting everything.
+//
+// It exists because the import form rendered all eight checkboxes for every
+// source, with menus and categories checked by default, while the Elefant
+// importer reads neither — so an Elefant run promised menus and categories,
+// imported neither, and still reported "Completed".
+type OptionSupporter interface {
+	SupportedImportOptions() []string
+}
+
+// SupportsImportOption reports whether a source acts on an import option.
+func SupportsImportOption(src Source, formKey string) bool {
+	supporter, ok := src.(OptionSupporter)
+	if !ok {
+		return true
+	}
+	return slices.Contains(supporter.SupportedImportOptions(), formKey)
+}
+
+// SupportedImportOptionSet returns the form keys a source acts on, keyed for
+// template lookup.
+func SupportedImportOptionSet(src Source) map[string]bool {
+	set := make(map[string]bool, len(ImportOptionKeys()))
+	for _, key := range ImportOptionKeys() {
+		set[key] = SupportsImportOption(src, key)
+	}
+	return set
+}
+
+// MaskUnsupportedImportOptions clears every option the source does not act on.
+//
+// Omitting a checkbox already stops the browser submitting it, so this only
+// matters for a hand-crafted POST. It is still worth doing: the options blob is
+// persisted on the job row and read back by the admin UI, and ImportMenus also
+// drives cache invalidation — recording an option the source ignored would
+// misreport what the run was asked to do.
+func MaskUnsupportedImportOptions(src Source, opts ImportOptions) ImportOptions {
+	if _, ok := src.(OptionSupporter); !ok {
+		return opts
+	}
+	value := reflect.ValueOf(&opts).Elem()
+	optionsType := value.Type()
+	for i := 0; i < optionsType.NumField(); i++ {
+		if !SupportsImportOption(src, ImportOptionFormKey(optionsType.Field(i).Name)) {
+			value.Field(i).SetBool(false)
+		}
+	}
+	return opts
+}
+
+// ImportOptionKeys returns the form key of every ImportOptions field, in
+// declaration order.
+func ImportOptionKeys() []string {
+	optionsType := reflect.TypeOf(ImportOptions{})
+	keys := make([]string, 0, optionsType.NumField())
+	for i := 0; i < optionsType.NumField(); i++ {
+		keys = append(keys, ImportOptionFormKey(optionsType.Field(i).Name))
+	}
+	return keys
+}
+
+// ImportOptionFormKey turns an ImportOptions field name such as
+// "ImportCategories" into its form key "import_categories".
+//
+// This is the one place the convention lives. parseImportOptions writes the
+// same mapping out longhand for readability, and
+// TestImportOptionsHaveFormCheckboxes proves the two agree.
+func ImportOptionFormKey(fieldName string) string {
+	var out strings.Builder
+	for i, r := range fieldName {
+		if unicode.IsUpper(r) {
+			if i > 0 {
+				out.WriteRune('_')
+			}
+			out.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
 }
 
 // ConfigField represents a configuration field for a migration source.

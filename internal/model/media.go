@@ -6,6 +6,7 @@ package model
 import (
 	"database/sql"
 	"net/url"
+	"sort"
 	"time"
 )
 
@@ -35,7 +36,7 @@ const (
 func MediaURL(variant, uuid, filename string) string {
 	dir := variant
 	if variant == "" || variant == VariantOriginal {
-		dir = "originals"
+		dir = OriginalsDir
 	}
 	return "/uploads/" + dir + "/" + uuid + "/" + url.PathEscape(filename)
 }
@@ -74,6 +75,30 @@ var ImageVariants = map[string]ImageVariantConfig{
 	VariantMedium:    {Width: 800, Height: 600, Quality: 85, Crop: false},
 	VariantLarge:     {Width: 1920, Height: 1080, Quality: 90, Crop: false},
 	VariantOG:        {Width: 1200, Height: 630, Quality: 85, Crop: false},
+}
+
+// OriginalsDir is the directory holding unresized uploads. It is "originals",
+// not VariantOriginal ("original"), which is why it cannot be derived from the
+// variant name — see MediaURL, which special-cases exactly this.
+const OriginalsDir = "originals"
+
+// MediaStorageDirs returns every directory under the uploads root that can hold
+// files for one media UUID: the originals plus one per image variant.
+//
+// It exists because three separate cleanup paths each kept their own hardcoded
+// copy of this list, and the migrator's had drifted — it omitted "og", so every
+// imported image left /uploads/og/<uuid> behind after "delete imported content"
+// with no database or tracking row left to find it from. Deleting a media item
+// must remove everything creating one can produce, so both sides derive from
+// ImageVariants.
+func MediaStorageDirs() []string {
+	dirs := make([]string, 0, len(ImageVariants)+1)
+	dirs = append(dirs, OriginalsDir)
+	for variant := range ImageVariants {
+		dirs = append(dirs, variant)
+	}
+	sort.Strings(dirs)
+	return dirs
 }
 
 // Media represents an uploaded file in the media library.
