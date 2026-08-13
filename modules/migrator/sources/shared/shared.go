@@ -56,14 +56,21 @@ func SanitizeIdentifier(name string) (string, error) {
 	if len(name) > MaxIdentifierLength {
 		return "", fmt.Errorf("invalid identifier: exceeds maximum length of %d characters", MaxIdentifierLength)
 	}
+	// Rebuilt rune by rune rather than returned as-is, matching
+	// SanitizeTablePrefix. Returning the argument makes the function a no-op to
+	// static taint analysis, so a scanner still sees the caller's untrusted
+	// string flowing into the query.
+	var builder strings.Builder
+	builder.Grow(len(name))
 	for _, c := range name {
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 			(c >= '0' && c <= '9') || c == '_' {
+			builder.WriteRune(c)
 			continue
 		}
 		return "", fmt.Errorf("invalid identifier %q: contains invalid character %q", name, c)
 	}
-	return name, nil
+	return builder.String(), nil
 }
 
 func SanitizeTablePrefix(prefix string) (string, error) {

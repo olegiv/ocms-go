@@ -299,3 +299,55 @@ func TestSourceReadersUseContextAwareQueries(t *testing.T) {
 			strings.Join(offenders, "\n  "))
 	}
 }
+
+// TestSanitizeIdentifier covers the helper that guards every interpolated SQL
+// identifier. It had no tests at all, which is a poor state for the one
+// function standing between a column name and a query string.
+func TestSanitizeIdentifier(t *testing.T) {
+	valid := []string{
+		"field_image_target_id",
+		"entity_id",
+		"NodeID",
+		"a",
+		"_leading_underscore",
+		"col9",
+		strings.Repeat("x", MaxIdentifierLength),
+	}
+	for _, name := range valid {
+		got, err := SanitizeIdentifier(name)
+		if err != nil {
+			t.Errorf("SanitizeIdentifier(%q) returned an error: %v", name, err)
+			continue
+		}
+		if got != name {
+			t.Errorf("SanitizeIdentifier(%q) = %q, want the input unchanged", name, got)
+		}
+	}
+
+	invalid := []struct {
+		name  string
+		input string
+	}{
+		{"empty", ""},
+		{"backtick escape", "id` FROM users WHERE 1=1 -- "},
+		{"quote", "id'"},
+		{"semicolon", "id;DROP TABLE x"},
+		{"space", "id name"},
+		{"parenthesis", "count(*)"},
+		{"comma", "id,name"},
+		{"hyphen", "id-name"},
+		{"dot qualified", "t.id"},
+		{"asterisk", "*"},
+		{"newline", "id\nname"},
+		{"null byte", "id\x00"},
+		{"unicode homoglyph", "іd"},
+		{"too long", strings.Repeat("x", MaxIdentifierLength+1)},
+	}
+	for _, tc := range invalid {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, err := SanitizeIdentifier(tc.input); err == nil {
+				t.Errorf("SanitizeIdentifier(%q) = %q, want an error", tc.input, got)
+			}
+		})
+	}
+}

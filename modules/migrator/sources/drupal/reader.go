@@ -165,7 +165,15 @@ func (r *Reader) table(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid table prefix: %w", err)
 	}
-	return fmt.Sprintf("`%s%s`", safePrefix, name), nil
+	// The name is validated too, not just the prefix. Every caller passes a
+	// package constant today, so this is not reachable — but "safe because all
+	// 17 call sites happen to pass constants" is exactly the property that
+	// stops holding when someone adds an eighteenth.
+	safeName, err := shared.SanitizeIdentifier(name)
+	if err != nil {
+		return "", fmt.Errorf("invalid table name: %w", err)
+	}
+	return fmt.Sprintf("`%s%s`", safePrefix, safeName), nil
 }
 
 // detectSchema records which optional tables exist. Drupal's field tables vary

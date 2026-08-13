@@ -65,14 +65,28 @@ func NewReader(ctx context.Context, dsn string, tablePrefix string) (*Reader, er
 }
 
 // countRows runs a COUNT(*) against a prefixed table under the caller's context.
-func (r *Reader) countRows(ctx context.Context, table, whereClause, failMsg string) (int, error) {
+//
+// It takes a publishedOnly flag rather than a WHERE fragment. The previous
+// signature accepted a raw SQL string, so a future caller could interpolate
+// anything it liked into the query; both real call shapes are covered by the
+// flag, so nothing is lost by removing that freedom.
+func (r *Reader) countRows(ctx context.Context, table string, publishedOnly bool, failMsg string) (int, error) {
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
 		return 0, fmt.Errorf("invalid table prefix: %w", err)
 	}
+	safeTable, err := shared.SanitizeIdentifier(table)
+	if err != nil {
+		return 0, fmt.Errorf("invalid table name: %w", err)
+	}
+
+	whereClause := ""
+	if publishedOnly {
+		whereClause = " WHERE published = 'yes'"
+	}
 
 	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s%s`%s", safePrefix, table, whereClause)
+	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s%s`%s", safePrefix, safeTable, whereClause)
 	if err := r.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
 		return 0, fmt.Errorf("%s: %w", failMsg, err)
 	}
@@ -280,7 +294,7 @@ func (r *Reader) GetWebpages(ctx context.Context) ([]Webpage, error) {
 
 // GetWebpageCount returns the total number of webpages.
 func (r *Reader) GetWebpageCount(ctx context.Context) (int, error) {
-	return r.countRows(ctx, "webpage", "", "failed to count webpages")
+	return r.countRows(ctx, "webpage", false, "failed to count webpages")
 }
 
 // GetTags retrieves all unique tags from the blog_tag table.
@@ -357,17 +371,17 @@ func (r *Reader) GetUsers(ctx context.Context) ([]User, error) {
 
 // GetPostCount returns the total number of blog posts.
 func (r *Reader) GetPostCount(ctx context.Context) (int, error) {
-	return r.countRows(ctx, "blog_post", "", "failed to count posts")
+	return r.countRows(ctx, "blog_post", false, "failed to count posts")
 }
 
 // GetPublishedPostCount returns the number of published blog posts.
 func (r *Reader) GetPublishedPostCount(ctx context.Context) (int, error) {
-	return r.countRows(ctx, "blog_post", " WHERE published = 'yes'", "failed to count published posts")
+	return r.countRows(ctx, "blog_post", true, "failed to count published posts")
 }
 
 // GetTagCount returns the total number of tags.
 func (r *Reader) GetTagCount(ctx context.Context) (int, error) {
-	return r.countRows(ctx, "blog_tag", "", "failed to count tags")
+	return r.countRows(ctx, "blog_tag", false, "failed to count tags")
 }
 
 // allowedMediaMimeTypes defines MIME types that can be imported.
