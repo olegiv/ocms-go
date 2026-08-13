@@ -73,6 +73,7 @@ func TestEveryVendoredScriptIsProtected(t *testing.T) {
 		asset string
 	}
 	var unprotected []hit
+	var stale []string
 	scanned := 0
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -113,11 +114,27 @@ func TestEveryVendoredScriptIsProtected(t *testing.T) {
 			if _, ok := firstPartyScripts[asset]; ok {
 				continue
 			}
-			if strings.Contains(snippet, "integrity=") {
+			line := 1 + strings.Count(string(data[:tag[0]]), "\n")
+
+			declared := integrityPattern.FindStringSubmatch(snippet)
+			if declared == nil {
+				unprotected = append(unprotected, hit{rel, line, asset})
 				continue
 			}
-			line := 1 + strings.Count(string(data[:tag[0]]), "\n")
-			unprotected = append(unprotected, hit{rel, line, asset})
+			// Presence alone is not enough. Checking only that the attribute
+			// exists would let a hash go stale across an npm upgrade, and the
+			// browser then silently refuses to execute the script — which is
+			// the failure this suite exists to catch.
+			want, hashErr := embeddedScriptIntegrity(asset)
+			if hashErr != nil {
+				stale = append(stale, rel+":"+strconv.Itoa(line)+"  "+asset+
+					" (cannot read from the embedded FS: "+hashErr.Error()+")")
+				continue
+			}
+			if declared[1] != want {
+				stale = append(stale, rel+":"+strconv.Itoa(line)+"  "+asset+
+					"\n      declared: "+declared[1]+"\n      actual:   "+want)
+			}
 		}
 		return nil
 	})
@@ -138,6 +155,11 @@ func TestEveryVendoredScriptIsProtected(t *testing.T) {
 			"crossorigin=\"anonymous\"), or declare the file in firstPartyScripts "+
 			"with a reason if it is not an npm dependency:\n  %s",
 			strings.Join(lines, "\n  "))
+	}
+
+	if len(stale) > 0 {
+		t.Errorf("these integrity hashes no longer match the shipped bytes, so the "+
+			"browser will refuse to execute them:\n  %s", strings.Join(stale, "\n  "))
 	}
 }
 
