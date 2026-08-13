@@ -202,6 +202,12 @@ type importState struct {
 	users       map[int64]int64 // Drupal uid -> oCMS user id
 	tags        map[int64]int64 // Drupal tid -> oCMS tag id
 	categories  map[int64]int64 // Drupal tid -> oCMS category id
+	// createdNodes holds only the pages this run created. Nodes skipped by
+	// SkipExisting are still mapped in `nodes` so menu links resolve to the
+	// page that already exists, but nothing may be *written* to those pages:
+	// aliases attached to a page the import does not own survive the delete,
+	// because aliases are removed only by cascade from a deleted page.
+	createdNodes map[int64]bool
 	// createdCategories holds only the categories this run created. Parent
 	// links are applied to those alone: a pre-existing category matched by slug
 	// is mapped so content can reference it, but reparenting it would rewrite a
@@ -264,6 +270,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 		users:             make(map[int64]int64),
 		tags:              make(map[int64]int64),
 		categories:        make(map[int64]int64),
+		createdNodes:      make(map[int64]bool),
 		createdCategories: make(map[int64]bool),
 		mediaByFID:        make(map[int64]int64),
 		nodes:             make(map[int64]int64),
@@ -788,6 +795,17 @@ func reportSkippedMimes(st *importState, skipped map[string]int) {
 	}
 }
 
+// removeOrphanedUpload deletes the variant directories written for a media UUID
+// whose database row was never created.
+func removeOrphanedUpload(uploadDir, fileUUID string) {
+	for _, variant := range []string{"originals", "thumbnail", "grid", "small", "medium", "large"} {
+		dir := filepath.Join(uploadDir, variant, fileUUID)
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("failed to remove orphaned upload", "dir", dir, "error", err)
+		}
+	}
+}
+
 // importOneFile copies a single file onto disk and creates its media row.
 func (s *Source) importOneFile(ctx context.Context, st *importState, processor *imaging.Processor,
 	f File, fullPath, mimeType string, now time.Time) (int64, string, error) {
@@ -854,6 +872,11 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 
 	media, err := st.queries.CreateMedia(ctx, params)
 	if err != nil {
+		// The file is already on disk under fileUUID. Without this cleanup no
+		// media row and no tracking row exist, so nothing — including "delete
+		// imported content" — can ever find it again: a database outage would
+		// leave one orphaned upload per source file processed.
+		removeOrphanedUpload(st.uploadDir, fileUUID)
 		return 0, "", fmt.Errorf("failed to create media record: %w", err)
 	}
 	st.track(ctx, types.EntityMedia, media.ID)
@@ -1086,6 +1109,7 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 	}
 
 	st.nodes[n.NID] = page.ID
+	st.createdNodes[n.NID] = true
 	st.track(ctx, entityTypeFor(pageType), page.ID)
 	countImported(st.result, pageType)
 
@@ -1152,6 +1176,10 @@ func (s *Source) importAliases(ctx context.Context, st *importState, now time.Ti
 		}
 		pageID, ok := st.nodes[nid]
 		if !ok {
+			continue
+		}
+		// Never write aliases onto a page this import did not create.
+		if !st.createdNodes[nid] {
 			continue
 		}
 

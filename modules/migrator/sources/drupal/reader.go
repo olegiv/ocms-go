@@ -781,10 +781,20 @@ func (r *Reader) NodeImages(ctx context.Context) (map[int64]int64, error) {
 		return nil, err
 	}
 
+	nodeTbl, err := r.table(tableNodeData)
+	if err != nil {
+		return nil, err
+	}
+
+	// Joined to the node row and matched on langcode. Field tables carry one
+	// row per translation, so reading them unfiltered let whichever translation
+	// happened to be scanned last become the featured image of a page imported
+	// from the default-language row.
 	query := fmt.Sprintf(`
-		SELECT entity_id, field_image_target_id
-		FROM %s
-		WHERE delta = 0 AND field_image_target_id IS NOT NULL`, tbl)
+		SELECT f.entity_id, f.field_image_target_id
+		FROM %s f
+		JOIN %s n ON n.nid = f.entity_id AND n.default_langcode = 1 AND f.langcode = n.langcode
+		WHERE f.delta = 0 AND f.field_image_target_id IS NOT NULL`, tbl, nodeTbl)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -820,11 +830,19 @@ func (r *Reader) NodeTerms(ctx context.Context) (map[int64][]int64, error) {
 		return nil, err
 	}
 
+	nodeTbl, err := r.table(tableNodeData)
+	if err != nil {
+		return nil, err
+	}
+
+	// As with NodeImages: unfiltered, this appended the terms of every
+	// translation onto the default-language page.
 	query := fmt.Sprintf(`
-		SELECT entity_id, field_tags_target_id
-		FROM %s
-		WHERE field_tags_target_id IS NOT NULL
-		ORDER BY entity_id, delta`, tbl)
+		SELECT f.entity_id, f.field_tags_target_id
+		FROM %s f
+		JOIN %s n ON n.nid = f.entity_id AND n.default_langcode = 1 AND f.langcode = n.langcode
+		WHERE f.field_tags_target_id IS NOT NULL
+		ORDER BY f.entity_id, f.delta`, tbl, nodeTbl)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {

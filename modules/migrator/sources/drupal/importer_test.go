@@ -175,6 +175,7 @@ func newTestState(t *testing.T, reader *fakeReader, opts types.ImportOptions) (*
 		users:             make(map[int64]int64),
 		tags:              make(map[int64]int64),
 		categories:        make(map[int64]int64),
+		createdNodes:      make(map[int64]bool),
 		createdCategories: make(map[int64]bool),
 		mediaByFID:        make(map[int64]int64),
 		nodes:             make(map[int64]int64),
