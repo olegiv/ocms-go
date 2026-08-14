@@ -289,7 +289,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Get default language for media creation
 	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
-	if err != nil {
+	if err != nil || !isRoutableContentLanguage(defaultLang) {
 		slog.Error("failed to get default language", "error", err)
 		if r.Header.Get("HX-Request") == "true" {
 			w.WriteHeader(http.StatusInternalServerError)

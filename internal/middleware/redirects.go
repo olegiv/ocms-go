@@ -86,7 +86,7 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip admin and API routes
 		path := r.URL.Path
-		if strings.HasPrefix(path, "/admin") || strings.HasPrefix(path, "/api") {
+		if hasPathSegmentPrefix(path, "/admin") || hasPathSegmentPrefix(path, "/api") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -141,6 +141,10 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func hasPathSegmentPrefix(path, prefix string) bool {
+	return path == prefix || strings.HasPrefix(path, prefix+"/")
 }
 
 // matchPathWithCaptures matches a request path against a source pattern and returns captured wildcard segments.

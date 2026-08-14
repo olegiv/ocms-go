@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -17,9 +18,11 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/auth"
+	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
 
@@ -33,14 +36,36 @@ type fakeReader struct {
 	terms        []Term
 	files        []File
 	mediaUUIDs   map[int64][]string
+	mediaUUIDErr error
 	nodes        []Node
 	nodeImages   map[int64]int64
 	nodeTerms    map[int64][]int64
+	nodeWarning  string
 	aliases      []PathAlias
+	aliasCalls   int
+	aliasErr     error
 	menuLinks    []MenuLink
 	translations int
 	err          error
 }
+
+type closeFailSource struct {
+	data []byte
+}
+
+type pathOwnership map[string]bool
+
+func (p pathOwnership) OwnsPublicPath(path string) bool { return p[path] }
+
+func (s closeFailSource) Open(string) (sourceFile, error) {
+	return &closeFailFile{Reader: bytes.NewReader(s.data)}, nil
+}
+
+type closeFailFile struct {
+	*bytes.Reader
+}
+
+func (*closeFailFile) Close() error { return errors.New("source close failed") }
 
 func (f *fakeReader) Schema() Schema { return f.schema }
 
@@ -54,10 +79,16 @@ func (f *fakeReader) GetTerms(context.Context) ([]Term, error) { return f.terms,
 
 func (f *fakeReader) GetFiles(context.Context) ([]File, error) { return f.files, f.err }
 
-// Warnings satisfies sourceReader; the fake replays whatever was seeded.
-func (f *fakeReader) Warnings() []string { return f.warnings }
+func (f *fakeReader) Warnings() []string {
+	warnings := f.warnings
+	f.warnings = nil
+	return warnings
+}
 
 func (f *fakeReader) MediaUUIDsByFile(context.Context) (map[int64][]string, error) {
+	if f.mediaUUIDErr != nil {
+		return nil, f.mediaUUIDErr
+	}
 	if f.mediaUUIDs == nil {
 		return map[int64][]string{}, nil
 	}
@@ -78,6 +109,17 @@ func (f *fakeReader) GetNodes(_ context.Context, offset int) ([]Node, error) {
 	return f.nodes[offset:end], nil
 }
 
+func (f *fakeReader) GetNodeLanguages(context.Context) (map[int64]string, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	languages := make(map[int64]string, len(f.nodes))
+	for _, node := range f.nodes {
+		languages[node.NID] = node.Langcode
+	}
+	return languages, nil
+}
+
 func (f *fakeReader) NodeImages(context.Context) (map[int64]int64, error) {
 	images := f.nodeImages
 	if images == nil {
@@ -87,20 +129,47 @@ func (f *fakeReader) NodeImages(context.Context) (map[int64]int64, error) {
 }
 
 func (f *fakeReader) NodeTerms(context.Context) (map[int64][]int64, error) {
+	if f.nodeWarning != "" {
+		f.warnings = append(f.warnings, f.nodeWarning)
+		f.nodeWarning = ""
+	}
 	if f.nodeTerms == nil {
 		return map[int64][]int64{}, nil
 	}
 	return f.nodeTerms, nil
 }
 
-func (f *fakeReader) GetPathAliases(context.Context) ([]PathAlias, error) { return f.aliases, nil }
+func (f *fakeReader) GetPathAliases(context.Context) ([]PathAlias, error) {
+	f.aliasCalls++
+	return f.aliases, f.aliasErr
+}
 
 func (f *fakeReader) GetMenuLinks(context.Context) ([]MenuLink, error) { return f.menuLinks, nil }
 
 // recordingTracker captures tracked items and progress reports.
 type recordingTracker struct {
-	items    []trackedItem
-	progress []types.Progress
+	items         []trackedItem
+	progress      []types.Progress
+	failType      types.EntityType
+	trackErr      error
+	cancel        context.CancelFunc
+	beforeFailure func()
+}
+
+type cleanupQueueTracker struct {
+	recordingTracker
+	queueCtxErr  error
+	queueBounded bool
+	queuedRoot   string
+	queuedUUID   string
+}
+
+func (r *cleanupQueueTracker) QueueMediaCleanup(ctx context.Context, _, uploadRoot, mediaUUID string) error {
+	r.queueCtxErr = ctx.Err()
+	_, r.queueBounded = ctx.Deadline()
+	r.queuedRoot = uploadRoot
+	r.queuedUUID = mediaUUID
+	return nil
 }
 
 type trackedItem struct {
@@ -111,6 +180,15 @@ type trackedItem struct {
 
 func (r *recordingTracker) TrackImportedItem(_ context.Context, source, entityType string, entityID int64) error {
 	r.items = append(r.items, trackedItem{source, entityType, entityID})
+	if r.trackErr != nil && (r.failType == "" || string(r.failType) == entityType) {
+		if r.beforeFailure != nil {
+			r.beforeFailure()
+		}
+		if r.cancel != nil {
+			r.cancel()
+		}
+		return r.trackErr
+	}
 	return nil
 }
 
@@ -131,6 +209,11 @@ func (r *recordingTracker) countOf(entityType types.EntityType) int {
 // newTestState builds an import state backed by a real migrated SQLite database
 // and a fake source reader.
 func newTestState(t *testing.T, reader *fakeReader, opts types.ImportOptions) (*importState, *recordingTracker, *store.Queries) {
+	st, tracker, queries, _ := newTestStateWithDB(t, reader, opts)
+	return st, tracker, queries
+}
+
+func newTestStateWithDB(t *testing.T, reader *fakeReader, opts types.ImportOptions) (*importState, *recordingTracker, *store.Queries, *sql.DB) {
 	t.Helper()
 
 	db, cleanup := testutil.TestDB(t)
@@ -163,7 +246,37 @@ func newTestState(t *testing.T, reader *fakeReader, opts types.ImportOptions) (*
 	tracker := &recordingTracker{}
 	st := newImportState(queries, reader, &types.ImportResult{}, tracker, opts, lang.Code, owner.ID)
 	st.uploadDir = t.TempDir()
-	return st, tracker, queries
+	return st, tracker, queries, db
+}
+
+func TestImportStagesFlushReaderWarningsWithMediaDisabledAndAfterNodes(t *testing.T) {
+	reader := &fakeReader{
+		warnings:    []string{"warning before media stage"},
+		nodeWarning: "warning discovered while reading node taxonomy fields",
+		nodes: []Node{{
+			NID: 1, Type: "page", Langcode: "en", Title: "Warning page", Status: 1,
+		}},
+	}
+	st, _, _ := newTestState(t, reader, types.ImportOptions{
+		ImportMedia: false,
+		ImportPages: true,
+	})
+	if err := (&Source{}).runImportStages(context.Background(), st); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{
+		"warning before media stage":                            1,
+		"warning discovered while reading node taxonomy fields": 1,
+	}
+	for _, summary := range st.result.Summaries {
+		want[summary]--
+	}
+	for summary, remaining := range want {
+		if remaining != 0 {
+			t.Fatalf("summary %q count mismatch (%d); all summaries: %v",
+				summary, remaining, st.result.Summaries)
+		}
+	}
 }
 
 func TestImportUsersCreatesPublicAccounts(t *testing.T) {
@@ -268,6 +381,67 @@ func TestImportUsersDisabledByOption(t *testing.T) {
 	}
 }
 
+func TestImportUsersDoesNotTreatLookupFailureAsMissing(t *testing.T) {
+	reader := &fakeReader{users: []User{{UID: 2, Name: "Ada", Mail: "ada@example.com"}}}
+	st, _, _, db := newTestStateWithDB(t, reader, types.ImportOptions{ImportUsers: true})
+	if _, err := db.Exec(`DROP TABLE users`); err != nil {
+		t.Fatalf("failed to break the users lookup fixture: %v", err)
+	}
+
+	if err := (&Source{}).importUsers(context.Background(), st); err != nil {
+		t.Fatalf("importUsers() error = %v", err)
+	}
+	if st.result.UsersImported != 0 || st.users[2] != 0 {
+		t.Fatalf("lookup failure created/mapped a user: imported=%d map=%v", st.result.UsersImported, st.users)
+	}
+	joined := strings.Join(st.result.Errors, "\n")
+	if !strings.Contains(joined, "could not check for existing user") {
+		t.Errorf("errors = %v, want the operational lookup failure", st.result.Errors)
+	}
+	if strings.Contains(joined, "failed to create user") {
+		t.Errorf("lookup failure was misclassified as a missing row: %v", st.result.Errors)
+	}
+}
+
+func TestImportUsersRollsBackTrackingFailure(t *testing.T) {
+	reader := &fakeReader{users: []User{{UID: 2, Name: "Ada", Mail: "ada@example.com"}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportUsers: true})
+	tracker.failType = types.EntityUser
+	tracker.trackErr = errors.New("tracking database unavailable")
+
+	if err := (&Source{}).importUsers(context.Background(), st); err != nil {
+		t.Fatalf("importUsers() error = %v", err)
+	}
+	if _, err := queries.GetUserByEmail(context.Background(), "ada@example.com"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("untracked user survived rollback: %v", err)
+	}
+	if st.result.UsersImported != 0 || st.users[2] != 0 {
+		t.Errorf("tracking failure published state: imported=%d map=%v", st.result.UsersImported, st.users)
+	}
+}
+
+func TestTrackingRollbackSurvivesCanceledImportContext(t *testing.T) {
+	reader := &fakeReader{users: []User{{UID: 2, Name: "Ada", Mail: "ada@example.com"}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportUsers: true})
+	ctx, cancel := context.WithCancel(context.Background())
+	tracker.failType = types.EntityUser
+	tracker.trackErr = errors.New("tracking canceled")
+	tracker.cancel = cancel
+
+	if err := (&Source{}).importUsers(ctx, st); err != nil {
+		t.Fatalf("importUsers() error = %v", err)
+	}
+	if ctx.Err() == nil {
+		t.Fatal("tracker did not cancel the import context")
+	}
+	if _, err := queries.GetUserByEmail(context.Background(), "ada@example.com"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("rollback reused the canceled context; untracked user survived: %v", err)
+	}
+	if got := strings.Join(st.result.Errors, "\n"); strings.Contains(got, "failed to roll back") {
+		t.Errorf("independent rollback failed after import cancellation: %v", st.result.Errors)
+	}
+}
+
 func TestImportTaxonomySplitsTagsAndCategories(t *testing.T) {
 	reader := &fakeReader{
 		schema: Schema{HasTermData: true, HasTermPar: true},
@@ -334,6 +508,555 @@ func TestImportTaxonomyRespectsOptions(t *testing.T) {
 	if st.result.TagsImported != 1 || st.result.CategoriesImported != 0 {
 		t.Errorf("with categories off: tags=%d categories=%d, want 1 and 0",
 			st.result.TagsImported, st.result.CategoriesImported)
+	}
+}
+
+func TestImportTaxonomyMapsLanguagesAndKeepsTermsDistinct(t *testing.T) {
+	reader := &fakeReader{terms: []Term{
+		{TID: 1, Vocabulary: "tags", Langcode: "en", Name: "Go"},
+		{TID: 2, Vocabulary: "tags", Langcode: "en", Name: "Go"},
+		{TID: 3, Vocabulary: "tags", Langcode: "fr", Name: "Bonjour"},
+		{TID: 4, Vocabulary: "tags", Langcode: "en", Name: "Only FR"},
+		{TID: 5, Vocabulary: "topics", Langcode: "tlh", Name: "Engineering"},
+		{TID: 6, Vocabulary: "topics", Langcode: "tlh", Name: "Engineering"},
+		{TID: 7, Vocabulary: "tags", Langcode: "und", Name: "Neutral"},
+		{TID: 8, Vocabulary: "tags", Langcode: "fr", Name: "Existing French"},
+	}}
+	st, _, queries := newTestState(t, reader,
+		types.ImportOptions{ImportTags: true, ImportCategories: true})
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", Direction: "ltr",
+		IsActive: true, Position: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage(fr): %v", err)
+	}
+	st.availableLangs["fr"] = true
+	preexisting, err := queries.CreateTag(ctx, store.CreateTagParams{
+		Name: "Go", Slug: "go", LanguageCode: st.defaultLang, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateTag(go): %v", err)
+	}
+	if _, err := queries.CreateTag(ctx, store.CreateTagParams{
+		Name: "Only FR", Slug: "only-fr", LanguageCode: "fr", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateTag(only-fr): %v", err)
+	}
+	existingFrench, err := queries.CreateTag(ctx, store.CreateTagParams{
+		Name: "Existing French", Slug: "existing-french", LanguageCode: "fr", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateTag(existing-french): %v", err)
+	}
+
+	if err := (&Source{}).importTaxonomy(ctx, st); err != nil {
+		t.Fatalf("importTaxonomy() error = %v", err)
+	}
+	if st.tags[1] != preexisting.ID {
+		t.Errorf("first Go term did not reuse the same-language row: got %d want %d", st.tags[1], preexisting.ID)
+	}
+	go2, err := queries.GetTagBySlug(ctx, "go-2")
+	if err != nil || st.tags[2] != go2.ID {
+		t.Errorf("second Go term was merged instead of getting go-2: tag=%+v err=%v map=%v", go2, err, st.tags)
+	}
+	bonjour, err := queries.GetTagBySlug(ctx, "bonjour")
+	if err != nil || bonjour.LanguageCode != "fr" {
+		t.Errorf("French term = %+v, err=%v; want language fr", bonjour, err)
+	}
+	if st.termURLs[3] != "/fr/tag/bonjour" {
+		t.Errorf("French term URL = %q, want /fr/tag/bonjour", st.termURLs[3])
+	}
+	if st.tags[8] != existingFrench.ID || st.termURLs[8] != "/fr/tag/existing-french" {
+		t.Errorf("reused French term = id %d URL %q, want id %d URL /fr/tag/existing-french",
+			st.tags[8], st.termURLs[8], existingFrench.ID)
+	}
+	onlyFR2, err := queries.GetTagBySlug(ctx, "only-fr-2")
+	if err != nil || onlyFR2.LanguageCode != st.defaultLang {
+		t.Errorf("cross-language global slug conflict = %+v, err=%v; want suffixed default-language tag", onlyFR2, err)
+	}
+	engineering, _ := queries.GetCategoryByID(ctx, st.categories[5])
+	engineering2, _ := queries.GetCategoryByID(ctx, st.categories[6])
+	if engineering.Slug != "engineering" || engineering2.Slug != "engineering-2" ||
+		engineering.LanguageCode != st.defaultLang || engineering2.LanguageCode != st.defaultLang {
+		t.Errorf("categories were merged or mislabelled: first=%+v second=%+v", engineering, engineering2)
+	}
+	if got := strings.Join(st.result.Summaries, "\n"); !strings.Contains(got, "2 taxonomy term(s)") || !strings.Contains(got, "tlh") {
+		t.Errorf("summaries = %v, want aggregated tlh fallback report", st.result.Summaries)
+	}
+	if got := strings.Join(st.result.Summaries, "\n"); !strings.Contains(got, "language-neutral code \"und\"") {
+		t.Errorf("summaries = %v, want a distinct neutral-language fallback report", st.result.Summaries)
+	}
+}
+
+func TestLegacyActiveUnroutableLanguagesFallBack(t *testing.T) {
+	reader := &fakeReader{
+		terms: []Term{
+			{TID: 1, Vocabulary: "tags", Langcode: "admin", Name: "Reserved term"},
+			{TID: 2, Vocabulary: "tags", Langcode: "x", Name: "Invalid term"},
+		},
+		nodes: []Node{
+			{NID: 1, Type: "page", Title: "Reserved node", Status: 1, Langcode: "admin"},
+			{NID: 2, Type: "page", Title: "Invalid node", Status: 1, Langcode: "x"},
+		},
+	}
+	st, _, queries := newTestState(t, reader,
+		types.ImportOptions{ImportTags: true, ImportPages: true})
+	ctx := context.Background()
+	now := time.Now()
+	for i, code := range []string{"admin", "x"} {
+		if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+			Code: code, Name: code, NativeName: code, Direction: "ltr",
+			IsActive: true, Position: int64(i + 2), CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("CreateLanguage(%q): %v", code, err)
+		}
+	}
+	langs, err := queries.ListActiveLanguages(ctx)
+	if err != nil {
+		t.Fatalf("ListActiveLanguages: %v", err)
+	}
+	for _, lang := range langs {
+		st.addAvailableLanguage(lang.Code)
+	}
+	if st.availableLangs["admin"] || st.availableLangs["x"] {
+		t.Fatalf("unroutable legacy languages entered availableLangs: %v", st.availableLangs)
+	}
+
+	source := NewSource()
+	if err := source.importTaxonomy(ctx, st); err != nil {
+		t.Fatalf("importTaxonomy: %v", err)
+	}
+	if err := source.importNodes(ctx, st); err != nil {
+		t.Fatalf("importNodes: %v", err)
+	}
+
+	for _, tid := range []int64{1, 2} {
+		tag, err := queries.GetTagByID(ctx, st.tags[tid])
+		if err != nil {
+			t.Fatalf("GetTagByID(term %d): %v", tid, err)
+		}
+		if tag.LanguageCode != st.defaultLang {
+			t.Errorf("term %d language = %q, want fallback %q", tid, tag.LanguageCode, st.defaultLang)
+		}
+		wantURL := "/tag/" + tag.Slug
+		if st.termURLs[tid] != wantURL {
+			t.Errorf("term %d URL = %q, want routable fallback URL %q", tid, st.termURLs[tid], wantURL)
+		}
+	}
+	for _, nid := range []int64{1, 2} {
+		page, err := queries.GetPageByID(ctx, st.nodes[nid])
+		if err != nil {
+			t.Fatalf("GetPageByID(node %d): %v", nid, err)
+		}
+		if page.LanguageCode != st.defaultLang {
+			t.Errorf("node %d language = %q, want fallback %q", nid, page.LanguageCode, st.defaultLang)
+		}
+		if strings.HasPrefix("/"+page.Slug, "/admin/") || strings.HasPrefix("/"+page.Slug, "/x/") {
+			t.Errorf("node %d received unroutable prefixed URL /%s", nid, page.Slug)
+		}
+	}
+
+	summaries := strings.Join(st.result.Summaries, "\n")
+	for _, code := range []string{"admin", "x"} {
+		if !strings.Contains(summaries, code) {
+			t.Errorf("summaries = %v, want fallback disclosure for %q", st.result.Summaries, code)
+		}
+	}
+}
+
+func TestLegacyUnroutableDefaultHasNoPublicTaxonomyURL(t *testing.T) {
+	for _, code := range []string{"admin", "x"} {
+		t.Run(code, func(t *testing.T) {
+			st := newImportState(nil, nil, &types.ImportResult{}, nil,
+				types.ImportOptions{}, code, 0)
+			if st.availableLangs[code] {
+				t.Fatalf("legacy default %q was exposed as an available URL prefix", code)
+			}
+			if got := st.languageForCode("unknown", st.unmappedLangs); got != code {
+				t.Errorf("fallback language = %q, want legacy configured default %q", got, code)
+			}
+			if got := taxonomyURL(code, code, "tag", "go"); got != "" {
+				t.Errorf("taxonomyURL() = %q, want unsafe legacy default ignored", got)
+			}
+		})
+	}
+}
+
+func TestImportTaxonomyAliasesBecomeTrackedRedirects(t *testing.T) {
+	reader := &fakeReader{
+		terms:   []Term{{TID: 7, Vocabulary: "tags", Langcode: "en", Name: "Go"}},
+		aliases: []PathAlias{{ID: 1, Path: "/taxonomy/term/7", Alias: "/topics/go", Langcode: "en"}},
+	}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportTags: true})
+	if err := (&Source{}).importTaxonomy(context.Background(), st); err != nil {
+		t.Fatalf("importTaxonomy() error = %v", err)
+	}
+	redirect, err := queries.GetRedirectBySourcePath(context.Background(), "/topics/go")
+	if err != nil {
+		t.Fatalf("taxonomy redirect not found: %v", err)
+	}
+	if redirect.TargetUrl != "/tag/go" || redirect.StatusCode != 301 || !redirect.Enabled {
+		t.Errorf("redirect = %+v, want enabled 301 to /tag/go", redirect)
+	}
+	if st.result.RedirectsImported != 1 || tracker.countOf(types.EntityRedirect) != 1 {
+		t.Errorf("redirect counters/tracking = %d/%d, want 1/1", st.result.RedirectsImported, tracker.countOf(types.EntityRedirect))
+	}
+}
+
+func TestImportTaxonomyAliasesUseDestinationLanguagePrefix(t *testing.T) {
+	reader := &fakeReader{
+		terms: []Term{
+			{TID: 7, Vocabulary: "tags", Langcode: "en", Name: "Current"},
+			{TID: 8, Vocabulary: "tags", Langcode: "fr", Name: "Actuel"},
+		},
+		aliases: []PathAlias{
+			{ID: 1, Path: "/taxonomy/term/7", Alias: "/topics/current", Langcode: "en"},
+			{ID: 2, Path: "/taxonomy/term/8", Alias: "/topics/current", Langcode: "fr"},
+		},
+	}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportTags: true})
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", Direction: "ltr",
+		IsActive: true, Position: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage(fr): %v", err)
+	}
+	st.availableLangs["fr"] = true
+
+	if err := (&Source{}).importTaxonomy(ctx, st); err != nil {
+		t.Fatalf("importTaxonomy() error = %v", err)
+	}
+
+	for sourcePath, targetURL := range map[string]string{
+		"/topics/current":    "/tag/current",
+		"/fr/topics/current": "/fr/tag/actuel",
+	} {
+		redirect, err := queries.GetRedirectBySourcePath(ctx, sourcePath)
+		if err != nil {
+			t.Errorf("GetRedirectBySourcePath(%q): %v", sourcePath, err)
+			continue
+		}
+		if redirect.TargetUrl != targetURL {
+			t.Errorf("redirect %q target = %q, want %q", sourcePath, redirect.TargetUrl, targetURL)
+		}
+	}
+	if st.result.RedirectsImported != 2 || tracker.countOf(types.EntityRedirect) != 2 {
+		t.Errorf("redirect counters/tracking = %d/%d, want 2/2",
+			st.result.RedirectsImported, tracker.countOf(types.EntityRedirect))
+	}
+}
+
+func TestTaxonomyAliasReservationPrecedesPageSlug(t *testing.T) {
+	reader := &fakeReader{
+		terms: []Term{{TID: 7, Vocabulary: "tags", Langcode: "en", Name: "Updates"}},
+		nodes: []Node{{NID: 1, Type: "page", Title: "News", Status: 1, Langcode: "en"}},
+		aliases: []PathAlias{
+			{ID: 1, Path: "/taxonomy/term/7", Alias: "/news", Langcode: "en"},
+		},
+	}
+	st, _, queries := newTestState(t, reader,
+		types.ImportOptions{ImportTags: true, ImportPages: true})
+	ctx := context.Background()
+	source := NewSource()
+
+	if err := source.importTaxonomy(ctx, st); err != nil {
+		t.Fatalf("importTaxonomy: %v", err)
+	}
+	if err := source.importNodes(ctx, st); err != nil {
+		t.Fatalf("importNodes: %v", err)
+	}
+
+	redirect, err := queries.GetRedirectBySourcePath(ctx, "/news")
+	if err != nil || redirect.TargetUrl != "/tag/updates" {
+		t.Fatalf("taxonomy redirect = %+v, err=%v; want /news -> /tag/updates", redirect, err)
+	}
+	page, err := queries.GetPageByID(ctx, st.nodes[1])
+	if err != nil {
+		t.Fatalf("GetPageByID: %v", err)
+	}
+	if page.Slug != "news-2" {
+		t.Errorf("page slug = %q, want news-2 because taxonomy owns /news", page.Slug)
+	}
+}
+
+func TestNodeAliasesPrecedeTaxonomyRedirectsRegardlessOfRowOrder(t *testing.T) {
+	reader := &fakeReader{
+		terms: []Term{
+			{TID: 7, Vocabulary: "tags", Langcode: "en", Name: "Term One"},
+			{TID: 8, Vocabulary: "tags", Langcode: "en", Name: "Term Two"},
+		},
+		nodes: []Node{
+			{NID: 1, Type: "page", Title: "Foo", Status: 1, Langcode: "en"},
+			{NID: 2, Type: "page", Title: "Archive", Status: 1, Langcode: "en"},
+		},
+		aliases: []PathAlias{
+			// Taxonomy rows deliberately come first. Node ownership must not
+			// depend on the source ID order.
+			{ID: 1, Path: "/taxonomy/term/7", Alias: "/foo", Langcode: "en"},
+			{ID: 2, Path: "/taxonomy/term/8", Alias: "/news/archive", Langcode: "en"},
+			{ID: 3, Path: "/node/1", Alias: "/foo", Langcode: "en"},
+			{ID: 4, Path: "/node/2", Alias: "/news/archive", Langcode: "en"},
+		},
+	}
+	st, _, queries := newTestState(t, reader,
+		types.ImportOptions{ImportTags: true, ImportPages: true})
+	ctx := context.Background()
+	source := NewSource()
+
+	if err := source.importTaxonomy(ctx, st); err != nil {
+		t.Fatalf("importTaxonomy: %v", err)
+	}
+	for _, path := range []string{"/foo", "/news/archive"} {
+		if _, err := queries.GetRedirectBySourcePath(ctx, path); !errors.Is(err, sql.ErrNoRows) {
+			t.Errorf("taxonomy redirect %q shadowed a source node alias: %v", path, err)
+		}
+	}
+
+	if err := source.importNodes(ctx, st); err != nil {
+		t.Fatalf("importNodes: %v", err)
+	}
+	page, err := queries.GetPublishedPageByAlias(ctx, "news/archive")
+	if err != nil || page.ID != st.nodes[2] {
+		t.Fatalf("multi-segment node alias owner = %+v, err=%v", page, err)
+	}
+}
+
+func TestImportTaxonomyRedirectRollsBackTrackingFailure(t *testing.T) {
+	reader := &fakeReader{
+		terms:   []Term{{TID: 7, Vocabulary: "tags", Langcode: "en", Name: "Go"}},
+		aliases: []PathAlias{{ID: 1, Path: "/taxonomy/term/7", Alias: "/topics/go", Langcode: "en"}},
+	}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportTags: true})
+	tracker.failType = types.EntityRedirect
+	tracker.trackErr = errors.New("tracking failed")
+	if err := (&Source{}).importTaxonomy(context.Background(), st); err != nil {
+		t.Fatalf("importTaxonomy() error = %v", err)
+	}
+	if _, err := queries.GetRedirectBySourcePath(context.Background(), "/topics/go"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("untracked redirect survived rollback: %v", err)
+	}
+	if st.result.RedirectsImported != 0 {
+		t.Errorf("RedirectsImported = %d, want 0", st.result.RedirectsImported)
+	}
+}
+
+func TestTaxonomyRedirectRefusesPagesAliasesAndReservedRoutes(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	ctx := context.Background()
+	now := time.Now()
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Owned", Slug: "owned", Status: model.PageStatusPublished,
+		AuthorID: st.authorID, LanguageCode: st.defaultLang, PageType: pageTypePage,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage: %v", err)
+	}
+	if _, err := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+		PageID: page.ID, Alias: "legacy", CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreatePageAlias: %v", err)
+	}
+
+	s := &Source{}
+	for _, source := range []string{
+		"/owned", "/legacy", "/admin/config", "/en", "/en/tag/go", "/en/existing-page",
+		"/sitemap.xml", "/robots.txt", "/.well-known/security.txt",
+	} {
+		s.createTaxonomyRedirect(ctx, st, source, "/tag/go", now)
+		if _, err := queries.GetRedirectBySourcePath(ctx, source); !errors.Is(err, sql.ErrNoRows) {
+			t.Errorf("conflicting redirect %q was created: %v", source, err)
+		}
+	}
+	if st.result.RedirectsImported != 0 || len(st.result.Notices) != 9 {
+		t.Errorf("redirect result = %+v, want nine conflict notices and no imports", st.result)
+	}
+}
+
+func TestTaxonomyRedirectRefusesRegisteredModuleRoutes(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	ctx := context.Background()
+	now := time.Now()
+	source := &Source{publicRouteChecker: pathOwnership{
+		"/bookmarks":                        true,
+		"/example":                          true,
+		"/analytics/read":                   true,
+		"/embed/dify/messages/id/suggested": true,
+	}}
+
+	for _, path := range []string{
+		"/bookmarks", "/example", "/analytics/read",
+		"/embed/dify/messages/id/suggested",
+	} {
+		source.createTaxonomyRedirect(ctx, st, path, "/tag/go", now)
+		if _, err := queries.GetRedirectBySourcePath(ctx, path); !errors.Is(err, sql.ErrNoRows) {
+			t.Errorf("module route %q was shadowed by redirect: %v", path, err)
+		}
+	}
+
+	source.createTaxonomyRedirect(ctx, st, "/topics/go", "/tag/go", now)
+	if _, err := queries.GetRedirectBySourcePath(ctx, "/topics/go"); err != nil {
+		t.Fatalf("ordinary taxonomy path was not imported: %v", err)
+	}
+	if st.result.RedirectsImported != 1 {
+		t.Errorf("RedirectsImported = %d, want 1", st.result.RedirectsImported)
+	}
+}
+
+func TestTaxonomyRedirectRefusesExistingWildcardMatch(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: "/topics/**", TargetUrl: "/archive/**", StatusCode: 301,
+		IsWildcard: true, TargetType: model.TargetSelf, Enabled: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateRedirect(wildcard): %v", err)
+	}
+
+	source := NewSource()
+	source.createTaxonomyRedirect(ctx, st, "/topics/news", "/tag/news", now)
+	if _, err := queries.GetRedirectBySourcePath(ctx, "/topics/news"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("redirect overlapping /topics/** was created: %v", err)
+	}
+	source.createTaxonomyRedirect(ctx, st, "/archive/news", "/tag/news", now)
+	if _, err := queries.GetRedirectBySourcePath(ctx, "/archive/news"); err != nil {
+		t.Fatalf("non-overlapping redirect was not created: %v", err)
+	}
+}
+
+func TestTaxonomyRedirectRefusesDraftPageAliasesInEachLanguageNamespace(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", IsActive: true,
+		Direction: "ltr", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage(fr): %v", err)
+	}
+	st.availableLangs["fr"] = true
+
+	for _, tc := range []struct {
+		language, slug, alias, sourcePath string
+	}{
+		{language: "en", slug: "draft-en", alias: "topics-en", sourcePath: "/topics-en"},
+		{language: "fr", slug: "draft-fr", alias: "topics-fr", sourcePath: "/fr/topics-fr"},
+	} {
+		page, err := queries.CreatePage(ctx, store.CreatePageParams{
+			Title: "Draft " + tc.language, Slug: tc.slug, Status: "draft", AuthorID: st.authorID,
+			LanguageCode: tc.language, PageType: "page", CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreatePage(%s): %v", tc.language, err)
+		}
+		if _, err := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+			PageID: page.ID, Alias: tc.alias, CreatedAt: now,
+		}); err != nil {
+			t.Fatalf("CreatePageAlias(%s): %v", tc.language, err)
+		}
+		(&Source{}).createTaxonomyRedirect(ctx, st, tc.sourcePath, "/tag/imported", now)
+		if _, err := queries.GetRedirectBySourcePath(ctx, tc.sourcePath); !errors.Is(err, sql.ErrNoRows) {
+			t.Errorf("draft %s alias %q was shadowed by a redirect: %v", tc.language, tc.sourcePath, err)
+		}
+	}
+	if len(st.result.Notices) != 2 {
+		t.Fatalf("conflict notices = %v; want one for each draft alias", st.result.Notices)
+	}
+}
+
+func TestNodeSlugAllocationRefusesExactAndWildcardRedirectOwnership(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	ctx := context.Background()
+	now := time.Now()
+	source := &Source{}
+
+	source.createTaxonomyRedirect(ctx, st, "/foo", "/tag/foo", now)
+	if got := source.uniqueNodeSlug(ctx, st, "foo", 1, st.defaultLang); got != "foo-2" {
+		t.Fatalf("node slug with taxonomy redirect = %q; want foo-2", got)
+	}
+	if _, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: "/legacy*", TargetUrl: "/archive", StatusCode: 301,
+		IsWildcard: true, TargetType: model.TargetSelf, Enabled: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateRedirect(wildcard): %v", err)
+	}
+	if got := source.uniqueNodeSlug(ctx, st, "legacy", 2, st.defaultLang); got != "imported-2" {
+		t.Fatalf("node slug with wildcard redirect = %q; want imported-2", got)
+	}
+}
+
+func TestTaxonomyRedirectNeverOverwritesExistingRedirect(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	ctx := context.Background()
+	now := time.Now()
+	existing, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: "/topics/go", TargetUrl: "/old-target", StatusCode: 302,
+		TargetType: model.TargetSelf, Enabled: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateRedirect: %v", err)
+	}
+	(&Source{}).createTaxonomyRedirect(ctx, st, "/topics/go", "/tag/go", now)
+	after, err := queries.GetRedirectBySourcePath(ctx, "/topics/go")
+	if err != nil {
+		t.Fatalf("GetRedirectBySourcePath: %v", err)
+	}
+	if after.ID != existing.ID || after.TargetUrl != "/old-target" || after.StatusCode != 302 {
+		t.Errorf("existing redirect was overwritten: before=%+v after=%+v", existing, after)
+	}
+	if st.result.RedirectsImported != 0 || len(st.result.Notices) != 1 {
+		t.Errorf("redirect conflict result = %+v, want one notice and no import", st.result)
+	}
+
+	identical, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: "/topics/rust", TargetUrl: "/tag/rust", StatusCode: 301,
+		TargetType: model.TargetSelf, Enabled: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateRedirect(identical): %v", err)
+	}
+	(&Source{}).createTaxonomyRedirect(ctx, st, identical.SourcePath, identical.TargetUrl, now)
+	if st.result.RedirectsSkipped != 1 {
+		t.Errorf("RedirectsSkipped = %d, want 1 for an identical existing redirect", st.result.RedirectsSkipped)
+	}
+}
+
+func TestImportTaxonomyRollsBackTrackingFailure(t *testing.T) {
+	reader := &fakeReader{terms: []Term{{TID: 1, Vocabulary: "tags", Name: "Go"}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportTags: true})
+	tracker.failType = types.EntityTag
+	tracker.trackErr = errors.New("tracking failed")
+	if err := (&Source{}).importTaxonomy(context.Background(), st); err != nil {
+		t.Fatalf("importTaxonomy() error = %v", err)
+	}
+	if _, err := queries.GetTagBySlug(context.Background(), "go"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("untracked tag survived rollback: %v", err)
+	}
+	if st.result.TagsImported != 0 || st.tags[1] != 0 || st.termURLs[1] != "" {
+		t.Errorf("tracking failure published taxonomy state: result=%+v tags=%v urls=%v", st.result, st.tags, st.termURLs)
+	}
+}
+
+func TestImportCategoryRollsBackTrackingFailure(t *testing.T) {
+	reader := &fakeReader{terms: []Term{{TID: 1, Vocabulary: "topics", Name: "Engineering"}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportCategories: true})
+	tracker.failType = types.EntityCategory
+	tracker.trackErr = errors.New("tracking failed")
+	if err := (&Source{}).importTaxonomy(context.Background(), st); err != nil {
+		t.Fatalf("importTaxonomy() error = %v", err)
+	}
+	if _, err := queries.GetCategoryBySlug(context.Background(), "engineering"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("untracked category survived rollback: %v", err)
+	}
+	if st.result.CategoriesImported != 0 || st.categories[1] != 0 || st.termURLs[1] != "" {
+		t.Errorf("tracking failure published category state: result=%+v categories=%v urls=%v", st.result, st.categories, st.termURLs)
 	}
 }
 
@@ -607,6 +1330,307 @@ func TestImportNodesSkipExisting(t *testing.T) {
 	}
 }
 
+func TestImportNodesSkipExistingDoesNotMapAcrossLanguages(t *testing.T) {
+	reader := &fakeReader{
+		schema: Schema{HasMenuLinks: true},
+		nodes:  []Node{{NID: 1, Type: "page", Title: "About", Status: 1, Langcode: "fr"}},
+		menuLinks: []MenuLink{{
+			ID: 1, UUID: "u1", Title: "À propos", MenuName: "main", Langcode: "fr",
+			LinkURI: "entity:node/1", Enabled: 1,
+		}},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{
+		ImportPages: true, ImportMenus: true, SkipExisting: true,
+	})
+	st.addAvailableLanguage("fr")
+	ctx := context.Background()
+	existing, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "English About", Slug: "about", Status: model.PageStatusPublished,
+		AuthorID: st.authorID, LanguageCode: st.defaultLang, PageType: pageTypePage,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (&Source{}).importNodes(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	importedID := st.nodes[1]
+	if importedID == 0 || importedID == existing.ID {
+		t.Fatalf("node mapping = %d, existing = %d", importedID, existing.ID)
+	}
+	imported, err := queries.GetPageByID(ctx, importedID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported.LanguageCode != "fr" || imported.Slug != "about-2" {
+		t.Fatalf("imported page = %+v, want fr/about-2", imported)
+	}
+	if st.result.PagesImported != 1 || st.result.PagesSkipped != 0 {
+		t.Fatalf("imported=%d skipped=%d", st.result.PagesImported, st.result.PagesSkipped)
+	}
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	menu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: "fr",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := queries.ListTopLevelMenuItems(ctx, menu.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || !items[0].PageID.Valid || items[0].PageID.Int64 != importedID {
+		t.Fatalf("menu items = %+v, want imported page %d", items, importedID)
+	}
+}
+
+func TestMultilingualNodeAliasesKeepEveryConcreteURLAndMenuTarget(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		aliases []PathAlias
+	}{
+		{
+			name: "english alias row first",
+			aliases: []PathAlias{
+				{ID: 1, Path: "/node/1", Alias: "/about", Langcode: "en"},
+				{ID: 2, Path: "/node/2", Alias: "/about", Langcode: "fr"},
+			},
+		},
+		{
+			name: "french alias row first",
+			aliases: []PathAlias{
+				{ID: 1, Path: "/node/2", Alias: "/about", Langcode: "fr"},
+				{ID: 2, Path: "/node/1", Alias: "/about", Langcode: "en"},
+			},
+		},
+		{
+			name: "neutral French alias row cannot steal default route",
+			aliases: []PathAlias{
+				{ID: 1, Path: "/node/2", Alias: "/about", Langcode: "und"},
+				{ID: 2, Path: "/node/1", Alias: "/about", Langcode: "en"},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reader := &fakeReader{
+				schema: Schema{HasAliases: true, HasMenuLinks: true},
+				// Import French first to prove the default-language alias owns the
+				// globally unsuffixed stored slug independently of node order too.
+				nodes: []Node{
+					{NID: 2, Type: "page", Title: "À propos", Status: 1, Langcode: "fr"},
+					{NID: 1, Type: "page", Title: "About", Status: 1, Langcode: "en"},
+				},
+				aliases: tc.aliases,
+				menuLinks: []MenuLink{
+					{ID: 1, UUID: "en-about", Title: "About", MenuName: "main", Langcode: "en", LinkURI: "internal:/about", Enabled: 1},
+					{ID: 2, UUID: "fr-about", Title: "À propos", MenuName: "main", Langcode: "fr", LinkURI: "internal:/about", Enabled: 1},
+				},
+			}
+			st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true, ImportMenus: true})
+			st.addAvailableLanguage("fr")
+			ctx := context.Background()
+			source := NewSource()
+
+			if err := source.importNodes(ctx, st); err != nil {
+				t.Fatal(err)
+			}
+			english, err := queries.GetPageByID(ctx, st.nodes[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			french, err := queries.GetPageByID(ctx, st.nodes[2])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if english.Slug != "about" || english.LanguageCode != "en" {
+				t.Fatalf("English page = %+v, want en/about", english)
+			}
+			if french.Slug != "about-2" || french.LanguageCode != "fr" {
+				t.Fatalf("French page = %+v, want fr/about-2", french)
+			}
+			redirect, err := queries.GetRedirectBySourcePath(ctx, "/fr/about")
+			if err != nil {
+				t.Fatalf("French legacy alias was not preserved: %v", err)
+			}
+			if redirect.TargetUrl != "/fr/about-2" {
+				t.Fatalf("French redirect target = %q, want /fr/about-2", redirect.TargetUrl)
+			}
+
+			if err := source.importMenus(ctx, st); err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []struct {
+				language string
+				pageID   int64
+			}{{"en", english.ID}, {"fr", french.ID}} {
+				menu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+					Slug: "main", LanguageCode: want.language,
+				})
+				if err != nil {
+					t.Fatalf("GetMenuBySlugAndLanguage(%s): %v", want.language, err)
+				}
+				items, err := queries.ListTopLevelMenuItems(ctx, menu.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(items) != 1 || !items[0].PageID.Valid || items[0].PageID.Int64 != want.pageID {
+					t.Fatalf("%s menu items = %+v, want page %d", want.language, items, want.pageID)
+				}
+			}
+		})
+	}
+}
+
+func TestNonDefaultTaxonomyAliasIgnoresOtherLanguagePageSlug(t *testing.T) {
+	reader := &fakeReader{
+		terms: []Term{{TID: 7, Vocabulary: "tags", Langcode: "fr", Name: "Actualités"}},
+		nodes: []Node{{NID: 1, Type: "page", Title: "Topics", Status: 1, Langcode: "en"}},
+		aliases: []PathAlias{{
+			ID: 1, Path: "/taxonomy/term/7", Alias: "/topics", Langcode: "fr",
+		}},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportTags: true, ImportPages: true})
+	st.addAvailableLanguage("fr")
+	ctx := context.Background()
+	source := NewSource()
+
+	if err := source.importTaxonomy(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.importNodes(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	page, err := queries.GetPageByID(ctx, st.nodes[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Slug != "topics" || page.LanguageCode != "en" {
+		t.Fatalf("English page = %+v, want en/topics", page)
+	}
+	redirect, err := queries.GetRedirectBySourcePath(ctx, "/fr/topics")
+	if err != nil {
+		t.Fatalf("French taxonomy redirect was suppressed by the English slug: %v", err)
+	}
+	if redirect.TargetUrl != "/fr/tag/actualites" {
+		t.Fatalf("redirect target = %q, want /fr/tag/actualites", redirect.TargetUrl)
+	}
+}
+
+func TestDefaultAliasesIgnoreForeignLanguageStoredSlugs(t *testing.T) {
+	t.Run("taxonomy redirect", func(t *testing.T) {
+		reader := &fakeReader{
+			terms: []Term{{TID: 7, Vocabulary: "tags", Langcode: "en", Name: "News"}},
+			aliases: []PathAlias{{
+				ID: 1, Path: "/taxonomy/term/7", Alias: "/topics", Langcode: "en",
+			}},
+		}
+		st, _, queries := newTestState(t, reader, types.ImportOptions{ImportTags: true})
+		ctx := context.Background()
+		_, err := queries.CreatePage(ctx, store.CreatePageParams{
+			Title: "French Topics", Slug: "topics", Status: model.PageStatusPublished,
+			AuthorID: st.authorID, LanguageCode: "fr", PageType: pageTypePage,
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := NewSource().importTaxonomy(ctx, st); err != nil {
+			t.Fatal(err)
+		}
+		redirect, err := queries.GetRedirectBySourcePath(ctx, "/topics")
+		if err != nil || redirect.TargetUrl != "/tag/news" {
+			t.Fatalf("default taxonomy alias = %+v, err=%v; want /topics -> /tag/news", redirect, err)
+		}
+	})
+
+	t.Run("node redirect fallback", func(t *testing.T) {
+		reader := &fakeReader{
+			nodes:   []Node{{NID: 1, Type: "page", Title: "About", Status: 1, Langcode: "en"}},
+			aliases: []PathAlias{{ID: 1, Path: "/node/1", Alias: "/about", Langcode: "en"}},
+		}
+		st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+		ctx := context.Background()
+		_, err := queries.CreatePage(ctx, store.CreatePageParams{
+			Title: "French About", Slug: "about", Status: model.PageStatusPublished,
+			AuthorID: st.authorID, LanguageCode: "fr", PageType: pageTypePage,
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := NewSource().importNodes(ctx, st); err != nil {
+			t.Fatal(err)
+		}
+		page, err := queries.GetPageByID(ctx, st.nodes[1])
+		if err != nil || page.Slug != "about-2" {
+			t.Fatalf("imported page = %+v, err=%v; want about-2", page, err)
+		}
+		redirect, err := queries.GetRedirectBySourcePath(ctx, "/about")
+		if err != nil || redirect.TargetUrl != "/about-2" {
+			t.Fatalf("default node alias = %+v, err=%v; want /about -> /about-2", redirect, err)
+		}
+	})
+}
+
+func TestNodeSlugsAndAliasesNeverShadowCoreOrModuleRoutes(t *testing.T) {
+	reader := &fakeReader{
+		nodes: []Node{
+			{NID: 1, Type: "page", Title: "Admin", Status: 1, Langcode: "en"},
+			{NID: 2, Type: "page", Title: "Bookmarks", Status: 1, Langcode: "en"},
+		},
+		aliases: []PathAlias{
+			{ID: 1, Path: "/node/1", Alias: "/admin", Langcode: "en"},
+			{ID: 2, Path: "/node/2", Alias: "/bookmarks", Langcode: "en"},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	ctx := context.Background()
+	source := &Source{publicRouteChecker: pathOwnership{"/bookmarks": true}}
+	if err := source.importNodes(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	for nid, wantSlug := range map[int64]string{1: "admin-2", 2: "bookmarks-2"} {
+		page, err := queries.GetPageByID(ctx, st.nodes[nid])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Slug != wantSlug {
+			t.Errorf("node %d slug = %q, want %q", nid, page.Slug, wantSlug)
+		}
+		aliases, err := queries.GetAliasesForPage(ctx, page.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, alias := range aliases {
+			if alias.Alias == "admin" || alias.Alias == "bookmarks" {
+				t.Errorf("shadowed route alias was created: %+v", alias)
+			}
+		}
+	}
+}
+
+func TestNonDefaultNodeAliasMayReuseTopLevelOnlyRouteName(t *testing.T) {
+	reader := &fakeReader{
+		nodes:   []Node{{NID: 1, Type: "page", Title: "Administration", Status: 1, Langcode: "fr"}},
+		aliases: []PathAlias{{ID: 1, Path: "/node/1", Alias: "/admin", Langcode: "fr"}},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	st.addAvailableLanguage("fr")
+	if err := NewSource().importNodes(context.Background(), st); err != nil {
+		t.Fatal(err)
+	}
+	page, err := queries.GetPageByID(context.Background(), st.nodes[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Slug != "admin" || page.LanguageCode != "fr" {
+		t.Fatalf("French page = %+v, want fr/admin", page)
+	}
+}
+
 func TestImportNodesDeduplicatesSlugs(t *testing.T) {
 	reader := &fakeReader{nodes: []Node{
 		{NID: 1, Type: "page", Title: "Same Title", Status: 1},
@@ -629,6 +1653,136 @@ func TestImportNodesDeduplicatesSlugs(t *testing.T) {
 	}
 	if second.Slug != "same-title-2" {
 		t.Errorf("second slug = %q, want %q", second.Slug, "same-title-2")
+	}
+}
+
+func TestImportNodesReservesSingleSegmentAliasesForTheirOwners(t *testing.T) {
+	reader := &fakeReader{
+		nodes: []Node{
+			{NID: 1, Type: "page", Title: "Reserved", Status: 1, Langcode: "en"},
+			{NID: 2, Type: "page", Title: "Owner", Status: 1, Langcode: "en"},
+		},
+		aliases: []PathAlias{{ID: 1, Path: "/node/2", Alias: "/reserved", Langcode: "en"}},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	if err := (&Source{}).importNodes(context.Background(), st); err != nil {
+		t.Fatalf("importNodes() error = %v", err)
+	}
+	other, _ := queries.GetPageByID(context.Background(), st.nodes[1])
+	owner, _ := queries.GetPageByID(context.Background(), st.nodes[2])
+	if other.Slug != "reserved-2" || owner.Slug != "reserved" {
+		t.Errorf("owner-aware reservation failed: other=%q owner=%q", other.Slug, owner.Slug)
+	}
+	if reader.aliasCalls != 1 {
+		t.Errorf("GetPathAliases called %d times, want one cached read", reader.aliasCalls)
+	}
+}
+
+func TestImportNodesRollsBackTrackingFailure(t *testing.T) {
+	reader := &fakeReader{nodes: []Node{{NID: 1, Type: "page", Title: "Transient", Status: 1}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	tracker.failType = types.EntityPage
+	tracker.trackErr = errors.New("tracking failed")
+	if err := (&Source{}).importNodes(context.Background(), st); err != nil {
+		t.Fatalf("importNodes() error = %v", err)
+	}
+	if _, err := queries.GetPageBySlug(context.Background(), "transient"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("untracked page survived rollback: %v", err)
+	}
+	if st.result.PagesImported != 0 || st.nodes[1] != 0 || st.createdNodes[1] {
+		t.Errorf("tracking failure published page state: result=%+v nodes=%v created=%v", st.result, st.nodes, st.createdNodes)
+	}
+}
+
+func TestCreatePageAliasRefusesSlugShadow(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	ctx := context.Background()
+	now := time.Now()
+	owner, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Owner", Slug: "claimed", Status: model.PageStatusPublished,
+		AuthorID: st.authorID, LanguageCode: st.defaultLang, PageType: pageTypePage,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage(owner): %v", err)
+	}
+	target, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Target", Slug: "target", Status: model.PageStatusPublished,
+		AuthorID: st.authorID, LanguageCode: st.defaultLang, PageType: pageTypePage,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage(target): %v", err)
+	}
+	(&Source{}).createPageAlias(ctx, st, target.ID, "claimed", now)
+	aliases, err := queries.GetAliasesForPage(ctx, target.ID)
+	if err != nil || len(aliases) != 0 {
+		t.Errorf("shadowing alias was created: aliases=%v err=%v", aliases, err)
+	}
+	if owner.ID == target.ID || len(st.result.Notices) != 1 {
+		t.Errorf("shadow refusal was not reported: %+v", st.result)
+	}
+}
+
+func TestCreatePageAliasRefusesExactAndWildcardRedirectOwnership(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	ctx := context.Background()
+	now := time.Now()
+	target, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Target", Slug: "target", Status: model.PageStatusPublished,
+		AuthorID: st.authorID, LanguageCode: st.defaultLang, PageType: pageTypePage,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage(target): %v", err)
+	}
+	if _, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: "/legacy/about", TargetUrl: "/kept-exact", StatusCode: 302,
+		TargetType: model.TargetSelf, Enabled: false, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateRedirect(exact): %v", err)
+	}
+	if _, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: "/node/**", TargetUrl: "/kept-wildcard/**", StatusCode: 301,
+		IsWildcard: true, TargetType: model.TargetSelf, Enabled: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateRedirect(wildcard): %v", err)
+	}
+
+	source := &Source{}
+	source.createPageAlias(ctx, st, target.ID, "legacy/about", now)
+	source.createPageAlias(ctx, st, target.ID, "node/42", now)
+
+	aliases, err := queries.GetAliasesForPage(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("GetAliasesForPage: %v", err)
+	}
+	if len(aliases) != 0 || st.result.AliasesImported != 0 {
+		t.Fatalf("redirect-shadowed aliases were imported: aliases=%v result=%+v", aliases, st.result)
+	}
+	if len(st.result.Notices) != 2 {
+		t.Fatalf("redirect ownership notices = %v; want exact and wildcard notices", st.result.Notices)
+	}
+}
+
+func TestImportAliasesRollsBackTrackingFailure(t *testing.T) {
+	reader := &fakeReader{
+		nodes:   []Node{{NID: 1, Type: "page", Title: "About", Status: 1, Langcode: "en"}},
+		aliases: []PathAlias{{ID: 1, Path: "/node/1", Alias: "/company/about", Langcode: "en"}},
+	}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	tracker.failType = types.EntityAlias
+	tracker.trackErr = errors.New("tracking failed")
+	if err := (&Source{}).importNodes(context.Background(), st); err != nil {
+		t.Fatalf("importNodes() error = %v", err)
+	}
+	aliases, err := queries.GetAliasesForPage(context.Background(), st.nodes[1])
+	if err != nil || len(aliases) != 0 {
+		t.Errorf("untracked aliases survived rollback: aliases=%v err=%v", aliases, err)
+	}
+	if st.result.AliasesImported != 0 {
+		t.Errorf("AliasesImported = %d, want 0", st.result.AliasesImported)
 	}
 }
 
@@ -786,6 +1940,423 @@ func TestImportMenusReusesExistingMenuWithoutTrackingIt(t *testing.T) {
 	}
 }
 
+func TestImportMenusClaimsReusedSlugAndScopesReuseToLanguage(t *testing.T) {
+	reader := &fakeReader{menuLinks: []MenuLink{
+		{ID: 1, UUID: "one", Title: "One", MenuName: "foo bar", LinkURI: "internal:/one", Enabled: 1},
+		{ID: 2, UUID: "two", Title: "Two", MenuName: "foo-bar", LinkURI: "internal:/two", Enabled: 1},
+		{ID: 3, UUID: "main", Title: "Home", MenuName: "main", LinkURI: "internal:/", Enabled: 1},
+	}}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", Direction: "ltr",
+		IsActive: true, Position: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage(fr): %v", err)
+	}
+	foo, err := queries.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Foo", Slug: "foo-bar", LanguageCode: st.defaultLang, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenu(foo-bar): %v", err)
+	}
+	if _, err := queries.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Principal", Slug: "main", LanguageCode: "fr", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateMenu(fr/main): %v", err)
+	}
+
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+	foo2, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "foo-bar-2", LanguageCode: st.defaultLang,
+	})
+	if err != nil {
+		t.Fatalf("second normalized menu was not suffixed: %v", err)
+	}
+	firstItems, _ := queries.ListMenuItems(ctx, foo.ID)
+	secondItems, _ := queries.ListMenuItems(ctx, foo2.ID)
+	if len(firstItems) != 1 || firstItems[0].Title != "One" || len(secondItems) != 1 || secondItems[0].Title != "Two" {
+		t.Errorf("source menus were merged: first=%v second=%v", firstItems, secondItems)
+	}
+	if _, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: st.defaultLang,
+	}); err != nil {
+		t.Errorf("foreign-language main menu incorrectly blocked destination-language creation: %v", err)
+	}
+}
+
+func TestImportMenusPartitionsSourceLanguagesAndParents(t *testing.T) {
+	reader := &fakeReader{menuLinks: []MenuLink{
+		{ID: 1, UUID: "parent-en", Title: "English", MenuName: "main", Langcode: "en", LinkURI: "internal:/english", Enabled: 1},
+		{ID: 2, UUID: "child-fr", Title: "Français", MenuName: "main", Langcode: "fr", LinkURI: "internal:/francais",
+			Parent: sql.NullString{String: "menu_link_content:parent-en", Valid: true}, Enabled: 1},
+		{ID: 3, UUID: "en-one", Title: "EN one", MenuName: "foo bar", Langcode: "en", LinkURI: "internal:/one", Enabled: 1},
+		{ID: 4, UUID: "en-two", Title: "EN two", MenuName: "foo-bar", Langcode: "en", LinkURI: "internal:/two", Enabled: 1},
+		{ID: 5, UUID: "fr-one", Title: "FR one", MenuName: "foo bar", Langcode: "fr", LinkURI: "internal:/un", Enabled: 1},
+	}}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", Direction: "ltr",
+		IsActive: true, Position: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	st.addAvailableLanguage("fr")
+
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []struct {
+		language string
+		slug     string
+		title    string
+		root     bool
+	}{
+		{"en", "main", "English", true},
+		{"fr", "main", "Français", true},
+		{"en", "foo-bar", "EN one", true},
+		{"en", "foo-bar-2", "EN two", true},
+		{"fr", "foo-bar", "FR one", true},
+	} {
+		menu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+			Slug: expected.slug, LanguageCode: expected.language,
+		})
+		if err != nil {
+			t.Fatalf("menu %s/%s: %v", expected.language, expected.slug, err)
+		}
+		items, err := queries.ListMenuItems(ctx, menu.ID)
+		if err != nil || len(items) != 1 || items[0].Title != expected.title {
+			t.Fatalf("menu %s/%s items = %+v, err=%v", expected.language, expected.slug, items, err)
+		}
+		if expected.root && items[0].ParentID.Valid {
+			t.Fatalf("menu %s/%s item crossed a language partition: %+v", expected.language, expected.slug, items[0])
+		}
+	}
+	if st.result.MenusImported != 5 || st.result.MenuItemsImported != 5 {
+		t.Fatalf("import counts menus=%d items=%d, want 5/5",
+			st.result.MenusImported, st.result.MenuItemsImported)
+	}
+	foundNotice := false
+	for _, notice := range st.result.Notices {
+		if strings.Contains(notice, "outside its language partition") {
+			foundNotice = true
+		}
+	}
+	if !foundNotice {
+		t.Fatalf("cross-language parent was not reported: %v", st.result.Notices)
+	}
+}
+
+func TestImportMenusReportsUnknownAndNeutralLanguageFallbacks(t *testing.T) {
+	reader := &fakeReader{menuLinks: []MenuLink{
+		{ID: 1, UUID: "unknown", Title: "Unknown", MenuName: "main", Langcode: "es", LinkURI: "internal:/unknown", Enabled: 1},
+		{ID: 2, UUID: "neutral", Title: "Neutral", MenuName: "main", Langcode: "und", LinkURI: "internal:/neutral", Enabled: 1},
+		{ID: 3, UUID: "empty", Title: "Empty", MenuName: "main", Langcode: "", LinkURI: "internal:/empty", Enabled: 1},
+	}}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	ctx := context.Background()
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	menu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: st.defaultLang,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := queries.ListMenuItems(ctx, menu.ID)
+	if err != nil || len(items) != 3 {
+		t.Fatalf("default menu items = %v, err=%v; want all three fallbacks", items, err)
+	}
+	if st.unmappedMenuLangs["es"] != 1 || st.neutralMenuLangs["und"] != 1 || st.neutralMenuLangs["empty"] != 1 {
+		t.Fatalf("menu fallback counters: unknown=%v neutral=%v", st.unmappedMenuLangs, st.neutralMenuLangs)
+	}
+	if len(st.unmappedLangs) != 0 || len(st.unmappedTermLangs) != 0 || len(st.neutralTermLangs) != 0 {
+		t.Fatalf("menu fallbacks leaked into node/term counters: node=%v term=%v neutralTerm=%v",
+			st.unmappedLangs, st.unmappedTermLangs, st.neutralTermLangs)
+	}
+	unknownSummaries, neutralSummaries := 0, 0
+	for _, summary := range st.result.Summaries {
+		switch {
+		case strings.Contains(summary, `Drupal language "es"`) && strings.Contains(summary, "1 menu link(s)"):
+			unknownSummaries++
+		case strings.Contains(summary, "language-neutral code") && strings.Contains(summary, "1 menu link(s)"):
+			neutralSummaries++
+		}
+	}
+	if unknownSummaries != 1 || neutralSummaries != 2 {
+		t.Fatalf("fallback summaries = %v; unknown=%d neutral=%d", st.result.Summaries,
+			unknownSummaries, neutralSummaries)
+	}
+}
+
+func TestImportMenusResolvesTaxonomyTermTarget(t *testing.T) {
+	reader := &fakeReader{menuLinks: []MenuLink{{
+		ID: 1, UUID: "term", Title: "Go", MenuName: "main",
+		LinkURI: "entity:taxonomy_term/7", Enabled: 1,
+	}}}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	st.termURLs[7] = "/fr/tag/go"
+	if err := (&Source{}).importMenus(context.Background(), st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+	menu, _ := queries.GetMenuBySlugAndLanguage(context.Background(), store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: st.defaultLang,
+	})
+	items, err := queries.ListMenuItems(context.Background(), menu.ID)
+	if err != nil || len(items) != 1 || !items[0].Url.Valid || items[0].Url.String != "/fr/tag/go" {
+		t.Errorf("taxonomy menu target = %v, err=%v; want /fr/tag/go", items, err)
+	}
+}
+
+func TestImportMenusResolvesTaxonomyPathAliases(t *testing.T) {
+	reader := &fakeReader{
+		aliases: []PathAlias{
+			{ID: 1, Path: "/taxonomy/term/7", Alias: "/topics/go", Langcode: "en"},
+			{ID: 2, Path: "/taxonomy/term/8", Alias: "/sujets/rouille", Langcode: "fr"},
+		},
+		menuLinks: []MenuLink{
+			{ID: 1, UUID: "default-term-alias", Title: "Go", MenuName: "main", Langcode: "en", LinkURI: "internal:/topics/go", Enabled: 1},
+			{ID: 2, UUID: "french-term-alias", Title: "Rouille", MenuName: "main", Langcode: "fr", LinkURI: "internal:/sujets/rouille", Enabled: 1},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	ctx := context.Background()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", Direction: "ltr",
+		IsActive: true, Position: 2, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	st.addAvailableLanguage("fr")
+	st.termURLs[7] = "/tag/go"
+	st.termURLs[8] = "/fr/category/rouille"
+	st.termLang[7] = "en"
+	st.termLang[8] = "fr"
+	st.termDestinationLang[7] = "en"
+	st.termDestinationLang[8] = "fr"
+
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+	menu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: st.defaultLang,
+	})
+	if err != nil {
+		t.Fatalf("GetMenuBySlugAndLanguage: %v", err)
+	}
+	items, err := queries.ListMenuItems(ctx, menu.ID)
+	if err != nil {
+		t.Fatalf("ListMenuItems: %v", err)
+	}
+	if len(items) != 1 || items[0].Title != "Go" || !items[0].Url.Valid || items[0].Url.String != "/tag/go" {
+		t.Fatalf("default-language menu items = %+v, want Go -> /tag/go", items)
+	}
+	frMenu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: "fr",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frItems, err := queries.ListMenuItems(ctx, frMenu.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(frItems) != 1 || frItems[0].Title != "Rouille" ||
+		!frItems[0].Url.Valid || frItems[0].Url.String != "/fr/category/rouille" {
+		t.Fatalf("French menu items = %+v, want Rouille -> /fr/category/rouille", frItems)
+	}
+	if reader.aliasCalls != 1 {
+		t.Errorf("GetPathAliases calls = %d, want one cached read", reader.aliasCalls)
+	}
+}
+
+func TestImportMenusResolvesIdenticalTaxonomyAliasesByLinkLanguage(t *testing.T) {
+	reader := &fakeReader{
+		aliases: []PathAlias{
+			// Put the non-default row first to prove source row order cannot choose
+			// the destination for an English menu link.
+			{ID: 1, Path: "/taxonomy/term/8", Alias: "/topics/current", Langcode: "fr"},
+			{ID: 2, Path: "/taxonomy/term/7", Alias: "/topics/current", Langcode: "en"},
+		},
+		menuLinks: []MenuLink{
+			{ID: 1, UUID: "current-en", Title: "Current EN", MenuName: "main", Langcode: "en", LinkURI: "internal:/topics/current", Enabled: 1},
+			{ID: 2, UUID: "current-fr", Title: "Current FR", MenuName: "main", Langcode: "fr", LinkURI: "internal:/topics/current", Enabled: 1},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	ctx := context.Background()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", Direction: "ltr",
+		IsActive: true, Position: 2, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	st.addAvailableLanguage("fr")
+	st.termURLs[7] = "/tag/current"
+	st.termURLs[8] = "/fr/tag/actuel"
+	st.termLang[7] = "en"
+	st.termLang[8] = "fr"
+	st.termDestinationLang[7] = "en"
+	st.termDestinationLang[8] = "fr"
+
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+	menu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: st.defaultLang,
+	})
+	if err != nil {
+		t.Fatalf("GetMenuBySlugAndLanguage: %v", err)
+	}
+	items, err := queries.ListMenuItems(ctx, menu.ID)
+	if err != nil {
+		t.Fatalf("ListMenuItems: %v", err)
+	}
+	if len(items) != 1 || items[0].Title != "Current EN" ||
+		!items[0].Url.Valid || items[0].Url.String != "/tag/current" {
+		t.Fatalf("English menu items = %+v, want Current EN -> /tag/current", items)
+	}
+	frMenu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: "fr",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frItems, err := queries.ListMenuItems(ctx, frMenu.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(frItems) != 1 || frItems[0].Title != "Current FR" ||
+		!frItems[0].Url.Valid || frItems[0].Url.String != "/fr/tag/actuel" {
+		t.Fatalf("French menu items = %+v, want Current FR -> /fr/tag/actuel", frItems)
+	}
+}
+
+func TestImportMenusResolvesNeutralTaxonomyAliasesByTermLanguage(t *testing.T) {
+	reader := &fakeReader{
+		aliases: []PathAlias{
+			{ID: 1, Path: "/taxonomy/term/7", Alias: "/topics/current", Langcode: "und"},
+			{ID: 2, Path: "/taxonomy/term/8", Alias: "/topics/current", Langcode: "und"},
+		},
+		menuLinks: []MenuLink{
+			{ID: 1, UUID: "current-en", Title: "Current EN", MenuName: "main", Langcode: "en", LinkURI: "internal:/topics/current", Enabled: 1},
+			{ID: 2, UUID: "current-fr", Title: "Current FR", MenuName: "main", Langcode: "fr", LinkURI: "internal:/topics/current", Enabled: 1},
+		},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	st.addAvailableLanguage("fr")
+	st.termURLs[7], st.termLang[7], st.termDestinationLang[7] = "/tag/current", "en", "en"
+	st.termURLs[8], st.termLang[8], st.termDestinationLang[8] = "/fr/tag/actuel", "fr", "fr"
+	if err := NewSource().importMenus(context.Background(), st); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []struct {
+		language string
+		url      string
+	}{{"en", "/tag/current"}, {"fr", "/fr/tag/actuel"}} {
+		menu, err := queries.GetMenuBySlugAndLanguage(context.Background(), store.GetMenuBySlugAndLanguageParams{
+			Slug: "main", LanguageCode: want.language,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		items, err := queries.ListMenuItems(context.Background(), menu.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(items) != 1 || !items[0].Url.Valid || items[0].Url.String != want.url {
+			t.Fatalf("%s neutral-alias menu items = %+v, want %q", want.language, items, want.url)
+		}
+	}
+}
+
+func TestImportMenusDropsUnresolvedTaxonomyPathAlias(t *testing.T) {
+	reader := &fakeReader{
+		aliases: []PathAlias{{
+			ID: 1, Path: "/taxonomy/term/99", Alias: "/topics/missing", Langcode: "en",
+		}},
+		menuLinks: []MenuLink{{
+			ID: 1, UUID: "missing-term-alias", Title: "Missing", MenuName: "main",
+			LinkURI: "internal:/topics/missing", Enabled: 1,
+		}},
+	}
+	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	ctx := context.Background()
+	if err := (&Source{}).importMenus(ctx, st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+	menu, err := queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: st.defaultLang,
+	})
+	if err != nil {
+		t.Fatalf("GetMenuBySlugAndLanguage: %v", err)
+	}
+	items, err := queries.ListMenuItems(ctx, menu.ID)
+	if err != nil {
+		t.Fatalf("ListMenuItems: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("unresolved taxonomy alias was stored as a raw menu URL: %+v", items)
+	}
+	if got := strings.Join(st.result.Notices, "\n"); !strings.Contains(got, "term 99") ||
+		!strings.Contains(got, "/topics/missing") {
+		t.Errorf("notices = %v, want unresolved taxonomy alias and term", st.result.Notices)
+	}
+}
+
+func TestImportMenusRollsBackTrackingFailure(t *testing.T) {
+	reader := &fakeReader{menuLinks: []MenuLink{{
+		ID: 1, UUID: "home", Title: "Home", MenuName: "main", LinkURI: "internal:/", Enabled: 1,
+	}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	tracker.failType = types.EntityMenu
+	tracker.trackErr = errors.New("tracking failed")
+	if err := (&Source{}).importMenus(context.Background(), st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+	if _, err := queries.GetMenuBySlugAndLanguage(context.Background(), store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: st.defaultLang,
+	}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("untracked menu survived rollback: %v", err)
+	}
+	if st.result.MenusImported != 0 || st.result.MenuItemsImported != 0 ||
+		st.claimedMenuSlugs[menuSlugClaim(st.defaultLang, "main")] {
+		t.Errorf("tracking failure published menu state: result=%+v claimed=%v", st.result, st.claimedMenuSlugs)
+	}
+}
+
+func TestImportMenuItemRollsBackTrackingFailure(t *testing.T) {
+	reader := &fakeReader{menuLinks: []MenuLink{{
+		ID: 1, UUID: "home", Title: "Home", MenuName: "main", LinkURI: "internal:/", Enabled: 1,
+	}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportMenus: true})
+	tracker.failType = types.EntityMenuItem
+	tracker.trackErr = errors.New("tracking failed")
+	if err := (&Source{}).importMenus(context.Background(), st); err != nil {
+		t.Fatalf("importMenus() error = %v", err)
+	}
+	menu, err := queries.GetMenuBySlugAndLanguage(context.Background(), store.GetMenuBySlugAndLanguageParams{
+		Slug: "main", LanguageCode: st.defaultLang,
+	})
+	if err != nil {
+		t.Fatalf("the successfully tracked menu should remain: %v", err)
+	}
+	items, err := queries.ListMenuItems(context.Background(), menu.ID)
+	if err != nil || len(items) != 0 {
+		t.Errorf("untracked menu item survived rollback: items=%v err=%v", items, err)
+	}
+	if st.result.MenusImported != 1 || st.result.MenuItemsImported != 0 {
+		t.Errorf("tracking failure counters = menu %d item %d, want 1/0",
+			st.result.MenusImported, st.result.MenuItemsImported)
+	}
+}
+
 func TestImportMenusDisabledByOption(t *testing.T) {
 	reader := &fakeReader{
 		schema:    Schema{HasMenuLinks: true},
@@ -857,6 +2428,7 @@ func writeTestPNG(t *testing.T, root, relPath string) {
 //     removes the <img> that was just built.
 func TestImportMediaCreatesMediaAndRefs(t *testing.T) {
 	filesRoot := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, filesRoot)
 	const relPath = "2026-01/фото с пробелом.png"
 	writeTestPNG(t, filesRoot, relPath)
 
@@ -932,6 +2504,7 @@ func TestImportMediaCreatesMediaAndRefs(t *testing.T) {
 // to appear with nothing anywhere to explain why.
 func TestImportMediaReportsSkippedTypes(t *testing.T) {
 	filesRoot := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, filesRoot)
 
 	reader := &fakeReader{
 		schema: Schema{HasFiles: true},
@@ -966,6 +2539,265 @@ func TestImportMediaReportsSkippedTypes(t *testing.T) {
 	}
 	if !strings.Contains(st.result.Summaries[0], "image/svg+xml") {
 		t.Errorf("summary %q does not name the skipped type", st.result.Summaries[0])
+	}
+}
+
+func TestImportMediaReportsMissingMediaFieldDataMapping(t *testing.T) {
+	filesRoot := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, filesRoot)
+	const rel = "document.pdf"
+	if err := os.WriteFile(filepath.Join(filesRoot, rel), []byte("pdf fixture"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	reader := &fakeReader{
+		files: []File{{FID: 1, Filename: rel, URI: "public://" + rel, MimeType: "application/pdf"}},
+	}
+	// Exercise the live Reader's required-media-data guard through the fake's
+	// interface slot: importMedia must surface this as an ImportResult error and
+	// still import the managed file by its own UUID.
+	reader.mediaUUIDErr = errors.New("media_field_data is absent; media entity UUID references cannot be mapped")
+	st, _, _ := newTestState(t, reader, types.ImportOptions{ImportMedia: true})
+	st.filesPath = filesRoot
+
+	if err := (&Source{}).importMedia(context.Background(), st); err != nil {
+		t.Fatalf("importMedia() error = %v", err)
+	}
+	if st.result.MediaImported != 1 {
+		t.Errorf("MediaImported = %d, want 1 despite missing media-entity mapping", st.result.MediaImported)
+	}
+	if got := strings.Join(st.result.Errors, "\n"); !strings.Contains(got, "failed to read media entity references") || !strings.Contains(got, "media_field_data") {
+		t.Errorf("errors = %v, want descriptive importer-visible media mapping error", st.result.Errors)
+	}
+}
+
+func TestImportMediaRollsBackDatabaseAndFilesOnTrackingFailure(t *testing.T) {
+	filesRoot := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, filesRoot)
+	const rel = "document.pdf"
+	if err := os.WriteFile(filepath.Join(filesRoot, rel), []byte("pdf fixture"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	reader := &fakeReader{files: []File{{
+		FID: 1, Filename: rel, URI: "public://" + rel, MimeType: "application/pdf",
+	}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportMedia: true})
+	st.filesPath = filesRoot
+	tracker.failType = types.EntityMedia
+	tracker.trackErr = errors.New("tracking failed")
+
+	if err := (&Source{}).importMedia(context.Background(), st); err != nil {
+		t.Fatalf("importMedia() error = %v", err)
+	}
+	count, err := queries.CountMedia(context.Background())
+	if err != nil || count != 0 {
+		t.Errorf("media count = %d, err=%v; want the untracked row removed", count, err)
+	}
+	if st.result.MediaImported != 0 || st.mediaByFID[1] != 0 || len(st.refs.ByPath) != 0 {
+		t.Errorf("tracking failure published media state: result=%+v map=%v refs=%v", st.result, st.mediaByFID, st.refs.ByPath)
+	}
+	assertNoUploadedFiles(t, st.uploadDir)
+}
+
+func TestImportMediaTrackingRollbackUsesCapturedCanonicalUploadRoot(t *testing.T) {
+	filesRoot := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, filesRoot)
+	const rel = "document.pdf"
+	if err := os.WriteFile(filepath.Join(filesRoot, rel), []byte("pdf fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reader := &fakeReader{files: []File{{
+		FID: 1, Filename: rel, URI: "public://" + rel, MimeType: "application/pdf",
+	}}}
+	st, tracker, queries := newTestState(t, reader, types.ImportOptions{ImportMedia: true})
+	st.filesPath = filesRoot
+
+	destinationParent := t.TempDir()
+	originalRoot := filepath.Join(destinationParent, "uploads-original")
+	outsideRoot := filepath.Join(destinationParent, "uploads-outside")
+	configuredRoot := filepath.Join(destinationParent, "uploads")
+	for _, root := range []string{originalRoot, outsideRoot} {
+		if err := os.MkdirAll(root, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(originalRoot, configuredRoot); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	st.uploadDir = configuredRoot
+	tracker.failType = types.EntityMedia
+	tracker.trackErr = errors.New("tracking failed")
+	var outsideSentinel string
+	tracker.beforeFailure = func() {
+		entries, err := os.ReadDir(filepath.Join(originalRoot, model.OriginalsDir))
+		if err != nil || len(entries) != 1 {
+			t.Fatalf("read written UUID: entries=%v error=%v", entries, err)
+		}
+		outsideMediaDir := filepath.Join(outsideRoot, model.OriginalsDir, entries[0].Name())
+		if err := os.MkdirAll(outsideMediaDir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		outsideSentinel = filepath.Join(outsideMediaDir, "must-remain.pdf")
+		if err := os.WriteFile(outsideSentinel, []byte("outside"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(configuredRoot); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outsideRoot, configuredRoot); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := (&Source{}).importMedia(context.Background(), st); err != nil {
+		t.Fatalf("importMedia() error = %v", err)
+	}
+	if count, err := queries.CountMedia(context.Background()); err != nil || count != 0 {
+		t.Fatalf("media count = %d, err=%v; want compensated row", count, err)
+	}
+	assertNoUploadedFiles(t, originalRoot)
+	if data, err := os.ReadFile(outsideSentinel); err != nil || string(data) != "outside" {
+		t.Fatalf("outside sentinel changed: data=%q error=%v", data, err)
+	}
+}
+
+func TestImportMediaKeepsFilesWhenDatabaseRollbackFails(t *testing.T) {
+	filesRoot := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, filesRoot)
+	const rel = "document.pdf"
+	if err := os.WriteFile(filepath.Join(filesRoot, rel), []byte("pdf fixture"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	reader := &fakeReader{files: []File{{
+		FID: 1, Filename: rel, URI: "public://" + rel, MimeType: "application/pdf",
+	}}}
+	st, tracker, queries, db := newTestStateWithDB(t, reader, types.ImportOptions{ImportMedia: true})
+	st.filesPath = filesRoot
+	tracker.failType = types.EntityMedia
+	tracker.trackErr = errors.New("tracking failed")
+	if _, err := db.Exec(`CREATE TRIGGER block_media_delete BEFORE DELETE ON media BEGIN SELECT RAISE(FAIL, 'delete blocked'); END`); err != nil {
+		t.Fatalf("failed to create rollback-failure trigger: %v", err)
+	}
+
+	if err := (&Source{}).importMedia(context.Background(), st); err != nil {
+		t.Fatalf("importMedia() error = %v", err)
+	}
+	count, err := queries.CountMedia(context.Background())
+	if err != nil || count != 1 {
+		t.Errorf("media count = %d, err=%v; failed DB rollback must retain the row", count, err)
+	}
+	var files int
+	if err := filepath.WalkDir(st.uploadDir, func(_ string, entry os.DirEntry, walkErr error) error {
+		if walkErr == nil && !entry.IsDir() {
+			files++
+		}
+		return walkErr
+	}); err != nil {
+		t.Fatalf("WalkDir(uploadDir): %v", err)
+	}
+	if files == 0 {
+		t.Error("failed DB rollback deleted the media files, leaving the retained row dangling")
+	}
+	if got := strings.Join(st.result.Errors, "\n"); !strings.Contains(got, "failed to roll back untracked media") || !strings.Contains(got, "delete blocked") {
+		t.Errorf("errors = %v, want the rollback failure reported", st.result.Errors)
+	}
+}
+
+func TestCleanupMediaFilesQueuesWithDetachedBoundedContext(t *testing.T) {
+	st, _, _ := newTestState(t, &fakeReader{}, types.ImportOptions{ImportMedia: true})
+	tracker := &cleanupQueueTracker{}
+	st.tracker = tracker
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	parent := t.TempDir()
+	originalRoot := filepath.Join(parent, "uploads-original")
+	outsideRoot := filepath.Join(parent, "uploads-outside")
+	configuredRoot := filepath.Join(parent, "uploads")
+	for _, root := range []string{originalRoot, outsideRoot} {
+		if err := os.MkdirAll(root, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(originalRoot, configuredRoot); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	canonicalUploadRoot, rootErr := imaging.CanonicalUploadRoot(configuredRoot)
+	if rootErr != nil {
+		t.Fatal(rootErr)
+	}
+	if err := os.Remove(configuredRoot); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideRoot, configuredRoot); err != nil {
+		t.Fatal(err)
+	}
+	err := st.cleanupMediaFiles(ctx, canonicalUploadRoot, "not-a-media-uuid")
+	if err == nil || !strings.Contains(err.Error(), "durable cleanup retry queued") {
+		t.Fatalf("cleanupMediaFiles() error = %v, want queued cleanup result", err)
+	}
+	if tracker.queueCtxErr != nil {
+		t.Errorf("cleanup queue received canceled context: %v", tracker.queueCtxErr)
+	}
+	if !tracker.queueBounded {
+		t.Error("cleanup queue context has no deadline")
+	}
+	if tracker.queuedRoot != canonicalUploadRoot || tracker.queuedUUID != "not-a-media-uuid" {
+		t.Fatalf("queued cleanup = (%q, %q), want captured root and UUID", tracker.queuedRoot, tracker.queuedUUID)
+	}
+}
+
+func TestImportOneFileCleansOutputWhenSourceCloseFails(t *testing.T) {
+	st, _, queries := newTestState(t, &fakeReader{}, types.ImportOptions{ImportMedia: true})
+	canonicalUploadRoot, err := imaging.CanonicalUploadRoot(st.uploadDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := imaging.NewProcessor(canonicalUploadRoot)
+	pngData := func() []byte {
+		img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatalf("png.Encode: %v", err)
+		}
+		return buf.Bytes()
+	}()
+	for _, tc := range []struct {
+		name, filename, mime string
+		data                 []byte
+	}{
+		{name: "non-image", filename: "document.pdf", mime: "application/pdf", data: []byte("pdf fixture")},
+		{name: "image", filename: "photo.png", mime: "image/png", data: pngData},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := (&Source{}).importOneFile(context.Background(), st,
+				closeFailSource{data: tc.data}, processor, canonicalUploadRoot,
+				File{FID: 1, Filename: tc.filename, URI: "public://" + tc.filename, MimeType: tc.mime},
+				tc.filename, tc.mime, time.Now())
+			if err == nil || !strings.Contains(err.Error(), "source close failed") {
+				t.Fatalf("importOneFile() error = %v, want the close failure", err)
+			}
+			assertNoUploadedFiles(t, st.uploadDir)
+		})
+	}
+	count, countErr := queries.CountMedia(context.Background())
+	if countErr != nil || count != 0 {
+		t.Errorf("media count = %d, err=%v; close failure must precede DB creation", count, countErr)
+	}
+}
+
+func assertNoUploadedFiles(t *testing.T, root string) {
+	t.Helper()
+	var files int
+	if err := filepath.WalkDir(root, func(_ string, entry os.DirEntry, walkErr error) error {
+		if walkErr == nil && !entry.IsDir() {
+			files++
+		}
+		return walkErr
+	}); err != nil {
+		t.Fatalf("WalkDir(%s): %v", root, err)
+	}
+	if files != 0 {
+		t.Errorf("cleanup left %d uploaded file(s)", files)
 	}
 }
 

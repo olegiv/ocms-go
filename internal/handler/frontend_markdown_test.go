@@ -94,6 +94,31 @@ func TestFrontendHandler_Page_Markdown_Negotiated(t *testing.T) {
 	}
 }
 
+func TestFrontendHandler_Page_Markdown_DefaultPrefixCanonicalizesUnprefixed(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	seedSiteURL(t, db, "https://example.com")
+	seedPageWithHTML(t, db, "markdown-canonical", "Canonical", `<p>Body</p>`, "", admin.ID)
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	router := languageAwareAliasTestRouter(db, h)
+	req := httptest.NewRequest(http.MethodGet, "/en/markdown-canonical", nil)
+	req.Header.Set("Accept", "text/markdown")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body = %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "https://example.com/markdown-canonical") {
+		t.Fatalf("unprefixed markdown canonical missing: %s", body)
+	}
+	if strings.Contains(body, "https://example.com/en/markdown-canonical") {
+		t.Fatalf("default prefix leaked into markdown canonical: %s", body)
+	}
+}
+
 // TestFrontendHandler_Page_Markdown_HTMLFallbackHasVary verifies that a
 // browser-style request still receives HTML with Vary: Accept so caches
 // keep the two representations keyed separately.

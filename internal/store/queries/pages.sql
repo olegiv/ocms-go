@@ -196,9 +196,11 @@ INNER JOIN pages p ON p.og_image_id = m.id
 WHERE p.id = ?;
 
 -- name: ListPublishedPagesForSitemap :many
-SELECT id, slug, updated_at, no_index FROM pages
-WHERE status = 'published' AND no_index = 0
-ORDER BY updated_at DESC;
+SELECT p.id, p.slug, p.updated_at, p.no_index, p.language_code, l.is_default
+FROM pages p
+INNER JOIN languages l ON l.code = p.language_code AND l.is_active = 1
+WHERE p.status = 'published' AND p.no_index = 0
+ORDER BY p.updated_at DESC;
 
 -- Scheduled publishing queries
 

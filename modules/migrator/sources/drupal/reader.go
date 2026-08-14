@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"maps"
 	"sort"
 	"strconv"
 	"strings"
@@ -288,6 +287,7 @@ func (r *Reader) NodeCount(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	var count int
+	// #nosec G201 -- tbl is rebuilt by Reader.table from a sanitized configured prefix and a constant table name.
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE default_langcode = 1", tbl)
 	if err := r.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count nodes: %w", err)
@@ -303,6 +303,7 @@ func (r *Reader) TranslationCount(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	var count int
+	// #nosec G201 -- tbl is rebuilt by Reader.table from a sanitized configured prefix and a constant table name.
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE default_langcode <> 1", tbl)
 	if err := r.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count node translations: %w", err)
@@ -317,6 +318,7 @@ func (r *Reader) Bundles(ctx context.Context) (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
+	// #nosec G201 -- tbl is rebuilt by Reader.table from a sanitized configured prefix and a constant table name.
 	query := fmt.Sprintf("SELECT type, COUNT(*) FROM %s WHERE default_langcode = 1 GROUP BY type ORDER BY type", tbl)
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -350,6 +352,7 @@ func (r *Reader) GetUsers(ctx context.Context) ([]User, error) {
 	if err != nil {
 		return nil, err
 	}
+	// #nosec G201 -- tbl is rebuilt by Reader.table from a sanitized configured prefix and a constant table name.
 	query := fmt.Sprintf(`
 		SELECT uid, COALESCE(name, ''), COALESCE(mail, ''), COALESCE(status, 0), COALESCE(created, 0)
 		FROM %s
@@ -391,11 +394,7 @@ func (r *Reader) GetTerms(ctx context.Context) ([]Term, error) {
 		return nil, err
 	}
 
-	query := fmt.Sprintf(`
-		SELECT tid, COALESCE(vid, ''), COALESCE(name, ''), description__value, COALESCE(weight, 0)
-		FROM %s
-		WHERE default_langcode = 1
-		ORDER BY vid, weight, tid`, tbl)
+	query := buildTermQuery(tbl)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -410,7 +409,7 @@ func (r *Reader) GetTerms(ctx context.Context) ([]Term, error) {
 	var terms []Term
 	for rows.Next() {
 		var t Term
-		if err := rows.Scan(&t.TID, &t.Vocabulary, &t.Name, &t.Description, &t.Weight); err != nil {
+		if err := rows.Scan(&t.TID, &t.Vocabulary, &t.Langcode, &t.Name, &t.Description, &t.Weight); err != nil {
 			return nil, fmt.Errorf("failed to scan taxonomy term: %w", err)
 		}
 		terms = append(terms, t)
@@ -429,6 +428,15 @@ func (r *Reader) GetTerms(ctx context.Context) ([]Term, error) {
 	return terms, nil
 }
 
+func buildTermQuery(tbl string) string {
+	return fmt.Sprintf(`
+		SELECT tid, COALESCE(vid, ''), COALESCE(langcode, ''), COALESCE(name, ''),
+		       description__value, COALESCE(weight, 0)
+		FROM %s
+		WHERE default_langcode = 1
+		ORDER BY vid, weight, tid`, tbl)
+}
+
 // termParents maps term ID to parent term ID. Drupal writes a 0 parent row for
 // root terms, which is preserved here as 0.
 func (r *Reader) termParents(ctx context.Context) (map[int64]int64, error) {
@@ -441,7 +449,12 @@ func (r *Reader) termParents(ctx context.Context) (map[int64]int64, error) {
 		return nil, err
 	}
 
-	query := fmt.Sprintf("SELECT entity_id, parent_target_id FROM %s", tbl)
+	termTbl, err := r.table(tableTermData)
+	if err != nil {
+		return nil, err
+	}
+
+	query := buildTermParentQuery(tbl, termTbl)
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query taxonomy hierarchy: %w", err)
@@ -452,19 +465,53 @@ func (r *Reader) termParents(ctx context.Context) (map[int64]int64, error) {
 		}
 	}()
 
+	chosen := make(map[int64]bool)
 	for rows.Next() {
-		var child, parent int64
-		if err := rows.Scan(&child, &parent); err != nil {
+		var child, parent, delta int64
+		if err := rows.Scan(&child, &parent, &delta); err != nil {
 			return nil, fmt.Errorf("failed to scan taxonomy hierarchy: %w", err)
 		}
-		if parent != 0 {
-			parents[child] = parent
+		if delta != 0 {
+			chosenParent := int64(0)
+			if chosen[child] {
+				chosenParent = parents[child]
+			}
+			r.warnings = append(r.warnings, fmt.Sprintf(
+				"taxonomy term %d has an additional parent %d at delta %d; it was discarded in favor of delta-zero parent %d",
+				child, parent, delta, chosenParent))
+			continue
 		}
+		if !chosen[child] {
+			chosen[child] = true
+			if parent != 0 {
+				parents[child] = parent
+			}
+			continue
+		}
+		r.warnings = append(r.warnings, fmt.Sprintf(
+			"taxonomy term %d has an additional parent %d at delta %d; it was discarded in favor of parent %d",
+			child, parent, delta, parents[child]))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating taxonomy hierarchy: %w", err)
 	}
 	return parents, nil
+}
+
+// buildTermParentQuery restricts parent references to the same source
+// translation and current revision selected by GetTerms. Active non-zero
+// deltas remain in the ordered result only so termParents can report discarded
+// Drupal multi-parent data; they are never allowed to populate the parent map.
+func buildTermParentQuery(parentTbl, termTbl string) string {
+	return fmt.Sprintf(`
+		SELECT p.entity_id, p.parent_target_id, p.delta
+		FROM %s p
+		JOIN %s t ON t.tid = p.entity_id
+		 AND t.default_langcode = 1
+		 AND p.langcode = t.langcode
+		 AND p.revision_id = t.revision_id
+		WHERE p.deleted = 0
+		ORDER BY p.entity_id, p.delta`, parentTbl, termTbl)
 }
 
 // GetFiles returns permanent managed files, with alt text joined in from the
@@ -478,6 +525,7 @@ func (r *Reader) GetFiles(ctx context.Context) ([]File, error) {
 		return nil, err
 	}
 
+	// #nosec G201 -- tbl is rebuilt by Reader.table from a sanitized configured prefix and a constant table name.
 	query := fmt.Sprintf(`
 		SELECT fid, COALESCE(uuid, ''), COALESCE(filename, ''), COALESCE(uri, ''),
 		       COALESCE(filemime, ''), COALESCE(filesize, 0), COALESCE(created, 0)
@@ -525,9 +573,9 @@ func (r *Reader) GetFiles(ctx context.Context) ([]File, error) {
 	return files, nil
 }
 
-// buildAltQuery assembles a "(file id, alt text)" query over an image field
-// table. Both shapes are identical apart from their column names, so they share
-// one builder rather than two near-copies.
+// buildAltQuery assembles a "(file id, owner entity id, alt text)" query over an
+// image field table. Both shapes are identical apart from their column names, so
+// they share one builder rather than two near-copies.
 //
 // Column names cannot be bound as parameters, so they are validated here rather
 // than trusted from the caller. Every caller currently passes a literal, which
@@ -543,22 +591,41 @@ func buildAltQuery(tbl, idColumn, altColumn string, entity entityJoin) (string, 
 		return "", err
 	}
 
-	// Without the join the field table is read across every language and
-	// readAltMap keeps whichever row came back first, so a translated alt could
-	// land on media even though only default-language content is imported —
-	// and which one won was not even deterministic.
+	// Without the join the field table is read across every language because
+	// there is no owning data table against which to identify the source
+	// translation or current revision. The total order still makes the degraded
+	// fallback reproducible.
 	if entity.Table == "" {
 		return fmt.Sprintf(`
-		SELECT f.%s, COALESCE(f.%s, '')
-		FROM %s f
-		WHERE f.%s IS NOT NULL`, safeID, safeAlt, tbl, safeID), nil
+			SELECT f.%s, f.entity_id, COALESCE(f.%s, '')
+			FROM %s f
+			WHERE f.deleted = 0 AND f.delta = 0
+			 AND f.%s IS NOT NULL
+			ORDER BY f.%s, f.entity_id, f.revision_id DESC,
+			         f.langcode, COALESCE(f.%s, '')`,
+			safeID, safeAlt, tbl, safeID, safeID, safeAlt), nil
+	}
+	safeEntityID, err := shared.SanitizeIdentifier(entity.IDColumn)
+	if err != nil {
+		return "", err
+	}
+	safeRevision, err := shared.SanitizeIdentifier(entity.RevisionColumn)
+	if err != nil {
+		return "", err
 	}
 	return fmt.Sprintf(`
-		SELECT f.%s, COALESCE(f.%s, '')
-		FROM %s f
-		JOIN %s e ON e.%s = f.entity_id AND e.default_langcode = 1 AND f.langcode = e.langcode
-		WHERE f.%s IS NOT NULL`,
-		safeID, safeAlt, tbl, entity.Table, entity.IDColumn, safeID), nil
+			SELECT f.%s, f.entity_id, COALESCE(f.%s, '')
+			FROM %s f
+			JOIN %s e ON e.%s = f.entity_id
+			 AND e.default_langcode = 1
+			 AND f.langcode = e.langcode
+			 AND f.revision_id = e.%s
+			WHERE f.deleted = 0 AND f.delta = 0
+			 AND f.%s IS NOT NULL
+			ORDER BY f.%s, f.entity_id, f.revision_id DESC,
+			         f.langcode, COALESCE(f.%s, '')`,
+		safeID, safeAlt, tbl, entity.Table, safeEntityID, safeRevision, safeID,
+		safeID, safeAlt), nil
 }
 
 // entityJoin names the entity data table a field table belongs to, so a field
@@ -566,8 +633,9 @@ func buildAltQuery(tbl, idColumn, altColumn string, entity entityJoin) (string, 
 // means "no join available", which is the pre-8 shape and a site whose media
 // data table is absent.
 type entityJoin struct {
-	Table    string // fully prefixed and sanitized
-	IDColumn string
+	Table          string // fully prefixed and sanitized
+	IDColumn       string
+	RevisionColumn string
 }
 
 // entityJoinFor builds the join describing a field table's owning entity.
@@ -587,14 +655,45 @@ func (r *Reader) entityJoinFor(table, idColumn string, present bool) (entityJoin
 	if err != nil {
 		return entityJoin{}, err
 	}
-	return entityJoin{Table: tbl, IDColumn: safeID}, nil
+	return entityJoin{Table: tbl, IDColumn: safeID, RevisionColumn: "vid"}, nil
 }
 
-// readAltMap runs an alt-text query and returns file ID -> first non-empty alt.
-func (r *Reader) readAltMap(ctx context.Context, table, idColumn, altColumn string,
-	entity entityJoin) (map[int64]string, error) {
+type altSource string
 
-	alts := make(map[int64]string)
+const (
+	altSourceNode  altSource = "node"
+	altSourceMedia altSource = "media"
+
+	// Alt conflict details are persisted with the import job. Bound both the
+	// number and size of those messages so a heavily shared library cannot grow
+	// the job row without limit.
+	maxAltConflictWarnings       = 20
+	maxAltAlternativesPerWarning = 5
+	maxAltWarningRunes           = 120
+)
+
+// altCandidate preserves enough source provenance to make the unavoidable
+// per-reference Drupal -> per-file oCMS collapse deterministic and auditable.
+type altCandidate struct {
+	FID     int64
+	OwnerID int64
+	Alt     string
+	Source  altSource
+}
+
+type altConflict struct {
+	FID       int64
+	Selected  altCandidate
+	Discarded []altCandidate
+}
+
+// readAltCandidates runs an alt-text query and returns every non-empty value
+// together with its file and owning entity IDs. buildAltQuery supplies a total
+// order; resolveAltCandidates applies the cross-table media-before-node policy.
+func (r *Reader) readAltCandidates(ctx context.Context, table, idColumn, altColumn string,
+	entity entityJoin, source altSource) ([]altCandidate, error) {
+
+	var candidates []altCandidate
 	tbl, err := r.table(table)
 	if err != nil {
 		return nil, err
@@ -616,21 +715,134 @@ func (r *Reader) readAltMap(ctx context.Context, table, idColumn, altColumn stri
 	}()
 
 	for rows.Next() {
-		var fid int64
+		var fid, ownerID int64
 		var alt string
-		if err := rows.Scan(&fid, &alt); err != nil {
+		if err := rows.Scan(&fid, &ownerID, &alt); err != nil {
 			return nil, fmt.Errorf("failed to scan %s: %w", table, err)
 		}
 		if alt != "" {
-			if _, seen := alts[fid]; !seen {
-				alts[fid] = alt
-			}
+			candidates = append(candidates, altCandidate{
+				FID: fid, OwnerID: ownerID, Alt: alt, Source: source,
+			})
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating %s: %w", table, err)
 	}
-	return alts, nil
+	return candidates, nil
+}
+
+func altSourcePriority(source altSource) int {
+	if source == altSourceMedia {
+		return 0
+	}
+	return 1
+}
+
+func altCandidateLess(left, right altCandidate) bool {
+	if left.FID != right.FID {
+		return left.FID < right.FID
+	}
+	if left.Source != right.Source {
+		return altSourcePriority(left.Source) < altSourcePriority(right.Source)
+	}
+	return left.OwnerID < right.OwnerID
+}
+
+// resolveAltCandidates chooses one global oCMS alt per Drupal file. Media
+// entities are the canonical Drupal 8+ representation and therefore retain
+// their existing precedence over classic node image fields. Within a tier the
+// lowest owner entity ID wins; text is the deterministic final tie-breaker for
+// malformed duplicate rows belonging to one owner.
+func resolveAltCandidates(candidates []altCandidate) (map[int64]string, []altConflict) {
+	nonEmpty := candidates[:0]
+	for _, candidate := range candidates {
+		if candidate.Alt != "" {
+			nonEmpty = append(nonEmpty, candidate)
+		}
+	}
+	candidates = nonEmpty
+
+	// Stable sorting preserves buildAltQuery's revision/language/text order for
+	// duplicate rows with the same tier and owner.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return altCandidateLess(candidates[i], candidates[j])
+	})
+
+	alts := make(map[int64]string)
+	var conflicts []altConflict
+	for start := 0; start < len(candidates); {
+		end := start + 1
+		for end < len(candidates) && candidates[end].FID == candidates[start].FID {
+			end++
+		}
+
+		selected := candidates[start]
+		alts[selected.FID] = selected.Alt
+		seen := map[string]bool{selected.Alt: true}
+		conflict := altConflict{FID: selected.FID, Selected: selected}
+		for _, candidate := range candidates[start+1 : end] {
+			if candidate.Alt == "" || seen[candidate.Alt] {
+				continue
+			}
+			seen[candidate.Alt] = true
+			conflict.Discarded = append(conflict.Discarded, candidate)
+		}
+		if len(conflict.Discarded) > 0 {
+			conflicts = append(conflicts, conflict)
+		}
+		start = end
+	}
+	return alts, conflicts
+}
+
+func quoteAltForWarning(alt string) string {
+	runes := []rune(alt)
+	if len(runes) > maxAltWarningRunes {
+		runes = append(runes[:maxAltWarningRunes-1], '…')
+	}
+	return strconv.Quote(string(runes))
+}
+
+func describeAltCandidate(candidate altCandidate) string {
+	return fmt.Sprintf("%s entity %d alt %s", candidate.Source, candidate.OwnerID,
+		quoteAltForWarning(candidate.Alt))
+}
+
+// reportAltConflicts names the deterministic winner and bounded discarded
+// alternatives. The final aggregate makes every omitted detail visible even
+// when the source contains more conflicts than are safe to persist individually.
+func (r *Reader) reportAltConflicts(conflicts []altConflict) {
+	sort.Slice(conflicts, func(i, j int) bool { return conflicts[i].FID < conflicts[j].FID })
+
+	omittedFiles := 0
+	omittedAlternatives := 0
+	for i, conflict := range conflicts {
+		if i >= maxAltConflictWarnings {
+			omittedFiles++
+			omittedAlternatives += len(conflict.Discarded)
+			continue
+		}
+
+		sort.SliceStable(conflict.Discarded, func(i, j int) bool {
+			return altCandidateLess(conflict.Discarded[i], conflict.Discarded[j])
+		})
+		shown := min(len(conflict.Discarded), maxAltAlternativesPerWarning)
+		discarded := make([]string, 0, shown)
+		for _, candidate := range conflict.Discarded[:shown] {
+			discarded = append(discarded, describeAltCandidate(candidate))
+		}
+		omittedAlternatives += len(conflict.Discarded) - shown
+		r.warnings = append(r.warnings, fmt.Sprintf(
+			"Drupal file %d selected %s; discarded %s",
+			conflict.FID, describeAltCandidate(conflict.Selected), strings.Join(discarded, "; ")))
+	}
+
+	if omittedFiles > 0 || omittedAlternatives > 0 {
+		r.warnings = append(r.warnings, fmt.Sprintf(
+			"Drupal alt-text conflict report omitted %d file detail(s) and %d discarded distinct alternative detail(s) after the bounded limit",
+			omittedFiles, omittedAlternatives))
+	}
 }
 
 // coreMediaSourceFields are the source fields Drupal core's own media types
@@ -670,6 +882,7 @@ func (r *Reader) mediaSourceFields(ctx context.Context) []string {
 		return coreMediaSourceFields
 	}
 
+	// #nosec G201 -- tbl is rebuilt by Reader.table from a sanitized configured prefix and a constant table name.
 	query := fmt.Sprintf(`
 		SELECT data FROM %s
 		WHERE collection = '' AND name LIKE 'media.type.%%'`, tbl)
@@ -761,7 +974,14 @@ func (r *Reader) MediaUUIDsByFile(ctx context.Context) (map[int64][]string, erro
 	if !r.schema.HasMedia {
 		return byFile, nil
 	}
+	if !r.schema.HasMediaData {
+		return nil, fmt.Errorf("%s is absent; media entity UUID references cannot be mapped to their current source-language revision", tableMediaData)
+	}
 	mediaTbl, err := r.table(tableMedia)
+	if err != nil {
+		return nil, err
+	}
+	mediaDataTbl, err := r.table(tableMediaData)
 	if err != nil {
 		return nil, err
 	}
@@ -776,7 +996,8 @@ func (r *Reader) MediaUUIDsByFile(ctx context.Context) (map[int64][]string, erro
 			return nil, err
 		}
 
-		if err := r.collectMediaUUIDs(ctx, mediaTbl, fieldTbl, field+"_target_id", table, byFile); err != nil {
+		if err := r.collectMediaUUIDs(ctx, mediaTbl, mediaDataTbl, fieldTbl,
+			field+"_target_id", table, byFile); err != nil {
 			return nil, err
 		}
 	}
@@ -784,21 +1005,12 @@ func (r *Reader) MediaUUIDsByFile(ctx context.Context) (map[int64][]string, erro
 }
 
 // collectMediaUUIDs adds one media field table's file references to byFile.
-func (r *Reader) collectMediaUUIDs(ctx context.Context, mediaTbl, fieldTbl, column, label string,
+func (r *Reader) collectMediaUUIDs(ctx context.Context, mediaTbl, mediaDataTbl, fieldTbl, column, label string,
 	byFile map[int64][]string) error {
-
-	// As in buildAltQuery: the column name is interpolated, so validate it here
-	// rather than relying on every caller to pass a literal.
-	safeColumn, err := shared.SanitizeIdentifier(column)
+	query, err := buildMediaUUIDQuery(mediaTbl, mediaDataTbl, fieldTbl, column)
 	if err != nil {
 		return err
 	}
-
-	query := fmt.Sprintf(`
-		SELECT m.uuid, f.%s
-		FROM %s m
-		JOIN %s f ON f.entity_id = m.mid
-		WHERE f.%s IS NOT NULL AND m.uuid <> ''`, safeColumn, mediaTbl, fieldTbl, safeColumn)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -824,6 +1036,28 @@ func (r *Reader) collectMediaUUIDs(ctx context.Context, mediaTbl, fieldTbl, colu
 	return nil
 }
 
+// buildMediaUUIDQuery selects only the active file reference for the media
+// entity's current source-language revision. Drupal field tables keep rows for
+// older revisions, translations, deleted values, and every delta.
+func buildMediaUUIDQuery(mediaTbl, mediaDataTbl, fieldTbl, column string) (string, error) {
+
+	// As in buildAltQuery: the column name is interpolated, so validate it here
+	// rather than relying on every caller to pass a literal.
+	safeColumn, err := shared.SanitizeIdentifier(column)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(`
+		SELECT m.uuid, f.%s
+		FROM %s m
+		JOIN %s d ON d.mid = m.mid AND d.vid = m.vid AND d.default_langcode = 1
+		JOIN %s f ON f.entity_id = d.mid
+		 AND f.revision_id = d.vid AND f.langcode = d.langcode
+		WHERE f.deleted = 0 AND f.delta = 0
+		 AND f.%s IS NOT NULL AND m.uuid <> ''`, safeColumn, mediaTbl, mediaDataTbl, fieldTbl, safeColumn), nil
+}
+
 // fileAltText maps file ID to alt text.
 //
 // Alt text lives in two places depending on how the site stores images.
@@ -834,23 +1068,24 @@ func (r *Reader) collectMediaUUIDs(ctx context.Context, mediaTbl, fieldTbl, colu
 // the media field winning — a site can carry a media library and legacy image
 // fields at once.
 //
-// Drupal's alt is per field instance, so two nodes may describe one shared file
-// differently; oCMS stores one alt per media row, so the first non-empty value
-// wins. On the 1:1 sites this fallback exists for, there is nothing to lose.
+// Drupal's alt is per field instance, so two owners may describe one shared file
+// differently while oCMS stores one alt per media row. Media owners win over
+// node owners, then the lowest owner entity ID wins. Distinct discarded values
+// are reported with bounded source provenance so that collapse is auditable.
 func (r *Reader) fileAltText(ctx context.Context) (map[int64]string, error) {
-	alts := make(map[int64]string)
+	var candidates []altCandidate
 
 	if r.schema.HasNodeImage {
 		nodeEntity, err := r.entityJoinFor(tableNodeData, "nid", true)
 		if err != nil {
 			return nil, err
 		}
-		nodeAlts, err := r.readAltMap(ctx, tableNodeImage,
-			"field_image_target_id", "field_image_alt", nodeEntity)
+		nodeAlts, err := r.readAltCandidates(ctx, tableNodeImage,
+			"field_image_target_id", "field_image_alt", nodeEntity, altSourceNode)
 		if err != nil {
 			return nil, err
 		}
-		maps.Copy(alts, nodeAlts)
+		candidates = append(candidates, nodeAlts...)
 	}
 
 	if r.schema.HasMediaImg {
@@ -858,14 +1093,16 @@ func (r *Reader) fileAltText(ctx context.Context) (map[int64]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		mediaAlts, err := r.readAltMap(ctx, tableMediaImage,
-			"field_media_image_target_id", "field_media_image_alt", mediaEntity)
+		mediaAlts, err := r.readAltCandidates(ctx, tableMediaImage,
+			"field_media_image_target_id", "field_media_image_alt", mediaEntity, altSourceMedia)
 		if err != nil {
 			return nil, err
 		}
-		maps.Copy(alts, mediaAlts)
+		candidates = append(candidates, mediaAlts...)
 	}
 
+	alts, conflicts := resolveAltCandidates(candidates)
+	r.reportAltConflicts(conflicts)
 	return alts, nil
 }
 
@@ -896,7 +1133,11 @@ func buildNodeQuery(nodeTbl, bodyTbl string, hasBody bool) string {
 		SELECT %s,
 		       b.body_value, b.body_summary, b.body_format
 		FROM %s n
-		LEFT JOIN %s b ON b.entity_id = n.nid AND b.langcode = n.langcode AND b.delta = 0
+		LEFT JOIN %s b ON b.entity_id = n.nid
+		 AND b.langcode = n.langcode
+		 AND b.revision_id = n.vid
+		 AND b.deleted = 0
+		 AND b.delta = 0
 		WHERE n.default_langcode = 1
 		ORDER BY n.nid
 		LIMIT ? OFFSET ?`, baseColumns, nodeTbl, bodyTbl)
@@ -941,6 +1182,44 @@ func (r *Reader) GetNodes(ctx context.Context, offset int) ([]Node, error) {
 	return nodes, nil
 }
 
+// GetNodeLanguages returns the source translation language for every node.
+// Path aliases are loaded before the paginated node stage (taxonomy aliases
+// must already yield to node URLs), so this lightweight map is needed to place
+// language-neutral aliases in the owning node's concrete public namespace.
+func (r *Reader) GetNodeLanguages(ctx context.Context) (map[int64]string, error) {
+	nodeTbl, err := r.table(tableNodeData)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT nid, COALESCE(langcode, '')
+		FROM %s
+		WHERE default_langcode = 1
+		ORDER BY nid`, nodeTbl))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query node languages: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
+
+	languages := make(map[int64]string)
+	for rows.Next() {
+		var nid int64
+		var language string
+		if err := rows.Scan(&nid, &language); err != nil {
+			return nil, fmt.Errorf("failed to scan node language: %w", err)
+		}
+		languages[nid] = language
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating node languages: %w", err)
+	}
+	return languages, nil
+}
+
 // NodeImages maps node ID to its featured-image file ID.
 //
 // Alt text is deliberately not returned here. It belongs to the file, not the
@@ -966,11 +1245,7 @@ func (r *Reader) NodeImages(ctx context.Context) (map[int64]int64, error) {
 	// row per translation, so reading them unfiltered let whichever translation
 	// happened to be scanned last become the featured image of a page imported
 	// from the default-language row.
-	query := fmt.Sprintf(`
-		SELECT f.entity_id, f.field_image_target_id
-		FROM %s f
-		JOIN %s n ON n.nid = f.entity_id AND n.default_langcode = 1 AND f.langcode = n.langcode
-		WHERE f.delta = 0 AND f.field_image_target_id IS NOT NULL`, tbl, nodeTbl)
+	query := buildNodeImageQuery(tbl, nodeTbl)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -993,6 +1268,17 @@ func (r *Reader) NodeImages(ctx context.Context) (map[int64]int64, error) {
 		return nil, fmt.Errorf("error iterating node images: %w", err)
 	}
 	return images, nil
+}
+
+func buildNodeImageQuery(tbl, nodeTbl string) string {
+	return fmt.Sprintf(`
+		SELECT f.entity_id, f.field_image_target_id
+		FROM %s f
+		JOIN %s n ON n.nid = f.entity_id
+		 AND n.default_langcode = 1
+		 AND f.langcode = n.langcode
+		 AND f.revision_id = n.vid
+		WHERE f.deleted = 0 AND f.delta = 0 AND f.field_image_target_id IS NOT NULL`, tbl, nodeTbl)
 }
 
 // taxonomyRefField is one discovered entity-reference field table.
@@ -1027,6 +1313,7 @@ func (r *Reader) taxonomyFieldNames(ctx context.Context) (map[string]bool, error
 
 	// Active config lives in the database by default. The collection filter
 	// keeps language overrides out; they carry no target_type of their own.
+	// #nosec G201 -- tbl is rebuilt by Reader.table from a sanitized configured prefix and a constant table name.
 	query := fmt.Sprintf(`
 		SELECT name, data
 		FROM %s
@@ -1188,20 +1475,27 @@ func (r *Reader) NodeTerms(ctx context.Context) (map[int64][]int64, error) {
 		// — see taxonomyFieldNames. The node join filters to the imported
 		// language, as NodeImages does: unfiltered, this appended the terms of
 		// every translation onto the default-language page.
-		query := fmt.Sprintf(`
-			SELECT f.entity_id, f.%s
-			FROM %s f
-			JOIN %s n ON n.nid = f.entity_id AND n.default_langcode = 1 AND f.langcode = n.langcode
-			JOIN %s t ON t.tid = f.%s
-			WHERE f.%s IS NOT NULL
-			ORDER BY f.entity_id, f.delta`,
-			f.Column, f.Table, nodeTbl, termTbl, f.Column, f.Column)
+		query := buildNodeTermsQuery(f, nodeTbl, termTbl)
 
 		if err := r.collectNodeTerms(ctx, query, terms, seen); err != nil {
 			return nil, err
 		}
 	}
 	return terms, nil
+}
+
+func buildNodeTermsQuery(field taxonomyRefField, nodeTbl, termTbl string) string {
+	return fmt.Sprintf(`
+		SELECT f.entity_id, f.%s
+		FROM %s f
+		JOIN %s n ON n.nid = f.entity_id
+		 AND n.default_langcode = 1
+		 AND f.langcode = n.langcode
+		 AND f.revision_id = n.vid
+		JOIN %s t ON t.tid = f.%s AND t.default_langcode = 1
+		WHERE f.deleted = 0 AND f.%s IS NOT NULL
+		ORDER BY f.entity_id, f.delta`,
+		field.Column, field.Table, nodeTbl, termTbl, field.Column, field.Column)
 }
 
 // collectNodeTerms runs one field table's query and merges its rows, skipping
@@ -1270,6 +1564,7 @@ func (r *Reader) GetPathAliases(ctx context.Context) ([]PathAlias, error) {
 		return nil, err
 	}
 
+	// #nosec G201 -- identifiers are sanitized by Reader.table/SanitizeIdentifier; the remaining SQL fragments are fixed constants.
 	query := fmt.Sprintf(`
 		SELECT %s, COALESCE(%s, ''), COALESCE(alias, ''), COALESCE(langcode, ''), %s
 		FROM %s
@@ -1300,7 +1595,9 @@ func (r *Reader) GetPathAliases(ctx context.Context) ([]PathAlias, error) {
 	return aliases, nil
 }
 
-// GetMenuLinks returns custom menu links in the default language.
+// GetMenuLinks returns each custom menu link's source translation. Drupal's
+// default_langcode flag is per entity, so these rows can belong to several site
+// languages and the langcode must travel with the link for alias resolution.
 func (r *Reader) GetMenuLinks(ctx context.Context) ([]MenuLink, error) {
 	if !r.schema.HasMenuLinks {
 		return nil, nil
@@ -1314,9 +1611,11 @@ func (r *Reader) GetMenuLinks(ctx context.Context) ([]MenuLink, error) {
 		return nil, err
 	}
 
+	// #nosec G201 -- both table names are rebuilt by Reader.table from a sanitized prefix and constant suffixes.
 	query := fmt.Sprintf(`
 		SELECT d.id, COALESCE(e.uuid, ''), COALESCE(d.title, ''), COALESCE(d.menu_name, ''),
-		       COALESCE(d.link__uri, ''), d.parent, COALESCE(d.weight, 0), COALESCE(d.enabled, 1)
+		       COALESCE(d.langcode, ''), COALESCE(d.link__uri, ''), d.parent,
+		       COALESCE(d.weight, 0), COALESCE(d.enabled, 1)
 		FROM %s d
 		LEFT JOIN %s e ON e.id = d.id
 		WHERE d.default_langcode = 1
@@ -1336,7 +1635,7 @@ func (r *Reader) GetMenuLinks(ctx context.Context) ([]MenuLink, error) {
 	for rows.Next() {
 		var m MenuLink
 		if err := rows.Scan(&m.ID, &m.UUID, &m.Title, &m.MenuName,
-			&m.LinkURI, &m.Parent, &m.Weight, &m.Enabled); err != nil {
+			&m.Langcode, &m.LinkURI, &m.Parent, &m.Weight, &m.Enabled); err != nil {
 			return nil, fmt.Errorf("failed to scan menu link: %w", err)
 		}
 		links = append(links, m)

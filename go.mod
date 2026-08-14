@@ -1,6 +1,6 @@
 module github.com/olegiv/ocms-go
 
-go 1.26.4
+go 1.26.6
 
 require (
 	github.com/a-h/templ v0.3.1020
@@ -10,6 +10,7 @@ require (
 
 require (
 	filippo.io/csrf v0.2.1
+	github.com/HugoSmits86/nativewebp v1.3.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/Oudwins/tailwind-merge-go v0.2.1
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
@@ -31,9 +32,9 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.8.2
 	golang.org/x/crypto v0.53.0
-	golang.org/x/image v0.43.0
+	golang.org/x/image v0.45.0
 	golang.org/x/net v0.56.0
-	golang.org/x/text v0.39.0
+	golang.org/x/text v0.41.0
 	golang.org/x/time v0.15.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.53.0
@@ -55,8 +56,8 @@ require (
 	github.com/sethvargo/go-retry v0.3.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	modernc.org/libc v1.73.5 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

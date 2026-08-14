@@ -13,7 +13,7 @@
     <div class="st-card__body">
         {{if .Category}}
         <span class="st-card__category">
-            <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+            <a href="{{.Category.URL}}">{{.Category.Name}}</a>
         </span>
         {{end}}
         <h3 class="st-card__title">
@@ -38,7 +38,7 @@
         {{if .Tags}}
         <div class="st-card__tags">
             {{range .Tags}}
-            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="st-tag">{{.Name}}</a>
+            <a href="{{.URL}}" class="st-tag">{{.Name}}</a>
             {{end}}
         </div>
         {{end}}

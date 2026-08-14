@@ -81,9 +81,13 @@ SELECT COALESCE(MAX(position), -1) FROM menu_items WHERE menu_id = ? AND (parent
 SELECT
     mi.*,
     p.title as page_title,
-    p.slug as page_slug
+    p.slug as page_slug,
+    p.language_code as page_language_code,
+    pl.is_active as page_language_is_active,
+    pl.is_default as page_language_is_default
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id
+LEFT JOIN languages pl ON p.language_code = pl.code
 WHERE mi.menu_id = ?
 ORDER BY mi.position;
 
@@ -91,7 +95,8 @@ ORDER BY mi.position;
 SELECT
     mi.*,
     p.title as page_title,
-    p.slug as page_slug
+    p.slug as page_slug,
+    p.language_code as page_language_code
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id AND p.status = 'published'
 WHERE mi.menu_id = ?

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 
@@ -40,8 +41,8 @@ func TestExportWithMediaToZip(t *testing.T) {
 		t.Fatalf("failed to create original dir: %v", err)
 	}
 
-	testFilename := "test-image.jpg"
-	testContent := []byte("fake image content for testing")
+	testFilename := "test-image.png"
+	testContent := transferTestPNG(t, 2, 2)
 	if err := os.WriteFile(filepath.Join(originalDir, testFilename), testContent, 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
@@ -50,7 +51,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 	media, err := ts.Queries.CreateMedia(ts.Ctx, store.CreateMediaParams{
 		Uuid:         testMediaUUID,
 		Filename:     testFilename,
-		MimeType:     "image/jpeg",
+		MimeType:     model.MimeTypePNG,
 		Size:         int64(len(testContent)),
 		UploadedBy:   ts.User.ID,
 		LanguageCode: lang.Code,
@@ -67,7 +68,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 		t.Fatalf("failed to create variant dir: %v", err)
 	}
 
-	variantContent := []byte("fake thumbnail content")
+	variantContent := transferTestPNG(t, 150, 150)
 	if err := os.WriteFile(filepath.Join(variantDir, testFilename), variantContent, 0644); err != nil {
 		t.Fatalf("failed to write variant file: %v", err)
 	}
@@ -187,8 +188,8 @@ func TestImportFromZip(t *testing.T) {
 		t.Fatalf("failed to create original dir: %v", err)
 	}
 
-	testFilename := "imported-image.png"
-	testContent := []byte("fake PNG image content for import test")
+	testFilename := "imported-report.pdf"
+	testContent := []byte("fake PDF content for import test")
 	if err := os.WriteFile(filepath.Join(originalDir, testFilename), testContent, 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
@@ -197,7 +198,7 @@ func TestImportFromZip(t *testing.T) {
 	_, err = srcQueries.CreateMedia(ctx, store.CreateMediaParams{
 		Uuid:         testMediaUUID,
 		Filename:     testFilename,
-		MimeType:     "image/png",
+		MimeType:     "application/pdf",
 		Size:         int64(len(testContent)),
 		UploadedBy:   user.ID,
 		LanguageCode: lang.Code,
@@ -280,6 +281,7 @@ func TestImportFromZip(t *testing.T) {
 }
 
 func TestValidateZipFile(t *testing.T) {
+	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
@@ -303,6 +305,10 @@ func TestValidateZipFile(t *testing.T) {
 				Status: "published",
 			},
 		},
+		Media: []ExportMedia{{
+			UUID: mediaUUID, Filename: "test.jpg", Size: int64(len("fake media content")),
+			FilePath: "media/originals/" + mediaUUID + "/test.jpg",
+		}},
 	}
 
 	jsonData, err := json.Marshal(exportData)
@@ -319,7 +325,7 @@ func TestValidateZipFile(t *testing.T) {
 	}
 
 	// Add a fake media file
-	mediaW, err := zipWriter.Create("media/originals/test-uuid/test.jpg")
+	mediaW, err := zipWriter.Create("media/originals/" + mediaUUID + "/test.jpg")
 	if err != nil {
 		t.Fatalf("failed to create media file in zip: %v", err)
 	}

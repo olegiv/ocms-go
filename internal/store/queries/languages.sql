@@ -10,7 +10,9 @@ SELECT * FROM languages WHERE id = ?;
 SELECT * FROM languages WHERE code = ?;
 
 -- name: GetDefaultLanguage :one
-SELECT * FROM languages WHERE is_default = 1;
+SELECT * FROM languages
+WHERE is_default = 1
+  AND (SELECT COUNT(*) FROM languages WHERE is_default = 1) = 1;
 
 -- name: ListLanguages :many
 SELECT * FROM languages ORDER BY position, name;
@@ -49,4 +51,3 @@ SELECT COALESCE(MAX(position), 0) FROM languages;
 
 -- name: UpdateLanguagePosition :exec
 UPDATE languages SET position = ?, updated_at = ? WHERE id = ?;
-

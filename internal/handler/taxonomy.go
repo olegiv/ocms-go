@@ -17,6 +17,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -43,6 +44,12 @@ type TaxonomyHandler struct {
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	eventService   *service.EventService
+	cacheManager   *cache.Manager
+}
+
+// SetCacheManager enables translation-cache invalidation after taxonomy writes.
+func (h *TaxonomyHandler) SetCacheManager(cm *cache.Manager) {
+	h.cacheManager = cm
 }
 
 // NewTaxonomyHandler creates a new TaxonomyHandler.
@@ -213,6 +220,9 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 
 	// Validate
 	validationErrors := make(map[string]string)
+	if _, err := getRoutableContentLanguage(r.Context(), h.queries, languageCode); err != nil {
+		validationErrors["language_code"] = "Select an active, routable language"
+	}
 	if errMsg := validateTaxonomyName(name); errMsg != "" {
 		validationErrors["name"] = errMsg
 	}
@@ -514,6 +524,8 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to create translation link", "error", err)
 		// Tag was created, so we should still redirect to it
+	} else if h.cacheManager != nil {
+		h.cacheManager.Translation.InvalidateType(model.EntityTypeTag)
 	}
 
 	slog.Info("tag translation created",
@@ -772,6 +784,9 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 
 	// Validate
 	validationErrors := make(map[string]string)
+	if _, err := getRoutableContentLanguage(r.Context(), h.queries, languageCode); err != nil {
+		validationErrors["language_code"] = "Select an active, routable language"
+	}
 	if errMsg := validateTaxonomyName(name); errMsg != "" {
 		validationErrors["name"] = errMsg
 	}
@@ -1049,6 +1064,8 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		slog.Error("failed to create translation link", "error", err)
 		// Category was created, so we should still redirect to it
+	} else if h.cacheManager != nil {
+		h.cacheManager.Translation.InvalidateType(model.EntityTypeCategory)
 	}
 
 	slog.Info("category translation created",
@@ -1255,15 +1272,26 @@ func getTargetLanguageForTranslation(
 		}
 		return nil, false
 	}
+	if !isRoutableContentLanguage(targetLang) {
+		flashError(w, r, renderer, redirectURL, "Language is not active and routable")
+		return nil, false
+	}
 
-	// Check if translation already exists
-	existingTranslation, err := queries.GetTranslation(r.Context(), store.GetTranslationParams{
-		EntityType: entityType,
-		EntityID:   entityID,
-		LanguageID: targetLang.ID,
+	// Translation relationships form an undirected component. A target can be
+	// connected through a sibling rather than a direct outgoing edge from the
+	// current entity, so search the full component before creating anything.
+	existingEntityID, err := queries.GetTranslationComponentEntityByLanguage(r.Context(), store.GetTranslationComponentEntityByLanguageParams{
+		EntityType:   entityType,
+		LanguageCode: targetLang.Code,
+		EntityID:     entityID,
 	})
-	if err == nil && existingTranslation.ID > 0 {
-		flashAndRedirect(w, r, renderer, fmt.Sprintf("/admin/%s/%d", adminEntityPath(entityType), existingTranslation.TranslationID), "Translation already exists", "info")
+	if err == nil {
+		flashAndRedirect(w, r, renderer, fmt.Sprintf("/admin/%s/%d", adminEntityPath(entityType), existingEntityID), "Translation already exists", "info")
+		return nil, false
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		slog.Error("failed to inspect translation component", "error", err, "entity_type", entityType, "entity_id", entityID, "lang_code", targetLang.Code)
+		flashError(w, r, renderer, redirectURL, "Error loading translations")
 		return nil, false
 	}
 

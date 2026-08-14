@@ -11,7 +11,7 @@ For the bulk-import/export of *oCMS-to-oCMS* content (Markdown + YAML front-matt
 | Source | DisplayName | Notes |
 |--------|-------------|-------|
 | `elefant` | Elefant CMS | MySQL-backed PHP CMS. Imports users, tags, pages, posts, media. |
-| `drupal` | Drupal | Drupal 8/9/10/11 MySQL. Imports users, taxonomy (tags + categories), media, nodes, URL aliases, menus. |
+| `drupal` | Drupal | Drupal 8/9/10/11 MySQL. Imports users, taxonomy (tags + categories), media, nodes, URL aliases/redirects, menus. |
 
 Add more sources by implementing `migrator/types/types.go:Source` and calling `RegisterSource` from the module's `Init`.
 
@@ -24,10 +24,10 @@ All migrator admin routes are wrapped in `middleware.RequireAdmin()`. The module
 Everything the module can create is declared once in `types.AllEntityTypes`, in dependency-safe deletion order:
 
 ```
-menu_item, menu, alias, post, page, tag, category, media, user
+menu_item, menu, redirect, alias, post, page, tag, category, media, user
 ```
 
-That order is dictated by the schema's foreign keys — `pages.author_id` is `ON DELETE RESTRICT`, so pages must be deleted before their authors; `page_aliases.page_id` is `ON DELETE CASCADE`, so aliases have no deleter of their own. Adding an entity type means adding it to that list, to `deleters()`, and to the locale files; drift tests fail if any of the three is missed.
+That order is dictated by the schema's foreign keys — `pages.author_id` is `ON DELETE RESTRICT`, so pages must be deleted before their authors. Page aliases and generic redirects are both explicitly deleted by their tracked IDs; the alias foreign key's `ON DELETE CASCADE` remains a fallback when its page is removed first. Adding an entity type means adding it to that list, to `deleters()`, and to the locale files; drift tests fail if any of the three is missed.
 
 ### Import options per source
 
@@ -118,7 +118,7 @@ Connects to an Elefant CMS MySQL database and copies content in a single pass.
 | Table prefix | no | `ELEFANT_PREFIX` |
 | Files path | no | `ELEFANT_FILES` — absolute path to the Elefant `files/` directory (required to copy media) |
 
-The **Test** button connects to the MySQL database and counts rows in the `{prefix}blog_post` and `{prefix}blog_tag` tables.
+The **Test** button connects to the MySQL database and counts rows in the `{prefix}blog_post` and `{prefix}blog_tag` tables. Built-in sources implement the optional `ContextConnectionTester` capability, so request cancellation and the router deadline stop the test without a late flash or redirect. The original `Source.TestConnection` method remains supported for third-party sources.
 
 ## Drupal Source
 
@@ -153,12 +153,12 @@ The **Test** button connects, introspects `INFORMATION_SCHEMA`, and logs the nod
 
 | Purpose | Table(s) |
 |---|---|
-| Nodes | `node_field_data`, `node__body` |
-| Node image / tags | `node__field_image`, `node__field_tags` |
+| Nodes | `node_field_data` |
+| Node fields | `node__body` plus discovered `node__field_*` image and taxonomy-reference tables |
 | Taxonomy | `taxonomy_term_field_data`, `taxonomy_term__parent` |
-| Files | `file_managed`, `media__field_media_image` |
+| Files / media | `file_managed`, `media`, `media_field_data`, discovered `media__field_*` source tables |
 | Users | `users_field_data` |
-| URL aliases | `path_alias` |
+| URL aliases | Drupal 8 `url_alias` or Drupal 9+ `path_alias` (detected at runtime) |
 | Menus | `menu_link_content`, `menu_link_content_data` |
 
 Only `node_field_data` is required. Every other table is optional: the reader detects what exists and reports what it skipped in the import result, so an install without an image field or without menus still imports cleanly.
@@ -168,11 +168,11 @@ Only `node_field_data` is required. Every other table is optional: the reader de
 Stage order is forced by referential integrity and by body rewriting:
 
 1. **Users** — `users_field_data` where `uid > 0`. Every account lands as `RolePublic`; Drupal's `administrator`/`content_editor` roles are deliberately **not** honoured, since importing a foreign system's admin would be a privilege-escalation footgun. Drupal's phpass hashes cannot be verified by oCMS's Argon2id verifier, so all imported accounts share one placeholder hash and must use "forgot password".
-2. **Taxonomy** — terms become tags or categories per the vocabulary setting. Category parents are linked in a second pass, so a child term appearing before its parent still gets linked. Page associations are read from every node reference field **whose storage config declares `taxonomy_term` as its target type**, read from Drupal's `config` table and matched against the `node__field_*` tables present. Reading only `node__field_tags` meant a vocabulary referenced through `field_category` — the common case — imported its terms and then had no page associations at all. The target type has to come from configuration: `node__field_image` is shape-identical to `node__field_category`, and Drupal allocates file, media, user and term IDs from independent sequences, so a node referencing file 7 would otherwise be tagged with term 7. If the `config` table cannot be read the importer falls back to `field_tags` alone and says so — importing fewer associations is recoverable, importing wrong ones is not.
-3. **Media** — driven by `file_managed`, not a directory walk, with alt text read from the image field tables joined to their entity's default-language row (unfiltered, a translated alt could land on the media, and which one won was not deterministic), so only files Drupal knows about are copied and each keeps its UUID (which is what lets `<drupal-media>` embeds resolve later — the media types' source fields are read from `media.type.*` config, so a bundle using a custom field such as `field_photo` resolves too; a fixed list of core field names silently deleted every embed of such a bundle from imported bodies). `public://` resolves against the files path; `private://` and `temporary://` are reported and skipped.
+2. **Taxonomy and taxonomy redirects** — terms become tags or categories per the vocabulary setting. Each term keeps its source `langcode` when that language is active in oCMS; neutral or unknown codes fall back to the default and are reported separately from node fallback. Same-slug source terms remain distinct, while only pre-existing same-language terms may be reused. Category parents are linked in a second pass from the source-language, current-revision, active delta-zero row, so a child term appearing before its parent still gets linked. Page associations are read from every node reference field **whose storage config declares `taxonomy_term` as its target type**, read from Drupal's `config` table and matched against the `node__field_*` tables present. Reading only `node__field_tags` meant a vocabulary referenced through `field_category` — the common case — imported its terms and then had no page associations at all. The target type has to come from configuration: `node__field_image` is shape-identical to `node__field_category`, and Drupal allocates file, media, user and term IDs from independent sequences, so a node referencing file 7 would otherwise be tagged with term 7. If the `config` table cannot be read the importer falls back to `field_tags` alone and says so — importing fewer associations is recoverable, importing wrong ones is not. Taxonomy aliases become tracked generic redirects to language-aware term URLs even when page import is disabled; non-default source aliases include their language prefix because redirect matching precedes language routing. They never replace a page or alias, a fixed or registered module route, or an exact or matching wildcard redirect. The module context exposes only a narrow `RedirectCacheInvalidator`, which makes newly imported redirects effective immediately and removes them immediately after import deletion.
+3. **Media** — driven by `file_managed`, not a directory walk. Alt text and media source-field references are restricted to the owning entity's source-language, current revision, active delta-zero rows. Drupal stores alt text per image-field reference while oCMS stores one value per media row, so a shared file can have several descriptions. The importer chooses deterministically: media-entity fields take precedence over classic node image fields, then the lowest owning entity ID wins, with revision, language, and text as stable tie-breakers. Identical and empty values are ignored; distinct discarded alternatives and their source owners are reported in a bounded import summary. The importer maps both file UUIDs and media-entity UUIDs, which lets `<drupal-media>` embeds resolve correctly. Media source fields are discovered from `media.type.*` configuration, so a bundle using a custom field such as `field_photo` resolves too. `public://` resolves against the files path; `private://` and `temporary://` are reported and skipped.
 4. **Nodes** — become pages or posts. The body is converted according to its Drupal **text format**: `plain_text` is escaped and paragraphed rather than parsed as markup (so `2 < 3` survives and a literal `<script>` example is displayed, not deleted), core's HTML formats pass through, and a contrib format such as Markdown is imported as-is and reported in the job summary. The slug comes from the node's `path_alias` when it has one, so existing URLs carry over; otherwise it is derived from the title, then de-duplicated. De-duplication checks page slugs **and** existing aliases: the frontend resolves a slug before falling back to the alias table, so a slug that shadows another page's alias would silently hijack that URL.
-5. **URL aliases** — every `path_alias` row pointing at an imported node becomes a `page_aliases` entry, so old Drupal URLs keep resolving. Each imported page additionally gets a **`node/<nid>`** alias for its Drupal canonical path: bodies, menus and inbound links routinely point at `/node/42`, and oCMS has no `/node/{nid}` route, so those links 404 after migration without it. `renderNotFound` resolves an arbitrary multi-segment path through the alias table and 301s to the real slug, which is why registering the alias fixes the links wherever they appear — rewriting body HTML would only fix the ones inside pages. Aliases are stored as Drupal had them — `About_Us`, `News/Archive`, non-ASCII paths all survive, because `page_aliases` holds arbitrary text and the frontend matches it exactly; applying the admin form's lowercase-slug grammar to imported data turned established URLs into 404s. Only paths that would misroute are rejected (a scheme, a query or fragment, traversal, whitespace), and those are reported rather than dropped silently. An alias identical to the page's own slug is skipped, no alias is ever written onto a page the import did not create, and only aliases in the node's own language (or Drupal's language-neutral `und`/`zxx`) are taken — attaching a translation's alias to the default-language page pointed a translated URL at unrelated content.
-6. **Menus** — `menu_link_content` grouped by `menu_name`. `link__uri` is resolved: `entity:node/N` and `internal:/node/N` point at the imported page, `internal:/path` and `base:` become local URLs, every scheme the oCMS menu validator accepts stays external (`http`, `https`, `mailto`, `tel` — the list lives once in `model.AllowedMenuURLSchemes`), and `route:` is reported as unsupported. Hierarchy is applied in a second pass.
+5. **Node URL aliases** — node aliases preserve their concrete language namespace. The default-language owner uses `page_aliases` when the global alias table can represent it safely; non-default owners and cross-language storage collisions use tracked concrete redirects such as `/fr/about`. This lets two source languages retain the same bare Drupal alias without one shadowing the other. Single-segment aliases are reserved per destination language before page slug allocation, and destination pages, aliases, fixed/module routes, and exact or matching wildcard redirects are checked before any alias or slug is claimed. Each imported page additionally gets a concrete route for **`node/<nid>`**, because bodies, menus and inbound links routinely point at `/node/42`. Multi-segment, mixed-case, and non-ASCII paths survive; schemes, query/fragment-bearing paths, traversal, and whitespace are reported and rejected. Only aliases belonging to the entity's resolved language (including correctly attributed neutral `und`/`zxx` rows) are used.
+6. **Menus** — `menu_link_content` is partitioned by **(`menu_name`, destination language)**. Menu reuse and suffix probing are scoped to that language, and every reused slug is claimed so distinct source menus cannot merge after normalization. `link__uri` is resolved: node and taxonomy entity links and their path aliases point at the imported page or language-aware term URL, `internal:/path` and `base:` become local URLs, every scheme the oCMS menu validator accepts stays external (`http`, `https`, `mailto`, `tel` — the list lives once in `model.AllowedMenuURLSchemes`), and `route:` is reported as unsupported. Hierarchy is applied in a second pass.
 7. **Search index** rebuild, then cache invalidation.
 
 Per-item failures are appended to the result and the import continues; only connection, author, and language failures abort.
@@ -190,7 +190,7 @@ Errors are logged at error level and shown in a red block; notices are logged at
 
 Drupal bodies are rewritten before storage, in this order:
 
-1. `<drupal-media>` / `<drupal-entity>` embeds resolve to `<img>` (or a download link) via the file UUID map.
+1. `<drupal-media>` / `<drupal-entity>` embeds resolve to `<img>` (or a download link) via the file/media UUID map.
 2. `/sites/default/files/…` and `/system/files/…` URLs are rewritten to their new `/uploads/…` URLs.
 3. The result goes through `security.SanitizePageHTML` — always, not gated on `OCMS_SANITIZE_PAGE_HTML`.
 
@@ -200,32 +200,32 @@ Note that the bluemonday UGC policy strips `<iframe>` and `<script>`, so embedde
 
 ### Languages
 
-Drupal's `default_langcode = 1` marks each *entity's* source translation, not the site's one default language, so a multilingual site's nodes arrive in several languages and are all "default" in Drupal's sense. Each imported page takes its own `langcode` when oCMS has a matching active language; `und`/`zxx` and any language oCMS does not have fall back to the default and are reported in the job summary. Filing every node under the oCMS default served French originals under the English locale in language-filtered listings and URLs.
+Drupal's `default_langcode = 1` marks each *entity's* source translation, not the site's one default language, so a multilingual site's nodes and taxonomy terms arrive in several languages and are all "default" in Drupal's sense. Each imported entity takes its own `langcode` when oCMS has a matching active language; `und`/`zxx` and any language oCMS does not have fall back to the default and are reported in the job summary. Node and taxonomy fallback are reported independently so a taxonomy-only run remains auditable.
 
 ### Multi-language
 
-Only default-language content is imported (`default_langcode = 1`). Drupal keeps translations as extra rows keyed by `langcode`, while oCMS models a translation as a separate page with its own globally-unique slug, so mapping them automatically would produce slug collisions rather than useful content. The number of skipped translations is reported in the import result.
+Only each entity's source/original row (`default_langcode = 1`) is imported. Those rows can have different `langcode` values, so a multilingual site imports source entities in every matching active oCMS language. Drupal's additional translated rows are not imported automatically; the number skipped is reported.
 
 ### Not imported
 
-Drupal blocks, views, custom field types beyond body/image/tags, revisions, comments, and non-default translations.
+Drupal blocks, views, unsupported custom field types, historical revisions, comments, and non-source translation rows. Taxonomy-reference fields and media source fields are discovered from Drupal configuration rather than limited to hard-coded field names.
 
 ## Undoing an import
 
 **Admin > Migrator > *source* > Delete imported items** deletes every entity tracked in `migrator_imported_items` for that source. Original oCMS content is not touched.
 
-The whole delete runs in **one transaction**, and that is what serializes it against a starting import. oCMS opens SQLite with `_txlock=immediate`, so the write lock is taken at `BEGIN` and the delete's transaction cannot interleave with `startJob`'s. The handler checks for a running job too, but only to produce a good error message — on its own it is a read that an import can slip past, after which the delete would strip rows the importer was still using and then clear the tracking rows of the job that had just begun, leaving its content with no undo path. Media files are removed after the commit, since `os.RemoveAll` cannot be rolled back. An item whose delete the database refuses keeps its tracking row, so the Imported Content panel still shows it and a retry can still find it — clearing the row regardless of outcome left rows in the database with no record that they had been imported.
+The whole delete runs in **one transaction**, and that is what serializes it against a starting import. oCMS opens SQLite with `_txlock=immediate`, so the write lock is taken at `BEGIN` and the delete's transaction cannot interleave with `startJob`'s. The handler checks for a running job too, but only to produce a good error message — on its own it is a read that an import can slip past. Filesystem removal happens after commit, but every deleted media UUID is first written to `migrator_media_cleanup_queue` in that same transaction; a queue-write failure rolls the database deletion back. Failed removals remain queued across restarts, are retried during initialization and later delete attempts, and remain visible in imported-media counts with a warning. An item whose database delete is refused keeps its tracking row so a retry can still find it. Any exact imported dependency of that failed row — for example its page-backed menu target, taxonomy URL target, or body-embedded media — stays tracked too; unrelated rows do not.
 
-Two things are deliberately **not** deleted:
+Several things are deliberately **not** deleted:
 
 - **A menu that already existed in oCMS.** The importer tracks only the menu *items* it added, never the menu itself, so deleting the import cannot destroy a menu you built by hand.
-- **A tag, category or media item original content has started using.** `page_tags.tag_id` and `page_categories.category_id` are `ON DELETE CASCADE`, and `pages.featured_image_id` / `og_image_id` are `ON DELETE SET NULL`, so removing an imported term would silently strip that association from a page the import does not own. By the time taxonomy is deleted every imported page is already gone, so any remaining join row necessarily belongs to original content — the row is kept and merely untracked. A failure to count references keeps the row too: an extra tag the operator can delete by hand is a smaller harm than an association destroyed with no undo.
+- **A tag, category or media item original content has started using.** `page_tags.tag_id` and `page_categories.category_id` are `ON DELETE CASCADE`, and `pages.featured_image_id` / `og_image_id` are `ON DELETE SET NULL`, so removing an imported term would silently strip that association from a page the import does not own. Media embedded in a page body through `/uploads/<variant>/<uuid>/...` is protected for the same reason. By the time taxonomy is deleted every imported page is already gone, so any remaining reference necessarily belongs to content this import does not own — the row is kept and merely untracked. A failure to count references keeps the row too: an extra entity the operator can delete by hand is a smaller harm than content destroyed with no undo.
 - **A menu the import created that still holds an administrator's item.** `menu_items.menu_id` is `ON DELETE CASCADE`, and an item cannot be moved out of a menu — `menu_id` is `NOT NULL` — so the menu is kept and untracked instead.
 - **A user who still owns content.** `pages.author_id` and `page_versions.changed_by` are `ON DELETE RESTRICT`, and `media.uploaded_by` carries no action clause, which enforces the same way — so a user owning any of them cannot be deleted at all. Two imports sharing an email is the ordinary way to reach this: the second reuses the account the first created.
-- **A menu item an administrator pointed at an imported page.** `menu_items.page_id` is `ON DELETE SET NULL` and a page-backed item stores no fallback URL, so the item would be left with an empty destination. Tracked menu items are already gone when pages are deleted, so anything still pointing at one belongs to the administrator: it is given the page's URL. That link will 404 — the page really is being removed — but a visible, editable link beats one that silently goes nowhere.
+- **A menu item an administrator pointed at an imported page.** `menu_items.page_id` is `ON DELETE SET NULL` and a page-backed item stores no fallback URL, so the item would be left with an empty destination. Successfully deleted tracked menu items are gone before pages are considered, so anything else still pointing at one belongs to the administrator: it is given the page's URL. If deletion of a tracked page-backed item failed, the exact target page is retained and remains tracked for the same retry instead of being detached into a dead URL.
 - **A menu item an administrator hung off an imported one.** `menu_items.parent_id` is `ON DELETE CASCADE`, so deleting the imported parent would take it too. Children are lifted to the imported item's own parent and the item is then deleted — preserving the item instead would leave an imported entry in the navigation permanently, which is exactly what the operator asked to clear.
 
-Deleting imported media removes every directory the uploads root can hold for that UUID, derived from `model.MediaStorageDirs()` — the originals plus one per entry in `model.ImageVariants`. That list used to be hardcoded here and had fallen behind: it omitted `og`, so every imported image left an orphaned `/uploads/og/<uuid>` after deletion, with the media row and its tracking row both gone and nothing left to find the directory from. The Drupal source's `removeOrphanedUpload` — the path that cleans up after a failed media insert — carried the same drifted copy. Four call sites in total now derive from `model.ImageVariants`, and `TestNoHardcodedVariantLists` fails on any new hand-written copy, so adding a variant extends creation and deletion together.
+Deleting imported media uses the centralized `imaging.DeleteMediaFiles` helper. It validates the canonical UUID, derives every possible directory from `model.MediaStorageDirs()`, attempts all removals, and returns their joined errors. `TestNoHardcodedVariantLists` rejects hand-written variant lists, so adding a storage variant extends cleanup without another source-specific copy.
 
 ## Database
 
@@ -241,8 +241,6 @@ CREATE TABLE migrator_imported_items (
 );
 ```
 
-Migration 3 adds a `notices` column to the job table, keeping informational messages apart from failures.
-
 Migration 2 creates the job table. Counters live in a single JSON column deliberately: `ImportResult` gains fields as sources learn new entity classes, and a blob avoids a schema migration per counter.
 
 ```sql
@@ -250,7 +248,7 @@ CREATE TABLE migrator_import_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'running'
-        CHECK (status IN ('running','completed','failed','interrupted')),
+        CHECK (status IN ('running','completed','failed','partial','interrupted')),
     phase TEXT NOT NULL DEFAULT '',
     processed INTEGER NOT NULL DEFAULT 0,
     total INTEGER NOT NULL DEFAULT 0,
@@ -269,7 +267,26 @@ CREATE UNIQUE INDEX idx_migrator_jobs_one_running
     ON migrator_import_jobs(source) WHERE status = 'running';
 ```
 
-No credentials are ever written to either table. History is trimmed to the newest 20 terminal jobs per source.
+Migration 3 adds a `notices` column to the job table, keeping informational messages apart from failures. Migration 4 adds the `skipped` counter; migration 5 transactionally rebuilds the job-status constraint to support `partial` and recovers interrupted rebuild state before retrying.
+
+Migration 6 creates the durable media cleanup queue:
+
+```sql
+CREATE TABLE migrator_media_cleanup_queue (
+    source TEXT NOT NULL,
+    upload_root TEXT NOT NULL,
+    media_uuid TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (source, upload_root, media_uuid)
+);
+CREATE INDEX idx_migrator_media_cleanup_source
+    ON migrator_media_cleanup_queue(source);
+```
+
+No credentials are ever written to any migrator table. History is trimmed to the newest 20 terminal jobs per source.
 
 ## Security notes
 
@@ -279,7 +296,10 @@ No credentials are ever written to either table. History is trimmed to the newes
 - **Table prefixes** are sanitized to `[A-Za-z0-9_]{0,20}` before being interpolated into SQL. Every other value is a bound parameter.
 - **Source database passwords are never persisted.** The form config round-trips through the session so a failed connection test does not clear the form, but `withoutSecrets` strips every password-typed field first — the session store is SQLite-backed and gob-encoded, not encrypted. The password input is therefore rendered without a `value` attribute and must be re-entered.
 - **Every source database call is context-aware**, so an import honours both shutdown and the six-hour job deadline, and a black-holed host cannot pin a goroutine and socket for the OS TCP timeout.
-- **The files path** is cleaned, checked for traversal, confirmed to be a directory, and resolved through symlinks; each file is then re-resolved and confirmed to sit inside that root, so a symlink in the source install cannot pull in host files. Writes go through `util.SanitizeFilename` and two `util.ValidatePathWithinBase` checks.
+- **Local file access is allowlisted.** `OCMS_MIGRATOR_ALLOWED_FILE_ROOTS` accepts comma-separated absolute roots; non-empty `DRUPAL_FILES` and `ELEFANT_FILES` values are trusted roots too. Configured roots must exist and be directories. Safe root symlinks are canonicalized, while any root resolving to the filesystem root is rejected. A submitted Files path must equal or descend from one of them both lexically and after symlink resolution. With no trusted root, local-media import fails closed while database/content-only migration remains available.
+- **Source files are capability-scoped.** After validation, scanning and opening use relative paths through `os.Root`; raw form values never reach filesystem operations. Symlink escapes, sibling-prefix paths and traversal components are rejected. Writes sanitize filenames and validate destination containment, and partial output is removed after seek, copy, close, processing, media-row, or tracking failures.
+- **Cleanup is retryable and bounded.** UUID directory removal validates canonical UUIDs, derives every storage directory from `model.MediaStorageDirs`, attempts them all and returns joined errors. Sources use the optional `MediaCleanupQueuer` capability when immediate compensation fails.
+- **Tracking is compensating.** A created entity is not published into source maps, counters, or live progress until its tracking insert succeeds. A failed insert triggers bounded rollback of the row and files; a failed file rollback is placed on the durable cleanup queue.
 - **Only an allowlist of MIME types** is importable (JPEG, PNG, GIF, WebP, PDF, MP4, WebM).
 - **Credentials are never logged.** The import logs the source, the acting user, and the option flags only; the config round-trips through the session, not the URL.
 - **A panic inside a source is recovered** by the job goroutine — chi's `Recoverer` middleware does not reach it, so without that the server would go down.
@@ -288,11 +308,11 @@ No credentials are ever written to either table. History is trimmed to the newes
 
 1. Create `modules/migrator/sources/<name>/`.
 2. Implement the `migrator.Source` interface (type alias for `types.Source`).
-3. Reuse `modules/migrator/sources/shared` for prefix sanitizing, upload-dir resolution, slug de-duplication, MIME detection and the hardened file-copy path — do not copy those into the new package.
+3. Reuse `modules/migrator/sources/shared` for prefix sanitizing, upload-dir resolution, slug de-duplication, MIME detection and hardened file access. Keep a `shared.MediaRoot` open and call `Open(file.Path)`; do not open the compatibility `FullPath` directly.
 4. Add its `NewSource()` constructor and call `RegisterSource(<name>.NewSource())` from `modules/migrator/module.go` `Init`.
 5. Add UI labels to **both** `locales/en/messages.json` and `locales/ru/messages.json` (key convention `<source>.field_xxx`, `<source>.placeholder_xxx`, `<source>.description`).
 6. Take a narrow reader interface in the import stages rather than a concrete type, so the stages can be tested against an in-memory fake instead of a live database.
-7. Track every created entity with `tracker.TrackImportedItem` using a `types.Entity*` constant, so the undo path and the live progress display both work for free.
+7. Track every created entity with `tracker.TrackImportedItem` using a `types.Entity*` constant. Publish maps and counters only after tracking succeeds, and compensate the new row and files if it fails.
 
 ## Testing
 

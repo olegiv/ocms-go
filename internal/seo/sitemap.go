@@ -8,6 +8,8 @@ import (
 	"encoding/xml"
 	"strings"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // XMLNamespace is the sitemap XML namespace.
@@ -39,20 +41,26 @@ type Sitemap struct {
 
 // SitemapPage contains data needed to add a page to the sitemap.
 type SitemapPage struct {
-	Slug      string
-	UpdatedAt time.Time
+	Slug         string
+	LanguageCode string
+	IsDefault    bool
+	UpdatedAt    time.Time
 }
 
 // SitemapCategory contains data needed to add a category to the sitemap.
 type SitemapCategory struct {
-	Slug      string
-	UpdatedAt time.Time
+	Slug         string
+	LanguageCode string
+	IsDefault    bool
+	UpdatedAt    time.Time
 }
 
 // SitemapTag contains data needed to add a tag to the sitemap.
 type SitemapTag struct {
-	Slug      string
-	UpdatedAt time.Time
+	Slug         string
+	LanguageCode string
+	IsDefault    bool
+	UpdatedAt    time.Time
 }
 
 // SitemapBuilder builds sitemap XML from various content types.
@@ -78,6 +86,24 @@ func (b *SitemapBuilder) AddHomepage() {
 	})
 }
 
+// AddLanguageHomepage adds the canonical homepage for one routable language.
+// The default remains the bare site URL; non-default homepages use the
+// slashless language root served by the frontend router.
+func (b *SitemapBuilder) AddLanguageHomepage(languageCode string, isDefault bool) {
+	if !util.IsValidLangCode(languageCode) || util.IsReservedLanguageCode(languageCode) {
+		return
+	}
+	if isDefault {
+		b.AddHomepage()
+		return
+	}
+	b.urls = append(b.urls, SitemapURL{
+		Loc:        b.siteURL + "/" + languageCode,
+		ChangeFreq: ChangeFreqDaily,
+		Priority:   "1.0",
+	})
+}
+
 // addURL adds a URL entry to the sitemap with the given parameters.
 func (b *SitemapBuilder) addURL(path string, priority string, updatedAt time.Time) {
 	url := SitemapURL{
@@ -91,9 +117,27 @@ func (b *SitemapBuilder) addURL(path string, priority string, updatedAt time.Tim
 	b.urls = append(b.urls, url)
 }
 
+// canonicalLanguagePath returns the public canonical path for content in a
+// language that was already verified as active by the sitemap store queries.
+// Invalid and reserved codes never receive public URLs, including a legacy
+// misconfigured default. A safe default language does not need a prefix.
+func canonicalLanguagePath(path, languageCode string, isDefault bool) (string, bool) {
+	if !util.IsValidLangCode(languageCode) || util.IsReservedLanguageCode(languageCode) {
+		return "", false
+	}
+	if isDefault {
+		return path, true
+	}
+	return "/" + languageCode + path, true
+}
+
 // AddPage adds a page to the sitemap.
 func (b *SitemapBuilder) AddPage(page SitemapPage) {
-	b.addURL("/"+page.Slug, "0.8", page.UpdatedAt)
+	path, ok := canonicalLanguagePath("/"+page.Slug, page.LanguageCode, page.IsDefault)
+	if !ok {
+		return
+	}
+	b.addURL(path, "0.8", page.UpdatedAt)
 }
 
 // AddPages adds multiple pages to the sitemap.
@@ -105,7 +149,11 @@ func (b *SitemapBuilder) AddPages(pages []SitemapPage) {
 
 // AddCategory adds a category archive page to the sitemap.
 func (b *SitemapBuilder) AddCategory(cat SitemapCategory) {
-	b.addURL("/category/"+cat.Slug, "0.6", cat.UpdatedAt)
+	path, ok := canonicalLanguagePath("/category/"+cat.Slug, cat.LanguageCode, cat.IsDefault)
+	if !ok {
+		return
+	}
+	b.addURL(path, "0.6", cat.UpdatedAt)
 }
 
 // AddCategories adds multiple categories to the sitemap.
@@ -117,7 +165,11 @@ func (b *SitemapBuilder) AddCategories(categories []SitemapCategory) {
 
 // AddTag adds a tag archive page to the sitemap.
 func (b *SitemapBuilder) AddTag(tag SitemapTag) {
-	b.addURL("/tag/"+tag.Slug, "0.5", tag.UpdatedAt)
+	path, ok := canonicalLanguagePath("/tag/"+tag.Slug, tag.LanguageCode, tag.IsDefault)
+	if !ok {
+		return
+	}
+	b.addURL(path, "0.5", tag.UpdatedAt)
 }
 
 // AddTags adds multiple tags to the sitemap.

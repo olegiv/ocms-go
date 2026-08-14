@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -31,7 +32,10 @@ var localesFS embed.FS
 
 // shutdownDrainTimeout bounds how long Shutdown waits for in-flight imports to
 // notice cancellation before the process moves on.
-const shutdownDrainTimeout = 10 * time.Second
+const (
+	shutdownDrainTimeout = 10 * time.Second
+	cleanupDrainTimeout  = 30 * time.Second
+)
 
 // Module implements the module.Module interface for the migrator module.
 type Module struct {
@@ -46,6 +50,10 @@ type Module struct {
 	live   map[string]*jobProgress      // source -> live progress
 	cancel map[int64]context.CancelFunc // job id -> cancel
 	jobsWG sync.WaitGroup
+
+	// removeMediaFiles is injectable so durable retry behavior can be tested
+	// deterministically without depending on host filesystem permissions.
+	removeMediaFiles func(uploadRoot, mediaUUID string) error
 }
 
 // New creates a new instance of the migrator module.
@@ -73,8 +81,18 @@ func (m *Module) Init(ctx *module.Context) error {
 	}
 
 	// Register available sources
-	RegisterSource(elefant.NewSource())
-	RegisterSource(drupal.NewSource())
+	elefantSource := elefant.NewSource()
+	elefantSource.SetPublicRouteChecker(ctx.PublicRouteChecker)
+	RegisterSource(elefantSource)
+	drupalSource := drupal.NewSource()
+	drupalSource.SetPublicRouteChecker(ctx.PublicRouteChecker)
+	RegisterSource(drupalSource)
+
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), cleanupDrainTimeout)
+	if err := m.drainMediaCleanup(cleanupCtx, ""); err != nil {
+		m.ctx.Logger.Warn("media cleanup remains queued after startup retry", "error", err)
+	}
+	cleanupCancel()
 
 	if reaped, err := m.reapStaleJobs(context.Background()); err != nil {
 		m.ctx.Logger.Warn("failed to reap stale migrator jobs", "error", err)
@@ -297,65 +315,159 @@ func (m *Module) Migrations() []module.Migration {
 		{
 			Version:     5,
 			Description: "Allow the partial job status",
-			Up: func(db *sql.DB) error {
-				// The v2 CHECK constraint predates the 'partial' status, so on
-				// any database created before this migration a run that
-				// recorded per-item errors failed its terminal UPDATE. The row
-				// then stayed 'running' and the partial unique index blocked
-				// every subsequent import for that source.
-				//
-				// SQLite cannot alter a CHECK constraint, so the table is
-				// rebuilt. Columns are listed explicitly because v3 and v4
-				// appended theirs, making positional copying order-dependent.
-				if statusCheckAllows(db, "partial") {
-					return nil
-				}
-				_, err := db.Exec(`
-					CREATE TABLE migrator_import_jobs_new (
-						id INTEGER PRIMARY KEY AUTOINCREMENT,
-						source TEXT NOT NULL,
-						status TEXT NOT NULL DEFAULT 'running'
-							CHECK (status IN ('running','completed','failed','partial','interrupted')),
-						phase TEXT NOT NULL DEFAULT '',
-						processed INTEGER NOT NULL DEFAULT 0,
-						total INTEGER NOT NULL DEFAULT 0,
-						counters TEXT NOT NULL DEFAULT '{}',
-						options TEXT NOT NULL DEFAULT '{}',
-						errors TEXT NOT NULL DEFAULT '[]',
-						fatal_error TEXT NOT NULL DEFAULT '',
-						started_by INTEGER,
-						started_by_email TEXT NOT NULL DEFAULT '',
-						owner_run_id TEXT NOT NULL DEFAULT '',
-						started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-						updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-						finished_at DATETIME,
-						notices TEXT NOT NULL DEFAULT '[]',
-						skipped TEXT NOT NULL DEFAULT '{}'
-					);
-					INSERT INTO migrator_import_jobs_new
-						(id, source, status, phase, processed, total, counters, options, errors,
-						 fatal_error, started_by, started_by_email, owner_run_id,
-						 started_at, updated_at, finished_at, notices, skipped)
-					SELECT id, source, status, phase, processed, total, counters, options, errors,
-						 fatal_error, started_by, started_by_email, owner_run_id,
-						 started_at, updated_at, finished_at, notices, skipped
-					FROM migrator_import_jobs;
-					DROP TABLE migrator_import_jobs;
-					ALTER TABLE migrator_import_jobs_new RENAME TO migrator_import_jobs;
-					CREATE UNIQUE INDEX IF NOT EXISTS idx_migrator_jobs_one_running
-						ON migrator_import_jobs(source) WHERE status = 'running';
-					CREATE INDEX IF NOT EXISTS idx_migrator_jobs_source_started
-						ON migrator_import_jobs(source, started_at DESC);
-				`)
-				return err
-			},
+			// The v2 CHECK constraint predates the 'partial' status. SQLite
+			// cannot alter it, so the helper performs an atomic table rebuild.
+			Up: migrateJobsPartialStatus,
 			Down: func(db *sql.DB) error {
 				// Narrowing the constraint again would reject rows that are
 				// already stored as 'partial'.
 				return nil
 			},
 		},
+		{
+			Version:     6,
+			Description: "Create durable media cleanup queue",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`
+					CREATE TABLE IF NOT EXISTS migrator_media_cleanup_queue (
+						source TEXT NOT NULL,
+						upload_root TEXT NOT NULL,
+						media_uuid TEXT NOT NULL,
+						attempts INTEGER NOT NULL DEFAULT 0,
+						last_error TEXT NOT NULL DEFAULT '',
+						created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						PRIMARY KEY (source, upload_root, media_uuid)
+					);
+					CREATE INDEX IF NOT EXISTS idx_migrator_media_cleanup_source
+						ON migrator_media_cleanup_queue(source);
+				`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`DROP TABLE IF EXISTS migrator_media_cleanup_queue`)
+				return err
+			},
+		},
 	}
+}
+
+const createPartialJobsTableSQL = `
+	CREATE TABLE migrator_import_jobs_new (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		source TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'running'
+			CHECK (status IN ('running','completed','failed','partial','interrupted')),
+		phase TEXT NOT NULL DEFAULT '',
+		processed INTEGER NOT NULL DEFAULT 0,
+		total INTEGER NOT NULL DEFAULT 0,
+		counters TEXT NOT NULL DEFAULT '{}',
+		options TEXT NOT NULL DEFAULT '{}',
+		errors TEXT NOT NULL DEFAULT '[]',
+		fatal_error TEXT NOT NULL DEFAULT '',
+		started_by INTEGER,
+		started_by_email TEXT NOT NULL DEFAULT '',
+		owner_run_id TEXT NOT NULL DEFAULT '',
+		started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		finished_at DATETIME,
+		notices TEXT NOT NULL DEFAULT '[]',
+		skipped TEXT NOT NULL DEFAULT '{}'
+	)`
+
+const copyJobsToPartialTableSQL = `
+	INSERT INTO migrator_import_jobs_new
+		(id, source, status, phase, processed, total, counters, options, errors,
+		 fatal_error, started_by, started_by_email, owner_run_id,
+		 started_at, updated_at, finished_at, notices, skipped)
+	SELECT id, source, status, phase, processed, total, counters, options, errors,
+		 fatal_error, started_by, started_by_email, owner_run_id,
+		 started_at, updated_at, finished_at, notices, skipped
+	FROM migrator_import_jobs`
+
+type migrationQueryer interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func migrationTableDDL(q migrationQueryer, table string) (string, bool, error) {
+	var ddl string
+	err := q.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`, table,
+	).Scan(&ddl)
+	if err == nil {
+		return ddl, true, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return "", false, err
+}
+
+// migrateJobsPartialStatus rebuilds the jobs table inside one transaction.
+// It also repairs the two partial states left by the historical multi-statement
+// migration: a stale _new table beside an intact old table, or a complete _new
+// table after the old table was dropped but before rename/index creation.
+func migrateJobsPartialStatus(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin partial-status migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	mainDDL, mainExists, err := migrationTableDDL(tx, "migrator_import_jobs")
+	if err != nil {
+		return fmt.Errorf("inspect jobs table: %w", err)
+	}
+	newDDL, newExists, err := migrationTableDDL(tx, "migrator_import_jobs_new")
+	if err != nil {
+		return fmt.Errorf("inspect temporary jobs table: %w", err)
+	}
+
+	switch {
+	case mainExists && strings.Contains(mainDDL, "'partial'"):
+		if newExists {
+			if _, err := tx.Exec(`DROP TABLE migrator_import_jobs_new`); err != nil {
+				return fmt.Errorf("drop stale temporary jobs table: %w", err)
+			}
+		}
+	case !mainExists && newExists && strings.Contains(newDDL, "'partial'"):
+		if _, err := tx.Exec(`ALTER TABLE migrator_import_jobs_new RENAME TO migrator_import_jobs`); err != nil {
+			return fmt.Errorf("recover temporary jobs table: %w", err)
+		}
+	case !mainExists:
+		return errors.New("migrator_import_jobs is missing and no recoverable temporary table exists")
+	default:
+		if newExists {
+			if _, err := tx.Exec(`DROP TABLE migrator_import_jobs_new`); err != nil {
+				return fmt.Errorf("drop stale temporary jobs table: %w", err)
+			}
+		}
+		if _, err := tx.Exec(createPartialJobsTableSQL); err != nil {
+			return fmt.Errorf("create replacement jobs table: %w", err)
+		}
+		if _, err := tx.Exec(copyJobsToPartialTableSQL); err != nil {
+			return fmt.Errorf("copy jobs into replacement table: %w", err)
+		}
+		if _, err := tx.Exec(`DROP TABLE migrator_import_jobs`); err != nil {
+			return fmt.Errorf("drop legacy jobs table: %w", err)
+		}
+		if _, err := tx.Exec(`ALTER TABLE migrator_import_jobs_new RENAME TO migrator_import_jobs`); err != nil {
+			return fmt.Errorf("activate replacement jobs table: %w", err)
+		}
+	}
+
+	if _, err := tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_migrator_jobs_one_running
+		ON migrator_import_jobs(source) WHERE status = 'running'`); err != nil {
+		return fmt.Errorf("create running-job index: %w", err)
+	}
+	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_migrator_jobs_source_started
+		ON migrator_import_jobs(source, started_at DESC)`); err != nil {
+		return fmt.Errorf("create job-history index: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit partial-status migration: %w", err)
+	}
+	return nil
 }
 
 // statusCheckAllows reports whether the jobs table's CHECK constraint already

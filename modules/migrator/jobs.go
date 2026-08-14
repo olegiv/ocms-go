@@ -76,6 +76,8 @@ type ImportJob struct {
 	Notices        []string
 	FatalError     string
 	StartedByEmail string
+	OwnerRunID     string
+	OwnedByRun     bool
 	StartedAt      time.Time
 	UpdatedAt      time.Time
 	FinishedAt     sql.NullTime
@@ -90,7 +92,7 @@ func (j *ImportJob) IsTerminal() bool {
 // be considered orphaned. The status fragment uses this so the UI stops
 // spinning even before the next restart reaps the row.
 func (j *ImportJob) IsStale(now time.Time) bool {
-	return j.Status == JobRunning && now.Sub(j.UpdatedAt) > staleJobThreshold
+	return j.Status == JobRunning && !j.OwnedByRun && now.Sub(j.UpdatedAt) > staleJobThreshold
 }
 
 // HasNotices reports whether the job recorded informational messages.
@@ -120,7 +122,8 @@ type jobProgress struct {
 	phase     types.EntityType
 	processed int
 	total     int
-	dirty     bool
+	revision  uint64
+	flushed   uint64
 }
 
 // newJobProgress returns an empty progress accumulator.
@@ -141,7 +144,7 @@ func (p *jobProgress) addItem(entityType types.EntityType) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.counts[entityType]++
-	p.dirty = true
+	p.revision++
 }
 
 // report records a progress sample published by the source.
@@ -151,19 +154,10 @@ func (p *jobProgress) report(sample types.Progress) {
 	p.phase = sample.Phase
 	p.processed = sample.Processed
 	p.total = sample.Total
-	p.dirty = true
+	p.revision++
 }
 
-// snapshot returns the current progress and whether it changed since the last
-// call, so the ticker can skip writing when nothing moved.
-func (p *jobProgress) snapshot() (progressSnapshot, bool) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if !p.dirty {
-		return progressSnapshot{}, false
-	}
-	p.dirty = false
-
+func (p *jobProgress) copySnapshotLocked() progressSnapshot {
 	counters := make(map[types.EntityType]int, len(p.counts))
 	for k, v := range p.counts {
 		counters[k] = v
@@ -173,7 +167,39 @@ func (p *jobProgress) snapshot() (progressSnapshot, bool) {
 		Processed: p.processed,
 		Total:     p.total,
 		Counters:  counters,
-	}, true
+	}
+}
+
+// pendingSnapshot returns the current progress, its revision, and whether the
+// revision still needs a successful database write. Taking a snapshot does not
+// clear that state: a failed write must be retried even if no later item moves.
+func (p *jobProgress) pendingSnapshot() (progressSnapshot, uint64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.revision == p.flushed {
+		return progressSnapshot{}, p.revision, false
+	}
+	return p.copySnapshotLocked(), p.revision, true
+}
+
+// acknowledge marks a revision durable only after flushJobProgress succeeds.
+// If newer progress arrived during the write, that newer revision remains
+// pending for the next tick.
+func (p *jobProgress) acknowledge(revision uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if revision > p.flushed {
+		p.flushed = revision
+	}
+}
+
+// forceSnapshot copies the full accumulator even when its last revision was
+// already acknowledged. Panic recovery uses it after joining the ticker so the
+// terminal row is preceded by one definitive, non-racing progress write.
+func (p *jobProgress) forceSnapshot() progressSnapshot {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.copySnapshotLocked()
 }
 
 // startJob inserts a running job row, refusing to start a second import for the
@@ -253,7 +279,7 @@ func (m *Module) startJob(ctx context.Context, source, startedByEmail string, us
 func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, error) {
 	row := m.ctx.DB.QueryRowContext(ctx, `
 		SELECT id, source, status, phase, processed, total, counters, skipped, errors, notices,
-		       fatal_error, started_by_email, started_at, updated_at, finished_at
+		       fatal_error, started_by_email, owner_run_id, started_at, updated_at, finished_at
 		FROM migrator_import_jobs
 		WHERE source = ?
 		ORDER BY id DESC
@@ -269,6 +295,7 @@ func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, erro
 	)
 	err := row.Scan(&job.ID, &job.Source, &status, &job.Phase, &job.Processed, &job.Total,
 		&countersJSON, &skippedJSON, &errorsJSON, &noticesJSON, &job.FatalError, &job.StartedByEmail,
+		&job.OwnerRunID,
 		&job.StartedAt, &job.UpdatedAt, &job.FinishedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -278,6 +305,7 @@ func (m *Module) latestJob(ctx context.Context, source string) (*ImportJob, erro
 	}
 
 	job.Status = JobStatus(status)
+	job.OwnedByRun = job.OwnerRunID == m.runID
 	if err := json.Unmarshal([]byte(countersJSON), &job.Counters); err != nil {
 		job.Counters = map[string]int{}
 	}

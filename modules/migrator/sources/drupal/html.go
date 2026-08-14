@@ -26,6 +26,11 @@ var attrPattern = regexp.MustCompile(`(?is)\b([a-z0-9-]+)\s*=\s*"([^"]*)"`)
 // nodePathPattern matches Drupal's internal node path form.
 var nodePathPattern = regexp.MustCompile(`^/?node/(\d+)/?$`)
 
+// termPathPattern matches Drupal's internal taxonomy-term path form.
+var termPathPattern = regexp.MustCompile(`^/?taxonomy/term/(\d+)/?$`)
+
+var termEntityPathPattern = regexp.MustCompile(`^taxonomy_term/(\d+)/?$`)
+
 // parseNodePath extracts a node ID from "/node/12", "node/12" or "/node/12/".
 func parseNodePath(path string) (int64, bool) {
 	m := nodePathPattern.FindStringSubmatch(strings.TrimSpace(path))
@@ -37,6 +42,23 @@ func parseNodePath(path string) (int64, bool) {
 		return 0, false
 	}
 	return nid, true
+}
+
+// parseTermPath extracts a term ID from Drupal's canonical taxonomy path.
+func parseTermPath(path string) (int64, bool) {
+	path = strings.TrimSpace(path)
+	m := termPathPattern.FindStringSubmatch(path)
+	if m == nil {
+		m = termEntityPathPattern.FindStringSubmatch(path)
+	}
+	if m == nil {
+		return 0, false
+	}
+	tid, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return tid, true
 }
 
 // MediaRefs carries the lookups needed to rewrite a Drupal body: the old public
@@ -337,58 +359,72 @@ func urlEnd(s string) int {
 	return len(s)
 }
 
+// LinkTarget preserves the source entity identity until the importer can map
+// it onto an oCMS page or taxonomy URL.
+type LinkTarget struct {
+	NodeID int64
+	TermID int64
+	URL    string
+}
+
 // ResolveLinkURI maps a Drupal menu link URI onto an oCMS menu item target.
 //
 // Drupal stores menu targets as URIs: "entity:node/12" and "internal:/node/12"
 // point at content, "internal:/some/path" at an arbitrary local path, and
 // "http(s)://…" at an external site. "route:<name>" refers to a Drupal routing
 // entry that has no oCMS equivalent, so it is reported rather than guessed at.
-func ResolveLinkURI(uri string) (nodeID int64, linkURL string, err error) {
+func ResolveLinkURI(uri string) (LinkTarget, error) {
 	uri = strings.TrimSpace(uri)
 	if uri == "" {
-		return 0, "", fmt.Errorf("empty link URI")
+		return LinkTarget{}, fmt.Errorf("empty link URI")
 	}
 
 	switch {
 	case strings.HasPrefix(uri, "entity:"):
 		path := strings.TrimPrefix(uri, "entity:")
 		if nid, ok := parseNodePath(path); ok {
-			return nid, "", nil
+			return LinkTarget{NodeID: nid}, nil
 		}
-		return 0, "", fmt.Errorf("unsupported entity link %q", uri)
+		if tid, ok := parseTermPath(path); ok {
+			return LinkTarget{TermID: tid}, nil
+		}
+		return LinkTarget{}, fmt.Errorf("unsupported entity link %q", uri)
 
 	case strings.HasPrefix(uri, "internal:"):
 		path := strings.TrimPrefix(uri, "internal:")
 		if nid, ok := parseNodePath(path); ok {
-			return nid, "", nil
+			return LinkTarget{NodeID: nid}, nil
+		}
+		if tid, ok := parseTermPath(path); ok {
+			return LinkTarget{TermID: tid}, nil
 		}
 		if path == "" || path == "/" {
-			return 0, "/", nil
+			return LinkTarget{URL: "/"}, nil
 		}
 		if !strings.HasPrefix(path, "/") {
 			path = "/" + path
 		}
-		return 0, path, nil
+		return LinkTarget{URL: path}, nil
 
 	case isAllowedAbsoluteURI(uri):
 		// Every scheme the oCMS menu validator accepts, not just http(s):
 		// mailto: and tel: links used to fall through to the unsupported-URI
 		// error below and were dropped, although oCMS stores them happily.
 		// TestMenuURISchemesMatchMenuValidator ties the two together.
-		return 0, uri, nil
+		return LinkTarget{URL: uri}, nil
 
 	case strings.HasPrefix(uri, "route:"):
-		return 0, "", fmt.Errorf("route link %q has no oCMS equivalent", uri)
+		return LinkTarget{}, fmt.Errorf("route link %q has no oCMS equivalent", uri)
 
 	case strings.HasPrefix(uri, "base:"):
 		path := strings.TrimPrefix(uri, "base:")
 		if !strings.HasPrefix(path, "/") {
 			path = "/" + path
 		}
-		return 0, path, nil
+		return LinkTarget{URL: path}, nil
 	}
 
-	return 0, "", fmt.Errorf("unsupported link URI %q", uri)
+	return LinkTarget{}, fmt.Errorf("unsupported link URI %q", uri)
 }
 
 // isAllowedAbsoluteURI reports whether uri is an absolute URL whose scheme oCMS

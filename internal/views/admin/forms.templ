@@ -31,6 +31,7 @@ type FormListItemView struct {
 	IsActive        bool
 	SubmissionCount int64
 	UnreadCount     int64
+	PublicURL       string
 }
 
 // FormTranslationInfoView holds info about a form translation.
@@ -71,6 +72,7 @@ type FormFormViewData struct {
 	EmailTo          string
 	IsActive         bool
 	LanguageCode     string
+	PublicURL        string
 	Fields           []FormFieldView
 	FieldTypes       []string
 	Errors           map[string]string
@@ -101,6 +103,7 @@ type SubmissionsListViewData struct {
 	FormID      int64
 	FormName    string
 	FormSlug    string
+	PublicURL   string
 	TotalCount  int64
 	UnreadCount int64
 	Submissions []SubmissionItemView
@@ -250,7 +253,9 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 										}
 										@table.Cell() {
 											<div class="action-buttons">
-												@ViewButton(fmt.Sprintf("/forms/%s", item.Slug), pc.T("forms.preview"))
+											if item.PublicURL != "" {
+												@ViewButton(item.PublicURL, pc.T("forms.preview"))
+											}
 												@EditButton(fmt.Sprintf("/admin/forms/%d", item.ID), pc.T("btn.edit"))
 												@DeleteButton(fmt.Sprintf("/admin/forms/%d", item.ID), pc.T("forms.confirm_delete"), "closest tr")
 											</div>
@@ -295,8 +300,10 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 				@button.Button(button.Props{Variant: button.VariantSecondary, Href: fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)}) {
 					{ pc.T("forms.view_submissions") }
 				}
-				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/forms/%s", data.FormSlug), Target: "_blank"}) {
-					{ pc.T("forms.preview") }
+				if data.PublicURL != "" {
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: data.PublicURL, Target: "_blank"}) {
+						{ pc.T("forms.preview") }
+					}
 				}
 			}
 		}
@@ -1006,8 +1013,10 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 						<p>{ pc.T("forms.no_submissions") }</p>
 						<span class="empty-hint">{ pc.T("forms.no_submissions_hint") }</span>
 						<div class="empty-state-action">
-							@button.Button(button.Props{Href: fmt.Sprintf("/forms/%s", data.FormSlug), Target: "_blank"}) {
-								{ pc.T("forms.view_form") }
+							if data.PublicURL != "" {
+								@button.Button(button.Props{Href: data.PublicURL, Target: "_blank"}) {
+									{ pc.T("forms.view_form") }
+								}
 							}
 						</div>
 					</div>

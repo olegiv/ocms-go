@@ -169,6 +169,7 @@ func (c *LanguageCache) loadAll(ctx context.Context) error {
 	c.byCode = make(map[string]store.Language, len(languages))
 	c.active = make([]store.Language, 0)
 	c.defaultLang = nil
+	defaultCount := 0
 
 	for _, lang := range languages {
 		c.byCode[lang.Code] = lang
@@ -176,8 +177,12 @@ func (c *LanguageCache) loadAll(ctx context.Context) error {
 			c.active = append(c.active, lang)
 		}
 		if lang.IsDefault {
+			defaultCount++
 			c.defaultLang = new(lang)
 		}
+	}
+	if defaultCount != 1 {
+		c.defaultLang = nil
 	}
 
 	c.loaded = true

@@ -8,13 +8,13 @@
         </svg>
         <h2>{{TTheme $.LangCode "forms.public.thank_you"}}</h2>
         <p>{{if .Form.SuccessMessage.Valid}}{{.Form.SuccessMessage.String}}{{else}}{{TTheme $.LangCode "forms.public.default_success"}}{{end}}</p>
-        <a href="/forms/{{.Form.Slug}}" class="btn btn-primary">{{TTheme $.LangCode "forms.public.submit_another"}}</a>
+        <a href="{{.LangPrefix}}/forms/{{.Form.Slug}}" class="btn btn-primary">{{TTheme $.LangCode "forms.public.submit_another"}}</a>
     </div>
     {{else}}
     <header class="dev-article-header">
         <div class="dev-file-path">
             <span class="dev-comment">// </span>
-            <span class="dev-path">/forms/{{.Form.Slug}}</span>
+            <span class="dev-path">{{.LangPrefix}}/forms/{{.Form.Slug}}</span>
         </div>
         <h1 class="dev-article-title">{{.Form.Title}}</h1>
         {{if .Form.Description.Valid}}
@@ -36,7 +36,7 @@
     </div>
     {{end}}
 
-    <form method="POST" action="/forms/{{.Form.Slug}}" class="public-form">
+    <form method="POST" action="{{.LangPrefix}}/forms/{{.Form.Slug}}" class="public-form">
         <!-- Honeypot field (hidden from real users, bots will fill it) -->
         <div class="sr-only">
             <label for="_website">{{TTheme $.LangCode "forms.public.honeypot_label"}}</label>

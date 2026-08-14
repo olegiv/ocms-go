@@ -276,9 +276,9 @@ func (m *Module) renderHeadScripts(nonce string) template.HTML {
 	// with a one-year lifetime, so after a Klaro upgrade a returning browser
 	// would fetch the old bytes from cache against the new integrity hash, fail
 	// the check, and silently lose the consent manager.
-	scripts.WriteString(fmt.Sprintf(
+	_, _ = fmt.Fprintf(&scripts,
 		`<script defer src="%s" integrity="sha384-Ic9lh4j2DStMyU7efUMc+JhotSEr4FuO24wWW401qG38mAPzx46ZGO464HmCsOmg" crossorigin="anonymous"></script>
-`, html.EscapeString(utils.ScriptURL("/static/dist/js/klaro.min.js"))))
+`, html.EscapeString(utils.ScriptURL("/static/dist/js/klaro.min.js")))
 
 	// 7. Footer link behavior (avoids inline onclick handlers)
 	scripts.WriteString(`<script>

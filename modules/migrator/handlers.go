@@ -10,8 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -72,7 +71,7 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 	// than dropped: nil counts render as "no imported content" and hide the
 	// delete form, so the operator would silently lose the only undo path for
 	// an import that did happen.
-	importedCounts, err := m.getImportedCounts(r.Context(), sourceName)
+	importedCounts, pendingMediaCleanup, err := m.getImportedContentState(r.Context(), sourceName)
 	if err != nil {
 		m.ctx.Logger.Error("failed to read imported counts", "source", sourceName, "error", err)
 	}
@@ -92,15 +91,16 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	viewData := MigratorSourceFormViewData{
-		SourceName:       sourceName,
-		DisplayName:      source.DisplayName(),
-		Description:      source.Description(),
-		ConfigFields:     source.ConfigFields(),
-		Config:           config,
-		ImportedCounts:   importedCounts,
-		Job:              job,
-		JobReadErr:       jobErr,
-		SupportedOptions: types.SupportedImportOptionSet(source),
+		SourceName:          sourceName,
+		DisplayName:         source.DisplayName(),
+		Description:         source.Description(),
+		ConfigFields:        source.ConfigFields(),
+		Config:              config,
+		ImportedCounts:      importedCounts,
+		PendingMediaCleanup: pendingMediaCleanup,
+		Job:                 job,
+		JobReadErr:          jobErr,
+		SupportedOptions:    types.SupportedImportOptionSet(source),
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "migrator.import_from", source.DisplayName()), []render.Breadcrumb{
@@ -212,13 +212,29 @@ func (m *Module) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Test connection
-	if err := ctx.Source.TestConnection(cfg); err != nil {
+	var err error
+	if tester, ok := ctx.Source.(types.ContextConnectionTester); ok {
+		err = tester.TestConnectionContext(r.Context(), cfg)
+	} else {
+		// Compatibility path for third-party sources compiled against the
+		// original interface. Built-in sources implement the context-aware
+		// capability above.
+		err = ctx.Source.TestConnection(cfg)
+	}
+	if err != nil {
+		if r.Context().Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			m.ctx.Logger.Info("connection test stopped with request context",
+				"source", ctx.SourceName, "error", err)
+			return
+		}
 		m.ctx.Logger.Error("connection test failed", "source", ctx.SourceName, "error", err)
 		// Save config to session so form values are preserved
 		m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, withoutSecrets(cfg, ctx.Source.ConfigFields()))
 		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_connection")+": "+err.Error(), "error")
 		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
+		return
+	}
+	if r.Context().Err() != nil {
 		return
 	}
 
@@ -374,13 +390,12 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 			// inside the first interval, or after work done since the last
 			// tick, would otherwise lose those counts entirely.
 			if progress != nil {
-				if snap, changed := progress.snapshot(); changed {
-					flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
-					if err := m.flushJobProgress(flushCtx, run.ID, snap); err != nil {
-						m.ctx.Logger.Warn("failed to flush progress after panic", "job_id", run.ID, "error", err)
-					}
-					cancel()
+				snap := progress.forceSnapshot()
+				flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
+				if err := m.flushJobProgress(flushCtx, run.ID, snap); err != nil {
+					m.ctx.Logger.Warn("failed to flush progress after panic", "job_id", run.ID, "error", err)
 				}
+				cancel()
 			}
 			m.finalizeJob(ctx, run, JobFailed, nil, fmt.Errorf("import panicked: %v", rec))
 		}
@@ -455,11 +470,13 @@ func deriveJobStatus(err, ctxErr error, result *ImportResult) JobStatus {
 // (runImportJob) is already counted in the group, so Wait cannot have returned.
 func (m *Module) startProgressFlush(ctx context.Context, jobID int64, progress *jobProgress) func() {
 	done := make(chan struct{})
+	stopped := make(chan struct{})
 	var once sync.Once
 
 	m.jobsWG.Add(1)
 	go func() {
 		defer m.jobsWG.Done()
+		defer close(stopped)
 		ticker := time.NewTicker(progressFlushInterval)
 		defer ticker.Stop()
 		for {
@@ -469,13 +486,16 @@ func (m *Module) startProgressFlush(ctx context.Context, jobID int64, progress *
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				snap, changed := progress.snapshot()
+				snap, revision, changed := progress.pendingSnapshot()
 				// Progress writes use a detached context so a cancelled import
 				// can still record how far it got.
 				flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
 				var err error
 				if changed {
 					err = m.flushJobProgress(flushCtx, jobID, snap)
+					if err == nil {
+						progress.acknowledge(revision)
+					}
 				} else {
 					// Still touch updated_at. A stage that publishes no
 					// progress for two minutes — a long index rebuild, a slow
@@ -493,7 +513,14 @@ func (m *Module) startProgressFlush(ctx context.Context, jobID int64, progress *
 		}
 	}()
 
-	return func() { once.Do(func() { close(done) }) }
+	return func() {
+		once.Do(func() { close(done) })
+		// Join this specific ticker rather than jobsWG: runImportJob itself is
+		// in that WaitGroup, so waiting for the whole group here would deadlock.
+		// The join prevents an older in-flight snapshot from overwriting panic
+		// recovery's forced snapshot or racing terminal finalization.
+		<-stopped
+	}
 }
 
 // finalizeJob writes the terminal row, invalidates caches and records the audit
@@ -558,13 +585,18 @@ func (m *Module) finalizeJob(ctx context.Context, run jobRun, status JobStatus, 
 // Nil-safe: module.Context.Cache is unset in tests and in any embedder that
 // does not wire it.
 func (m *Module) invalidateCaches(opts ImportOptions) {
-	if m.ctx == nil || m.ctx.Cache == nil {
+	if m.ctx == nil {
 		return
 	}
-	// InvalidateContent covers both the page cache and the sitemap.
-	m.ctx.Cache.InvalidateContent()
-	if opts.ImportMenus {
-		m.ctx.Cache.InvalidateMenus()
+	if m.ctx.Cache != nil {
+		// InvalidateContent covers both the page cache and the sitemap.
+		m.ctx.Cache.InvalidateContent()
+		if opts.ImportMenus {
+			m.ctx.Cache.InvalidateMenus()
+		}
+	}
+	if m.ctx.RedirectCacheInvalidator != nil {
+		m.ctx.RedirectCacheInvalidator.InvalidateCache()
 	}
 }
 
@@ -592,7 +624,7 @@ func (m *Module) handleJobStatus(w http.ResponseWriter, r *http.Request) {
 		m.ctx.Logger.Error("failed to read import job", "source", ctx.SourceName, "error", err)
 	}
 
-	counts, countsErr := m.getImportedCounts(r.Context(), ctx.SourceName)
+	counts, pendingMediaCleanup, countsErr := m.getImportedContentState(r.Context(), ctx.SourceName)
 	if countsErr != nil {
 		m.ctx.Logger.Error("failed to read imported counts", "source", ctx.SourceName, "error", countsErr)
 	}
@@ -611,7 +643,8 @@ func (m *Module) handleJobStatus(w http.ResponseWriter, r *http.Request) {
 	// imported" and remove the delete form, destroying the only undo path for
 	// an import that did happen.
 	render.Templ(w, r, MigratorJobStatusResponse(
-		pc, buildJobStatusView(ctx.SourceName, job, err), counts, countsErr == nil))
+		pc, buildJobStatusView(ctx.SourceName, job, err), counts,
+		pendingMediaCleanup, countsErr == nil))
 }
 
 // buildJobStatusView assembles the status fragment's view data.
@@ -644,6 +677,12 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pending filesystem cleanup is independent of whether this request can
+	// delete more database rows. Retry it before either job-state guard returns,
+	// so a live import or a transient job lookup failure cannot strand durable
+	// cleanup work until an otherwise-successful delete is attempted later.
+	m.retryQueuedMediaCleanup(r.Context(), ctx.SourceName)
+
 	// Refuse while an import is in flight. The status poll renders the delete
 	// form as soon as the running job tracks its first item, so without this an
 	// admin can delete rows the goroutine is still using: it keeps its in-memory
@@ -668,7 +707,9 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 	m.ctx.Logger.Info("deleting imported content", "source", ctx.SourceName, "user", ctx.User.Email)
 
 	// Delete all imported items for this source
-	deleted, err := m.deleteImportedItems(r.Context(), ctx.SourceName)
+	deleted, err := m.deleteImportedItemsAfterCleanupRetry(r.Context(), ctx.SourceName)
+	var cleanupPending *mediaCleanupPendingError
+	var rowsPending *importedRowsPendingError
 	if err != nil {
 		// An import that started between the check above and the transaction.
 		if errors.Is(err, errImportRunning) {
@@ -676,10 +717,23 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 			return
 		}
-		m.ctx.Logger.Error("delete failed", "source", ctx.SourceName, "error", err)
-		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_delete")+": "+err.Error(), "error")
-		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
-		return
+		hasCleanupPending := errors.As(err, &cleanupPending)
+		hasRowsPending := errors.As(err, &rowsPending)
+		if hasCleanupPending || hasRowsPending {
+			if hasRowsPending {
+				m.ctx.Logger.Warn("some imported database rows remain tracked for retry",
+					"source", ctx.SourceName, "count", rowsPending.count, "error", err)
+			}
+			if hasCleanupPending {
+				m.ctx.Logger.Warn("imported rows deleted but media file cleanup remains queued",
+					"source", ctx.SourceName, "error", err)
+			}
+		} else {
+			m.ctx.Logger.Error("delete failed", "source", ctx.SourceName, "error", err)
+			m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_delete")+": "+err.Error(), "error")
+			http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
+			return
+		}
 	}
 
 	m.ctx.Logger.Info("deleted imported content", "source", ctx.SourceName, "deleted", deleted)
@@ -703,8 +757,25 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 	m.invalidateCaches(ImportOptions{ImportMenus: true})
 
 	msg := i18n.T(ctx.Lang, "migrator.success_delete_summary", formatEntityCounts(ctx.Lang, deleted))
-	m.ctx.Render.SetFlash(r, msg, "success")
+	flashType := "success"
+	if cleanupPending != nil {
+		msg += " " + i18n.T(ctx.Lang, "migrator.warning_media_cleanup_pending")
+		flashType = "warning"
+	}
+	if rowsPending != nil {
+		msg += " " + i18n.T(ctx.Lang, "migrator.warning_delete_partial")
+		flashType = "warning"
+	}
+	m.ctx.Render.SetFlash(r, msg, flashType)
 	http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
+}
+
+type importedRowsPendingError struct {
+	count int
+}
+
+func (e *importedRowsPendingError) Error() string {
+	return fmt.Sprintf("%d imported database item(s) remain tracked for retry", e.count)
 }
 
 // formatEntityCounts renders per-entity counts as a translated, comma-separated
@@ -736,22 +807,34 @@ func formatEntityCounts(lang string, counts map[string]int) string {
 // per imported entity, so counting here gives any source a progress display
 // without the source having to opt in.
 func (m *Module) TrackImportedItem(ctx context.Context, source, entityType string, entityID int64) error {
+	_, err := m.ctx.DB.ExecContext(ctx, `
+		INSERT INTO migrator_imported_items (source, entity_type, entity_id, created_at)
+		VALUES (?, ?, ?, ?)
+	`, source, entityType, entityID, time.Now())
+	if err != nil {
+		return err
+	}
+
 	m.jobsMu.Lock()
 	progress := m.live[source]
 	m.jobsMu.Unlock()
 	if progress != nil {
 		progress.addItem(types.EntityType(entityType))
 	}
-
-	_, err := m.ctx.DB.ExecContext(ctx, `
-		INSERT INTO migrator_imported_items (source, entity_type, entity_id, created_at)
-		VALUES (?, ?, ?, ?)
-	`, source, entityType, entityID, time.Now())
-	return err
+	return nil
 }
 
 // getImportedCounts returns counts of imported items by entity type for a source.
 func (m *Module) getImportedCounts(ctx context.Context, source string) (map[string]int, error) {
+	counts, _, err := m.getImportedContentState(ctx, source)
+	return counts, err
+}
+
+// getImportedContentState returns tracked entity counts together with the
+// durable media-cleanup backlog. Queue rows are included in the media count so
+// deletion remains available, while the separate value lets the UI explain
+// that those items are pending filesystem work rather than live media rows.
+func (m *Module) getImportedContentState(ctx context.Context, source string) (map[string]int, int, error) {
 	rows, err := m.ctx.DB.QueryContext(ctx, `
 		SELECT entity_type, COUNT(*) as cnt
 		FROM migrator_imported_items
@@ -759,7 +842,7 @@ func (m *Module) getImportedCounts(ctx context.Context, source string) (map[stri
 		GROUP BY entity_type
 	`, source)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
@@ -772,11 +855,27 @@ func (m *Module) getImportedCounts(ctx context.Context, source string) (map[stri
 		var entityType string
 		var count int
 		if err := rows.Scan(&entityType, &count); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		counts[entityType] = count
 	}
-	return counts, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, 0, err
+	}
+
+	var pendingMedia int
+	if err := m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM migrator_media_cleanup_queue WHERE source = ?
+	`, source).Scan(&pendingMedia); err != nil {
+		return nil, 0, err
+	}
+	if pendingMedia > 0 {
+		counts[string(types.EntityMedia)] += pendingMedia
+	}
+	return counts, pendingMedia, nil
 }
 
 // getImportedItems returns all imported item IDs of a given type for a source.
@@ -838,6 +937,88 @@ func keepIfReferenced(count func(ctx context.Context, q *store.Queries, id int64
 	}
 }
 
+// canonicalDetachedPageURL returns the same canonical public path used by the
+// menu service for a page-backed item. Default-language pages are unprefixed;
+// active, routable non-default languages own their prefix. A missing,
+// inactive, or unsafe language fails closed so deletion never leaves behind a
+// link that resolves in another language's namespace.
+func canonicalDetachedPageURL(ctx context.Context, q *store.Queries, page store.Page) (string, bool) {
+	if !util.IsValidSlug(page.Slug) {
+		return "", false
+	}
+	defaultLanguage, err := q.GetDefaultLanguage(ctx)
+	if err != nil {
+		return "", false
+	}
+	language, err := q.GetLanguageByCode(ctx, page.LanguageCode)
+	if err != nil || !language.IsActive {
+		return "", false
+	}
+	if !util.IsValidLangCode(language.Code) || util.IsReservedLanguageCode(language.Code) {
+		return "", false
+	}
+	if language.ID == defaultLanguage.ID && language.Code == defaultLanguage.Code {
+		return "/" + page.Slug, true
+	}
+	return "/" + language.Code + "/" + page.Slug, true
+}
+
+// importedEntityRouteCandidates returns every concrete path that may have been
+// persisted for an imported frontend entity: unprefixed while its language was
+// the default, and language-prefixed while it was not. Comparing both exact
+// paths preserves a failed navigation dependency even if the administrator
+// changed the default language after the import. It also avoids guessing the
+// current default and falsely retaining unrelated entities when defaults are
+// temporarily ambiguous.
+func importedEntityRouteCandidates(
+	ctx context.Context,
+	q *store.Queries,
+	entityType types.EntityType,
+	id int64,
+) ([]string, error) {
+	var slug, languageCode, routePrefix string
+	switch entityType {
+	case types.EntityPage, types.EntityPost:
+		page, err := q.GetPageByID(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		slug, languageCode = page.Slug, page.LanguageCode
+	case types.EntityTag:
+		tag, err := q.GetTagByID(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		slug, languageCode, routePrefix = tag.Slug, tag.LanguageCode, "/tag"
+	case types.EntityCategory:
+		category, err := q.GetCategoryByID(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		slug, languageCode, routePrefix = category.Slug, category.LanguageCode, "/category"
+	default:
+		return nil, nil
+	}
+	if !util.IsValidSlug(slug) {
+		return nil, nil
+	}
+	basePath := routePrefix + "/" + slug
+	paths := []string{basePath}
+	if util.IsValidLangCode(languageCode) && !util.IsReservedLanguageCode(languageCode) {
+		paths = append(paths, "/"+languageCode+basePath)
+	}
+	return paths, nil
+}
+
 // deleters returns every trackable entity type in dependency-safe deletion
 // order. The order is dictated by the schema's foreign keys:
 //
@@ -845,8 +1026,8 @@ func keepIfReferenced(count func(ctx context.Context, q *store.Queries, id int64
 //     keep their counts accurate
 //   - pages.author_id is ON DELETE RESTRICT, so pages and posts must be gone
 //     before their authors
-//   - page_aliases.page_id is ON DELETE CASCADE, so aliases need no delete of
-//     their own — they vanish with their page
+//   - aliases are deleted before pages so they remain independently undoable
+//     even when a page is deliberately preserved or its deletion fails
 //   - categories.parent_id is ON DELETE SET NULL, so category order is free
 //
 // Tags and categories additionally declare a reference count. They are the only
@@ -906,8 +1087,11 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 	// item pointing at it present but with an empty destination. Tracked menu
 	// items are already gone by the time pages are deleted, so everything still
 	// pointing at the page belongs to the administrator: those items are given
-	// the page's URL. It will 404 — the page really is being removed — but a
-	// visible, editable link beats one that silently goes nowhere.
+	// the page's canonical language-aware URL. It will 404 after the page is
+	// removed, but a visible, editable link beats one that silently goes
+	// nowhere. If no safe canonical URL exists, both the page and the
+	// administrator's page-backed item remain untouched and the page stays
+	// tracked for a later retry after its language is remediated.
 	detachMenuItems := func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
 		page, err := q.GetPageByID(ctx, id)
 		if err != nil {
@@ -917,9 +1101,17 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 		if err != nil {
 			return false, err
 		}
+		if len(items) == 0 {
+			return false, nil
+		}
+		pageURL, ok := canonicalDetachedPageURL(ctx, q, page)
+		if !ok {
+			return false, fmt.Errorf("cannot detach menu items from page %d with unrouteable language %q",
+				page.ID, page.LanguageCode)
+		}
 		for _, itemID := range items {
 			if err := q.ConvertMenuItemToURL(ctx, store.ConvertMenuItemToURLParams{
-				Url:       sql.NullString{String: "/" + page.Slug, Valid: true},
+				Url:       sql.NullString{String: pageURL, Valid: true},
 				UpdatedAt: time.Now(),
 				ID:        itemID,
 			}); err != nil {
@@ -979,7 +1171,12 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 			}
 			return len(items) > 0, nil
 		}},
-		{entityType: types.EntityAlias, cascadesFrom: types.EntityPage},
+		{entityType: types.EntityRedirect, del: func(ctx context.Context, q *store.Queries, id int64) error {
+			return q.DeleteRedirect(ctx, id)
+		}},
+		{entityType: types.EntityAlias, del: func(ctx context.Context, q *store.Queries, id int64) error {
+			return q.DeletePageAlias(ctx, id)
+		}},
 		{entityType: types.EntityPost, del: deletePage, beforeDelete: detachMenuItems},
 		{entityType: types.EntityPage, del: deletePage, beforeDelete: detachMenuItems},
 		{entityType: types.EntityTag, del: func(ctx context.Context, q *store.Queries, id int64) error {
@@ -989,21 +1186,46 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 		})},
 		{entityType: types.EntityCategory, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteCategory(ctx, id)
-		}, beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
-			return q.CountPagesByCategory(ctx, id)
-		})},
+		}, beforeDelete: func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
+			refs, err := q.CountPagesByCategory(ctx, id)
+			if err != nil || refs > 0 {
+				return refs > 0, err
+			}
+			children, err := q.ListChildCategories(ctx, sql.NullInt64{Int64: id, Valid: true})
+			return len(children) > 0, err
+		}},
 		{entityType: types.EntityMedia, del: deleteMedia,
-			beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
+			beforeDelete: func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
 				// pages.featured_image_id and og_image_id are ON DELETE SET
 				// NULL, so deleting imported media silently strips the image
-				// from any page still using it. Imported pages are already
-				// gone by the time media is deleted, so a remaining reference
-				// is an original page.
-				return q.CountPagesUsingMedia(ctx, store.CountPagesUsingMediaParams{
+				// from any page still using it. Body URLs have no foreign key,
+				// so they must be checked explicitly too or a failed imported
+				// page can survive with its embedded files removed.
+				refs, err := q.CountPagesUsingMedia(ctx, store.CountPagesUsingMediaParams{
 					FeaturedImageID: sql.NullInt64{Int64: id, Valid: true},
 					OgImageID:       sql.NullInt64{Int64: id, Valid: true},
 				})
-			})},
+				if err != nil || refs > 0 {
+					return refs > 0, err
+				}
+				media, err := q.GetMediaByID(ctx, id)
+				if errors.Is(err, sql.ErrNoRows) {
+					return false, nil
+				}
+				if err != nil {
+					return false, err
+				}
+				for _, storageDir := range model.MediaStorageDirs() {
+					refs, err = q.CountPagesEmbeddingMediaUUID(ctx, store.CountPagesEmbeddingMediaUUIDParams{
+						StorageDir: sql.NullString{String: storageDir, Valid: true},
+						MediaUuid:  sql.NullString{String: media.Uuid, Valid: true},
+					})
+					if err != nil || refs > 0 {
+						return refs > 0, err
+					}
+				}
+				return false, nil
+			}},
 		{entityType: types.EntityUser, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteUser(ctx, id)
 		}, beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
@@ -1029,6 +1251,268 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 type trackedItem struct {
 	entityType string
 	id         int64
+}
+
+type failedEntityIDs map[types.EntityType]map[int64]struct{}
+
+func (failed failedEntityIDs) add(entityType types.EntityType, id int64) {
+	if failed[entityType] == nil {
+		failed[entityType] = make(map[int64]struct{})
+	}
+	failed[entityType][id] = struct{}{}
+}
+
+func failedPageIDs(failed failedEntityIDs) []int64 {
+	ids := make([]int64, 0, len(failed[types.EntityPost])+len(failed[types.EntityPage]))
+	for id := range failed[types.EntityPost] {
+		ids = append(ids, id)
+	}
+	for id := range failed[types.EntityPage] {
+		if _, duplicate := failed[types.EntityPost][id]; !duplicate {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// keptEntityDependsOnFailedItems reports whether the concrete reference that
+// made an imported dependency stay belongs to an earlier tracked row whose
+// deletion failed. Type-wide propagation is unsafe: one unrelated page failure
+// must not keep a taxonomy/media/user row that is shared only by administrator
+// content falsely tracked forever.
+func keptEntityDependsOnFailedItems(
+	ctx context.Context,
+	q *store.Queries,
+	tx *sql.Tx,
+	entityType types.EntityType,
+	id int64,
+	failed failedEntityIDs,
+) (bool, error) {
+	exists := func(query string, args ...any) (bool, error) {
+		var value int
+		if err := tx.QueryRowContext(ctx, query, args...).Scan(&value); err != nil {
+			return false, err
+		}
+		return value != 0, nil
+	}
+	forFailedPage := func(query string) (bool, error) {
+		for _, pageID := range failedPageIDs(failed) {
+			matched, err := exists(query, pageID, id)
+			if err != nil || matched {
+				return matched, err
+			}
+		}
+		return false, nil
+	}
+	forFailedNavigationTarget := func(includePageID bool) (bool, error) {
+		if len(failed[types.EntityMenuItem]) == 0 && len(failed[types.EntityRedirect]) == 0 {
+			return false, nil
+		}
+		if includePageID {
+			for itemID := range failed[types.EntityMenuItem] {
+				matched, err := exists(`SELECT EXISTS(
+					SELECT 1 FROM menu_items WHERE id = ? AND page_id = ?
+				)`, itemID, id)
+				if err != nil || matched {
+					return matched, err
+				}
+			}
+		}
+		paths, err := importedEntityRouteCandidates(ctx, q, entityType, id)
+		if err != nil {
+			return false, err
+		}
+		for itemID := range failed[types.EntityMenuItem] {
+			for _, path := range paths {
+				matched, err := exists(`SELECT EXISTS(
+					SELECT 1 FROM menu_items WHERE id = ? AND url = ?
+				)`, itemID, path)
+				if err != nil || matched {
+					return matched, err
+				}
+			}
+		}
+		for redirectID := range failed[types.EntityRedirect] {
+			for _, path := range paths {
+				matched, err := exists(`SELECT EXISTS(
+					SELECT 1 FROM redirects WHERE id = ? AND target_url = ?
+				)`, redirectID, path)
+				if err != nil || matched {
+					return matched, err
+				}
+			}
+		}
+		return false, nil
+	}
+
+	switch entityType {
+	case types.EntityMenu:
+		for itemID := range failed[types.EntityMenuItem] {
+			matched, err := exists(`SELECT EXISTS(
+				SELECT 1 FROM menu_items WHERE id = ? AND menu_id = ?
+			)`, itemID, id)
+			if err != nil || matched {
+				return matched, err
+			}
+		}
+	case types.EntityTag:
+		matched, err := forFailedPage(`SELECT EXISTS(
+			SELECT 1 FROM page_tags WHERE page_id = ? AND tag_id = ?
+		)`)
+		if err != nil || matched {
+			return matched, err
+		}
+		return forFailedNavigationTarget(false)
+	case types.EntityCategory:
+		matched, err := forFailedPage(`SELECT EXISTS(
+			SELECT 1 FROM page_categories WHERE page_id = ? AND category_id = ?
+		)`)
+		if err != nil || matched {
+			return matched, err
+		}
+		for childID := range failed[types.EntityCategory] {
+			matched, err := exists(`SELECT EXISTS(
+				SELECT 1 FROM categories WHERE id = ? AND parent_id = ?
+			)`, childID, id)
+			if err != nil || matched {
+				return matched, err
+			}
+		}
+		return forFailedNavigationTarget(false)
+	case types.EntityMedia:
+		for _, pageID := range failedPageIDs(failed) {
+			matched, err := exists(`SELECT EXISTS(
+				SELECT 1 FROM pages
+				WHERE id = ? AND (featured_image_id = ? OR og_image_id = ?)
+			)`, pageID, id, id)
+			if err != nil || matched {
+				return matched, err
+			}
+		}
+		media, err := q.GetMediaByID(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		for _, pageID := range failedPageIDs(failed) {
+			for _, storageDir := range model.MediaStorageDirs() {
+				mediaPath := model.MediaURL(storageDir, media.Uuid, "")
+				matched, err := exists(`SELECT EXISTS(
+					SELECT 1 FROM pages WHERE id = ? AND instr(body, ?) > 0
+				)`, pageID, mediaPath)
+				if err != nil || matched {
+					return matched, err
+				}
+			}
+		}
+	case types.EntityUser:
+		for _, pageID := range failedPageIDs(failed) {
+			matched, err := exists(`SELECT EXISTS(
+				SELECT 1 FROM pages WHERE id = ? AND author_id = ?
+			)`, pageID, id)
+			if err != nil || matched {
+				return matched, err
+			}
+			matched, err = exists(`SELECT EXISTS(
+				SELECT 1 FROM page_versions WHERE page_id = ? AND changed_by = ?
+			)`, pageID, id)
+			if err != nil || matched {
+				return matched, err
+			}
+		}
+		for mediaID := range failed[types.EntityMedia] {
+			matched, err := exists(`SELECT EXISTS(
+				SELECT 1 FROM media WHERE id = ? AND uploaded_by = ?
+			)`, mediaID, id)
+			if err != nil || matched {
+				return matched, err
+			}
+		}
+	case types.EntityPage, types.EntityPost:
+		return forFailedNavigationTarget(true)
+	}
+	return false, nil
+}
+
+// orderCategoryIDsChildFirst ensures tracked descendants are deleted before
+// their tracked ancestors. A parent is preserved when any child remains after
+// that pass, which protects administrator-created descendants without leaking
+// an imported parent merely because its own tracked child had not run yet.
+func orderCategoryIDsChildFirst(ctx context.Context, queries *store.Queries, ids []int64) ([]int64, error) {
+	parents := make(map[int64]int64, len(ids))
+	for _, id := range ids {
+		category, err := queries.GetCategoryByID(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if category.ParentID.Valid {
+			parents[id] = category.ParentID.Int64
+		}
+	}
+	depths := make(map[int64]int, len(ids))
+	var depth func(int64, map[int64]bool) int
+	depth = func(id int64, visiting map[int64]bool) int {
+		if known, ok := depths[id]; ok {
+			return known
+		}
+		if visiting[id] {
+			// A malformed cycle must not recurse forever. Equal depths preserve
+			// the stable tracking order; the database delete will then fail
+			// safely if its constraints reject the cycle.
+			return 0
+		}
+		visiting[id] = true
+		value := 0
+		if parentID, trackedParent := parents[id]; trackedParent {
+			if _, parentIsTracked := parents[parentID]; parentIsTracked {
+				value = depth(parentID, visiting) + 1
+			} else {
+				for _, candidate := range ids {
+					if candidate == parentID {
+						value = depth(parentID, visiting) + 1
+						break
+					}
+				}
+			}
+		}
+		delete(visiting, id)
+		depths[id] = value
+		return value
+	}
+
+	ordered := append([]int64(nil), ids...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return depth(ordered[i], map[int64]bool{}) > depth(ordered[j], map[int64]bool{})
+	})
+	return ordered, nil
+}
+
+const entityDeleteSavepoint = "migrator_entity_delete"
+
+func beginEntityDeleteSavepoint(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, "SAVEPOINT "+entityDeleteSavepoint)
+	return err
+}
+
+func releaseEntityDeleteSavepoint(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, "RELEASE SAVEPOINT "+entityDeleteSavepoint)
+	return err
+}
+
+// rollbackEntityDeleteSavepoint reverts both the beforeDelete hook and the
+// delete statement. The hook may already have reparented or detached
+// administrator-owned rows, and those changes must not survive a failed
+// deletion of the imported owner.
+func rollbackEntityDeleteSavepoint(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT "+entityDeleteSavepoint); err != nil {
+		return err
+	}
+	return releaseEntityDeleteSavepoint(ctx, tx)
 }
 
 // retainTrackingRows re-inserts tracking rows for items whose delete failed.
@@ -1073,6 +1557,31 @@ func retainTrackingRows(ctx context.Context, tx *sql.Tx, source string, failed [
 // for an import: a delete is bounded by what one import created and is a rare,
 // deliberate admin action, whereas an import can run for hours.
 func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[string]int, error) {
+	m.retryQueuedMediaCleanup(ctx, source)
+	return m.deleteImportedItemsAfterCleanupRetry(ctx, source)
+}
+
+// retryQueuedMediaCleanup retries durable filesystem work independently of a
+// new database deletion. It intentionally logs and continues on failure:
+// drainMediaCleanup keeps failed rows queued for the next bounded attempt.
+func (m *Module) retryQueuedMediaCleanup(ctx context.Context, source string) {
+	// A prior delete or import-time compensation may have committed cleanup work
+	// that is still waiting on the filesystem. Retry it on every later delete
+	// attempt, even when the new database deletion aborts before commit. The retry
+	// has its own bounded context because it is independent of both this
+	// transaction and a request cancellation; failed work remains durable and the
+	// post-commit drain retries it together with any newly queued UUIDs.
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupDrainTimeout)
+	defer cleanupCancel()
+	if err := m.drainMediaCleanup(cleanupCtx, source); err != nil {
+		m.ctx.Logger.Warn("media cleanup remains queued after pre-delete retry",
+			"source", source, "error", err)
+	}
+}
+
+// deleteImportedItemsAfterCleanupRetry performs the transactional delete after
+// its caller has retried already-queued filesystem work.
+func (m *Module) deleteImportedItemsAfterCleanupRetry(ctx context.Context, source string) (map[string]int, error) {
 	tx, err := m.ctx.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin delete transaction: %w", err)
@@ -1084,21 +1593,27 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 	var running int
 	if err := tx.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM migrator_import_jobs
-		WHERE source = ? AND status = ? AND updated_at >= ?`,
-		source, string(JobRunning), time.Now().Add(-staleJobThreshold)).Scan(&running); err != nil {
+		WHERE source = ? AND status = ?
+		  AND (owner_run_id = ? OR updated_at >= ?)`,
+		source, string(JobRunning), m.runID, time.Now().Add(-staleJobThreshold)).Scan(&running); err != nil {
 		return nil, fmt.Errorf("failed to check for a running import: %w", err)
 	}
 	if running > 0 {
 		return nil, errImportRunning
 	}
 
-	// Files are removed after the commit: os.RemoveAll cannot be rolled back,
-	// so deleting during the transaction would leave media rows pointing at
-	// missing files if anything later forced a rollback.
+	// Files are removed after the commit: filesystem deletion cannot be rolled
+	// back. UUIDs are first persisted to the durable queue in this transaction,
+	// so a crash or removal failure cannot make the work undiscoverable.
 	var mediaUUIDs []string
 	// Items whose delete failed. Their tracking rows survive so the operator can
 	// retry, and so the Imported Content panel keeps showing what is left.
 	var failed []trackedItem
+	failedEntities := make(failedEntityIDs)
+	recordFailure := func(entityType types.EntityType, id int64) {
+		failed = append(failed, trackedItem{entityType: string(entityType), id: id})
+		failedEntities.add(entityType, id)
+	}
 	queries := store.New(m.ctx.DB).WithTx(tx)
 	deleted := make(map[string]int)
 
@@ -1112,21 +1627,84 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 			deleted[string(d.entityType)] = len(ids)
 			continue
 		}
+		if d.entityType == types.EntityCategory {
+			ids, err = orderCategoryIDsChildFirst(ctx, queries, ids)
+			if err != nil {
+				return nil, fmt.Errorf("failed to order imported categories for deletion: %w", err)
+			}
+		}
 		for _, id := range ids {
-			if m.preserveShared(ctx, queries, d, id) {
+			if err := beginEntityDeleteSavepoint(ctx, tx); err != nil {
+				return nil, fmt.Errorf("failed to begin savepoint for %s %d: %w",
+					string(d.entityType), id, err)
+			}
+			retryable, dependencyErr := keptEntityDependsOnFailedItems(
+				ctx, queries, tx, d.entityType, id, failedEntities,
+			)
+			if dependencyErr != nil {
+				if err := rollbackEntityDeleteSavepoint(ctx, tx); err != nil {
+					return nil, fmt.Errorf("failed to roll back dependency check for %s %d: %w",
+						string(d.entityType), id, errors.Join(dependencyErr, err))
+				}
+				m.ctx.Logger.Warn("could not identify the failed imported dependency; keeping item tracked",
+					"type", string(d.entityType), "id", id, "error", dependencyErr)
+				recordFailure(d.entityType, id)
+				continue
+			}
+			if retryable {
+				if err := releaseEntityDeleteSavepoint(ctx, tx); err != nil {
+					return nil, fmt.Errorf("failed to release savepoint for retryable %s %d: %w",
+						string(d.entityType), id, err)
+				}
+				recordFailure(d.entityType, id)
+				continue
+			}
+
+			keep, beforeErr := m.preserveShared(ctx, queries, d, id)
+			if beforeErr != nil {
+				if errors.Is(beforeErr, sql.ErrNoRows) {
+					// A cascade or an earlier manual cleanup already removed the
+					// tracked row. There is nothing to retry.
+					if err := releaseEntityDeleteSavepoint(ctx, tx); err != nil {
+						return nil, fmt.Errorf("failed to release savepoint for missing %s %d: %w",
+							string(d.entityType), id, err)
+					}
+					deleted[string(d.entityType)]++
+					continue
+				}
+				if err := rollbackEntityDeleteSavepoint(ctx, tx); err != nil {
+					return nil, fmt.Errorf("failed to roll back before-delete work for %s %d: %w",
+						string(d.entityType), id, err)
+				}
+				recordFailure(d.entityType, id)
+				continue
+			}
+			if keep {
 				// Deliberately kept, permanently: retrying would keep it too,
 				// so its tracking row goes.
+				if err := releaseEntityDeleteSavepoint(ctx, tx); err != nil {
+					return nil, fmt.Errorf("failed to release savepoint for preserved %s %d: %w",
+						string(d.entityType), id, err)
+				}
 				continue
 			}
 			if err := d.del(ctx, queries, id); err != nil {
+				if rollbackErr := rollbackEntityDeleteSavepoint(ctx, tx); rollbackErr != nil {
+					return nil, fmt.Errorf("delete and savepoint rollback failed for %s %d: %w",
+						string(d.entityType), id, errors.Join(err, rollbackErr))
+				}
 				// Keep the tracking row. Clearing it was the more damaging half
 				// of this: the row stayed in the database, untracked, while the
 				// UI reported a clean delete — so nothing could ever find it
 				// again, not even a retry.
 				m.ctx.Logger.Warn("failed to delete imported item; keeping it tracked so a retry can find it",
 					"type", string(d.entityType), "id", id, "error", err)
-				failed = append(failed, trackedItem{entityType: string(d.entityType), id: id})
+				recordFailure(d.entityType, id)
 				continue
+			}
+			if err := releaseEntityDeleteSavepoint(ctx, tx); err != nil {
+				return nil, fmt.Errorf("failed to release savepoint for deleted %s %d: %w",
+					string(d.entityType), id, err)
 			}
 			deleted[string(d.entityType)]++
 		}
@@ -1146,94 +1724,53 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 			"source", source, "count", len(failed))
 	}
 
+	if len(mediaUUIDs) > 0 {
+		uploadRoot, err := m.configuredUploadRoot()
+		if err != nil {
+			return nil, fmt.Errorf("resolve uploads root before delete: %w", err)
+		}
+		for _, mediaUUID := range mediaUUIDs {
+			if err := enqueueMediaCleanup(ctx, tx, mediaCleanupWork{
+				source: source, uploadRoot: uploadRoot, mediaUUID: mediaUUID,
+			}); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit delete: %w", err)
 	}
 
-	for _, uuid := range mediaUUIDs {
-		m.deleteMediaFiles(uuid)
+	cleanupErr := m.drainMediaCleanup(ctx, source)
+	var pendingErr error
+	if len(failed) > 0 {
+		pendingErr = &importedRowsPendingError{count: len(failed)}
 	}
-
-	return deleted, nil
+	return deleted, errors.Join(pendingErr, cleanupErr)
 }
 
 // preserveShared reports whether a row must be kept because content this import
 // does not own still points at it.
 //
-// A count failure preserves too. The two outcomes are not symmetric: keeping an
-// imported tag costs the operator one row they can delete by hand, while
-// removing a shared one silently strips the association from an original page
-// and cannot be undone.
-func (m *Module) preserveShared(ctx context.Context, queries *store.Queries, d entityDeleter, id int64) bool {
+// A check failure preserves the row and its tracking entry for retry. The two
+// outcomes are not symmetric: keeping an imported tag costs the operator one
+// row they can delete by hand, while removing a shared one silently strips the
+// association from an original page and cannot be undone.
+func (m *Module) preserveShared(ctx context.Context, queries *store.Queries, d entityDeleter, id int64) (bool, error) {
 	if d.beforeDelete == nil {
-		return false
+		return false, nil
 	}
 	keep, err := d.beforeDelete(ctx, queries, id)
 	if err != nil {
-		m.ctx.Logger.Warn("could not check an imported item before deleting it; keeping it",
+		m.ctx.Logger.Warn("could not prepare an imported item for deletion; keeping it tracked for retry",
 			"type", string(d.entityType), "id", id, "error", err)
-		return true
+		return true, err
 	}
 	if !keep {
-		return false
+		return false, nil
 	}
 	m.ctx.Logger.Info("keeping imported item still used by content this import did not create",
 		"type", string(d.entityType), "id", id)
-	return true
-}
-
-// deleteMediaFiles removes media files from disk.
-//
-// The UUID is validated before it reaches os.RemoveAll. Media UUIDs are
-// normally server-generated, but internal/transfer/importer.go carries the UUID
-// over from an uploaded archive, so "the value came from our own database" is
-// not a strong enough guarantee for a recursive delete. Each path is then
-// joined properly and confirmed to sit inside the uploads root.
-func (m *Module) deleteMediaFiles(mediaUUID string) {
-	if !isMediaUUID(mediaUUID) {
-		m.ctx.Logger.Warn("refusing to delete media directory for malformed uuid", "uuid", mediaUUID)
-		return
-	}
-
-	uploadDir := os.Getenv("OCMS_UPLOADS_DIR")
-	if uploadDir == "" {
-		uploadDir = "./uploads"
-	}
-
-	// Derived from model.ImageVariants rather than listed here. This was a
-	// hardcoded copy and it had drifted: it omitted "og", so deleting an import
-	// left /uploads/og/<uuid> behind for every image, with the media row and its
-	// tracking row both gone and nothing left to find the directory from.
-	for _, variant := range model.MediaStorageDirs() {
-		dir := filepath.Join(uploadDir, variant, mediaUUID)
-		if err := util.ValidatePathWithinBase(uploadDir, dir); err != nil {
-			m.ctx.Logger.Warn("refusing to delete path outside uploads root", "dir", dir, "error", err)
-			continue
-		}
-		if err := os.RemoveAll(dir); err != nil {
-			m.ctx.Logger.Warn("failed to delete media directory", "dir", dir, "error", err)
-		}
-	}
-}
-
-// isMediaUUID reports whether s is a canonical hyphenated UUID. Deliberately
-// stricter than uuid.Parse, which also accepts unhyphenated and URN forms.
-func isMediaUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i, r := range s {
-		switch i {
-		case 8, 13, 18, 23:
-			if r != '-' {
-				return false
-			}
-		default:
-			isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
-			if !isHex {
-				return false
-			}
-		}
-	}
-	return true
+	return true, nil
 }

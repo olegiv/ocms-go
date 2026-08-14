@@ -8,7 +8,7 @@
         </svg>
         <h2>{{TTheme $.LangCode "forms.public.thank_you"}}</h2>
         <p>{{if .Form.SuccessMessage.Valid}}{{.Form.SuccessMessage.String}}{{else}}{{TTheme $.LangCode "forms.public.default_success"}}{{end}}</p>
-        <a href="/forms/{{.Form.Slug}}" class="st-btn st-btn--primary">{{TTheme $.LangCode "forms.public.submit_another"}}</a>
+        <a href="{{.LangPrefix}}/forms/{{.Form.Slug}}" class="st-btn st-btn--primary">{{TTheme $.LangCode "forms.public.submit_another"}}</a>
     </div>
     {{else}}
     <header class="st-article__header">
@@ -28,7 +28,7 @@
     <div class="st-alert st-alert--error">{{index .Errors "_captcha"}}</div>
     {{end}}
 
-    <form method="POST" action="/forms/{{.Form.Slug}}" class="st-form">
+    <form method="POST" action="{{.LangPrefix}}/forms/{{.Form.Slug}}" class="st-form">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
         <!-- Honeypot -->

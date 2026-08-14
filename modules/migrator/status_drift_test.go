@@ -171,7 +171,7 @@ func TestFinishJobPreservesCountersWithoutResult(t *testing.T) {
 	for range 4200 {
 		progress.addItem(types.EntityPage)
 	}
-	snap, _ := progress.snapshot()
+	snap := progress.forceSnapshot()
 	if err := m.flushJobProgress(ctx, jobID, snap); err != nil {
 		t.Fatalf("flushJobProgress: %v", err)
 	}
@@ -195,6 +195,53 @@ func TestFinishJobPreservesCountersWithoutResult(t *testing.T) {
 	}
 	if job.FatalError == "" {
 		t.Error("fatal error was not recorded")
+	}
+}
+
+func TestFailedProgressFlushRemainsRecoverableAfterPanic(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	jobID, err := m.startJob(ctx, "drupal", "tester@example.com", 0, ImportOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress := newJobProgress()
+	for range 17 {
+		progress.addItem(types.EntityPage)
+	}
+	snap, revision, changed := progress.pendingSnapshot()
+	if !changed {
+		t.Fatal("progress snapshot is unexpectedly clean")
+	}
+	if _, err := m.ctx.DB.ExecContext(ctx, fmt.Sprintf(`
+		CREATE TRIGGER fail_progress_flush
+		BEFORE UPDATE OF counters ON migrator_import_jobs WHEN OLD.id = %d
+		BEGIN SELECT RAISE(FAIL, 'forced progress flush failure'); END`, jobID)); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.flushJobProgress(ctx, jobID, snap); err == nil {
+		t.Fatal("flushJobProgress() error = nil, want forced failure")
+	}
+	// No acknowledgement follows a failed ticker write.
+	if _, retryRevision, pending := progress.pendingSnapshot(); !pending || retryRevision != revision {
+		t.Fatal("failed progress write was incorrectly marked durable")
+	}
+	if _, err := m.ctx.DB.ExecContext(ctx, `DROP TRIGGER fail_progress_flush`); err != nil {
+		t.Fatal(err)
+	}
+	// Panic recovery force-copies the full accumulator after joining the ticker.
+	if err := m.flushJobProgress(ctx, jobID, progress.forceSnapshot()); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.finishJob(ctx, jobID, JobFailed, nil, errors.New("import panicked: boom")); err != nil {
+		t.Fatal(err)
+	}
+	job, err := m.latestJob(ctx, "drupal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := job.Counters[string(types.EntityPage)]; got != 17 {
+		t.Fatalf("persisted page count after failed tick and panic = %d, want 17", got)
 	}
 }
 

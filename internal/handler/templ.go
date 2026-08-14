@@ -1330,6 +1330,7 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 			ID:        p.ID,
 			Title:     p.Title,
 			Slug:      p.Slug,
+			PublicURL: data.PagePublicURLs[p.ID],
 			Status:    p.Status,
 			PageType:  p.PageType,
 			UpdatedAt: renderer.FormatDateTimeLocale(p.UpdatedAt, lang),
@@ -1416,6 +1417,7 @@ func convertPageCategoryNodes(nodes []PageCategoryNode) []adminviews.PageCategor
 func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang string) adminviews.PageFormViewData {
 	viewData := adminviews.PageFormViewData{
 		IsEdit:               data.IsEdit,
+		PublicURL:            data.PublicURL,
 		Statuses:             data.Statuses,
 		PageTypes:            data.PageTypes,
 		AllCategories:        convertPageCategoryNodes(data.AllCategories),
@@ -1834,6 +1836,7 @@ func convertFormsListViewData(data FormsListData) adminviews.FormsListViewData {
 			IsActive:        f.Form.IsActive,
 			SubmissionCount: f.SubmissionCount,
 			UnreadCount:     f.UnreadCount,
+			PublicURL:       f.PublicURL,
 		}
 	}
 	return adminviews.FormsListViewData{Forms: items}
@@ -1882,6 +1885,7 @@ func convertFormFormViewData(data FormFormData, renderer *render.Renderer) admin
 		viewData.EmailTo = data.Form.EmailTo.String
 		viewData.IsActive = data.Form.IsActive
 		viewData.LanguageCode = data.Form.LanguageCode
+		viewData.PublicURL = data.PublicURL
 	}
 
 	// Fields
@@ -1943,6 +1947,7 @@ func convertSubmissionsListViewData(data SubmissionsListData, renderer *render.R
 		FormID:      data.Form.ID,
 		FormName:    data.Form.Name,
 		FormSlug:    data.Form.Slug,
+		PublicURL:   data.PublicURL,
 		TotalCount:  data.TotalCount,
 		UnreadCount: data.UnreadCount,
 		Submissions: subs,

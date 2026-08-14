@@ -33,6 +33,7 @@ func (n *Node) IsPublished() bool { return n.Status == 1 }
 type Term struct {
 	TID         int64
 	Vocabulary  string // vid: "tags", "categories", …
+	Langcode    string
 	Name        string
 	Description sql.NullString
 	Weight      int64
@@ -96,12 +97,18 @@ func (p *PathAlias) NodeID() (int64, bool) {
 	return parseNodePath(p.Path)
 }
 
+// TermID extracts the term ID from a "/taxonomy/term/<tid>" system path.
+func (p *PathAlias) TermID() (int64, bool) {
+	return parseTermPath(p.Path)
+}
+
 // MenuLink is one row of menu_link_content_data.
 type MenuLink struct {
 	ID       int64
 	UUID     string
 	Title    string
 	MenuName string
+	Langcode string
 	LinkURI  string
 	Parent   sql.NullString // "menu_link_content:<uuid>" or empty for a root item
 	Weight   int64

@@ -28,6 +28,7 @@ type PageListItemView struct {
 	ID               int64
 	Title            string
 	Slug             string
+	PublicURL        string
 	Status           string
 	PageType         string
 	IsScheduled      bool
@@ -75,6 +76,7 @@ type PageFormViewData struct {
 	PageID        int64
 	PageTitle     string
 	PageSlug      string
+	PublicURL     string
 	PageBody      string
 	PageSummary   string
 	PageStatus    string
@@ -727,7 +729,11 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 			}
 		}
 		@table.Cell() {
-			<a href={ templ.SafeURL(fmt.Sprintf("/%s", page.Slug)) } class="page-title-link" target="_blank" rel="noopener noreferrer">{ page.Title }</a>
+			if page.PublicURL != "" {
+				<a href={ templ.SafeURL(page.PublicURL) } class="page-title-link" target="_blank" rel="noopener noreferrer">{ page.Title }</a>
+			} else {
+				<span class="page-title-link">{ page.Title }</span>
+			}
 		}
 		@table.Cell() {
 			if len(page.Tags) > 0 {
@@ -844,9 +850,11 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
 		if data.IsEdit {
 			@PageHeader(pc.T("pages.edit"), pc.T("pages.edit_description")) {
-				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/" + data.PageSlug, Target: "_blank"}) {
-					@icon.Eye(icon.Props{Size: 16})
-					{ pc.T("btn.preview") }
+				if data.PublicURL != "" {
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: data.PublicURL, Target: "_blank"}) {
+						@icon.Eye(icon.Props{Size: 16})
+						{ pc.T("btn.preview") }
+					}
 				}
 				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d/versions", data.PageID)}) {
 					@iconClockHistory()

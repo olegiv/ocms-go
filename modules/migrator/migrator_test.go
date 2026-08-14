@@ -15,7 +15,11 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/olegiv/ocms-go/internal/imaging"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
@@ -38,6 +42,17 @@ func (s *mockSource) ConfigFields() []types.ConfigField {
 func (s *mockSource) TestConnection(_ map[string]string) error { return nil }
 func (s *mockSource) Import(_ context.Context, _ *sql.DB, _ map[string]string, _ types.ImportOptions, _ types.ImportTracker) (*types.ImportResult, error) {
 	return &types.ImportResult{}, nil
+}
+
+type canceledConnectionSource struct {
+	mockSource
+	observedCancellation bool
+}
+
+func (s *canceledConnectionSource) TestConnectionContext(ctx context.Context, _ map[string]string) error {
+	<-ctx.Done()
+	s.observedCancellation = true
+	return ctx.Err()
 }
 
 func testModule(t *testing.T) *Module {
@@ -87,7 +102,7 @@ func TestModuleProperties(t *testing.T) {
 
 func TestMigrations(t *testing.T) {
 	m := New()
-	moduleutil.AssertMigrations(t, m.Migrations(), 5)
+	moduleutil.AssertMigrations(t, m.Migrations(), 6)
 }
 
 func TestMigrationUp(t *testing.T) {
@@ -103,12 +118,140 @@ func TestMigrationUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("migrator_imported_items table should exist: %v", err)
 	}
+	if err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='migrator_media_cleanup_queue'`).Scan(&name); err != nil {
+		t.Fatalf("migrator_media_cleanup_queue table should exist: %v", err)
+	}
 
 	// Verify indexes exist
 	for _, idx := range []string{"idx_migrator_source", "idx_migrator_entity"} {
 		err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='index' AND name=?`, idx).Scan(&name)
 		if err != nil {
 			t.Errorf("index %s should exist: %v", idx, err)
+		}
+	}
+}
+
+func TestMediaCleanupMigrationColumns(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	moduleutil.RunMigrations(t, db, New().Migrations())
+
+	want := []string{"source", "upload_root", "media_uuid", "attempts", "last_error", "created_at", "updated_at"}
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('migrator_media_cleanup_queue') ORDER BY cid`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var got []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, name)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("cleanup queue columns = %v, want %v", got, want)
+	}
+}
+
+func migrationByVersion(t *testing.T, version int64) module.Migration {
+	t.Helper()
+	for _, migration := range New().Migrations() {
+		if migration.Version == version {
+			return migration
+		}
+	}
+	t.Fatalf("migration %d not found", version)
+	return module.Migration{}
+}
+
+func legacyJobsTableDDL() string {
+	ddl := strings.ReplaceAll(createPartialJobsTableSQL,
+		"migrator_import_jobs_new", "migrator_import_jobs")
+	return strings.Replace(ddl,
+		"'running','completed','failed','partial','interrupted'",
+		"'running','completed','failed','interrupted'", 1)
+}
+
+func TestMigrationV5RollsBackFailedRebuildAndRetries(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	if _, err := db.Exec(legacyJobsTableDDL()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`PRAGMA ignore_check_constraints = ON`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO migrator_import_jobs (source, status) VALUES ('drupal', 'corrupt')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`PRAGMA ignore_check_constraints = OFF`); err != nil {
+		t.Fatal(err)
+	}
+
+	migration := migrationByVersion(t, 5)
+	if err := migration.Up(db); err == nil {
+		t.Fatal("migration 5 succeeded despite a row rejected by the replacement constraint")
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM migrator_import_jobs WHERE source = 'drupal'`).Scan(&status); err != nil {
+		t.Fatalf("legacy table/data did not survive rollback: %v", err)
+	}
+	if status != "corrupt" {
+		t.Fatalf("legacy status = %q, want corrupt", status)
+	}
+	var tempCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='migrator_import_jobs_new'`).Scan(&tempCount); err != nil {
+		t.Fatal(err)
+	}
+	if tempCount != 0 {
+		t.Fatal("temporary jobs table survived the rolled-back migration")
+	}
+
+	if _, err := db.Exec(`DELETE FROM migrator_import_jobs WHERE status = 'corrupt'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO migrator_import_jobs (source, status) VALUES ('drupal', 'completed')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migration.Up(db); err != nil {
+		t.Fatalf("migration retry failed: %v", err)
+	}
+	if !statusCheckAllows(db, "partial") {
+		t.Fatal("rebuilt jobs table still rejects partial status")
+	}
+	if _, err := db.Exec(`INSERT INTO migrator_import_jobs (source, status) VALUES ('elefant', 'partial')`); err != nil {
+		t.Fatalf("partial status insert failed after rebuild: %v", err)
+	}
+}
+
+func TestMigrationV5RecoversRenameInterruptedLegacyState(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	if _, err := db.Exec(createPartialJobsTableSQL); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO migrator_import_jobs_new (source, status) VALUES ('drupal', 'partial')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrationByVersion(t, 5).Up(db); err != nil {
+		t.Fatalf("migration recovery failed: %v", err)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM migrator_import_jobs WHERE source = 'drupal'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "partial" {
+		t.Fatalf("recovered status = %q, want partial", status)
+	}
+	for _, index := range []string{"idx_migrator_jobs_one_running", "idx_migrator_jobs_source_started"} {
+		var count int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, index).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 1 {
+			t.Fatalf("index %s count = %d, want 1", index, count)
 		}
 	}
 }
@@ -121,6 +264,7 @@ func TestMigrationDown(t *testing.T) {
 	moduleutil.RunMigrations(t, db, m.Migrations())
 	moduleutil.RunMigrationsDown(t, db, m.Migrations())
 	moduleutil.AssertTableNotExists(t, db, "migrator_imported_items")
+	moduleutil.AssertTableNotExists(t, db, "migrator_media_cleanup_queue")
 }
 
 // --- Init / Shutdown ---
@@ -364,6 +508,36 @@ func TestHandlerUnauthenticated_TestConnection(t *testing.T) {
 	}
 }
 
+func TestConnectionCancellationWritesNoResponse(t *testing.T) {
+	m := testModule(t)
+	source := &canceledConnectionSource{mockSource: mockSource{name: "cancel-test"}}
+	RegisterSource(source)
+	t.Cleanup(func() {
+		sourcesMu.Lock()
+		delete(sources, source.Name())
+		sourcesMu.Unlock()
+	})
+
+	requestContext, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodPost, "/admin/migrator/cancel-test/test", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("source", source.Name())
+	requestContext = context.WithValue(requestContext, chi.RouteCtxKey, rctx)
+	requestContext = context.WithValue(requestContext, middleware.ContextKeyUser,
+		store.User{ID: 1, Email: "admin@example.com", Role: "admin"})
+	req = req.WithContext(requestContext)
+	rr := httptest.NewRecorder()
+
+	m.handleTestConnection(rr, req)
+	if !source.observedCancellation {
+		t.Fatal("context-aware source did not observe request cancellation")
+	}
+	if rr.Header().Get("Location") != "" || rr.Body.Len() != 0 {
+		t.Fatalf("canceled connection test wrote response: headers=%v body=%q", rr.Header(), rr.Body.String())
+	}
+}
+
 func TestHandlerUnauthenticated_Import(t *testing.T) {
 	m := testModule(t)
 
@@ -394,14 +568,6 @@ func TestHandlerUnauthenticated_Delete(t *testing.T) {
 	}
 }
 
-// --- deleteMediaFiles ---
-
-func TestDeleteMediaFiles_NoPanic(t *testing.T) {
-	m := testModule(t)
-	// Random UUID that doesn't exist on disk — os.RemoveAll on missing dirs is a no-op.
-	m.deleteMediaFiles("00000000-0000-0000-0000-000000000000")
-}
-
 // TestDeleteMediaFilesRemovesEveryStorageDir asserts that deleting a media item
 // removes everything creating one can produce.
 //
@@ -415,7 +581,6 @@ func TestDeleteMediaFilesRemovesEveryStorageDir(t *testing.T) {
 	uploadDir := t.TempDir()
 	t.Setenv("OCMS_UPLOADS_DIR", uploadDir)
 
-	m := testModule(t)
 	const mediaUUID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
 
 	dirs := model.MediaStorageDirs()
@@ -438,7 +603,9 @@ func TestDeleteMediaFilesRemovesEveryStorageDir(t *testing.T) {
 		}
 	}
 
-	m.deleteMediaFiles(mediaUUID)
+	if err := imaging.DeleteMediaFiles(uploadDir, mediaUUID); err != nil {
+		t.Fatalf("DeleteMediaFiles() error = %v", err)
+	}
 
 	for _, dir := range dirs {
 		path := filepath.Join(uploadDir, dir, mediaUUID)

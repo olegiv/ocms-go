@@ -29,6 +29,10 @@ type MigratorSourceFormViewData struct {
 	ConfigFields   []ConfigField
 	Config         map[string]string
 	ImportedCounts map[string]int
+	// PendingMediaCleanup is the durable filesystem-cleanup backlog. Those rows
+	// are already included in ImportedCounts[media], but remain separate so the
+	// UI does not present queued work as ordinary imported media.
+	PendingMediaCleanup int
 	Job            *ImportJob
 	// JobReadErr carries a failed job lookup into the initial render. Passing
 	// nil said "no import has ever run" and dropped hx-trigger, so a transient
@@ -348,13 +352,23 @@ func optionEnabled(supported map[string]bool, formKey string) bool {
 // Delete button at all — until the operator refreshed by hand.
 //
 // oob marks the copy returned by the status endpoint rather than the page.
-templ MigratorImportedContent(pc *adminviews.PageContext, sourceName string, counts map[string]int, oob bool) {
+templ MigratorImportedContent(pc *adminviews.PageContext, sourceName string, counts map[string]int, pendingMediaCleanup int, oob bool) {
 	<div id="migrator-imported-content" { oobAttrs(oob)... }>
 		<div class="card card-danger">
 			<div class="card-header">
 				<h2>{ pc.T("migrator.imported_content") }</h2>
 			</div>
 			<div class="card-body">
+				if counts == nil {
+					<div class="alert alert-warning" role="alert">
+						{ pc.T("migrator.warning_imported_state_unknown") }
+					</div>
+				}
+				if pendingMediaCleanup > 0 {
+					<div class="alert alert-warning" role="alert">
+						{ pc.T("migrator.warning_media_cleanup_pending") }
+					</div>
+				}
 				if hasCounts(counts) {
 					<div class="imported-stats">
 						for _, entityType := range types.AllEntityTypes {
@@ -366,6 +380,8 @@ templ MigratorImportedContent(pc *adminviews.PageContext, sourceName string, cou
 							}
 						}
 					</div>
+				}
+				if hasCounts(counts) || counts == nil {
 					<form method="POST" action={ templ.URL("/admin/migrator/" + sourceName + "/delete") } id="delete-imported-form" data-confirm={ pc.T("migrator.confirm_delete") }>
 						<button type="submit" class="btn btn-danger">
 							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -378,7 +394,8 @@ templ MigratorImportedContent(pc *adminviews.PageContext, sourceName string, cou
 							{ pc.T("migrator.delete_imported") }
 						</button>
 					</form>
-				} else {
+				}
+				if counts != nil && !hasCounts(counts) {
 					<p class="text-muted">{ pc.T("migrator.no_imported_content") }</p>
 				}
 			</div>
@@ -389,10 +406,10 @@ templ MigratorImportedContent(pc *adminviews.PageContext, sourceName string, cou
 // MigratorJobStatusResponse is the body of the status endpoint: the job card
 // plus an out-of-band copy of the Imported Content card, so a single poll keeps
 // both regions current without reloading the page.
-templ MigratorJobStatusResponse(pc *adminviews.PageContext, data MigratorJobStatusViewData, counts map[string]int, countsOK bool) {
+templ MigratorJobStatusResponse(pc *adminviews.PageContext, data MigratorJobStatusViewData, counts map[string]int, pendingMediaCleanup int, countsOK bool) {
 	@MigratorJobStatus(pc, data)
 	if countsOK {
-		@MigratorImportedContent(pc, data.SourceName, counts, true)
+		@MigratorImportedContent(pc, data.SourceName, counts, pendingMediaCleanup, true)
 	}
 }
 
@@ -577,7 +594,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 					</button>
 				</div>
 			</form>
-			@MigratorImportedContent(pc, data.SourceName, data.ImportedCounts, false)
+			@MigratorImportedContent(pc, data.SourceName, data.ImportedCounts, data.PendingMediaCleanup, false)
 		</div>
 		<style>
 			.migrator-form-container {

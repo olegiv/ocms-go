@@ -621,11 +621,11 @@ func TestPageVideoURL(t *testing.T) {
 		}
 
 		updated, err := queries.UpdatePage(context.Background(), store.UpdatePageParams{
-			ID:       page.ID,
-			Title:    page.Title,
-			Slug:     page.Slug,
-			Body:     page.Body,
-			Status:   page.Status,
+			ID:         page.ID,
+			Title:      page.Title,
+			Slug:       page.Slug,
+			Body:       page.Body,
+			Status:     page.Status,
 			VideoUrl:   "https://youtu.be/dQw4w9WgXcQ",
 			VideoTitle: "Updated Video Title",
 		})

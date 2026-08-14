@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/internal/views/components/alert"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
@@ -268,10 +270,10 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 								Value: languageFormValue(data, "code"),
 								Placeholder: pc.T("languages.code_placeholder"),
 								HasError: data.Errors["code"] != "",
-								Readonly: data.IsEdit,
+								Readonly: languageCodeReadonly(data),
 								Attributes: templ.Attributes{
 									"x-model": "code",
-									"maxlength": "5",
+									"maxlength": "10",
 									"required": true,
 									"autofocus": !data.IsEdit,
 								},
@@ -485,6 +487,18 @@ func languageFormValue(data LanguageFormData, field string) string {
 		}
 	}
 	return ""
+}
+
+// languageCodeReadonly preserves the existing immutable-code behavior for
+// ordinary languages while allowing administrators to rename legacy invalid or
+// reserved codes that the public router deliberately ignores.
+func languageCodeReadonly(data LanguageFormData) bool {
+	if !data.IsEdit || data.Language == nil {
+		return false
+	}
+
+	code := data.Language.Code
+	return util.IsValidLangCode(code) && !util.IsReservedLanguageCode(code)
 }
 
 func languageFormChecked(data LanguageFormData, field string) bool {

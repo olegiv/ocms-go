@@ -118,10 +118,9 @@ func (c *TranslationCache) GetBatch(ctx context.Context, entityType string, enti
 
 // loadEntity loads translations for a single entity from the database.
 func (c *TranslationCache) loadEntity(ctx context.Context, entityType string, entityID int64) (TranslationMap, error) {
-	translations, err := c.queries.GetRelatedTranslations(ctx, store.GetRelatedTranslationsParams{
-		EntityType:    entityType,
-		EntityID:      entityID,
-		TranslationID: entityID,
+	translations, err := c.queries.ListTranslationComponentMembers(ctx, store.ListTranslationComponentMembersParams{
+		EntityType:     entityType,
+		SourceEntityID: entityID,
 	})
 	if err != nil {
 		return nil, err
@@ -129,14 +128,7 @@ func (c *TranslationCache) loadEntity(ctx context.Context, entityType string, en
 
 	tmap := make(TranslationMap)
 	for _, t := range translations {
-		langCode := t.LanguageCode
-		// Map to the translation target
-		if t.EntityID == entityID {
-			tmap[langCode] = t.TranslationID
-		} else {
-			// This entity is a translation target, map back to source
-			tmap[langCode] = t.EntityID
-		}
+		tmap[t.LanguageCode] = t.EntityID
 	}
 
 	// Cache the result
@@ -166,26 +158,20 @@ func (c *TranslationCache) loadBatch(ctx context.Context, entityType string, ent
 	// Load translations for each entity
 	// Note: We could optimize this with a batch query if sqlc supported it
 	for _, id := range entityIDs {
-		translations, err := c.queries.GetRelatedTranslations(ctx, store.GetRelatedTranslationsParams{
-			EntityType:    entityType,
-			EntityID:      id,
-			TranslationID: id,
+		translations, err := c.queries.ListTranslationComponentMembers(ctx, store.ListTranslationComponentMembersParams{
+			EntityType:     entityType,
+			SourceEntityID: id,
 		})
 		if err != nil {
 			return nil, err
 		}
 
 		for _, t := range translations {
-			langCode := t.LanguageCode
 			// Ensure the inner map exists (defensive check for nilaway)
 			if result[id] == nil {
 				result[id] = make(TranslationMap)
 			}
-			if t.EntityID == id {
-				result[id][langCode] = t.TranslationID
-			} else {
-				result[id][langCode] = t.EntityID
-			}
+			result[id][t.LanguageCode] = t.EntityID
 		}
 	}
 

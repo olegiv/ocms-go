@@ -243,6 +243,26 @@ func TestLanguageCache_GetDefault_EmptyDB(t *testing.T) {
 	}
 }
 
+func TestLanguageCache_GetDefault_AmbiguousDefaultsFailClosed(t *testing.T) {
+	q := newTestDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := q.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", IsDefault: true,
+		IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage: %v", err)
+	}
+	c := NewLanguageCache(q)
+	defaultLang, err := c.GetDefault(ctx)
+	if err != nil {
+		t.Fatalf("GetDefault: %v", err)
+	}
+	if defaultLang != nil {
+		t.Fatalf("GetDefault = %+v, want nil for ambiguous defaults", defaultLang)
+	}
+}
+
 func TestLanguageCache_IsActiveCode_Unknown(t *testing.T) {
 	q := newTestDB(t)
 	c := NewLanguageCache(q)
@@ -620,6 +640,61 @@ func TestTranslationCache_GetBatch(t *testing.T) {
 	}
 	if len(result) != 3 {
 		t.Errorf("GetBatch() = %d entries, want 3", len(result))
+	}
+}
+
+func TestTranslationCache_UsesCompleteTranslationComponent(t *testing.T) {
+	q := newTestDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	for _, language := range []store.CreateLanguageParams{
+		{Code: "fr", Name: "French", NativeName: "Français", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+		{Code: "de", Name: "German", NativeName: "Deutsch", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+	} {
+		if _, err := q.CreateLanguage(ctx, language); err != nil {
+			t.Fatalf("CreateLanguage(%q): %v", language.Code, err)
+		}
+	}
+	createCategory := func(name, slug, languageCode string) store.Category {
+		t.Helper()
+		category, err := q.CreateCategory(ctx, store.CreateCategoryParams{
+			Name: name, Slug: slug, LanguageCode: languageCode, CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreateCategory(%q): %v", slug, err)
+		}
+		return category
+	}
+	english := createCategory("News", "news-cache", "en")
+	french := createCategory("Actualités", "actualites-cache", "fr")
+	german := createCategory("Nachrichten", "nachrichten-cache", "de")
+	for languageCode, targetID := range map[string]int64{"fr": french.ID, "de": german.ID} {
+		language, err := q.GetLanguageByCode(ctx, languageCode)
+		if err != nil {
+			t.Fatalf("GetLanguageByCode(%q): %v", languageCode, err)
+		}
+		if _, err := q.CreateTranslation(ctx, store.CreateTranslationParams{
+			EntityType: "category", EntityID: english.ID, LanguageID: language.ID,
+			TranslationID: targetID, CreatedAt: now,
+		}); err != nil {
+			t.Fatalf("CreateTranslation(%q): %v", languageCode, err)
+		}
+	}
+
+	c := NewTranslationCache(q)
+	got, err := c.Get(ctx, "category", french.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got["en"] != english.ID || got["de"] != german.ID || len(got) != 2 {
+		t.Fatalf("French component map = %#v; want en=%d de=%d", got, english.ID, german.ID)
+	}
+	batch, err := c.GetBatch(ctx, "category", []int64{french.ID, german.ID})
+	if err != nil {
+		t.Fatalf("GetBatch: %v", err)
+	}
+	if batch[german.ID]["en"] != english.ID || batch[german.ID]["fr"] != french.ID {
+		t.Fatalf("German batch component map = %#v", batch[german.ID])
 	}
 }
 

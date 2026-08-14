@@ -8,6 +8,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"net/http"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -27,6 +28,7 @@ type mockModule struct {
 	initErr      error
 	shutdownErr  error
 	routesCalled bool
+	routeCalls   int
 	adminCalled  bool
 	funcMap      template.FuncMap
 }
@@ -39,14 +41,18 @@ func newMockModule(name, version string) *mockModule {
 	}
 }
 
-func (m *mockModule) Name() string                     { return m.name }
-func (m *mockModule) Version() string                  { return m.version }
-func (m *mockModule) Description() string              { return m.description }
-func (m *mockModule) Dependencies() []string           { return m.dependencies }
-func (m *mockModule) Migrations() []Migration          { return m.migrations }
-func (m *mockModule) Init(_ *Context) error            { m.initCalled = true; return m.initErr }
-func (m *mockModule) Shutdown() error                  { return m.shutdownErr }
-func (m *mockModule) RegisterRoutes(_ chi.Router)      { m.routesCalled = true }
+func (m *mockModule) Name() string            { return m.name }
+func (m *mockModule) Version() string         { return m.version }
+func (m *mockModule) Description() string     { return m.description }
+func (m *mockModule) Dependencies() []string  { return m.dependencies }
+func (m *mockModule) Migrations() []Migration { return m.migrations }
+func (m *mockModule) Init(_ *Context) error   { m.initCalled = true; return m.initErr }
+func (m *mockModule) Shutdown() error         { return m.shutdownErr }
+func (m *mockModule) RegisterRoutes(r chi.Router) {
+	m.routesCalled = true
+	m.routeCalls++
+	r.Get("/"+m.name, http.NotFound)
+}
 func (m *mockModule) RegisterAdminRoutes(_ chi.Router) { m.adminCalled = true }
 func (m *mockModule) TemplateFuncs() template.FuncMap  { return m.funcMap }
 func (m *mockModule) AdminURL() string                 { return "" }
@@ -288,6 +294,22 @@ func testRouteRegistration(t *testing.T, namePrefix string, routeFn func(*Regist
 
 func TestRouteAll(t *testing.T) {
 	testRouteRegistration(t, "route", func(r *Registry, router chi.Router) { r.RouteAll(router) }, func(m *mockModule) bool { return m.routesCalled })
+}
+
+func TestOwnsPublicPathDoesNotReplayRouteRegistration(t *testing.T) {
+	r := NewRegistry(testutil.TestLoggerSilent())
+	m := newMockModule("side-effect", "1.0.0")
+	if err := r.Register(m); err != nil {
+		t.Fatal(err)
+	}
+	r.RouteAll(chi.NewRouter())
+
+	if !r.OwnsPublicPath("/side-effect") {
+		t.Fatal("captured module route was not recognized")
+	}
+	if m.routeCalls != 1 {
+		t.Fatalf("RegisterRoutes calls = %d, want exactly one", m.routeCalls)
+	}
 }
 
 func TestAdminRouteAll(t *testing.T) {

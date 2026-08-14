@@ -37,6 +37,10 @@ type ContentProps struct {
 	TabsID     string
 }
 
+type tabsContextKey struct{}
+
+var tabsIDContextKey tabsContextKey
+
 templ Tabs(props ...Props) {
 	{{ var p Props }}
 	if len(props) > 0 {
@@ -55,7 +59,7 @@ templ Tabs(props ...Props) {
 		data-tui-tabs-id={ tabsID }
 		{ p.Attributes... }
 	>
-		{{ ctx = context.WithValue(ctx, "tabsId", tabsID) }}
+		{{ ctx = context.WithValue(ctx, tabsIDContextKey, tabsID) }}
 		{ children... }
 	</div>
 }
@@ -152,7 +156,7 @@ templ Content(props ...ContentProps) {
 }
 
 func IDFromContext(ctx context.Context) string {
-	if tabsID, ok := ctx.Value("tabsId").(string); ok {
+	if tabsID, ok := ctx.Value(tabsIDContextKey).(string); ok {
 		return tabsID
 	}
 	return ""

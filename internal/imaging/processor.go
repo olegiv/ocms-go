@@ -5,18 +5,22 @@ package imaging
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
+	"io/fs"
 	"math"
 	"net/http"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 
+	"github.com/HugoSmits86/nativewebp"
 	"github.com/disintegration/imaging"
 	"github.com/rwcarlsen/goexif/exif"
 	_ "golang.org/x/image/webp" // WebP decoder
@@ -105,6 +109,27 @@ func NewProcessor(uploadDir string) *Processor {
 	return &Processor{
 		uploadDir: uploadDir,
 	}
+}
+
+// SaveMediaImage writes one image into a declared media storage directory.
+// It is used by internal generators that already hold encoded image bytes but
+// still need the same UUID validation and root-relative filesystem boundary as
+// uploaded and migrated images.
+func (p *Processor) SaveMediaImage(storageDir, mediaUUID, filename string, data []byte) (string, error) {
+	if !IsCanonicalMediaUUID(mediaUUID) {
+		return "", fmt.Errorf("invalid media UUID %q", mediaUUID)
+	}
+	allowed := false
+	for _, candidate := range model.MediaStorageDirs() {
+		if storageDir == candidate {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return "", fmt.Errorf("invalid media storage directory %q", storageDir)
+	}
+	return p.saveImageFile(filepath.Join(storageDir, mediaUUID), filename, data)
 }
 
 // ProcessImage reads an uploaded image file and returns its metadata.
@@ -316,6 +341,39 @@ func (p *Processor) GetImageDimensions(path string) (width, height int, err erro
 	return config.Width, config.Height, nil
 }
 
+// ValidateImage fully decodes an untrusted image after enforcing the same byte,
+// dimension, and pixel limits as ProcessImage. It performs no filesystem writes.
+func ValidateImage(reader io.Reader) (width, height int, mimeType string, resultErr error) {
+	data, err := io.ReadAll(io.LimitReader(reader, maxDecodableBytes+1))
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("failed to read image data: %w", err)
+	}
+	if len(data) > maxDecodableBytes {
+		return 0, 0, "", fmt.Errorf("image exceeds maximum size of %d bytes", int64(maxDecodableBytes))
+	}
+	format := detectFormat(data)
+	if format == "" {
+		return 0, 0, "", errors.New("unsupported image format")
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("failed to read image config: %w", err)
+	}
+	if _, err := validateDecodable(config.Width, config.Height, ProcessOptions{}); err != nil {
+		return 0, 0, "", err
+	}
+	decoded, err := imaging.Decode(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("failed to decode image: %w", err)
+	}
+	bounds := decoded.Bounds()
+	width, height = bounds.Dx(), bounds.Dy()
+	if err := validateImageDimensions(width, height); err != nil {
+		return 0, 0, "", err
+	}
+	return width, height, formatToMimeType(format), nil
+}
+
 // IsImage checks if a MIME type represents an image that can be processed.
 func (p *Processor) IsImage(mimeType string) bool {
 	switch mimeType {
@@ -343,12 +401,7 @@ func (p *Processor) DetectMimeType(data []byte) string {
 
 // DeleteMediaFiles removes all files associated with a media item.
 func (p *Processor) DeleteMediaFiles(uuid string) error {
-	for _, dir := range model.MediaStorageDirs() {
-		if err := os.RemoveAll(filepath.Join(p.uploadDir, dir, uuid)); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to delete %s files: %w", dir, err)
-		}
-	}
-	return nil
+	return DeleteMediaFiles(p.uploadDir, uuid)
 }
 
 // readExifOrientation reads the EXIF orientation tag from image data.
@@ -421,9 +474,10 @@ func encodeImage(img image.Image, format string, quality int) ([]byte, error) {
 			return nil, err
 		}
 	case "webp":
-		// WebP decoding is supported but encoding is not in pure Go
-		// Convert to JPEG for output
-		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+		// nativewebp writes lossless VP8L using pure Go. Unlike the old JPEG
+		// fallback, this keeps the encoded bytes consistent with the .webp
+		// filename and image/webp metadata and preserves transparency.
+		if err := nativewebp.Encode(&buf, img, nil); err != nil {
 			return nil, err
 		}
 	default:
@@ -558,40 +612,87 @@ func validateImageDimensions(width, height int) error {
 // saveImageFile creates the directory if needed and saves image data to a file.
 // The filename is sanitized and the target directory is validated to be within uploadDir.
 func (p *Processor) saveImageFile(subDir, filename string, data []byte) (string, error) {
-	// Sanitize filename to prevent path traversal
-	safeFilename := filepath.Base(filename)
-	if safeFilename == "." || safeFilename == ".." || safeFilename == "" {
+	return p.saveImageFileWith(subDir, filename, data, (*os.Root).WriteFile, (*os.Root).Close)
+}
+
+// saveImageFileWith is the write seam used by tests to prove that a failed
+// write cannot leave a partial image behind. Production always passes
+// os.Root.WriteFile through saveImageFile.
+func (p *Processor) saveImageFileWith(
+	subDir, filename string,
+	data []byte,
+	writeFile func(*os.Root, string, []byte, os.FileMode) error,
+	closeRoot func(*os.Root) error,
+) (resultPath string, resultErr error) {
+	if filename == "" || filename != filepath.Base(filename) || !fs.ValidPath(filename) {
 		return "", fmt.Errorf("invalid filename")
 	}
-
-	// Validate subDir doesn't contain path traversal sequences
-	cleanSubDir := filepath.Clean(subDir)
-	if strings.Contains(cleanSubDir, "..") || filepath.IsAbs(cleanSubDir) {
+	relSubDir := filepath.ToSlash(subDir)
+	if filepath.IsAbs(subDir) || relSubDir == "." || !fs.ValidPath(relSubDir) {
 		return "", fmt.Errorf("invalid subdirectory path")
 	}
-
-	// Resolve base directory to absolute path
-	absBase, err := filepath.Abs(p.uploadDir)
+	uploadRoot, err := openOrCreateUploadRoot(p.uploadDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve base directory: %w", err)
+		return "", err
 	}
+	canonicalUploadRoot := uploadRoot.Name()
+	rootClosed := false
+	defer func() {
+		if !rootClosed {
+			if closeErr := closeRoot(uploadRoot); closeErr != nil {
+				resultErr = errors.Join(resultErr, fmt.Errorf("close uploads directory: %w", closeErr))
+			}
+		}
+	}()
 
-	// Build target path using validated subDir
-	absTarget := filepath.Join(absBase, cleanSubDir)
-
-	// Verify containment using filepath.Rel
-	rel, err := filepath.Rel(absBase, absTarget)
-	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("path traversal detected")
+	_, statErr := uploadRoot.Stat(relSubDir)
+	createdDir := errors.Is(statErr, os.ErrNotExist)
+	if statErr != nil && !createdDir {
+		return "", fmt.Errorf("failed to inspect destination directory: %w", statErr)
 	}
-
-	if err := os.MkdirAll(absTarget, 0755); err != nil {
-		return "", fmt.Errorf("failed to create directory: %w", err)
+	if err := uploadRoot.MkdirAll(relSubDir, 0o750); err != nil {
+		cleanupErr := cleanupFailedImageWrite(uploadRoot, "", relSubDir, createdDir)
+		return "", errors.Join(fmt.Errorf("failed to create directory: %w", err), cleanupErr)
 	}
-
-	filePath := filepath.Join(absTarget, safeFilename)
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		return "", fmt.Errorf("failed to save image: %w", err)
+	relFile := pathpkg.Join(relSubDir, filename)
+	if err := writeFile(uploadRoot, relFile, data, 0o640); err != nil {
+		cleanupErr := cleanupFailedImageWrite(uploadRoot, relFile, relSubDir, createdDir)
+		return "", errors.Join(fmt.Errorf("failed to save image: %w", err), cleanupErr)
 	}
-	return filePath, nil
+	resultPath = filepath.Join(uploadRoot.Name(), filepath.FromSlash(relFile))
+	if closeErr := closeRoot(uploadRoot); closeErr != nil {
+		rootClosed = true
+		cleanupRoot, openErr := openVerifiedUploadRootWithPolicy(canonicalUploadRoot, nil, true)
+		var cleanupErr, cleanupCloseErr error
+		if openErr == nil && cleanupRoot != nil {
+			cleanupErr = cleanupFailedImageWrite(cleanupRoot, relFile, relSubDir, createdDir)
+			cleanupCloseErr = cleanupRoot.Close()
+		}
+		return "", errors.Join(
+			fmt.Errorf("close uploads directory: %w", closeErr),
+			openErr,
+			cleanupErr,
+			cleanupCloseErr,
+		)
+	}
+	rootClosed = true
+	return resultPath, nil
+}
+
+// cleanupFailedImageWrite removes a possibly partial output file. When this
+// call created the UUID directory, it removes that directory as well so a
+// failed first write cannot accumulate empty media directories.
+func cleanupFailedImageWrite(root *os.Root, filePath, targetDir string, createdDir bool) error {
+	var cleanupErrors []error
+	if filePath != "" {
+		if err := root.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("remove partial image: %w", err))
+		}
+	}
+	if createdDir {
+		if err := root.RemoveAll(targetDir); err != nil && !os.IsNotExist(err) {
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("remove partial image directory: %w", err))
+		}
+	}
+	return errors.Join(cleanupErrors...)
 }

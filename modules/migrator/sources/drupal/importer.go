@@ -4,11 +4,9 @@
 // Package drupal imports content from a Drupal 8/9/10/11 site into oCMS by
 // reading its MySQL database and its public files directory.
 //
-// Only default-language content is imported: Drupal keeps translations as extra
-// rows in the *_field_data tables keyed by langcode, and oCMS models a
-// translation as a separate page with its own globally-unique slug, so mapping
-// them automatically would produce slug collisions rather than useful content.
-// Non-default rows are counted and reported as skipped.
+// Only each entity's source translation is imported: Drupal marks that row with
+// default_langcode = 1, but source translations can belong to several site
+// languages. Additional translation rows are counted and reported as skipped.
 package drupal
 
 import (
@@ -23,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/google/uuid"
 
@@ -43,15 +40,31 @@ const defaultTypeMap = "article:post,page:page"
 // oCMS page types. These mirror internal/handler's constants, redeclared here
 // because a module must not import the admin handler package.
 const (
-	pageTypePost = "post"
-	pageTypePage = "page"
+	pageTypePost            = "post"
+	pageTypePage            = "page"
+	trackingRollbackTimeout = 30 * time.Second
 )
 
+// PublicRouteChecker reports whether a concrete URL path belongs to a
+// registered module. It is optional so the source remains usable by embedders
+// that do not run oCMS's module registry.
+type PublicRouteChecker interface {
+	OwnsPublicPath(path string) bool
+}
+
 // Source implements types.Source for Drupal.
-type Source struct{}
+type Source struct {
+	publicRouteChecker PublicRouteChecker
+}
 
 // NewSource creates a new Drupal source.
 func NewSource() *Source { return &Source{} }
+
+// SetPublicRouteChecker supplies the destination route ownership check used
+// before creating taxonomy redirects.
+func (s *Source) SetPublicRouteChecker(checker PublicRouteChecker) {
+	s.publicRouteChecker = checker
+}
 
 // Name returns the unique identifier for this source.
 func (s *Source) Name() string { return "drupal" }
@@ -83,7 +96,13 @@ func (s *Source) ConfigFields() []types.ConfigField {
 // The returned error doubles as the admin-facing summary, so a successful test
 // still tells the operator which bundles exist and which tables are missing.
 func (s *Source) TestConnection(cfg map[string]string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout+readTimeout)
+	return s.TestConnectionContext(context.Background(), cfg)
+}
+
+// TestConnectionContext performs the test with the request context as its
+// parent, while retaining the source's own upper bound.
+func (s *Source) TestConnectionContext(parent context.Context, cfg map[string]string) error {
+	ctx, cancel := context.WithTimeout(parent, connectTimeout+readTimeout)
 	defer cancel()
 
 	reader, err := s.openReader(ctx, cfg)
@@ -179,6 +198,7 @@ type sourceReader interface {
 	GetFiles(ctx context.Context) ([]File, error)
 	Warnings() []string
 	MediaUUIDsByFile(ctx context.Context) (map[int64][]string, error)
+	GetNodeLanguages(ctx context.Context) (map[int64]string, error)
 	GetNodes(ctx context.Context, offset int) ([]Node, error)
 	NodeImages(ctx context.Context) (map[int64]int64, error)
 	NodeTerms(ctx context.Context) (map[int64][]int64, error)
@@ -226,29 +246,83 @@ type importState struct {
 	// unmappedLangs counts nodes whose source language has no oCMS language, so
 	// the fallback is reported once rather than per node.
 	unmappedLangs map[string]int
+	// unmappedTermLangs is separate because taxonomy can be imported without
+	// pages; term fallbacks still need an operator-visible summary.
+	unmappedTermLangs map[string]int
+	neutralTermLangs  map[string]int
+	unmappedMenuLangs map[string]int
+	neutralMenuLangs  map[string]int
 	// unknownFormats counts nodes whose Drupal text format is neither core HTML
 	// nor plain text — a contrib format such as Markdown, which arrives
 	// unrendered. Counted so it is reported once per format.
 	unknownFormats map[string]int
-	// createdCategorySlugs records the slugs this run has already taken, so a
-	// second Drupal term that slugifies the same way gets its own row rather
-	// than being folded into the first.
-	createdCategorySlugs map[string]bool
-	// createdMenuSlugs mirrors createdCategorySlugs for menus.
-	createdMenuSlugs map[string]bool
+	// claimed term slugs include rows reused from before this import as well as
+	// rows it created. Each source term must map distinctly even when two names
+	// normalize alike; tag/category slugs are globally unique in oCMS.
+	claimedTagSlugs      map[string]bool
+	claimedCategorySlugs map[string]bool
+	// claimedMenuSlugs has the same per-source identity rule, but menu slugs are
+	// unique only within the destination language.
+	claimedMenuSlugs map[string]bool
 	// createdCategories holds only the categories this run created. Parent
 	// links are applied to those alone: a pre-existing category matched by slug
 	// is mapped so content can reference it, but reparenting it would rewrite a
 	// hierarchy the import does not own and cannot restore on delete.
-	createdCategories map[int64]bool
-	mediaByFID        map[int64]int64 // Drupal fid -> oCMS media id
-	nodes             map[int64]int64 // Drupal nid -> oCMS page id
+	createdCategories   map[int64]bool
+	mediaByFID          map[int64]int64  // Drupal fid -> oCMS media id
+	nodes               map[int64]int64  // Drupal nid -> oCMS page id
+	termURLs            map[int64]string // Drupal tid -> oCMS public tag/category URL
+	termLang            map[int64]string // Drupal tid -> source langcode
+	termDestinationLang map[int64]string // Drupal tid -> resolved oCMS language code
 	// aliasByNode maps a Drupal nid to its aliases keyed by langcode. Aliases
 	// are per-language, and only default-language nodes are imported, so
 	// collapsing them to one entry let a translation's alias overwrite the
 	// canonical slug of the page actually being imported.
 	aliasByNode map[int64]map[string]string
-	refs        *MediaRefs
+	// pathAliases is loaded once and shared by the canonical-slug, page-alias,
+	// and taxonomy-redirect passes.
+	pathAliases        []PathAlias
+	aliasesLoaded      bool
+	aliasLoadErr       error
+	aliasErrorReported bool
+	// Every concrete legacy URL has one deterministic owner. Keys include the
+	// public language prefix for non-default content (for example /fr/about),
+	// so aliases that are identical in Drupal but belong to different
+	// languages do not incorrectly shadow one another.
+	// nodeID is non-zero for a node owner and zero for a taxonomy owner.
+	aliasReservations map[string]aliasReservation
+	// Page slugs are globally unique in storage even though public routes are
+	// language-scoped. A single-segment source alias therefore chooses one
+	// deterministic node that may retain the unsuffixed stored slug. A
+	// default-language owner wins regardless of source-row/import order; other
+	// language owners keep their concrete legacy URLs through tracked redirects.
+	aliasSlugOwners map[string]int64
+	refs            *MediaRefs
+}
+
+type aliasReservation struct {
+	nodeID int64
+}
+
+// mediaSource is the capability needed by importOneFile. The live
+// shared.MediaRoot returns *os.File; the interface also lets tests inject a
+// reader whose Close fails and prove partial output is compensated.
+type mediaSource interface {
+	Open(relativePath string) (sourceFile, error)
+}
+
+type sourceFile interface {
+	Read([]byte) (int, error)
+	Seek(int64, int) (int64, error)
+	Close() error
+}
+
+type mediaRootSource struct {
+	root *shared.MediaRoot
+}
+
+func (s mediaRootSource) Open(relativePath string) (sourceFile, error) {
+	return s.root.Open(relativePath)
 }
 
 // newImportState builds an import state with every lookup allocated.
@@ -260,7 +334,7 @@ type importState struct {
 func newImportState(queries *store.Queries, reader sourceReader, result *types.ImportResult,
 	tracker types.ImportTracker, opts types.ImportOptions, defaultLang string, authorID int64) *importState {
 
-	return &importState{
+	st := &importState{
 		queries:              queries,
 		reader:               reader,
 		result:               result,
@@ -275,17 +349,29 @@ func newImportState(queries *store.Queries, reader sourceReader, result *types.I
 		categories:           make(map[int64]int64),
 		createdNodes:         make(map[int64]bool),
 		createdCategories:    make(map[int64]bool),
-		createdCategorySlugs: make(map[string]bool),
-		createdMenuSlugs:     make(map[string]bool),
+		claimedTagSlugs:      make(map[string]bool),
+		claimedCategorySlugs: make(map[string]bool),
+		claimedMenuSlugs:     make(map[string]bool),
 		mediaByFID:           make(map[int64]int64),
 		nodes:                make(map[int64]int64),
+		termURLs:             make(map[int64]string),
+		termLang:             make(map[int64]string),
+		termDestinationLang:  make(map[int64]string),
 		aliasByNode:          make(map[int64]map[string]string),
+		aliasReservations:    make(map[string]aliasReservation),
+		aliasSlugOwners:      make(map[string]int64),
 		nodeLang:             make(map[int64]string),
 		availableLangs:       make(map[string]bool),
 		unmappedLangs:        make(map[string]int),
+		unmappedTermLangs:    make(map[string]int),
+		neutralTermLangs:     make(map[string]int),
+		unmappedMenuLangs:    make(map[string]int),
+		neutralMenuLangs:     make(map[string]int),
 		unknownFormats:       make(map[string]int),
 		refs:                 NewMediaRefs(),
 	}
+	st.addAvailableLanguage(defaultLang)
+	return st
 }
 
 // Import copies content from Drupal into oCMS.
@@ -315,7 +401,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if err != nil {
 		return nil, err
 	}
-	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	defaultLang, err := shared.RoutableDefaultLanguage(ctx, queries)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get default language: %w", err)
 	}
@@ -326,7 +412,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 			defaultLang.Code, err)
 	} else {
 		for _, l := range langs {
-			st.availableLangs[strings.ToLower(l.Code)] = true
+			st.addAvailableLanguage(l.Code)
 		}
 	}
 	st.typeMap = ParseTypeMap(cfg["type_map"])
@@ -339,30 +425,8 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 		result.AddNotice("optional table %q not found in source database; related content skipped", missing)
 	}
 
-	stages := []struct {
-		phase types.EntityType
-		run   func(context.Context, *importState) error
-	}{
-		{types.EntityUser, s.importUsers},
-		{types.EntityTag, s.importTaxonomy},
-		{types.EntityMedia, s.importMedia},
-		{types.EntityPage, s.importNodes},
-		{types.EntityMenu, s.importMenus},
-	}
-
-	for _, stage := range stages {
-		if err := ctx.Err(); err != nil {
-			return result, err
-		}
-		types.Report(ctx, tracker, types.Progress{Source: s.Name(), Phase: stage.phase})
-		if err := stage.run(ctx, st); err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return result, err
-			}
-			// A stage failure is reported and the import continues: a missing
-			// taxonomy table should not cost the admin their pages.
-			result.AddError("%s import failed: %v", stage.phase, err)
-		}
+	if err := s.runImportStages(ctx, st); err != nil {
+		return result, err
 	}
 
 	if translations, err := reader.TranslationCount(ctx); err == nil && translations > 0 {
@@ -377,6 +441,38 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	}
 
 	return result, nil
+}
+
+func (s *Source) runImportStages(ctx context.Context, st *importState) error {
+	stages := []struct {
+		phase types.EntityType
+		run   func(context.Context, *importState) error
+	}{
+		{types.EntityUser, s.importUsers},
+		{types.EntityTag, s.importTaxonomy},
+		{types.EntityMedia, s.importMedia},
+		{types.EntityPage, s.importNodes},
+		{types.EntityMenu, s.importMenus},
+	}
+
+	for _, stage := range stages {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		types.Report(ctx, st.tracker, types.Progress{Source: s.Name(), Phase: stage.phase})
+		stageErr := stage.run(ctx, st)
+		st.flushReaderWarnings()
+		if stageErr != nil {
+			if errors.Is(stageErr, context.Canceled) || errors.Is(stageErr, context.DeadlineExceeded) {
+				return stageErr
+			}
+			// A stage failure is reported and the import continues: a missing
+			// taxonomy table should not cost the admin their pages.
+			st.result.AddError("%s import failed: %v", stage.phase, stageErr)
+		}
+	}
+	st.flushReaderWarnings()
+	return nil
 }
 
 // defaultAuthorID returns the user that owns imported content when the Drupal
@@ -482,11 +578,16 @@ func (s *Source) importUsers(ctx context.Context, st *importState) error {
 			return err
 		}
 
-		if existing, lookupErr := st.queries.GetUserByEmail(ctx, u.Mail); lookupErr == nil {
+		existing, lookupErr := st.queries.GetUserByEmail(ctx, u.Mail)
+		switch {
+		case lookupErr == nil:
 			// Always remember the mapping so nodes authored by this Drupal user
 			// still resolve, whether or not the row was created by this import.
 			st.users[u.UID] = existing.ID
 			st.result.UsersSkipped++
+			continue
+		case !errors.Is(lookupErr, sql.ErrNoRows):
+			st.result.AddError("could not check for existing user %q: %v", u.Mail, lookupErr)
 			continue
 		}
 
@@ -508,8 +609,12 @@ func (s *Source) importUsers(ctx context.Context, st *importState) error {
 			continue
 		}
 
+		if !st.track(ctx, types.EntityUser, created.ID, func(rollbackCtx context.Context) error {
+			return st.queries.DeleteUser(rollbackCtx, created.ID)
+		}) {
+			continue
+		}
 		st.users[u.UID] = created.ID
-		st.track(ctx, types.EntityUser, created.ID)
 		st.result.UsersImported++
 		st.report(ctx, types.EntityUser, i+1, len(users))
 	}
@@ -558,6 +663,8 @@ func (s *Source) importTaxonomy(ctx context.Context, st *importState) error {
 	if st.opts.ImportCategories {
 		s.linkCategoryParents(ctx, st, terms, now)
 	}
+	st.reportUnmappedTermLanguages()
+	s.importTaxonomyAliases(ctx, st, now)
 	return nil
 }
 
@@ -567,13 +674,21 @@ func (s *Source) importTag(ctx context.Context, st *importState, t Term, now tim
 	if slug == "" {
 		return
 	}
+	language := st.languageForTerm(t)
+	st.termLang[t.TID] = t.Langcode
 
 	existing, err := st.queries.GetTagBySlug(ctx, slug)
 	switch {
 	case err == nil:
-		st.tags[t.TID] = existing.ID
-		st.result.TagsSkipped++
-		return
+		if !st.claimedTagSlugs[slug] && existing.LanguageCode == language {
+			st.tags[t.TID] = existing.ID
+			st.termURLs[t.TID] = taxonomyURL(language, st.defaultLang, "tag", existing.Slug)
+			st.termDestinationLang[t.TID] = language
+			st.claimedTagSlugs[slug] = true
+			st.result.TagsSkipped++
+			return
+		}
+		slug = uniqueTagSlug(ctx, st, slug)
 	case !errors.Is(err, sql.ErrNoRows):
 		// A failed lookup is not "the row is absent". Treating it as such made
 		// the importer proceed to create, so a transient database error
@@ -585,7 +700,7 @@ func (s *Source) importTag(ctx context.Context, st *importState, t Term, now tim
 	tag, err := st.queries.CreateTag(ctx, store.CreateTagParams{
 		Name:         t.Name,
 		Slug:         slug,
-		LanguageCode: st.defaultLang,
+		LanguageCode: language,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	})
@@ -594,8 +709,15 @@ func (s *Source) importTag(ctx context.Context, st *importState, t Term, now tim
 		return
 	}
 
+	if !st.track(ctx, types.EntityTag, tag.ID, func(rollbackCtx context.Context) error {
+		return st.queries.DeleteTag(rollbackCtx, tag.ID)
+	}) {
+		return
+	}
 	st.tags[t.TID] = tag.ID
-	st.track(ctx, types.EntityTag, tag.ID)
+	st.termURLs[t.TID] = taxonomyURL(language, st.defaultLang, "tag", tag.Slug)
+	st.termDestinationLang[t.TID] = language
+	st.claimedTagSlugs[tag.Slug] = true
 	st.result.TagsImported++
 }
 
@@ -606,21 +728,21 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 	if slug == "" {
 		return
 	}
+	language := st.languageForTerm(t)
+	st.termLang[t.TID] = t.Langcode
 
 	existing, err := st.queries.GetCategoryBySlug(ctx, slug)
 	switch {
 	case err == nil:
-		// Reuse only a category that pre-existed this import. Two Drupal terms
-		// in different vocabularies can share a name and so slugify alike;
-		// treating the second as "already imported" merged their page
-		// associations and silently discarded its hierarchy.
-		if st.createdCategorySlugs[slug] {
-			slug = uniqueCategorySlug(ctx, st, slug)
-			break
+		if !st.claimedCategorySlugs[slug] && existing.LanguageCode == language {
+			st.categories[t.TID] = existing.ID
+			st.termURLs[t.TID] = taxonomyURL(language, st.defaultLang, "category", existing.Slug)
+			st.termDestinationLang[t.TID] = language
+			st.claimedCategorySlugs[slug] = true
+			st.result.CategoriesSkipped++
+			return
 		}
-		st.categories[t.TID] = existing.ID
-		st.result.CategoriesSkipped++
-		return
+		slug = uniqueCategorySlug(ctx, st, slug)
 	case !errors.Is(err, sql.ErrNoRows):
 		st.result.AddError("could not check for existing category %q: %v", slug, err)
 		return
@@ -632,7 +754,7 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 		Description:  t.Description,
 		ParentID:     sql.NullInt64{},
 		Position:     t.Weight,
-		LanguageCode: st.defaultLang,
+		LanguageCode: language,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	})
@@ -641,10 +763,16 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 		return
 	}
 
+	if !st.track(ctx, types.EntityCategory, category.ID, func(rollbackCtx context.Context) error {
+		return st.queries.DeleteCategory(rollbackCtx, category.ID)
+	}) {
+		return
+	}
 	st.categories[t.TID] = category.ID
+	st.termURLs[t.TID] = taxonomyURL(language, st.defaultLang, "category", category.Slug)
+	st.termDestinationLang[t.TID] = language
 	st.createdCategories[t.TID] = true
-	st.createdCategorySlugs[slug] = true
-	st.track(ctx, types.EntityCategory, category.ID)
+	st.claimedCategorySlugs[category.Slug] = true
 	st.result.CategoriesImported++
 }
 
@@ -687,19 +815,45 @@ func (s *Source) linkCategoryParents(ctx context.Context, st *importState, terms
 	}
 }
 
-// track records a created entity so the module can undo the import later.
-func (st *importState) track(ctx context.Context, entityType types.EntityType, id int64) {
+// track records a created entity so the module can undo the import later. An
+// untracked row is immediately compensated: otherwise deleting the import can
+// never discover it. Callers must not publish maps/counters until this returns
+// true.
+func (st *importState) track(ctx context.Context, entityType types.EntityType, id int64,
+	rollback func(context.Context) error) bool {
 	if st.tracker == nil {
-		return
+		return true
 	}
 	if err := st.tracker.TrackImportedItem(ctx, "drupal", string(entityType), id); err != nil {
-		slog.Warn("failed to track imported item", "type", entityType, "id", id, "error", err)
-		// Untracked means "delete imported content" can never remove this row,
-		// so the operator must be told: a log line is not part of the job
-		// record they will actually read.
-		st.result.AddError("%s %d was created but could not be tracked, so it will "+
-			"not be removed by deleting the import: %v", entityType, id, err)
+		st.result.AddError("failed to track imported %s %d: %v", entityType, id, err)
+		if rollback != nil {
+			rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), trackingRollbackTimeout)
+			rollbackErr := rollback(rollbackCtx)
+			cancel()
+			if rollbackErr != nil {
+				st.result.AddError("failed to roll back untracked %s %d: %v", entityType, id, rollbackErr)
+			}
+		}
+		return false
 	}
+	return true
+}
+
+func (st *importState) cleanupMediaFiles(ctx context.Context, canonicalUploadRoot, mediaUUID string) error {
+	err := imaging.DeleteMediaFilesFromCanonicalRoot(canonicalUploadRoot, mediaUUID)
+	if err == nil {
+		return nil
+	}
+	queuer, ok := st.tracker.(types.MediaCleanupQueuer)
+	if !ok {
+		return err
+	}
+	queueCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), trackingRollbackTimeout)
+	defer cancel()
+	if queueErr := queuer.QueueMediaCleanup(queueCtx, "drupal", canonicalUploadRoot, mediaUUID); queueErr != nil {
+		return errors.Join(err, fmt.Errorf("queue media cleanup: %w", queueErr))
+	}
+	return fmt.Errorf("%w (durable cleanup retry queued)", err)
 }
 
 // report publishes progress for the current stage.
@@ -712,6 +866,12 @@ func (st *importState) report(ctx context.Context, phase types.EntityType, proce
 	})
 }
 
+func (st *importState) flushReaderWarnings() {
+	for _, warning := range st.reader.Warnings() {
+		st.result.AddSummary("%s", warning)
+	}
+}
+
 // unixOrNow converts a Drupal Unix timestamp, falling back to now when unset.
 func unixOrNow(ts int64, now time.Time) time.Time {
 	if ts <= 0 {
@@ -720,17 +880,7 @@ func unixOrNow(ts int64, now time.Time) time.Time {
 	return time.Unix(ts, 0).UTC()
 }
 
-// resolveFilePath maps a Drupal file URI onto a path inside the files root,
-// confirming the result stays within that root.
-//
-// Only the public:// stream is importable — private:// and temporary:// live
-// outside the public files directory and are reported rather than guessed at.
 // hasTraversalSegment reports whether any path segment is exactly "..".
-//
-// Checking for the substring instead rejected legitimate Drupal filenames:
-// "report..pdf" contains ".." but escapes nothing, and the file was skipped
-// even though the resolved-path containment check below would have kept it
-// inside the files root anyway.
 func hasTraversalSegment(rel string) bool {
 	for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
 		if segment == ".." {
@@ -738,31 +888,6 @@ func hasTraversalSegment(rel string) bool {
 		}
 	}
 	return false
-}
-
-func resolveFilePath(f File, cleanRoot, realRoot string) (string, error) {
-	switch f.Scheme() {
-	case "public", "":
-	case "private", "temporary":
-		return "", fmt.Errorf("file uses the %s:// stream and was not imported", f.Scheme())
-	default:
-		return "", fmt.Errorf("file uses the unsupported %s:// stream", f.Scheme())
-	}
-
-	rel := f.RelPath()
-	if rel == "" {
-		return "", fmt.Errorf("file has an empty path")
-	}
-	if hasTraversalSegment(rel) {
-		return "", fmt.Errorf("file path %q contains a traversal sequence", rel)
-	}
-
-	candidate := filepath.Join(cleanRoot, filepath.FromSlash(rel))
-	resolved, ok := shared.ResolveWithinRoot(realRoot, candidate)
-	if !ok {
-		return "", fmt.Errorf("file %q is missing or resolves outside the files directory", rel)
-	}
-	return resolved, nil
 }
 
 // importMedia copies Drupal's managed files into the oCMS media library and
@@ -784,18 +909,26 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 	if err != nil {
 		return err
 	}
-	// Surface degraded reads (missing alt text, for instance) as summaries so
-	// they survive the per-item message cap.
-	for _, warning := range st.reader.Warnings() {
-		st.result.AddSummary("%s", warning)
-	}
 	if len(files) == 0 {
 		return nil
 	}
 
-	cleanRoot, realRoot, err := shared.ResolveMediaRoot(st.filesPath)
+	mediaRoot, err := shared.OpenMediaRoot(st.filesPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open media root: %w", err)
+	}
+	defer func() {
+		if err := mediaRoot.Close(); err != nil {
+			slog.Error("failed to close drupal media root", "error", err)
+		}
+	}()
+	scanned, err := mediaRoot.Scan()
+	if err != nil {
+		return fmt.Errorf("failed to scan media files: %w", err)
+	}
+	scannedPaths := make(map[string]string, len(scanned))
+	for _, file := range scanned {
+		scannedPaths[filepath.ToSlash(file.Path)] = file.Path
 	}
 
 	// A media-library site addresses embeds by media UUID, not file UUID, so
@@ -807,7 +940,11 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 		mediaUUIDs = map[int64][]string{}
 	}
 
-	processor := imaging.NewProcessor(st.uploadDir)
+	canonicalUploadRoot, err := imaging.CanonicalUploadRoot(st.uploadDir)
+	if err != nil {
+		return fmt.Errorf("failed to open uploads root: %w", err)
+	}
+	processor := imaging.NewProcessor(canonicalUploadRoot)
 	now := time.Now()
 	skippedMimes := make(map[string]int)
 
@@ -829,14 +966,21 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 			continue
 		}
 
-		fullPath, err := resolveFilePath(f, cleanRoot, realRoot)
+		relPath, err := importableFilePath(f)
 		if err != nil {
 			st.result.AddNotice("%s: %v", f.Filename, err)
 			st.result.MediaSkipped++
 			continue
 		}
+		rootPath, ok := scannedPaths[filepath.ToSlash(relPath)]
+		if !ok {
+			st.result.AddNotice("%s: source file is missing, unsafe, or outside the trusted media root", f.Filename)
+			st.result.MediaSkipped++
+			continue
+		}
 
-		mediaID, publicURL, err := s.importOneFile(ctx, st, processor, f, fullPath, mimeType, now)
+		mediaID, publicURL, err := s.importOneFile(ctx, st, mediaRootSource{root: mediaRoot},
+			processor, canonicalUploadRoot, f, rootPath, mimeType, now)
 		if err != nil {
 			st.result.AddError("failed to import %q: %v", f.Filename, err)
 			continue
@@ -863,6 +1007,17 @@ func (s *Source) importMedia(ctx context.Context, st *importState) error {
 	return nil
 }
 
+func importableFilePath(f File) (string, error) {
+	if f.Scheme() != "public" {
+		return "", fmt.Errorf("unsupported Drupal stream wrapper %q", f.Scheme())
+	}
+	rel := filepath.ToSlash(filepath.Clean(f.RelPath()))
+	if rel == "." || rel == "" || filepath.IsAbs(rel) || hasTraversalSegment(f.RelPath()) {
+		return "", fmt.Errorf("invalid public file path %q", f.RelPath())
+	}
+	return rel, nil
+}
+
 // reportSkippedMimes turns the per-type skip tally into one notice per type.
 //
 // Without this a file skipped for its type left no trace at all: not an error,
@@ -881,20 +1036,10 @@ func reportSkippedMimes(st *importState, skipped map[string]int) {
 	}
 }
 
-// removeOrphanedUpload deletes the variant directories written for a media UUID
-// whose database row was never created.
-func removeOrphanedUpload(uploadDir, fileUUID string) {
-	for _, variant := range model.MediaStorageDirs() {
-		dir := filepath.Join(uploadDir, variant, fileUUID)
-		if err := os.RemoveAll(dir); err != nil {
-			slog.Warn("failed to remove orphaned upload", "dir", dir, "error", err)
-		}
-	}
-}
-
 // importOneFile copies a single file onto disk and creates its media row.
-func (s *Source) importOneFile(ctx context.Context, st *importState, processor *imaging.Processor,
-	f File, fullPath, mimeType string, now time.Time) (int64, string, error) {
+func (s *Source) importOneFile(ctx context.Context, st *importState, source mediaSource,
+	processor *imaging.Processor, canonicalUploadRoot string,
+	f File, relPath, mimeType string, now time.Time) (int64, string, error) {
 
 	// Sanitize once, here, and use the result for both the database row and the
 	// disk write. The writers already apply filepath.Base themselves, so
@@ -907,7 +1052,7 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 	}
 	f.Filename = safeFilename
 
-	src, err := os.Open(fullPath) // #nosec G304 -- path validated by resolveFilePath
+	src, err := source.Open(relPath)
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to open file: %w", err)
 	}
@@ -932,11 +1077,19 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 		// Migration files come from a trusted local directory, so an oversized
 		// photo is downscaled rather than dropped; the upload path keeps the
 		// strict reject.
-		processed, err := processor.ProcessImageWithOptions(src, fileUUID, f.Filename,
+		processed, processErr := processor.ProcessImageWithOptions(src, fileUUID, f.Filename,
 			imaging.ProcessOptions{DownscaleOversized: true})
-		closeFile(src, fullPath)
-		if err != nil {
-			return 0, "", fmt.Errorf("failed to process image: %w", err)
+		closeErr := src.Close()
+		if processErr != nil {
+			// ProcessImage compensates partial writes through its open capability;
+			// retry against the captured canonical root so a failed internal cleanup
+			// becomes durable instead of re-resolving the configured path.
+			cleanupErr := st.cleanupMediaFiles(ctx, canonicalUploadRoot, fileUUID)
+			return 0, "", fmt.Errorf("failed to process image: %w", errors.Join(processErr, closeErr, cleanupErr))
+		}
+		if closeErr != nil {
+			cleanupErr := st.cleanupMediaFiles(ctx, canonicalUploadRoot, fileUUID)
+			return 0, "", fmt.Errorf("failed to close source image: %w", errors.Join(closeErr, cleanupErr))
 		}
 		if processed.Downscaled {
 			st.result.AddNotice("%s: downscaled from %dx%d to %dx%d to fit the %dx%d limit",
@@ -949,10 +1102,15 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 		params.Height = sql.NullInt64{Int64: int64(processed.Height), Valid: true}
 		variantSource = processed.FilePath
 	} else {
-		err := shared.SaveNonImageFile(src, st.uploadDir, fileUUID, f.Filename)
-		closeFile(src, fullPath)
-		if err != nil {
-			return 0, "", fmt.Errorf("failed to copy file: %w", err)
+		var copyErr error
+		canonicalUploadRoot, copyErr = shared.SaveNonImageFileWithCanonicalRoot(src, canonicalUploadRoot, fileUUID, f.Filename)
+		closeErr := src.Close()
+		if err := errors.Join(copyErr, closeErr); err != nil {
+			var cleanupErr error
+			if canonicalUploadRoot != "" {
+				cleanupErr = st.cleanupMediaFiles(ctx, canonicalUploadRoot, fileUUID)
+			}
+			return 0, "", fmt.Errorf("failed to copy file: %w", errors.Join(err, cleanupErr))
 		}
 	}
 
@@ -962,10 +1120,17 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 		// media row and no tracking row exist, so nothing — including "delete
 		// imported content" — can ever find it again: a database outage would
 		// leave one orphaned upload per source file processed.
-		removeOrphanedUpload(st.uploadDir, fileUUID)
-		return 0, "", fmt.Errorf("failed to create media record: %w", err)
+		cleanupErr := st.cleanupMediaFiles(ctx, canonicalUploadRoot, fileUUID)
+		return 0, "", fmt.Errorf("failed to create media record: %w", errors.Join(err, cleanupErr))
 	}
-	st.track(ctx, types.EntityMedia, media.ID)
+	if !st.track(ctx, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
+		if err := st.queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
+			return err
+		}
+		return st.cleanupMediaFiles(rollbackCtx, canonicalUploadRoot, fileUUID)
+	}) {
+		return 0, "", fmt.Errorf("media record could not be tracked and was rolled back")
+	}
 
 	if variantSource != "" {
 		// Variants are best-effort: a partial failure costs a thumbnail, not the
@@ -994,13 +1159,6 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, processor *
 	return media.ID, publicMediaURL(fileUUID, f.Filename), nil
 }
 
-// closeFile closes a source file, logging failures.
-func closeFile(f *os.File, path string) {
-	if err := f.Close(); err != nil {
-		slog.Error("failed to close source file", "path", path, "error", err)
-	}
-}
-
 // importNodes copies Drupal nodes into oCMS pages and posts, then writes their
 // path aliases so the site's existing URLs keep working.
 func (s *Source) importNodes(ctx context.Context, st *importState) error {
@@ -1009,7 +1167,7 @@ func (s *Source) importNodes(ctx context.Context, st *importState) error {
 	}
 
 	if err := s.loadNodeAliases(ctx, st); err != nil {
-		st.result.AddError("failed to read path aliases: %v", err)
+		st.reportAliasLoadError(err)
 	}
 
 	images, err := st.reader.NodeImages(ctx)
@@ -1074,23 +1232,46 @@ func reportUnresolvedEmbeds(st *importState) {
 		return
 	}
 	unique := make(map[string]bool, len(st.refs.Unresolved))
-	for _, uuid := range st.refs.Unresolved {
-		unique[uuid] = true
+	for _, mediaUUID := range st.refs.Unresolved {
+		unique[mediaUUID] = true
 	}
 	st.result.AddSummary("%d media embed(s) referencing %d unknown media item(s) were removed "+
 		"from page bodies; the referenced files were not imported",
 		len(st.refs.Unresolved), len(unique))
 }
 
-// loadNodeAliases records the best path alias per node. Drupal keeps every
-// historical alias, so the highest id — the most recent — wins as the canonical
-// slug and the rest are still written as redirect aliases.
+// loadPathAliases reads aliases exactly once. Taxonomy redirects may run before
+// pages, while page slugs and aliases consume the same rows later.
+func (s *Source) loadPathAliases(ctx context.Context, st *importState) error {
+	if st.aliasesLoaded {
+		return st.aliasLoadErr
+	}
+	st.aliasesLoaded = true
+	st.pathAliases, st.aliasLoadErr = st.reader.GetPathAliases(ctx)
+	return st.aliasLoadErr
+}
+
+// loadNodeAliases records the best path alias per node and resolves source
+// alias ownership in two passes. Node aliases take precedence over taxonomy
+// redirects regardless of source row order; otherwise a lower-ID term alias
+// could create a redirect that permanently shadows the page URL written later.
+// Concrete ownership is language-aware, while the separate single-segment
+// slug owner remains global because pages.slug is globally unique in storage.
 func (s *Source) loadNodeAliases(ctx context.Context, st *importState) error {
-	aliases, err := st.reader.GetPathAliases(ctx)
-	if err != nil {
+	if err := s.loadPathAliases(ctx, st); err != nil {
 		return err
 	}
-	for _, a := range aliases {
+	nodeLanguages, err := st.reader.GetNodeLanguages(ctx)
+	if err != nil {
+		return fmt.Errorf("read node languages for path aliases: %w", err)
+	}
+	for nid, language := range nodeLanguages {
+		st.nodeLang[nid] = language
+	}
+
+	// First establish every node-owned path. Highest ID still wins as the
+	// canonical alias per node/language because pathAliases is ID-ordered.
+	for _, a := range st.pathAliases {
 		nid, ok := a.NodeID()
 		if !ok {
 			continue
@@ -1098,11 +1279,79 @@ func (s *Source) loadNodeAliases(ctx context.Context, st *importState) error {
 		if st.aliasByNode[nid] == nil {
 			st.aliasByNode[nid] = make(map[string]string)
 		}
-		// Highest id wins per language: Drupal keeps every historical alias and
-		// the most recent is canonical.
 		st.aliasByNode[nid][a.Langcode] = strings.TrimPrefix(a.Alias, "/")
+
+		alias := strings.Trim(a.Alias, "/")
+		if !isSafeAliasPath(alias) {
+			continue
+		}
+		if !langcodeApplies(a.Langcode, st.nodeLang[nid]) {
+			continue
+		}
+		sourcePath := localizedAliasSourcePath(
+			st.aliasDestinationLanguage(st.nodeLang[nid]), st.defaultLang, "/"+alias,
+		)
+		if _, claimed := st.aliasReservations[sourcePath]; !claimed {
+			st.aliasReservations[sourcePath] = aliasReservation{nodeID: nid}
+		}
+	}
+
+	// Prefer the default-language node for the one globally unsuffixed stored
+	// slug, independent of path_alias row order. A second pass gives an alias
+	// with no default-language owner to the first deterministic source row.
+	for pass := 0; pass < 2; pass++ {
+		for _, a := range st.pathAliases {
+			nid, ok := a.NodeID()
+			if !ok {
+				continue
+			}
+			alias := strings.Trim(a.Alias, "/")
+			if !isSafeAliasPath(alias) || strings.Contains(alias, "/") {
+				continue
+			}
+			if !langcodeApplies(a.Langcode, st.nodeLang[nid]) {
+				continue
+			}
+			isDefault := st.aliasDestinationLanguage(st.nodeLang[nid]) == st.defaultLang
+			if (pass == 0) != isDefault {
+				continue
+			}
+			if _, claimed := st.aliasSlugOwners[alias]; !claimed {
+				st.aliasSlugOwners[alias] = nid
+			}
+		}
+	}
+
+	// Then reserve single-segment taxonomy paths that did not lose to a node.
+	// A term must have been imported to own a usable destination URL.
+	for _, a := range st.pathAliases {
+		tid, ok := a.TermID()
+		if !ok || st.termURLs[tid] == "" {
+			continue
+		}
+		alias := strings.Trim(a.Alias, "/")
+		if !isSafeAliasPath(alias) || strings.Contains(alias, "/") {
+			continue
+		}
+		sourcePath := localizedAliasSourcePath(
+			st.termDestinationLang[tid], st.defaultLang, "/"+alias,
+		)
+		if _, claimed := st.aliasReservations[sourcePath]; !claimed {
+			st.aliasReservations[sourcePath] = aliasReservation{}
+		}
 	}
 	return nil
+}
+
+// aliasDestinationLanguage resolves path_alias.langcode without changing the
+// operator-facing fallback counters. The node/term import stages report those
+// fallbacks once from the entity rows themselves.
+func (st *importState) aliasDestinationLanguage(raw string) string {
+	code := strings.ToLower(strings.TrimSpace(raw))
+	if isNeutralDrupalLangcode(code) || !st.availableLangs[code] {
+		return st.defaultLang
+	}
+	return code
 }
 
 // aliasFor returns the canonical alias for a node in its own language.
@@ -1157,7 +1406,49 @@ func langcodeApplies(aliasLang, nodeLang string) bool {
 // A language oCMS does not have falls back to the default and is counted, so
 // the operator is told once rather than silently getting mislabelled content.
 func (st *importState) languageFor(n Node) string {
-	code := strings.ToLower(strings.TrimSpace(n.Langcode))
+	return st.languageForCode(n.Langcode, st.unmappedLangs)
+}
+
+func (st *importState) languageForTerm(t Term) string {
+	code := strings.ToLower(strings.TrimSpace(t.Langcode))
+	if code == "" || code == "und" || code == "zxx" {
+		label := code
+		if label == "" {
+			label = "empty"
+		}
+		st.neutralTermLangs[label]++
+		return st.defaultLang
+	}
+	return st.languageForCode(code, st.unmappedTermLangs)
+}
+
+func (st *importState) languageForMenuLink(link MenuLink) string {
+	code := strings.ToLower(strings.TrimSpace(link.Langcode))
+	if isNeutralDrupalLangcode(code) {
+		label := code
+		if label == "" {
+			label = "empty"
+		}
+		st.neutralMenuLangs[label]++
+		return st.defaultLang
+	}
+	return st.languageForCode(code, st.unmappedMenuLangs)
+}
+
+// addAvailableLanguage mirrors the public language router's eligibility
+// policy. Legacy active rows with malformed or reserved codes remain
+// manageable in the admin UI, but imported entities must not be assigned to a
+// URL prefix that the router deliberately ignores.
+func (st *importState) addAvailableLanguage(raw string) {
+	code := strings.TrimSpace(raw)
+	if !util.IsValidLangCode(code) || util.IsReservedLanguageCode(code) {
+		return
+	}
+	st.availableLangs[code] = true
+}
+
+func (st *importState) languageForCode(raw string, unmapped map[string]int) string {
+	code := strings.ToLower(strings.TrimSpace(raw))
 	// "und" and "zxx" mean the content is not in any particular language.
 	if code == "" || code == "und" || code == "zxx" {
 		return st.defaultLang
@@ -1165,7 +1456,7 @@ func (st *importState) languageFor(n Node) string {
 	if st.availableLangs[code] {
 		return code
 	}
-	st.unmappedLangs[code]++
+	unmapped[code]++
 	return st.defaultLang
 }
 
@@ -1182,6 +1473,66 @@ func (st *importState) reportUnmappedLanguages() {
 			"%d node(s) are in Drupal language %q, which is not configured in oCMS; "+
 				"they were imported as %q", st.unmappedLangs[code], code, st.defaultLang)
 	}
+}
+
+// reportUnmappedTermLanguages is deliberately independent of the node report:
+// taxonomy-only imports must still disclose language fallback.
+func (st *importState) reportUnmappedTermLanguages() {
+	codes := make([]string, 0, len(st.unmappedTermLangs))
+	for code := range st.unmappedTermLangs {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	for _, code := range codes {
+		st.result.AddSummary(
+			"%d taxonomy term(s) are in Drupal language %q, which is not configured in oCMS; "+
+				"they were imported as %q", st.unmappedTermLangs[code], code, st.defaultLang)
+	}
+	neutral := make([]string, 0, len(st.neutralTermLangs))
+	for code := range st.neutralTermLangs {
+		neutral = append(neutral, code)
+	}
+	sort.Strings(neutral)
+	for _, code := range neutral {
+		st.result.AddSummary(
+			"%d taxonomy term(s) use Drupal's language-neutral code %q; they were imported as %q",
+			st.neutralTermLangs[code], code, st.defaultLang)
+	}
+}
+
+func (st *importState) reportUnmappedMenuLanguages() {
+	codes := make([]string, 0, len(st.unmappedMenuLangs))
+	for code := range st.unmappedMenuLangs {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	for _, code := range codes {
+		st.result.AddSummary(
+			"%d menu link(s) are in Drupal language %q, which is not configured in oCMS; "+
+				"they were imported into the %q menu", st.unmappedMenuLangs[code], code, st.defaultLang)
+	}
+	neutral := make([]string, 0, len(st.neutralMenuLangs))
+	for code := range st.neutralMenuLangs {
+		neutral = append(neutral, code)
+	}
+	sort.Strings(neutral)
+	for _, code := range neutral {
+		st.result.AddSummary(
+			"%d menu link(s) use Drupal's language-neutral code %q; they were imported into the %q menu",
+			st.neutralMenuLangs[code], code, st.defaultLang)
+	}
+}
+
+func taxonomyURL(language, defaultLanguage, entity, slug string) string {
+	language = strings.ToLower(strings.TrimSpace(language))
+	if !util.IsValidLangCode(language) || util.IsReservedLanguageCode(language) {
+		return ""
+	}
+	path := "/" + entity + "/" + slug
+	if language != "" && !strings.EqualFold(language, defaultLanguage) {
+		return "/" + strings.ToLower(language) + path
+	}
+	return path
 }
 
 // reportUnknownFormats tells the operator which text formats arrived unrendered.
@@ -1214,24 +1565,34 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 		st.result.AddError("node %d has no usable title or alias; skipped", n.NID)
 		return
 	}
+	nodeLanguage := st.languageFor(n)
 
 	if st.opts.SkipExisting {
 		existing, err := st.queries.GetPageBySlug(ctx, baseSlug)
 		switch {
-		case err == nil:
+		case err == nil && existing.LanguageCode == nodeLanguage:
 			// Map the node to the page that is already there. Discarding the ID
 			// made resolveMenuTarget treat every link to a skipped node as
 			// pointing at uncreated content, so the menu item was dropped even
 			// though its destination existed.
 			st.nodes[n.NID] = existing.ID
+			st.nodeLang[n.NID] = n.Langcode
 			countSkipped(st.result, pageType)
 			return
+		case err == nil:
+			// Slugs are globally unique in storage, but public routes are scoped
+			// by language. A same-slug page in another language is not the
+			// source entity and must never become its node/menu mapping.
 		case !errors.Is(err, sql.ErrNoRows):
 			st.result.AddError("could not check for existing page %q: %v", baseSlug, err)
 			return
 		}
 	}
-	slug := shared.MakeUniqueSlug(ctx, st.queries, baseSlug)
+	slug := s.uniqueNodeSlug(ctx, st, baseSlug, n.NID, nodeLanguage)
+	if slug == "" {
+		st.result.AddError("failed to allocate an unshadowed page slug for node %d (%q)", n.NID, n.Title)
+		return
+	}
 
 	// The source format decides whether the body is HTML at all. Plain text is
 	// escaped and paragraphed, and skips the media rewriter: a path inside it is
@@ -1268,7 +1629,7 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 		FeaturedImageID: st.featuredImageID(n),
 		MetaTitle:       n.Title,
 		MetaDescription: summaryFor(n),
-		LanguageCode:    st.languageFor(n),
+		LanguageCode:    nodeLanguage,
 		PageType:        pageType,
 		PublishedAt:     publishedAt,
 		CreatedAt:       unixOrNow(n.Created, now),
@@ -1279,13 +1640,71 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 		return
 	}
 
+	if !st.track(ctx, entityTypeFor(pageType), page.ID, func(rollbackCtx context.Context) error {
+		return st.queries.DeletePage(rollbackCtx, page.ID)
+	}) {
+		return
+	}
 	st.nodes[n.NID] = page.ID
 	st.createdNodes[n.NID] = true
 	st.nodeLang[n.NID] = n.Langcode
-	st.track(ctx, entityTypeFor(pageType), page.ID)
 	countImported(st.result, pageType)
 
 	s.linkNodeTerms(ctx, st, n, page.ID)
+}
+
+// uniqueNodeSlug respects aliases that exist only in the source cache as well
+// as slugs and aliases already persisted in oCMS. The alias's owning node may
+// claim its own single-segment route; every other node must suffix.
+func (s *Source) uniqueNodeSlug(ctx context.Context, st *importState, base string, nodeID int64, language string) string {
+	if s.nodeSlugIsFree(ctx, st, base, nodeID, language) {
+		return base
+	}
+	for i := 2; i <= 100; i++ {
+		candidate := base + "-" + strconv.Itoa(i)
+		if s.nodeSlugIsFree(ctx, st, candidate, nodeID, language) {
+			return candidate
+		}
+	}
+	fallback := "imported-" + strconv.FormatInt(nodeID, 10)
+	if s.nodeSlugIsFree(ctx, st, fallback, nodeID, language) {
+		return fallback
+	}
+	for i := 2; i <= 100; i++ {
+		candidate := fallback + "-" + strconv.Itoa(i)
+		if s.nodeSlugIsFree(ctx, st, candidate, nodeID, language) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (s *Source) nodeSlugIsFree(ctx context.Context, st *importState, slug string, nodeID int64, language string) bool {
+	sourcePath := localizedAliasSourcePath(language, st.defaultLang, "/"+slug)
+	if concreteAliasRouteReserved(st, sourcePath, "/"+slug) {
+		return false
+	}
+	if s.publicRouteChecker != nil && s.publicRouteChecker.OwnsPublicPath(sourcePath) {
+		return false
+	}
+	if owner, ok := st.aliasSlugOwners[slug]; ok && owner != nodeID {
+		return false
+	}
+	if reservation, ok := st.aliasReservations[sourcePath]; ok && reservation.nodeID != nodeID {
+		return false
+	}
+	redirectOccupied, err := enabledRedirectMatchesPath(ctx, st.queries, sourcePath)
+	if err != nil {
+		st.result.AddError("could not check redirect ownership for page path %q: %v", sourcePath, err)
+		return false
+	}
+	if redirectOccupied {
+		return false
+	}
+	exists, err := st.queries.SlugOrAliasExists(ctx, store.SlugOrAliasExistsParams{
+		Slug: slug, Alias: slug,
+	})
+	return err == nil && exists == 0
 }
 
 // slugForNode picks a node's slug: its Drupal alias when it has one, so URLs
@@ -1316,7 +1735,24 @@ func (st *importState) featuredImageID(n Node) sql.NullInt64 {
 func uniqueCategorySlug(ctx context.Context, st *importState, base string) string {
 	for i := 2; i < 100; i++ {
 		candidate := base + "-" + strconv.Itoa(i)
+		if st.claimedCategorySlugs[candidate] {
+			continue
+		}
 		if _, err := st.queries.GetCategoryBySlug(ctx, candidate); errors.Is(err, sql.ErrNoRows) {
+			return candidate
+		}
+	}
+	return base + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+}
+
+// uniqueTagSlug appends -2, -3, … until the globally unique tag slug is free.
+func uniqueTagSlug(ctx context.Context, st *importState, base string) string {
+	for i := 2; i < 100; i++ {
+		candidate := base + "-" + strconv.Itoa(i)
+		if st.claimedTagSlugs[candidate] {
+			continue
+		}
+		if _, err := st.queries.GetTagBySlug(ctx, candidate); errors.Is(err, sql.ErrNoRows) {
 			return candidate
 		}
 	}
@@ -1348,14 +1784,13 @@ func (s *Source) linkNodeTerms(ctx context.Context, st *importState, n Node, pag
 // An alias equal to the page's own slug is skipped — it would be a redundant
 // row that also collides with the globally-unique alias index.
 func (s *Source) importAliases(ctx context.Context, st *importState, now time.Time) {
-	aliases, err := st.reader.GetPathAliases(ctx)
-	if err != nil {
+	if err := s.loadNodeAliases(ctx, st); err != nil {
 		// Reported, not fatal: the canonical node paths below are worth writing
 		// even when the alias table could not be read.
-		st.result.AddError("failed to read path aliases: %v", err)
+		st.reportAliasLoadError(err)
 	}
 
-	for _, a := range aliases {
+	for _, a := range st.pathAliases {
 		nid, ok := a.NodeID()
 		if !ok {
 			continue
@@ -1374,10 +1809,341 @@ func (s *Source) importAliases(ctx context.Context, st *importState, now time.Ti
 		if !langcodeApplies(a.Langcode, st.nodeLang[nid]) {
 			continue
 		}
-		s.createPageAlias(ctx, st, pageID, strings.Trim(a.Alias, "/"), now)
+		s.importNodeAlias(ctx, st, nid, pageID, strings.Trim(a.Alias, "/"), now)
 	}
 
 	s.importNodePathAliases(ctx, st, now)
+}
+
+// importNodeAlias preserves a node alias in the namespace where Drupal served
+// it. The legacy page_aliases table is global, so only default-language aliases
+// are stored there. Non-default aliases use a concrete tracked redirect such
+// as /fr/about -> /fr/about-2; this permits identical source aliases in two
+// languages without one becoming unreachable or pointing at the other page.
+func (s *Source) importNodeAlias(ctx context.Context, st *importState, nodeID, pageID int64, alias string, now time.Time) {
+	page, err := st.queries.GetPageByID(ctx, pageID)
+	if err != nil {
+		st.result.AddError("could not load page %d for node %d alias %q: %v", pageID, nodeID, alias, err)
+		return
+	}
+	if page.LanguageCode == st.defaultLang {
+		if alias != page.Slug {
+			pageBySlug, lookupErr := st.queries.GetPageBySlug(ctx, alias)
+			switch {
+			case lookupErr == nil && pageBySlug.LanguageCode != page.LanguageCode:
+				// pages.slug is globally unique, but the foreign-language row is
+				// not routable at this unprefixed/default URL. A concrete redirect
+				// preserves the source URL without violating page_aliases' global
+				// cross-table policy.
+				s.createAliasRedirect(ctx, st, "/"+alias, "/"+alias, "/"+page.Slug, nodeID, now)
+				return
+			case lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows):
+				st.result.AddError("could not check page slug for node %d alias %q: %v", nodeID, alias, lookupErr)
+				return
+			}
+		}
+		s.createPageAlias(ctx, st, pageID, alias, now)
+		return
+	}
+
+	aliasPath := "/" + alias
+	sourcePath := localizedAliasSourcePath(page.LanguageCode, st.defaultLang, aliasPath)
+	targetPath := localizedAliasSourcePath(page.LanguageCode, st.defaultLang, "/"+page.Slug)
+	if sourcePath == targetPath {
+		return
+	}
+	s.createAliasRedirect(ctx, st, sourcePath, aliasPath, targetPath, nodeID, now)
+}
+
+func (st *importState) reportAliasLoadError(err error) {
+	if err == nil || st.aliasErrorReported {
+		return
+	}
+	st.aliasErrorReported = true
+	st.result.AddError("failed to read path aliases: %v", err)
+}
+
+// importTaxonomyAliases preserves Drupal term aliases using the generic
+// redirect subsystem. Page aliases cannot target tags/categories, and storing
+// these as page aliases would either lose the URL or point it at unrelated
+// content.
+func (s *Source) importTaxonomyAliases(ctx context.Context, st *importState, now time.Time) {
+	if err := s.loadNodeAliases(ctx, st); err != nil {
+		st.reportAliasLoadError(err)
+		return
+	}
+	for _, a := range st.pathAliases {
+		tid, ok := a.TermID()
+		if !ok {
+			continue
+		}
+		target := st.termURLs[tid]
+		if target == "" || !langcodeApplies(a.Langcode, st.termLang[tid]) {
+			continue
+		}
+		alias := strings.Trim(a.Alias, "/")
+		if !isSafeAliasPath(alias) {
+			st.result.AddNotice("taxonomy path alias %q was not imported: it is not a usable URL path", a.Alias)
+			continue
+		}
+		aliasPath := "/" + alias
+		sourcePath := localizedAliasSourcePath(
+			st.termDestinationLang[tid], st.defaultLang, aliasPath,
+		)
+		s.createAliasRedirect(ctx, st, sourcePath, aliasPath, target, 0, now)
+	}
+}
+
+// localizedAliasSourcePath mirrors the public language router: the default
+// language owns the unprefixed path, while non-default legacy URLs live below
+// their language prefix. Redirect matching happens before language routing,
+// so the stored source itself must include that prefix.
+func localizedAliasSourcePath(language, defaultLanguage, aliasPath string) string {
+	if language == "" || language == defaultLanguage {
+		return aliasPath
+	}
+	return "/" + language + aliasPath
+}
+
+func (s *Source) createTaxonomyRedirect(ctx context.Context, st *importState,
+	sourcePath, targetURL string, now time.Time) {
+	s.createAliasRedirect(ctx, st, sourcePath, sourcePath, targetURL, 0, now)
+}
+
+// createAliasRedirect separates the concrete source stored in the global
+// redirect table from the underlying Drupal alias. ownerNodeID is non-zero
+// when the redirect preserves that node's own language-scoped legacy URL;
+// taxonomy redirects use zero and must yield to a node owning the same
+// concrete path.
+func (s *Source) createAliasRedirect(ctx context.Context, st *importState,
+	sourcePath, aliasPath, targetURL string, ownerNodeID int64, now time.Time) {
+	alias := strings.TrimPrefix(aliasPath, "/")
+	if reservation, ok := st.aliasReservations[sourcePath]; ok &&
+		reservation.nodeID != 0 && reservation.nodeID != ownerNodeID {
+		st.result.AddNotice("redirect %q was not imported because Drupal node %d owns that path alias", sourcePath, reservation.nodeID)
+		return
+	}
+	if concreteAliasRouteReserved(st, sourcePath, aliasPath) {
+		st.result.AddNotice("redirect %q was not imported because it conflicts with a reserved oCMS route", sourcePath)
+		return
+	}
+	if s.publicRouteChecker != nil && s.publicRouteChecker.OwnsPublicPath(sourcePath) {
+		st.result.AddNotice("redirect %q was not imported because a registered oCMS module route owns that path", sourcePath)
+		return
+	}
+	occupied, err := aliasPathOccupied(ctx, st, sourcePath, alias)
+	if err != nil {
+		st.result.AddError("could not check page/alias conflict for redirect %q: %v", sourcePath, err)
+		return
+	}
+	if occupied {
+		st.result.AddNotice("redirect %q was not imported because an oCMS page slug or alias already owns that path", sourcePath)
+		return
+	}
+
+	enabledRedirects, err := st.queries.ListEnabledRedirects(ctx)
+	if err != nil {
+		st.result.AddError("could not check wildcard conflicts for redirect %q: %v", sourcePath, err)
+		return
+	}
+	for _, existing := range enabledRedirects {
+		if existing.IsWildcard && wildcardRedirectMatchesPath(existing.SourcePath, sourcePath) {
+			st.result.AddNotice("redirect %q was not imported because enabled wildcard redirect %q already matches that path",
+				sourcePath, existing.SourcePath)
+			return
+		}
+	}
+
+	existing, err := st.queries.GetRedirectBySourcePath(ctx, sourcePath)
+	switch {
+	case err == nil:
+		if existing.TargetUrl == targetURL && existing.Enabled {
+			st.result.RedirectsSkipped++
+		} else {
+			st.result.AddNotice("redirect %q was not replaced: it already targets %q", sourcePath, existing.TargetUrl)
+		}
+		return
+	case !errors.Is(err, sql.ErrNoRows):
+		st.result.AddError("could not check for existing redirect %q: %v", sourcePath, err)
+		return
+	}
+
+	redirect, err := st.queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: sourcePath,
+		TargetUrl:  targetURL,
+		StatusCode: 301,
+		IsWildcard: false,
+		TargetType: model.TargetSelf,
+		Enabled:    true,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
+	if err != nil {
+		st.result.AddError("failed to create redirect %q to %q: %v", sourcePath, targetURL, err)
+		return
+	}
+	if !st.track(ctx, types.EntityRedirect, redirect.ID, func(rollbackCtx context.Context) error {
+		return st.queries.DeleteRedirect(rollbackCtx, redirect.ID)
+	}) {
+		return
+	}
+	st.result.RedirectsImported++
+}
+
+// aliasPathOccupied checks the namespace the request will actually use. The
+// unprefixed/default namespace is global in the legacy tables. A non-default
+// concrete redirect such as /fr/about is only shadowed by a page or alias that
+// belongs to fr; an English bare slug must not suppress that safe route.
+func aliasPathOccupied(ctx context.Context, st *importState, sourcePath, alias string) (bool, error) {
+	language := concreteAliasLanguage(sourcePath, "/"+alias, st.defaultLang)
+	page, err := st.queries.GetPageBySlug(ctx, alias)
+	switch {
+	case err == nil && page.LanguageCode == language:
+		return true, nil
+	case err == nil, errors.Is(err, sql.ErrNoRows):
+	case err != nil:
+		return false, err
+	}
+
+	page, err = st.queries.GetPageByAlias(ctx, alias)
+	switch {
+	case err == nil:
+		// An unprefixed alias is globally routable and may intentionally
+		// redirect to a non-default page. Explicit prefixes, by contrast, only
+		// resolve aliases belonging to that same language.
+		return language == st.defaultLang || page.LanguageCode == language, nil
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+func enabledRedirectMatchesPath(ctx context.Context, queries *store.Queries, sourcePath string) (bool, error) {
+	redirects, err := queries.ListEnabledRedirects(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, redirect := range redirects {
+		if redirect.SourcePath == sourcePath ||
+			(redirect.IsWildcard && wildcardRedirectMatchesPath(redirect.SourcePath, sourcePath)) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func concreteAliasLanguage(sourcePath, aliasPath, defaultLanguage string) string {
+	if sourcePath == aliasPath {
+		return defaultLanguage
+	}
+	trimmed := strings.TrimPrefix(sourcePath, "/")
+	language, _, found := strings.Cut(trimmed, "/")
+	if !found {
+		return defaultLanguage
+	}
+	return strings.ToLower(language)
+}
+
+// wildcardRedirectMatchesPath mirrors the redirect middleware's wildcard
+// semantics for conflict detection. The importer only needs the match result,
+// not the captured values used to build a redirect target.
+func wildcardRedirectMatchesPath(pattern, requestPath string) bool {
+	if strings.HasSuffix(pattern, "*") && !strings.HasSuffix(pattern, "**") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		if !strings.HasSuffix(prefix, "/") {
+			requestPath = strings.TrimSuffix(requestPath, "/")
+			prefixWithoutSlash := strings.TrimSuffix(prefix, "/")
+			return requestPath == prefixWithoutSlash || strings.HasPrefix(requestPath, prefix)
+		}
+	}
+
+	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
+	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
+	return wildcardRedirectPartsMatch(patternParts, requestParts, 0, 0)
+}
+
+func wildcardRedirectPartsMatch(pattern, request []string, patternIndex, requestIndex int) bool {
+	if patternIndex >= len(pattern) {
+		return requestIndex >= len(request)
+	}
+	if requestIndex >= len(request) {
+		for ; patternIndex < len(pattern); patternIndex++ {
+			if pattern[patternIndex] != "**" {
+				return false
+			}
+		}
+		return true
+	}
+
+	switch pattern[patternIndex] {
+	case "*":
+		return wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
+	case "**":
+		if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex) {
+			return true
+		}
+		for end := requestIndex + 1; end <= len(request); end++ {
+			if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, end) {
+				return true
+			}
+		}
+		return false
+	default:
+		return pattern[patternIndex] == request[requestIndex] &&
+			wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
+	}
+}
+
+// reservedPublicPath protects fixed routes that are selected before the page
+// catch-all. The set includes every built-in public/admin/API/static prefix;
+// module routes remain protected by the destination page/alias checks where
+// they are represented in storage.
+func reservedPublicPath(st *importState, path string) bool {
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return true
+	}
+	first, _, _ := strings.Cut(path, "/")
+	if fixedPublicPaths[path] || util.IsReservedLanguageCode(first) {
+		return true
+	}
+	// Active language prefixes are stripped before public route matching, and
+	// the remainder may be either a fixed endpoint or a page slug/alias. Reject
+	// the whole prefix namespace here: the generic redirect table cannot safely
+	// prove that it is unowned without duplicating the language router.
+	if st != nil && st.availableLangs[strings.ToLower(first)] {
+		return true
+	}
+	return strings.HasPrefix(path, ".well-known/") || path == ".well-known"
+}
+
+// concreteAliasRouteReserved distinguishes top-level routes from routes that
+// are actually mounted inside the language-aware frontend child. A default
+// alias /admin conflicts with the admin router, while /fr/admin is a valid page
+// path because only the child router sees "admin" after stripping "fr".
+func concreteAliasRouteReserved(st *importState, sourcePath, aliasPath string) bool {
+	if sourcePath == aliasPath {
+		return reservedPublicPath(st, aliasPath)
+	}
+	parts := strings.Split(strings.Trim(aliasPath, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		return true
+	}
+	switch parts[0] {
+	case "blog", "search":
+		return len(parts) == 1 || (parts[0] == "blog" && len(parts) == 3 && parts[1] == "tag")
+	case "category", "tag", "page", "forms":
+		return len(parts) == 2
+	default:
+		return false
+	}
+}
+
+var fixedPublicPaths = map[string]bool{
+	"sitemap.xml": true,
+	"robots.txt":  true,
+	"favicon.ico": true,
 }
 
 // importNodePathAliases gives every page this run created an alias for its
@@ -1403,7 +2169,7 @@ func (s *Source) importNodePathAliases(ctx context.Context, st *importState, now
 		if !ok {
 			continue
 		}
-		s.createPageAlias(ctx, st, pageID, fmt.Sprintf("node/%d", nid), now)
+		s.importNodeAlias(ctx, st, nid, pageID, fmt.Sprintf("node/%d", nid), now)
 	}
 }
 
@@ -1420,19 +2186,61 @@ func (s *Source) createPageAlias(ctx context.Context, st *importState, pageID in
 		st.result.AddNotice("path alias %q was not imported: it is not a usable URL path", alias)
 		return
 	}
-
-	// An alias equal to the page's own slug would be a redundant row that also
-	// collides with the globally-unique alias index.
-	page, err := st.queries.GetPageByID(ctx, pageID)
-	if err == nil && page.Slug == alias {
+	if reservedPublicPath(st, alias) {
+		st.result.AddNotice("path alias %q was not imported because it conflicts with a reserved oCMS route", alias)
+		return
+	}
+	if s.publicRouteChecker != nil && s.publicRouteChecker.OwnsPublicPath("/"+alias) {
+		st.result.AddNotice("path alias %q was not imported because a registered oCMS module route owns that path", alias)
 		return
 	}
 
-	if _, err := st.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+	// Redirect middleware runs before frontend page-alias lookup. Preserve
+	// exact redirect ownership even when it is currently disabled (it may be
+	// re-enabled later), and reject every enabled wildcard that would make the
+	// new alias unreachable while still being counted as imported.
+	sourcePath := "/" + alias
+	existingRedirect, err := st.queries.GetRedirectBySourcePath(ctx, sourcePath)
+	switch {
+	case err == nil:
+		st.result.AddNotice("path alias %q was not imported because redirect %q already owns that path",
+			alias, existingRedirect.SourcePath)
+		return
+	case !errors.Is(err, sql.ErrNoRows):
+		st.result.AddError("could not check whether alias %q conflicts with a redirect: %v", alias, err)
+		return
+	}
+	redirectOccupied, err := enabledRedirectMatchesPath(ctx, st.queries, sourcePath)
+	if err != nil {
+		st.result.AddError("could not check wildcard redirects for alias %q: %v", alias, err)
+		return
+	}
+	if redirectOccupied {
+		st.result.AddNotice("path alias %q was not imported because an enabled wildcard redirect already owns that path", alias)
+		return
+	}
+
+	// Page slugs are resolved before aliases. Refuse to create a legacy alias
+	// that would be shadowed by another page even if a future schema change
+	// removes cross-table validation at write time.
+	pageBySlug, err := st.queries.GetPageBySlug(ctx, alias)
+	switch {
+	case err == nil && pageBySlug.ID == pageID:
+		return // redundant alias equal to this page's own slug
+	case err == nil:
+		st.result.AddNotice("path alias %q was not imported because page %d already owns that slug", alias, pageBySlug.ID)
+		return
+	case !errors.Is(err, sql.ErrNoRows):
+		st.result.AddError("could not check whether alias %q shadows a page slug: %v", alias, err)
+		return
+	}
+
+	created, err := st.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
 		PageID:    pageID,
 		Alias:     alias,
 		CreatedAt: now,
-	}); err != nil {
+	})
+	if err != nil {
 		// A duplicate alias is expected when two Drupal nodes shared one path
 		// over time, and is not worth failing the import over. Any other
 		// failure is: with menus disabled this is the last step, so a database
@@ -1445,16 +2253,13 @@ func (s *Source) createPageAlias(ctx context.Context, st *importState, pageID in
 		}
 		return
 	}
-	st.track(ctx, types.EntityAlias, pageID)
+	if !st.track(ctx, types.EntityAlias, created.ID, func(rollbackCtx context.Context) error {
+		return st.queries.DeletePageAlias(rollbackCtx, created.ID)
+	}) {
+		return
+	}
 	st.result.AliasesImported++
 }
-
-// aliasUnsafeRunes are characters that would change how a stored alias is
-// routed, or that cannot appear in a path at all.
-const aliasUnsafeRunes = "?#\\"
-
-// maxAliasLength bounds an imported alias. Drupal's own column is 255.
-const maxAliasLength = 255
 
 // isSafeAliasPath reports whether a Drupal alias can be stored and served as-is.
 //
@@ -1468,32 +2273,10 @@ const maxAliasLength = 255
 // What is rejected is what would misroute or is not a path: a scheme or host, a
 // query or fragment, traversal, empty or duplicated segments, control
 // characters and whitespace.
+const maxAliasLength = shared.MaxImportedAliasLength
+
 func isSafeAliasPath(alias string) bool {
-	if alias == "" || len(alias) > maxAliasLength {
-		return false
-	}
-	if strings.ContainsAny(alias, aliasUnsafeRunes) {
-		return false
-	}
-	if strings.HasPrefix(alias, "/") || strings.HasSuffix(alias, "/") {
-		return false
-	}
-	// "//example.com/x" is protocol-relative, and "http://…" is absolute; both
-	// would send a visitor off-site if ever echoed into a link.
-	if strings.Contains(alias, "//") || strings.Contains(alias, ":") {
-		return false
-	}
-	for _, r := range alias {
-		if r < 0x20 || r == 0x7f || unicode.IsSpace(r) {
-			return false
-		}
-	}
-	for _, segment := range strings.Split(alias, "/") {
-		if segment == "" || segment == "." || segment == ".." {
-			return false
-		}
-	}
-	return true
+	return shared.IsSafeImportedAliasPath(alias)
 }
 
 // isUniqueConstraintErr reports whether err is SQLite's uniqueness violation,
@@ -1516,6 +2299,13 @@ func (s *Source) importMenus(ctx context.Context, st *importState) error {
 	if !st.opts.ImportMenus {
 		return nil
 	}
+	// Menu links may point at a taxonomy term through its human-readable path
+	// alias (internal:/topics/go), not only its canonical entity URI. Reuse the
+	// one cached alias read so those links can resolve to the imported,
+	// language-aware tag/category URL.
+	if err := s.loadNodeAliases(ctx, st); err != nil {
+		return fmt.Errorf("failed to load path aliases for menu targets: %w", err)
+	}
 
 	links, err := st.reader.GetMenuLinks(ctx)
 	if err != nil {
@@ -1525,27 +2315,38 @@ func (s *Source) importMenus(ctx context.Context, st *importState) error {
 		return nil
 	}
 
-	byMenu := make(map[string][]MenuLink)
-	var order []string
+	type menuPartition struct {
+		name     string
+		language string
+	}
+	byMenu := make(map[menuPartition][]MenuLink)
+	var order []menuPartition
 	for _, l := range links {
 		if l.MenuName == "" {
 			continue
 		}
-		if _, seen := byMenu[l.MenuName]; !seen {
-			order = append(order, l.MenuName)
+		partition := menuPartition{name: l.MenuName, language: st.languageForMenuLink(l)}
+		if _, seen := byMenu[partition]; !seen {
+			order = append(order, partition)
 		}
-		byMenu[l.MenuName] = append(byMenu[l.MenuName], l)
+		byMenu[partition] = append(byMenu[partition], l)
 	}
-	sort.Strings(order)
+	sort.Slice(order, func(i, j int) bool {
+		if order[i].language == order[j].language {
+			return order[i].name < order[j].name
+		}
+		return order[i].language < order[j].language
+	})
 
 	now := time.Now()
-	for i, menuName := range order {
+	for i, partition := range order {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		s.importMenu(ctx, st, menuName, byMenu[menuName], now)
+		s.importMenu(ctx, st, partition.name, partition.language, byMenu[partition], now)
 		st.report(ctx, types.EntityMenu, i+1, len(order))
 	}
+	st.reportUnmappedMenuLanguages()
 	return nil
 }
 
@@ -1562,18 +2363,25 @@ func menuItemKey(title string, pageID sql.NullInt64, url sql.NullString) string 
 }
 
 // uniqueMenuSlug appends -2, -3, … until the slug is free.
-func uniqueMenuSlug(ctx context.Context, st *importState, base string) string {
+func uniqueMenuSlug(ctx context.Context, st *importState, base, language string) string {
 	for i := 2; i < 100; i++ {
 		candidate := base + "-" + strconv.Itoa(i)
-		if _, err := st.queries.GetMenuBySlug(ctx, candidate); errors.Is(err, sql.ErrNoRows) {
+		if st.claimedMenuSlugs[menuSlugClaim(language, candidate)] {
+			continue
+		}
+		if _, err := st.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+			Slug: candidate, LanguageCode: language,
+		}); errors.Is(err, sql.ErrNoRows) {
 			return candidate
 		}
 	}
 	return base + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
 
+func menuSlugClaim(language, slug string) string { return language + "\x00" + slug }
+
 // importMenu creates or reuses one menu and imports its links.
-func (s *Source) importMenu(ctx context.Context, st *importState, menuName string, links []MenuLink, now time.Time) {
+func (s *Source) importMenu(ctx context.Context, st *importState, menuName, language string, links []MenuLink, now time.Time) {
 	slug := util.Slugify(menuName)
 	if slug == "" {
 		return
@@ -1582,22 +2390,28 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 	// Two distinct Drupal menu names can normalize to the same slug ("foo_bar"
 	// and "foobar"). Without this the second reuses the first's menu and both
 	// sets of links land in one navigation.
-	if st.createdMenuSlugs[slug] {
-		slug = uniqueMenuSlug(ctx, st, slug)
+	if st.claimedMenuSlugs[menuSlugClaim(language, slug)] {
+		slug = uniqueMenuSlug(ctx, st, slug, language)
 	}
 
-	menuID, created, err := s.ensureMenu(ctx, st, menuName, slug, now)
+	menuID, created, err := s.ensureMenu(ctx, st, menuName, slug, language, now)
 	if err != nil {
 		st.result.AddError("failed to create menu %q: %v", menuName, err)
 		return
 	}
 	if created {
-		st.createdMenuSlugs[slug] = true
-		st.track(ctx, types.EntityMenu, menuID)
+		if !st.track(ctx, types.EntityMenu, menuID, func(rollbackCtx context.Context) error {
+			return st.queries.DeleteMenu(rollbackCtx, menuID)
+		}) {
+			return
+		}
 		st.result.MenusImported++
 	} else {
 		st.result.MenusSkipped++
 	}
+	// Reused rows count as claimed too. Otherwise the next distinct source menu
+	// with the same normalized slug is merged into that same destination menu.
+	st.claimedMenuSlugs[menuSlugClaim(language, slug)] = true
 
 	itemByUUID := make(map[string]int64, len(links))
 	// Items this run created. itemByUUID also holds pre-existing rows matched
@@ -1669,11 +2483,15 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 			continue
 		}
 
+		if !st.track(ctx, types.EntityMenuItem, item.ID, func(rollbackCtx context.Context) error {
+			return st.queries.DeleteMenuItem(rollbackCtx, item.ID)
+		}) {
+			continue
+		}
 		if l.UUID != "" {
 			itemByUUID[l.UUID] = item.ID
 		}
 		createdItems[item.ID] = true
-		st.track(ctx, types.EntityMenuItem, item.ID)
 		st.result.MenuItemsImported++
 	}
 
@@ -1683,8 +2501,10 @@ func (s *Source) importMenu(ctx context.Context, st *importState, menuName strin
 
 // ensureMenu returns the ID of the oCMS menu for a Drupal menu name, creating
 // it when absent. created reports whether this import made the row.
-func (s *Source) ensureMenu(ctx context.Context, st *importState, menuName, slug string, now time.Time) (int64, bool, error) {
-	existing, err := st.queries.GetMenuBySlug(ctx, slug)
+func (s *Source) ensureMenu(ctx context.Context, st *importState, menuName, slug, language string, now time.Time) (int64, bool, error) {
+	existing, err := st.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug: slug, LanguageCode: language,
+	})
 	switch {
 	case err == nil:
 		return existing.ID, false, nil
@@ -1695,7 +2515,7 @@ func (s *Source) ensureMenu(ctx context.Context, st *importState, menuName, slug
 	menu, err := st.queries.CreateMenu(ctx, store.CreateMenuParams{
 		Name:         menuName,
 		Slug:         slug,
-		LanguageCode: st.defaultLang,
+		LanguageCode: language,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	})
@@ -1707,20 +2527,157 @@ func (s *Source) ensureMenu(ctx context.Context, st *importState, menuName, slug
 
 // resolveMenuTarget maps a Drupal link URI onto an oCMS page reference or URL.
 func (s *Source) resolveMenuTarget(st *importState, l MenuLink) (sql.NullInt64, sql.NullString, error) {
-	nodeID, url, err := ResolveLinkURI(l.LinkURI)
+	target, err := ResolveLinkURI(l.LinkURI)
 	if err != nil {
 		return sql.NullInt64{}, sql.NullString{}, fmt.Errorf("link %q: %w", l.Title, err)
 	}
 
-	if nodeID != 0 {
-		pageID, ok := st.nodes[nodeID]
+	if target.NodeID != 0 {
+		pageID, ok := st.nodes[target.NodeID]
 		if !ok {
-			return sql.NullInt64{}, sql.NullString{}, fmt.Errorf("link %q points at node %d, which was not imported", l.Title, nodeID)
+			return sql.NullInt64{}, sql.NullString{}, fmt.Errorf("link %q points at node %d, which was not imported", l.Title, target.NodeID)
 		}
 		return sql.NullInt64{Int64: pageID, Valid: true}, sql.NullString{String: "", Valid: true}, nil
 	}
+	if target.TermID != 0 {
+		url := st.termURLs[target.TermID]
+		if url == "" {
+			return sql.NullInt64{}, sql.NullString{}, fmt.Errorf("link %q points at taxonomy term %d, which was not imported", l.Title, target.TermID)
+		}
+		return sql.NullInt64{}, sql.NullString{String: url, Valid: true}, nil
+	}
+	if pageID, nodeID, known := st.nodePageForAlias(target.URL, l.Langcode); known {
+		if pageID == 0 {
+			return sql.NullInt64{}, sql.NullString{}, fmt.Errorf(
+				"link %q points at node alias %q for node %d, which was not imported in language %q",
+				l.Title, target.URL, nodeID, st.aliasDestinationLanguage(l.Langcode))
+		}
+		return sql.NullInt64{Int64: pageID, Valid: true}, sql.NullString{}, nil
+	}
+	if url, termID, known := st.taxonomyURLForAlias(target.URL, l.Langcode); known {
+		if url == "" {
+			return sql.NullInt64{}, sql.NullString{}, fmt.Errorf(
+				"link %q points at taxonomy alias %q for term %d, which was not imported",
+				l.Title, target.URL, termID)
+		}
+		return sql.NullInt64{}, sql.NullString{String: url, Valid: true}, nil
+	}
 
-	return sql.NullInt64{}, sql.NullString{String: url, Valid: true}, nil
+	return sql.NullInt64{}, sql.NullString{String: target.URL, Valid: true}, nil
+}
+
+// nodePageForAlias resolves internal:/legacy-path menu links to the exact
+// imported node in the link's source language. Returning a PageID lets the
+// menu service generate the page's canonical language-aware URL; preserving
+// the raw path would send a French link to an English page when both languages
+// used the same Drupal alias.
+func (st *importState) nodePageForAlias(path, menuLang string) (pageID, nodeID int64, known bool) {
+	alias := strings.Trim(path, "/")
+	if alias == "" || !isSafeAliasPath(alias) {
+		return 0, 0, false
+	}
+	preferredLang := st.aliasDestinationLanguage(menuLang)
+
+	var neutralPageID, neutralNodeID int64
+	var neutralKnown bool
+	for _, candidate := range st.pathAliases {
+		if strings.Trim(candidate.Alias, "/") != alias {
+			continue
+		}
+		nid, ok := candidate.NodeID()
+		if !ok {
+			continue
+		}
+		candidateLang := strings.ToLower(strings.TrimSpace(candidate.Langcode))
+		nodeDestinationLang := st.aliasDestinationLanguage(st.nodeLang[nid])
+		switch {
+		case candidateLang == preferredLang:
+			if nodeDestinationLang == preferredLang && langcodeApplies(candidate.Langcode, st.nodeLang[nid]) {
+				return st.nodes[nid], nid, true
+			}
+			return 0, nid, true
+		case isNeutralDrupalLangcode(candidateLang) && !neutralKnown && nodeDestinationLang == preferredLang:
+			neutralKnown = true
+			neutralNodeID = nid
+			neutralPageID = st.nodes[nid]
+		}
+	}
+	return neutralPageID, neutralNodeID, neutralKnown
+}
+
+// taxonomyURLForAlias maps an internal menu URL such as /topics/go back to the
+// imported term that owned that Drupal path alias in the menu link's source
+// language. Drupal permits the same alias text in different languages, so row
+// order is not ownership: an exact language match wins, followed by a neutral
+// alias. Node aliases still take precedence just as they do for redirects.
+func (st *importState) taxonomyURLForAlias(path, menuLang string) (target string, termID int64, known bool) {
+	alias := strings.Trim(path, "/")
+	if alias == "" || !isSafeAliasPath(alias) {
+		return "", 0, false
+	}
+	preferredLang := st.aliasDestinationLanguage(menuLang)
+	sourcePath := localizedAliasSourcePath(preferredLang, st.defaultLang, "/"+alias)
+	if reservation, ok := st.aliasReservations[sourcePath]; ok && reservation.nodeID != 0 {
+		return "", 0, false
+	}
+
+	var exactTarget, neutralTarget string
+	var exactTermID, neutralTermID int64
+	var exactSeen, neutralSeen bool
+
+	for _, candidate := range st.pathAliases {
+		if strings.Trim(candidate.Alias, "/") != alias {
+			continue
+		}
+		tid, ok := candidate.TermID()
+		if !ok {
+			continue
+		}
+		if !known {
+			termID = tid
+		}
+		known = true
+		if st.termDestinationLang[tid] != preferredLang {
+			continue
+		}
+		if !langcodeApplies(candidate.Langcode, st.termLang[tid]) {
+			continue
+		}
+
+		candidateLang := strings.ToLower(strings.TrimSpace(candidate.Langcode))
+		switch {
+		case candidateLang == preferredLang:
+			if !exactSeen {
+				exactSeen = true
+				exactTermID = tid
+			}
+			if candidateTarget := st.termURLs[tid]; exactTarget == "" && candidateTarget != "" {
+				exactTarget = candidateTarget
+				exactTermID = tid
+			}
+		case isNeutralDrupalLangcode(candidateLang):
+			if !neutralSeen {
+				neutralSeen = true
+				neutralTermID = tid
+			}
+			if candidateTarget := st.termURLs[tid]; neutralTarget == "" && candidateTarget != "" {
+				neutralTarget = candidateTarget
+				neutralTermID = tid
+			}
+		}
+	}
+	if exactSeen {
+		return exactTarget, exactTermID, true
+	}
+	if neutralSeen {
+		return neutralTarget, neutralTermID, true
+	}
+	return "", termID, known
+}
+
+func isNeutralDrupalLangcode(code string) bool {
+	code = strings.ToLower(strings.TrimSpace(code))
+	return code == "" || code == "und" || code == "zxx"
 }
 
 // linkMenuParents applies the Drupal menu hierarchy to the created items.
@@ -1742,7 +2699,12 @@ func (s *Source) linkMenuParents(ctx context.Context, st *importState, links []M
 			continue
 		}
 		parentID, ok := itemByUUID[parentUUID]
-		if !ok || parentID == childID {
+		if !ok {
+			st.result.AddNotice("menu %q item %q references parent %q outside its language partition; left at root",
+				l.MenuName, l.Title, parentUUID)
+			continue
+		}
+		if parentID == childID {
 			continue
 		}
 

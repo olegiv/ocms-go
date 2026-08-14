@@ -6,7 +6,6 @@ package drupal
 import (
 	"context"
 	"database/sql"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -228,28 +227,19 @@ func TestFileSchemeAndRelPath(t *testing.T) {
 	}
 }
 
-func TestResolveFilePath(t *testing.T) {
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "2026-01"), 0o755); err != nil {
-		t.Fatalf("failed to create fixture dir: %v", err)
-	}
-	target := filepath.Join(root, "2026-01", "photo.jpg")
-	if err := os.WriteFile(target, []byte("x"), 0o600); err != nil {
-		t.Fatalf("failed to write fixture: %v", err)
-	}
-
-	cleanRoot, realRoot, err := shared.ResolveMediaRoot(root)
-	if err != nil {
-		t.Fatalf("ResolveMediaRoot() error = %v", err)
-	}
-
-	t.Run("public file resolves", func(t *testing.T) {
-		got, err := resolveFilePath(File{URI: "public://2026-01/photo.jpg"}, cleanRoot, realRoot)
+func TestImportableFilePath(t *testing.T) {
+	t.Run("public file resolves to a relative capability path", func(t *testing.T) {
+		got, err := importableFilePath(File{URI: "public://2026-01/photo.jpg"})
 		if err != nil {
-			t.Fatalf("resolveFilePath() error = %v", err)
+			t.Fatalf("importableFilePath() error = %v", err)
 		}
-		if filepath.Base(got) != "photo.jpg" {
-			t.Errorf("resolved to %q, want the fixture file", got)
+		if got != "2026-01/photo.jpg" || filepath.IsAbs(got) {
+			t.Errorf("resolved to %q, want a root-relative path", got)
+		}
+	})
+	t.Run("dots inside a filename are allowed", func(t *testing.T) {
+		if got, err := importableFilePath(File{URI: "public://reports/report..pdf"}); err != nil || got != "reports/report..pdf" {
+			t.Errorf("importableFilePath() = (%q, %v), want report..pdf accepted", got, err)
 		}
 	})
 
@@ -259,11 +249,10 @@ func TestResolveFilePath(t *testing.T) {
 		{"unknown stream rejected", "s3://bucket/key.jpg"},
 		{"traversal rejected", "public://../../etc/passwd"},
 		{"empty path rejected", "public://"},
-		{"missing file rejected", "public://nope.jpg"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := resolveFilePath(File{URI: tt.uri}, cleanRoot, realRoot); err == nil {
-				t.Errorf("resolveFilePath(%q) should have returned an error", tt.uri)
+			if _, err := importableFilePath(File{URI: tt.uri}); err == nil {
+				t.Errorf("importableFilePath(%q) should have returned an error", tt.uri)
 			}
 		})
 	}
@@ -290,6 +279,26 @@ func TestPathAliasNodeID(t *testing.T) {
 			gotID, gotOK := a.NodeID()
 			if gotID != tt.wantID || gotOK != tt.wantOK {
 				t.Errorf("NodeID() = (%d, %v), want (%d, %v)", gotID, gotOK, tt.wantID, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestPathAliasTermID(t *testing.T) {
+	for _, tt := range []struct {
+		path   string
+		wantID int64
+		wantOK bool
+	}{
+		{"/taxonomy/term/4", 4, true},
+		{"taxonomy/term/12/", 12, true},
+		{"/node/4", 0, false},
+		{"/taxonomy/term/nope", 0, false},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			gotID, gotOK := (&PathAlias{Path: tt.path}).TermID()
+			if gotID != tt.wantID || gotOK != tt.wantOK {
+				t.Errorf("TermID() = (%d, %v), want (%d, %v)", gotID, gotOK, tt.wantID, tt.wantOK)
 			}
 		})
 	}
@@ -322,37 +331,42 @@ func TestResolveLinkURI(t *testing.T) {
 		name     string
 		uri      string
 		wantNode int64
+		wantTerm int64
 		wantURL  string
 		wantErr  bool
 	}{
-		{"entity node", "entity:node/12", 12, "", false},
-		{"internal node", "internal:/node/7", 7, "", false},
-		{"internal path", "internal:/about-us", 0, "/about-us", false},
-		{"internal path without slash", "internal:contact", 0, "/contact", false},
-		{"internal front page", "internal:/", 0, "/", false},
-		{"external https", "https://example.com/x", 0, "https://example.com/x", false},
-		{"external http", "http://example.com", 0, "http://example.com", false},
-		{"base path", "base:sitemap.xml", 0, "/sitemap.xml", false},
-		{"route has no equivalent", "route:<front>", 0, "", true},
-		{"unsupported entity", "entity:taxonomy_term/3", 0, "", true},
-		{"empty", "", 0, "", true},
-		{"unknown scheme", "weird:thing", 0, "", true},
+		{"entity node", "entity:node/12", 12, 0, "", false},
+		{"internal node", "internal:/node/7", 7, 0, "", false},
+		{"entity term", "entity:taxonomy_term/3", 0, 3, "", false},
+		{"internal term", "internal:/taxonomy/term/4", 0, 4, "", false},
+		{"internal path", "internal:/about-us", 0, 0, "/about-us", false},
+		{"internal path without slash", "internal:contact", 0, 0, "/contact", false},
+		{"internal front page", "internal:/", 0, 0, "/", false},
+		{"external https", "https://example.com/x", 0, 0, "https://example.com/x", false},
+		{"external http", "http://example.com", 0, 0, "http://example.com", false},
+		{"base path", "base:sitemap.xml", 0, 0, "/sitemap.xml", false},
+		{"route has no equivalent", "route:<front>", 0, 0, "", true},
+		{"empty", "", 0, 0, "", true},
+		{"unknown scheme", "weird:thing", 0, 0, "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotNode, gotURL, err := ResolveLinkURI(tt.uri)
+			got, err := ResolveLinkURI(tt.uri)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ResolveLinkURI(%q) error = %v, wantErr %v", tt.uri, err, tt.wantErr)
 			}
 			if err != nil {
 				return
 			}
-			if gotNode != tt.wantNode {
-				t.Errorf("node = %d, want %d", gotNode, tt.wantNode)
+			if got.NodeID != tt.wantNode {
+				t.Errorf("node = %d, want %d", got.NodeID, tt.wantNode)
 			}
-			if gotURL != tt.wantURL {
-				t.Errorf("url = %q, want %q", gotURL, tt.wantURL)
+			if got.TermID != tt.wantTerm {
+				t.Errorf("term = %d, want %d", got.TermID, tt.wantTerm)
+			}
+			if got.URL != tt.wantURL {
+				t.Errorf("url = %q, want %q", got.URL, tt.wantURL)
 			}
 		})
 	}
@@ -649,6 +663,111 @@ func TestBuildNodeQueryOmitsBodyJoinWhenAbsent(t *testing.T) {
 	}
 }
 
+func TestDrupalEntityReferenceQueriesUseSourceCurrentRevision(t *testing.T) {
+	termQuery := buildTermQuery("`taxonomy_term_field_data`")
+	for _, want := range []string{"COALESCE(langcode, '')", "default_langcode = 1"} {
+		if !strings.Contains(termQuery, want) {
+			t.Errorf("term query is missing %q:\n%s", want, termQuery)
+		}
+	}
+
+	parentQuery := buildTermParentQuery("`taxonomy_term__parent`", "`taxonomy_term_field_data`")
+	for _, want := range []string{
+		"p.langcode = t.langcode", "p.revision_id = t.revision_id",
+		"p.deleted = 0", "p.parent_target_id, p.delta", "ORDER BY p.entity_id, p.delta",
+		"t.default_langcode = 1",
+	} {
+		if !strings.Contains(parentQuery, want) {
+			t.Errorf("term-parent query is missing %q:\n%s", want, parentQuery)
+		}
+	}
+
+	nodeQuery := buildNodeQuery("`node_field_data`", "`node__body`", true)
+	for _, want := range []string{
+		"b.langcode = n.langcode", "b.revision_id = n.vid", "b.deleted = 0", "b.delta = 0",
+	} {
+		if !strings.Contains(nodeQuery, want) {
+			t.Errorf("node-body query is missing %q:\n%s", want, nodeQuery)
+		}
+	}
+
+	imageQuery := buildNodeImageQuery("`node__field_image`", "`node_field_data`")
+	for _, want := range []string{
+		"f.langcode = n.langcode", "f.revision_id = n.vid", "f.deleted = 0", "f.delta = 0",
+	} {
+		if !strings.Contains(imageQuery, want) {
+			t.Errorf("node-image query is missing %q:\n%s", want, imageQuery)
+		}
+	}
+
+	nodeTermsQuery := buildNodeTermsQuery(taxonomyRefField{
+		Table: "`node__field_tags`", Column: "field_tags_target_id",
+	}, "`node_field_data`", "`taxonomy_term_field_data`")
+	for _, want := range []string{
+		"f.langcode = n.langcode", "f.revision_id = n.vid", "f.deleted = 0",
+		"t.default_langcode = 1", "ORDER BY f.entity_id, f.delta",
+	} {
+		if !strings.Contains(nodeTermsQuery, want) {
+			t.Errorf("node-taxonomy query is missing %q:\n%s", want, nodeTermsQuery)
+		}
+	}
+
+	mediaQuery, err := buildMediaUUIDQuery("`media`", "`media_field_data`",
+		"`media__field_media_image`", "field_media_image_target_id")
+	if err != nil {
+		t.Fatalf("buildMediaUUIDQuery() error = %v", err)
+	}
+	for _, want := range []string{
+		"d.vid = m.vid", "d.default_langcode = 1", "f.revision_id = d.vid",
+		"f.langcode = d.langcode", "f.deleted = 0", "f.delta = 0",
+	} {
+		if !strings.Contains(mediaQuery, want) {
+			t.Errorf("media-reference query is missing %q:\n%s", want, mediaQuery)
+		}
+	}
+	if _, err := buildMediaUUIDQuery("m", "d", "f", "unsafe;column"); err == nil {
+		t.Error("buildMediaUUIDQuery accepted an unsafe interpolated column")
+	}
+
+	altQuery, err := buildAltQuery("`node__field_image`", "field_image_target_id",
+		"field_image_alt", entityJoin{
+			Table: "`node_field_data`", IDColumn: "nid", RevisionColumn: "vid",
+		})
+	if err != nil {
+		t.Fatalf("buildAltQuery() error = %v", err)
+	}
+	for _, want := range []string{
+		"SELECT f.field_image_target_id, f.entity_id, COALESCE(f.field_image_alt, '')",
+		"e.default_langcode = 1", "f.langcode = e.langcode",
+		"f.revision_id = e.vid", "f.deleted = 0", "f.delta = 0",
+		"ORDER BY f.field_image_target_id, f.entity_id, f.revision_id DESC",
+		"f.langcode, COALESCE(f.field_image_alt, '')",
+	} {
+		if !strings.Contains(altQuery, want) {
+			t.Errorf("alt-text query is missing %q:\n%s", want, altQuery)
+		}
+	}
+	degradedAltQuery, err := buildAltQuery("`media__field_media_image`",
+		"field_media_image_target_id", "field_media_image_alt", entityJoin{})
+	if err != nil {
+		t.Fatalf("buildAltQuery() without entity join error = %v", err)
+	}
+	for _, want := range []string{
+		"SELECT f.field_media_image_target_id, f.entity_id, COALESCE(f.field_media_image_alt, '')",
+		"ORDER BY f.field_media_image_target_id, f.entity_id, f.revision_id DESC",
+		"f.langcode, COALESCE(f.field_media_image_alt, '')",
+	} {
+		if !strings.Contains(degradedAltQuery, want) {
+			t.Errorf("degraded alt-text query is missing %q:\n%s", want, degradedAltQuery)
+		}
+	}
+	if _, err := buildAltQuery("f", "target_id", "alt", entityJoin{
+		Table: "e", IDColumn: "unsafe;column", RevisionColumn: "vid",
+	}); err == nil {
+		t.Error("buildAltQuery accepted an unsafe entity ID column")
+	}
+}
+
 // TestZeroSchemaReportsEveryOptionalTable ties the schema flags to the report
 // the admin sees. A new optional table added to the reader without a Schema
 // field would otherwise be silently required.
@@ -694,6 +813,12 @@ func TestOptionalTableGettersShortCircuit(t *testing.T) {
 		// database here would panic on the nil *sql.DB.
 		if got, err := r.MediaUUIDsByFile(ctx); err != nil || len(got) != 0 {
 			t.Errorf("MediaUUIDsByFile() = (%v, %v), want an empty map and nil", got, err)
+		}
+	})
+	t.Run("MediaUUIDsByFile requires media data for a media site", func(t *testing.T) {
+		r := &Reader{db: nil, schema: Schema{HasMedia: true}}
+		if _, err := r.MediaUUIDsByFile(ctx); err == nil || !strings.Contains(err.Error(), tableMediaData) {
+			t.Errorf("MediaUUIDsByFile() error = %v, want a descriptive %s error", err, tableMediaData)
 		}
 	})
 	t.Run("fileAltText", func(t *testing.T) {

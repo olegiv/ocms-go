@@ -8,18 +8,21 @@ package middleware
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Context keys for language data.
 const (
 	ContextKeyLanguage     ContextKey = "language"
 	ContextKeyLanguageCode ContextKey = "language_code"
+	ContextKeyLangPrefix   ContextKey = "language_prefix"
 )
 
 // LanguageCookieName is the cookie name for language preference.
@@ -48,13 +51,15 @@ type LanguageInfo struct {
 
 // Language creates middleware that detects and sets the current language.
 // Priority order:
-// 1. Query parameter ?lang=XX (explicit language switch, updates cookie)
-// 2. URL parameter {lang} from chi router (e.g., /ru/page-slug)
+// 1. Active URL prefix (e.g., /ru/page-slug)
+// 2. Query parameter ?lang=XX (explicit language switch, updates cookie)
 // 3. For homepage only: Cookie preference, then Accept-Language header
 // 4. Default language (for all non-prefixed content pages)
 //
 // This ensures that /page-slug always shows in default language,
 // while /ru/page-slug shows in Russian, and the homepage uses user preference.
+// The middleware must wrap the frontend child router so it can rewrite the
+// child's RoutePath before that router selects an endpoint.
 func Language(db *sql.DB) func(http.Handler) http.Handler {
 	queries := store.New(db)
 
@@ -69,41 +74,47 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			defaultRoutable := defaultLang.IsActive && util.IsValidLangCode(defaultLang.Code) &&
+				!util.IsReservedLanguageCode(defaultLang.Code)
 
-			// Get all active languages for matching
+			// Get all active languages for matching. An inactive default is retained
+			// in storage for administrator remediation, but it must never be installed
+			// in public request context or used as an unprefixed fallback.
 			activeLangs, err := queries.ListActiveLanguages(ctx)
 			if err != nil || len(activeLangs) == 0 {
-				// Set default language and proceed
-				ctx = setLanguageContext(ctx, defaultLang)
+				if defaultRoutable {
+					ctx = setLanguageContext(ctx, defaultLang)
+				}
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 
-			// Build a map of language codes for quick lookup
-			langMap := make(map[string]store.Language)
-			for _, lang := range activeLangs {
-				langMap[strings.ToLower(lang.Code)] = lang
+			langMap := activeLanguageMap(activeLangs)
+
+			// 1. An active, non-reserved URL prefix is authoritative. Strip it
+			// from the child router's path before route matching, while retaining
+			// the original request URL for logging and canonical URL handling.
+			routePath := r.URL.Path
+			if routeCtx := chi.RouteContext(ctx); routeCtx != nil && routeCtx.RoutePath != "" {
+				routePath = routeCtx.RoutePath
+			}
+			if lang, strippedPath, ok := matchLanguagePrefix(routePath, langMap); ok {
+				if routeCtx := chi.RouteContext(ctx); routeCtx != nil {
+					routeCtx.RoutePath = strippedPath
+				}
+				ctx = setLanguageContext(ctx, lang)
+				ctx = context.WithValue(ctx, ContextKeyLangPrefix, lang.Code)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
 			}
 
-			// 1. Check query parameter ?lang=XX (explicit language switch)
-			// This takes highest priority and updates the cookie
+			// 2. Check query parameter ?lang=XX (explicit language switch).
 			queryLang := r.URL.Query().Get("lang")
 			if queryLang != "" {
 				code := strings.ToLower(queryLang)
 				if lang, ok := langMap[code]; ok {
 					// Update cookie to new language preference
 					SetLanguageCookie(w, lang.Code)
-					ctx = setLanguageContext(ctx, lang)
-					next.ServeHTTP(w, r.WithContext(ctx))
-					return
-				}
-			}
-
-			// 2. Check URL parameter {lang} from chi router (explicit language in URL)
-			langParam := chi.URLParam(r, "lang")
-			if langParam != "" {
-				code := strings.ToLower(langParam)
-				if lang, ok := langMap[code]; ok {
 					ctx = setLanguageContext(ctx, lang)
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
@@ -136,10 +147,52 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 			}
 
 			// 4. Fall back to default language
-			ctx = setLanguageContext(ctx, defaultLang)
+			if defaultRoutable {
+				ctx = setLanguageContext(ctx, defaultLang)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// activeLanguageMap returns only codes that are safe to expose as URL
+// prefixes. Invalid and reserved legacy rows stay manageable in the admin UI,
+// but cannot shadow application routes.
+func activeLanguageMap(activeLangs []store.Language) map[string]store.Language {
+	langMap := make(map[string]store.Language, len(activeLangs))
+	for _, lang := range activeLangs {
+		code := lang.Code
+		if !util.IsValidLangCode(code) {
+			slog.Warn("ignoring active language with invalid code", "language_id", lang.ID, "code", lang.Code)
+			continue
+		}
+		if util.IsReservedLanguageCode(code) {
+			slog.Warn("ignoring active language with reserved route prefix", "language_id", lang.ID, "code", lang.Code)
+			continue
+		}
+		langMap[code] = lang
+	}
+	return langMap
+}
+
+// matchLanguagePrefix matches the first path segment against the active
+// language map and returns the path to route after removing that prefix.
+func matchLanguagePrefix(path string, langMap map[string]store.Language) (store.Language, string, bool) {
+	path = strings.TrimPrefix(path, "/")
+	code, remainder, hasRemainder := strings.Cut(path, "/")
+	if !util.IsValidLangCode(code) {
+		return store.Language{}, "", false
+	}
+
+	lang, ok := langMap[code]
+	if !ok {
+		return store.Language{}, "", false
+	}
+
+	if !hasRemainder || remainder == "" {
+		return lang, "/", true
+	}
+	return lang, "/" + remainder, true
 }
 
 // matchAcceptLanguage finds the best matching language from Accept-Language header.
@@ -193,6 +246,13 @@ func GetLanguage(r *http.Request) *LanguageInfo {
 		return nil
 	}
 	return &info
+}
+
+// GetLanguagePrefix returns the explicit language URL prefix selected for the
+// request, or an empty string when language selection came from another source.
+func GetLanguagePrefix(r *http.Request) string {
+	code, _ := r.Context().Value(ContextKeyLangPrefix).(string)
+	return code
 }
 
 // SetLanguageCookie sets the language preference cookie.

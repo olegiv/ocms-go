@@ -32,7 +32,7 @@
                 <div class="post-content">
                     {{if .Category}}
                     <span class="post-category">
-                        <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                        <a href="{{.Category.URL}}">{{.Category.Name}}</a>
                     </span>
                     {{end}}
                     <h2 class="post-title">

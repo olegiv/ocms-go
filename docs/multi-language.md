@@ -15,7 +15,7 @@ The multi-language system consists of two parts:
 1. Navigate to **Admin > Config > Languages**
 2. Click **Add Language**
 3. Fill in:
-   - **Code**: ISO 639-1 language code (e.g., `ru`, `de`, `fr`)
+   - **Code**: 2–10 lowercase ASCII letters, digits, or internal hyphens (for example `ru`, `de`, `pt-br`)
    - **Name**: English name (e.g., "Russian")
    - **Native Name**: Name in the language (e.g., "Русский")
    - **Direction**: LTR (left-to-right) or RTL (right-to-left)
@@ -84,9 +84,20 @@ Languages are indicated in URLs using prefixes:
 
 The language is determined in this order:
 1. **URL prefix**: `/ru/page-slug` → Russian
-2. **Cookie preference**: Stored from previous selection
-3. **Accept-Language header**: Browser preference
-4. **Default language**: Fallback
+2. **Query preference**: `?lang=ru` when no language prefix is present
+3. **Cookie preference**: Stored from previous selection
+4. **Accept-Language header**: Browser preference
+5. **Default language**: Fallback
+
+Only active database languages are treated as URL prefixes. An inactive
+one-segment value falls through as an ordinary page slug; an unknown nested
+prefix returns 404. The URL prefix always wins over `?lang`.
+
+Core route names cannot be activated as language codes: `admin`, `api`,
+`blog`, `uploads`, `static`, `themes`, `health`, `login`, `logout`,
+`language`, `forms`, `search`, `tag`, `category`, `page`, and `session`.
+Legacy active rows using a reserved code are ignored by routing and logged,
+but administrators can still deactivate or rename them.
 
 ### Language Switcher
 
@@ -159,6 +170,9 @@ In theme templates, you have access to:
 
 <!-- Language direction (ltr/rtl) -->
 {{.LanguageDirection}}
+
+<!-- Canonical home path: "/" for the default language, "/fr" for French -->
+<a href="{{.HomeURL}}">Home</a>
 
 <!-- Available translations for current page -->
 {{range .Translations}}

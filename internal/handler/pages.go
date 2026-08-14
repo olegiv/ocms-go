@@ -166,6 +166,7 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 // PagesListData holds data for the pages list template.
 type PagesListData struct {
 	Pages              []store.Page
+	PagePublicURLs     map[int64]string             // Canonical public URL by page ID; empty means not publicly routable
 	PageTags           map[int64][]store.Tag        // Map of page ID to tags
 	PageCategories     map[int64][]store.Category   // Map of page ID to categories
 	PageFeaturedImages map[int64]*FeaturedImageData // Map of page ID to featured image
@@ -317,6 +318,15 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 			pageLanguages[p.ID] = &language
 		}
 	}
+	pagePublicURLs := make(map[int64]string, len(pages))
+	defaultLanguage, defaultErr := h.queries.GetDefaultLanguage(r.Context())
+	if defaultErr == nil {
+		for _, p := range pages {
+			if language := pageLanguages[p.ID]; language != nil {
+				pagePublicURLs[p.ID] = publicPagePathWithLanguages(p, *language, defaultLanguage)
+			}
+		}
+	}
 
 	// Load all categories for filter dropdown
 	allCategories, err := h.queries.ListCategories(r.Context())
@@ -339,6 +349,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageCategories:     pageCategories,
 		PageFeaturedImages: pageFeaturedImages,
 		PageLanguages:      pageLanguages,
+		PagePublicURLs:     pagePublicURLs,
 		TotalCount:         totalCount,
 		StatusFilter:       statusFilter,
 		PageTypeFilter:     pageTypeFilter,
@@ -375,6 +386,7 @@ type FeaturedImageData struct {
 // PageFormData holds data for the page form template.
 type PageFormData struct {
 	Page          *store.Page
+	PublicURL     string
 	Tags          []store.Tag
 	Categories    []store.Category   // Selected categories for the page
 	AllCategories []PageCategoryNode // All categories for selection (with tree structure)
@@ -409,6 +421,31 @@ func (h *PagesHandler) loadPageLanguageInfo(ctx context.Context, page store.Page
 		return PageTranslationInfo{Language: lang, Page: p}
 	}
 	return loadLanguageInfo(ctx, h.queries, model.EntityTypePage, page.ID, page.LanguageCode, fetcher, maker)
+}
+
+func publicPagePath(ctx context.Context, queries *store.Queries, page store.Page) string {
+	defaultLanguage, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return ""
+	}
+	language, err := queries.GetLanguageByCode(ctx, page.LanguageCode)
+	if err != nil {
+		return ""
+	}
+	return publicPagePathWithLanguages(page, language, defaultLanguage)
+}
+
+func publicPagePathWithLanguages(page store.Page, language, defaultLanguage store.Language) string {
+	if page.Status != PageStatusPublished || !util.IsValidSlug(page.Slug) ||
+		!language.IsActive || language.Code != page.LanguageCode ||
+		!util.IsValidLangCode(language.Code) || util.IsReservedLanguageCode(language.Code) {
+		return ""
+	}
+	prefix := ""
+	if language.ID != defaultLanguage.ID || language.Code != defaultLanguage.Code {
+		prefix = "/" + language.Code
+	}
+	return prefix + "/" + page.Slug
 }
 
 // buildPageCategoryTree builds a flat list with depth for display.
@@ -519,6 +556,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Validate
 	validationErrors := make(map[string]string)
+	if _, err := getRoutableContentLanguage(r.Context(), h.queries, input.LanguageCode); err != nil {
+		validationErrors["language_code"] = "Select an active, routable language"
+	}
 
 	// Title validation
 	if err := validatePageTitle(input.Title); err != "" {
@@ -742,6 +782,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	data := PageFormData{
 		Page:             &page,
+		PublicURL:        publicPagePath(r.Context(), h.queries, page),
 		Tags:             tags,
 		Categories:       categories,
 		AllCategories:    categoryTree,
@@ -850,6 +891,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 		data := PageFormData{
 			Page:          &existingPage,
+			PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
 			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
 			AllCategories: categoryTree,
 			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
@@ -1422,6 +1464,8 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to create translation link", "error", err)
 		// Page was created, so we should still redirect to it
+	} else if h.cacheManager != nil {
+		h.cacheManager.Translation.InvalidateType(model.EntityTypePage)
 	}
 
 	slog.Info("page translation created",

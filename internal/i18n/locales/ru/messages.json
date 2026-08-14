@@ -2514,13 +2514,28 @@
         },
         {
             "id": "languages.code_hint",
-            "message": "ISO 639-1 code (2-5 characters)",
-            "translation": "Код ISO 639-1 (2-5 символов)"
+            "message": "Language code (2-10 lowercase ASCII letters, digits, or hyphens)",
+            "translation": "Код языка (2-10 строчных латинских букв, цифр и дефисов)"
+        },
+        {
+            "id": "languages.error_code_required",
+            "message": "Language code is required",
+            "translation": "Код языка обязателен"
+        },
+        {
+            "id": "languages.error_code_format",
+            "message": "Language code must be 2-10 lowercase ASCII letters, digits, or hyphens",
+            "translation": "Код языка должен содержать 2-10 строчных латинских букв, цифр или дефисов"
+        },
+        {
+            "id": "languages.error_code_reserved",
+            "message": "Language code conflicts with a reserved route prefix",
+            "translation": "Код языка конфликтует с зарезервированным префиксом маршрута"
         },
         {
             "id": "languages.code_placeholder",
-            "message": "e.g., en, ru, de",
-            "translation": "напр., en, ru, de"
+            "message": "e.g., en, ru, zh-hans",
+            "translation": "напр., en, ru, zh-hans"
         },
         {
             "id": "languages.name_hint",

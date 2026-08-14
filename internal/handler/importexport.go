@@ -6,6 +6,7 @@ package handler
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -30,7 +32,15 @@ import (
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
-const maxImportUploadBytes int64 = 100 << 20 // 100 MB
+const (
+	maxImportUploadBytes            = transfer.MaxZipArchiveBytes
+	maxImportMultipartOverheadBytes = 1 << 20 // 1 MiB for boundaries and form fields
+	defaultImportExportUploadDir    = "./uploads"
+)
+
+func maxImportRequestBytes(fileLimit int64) int64 {
+	return fileLimit + maxImportMultipartOverheadBytes
+}
 
 // ImportExportHandler handles import/export routes.
 type ImportExportHandler struct {
@@ -40,20 +50,55 @@ type ImportExportHandler struct {
 	sessionManager *scs.SessionManager
 	logger         *slog.Logger
 	eventService   *service.EventService
+	cacheManager   *cache.Manager
+	uploadDir      string
 
 	blockSuspiciousMarkup bool
 }
 
 // NewImportExportHandler creates a new ImportExportHandler.
-func NewImportExportHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *ImportExportHandler {
-	return &ImportExportHandler{
+func NewImportExportHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, managers ...*cache.Manager) *ImportExportHandler {
+	h := &ImportExportHandler{
 		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
 		logger:         slog.Default(),
 		eventService:   service.NewEventService(db),
+		uploadDir:      defaultImportExportUploadDir,
 	}
+	if len(managers) > 0 {
+		h.cacheManager = managers[0]
+	}
+	return h
+}
+
+// SetUploadDir configures the media storage root used by transfer imports and
+// exports. An empty value retains the same default as the transfer package.
+func (h *ImportExportHandler) SetUploadDir(dir string) {
+	if dir == "" {
+		dir = defaultImportExportUploadDir
+	}
+	h.uploadDir = dir
+}
+
+func (h *ImportExportHandler) newExporter() *transfer.Exporter {
+	exporter := transfer.NewExporter(h.queries, h.logger)
+	exporter.SetUploadDir(h.configuredUploadDir())
+	return exporter
+}
+
+func (h *ImportExportHandler) newImporter() *transfer.Importer {
+	importer := transfer.NewImporter(h.queries, h.db, h.logger)
+	importer.SetUploadDir(h.configuredUploadDir())
+	return importer
+}
+
+func (h *ImportExportHandler) configuredUploadDir() string {
+	if h.uploadDir == "" {
+		return defaultImportExportUploadDir
+	}
+	return h.uploadDir
 }
 
 // SetBlockSuspiciousMarkup configures whether imports should reject page
@@ -116,7 +161,7 @@ func (h *ImportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create exporter
-	exporter := transfer.NewExporter(h.queries, h.logger)
+	exporter := h.newExporter()
 
 	// Check if we need to include media files (creates zip instead of JSON)
 	if opts.IncludeMediaFiles && opts.IncludeMedia {
@@ -233,8 +278,10 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 
 	user := middleware.GetUser(r)
 
-	// Hard cap request body size before multipart parsing.
-	r.Body = http.MaxBytesReader(w, r.Body, maxImportUploadBytes)
+	// Cap the archive itself at maxImportUploadBytes while reserving bounded
+	// space for multipart boundaries and the import option fields. Applying the
+	// file limit to the whole request would reject a valid archive at the limit.
+	r.Body = http.MaxBytesReader(w, r.Body, maxImportRequestBytes(maxImportUploadBytes))
 
 	// Parse multipart form (max 100MB for zip files with media)
 	if err := r.ParseMultipartForm(maxImportUploadBytes); err != nil {
@@ -273,7 +320,7 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Create importer
-	importer := transfer.NewImporter(h.queries, h.db, h.logger)
+	importer := h.newImporter()
 
 	var validationResult *transfer.ValidationResult
 	var exportData transfer.ExportData
@@ -502,9 +549,13 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	if opts.ConflictStrategy == "" {
 		opts.ConflictStrategy = transfer.ConflictSkip
 	}
+	if opts.ImportMediaFiles && !isZip {
+		h.renderImportError(w, r, user, "Import failed: media file import requires a ZIP archive")
+		return
+	}
 
 	// Create importer
-	importer := transfer.NewImporter(h.queries, h.db, h.logger)
+	importer := h.newImporter()
 
 	var result *transfer.ImportResult
 	var err error
@@ -579,6 +630,7 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	// Clear common session data
 	h.sessionManager.Remove(r.Context(), "import_is_zip")
+	h.invalidateCachesAfterImport(r.Context(), result)
 
 	// Set flash message based on result
 	if result.Success {
@@ -596,6 +648,22 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		ConflictStrategies: defaultConflictStrategies(),
 		ImportResult:       result,
 	})
+}
+
+func (h *ImportExportHandler) invalidateCachesAfterImport(ctx context.Context, result *transfer.ImportResult) {
+	if h == nil || result == nil || result.DryRun {
+		return
+	}
+	if h.queries != nil {
+		refreshCtx, cancel := detachedLanguageStateContext(ctx)
+		defer cancel()
+		if err := refreshI18nLanguageState(refreshCtx, h.queries); err != nil {
+			h.logger.Error("failed to refresh runtime language state after import", "error", err)
+		}
+	}
+	if h.cacheManager != nil {
+		h.cacheManager.ClearAll()
+	}
 }
 
 // renderImportError renders the import form with an error message.

@@ -23,6 +23,8 @@ import (
 // because it never looked at them.
 var layoutsWithVendoredScripts = []string{
 	"internal/views/admin/layout.templ",
+	"internal/views/admin/pages.templ",
+	"web/templates/api/docs.html",
 	"web/templates/layouts/base.html",
 	"internal/handler/frontend_layout.templ",
 	"internal/themes/default/templates/layouts/base.html",
@@ -45,7 +47,10 @@ var vendoredScripts = map[string]bool{
 	"/static/dist/js/alpine-collapse.min.js": true,
 	// Concatenated from node_modules/prismjs by the copy-deps script, so its
 	// bytes change on a prismjs upgrade exactly like the others.
-	"/static/dist/js/prism-bundle.min.js": true,
+	"/static/dist/js/prism-bundle.min.js":                     true,
+	"/static/dist/js/tinymce/tinymce.min.js":                  true,
+	"/static/dist/swagger-ui/swagger-ui-bundle.js":            true,
+	"/static/dist/swagger-ui/swagger-ui-standalone-preset.js": true,
 }
 
 // scriptTagPattern matches an opening <script> tag. The asset path is located
@@ -55,7 +60,7 @@ var vendoredScripts = map[string]bool{
 var scriptTagPattern = regexp.MustCompile(`<script[^>]*>`)
 
 // assetPathPattern finds a dist asset path anywhere inside a script tag.
-var assetPathPattern = regexp.MustCompile(`/static/dist/js/[a-zA-Z0-9._-]+`)
+var assetPathPattern = regexp.MustCompile(`/static/dist/[a-zA-Z0-9._/-]+\.js`)
 
 // integrityPattern extracts an sha384 SRI value from a script tag.
 var integrityPattern = regexp.MustCompile(`integrity="(sha384-[A-Za-z0-9+/=]+)"`)
@@ -120,6 +125,37 @@ func TestVendoredScriptIntegrityHashes(t *testing.T) {
 
 	if checked == 0 {
 		t.Fatal("no integrity hashes were checked; the regex or the layout list is broken")
+	}
+}
+
+// TestDynamicKlaroIntegrityAndCacheBust covers the Klaro script assembled by
+// fmt.Sprintf. The generic tag scanner cannot associate a src="%s" placeholder
+// with the ScriptURL argument that follows the tag, so this direct regression
+// keeps the rendered dependency from becoming a permanent scanner blind spot.
+func TestDynamicKlaroIntegrityAndCacheBust(t *testing.T) {
+	root := repoRoot(t)
+	const asset = "/static/dist/js/klaro.min.js"
+	source, err := os.ReadFile(filepath.Join(root, "modules/privacy/settings.go")) // #nosec G304 -- fixed repo file
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(source)
+	assetIndex := strings.Index(text, `utils.ScriptURL("`+asset+`")`)
+	if assetIndex < 0 {
+		t.Fatalf("Klaro does not use utils.ScriptURL(%q)", asset)
+	}
+	start := max(0, assetIndex-600)
+	block := text[start:assetIndex]
+	declared := integrityPattern.FindStringSubmatch(block)
+	if declared == nil {
+		t.Fatal("Klaro's dynamic script tag has no integrity attribute")
+	}
+	want, err := embeddedScriptIntegrity(asset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if declared[1] != want {
+		t.Fatalf("Klaro integrity is stale: declared %s, actual %s", declared[1], want)
 	}
 }
 

@@ -86,16 +86,16 @@ func TestMenuURISchemesMatchMenuValidator(t *testing.T) {
 				"add one so the importer is actually exercised for it", scheme)
 		}
 		t.Run(scheme, func(t *testing.T) {
-			nodeID, linkURL, err := ResolveLinkURI(uri)
+			target, err := ResolveLinkURI(uri)
 			if err != nil {
 				t.Fatalf("ResolveLinkURI(%q) = error %v, want it accepted: "+
 					"oCMS stores this scheme, so dropping the menu item loses data", uri, err)
 			}
-			if nodeID != 0 {
-				t.Errorf("ResolveLinkURI(%q) nodeID = %d, want 0", uri, nodeID)
+			if target.NodeID != 0 || target.TermID != 0 {
+				t.Errorf("ResolveLinkURI(%q) entity target = %+v, want none", uri, target)
 			}
-			if linkURL != uri {
-				t.Errorf("ResolveLinkURI(%q) url = %q, want it passed through unchanged", uri, linkURL)
+			if target.URL != uri {
+				t.Errorf("ResolveLinkURI(%q) url = %q, want it passed through unchanged", uri, target.URL)
 			}
 		})
 	}
@@ -112,7 +112,7 @@ func TestResolveLinkURIRejectsForeignSchemes(t *testing.T) {
 		"file:///etc/passwd",
 	} {
 		t.Run(uri, func(t *testing.T) {
-			if _, _, err := ResolveLinkURI(uri); err == nil {
+			if _, err := ResolveLinkURI(uri); err == nil {
 				t.Errorf("ResolveLinkURI(%q) = nil error, want it rejected", uri)
 			}
 		})

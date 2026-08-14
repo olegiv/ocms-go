@@ -136,6 +136,22 @@ func (q *Queries) DeleteTranslationsForEntityAndLanguage(ctx context.Context, ar
 	return err
 }
 
+const deleteTranslationsRelatedToEntity = `-- name: DeleteTranslationsRelatedToEntity :exec
+DELETE FROM translations
+WHERE entity_type = ? AND (entity_id = ? OR translation_id = ?)
+`
+
+type DeleteTranslationsRelatedToEntityParams struct {
+	EntityType    string `json:"entity_type"`
+	EntityID      int64  `json:"entity_id"`
+	TranslationID int64  `json:"translation_id"`
+}
+
+func (q *Queries) DeleteTranslationsRelatedToEntity(ctx context.Context, arg DeleteTranslationsRelatedToEntityParams) error {
+	_, err := q.db.ExecContext(ctx, deleteTranslationsRelatedToEntity, arg.EntityType, arg.EntityID, arg.TranslationID)
+	return err
+}
+
 const getAllTranslationsOfEntity = `-- name: GetAllTranslationsOfEntity :many
 SELECT t.id, t.entity_type, t.entity_id, t.language_id, t.translation_id, t.created_at, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM translations t
@@ -196,6 +212,19 @@ func (q *Queries) GetAllTranslationsOfEntity(ctx context.Context, arg GetAllTran
 }
 
 const getPageAvailableTranslations = `-- name: GetPageAvailableTranslations :many
+WITH RECURSIVE translation_component(entity_id) AS (
+    SELECT CAST(?1 AS INTEGER) AS entity_id FROM (SELECT 1 AS seed)
+    UNION
+    SELECT CASE
+        WHEN t.entity_id = translation_component.entity_id THEN t.translation_id
+        ELSE t.entity_id
+    END AS entity_id
+    FROM translations t
+    INNER JOIN translation_component
+        ON t.entity_id = translation_component.entity_id
+        OR t.translation_id = translation_component.entity_id
+    WHERE t.entity_type = 'page'
+)
 SELECT
     l.id as language_id,
     l.code as language_code,
@@ -208,35 +237,14 @@ SELECT
     COALESCE(p.title, '') as page_title
 FROM languages l
 LEFT JOIN (
-    -- Get pages that are translations of the source page
     SELECT p.id, p.slug, p.title, p.language_code
     FROM pages p
-    INNER JOIN translations t ON t.translation_id = p.id
-    WHERE t.entity_type = 'page' AND t.entity_id = ? AND p.status = 'published'
-    UNION
-    -- Get the source page itself
-    SELECT p.id, p.slug, p.title, p.language_code
-    FROM pages p
-    WHERE p.id = ? AND p.status = 'published'
-    UNION
-    -- Get pages where current page is a translation (sibling translations)
-    SELECT p2.id, p2.slug, p2.title, p2.language_code
-    FROM translations t
-    INNER JOIN pages p2 ON (p2.id = t.entity_id OR p2.id = t.translation_id)
-    WHERE t.entity_type = 'page'
-    AND (t.entity_id = ? OR t.translation_id = ?)
-    AND p2.status = 'published'
+    INNER JOIN translation_component tc ON tc.entity_id = p.id
+    WHERE p.status = 'published'
 ) p ON p.language_code = l.code
 WHERE l.is_active = 1
 ORDER BY l.position
 `
-
-type GetPageAvailableTranslationsParams struct {
-	EntityID      int64 `json:"entity_id"`
-	ID            int64 `json:"id"`
-	EntityID_2    int64 `json:"entity_id_2"`
-	TranslationID int64 `json:"translation_id"`
-}
 
 type GetPageAvailableTranslationsRow struct {
 	LanguageID         int64  `json:"language_id"`
@@ -251,14 +259,11 @@ type GetPageAvailableTranslationsRow struct {
 }
 
 // Get all available translations for a page (for language switcher)
-// Returns the page itself plus all its translations with language info and page slugs
-func (q *Queries) GetPageAvailableTranslations(ctx context.Context, arg GetPageAvailableTranslationsParams) ([]GetPageAvailableTranslationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getPageAvailableTranslations,
-		arg.EntityID,
-		arg.ID,
-		arg.EntityID_2,
-		arg.TranslationID,
-	)
+// Returns every published page in the current translation component. Translation
+// rows form an undirected graph: an entity may be the source or target of an
+// edge, and siblings can be more than one hop away from the current page.
+func (q *Queries) GetPageAvailableTranslations(ctx context.Context, entityID int64) ([]GetPageAvailableTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPageAvailableTranslations, entityID)
 	if err != nil {
 		return nil, err
 	}
@@ -731,6 +736,67 @@ func (q *Queries) GetTranslationByID(ctx context.Context, id int64) (Translation
 	return i, err
 }
 
+const getTranslationComponentEntityByLanguage = `-- name: GetTranslationComponentEntityByLanguage :one
+WITH RECURSIVE translation_component(entity_id) AS (
+    SELECT CAST(?3 AS INTEGER) AS entity_id FROM (SELECT 1 AS seed)
+    UNION
+    SELECT CASE
+        WHEN t.entity_id = translation_component.entity_id THEN t.translation_id
+        ELSE t.entity_id
+    END AS entity_id
+    FROM translations t
+    INNER JOIN translation_component
+        ON t.entity_id = translation_component.entity_id
+        OR t.translation_id = translation_component.entity_id
+    WHERE t.entity_type = ?1
+)
+SELECT candidate.entity_id
+FROM (
+    SELECT p.id AS entity_id
+    FROM pages p
+    INNER JOIN translation_component tc ON tc.entity_id = p.id
+    WHERE ?1 = 'page'
+      AND p.language_code = ?2
+    UNION ALL
+    SELECT c.id AS entity_id
+    FROM categories c
+    INNER JOIN translation_component tc ON tc.entity_id = c.id
+    WHERE ?1 = 'category'
+      AND c.language_code = ?2
+    UNION ALL
+    SELECT tag.id AS entity_id
+    FROM tags tag
+    INNER JOIN translation_component tc ON tc.entity_id = tag.id
+    WHERE ?1 = 'tag'
+      AND tag.language_code = ?2
+    UNION ALL
+    SELECT f.id AS entity_id
+    FROM forms f
+    INNER JOIN translation_component tc ON tc.entity_id = f.id
+    WHERE ?1 = 'form'
+      AND f.language_code = ?2
+) candidate
+ORDER BY candidate.entity_id
+LIMIT 1
+`
+
+type GetTranslationComponentEntityByLanguageParams struct {
+	EntityType   interface{} `json:"entity_type"`
+	LanguageCode string      `json:"language_code"`
+	EntityID     int64       `json:"entity_id"`
+}
+
+// Return an entity in the same translation component that already owns the
+// requested language. This keeps Translate actions from creating a second
+// entity for a language when the existing entity is connected through a
+// sibling rather than a direct outgoing edge.
+func (q *Queries) GetTranslationComponentEntityByLanguage(ctx context.Context, arg GetTranslationComponentEntityByLanguageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTranslationComponentEntityByLanguage, arg.EntityType, arg.LanguageCode, arg.EntityID)
+	var entity_id int64
+	err := row.Scan(&entity_id)
+	return entity_id, err
+}
+
 const getTranslationCountsBatch = `-- name: GetTranslationCountsBatch :many
 SELECT
     entity_id,
@@ -1139,6 +1205,87 @@ func (q *Queries) ListPublishedPostsByLanguage(ctx context.Context, arg ListPubl
 			&i.VideoUrl,
 			&i.VideoTitle,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTranslationComponentMembers = `-- name: ListTranslationComponentMembers :many
+WITH RECURSIVE translation_component(entity_id) AS (
+    SELECT CAST(?1 AS INTEGER) AS entity_id FROM (SELECT 1 AS seed)
+    UNION
+    SELECT CASE
+        WHEN t.entity_id = translation_component.entity_id THEN t.translation_id
+        ELSE t.entity_id
+    END AS entity_id
+    FROM translations t
+    INNER JOIN translation_component
+        ON t.entity_id = translation_component.entity_id
+        OR t.translation_id = translation_component.entity_id
+    WHERE t.entity_type = ?2
+), component_entities AS (
+    SELECT p.id AS entity_id, p.language_code
+    FROM pages p
+    INNER JOIN translation_component tc ON tc.entity_id = p.id
+    WHERE ?2 = 'page'
+      AND p.id != ?1
+    UNION ALL
+    SELECT c.id AS entity_id, c.language_code
+    FROM categories c
+    INNER JOIN translation_component tc ON tc.entity_id = c.id
+    WHERE ?2 = 'category'
+      AND c.id != ?1
+    UNION ALL
+    SELECT tag.id AS entity_id, tag.language_code
+    FROM tags tag
+    INNER JOIN translation_component tc ON tc.entity_id = tag.id
+    WHERE ?2 = 'tag'
+      AND tag.id != ?1
+    UNION ALL
+    SELECT f.id AS entity_id, f.language_code
+    FROM forms f
+    INNER JOIN translation_component tc ON tc.entity_id = f.id
+    WHERE ?2 = 'form'
+      AND f.id != ?1
+)
+SELECT component_entities.entity_id, l.id AS language_id, l.code AS language_code
+FROM component_entities
+INNER JOIN languages l ON l.code = component_entities.language_code
+ORDER BY l.position, component_entities.entity_id
+`
+
+type ListTranslationComponentMembersParams struct {
+	SourceEntityID int64  `json:"source_entity_id"`
+	EntityType     string `json:"entity_type"`
+}
+
+type ListTranslationComponentMembersRow struct {
+	EntityID     int64  `json:"entity_id"`
+	LanguageID   int64  `json:"language_id"`
+	LanguageCode string `json:"language_code"`
+}
+
+// List every other entity in the same undirected translation component with
+// its actual language. Admin editors use this to show complete translation
+// state even when the current entity is a translated child of a star graph.
+func (q *Queries) ListTranslationComponentMembers(ctx context.Context, arg ListTranslationComponentMembersParams) ([]ListTranslationComponentMembersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTranslationComponentMembers, arg.SourceEntityID, arg.EntityType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTranslationComponentMembersRow{}
+	for rows.Next() {
+		var i ListTranslationComponentMembersRow
+		if err := rows.Scan(&i.EntityID, &i.LanguageID, &i.LanguageCode); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

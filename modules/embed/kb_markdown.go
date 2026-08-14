@@ -9,16 +9,77 @@ import (
 	"strings"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
 
 const kbMaxPages = 10000
 
+type kbLanguagePlan struct {
+	defaultLanguage store.Language
+	routable        map[string]store.Language
+	ordered         []store.Language
+}
+
+func loadKBLanguagePlan(ctx context.Context, q *store.Queries) (kbLanguagePlan, error) {
+	defaultLanguage, err := q.GetDefaultLanguage(ctx)
+	if err != nil {
+		return kbLanguagePlan{}, fmt.Errorf("resolve exactly one default language: %w", err)
+	}
+	if !isRoutableKBLanguage(defaultLanguage) {
+		return kbLanguagePlan{}, fmt.Errorf("default language %q is not active and routable", defaultLanguage.Code)
+	}
+
+	activeLanguages, err := q.ListActiveLanguages(ctx)
+	if err != nil {
+		return kbLanguagePlan{}, fmt.Errorf("list active languages: %w", err)
+	}
+	plan := kbLanguagePlan{
+		defaultLanguage: defaultLanguage,
+		routable:        make(map[string]store.Language, len(activeLanguages)),
+	}
+	for _, language := range activeLanguages {
+		if !isRoutableKBLanguage(language) {
+			continue
+		}
+		plan.routable[language.Code] = language
+		plan.ordered = append(plan.ordered, language)
+	}
+	if _, ok := plan.routable[defaultLanguage.Code]; !ok {
+		return kbLanguagePlan{}, fmt.Errorf("default language %q is not active and routable", defaultLanguage.Code)
+	}
+	return plan, nil
+}
+
+func isRoutableKBLanguage(language store.Language) bool {
+	return language.IsActive && util.IsValidLangCode(language.Code) && !util.IsReservedLanguageCode(language.Code)
+}
+
+func (p kbLanguagePlan) canonicalPath(languageCode, route string) (string, bool) {
+	language, ok := p.routable[languageCode]
+	if !ok {
+		return "", false
+	}
+	route = "/" + strings.TrimLeft(route, "/")
+	if language.ID == p.defaultLanguage.ID && language.Code == p.defaultLanguage.Code {
+		return route, true
+	}
+	return "/" + language.Code + route, true
+}
+
+func kbAbsoluteURL(siteURL, path string) string {
+	return strings.TrimRight(siteURL, "/") + path
+}
+
 // GenerateSiteContentMarkdown builds a markdown document from all published
 // pages, posts, tags, and categories.
 func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string, error) {
 	siteURL, siteName, siteDesc := loadSiteInfo(ctx, q)
+	languagePlan, err := loadKBLanguagePlan(ctx, q)
+	if err != nil {
+		return "", err
+	}
 
 	// Fetch all published content
 	allPages, err := q.ListPublishedPages(ctx, store.ListPublishedPagesParams{
@@ -31,7 +92,16 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 
 	// Split into pages and posts
 	var pages, posts []store.Page
+	pageURLs := make(map[int64]string, len(allPages))
 	for _, p := range allPages {
+		if !util.IsValidSlug(p.Slug) {
+			continue
+		}
+		pagePath, ok := languagePlan.canonicalPath(p.LanguageCode, p.Slug)
+		if !ok {
+			continue
+		}
+		pageURLs[p.ID] = kbAbsoluteURL(siteURL, pagePath)
 		if p.PageType == "post" {
 			posts = append(posts, p)
 		} else {
@@ -85,7 +155,7 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 	if len(pages) > 0 {
 		b.WriteString("## Pages\n\n")
 		for _, p := range pages {
-			writePageEntry(&b, p, siteURL, authorCache, pageCats, pageTags)
+			writePageEntry(&b, p, pageURLs[p.ID], authorCache, pageCats, pageTags)
 		}
 	}
 
@@ -93,26 +163,39 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 	if len(posts) > 0 {
 		b.WriteString("## Blog Posts\n\n")
 		for _, p := range posts {
-			writePageEntry(&b, p, siteURL, authorCache, pageCats, pageTags)
+			writePageEntry(&b, p, pageURLs[p.ID], authorCache, pageCats, pageTags)
 		}
 	}
 
 	// Categories section (published pages only)
 	categories, err := q.GetPublishedCategoryUsageCounts(ctx)
 	if err == nil && len(categories) > 0 {
-		b.WriteString("## Categories\n\n")
+		categoryURLs := make(map[int64]string, len(categories))
 		catNameByID := make(map[int64]string, len(categories))
 		for _, c := range categories {
+			if !util.IsValidSlug(c.Slug) {
+				continue
+			}
+			categoryPath, ok := languagePlan.canonicalPath(c.LanguageCode, "/category/"+c.Slug)
+			if !ok {
+				continue
+			}
+			categoryURLs[c.ID] = kbAbsoluteURL(siteURL, categoryPath)
 			catNameByID[c.ID] = c.Name
 		}
+		if len(categoryURLs) > 0 {
+			b.WriteString("## Categories\n\n")
+		}
 		for _, c := range categories {
+			categoryURL, ok := categoryURLs[c.ID]
+			if !ok {
+				continue
+			}
 			b.WriteString("### ")
 			b.WriteString(c.Name)
 			b.WriteString("\n")
 			b.WriteString("- URL: ")
-			b.WriteString(siteURL)
-			b.WriteString("/category/")
-			b.WriteString(c.Slug)
+			b.WriteString(categoryURL)
 			b.WriteString("\n")
 			if c.Description.Valid && c.Description.String != "" {
 				b.WriteString("- Description: ")
@@ -138,16 +221,30 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 		Offset: 0,
 	})
 	if err == nil && len(tags) > 0 {
-		b.WriteString("## Tags\n\n")
+		tagURLs := make(map[int64]string, len(tags))
 		for _, t := range tags {
+			if !util.IsValidSlug(t.Slug) {
+				continue
+			}
+			tagPath, ok := languagePlan.canonicalPath(t.LanguageCode, "/tag/"+t.Slug)
+			if ok {
+				tagURLs[t.ID] = kbAbsoluteURL(siteURL, tagPath)
+			}
+		}
+		if len(tagURLs) > 0 {
+			b.WriteString("## Tags\n\n")
+		}
+		for _, t := range tags {
+			tagURL, ok := tagURLs[t.ID]
+			if !ok {
+				continue
+			}
 			b.WriteString("- ")
 			b.WriteString(t.Name)
 			b.WriteString(" (")
 			b.WriteString(fmt.Sprintf("%d", t.UsageCount))
 			b.WriteString(" pages) — URL: ")
-			b.WriteString(siteURL)
-			b.WriteString("/tag/")
-			b.WriteString(t.Slug)
+			b.WriteString(tagURL)
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
@@ -160,6 +257,10 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 // site features detected from config, menus, categories, tags, and forms.
 func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, error) {
 	siteURL, siteName, _ := loadSiteInfo(ctx, q)
+	languagePlan, err := loadKBLanguagePlan(ctx, q)
+	if err != nil {
+		return "", err
+	}
 
 	// Do not include admin_email in the generated guide — it would be indexed
 	// by the third-party AI service (Dify) and returned in chatbot responses.
@@ -181,28 +282,37 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 	b.WriteString("The website is organized using navigation menus. ")
 	b.WriteString("Use the main menu to access different sections of the site.\n\n")
 
-	writeMenuSection(&b, ctx, q, siteURL)
+	writeMenuSection(&b, ctx, q, siteURL, languagePlan)
 
 	// Categories (published pages only)
 	categories, err := q.GetPublishedCategoryUsageCounts(ctx)
 	if err == nil && len(categories) > 0 {
-		b.WriteString("### Browsing by Category\n\n")
-		b.WriteString("Categories organize content by topic. Available categories:\n\n")
+		var categoryEntries strings.Builder
 		for _, c := range categories {
-			b.WriteString("- **")
-			b.WriteString(c.Name)
-			b.WriteString("**")
-			if c.Description.Valid && c.Description.String != "" {
-				b.WriteString(": ")
-				b.WriteString(c.Description.String)
+			if !util.IsValidSlug(c.Slug) {
+				continue
 			}
-			b.WriteString(" — ")
-			b.WriteString(siteURL)
-			b.WriteString("/category/")
-			b.WriteString(c.Slug)
+			categoryPath, ok := languagePlan.canonicalPath(c.LanguageCode, "/category/"+c.Slug)
+			if !ok {
+				continue
+			}
+			categoryEntries.WriteString("- **")
+			categoryEntries.WriteString(c.Name)
+			categoryEntries.WriteString("**")
+			if c.Description.Valid && c.Description.String != "" {
+				categoryEntries.WriteString(": ")
+				categoryEntries.WriteString(c.Description.String)
+			}
+			categoryEntries.WriteString(" — ")
+			categoryEntries.WriteString(kbAbsoluteURL(siteURL, categoryPath))
+			categoryEntries.WriteString("\n")
+		}
+		if categoryEntries.Len() > 0 {
+			b.WriteString("### Browsing by Category\n\n")
+			b.WriteString("Categories organize content by topic. Available categories:\n\n")
+			b.WriteString(categoryEntries.String())
 			b.WriteString("\n")
 		}
-		b.WriteString("\n")
 	}
 
 	// Tags (published pages only)
@@ -211,20 +321,29 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 		Offset: 0,
 	})
 	if err == nil && len(tags) > 0 {
-		b.WriteString("### Browsing by Tag\n\n")
-		b.WriteString("Tags provide additional content classification:\n\n")
+		var tagEntries strings.Builder
 		for _, t := range tags {
-			b.WriteString("- **")
-			b.WriteString(t.Name)
-			b.WriteString("** (")
-			b.WriteString(fmt.Sprintf("%d", t.UsageCount))
-			b.WriteString(" pages) — ")
-			b.WriteString(siteURL)
-			b.WriteString("/tag/")
-			b.WriteString(t.Slug)
+			if !util.IsValidSlug(t.Slug) {
+				continue
+			}
+			tagPath, ok := languagePlan.canonicalPath(t.LanguageCode, "/tag/"+t.Slug)
+			if !ok {
+				continue
+			}
+			tagEntries.WriteString("- **")
+			tagEntries.WriteString(t.Name)
+			tagEntries.WriteString("** (")
+			fmt.Fprintf(&tagEntries, "%d", t.UsageCount)
+			tagEntries.WriteString(" pages) — ")
+			tagEntries.WriteString(kbAbsoluteURL(siteURL, tagPath))
+			tagEntries.WriteString("\n")
+		}
+		if tagEntries.Len() > 0 {
+			b.WriteString("### Browsing by Tag\n\n")
+			b.WriteString("Tags provide additional content classification:\n\n")
+			b.WriteString(tagEntries.String())
 			b.WriteString("\n")
 		}
-		b.WriteString("\n")
 	}
 
 	// Search
@@ -247,7 +366,7 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 	b.WriteString(" items per page. Use page navigation at the bottom to browse more content.\n\n")
 
 	// Language support
-	writeLanguageSection(&b, ctx, q, siteURL)
+	writeLanguageSection(&b, siteURL, languagePlan)
 
 	// User accounts
 	b.WriteString("## User Accounts\n\n")
@@ -273,7 +392,7 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 	b.WriteString("/logout.\n\n")
 
 	// Forms
-	writeFormsSection(&b, ctx, q, siteURL, adminEmail)
+	writeFormsSection(&b, ctx, q, siteURL, adminEmail, languagePlan)
 
 	// API
 	b.WriteString("## REST API\n\n")
@@ -288,14 +407,12 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 	return b.String(), nil
 }
 
-func writePageEntry(b *strings.Builder, p store.Page, siteURL string, authorCache map[int64]string, pageCats, pageTagNames map[int64][]string) {
+func writePageEntry(b *strings.Builder, p store.Page, pageURL string, authorCache map[int64]string, pageCats, pageTagNames map[int64][]string) {
 	b.WriteString("### ")
 	b.WriteString(p.Title)
 	b.WriteString("\n\n")
 	b.WriteString("- URL: ")
-	b.WriteString(siteURL)
-	b.WriteString("/")
-	b.WriteString(p.Slug)
+	b.WriteString(pageURL)
 	b.WriteString("\n")
 
 	if p.PublishedAt.Valid {
@@ -344,23 +461,8 @@ func writePageEntry(b *strings.Builder, p store.Page, siteURL string, authorCach
 	b.WriteString("\n---\n\n")
 }
 
-func writeMenuSection(b *strings.Builder, ctx context.Context, q *store.Queries, siteURL string) {
-	// Find default language
-	defaultLang := ""
-	langs, err := q.ListLanguages(ctx)
-	if err == nil {
-		for _, l := range langs {
-			if l.IsDefault {
-				defaultLang = l.Code
-				break
-			}
-		}
-	}
-	if defaultLang == "" {
-		defaultLang = "en"
-	}
-
-	menus, err := q.ListMenusByLanguage(ctx, defaultLang)
+func writeMenuSection(b *strings.Builder, ctx context.Context, q *store.Queries, siteURL string, languagePlan kbLanguagePlan) {
+	menus, err := q.ListMenusByLanguage(ctx, languagePlan.defaultLanguage.Code)
 	if err != nil || len(menus) == 0 {
 		return
 	}
@@ -385,14 +487,21 @@ func writeMenuSection(b *strings.Builder, ctx context.Context, q *store.Queries,
 			if item.PageID.Valid && (!item.PageSlug.Valid || item.PageSlug.String == "") {
 				continue
 			}
-			b.WriteString("- ")
-			b.WriteString(item.Title)
 			itemURL := ""
-			if item.PageSlug.Valid && item.PageSlug.String != "" {
-				itemURL = siteURL + "/" + item.PageSlug.String
+			if item.PageID.Valid {
+				if !item.PageSlug.Valid || !item.PageLanguageCode.Valid || !util.IsValidSlug(item.PageSlug.String) {
+					continue
+				}
+				pagePath, ok := languagePlan.canonicalPath(item.PageLanguageCode.String, item.PageSlug.String)
+				if !ok {
+					continue
+				}
+				itemURL = kbAbsoluteURL(siteURL, pagePath)
 			} else if item.Url.Valid && item.Url.String != "" {
 				itemURL = item.Url.String
 			}
+			b.WriteString("- ")
+			b.WriteString(item.Title)
 			if itemURL != "" {
 				b.WriteString(" — ")
 				b.WriteString(itemURL)
@@ -403,19 +512,8 @@ func writeMenuSection(b *strings.Builder, ctx context.Context, q *store.Queries,
 	}
 }
 
-func writeLanguageSection(b *strings.Builder, ctx context.Context, q *store.Queries, siteURL string) {
-	langs, err := q.ListLanguages(ctx)
-	if err != nil {
-		return
-	}
-
-	var activeLangs []store.Language
-	for _, l := range langs {
-		if l.IsActive {
-			activeLangs = append(activeLangs, l)
-		}
-	}
-
+func writeLanguageSection(b *strings.Builder, siteURL string, languagePlan kbLanguagePlan) {
+	activeLangs := languagePlan.ordered
 	b.WriteString("## Language Support\n\n")
 	if len(activeLangs) > 1 {
 		b.WriteString("The site supports multiple languages: ")
@@ -432,12 +530,12 @@ func writeLanguageSection(b *strings.Builder, ctx context.Context, q *store.Quer
 		b.WriteString(siteURL)
 		b.WriteString("/")
 		for _, l := range activeLangs {
-			if !l.IsDefault {
+			if l.ID != languagePlan.defaultLanguage.ID {
 				b.WriteString(l.Code)
 				break
 			}
 		}
-		b.WriteString("/).\n\n")
+		b.WriteString("/example-page).\n\n")
 	} else if len(activeLangs) == 1 {
 		b.WriteString("The site is available in ")
 		b.WriteString(activeLangs[0].NativeName)
@@ -445,7 +543,7 @@ func writeLanguageSection(b *strings.Builder, ctx context.Context, q *store.Quer
 	}
 }
 
-func writeFormsSection(b *strings.Builder, ctx context.Context, q *store.Queries, siteURL, adminEmail string) {
+func writeFormsSection(b *strings.Builder, ctx context.Context, q *store.Queries, siteURL, adminEmail string, languagePlan kbLanguagePlan) {
 	forms, err := q.ListForms(ctx, store.ListFormsParams{
 		Limit:  100,
 		Offset: 0,
@@ -460,10 +558,14 @@ func writeFormsSection(b *strings.Builder, ctx context.Context, q *store.Queries
 		return
 	}
 
-	var activeForms []store.Form
+	activeForms := make(map[int64]string, len(forms))
 	for _, f := range forms {
-		if f.IsActive {
-			activeForms = append(activeForms, f)
+		if !f.IsActive || !util.IsValidSlug(f.Slug) {
+			continue
+		}
+		formPath, ok := languagePlan.canonicalPath(f.LanguageCode, "/forms/"+f.Slug)
+		if ok {
+			activeForms[f.ID] = kbAbsoluteURL(siteURL, formPath)
 		}
 	}
 
@@ -479,7 +581,11 @@ func writeFormsSection(b *strings.Builder, ctx context.Context, q *store.Queries
 
 	b.WriteString("## Forms\n\n")
 	b.WriteString("The following forms are available:\n\n")
-	for _, f := range activeForms {
+	for _, f := range forms {
+		formURL, ok := activeForms[f.ID]
+		if !ok {
+			continue
+		}
 		b.WriteString("- **")
 		b.WriteString(f.Title)
 		b.WriteString("**")
@@ -488,9 +594,7 @@ func writeFormsSection(b *strings.Builder, ctx context.Context, q *store.Queries
 			b.WriteString(f.Description.String)
 		}
 		b.WriteString(" — ")
-		b.WriteString(siteURL)
-		b.WriteString("/forms/")
-		b.WriteString(f.Slug)
+		b.WriteString(formURL)
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
@@ -601,4 +705,3 @@ func collapseWhitespace(s string) string {
 	}
 	return strings.TrimSpace(strings.Join(result, "\n"))
 }
-

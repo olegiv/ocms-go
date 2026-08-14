@@ -253,16 +253,16 @@ func seedPublishedPage(t *testing.T, q *store.Queries, authorID int64, title, sl
 	t.Helper()
 	now := time.Now()
 	p, err := q.CreatePage(context.Background(), store.CreatePageParams{
-		Title:       title,
-		Slug:        slug,
-		Body:        body,
-		Status:      "published",
-		AuthorID:    authorID,
+		Title:        title,
+		Slug:         slug,
+		Body:         body,
+		Status:       "published",
+		AuthorID:     authorID,
 		LanguageCode: "en",
-		PageType:    pageType,
-		PublishedAt: sql.NullTime{Time: now, Valid: true},
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		PageType:     pageType,
+		PublishedAt:  sql.NullTime{Time: now, Valid: true},
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("seedPublishedPage %q: %v", slug, err)
@@ -975,4 +975,195 @@ func TestGenerateUserGuideMarkdown_MenuHidesDraftPageItem(t *testing.T) {
 	if strings.Contains(out, "draft-page") {
 		t.Errorf("draft page slug must not appear in user guide")
 	}
+}
+
+func TestKnowledgeBaseUsesCanonicalLanguageURLsAndFailsClosedWithoutOneDefault(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := store.New(db)
+	now := time.Now()
+	seedConfig(t, q, "site_url", "https://kb.example/")
+	authorID := seedTestUser(t, q)
+
+	for _, language := range []store.CreateLanguageParams{
+		{
+			Code: "fr", Name: "French", NativeName: "Français", IsActive: true,
+			Direction: "ltr", Position: 1, CreatedAt: now, UpdatedAt: now,
+		},
+		{
+			Code: "admin", Name: "Legacy", NativeName: "Legacy", IsActive: true,
+			Direction: "ltr", Position: 2, CreatedAt: now, UpdatedAt: now,
+		},
+	} {
+		if _, err := q.CreateLanguage(ctx, language); err != nil {
+			t.Fatalf("CreateLanguage(%s): %v", language.Code, err)
+		}
+	}
+
+	createPage := func(title, slug, languageCode string) store.Page {
+		t.Helper()
+		page, err := q.CreatePage(ctx, store.CreatePageParams{
+			Title: title, Slug: slug, Body: "<p>Body</p>", Status: "published",
+			AuthorID: authorID, LanguageCode: languageCode, PageType: "page",
+			PublishedAt: sql.NullTime{Time: now, Valid: true}, CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreatePage(%s): %v", slug, err)
+		}
+		return page
+	}
+	englishPage := createPage("English Page", "english-page", "en")
+	frenchPage := createPage("French Page", "french-page", "fr")
+	legacyPage := createPage("Legacy Page", "legacy-page", "admin")
+
+	createCategory := func(name, slug, languageCode string) store.Category {
+		t.Helper()
+		category, err := q.CreateCategory(ctx, store.CreateCategoryParams{
+			Name: name, Slug: slug, LanguageCode: languageCode,
+			CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreateCategory(%s): %v", slug, err)
+		}
+		return category
+	}
+	englishCategory := createCategory("English Category", "english-category", "en")
+	frenchCategory := createCategory("French Category", "french-category", "fr")
+	legacyCategory := createCategory("Legacy Category", "legacy-category", "admin")
+
+	createTag := func(name, slug, languageCode string) store.Tag {
+		t.Helper()
+		tag, err := q.CreateTag(ctx, store.CreateTagParams{
+			Name: name, Slug: slug, LanguageCode: languageCode,
+			CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreateTag(%s): %v", slug, err)
+		}
+		return tag
+	}
+	englishTag := createTag("English Tag", "english-tag", "en")
+	frenchTag := createTag("French Tag", "french-tag", "fr")
+	legacyTag := createTag("Legacy Tag", "legacy-tag", "admin")
+
+	for _, relation := range []struct {
+		pageID     int64
+		categoryID int64
+		tagID      int64
+	}{
+		{englishPage.ID, englishCategory.ID, englishTag.ID},
+		{frenchPage.ID, frenchCategory.ID, frenchTag.ID},
+		{legacyPage.ID, legacyCategory.ID, legacyTag.ID},
+	} {
+		if err := q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
+			PageID: relation.pageID, CategoryID: relation.categoryID,
+		}); err != nil {
+			t.Fatalf("AddCategoryToPage: %v", err)
+		}
+		if err := q.AddTagToPage(ctx, store.AddTagToPageParams{
+			PageID: relation.pageID, TagID: relation.tagID,
+		}); err != nil {
+			t.Fatalf("AddTagToPage: %v", err)
+		}
+	}
+
+	for _, form := range []store.CreateFormParams{
+		{Name: "English Form", Slug: "english-form", Title: "English Form", IsActive: true, LanguageCode: "en", CreatedAt: now, UpdatedAt: now},
+		{Name: "French Form", Slug: "french-form", Title: "French Form", IsActive: true, LanguageCode: "fr", CreatedAt: now, UpdatedAt: now},
+		{Name: "Legacy Form", Slug: "legacy-form", Title: "Legacy Form", IsActive: true, LanguageCode: "admin", CreatedAt: now, UpdatedAt: now},
+	} {
+		if _, err := q.CreateForm(ctx, form); err != nil {
+			t.Fatalf("CreateForm(%s): %v", form.Slug, err)
+		}
+	}
+
+	menu, err := q.CreateMenu(ctx, store.CreateMenuParams{
+		Name: "Main", Slug: "main", LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenu: %v", err)
+	}
+	if _, err := q.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID: menu.ID, Title: "French menu page",
+		PageID:   sql.NullInt64{Int64: frenchPage.ID, Valid: true},
+		IsActive: true, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateMenuItem: %v", err)
+	}
+
+	content, err := GenerateSiteContentMarkdown(ctx, q)
+	if err != nil {
+		t.Fatalf("GenerateSiteContentMarkdown: %v", err)
+	}
+	guide, err := GenerateUserGuideMarkdown(ctx, q)
+	if err != nil {
+		t.Fatalf("GenerateUserGuideMarkdown: %v", err)
+	}
+	combined := content + "\n" + guide
+	if !strings.Contains(guide, "French menu page — https://kb.example/fr/french-page") {
+		t.Errorf("default-language menu did not preserve the linked French page canonical URL")
+	}
+	for _, canonicalURL := range []string{
+		"https://kb.example/english-page",
+		"https://kb.example/fr/french-page",
+		"https://kb.example/category/english-category",
+		"https://kb.example/fr/category/french-category",
+		"https://kb.example/tag/english-tag",
+		"https://kb.example/fr/tag/french-tag",
+		"https://kb.example/forms/english-form",
+		"https://kb.example/fr/forms/french-form",
+	} {
+		if !strings.Contains(combined, canonicalURL) {
+			t.Errorf("expected canonical URL %q in generated knowledge base", canonicalURL)
+		}
+	}
+	for _, wrongURL := range []string{
+		"https://kb.example/french-page",
+		"https://kb.example/category/french-category",
+		"https://kb.example/tag/french-tag",
+		"https://kb.example/forms/french-form",
+	} {
+		if strings.Contains(combined, wrongURL) {
+			t.Errorf("unexpected unprefixed non-default URL %q", wrongURL)
+		}
+	}
+	for _, legacyValue := range []string{"Legacy Page", "Legacy Category", "Legacy Tag", "Legacy Form"} {
+		if strings.Contains(combined, legacyValue) {
+			t.Errorf("unsafe-language content %q must be omitted", legacyValue)
+		}
+	}
+	languagePlan, err := loadKBLanguagePlan(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path, ok := languagePlan.canonicalPath("", "/orphan"); ok || path != "" {
+		t.Fatalf("empty/orphan entity language resolved to %q, want omitted", path)
+	}
+
+	assertGeneratorsFail := func(want string) {
+		t.Helper()
+		for name, generate := range map[string]func(context.Context, *store.Queries) (string, error){
+			"content": GenerateSiteContentMarkdown,
+			"guide":   GenerateUserGuideMarkdown,
+		} {
+			output, generateErr := generate(ctx, q)
+			if generateErr == nil || !strings.Contains(generateErr.Error(), want) {
+				t.Errorf("%s generator error = %v, want substring %q", name, generateErr, want)
+			}
+			if output != "" {
+				t.Errorf("%s generator returned partial output after language failure", name)
+			}
+		}
+	}
+
+	if _, err := db.ExecContext(ctx, `UPDATE languages SET is_default = 1 WHERE code = 'fr'`); err != nil {
+		t.Fatalf("create ambiguous defaults: %v", err)
+	}
+	assertGeneratorsFail("exactly one default language")
+	if _, err := db.ExecContext(ctx, `UPDATE languages SET is_default = 0`); err != nil {
+		t.Fatalf("remove all defaults: %v", err)
+	}
+	assertGeneratorsFail("exactly one default language")
 }

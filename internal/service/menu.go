@@ -7,10 +7,12 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"sort"
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // MenuItem represents a menu item for frontend rendering.
@@ -79,17 +81,30 @@ func (s *MenuService) GetMenu(slug string) []MenuItem {
 // MenuCache only caches by slug (not by slug+language).
 func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuItem {
 	ctx := context.Background()
-
-	// Validate language code exists
-	_, err := s.queries.GetLanguageByCode(ctx, langCode)
+	// Public routing has no canonical language namespace unless there is
+	// exactly one configured default. GetDefaultLanguage enforces that
+	// cardinality, so fail closed before returning menu links in an ambiguous
+	// state even when a requested-language menu happens to exist.
+	defaultLang, err := s.queries.GetDefaultLanguage(ctx)
 	if err != nil {
-		// Language not found, try default
-		defaultLang, err := s.queries.GetDefaultLanguage(ctx)
-		if err != nil {
-			// No default language, fall back to basic GetMenu
-			return s.GetMenu(slug)
+		return nil
+	}
+
+	// A menu namespace is usable only when its language owns a public route.
+	// Inactive/malformed/reserved legacy rows must not leak their raw URL items
+	// through fallback even if the database still marks one as default.
+	requestedLanguage, err := s.queries.GetLanguageByCode(ctx, langCode)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		// Unknown language: fall back only to the configured default.
+		if !routableMenuLanguage(defaultLang) {
+			return nil
 		}
 		langCode = defaultLang.Code
+	} else if !routableMenuLanguage(requestedLanguage) {
+		return nil
 	}
 
 	// Try to get menu for specific language first
@@ -98,9 +113,11 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 		LanguageCode: langCode,
 	})
 	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
 		// Menu not found for this language, try default language
-		defaultLang, err := s.queries.GetDefaultLanguage(ctx)
-		if err != nil {
+		if !routableMenuLanguage(defaultLang) {
 			return nil
 		}
 
@@ -111,18 +128,10 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 				LanguageCode: defaultLang.Code,
 			})
 			if err != nil {
-				// Still not found, try without language filter as last resort
-				menu, err = s.queries.GetMenuBySlug(ctx, slug)
-				if err != nil {
-					return nil
-				}
-			}
-		} else {
-			// Already tried with default language, try basic lookup
-			menu, err = s.queries.GetMenuBySlug(ctx, slug)
-			if err != nil {
 				return nil
 			}
+		} else {
+			return nil
 		}
 	}
 
@@ -132,6 +141,11 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 	}
 
 	return s.buildMenuTree(items)
+}
+
+func routableMenuLanguage(language store.Language) bool {
+	return language.IsActive && util.IsValidLangCode(language.Code) &&
+		!util.IsReservedLanguageCode(language.Code)
 }
 
 // GetMenuForLanguageCode fetches a menu by slug for a specific language code.
@@ -177,12 +191,19 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 			Children: []MenuItem{},
 		}
 
-		// Determine URL
-		if item.PageID.Valid && item.PageSlug.Valid {
-			// Internal page link
+		// Page-backed items must use the linked page's canonical language, not
+		// the requested menu language. This matters when a language-specific
+		// menu falls back to the default menu.
+		if item.PageID.Valid {
+			pageURL, ok := canonicalMenuPageURL(item)
+			if !ok {
+				// Never fall back to a raw URL for a broken, inactive, orphaned, or
+				// unsafe page reference.
+				continue
+			}
 			mi.PageID = &item.PageID.Int64
 			mi.PageSlug = item.PageSlug.String
-			mi.URL = "/" + item.PageSlug.String
+			mi.URL = pageURL
 		} else if item.Url.Valid && item.Url.String != "" {
 			// External URL
 			mi.URL = item.Url.String
@@ -249,4 +270,27 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 	})
 
 	return roots
+}
+
+// canonicalMenuPageURL returns the public canonical path for a page-backed
+// menu item. Active default-language pages are unprefixed. Active routable
+// non-default languages own their validated prefix. Invalid and reserved
+// legacy languages fail closed, including a misconfigured default.
+func canonicalMenuPageURL(item store.ListMenuItemsWithPageRow) (string, bool) {
+	if !item.PageSlug.Valid || !util.IsValidSlug(item.PageSlug.String) ||
+		!item.PageLanguageCode.Valid ||
+		!item.PageLanguageIsActive.Valid || !item.PageLanguageIsActive.Bool ||
+		!item.PageLanguageIsDefault.Valid {
+		return "", false
+	}
+
+	languageCode := item.PageLanguageCode.String
+	if !util.IsValidLangCode(languageCode) || util.IsReservedLanguageCode(languageCode) {
+		return "", false
+	}
+	if item.PageLanguageIsDefault.Bool {
+		return "/" + item.PageSlug.String, true
+	}
+
+	return "/" + languageCode + "/" + item.PageSlug.String, true
 }

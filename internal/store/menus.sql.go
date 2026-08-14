@@ -431,28 +431,35 @@ const listMenuItemsWithPage = `-- name: ListMenuItemsWithPage :many
 SELECT
     mi.id, mi.menu_id, mi.parent_id, mi.title, mi.url, mi.target, mi.page_id, mi.position, mi.css_class, mi.is_active, mi.created_at, mi.updated_at,
     p.title as page_title,
-    p.slug as page_slug
+    p.slug as page_slug,
+    p.language_code as page_language_code,
+    pl.is_active as page_language_is_active,
+    pl.is_default as page_language_is_default
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id
+LEFT JOIN languages pl ON p.language_code = pl.code
 WHERE mi.menu_id = ?
 ORDER BY mi.position
 `
 
 type ListMenuItemsWithPageRow struct {
-	ID        int64          `json:"id"`
-	MenuID    int64          `json:"menu_id"`
-	ParentID  sql.NullInt64  `json:"parent_id"`
-	Title     string         `json:"title"`
-	Url       sql.NullString `json:"url"`
-	Target    sql.NullString `json:"target"`
-	PageID    sql.NullInt64  `json:"page_id"`
-	Position  int64          `json:"position"`
-	CssClass  sql.NullString `json:"css_class"`
-	IsActive  bool           `json:"is_active"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	PageTitle sql.NullString `json:"page_title"`
-	PageSlug  sql.NullString `json:"page_slug"`
+	ID                    int64          `json:"id"`
+	MenuID                int64          `json:"menu_id"`
+	ParentID              sql.NullInt64  `json:"parent_id"`
+	Title                 string         `json:"title"`
+	Url                   sql.NullString `json:"url"`
+	Target                sql.NullString `json:"target"`
+	PageID                sql.NullInt64  `json:"page_id"`
+	Position              int64          `json:"position"`
+	CssClass              sql.NullString `json:"css_class"`
+	IsActive              bool           `json:"is_active"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	PageTitle             sql.NullString `json:"page_title"`
+	PageSlug              sql.NullString `json:"page_slug"`
+	PageLanguageCode      sql.NullString `json:"page_language_code"`
+	PageLanguageIsActive  sql.NullBool   `json:"page_language_is_active"`
+	PageLanguageIsDefault sql.NullBool   `json:"page_language_is_default"`
 }
 
 // Menu item with page info
@@ -480,6 +487,9 @@ func (q *Queries) ListMenuItemsWithPage(ctx context.Context, menuID int64) ([]Li
 			&i.UpdatedAt,
 			&i.PageTitle,
 			&i.PageSlug,
+			&i.PageLanguageCode,
+			&i.PageLanguageIsActive,
+			&i.PageLanguageIsDefault,
 		); err != nil {
 			return nil, err
 		}
@@ -498,7 +508,8 @@ const listMenuItemsWithPublishedPage = `-- name: ListMenuItemsWithPublishedPage 
 SELECT
     mi.id, mi.menu_id, mi.parent_id, mi.title, mi.url, mi.target, mi.page_id, mi.position, mi.css_class, mi.is_active, mi.created_at, mi.updated_at,
     p.title as page_title,
-    p.slug as page_slug
+    p.slug as page_slug,
+    p.language_code as page_language_code
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id AND p.status = 'published'
 WHERE mi.menu_id = ?
@@ -506,20 +517,21 @@ ORDER BY mi.position
 `
 
 type ListMenuItemsWithPublishedPageRow struct {
-	ID        int64          `json:"id"`
-	MenuID    int64          `json:"menu_id"`
-	ParentID  sql.NullInt64  `json:"parent_id"`
-	Title     string         `json:"title"`
-	Url       sql.NullString `json:"url"`
-	Target    sql.NullString `json:"target"`
-	PageID    sql.NullInt64  `json:"page_id"`
-	Position  int64          `json:"position"`
-	CssClass  sql.NullString `json:"css_class"`
-	IsActive  bool           `json:"is_active"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	PageTitle sql.NullString `json:"page_title"`
-	PageSlug  sql.NullString `json:"page_slug"`
+	ID               int64          `json:"id"`
+	MenuID           int64          `json:"menu_id"`
+	ParentID         sql.NullInt64  `json:"parent_id"`
+	Title            string         `json:"title"`
+	Url              sql.NullString `json:"url"`
+	Target           sql.NullString `json:"target"`
+	PageID           sql.NullInt64  `json:"page_id"`
+	Position         int64          `json:"position"`
+	CssClass         sql.NullString `json:"css_class"`
+	IsActive         bool           `json:"is_active"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	PageTitle        sql.NullString `json:"page_title"`
+	PageSlug         sql.NullString `json:"page_slug"`
+	PageLanguageCode sql.NullString `json:"page_language_code"`
 }
 
 func (q *Queries) ListMenuItemsWithPublishedPage(ctx context.Context, menuID int64) ([]ListMenuItemsWithPublishedPageRow, error) {
@@ -546,6 +558,7 @@ func (q *Queries) ListMenuItemsWithPublishedPage(ctx context.Context, menuID int
 			&i.UpdatedAt,
 			&i.PageTitle,
 			&i.PageSlug,
+			&i.PageLanguageCode,
 		); err != nil {
 			return nil, err
 		}

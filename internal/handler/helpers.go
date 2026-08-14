@@ -22,7 +22,7 @@ type translationBaseInfo struct {
 	EntityLanguage       *store.Language
 	AllLanguages         []store.Language
 	TranslatedIDs        map[int64]bool
-	TranslationLinks     []store.GetTranslationsForEntityRow
+	TranslationLinks     []store.ListTranslationComponentMembersRow
 	TranslationLanguages map[int64]store.Language // maps LanguageID to Language for each translation link
 	MissingLanguages     []store.Language
 }
@@ -55,9 +55,9 @@ func loadTranslationBaseInfo(ctx context.Context, queries *store.Queries, entity
 	}
 
 	// Load translation links
-	translationLinks, err := queries.GetTranslationsForEntity(ctx, store.GetTranslationsForEntityParams{
-		EntityType: entityType,
-		EntityID:   entityID,
+	translationLinks, err := queries.ListTranslationComponentMembers(ctx, store.ListTranslationComponentMembersParams{
+		EntityType:     entityType,
+		SourceEntityID: entityID,
 	})
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("failed to get translations", "error", err, "entity_type", entityType, "entity_id", entityID)
@@ -107,7 +107,7 @@ func loadEntityTranslations[E, T any](
 		if !ok {
 			continue
 		}
-		entity, err := fetcher(tl.TranslationID)
+		entity, err := fetcher(tl.EntityID)
 		if err == nil {
 			result.Translations = append(result.Translations, makeTranslation(lang, entity))
 		}

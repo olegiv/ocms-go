@@ -22,6 +22,7 @@ type EntityType string
 const (
 	EntityMenuItem EntityType = "menu_item"
 	EntityMenu     EntityType = "menu"
+	EntityRedirect EntityType = "redirect"
 	EntityAlias    EntityType = "alias"
 	EntityPost     EntityType = "post"
 	EntityPage     EntityType = "page"
@@ -40,6 +41,7 @@ const (
 var AllEntityTypes = []EntityType{
 	EntityMenuItem,
 	EntityMenu,
+	EntityRedirect,
 	EntityAlias,
 	EntityPost,
 	EntityPage,
@@ -53,6 +55,15 @@ var AllEntityTypes = []EntityType{
 type ImportTracker interface {
 	// TrackImportedItem records an imported item.
 	TrackImportedItem(ctx context.Context, source, entityType string, entityID int64) error
+}
+
+// MediaCleanupQueuer is an optional capability of an ImportTracker. Sources
+// use it when compensating an import-time media failure could not remove the
+// files immediately. The durable queue keeps that orphan discoverable across
+// process restarts without extending ImportTracker and breaking third-party
+// implementations.
+type MediaCleanupQueuer interface {
+	QueueMediaCleanup(ctx context.Context, source, uploadRoot, mediaUUID string) error
 }
 
 // Progress is a live progress sample published by a source during Import.
@@ -111,6 +122,14 @@ type Source interface {
 	// the duration of an import starves every other writer. Write per entity
 	// and let the tracking table provide the undo path instead.
 	Import(ctx context.Context, db *sql.DB, cfg map[string]string, opts ImportOptions, tracker ImportTracker) (*ImportResult, error)
+}
+
+// ContextConnectionTester is an optional capability of a Source. The legacy
+// TestConnection method remains on Source for compatibility; the HTTP handler
+// prefers this method so request cancellation and its deadline reach the
+// database driver.
+type ContextConnectionTester interface {
+	TestConnectionContext(ctx context.Context, cfg map[string]string) error
 }
 
 // OptionSupporter is an optional capability of a Source: it declares which
@@ -245,6 +264,7 @@ type ImportResult struct {
 	PagesImported      int `json:"pages_imported"`
 	MenusImported      int `json:"menus_imported"`
 	MenuItemsImported  int `json:"menu_items_imported"`
+	RedirectsImported  int `json:"redirects_imported"`
 	AliasesImported    int `json:"aliases_imported"`
 	UsersImported      int `json:"users_imported"`
 
@@ -258,6 +278,7 @@ type ImportResult struct {
 	// items have no uniqueness constraint, so a re-run would otherwise append
 	// a second copy of every link.
 	MenuItemsSkipped int `json:"menu_items_skipped"`
+	RedirectsSkipped int `json:"redirects_skipped"`
 	UsersSkipped     int `json:"users_skipped"`
 
 	// Errors records things that failed but should have worked: a row that
@@ -332,6 +353,7 @@ func (r *ImportResult) Counters() map[EntityType]int {
 	return map[EntityType]int{
 		EntityMenuItem: r.MenuItemsImported,
 		EntityMenu:     r.MenusImported,
+		EntityRedirect: r.RedirectsImported,
 		EntityAlias:    r.AliasesImported,
 		EntityPost:     r.PostsImported,
 		EntityPage:     r.PagesImported,
@@ -348,6 +370,7 @@ func (r *ImportResult) SkippedCounters() map[EntityType]int {
 	return map[EntityType]int{
 		EntityMenuItem: r.MenuItemsSkipped,
 		EntityMenu:     r.MenusSkipped,
+		EntityRedirect: r.RedirectsSkipped,
 		EntityPost:     r.PostsSkipped,
 		EntityPage:     r.PagesSkipped,
 		EntityTag:      r.TagsSkipped,

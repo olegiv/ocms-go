@@ -29,6 +29,13 @@ UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, language_cod
 WHERE id = ?
 RETURNING *;
 
+-- name: UpdateMediaForImport :one
+UPDATE media
+SET filename = ?, mime_type = ?, size = ?, width = ?, height = ?, alt = ?,
+    caption = ?, folder_id = ?, uploaded_by = ?, language_code = ?, updated_at = ?
+WHERE id = ?
+RETURNING *;
+
 -- name: DeleteMedia :exec
 DELETE FROM media WHERE id = ?;
 
@@ -131,3 +138,10 @@ WHERE mt.media_id = ? AND l.code = ? AND mt.caption != '';
 -- name: CountPagesUsingMedia :one
 SELECT COUNT(*) FROM pages
 WHERE featured_image_id = ? OR og_image_id = ?;
+
+-- name: CountPagesEmbeddingMediaUUID :one
+SELECT COUNT(*) FROM pages
+WHERE instr(
+    body,
+    '/uploads/' || sqlc.arg(storage_dir) || '/' || sqlc.arg(media_uuid) || '/'
+) > 0;

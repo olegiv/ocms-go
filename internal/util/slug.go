@@ -79,12 +79,11 @@ func IsValidSlug(s string) bool {
 	return true
 }
 
-// IsValidLangCode checks if a string is a valid language code format.
-// Language codes are typically 2-3 letter codes optionally followed by a hyphen
-// and a 2-4 letter region code (e.g., "en", "de", "zh-cn", "pt-br").
-// Only lowercase letters, digits, and hyphens are allowed.
+// IsValidLangCode checks if a string is a valid language code format. Codes
+// contain 2-10 lowercase letters, digits, or hyphens, with no leading,
+// trailing, or consecutive hyphens.
 func IsValidLangCode(s string) bool {
-	if s == "" || len(s) > 10 {
+	if len(s) < 2 || len(s) > 10 {
 		return false
 	}
 
@@ -106,6 +105,20 @@ func IsValidLangCode(s string) bool {
 	}
 
 	return true
+}
+
+// IsReservedLanguageCode reports whether a language code conflicts with a
+// top-level route owned by the application. Reserved codes must not be used as
+// language URL prefixes, even when legacy data marks them as active.
+func IsReservedLanguageCode(s string) bool {
+	switch s {
+	case "admin", "api", "blog", "uploads", "static", "themes", "health",
+		"login", "logout", "language", "forms", "search", "tag", "category",
+		"page", "session":
+		return true
+	default:
+		return false
+	}
 }
 
 // isAlphanumeric checks if a rune is a lowercase letter or digit.

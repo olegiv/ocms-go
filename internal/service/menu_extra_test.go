@@ -28,8 +28,11 @@ func menuTestDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			code TEXT NOT NULL UNIQUE,
 			name TEXT NOT NULL,
-			is_active INTEGER NOT NULL DEFAULT 1,
+			native_name TEXT NOT NULL DEFAULT '',
 			is_default INTEGER NOT NULL DEFAULT 0,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			direction TEXT NOT NULL DEFAULT 'ltr',
+			position INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
@@ -306,10 +309,9 @@ func TestBuildMenuTree_ThreeLevelNesting(t *testing.T) {
 	}
 }
 
-func TestGetMenuForLanguage_FallsBackToBasicGetMenu(t *testing.T) {
+func TestGetMenuForLanguage_FailsClosedOnLanguageLookupError(t *testing.T) {
 	db := menuTestDB(t)
 
-	// No languages in DB - should fall back to GetMenu
 	_, err := db.Exec(`INSERT INTO menus (name, slug, language_code) VALUES ('Nav', 'nav', 'en')`)
 	if err != nil {
 		t.Fatalf("insert menu: %v", err)
@@ -319,13 +321,12 @@ func TestGetMenuForLanguage_FallsBackToBasicGetMenu(t *testing.T) {
 		t.Fatalf("insert item: %v", err)
 	}
 
-	svc := NewMenuService(db, nil)
-	// No languages table entries, so GetLanguageByCode will fail, GetDefaultLanguage will fail too
-	// which triggers the fallback path to GetMenu
-	items := svc.GetMenuForLanguage("nav", "en")
-	// The fallback GetMenu path should still return items since the menu slug exists
-	if items == nil {
-		t.Log("GetMenuForLanguage returned nil (acceptable if GetMenuBySlugAndLanguage also fails)")
+	if _, err := db.Exec(`DROP TABLE languages`); err != nil {
+		t.Fatalf("drop languages: %v", err)
+	}
+	items := NewMenuService(db, nil).GetMenuForLanguage("nav", "en")
+	if items != nil {
+		t.Fatalf("operational language lookup error leaked unrelated menu: %v", items)
 	}
 }
 
@@ -340,6 +341,116 @@ func TestGetMenuForLanguage_UnknownSlugReturnsNil(t *testing.T) {
 	items := svc.GetMenuForLanguage("does-not-exist", "en")
 	if items != nil {
 		t.Errorf("GetMenuForLanguage with unknown slug should return nil, got %v", items)
+	}
+}
+
+func TestGetMenuForLanguage_DoesNotFallBackToUnrelatedLanguage(t *testing.T) {
+	db := menuTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO languages (code, name, is_active, is_default) VALUES
+			('en', 'English', 1, 1),
+			('fr', 'French', 1, 0),
+			('de', 'German', 1, 0);
+		INSERT INTO menus (name, slug, language_code) VALUES ('German main', 'main', 'de');
+		INSERT INTO menu_items (menu_id, title, url, is_active, position)
+		VALUES (1, 'Deutsch', '/de', 1, 0);
+	`)
+	if err != nil {
+		t.Fatalf("seed unrelated-language menu: %v", err)
+	}
+
+	items := NewMenuService(db, nil).GetMenuForLanguage("main", "fr")
+	if items != nil {
+		t.Fatalf("expected no menu instead of German fallback, got %#v", items)
+	}
+}
+
+func TestGetMenuForLanguage_DoesNotFallBackToUnsafeDefault(t *testing.T) {
+	for _, defaultLanguage := range []struct {
+		code     string
+		active   int
+		menuPath string
+	}{
+		{code: "admin", active: 1, menuPath: "/admin-owned"},
+		{code: "en", active: 0, menuPath: "/inactive-owned"},
+	} {
+		t.Run(defaultLanguage.code, func(t *testing.T) {
+			db := menuTestDB(t)
+			_, err := db.Exec(`
+				INSERT INTO languages (code, name, is_active, is_default) VALUES
+					(?, 'Unsafe default', ?, 1),
+					('fr', 'French', 1, 0);
+				INSERT INTO menus (name, slug, language_code) VALUES ('Unsafe main', 'main', ?);
+				INSERT INTO menu_items (menu_id, title, url, is_active, position)
+				VALUES (1, 'Unsafe', ?, 1, 0);
+			`, defaultLanguage.code, defaultLanguage.active, defaultLanguage.code, defaultLanguage.menuPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if items := NewMenuService(db, nil).GetMenuForLanguage("main", "fr"); items != nil {
+				t.Fatalf("unsafe default menu leaked into French namespace: %#v", items)
+			}
+		})
+	}
+}
+
+func TestGetMenuForLanguageFailsClosedWithAmbiguousDefaults(t *testing.T) {
+	db := menuTestDB(t)
+	if _, err := db.Exec(`
+		INSERT INTO languages (code, name, is_active, is_default) VALUES
+			('en', 'English', 1, 1), ('fr', 'French', 1, 1);
+		INSERT INTO menus (name, slug, language_code) VALUES ('French main', 'main', 'fr');
+		INSERT INTO menu_items (menu_id, title, url, is_active, position)
+		VALUES (1, 'French', '/fr', 1, 0);
+	`); err != nil {
+		t.Fatalf("seed ambiguous defaults: %v", err)
+	}
+	if items := NewMenuService(db, nil).GetMenuForLanguage("main", "fr"); items != nil {
+		t.Fatalf("menu items = %+v; want nil with multiple defaults", items)
+	}
+}
+
+func TestGetMenuForLanguage_PageLinksUsePageLanguage(t *testing.T) {
+	db := menuTestDB(t)
+
+	_, err := db.Exec(`
+		INSERT INTO languages (code, name, native_name, is_default, is_active, position) VALUES
+			('en', 'English', 'English', 1, 1, 0),
+			('fr', 'French', 'Français', 0, 1, 1),
+			('de', 'German', 'Deutsch', 0, 1, 2),
+			('es', 'Spanish', 'Español', 0, 0, 3),
+			('admin', 'Legacy reserved', 'Legacy reserved', 0, 1, 4);
+		INSERT INTO menus (name, slug, language_code) VALUES
+			('Default main', 'main', 'en');
+		INSERT INTO pages (title, slug, status, language_code) VALUES
+			('English page', 'english-page', 'published', 'en'),
+			('French page', 'french-page', 'published', 'fr'),
+			('Inactive page', 'inactive-page', 'published', 'es'),
+			('Reserved page', 'reserved-page', 'published', 'admin'),
+			('Orphan page', 'orphan-page', 'published', 'zz');
+		INSERT INTO menu_items (menu_id, title, url, page_id, is_active, position) VALUES
+			(1, 'English page', '/stale-english', 1, 1, 0),
+			(1, 'French page', '/stale-french', 2, 1, 1),
+			(1, 'Inactive page', '/stale-inactive', 3, 1, 2),
+			(1, 'Reserved page', '/stale-reserved', 4, 1, 3),
+			(1, 'Orphan page', '/stale-orphan', 5, 1, 4);
+	`)
+	if err != nil {
+		t.Fatalf("seed multilingual menu: %v", err)
+	}
+
+	// No German menu exists, so the service falls back to the English menu.
+	// Page-backed URLs must still follow each linked page's canonical language
+	// instead of inheriting the requested German prefix.
+	items := NewMenuService(db, nil).GetMenuForLanguage("main", "de")
+	if len(items) != 2 {
+		t.Fatalf("len(items) = %d, want 2 safe page links: %#v", len(items), items)
+	}
+	if items[0].URL != "/english-page" {
+		t.Errorf("default page URL = %q, want /english-page", items[0].URL)
+	}
+	if items[1].URL != "/fr/french-page" {
+		t.Errorf("non-default page URL = %q, want /fr/french-page", items[1].URL)
 	}
 }
 

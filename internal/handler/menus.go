@@ -10,8 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -235,6 +235,9 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := parseMenuFormInput(r)
+	if _, err := getRoutableContentLanguage(r.Context(), h.queries, input.LanguageCode); err != nil {
+		input.Errors["language_code"] = "Select an active, routable language"
+	}
 
 	// Validate slug
 	if errMsg := h.validateMenuSlugCreate(r.Context(), input.Slug, input.LanguageCode); errMsg != "" {
@@ -335,6 +338,9 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := parseMenuFormInput(r)
+	if _, err := getRoutableContentLanguage(r.Context(), h.queries, input.LanguageCode); err != nil {
+		input.Errors["language_code"] = "Select an active, routable language"
+	}
 
 	// Validate slug
 	if errMsg := h.validateMenuSlugUpdate(r.Context(), input.Slug, input.LanguageCode, menu.Slug, menu.LanguageCode, id); errMsg != "" {

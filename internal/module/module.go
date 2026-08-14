@@ -41,6 +41,27 @@ type Context struct {
 	// be nil in tests and in embedders that do not wire it, so every use must
 	// be nil-guarded.
 	Cache *cache.Manager
+	// RedirectCacheInvalidator lets modules that write redirects make those
+	// changes visible immediately without depending on the concrete middleware.
+	// It may be nil in tests and embedders.
+	RedirectCacheInvalidator RedirectCacheInvalidator
+	// PublicRouteChecker lets modules that create database redirects avoid
+	// shadowing routes registered by core or another module. The registry wires
+	// itself during InitAll, after every module has been registered.
+	PublicRouteChecker PublicRouteChecker
+}
+
+// RedirectCacheInvalidator is the narrow cache capability exposed to modules
+// that create or delete redirects.
+type RedirectCacheInvalidator interface {
+	InvalidateCache()
+}
+
+// PublicRouteChecker reports whether a concrete URL path is owned by a
+// registered module route. Core routes are protected separately by the shared
+// reserved-prefix policy because the module registry does not register them.
+type PublicRouteChecker interface {
+	OwnsPublicPath(path string) bool
 }
 
 // ActivationGuard is an optional interface a module may implement to refuse

@@ -12,7 +12,15 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
+
+func trustElefantMediaRoot(t *testing.T, root string) {
+	t.Helper()
+	t.Setenv(shared.EnvAllowedFileRoots, root)
+	t.Setenv("DRUPAL_FILES", "")
+	t.Setenv("ELEFANT_FILES", "")
+}
 
 func TestGetMimeTypeFromExt(t *testing.T) {
 	tests := []struct {
@@ -96,6 +104,7 @@ func TestAllowedMediaMimeTypes(t *testing.T) {
 func TestScanMediaFiles(t *testing.T) {
 	// Create a temporary directory structure for testing
 	tempDir := t.TempDir()
+	trustElefantMediaRoot(t, tempDir)
 
 	// Create test files
 	testFiles := map[string]string{
@@ -171,6 +180,7 @@ func TestScanMediaFiles(t *testing.T) {
 func TestScanMediaFiles_SkipsSymlinks(t *testing.T) {
 	tempDir := t.TempDir()
 	outsideDir := t.TempDir()
+	trustElefantMediaRoot(t, tempDir)
 
 	regularFilePath := filepath.Join(tempDir, "valid.jpg")
 	if err := os.WriteFile(regularFilePath, []byte("regular content"), 0644); err != nil {
@@ -222,6 +232,7 @@ func TestScanMediaFiles_FileNotDirectory(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	_ = tempFile.Close()
+	trustElefantMediaRoot(t, filepath.Dir(tempFile.Name()))
 
 	_, err = ScanMediaFiles(tempFile.Name())
 	if err == nil {
@@ -231,6 +242,7 @@ func TestScanMediaFiles_FileNotDirectory(t *testing.T) {
 
 func TestScanMediaFiles_EmptyDirectory(t *testing.T) {
 	tempDir := t.TempDir()
+	trustElefantMediaRoot(t, tempDir)
 
 	files, err := ScanMediaFiles(tempDir)
 	if err != nil {

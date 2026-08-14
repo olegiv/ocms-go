@@ -55,6 +55,7 @@
 
         {"id": "migrator.phase_menu_item", "message": "Importing menu items…", "translation": "Importing menu items…"},
         {"id": "migrator.phase_menu", "message": "Importing menus…", "translation": "Importing menus…"},
+        {"id": "migrator.phase_redirect", "message": "Importing redirects…", "translation": "Importing redirects…"},
         {"id": "migrator.phase_alias", "message": "Importing URL aliases…", "translation": "Importing URL aliases…"},
         {"id": "migrator.phase_post", "message": "Importing posts…", "translation": "Importing posts…"},
         {"id": "migrator.phase_page", "message": "Importing pages…", "translation": "Importing pages…"},
@@ -66,6 +67,7 @@
         {"id": "migrator.imported_content", "message": "Imported Content", "translation": "Imported Content"},
         {"id": "migrator.imported_menu_item", "message": "Menu items", "translation": "Menu items"},
         {"id": "migrator.imported_menu", "message": "Menus", "translation": "Menus"},
+        {"id": "migrator.imported_redirect", "message": "Redirects", "translation": "Redirects"},
         {"id": "migrator.imported_alias", "message": "URL aliases", "translation": "URL aliases"},
         {"id": "migrator.imported_post", "message": "Posts", "translation": "Posts"},
         {"id": "migrator.imported_page", "message": "Pages", "translation": "Pages"},
@@ -75,6 +77,7 @@
         {"id": "migrator.imported_user", "message": "Users", "translation": "Users"},
         {"id": "migrator.skipped_menu_item", "message": "Menu items skipped", "translation": "Menu items skipped"},
         {"id": "migrator.skipped_menu", "message": "Menus skipped", "translation": "Menus skipped"},
+        {"id": "migrator.skipped_redirect", "message": "Redirects skipped", "translation": "Redirects skipped"},
         {"id": "migrator.skipped_alias", "message": "URL aliases skipped", "translation": "URL aliases skipped"},
         {"id": "migrator.skipped_post", "message": "Posts skipped", "translation": "Posts skipped"},
         {"id": "migrator.skipped_page", "message": "Pages skipped", "translation": "Pages skipped"},
@@ -87,6 +90,9 @@
         {"id": "migrator.confirm_delete", "message": "Are you sure you want to delete ALL content imported from this source? This action cannot be undone.", "translation": "Are you sure you want to delete ALL content imported from this source? This action cannot be undone."},
         {"id": "migrator.error_delete", "message": "Failed to delete imported content", "translation": "Failed to delete imported content"},
         {"id": "migrator.success_delete_summary", "message": "Deleted %s", "translation": "Deleted %s"},
+        {"id": "migrator.warning_media_cleanup_pending", "message": "Some media files could not be removed and remain queued for automatic retry.", "translation": "Some media files could not be removed and remain queued for automatic retry."},
+        {"id": "migrator.warning_imported_state_unknown", "message": "Imported content and cleanup state could not be verified. Retry before assuming cleanup is complete.", "translation": "Imported content and cleanup state could not be verified. Retry before assuming cleanup is complete."},
+        {"id": "migrator.warning_delete_partial", "message": "Some imported database items could not be deleted and remain tracked for retry.", "translation": "Some imported database items could not be deleted and remain tracked for retry."},
 
         {"id": "elefant.description", "message": "Import blog posts, pages, and tags from Elefant CMS MySQL database", "translation": "Import blog posts, pages, and tags from Elefant CMS MySQL database"},
         {"id": "elefant.field_mysql_host", "message": "MySQL Host", "translation": "MySQL Host"},

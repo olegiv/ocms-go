@@ -13,7 +13,7 @@
     <div class="dev-post-content">
         {{if .Categories}}
         <span class="dev-post-category">
-            {{range .Categories}}<a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a> {{end}}
+            {{range .Categories}}<a href="{{.URL}}">{{.Name}}</a> {{end}}
         </span>
         {{end}}
         <h3 class="dev-post-title">
@@ -40,7 +40,7 @@
         {{if .Tags}}
         <div class="dev-post-tags">
             {{range .Tags}}
-            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+            <a href="{{.URL}}" class="dev-tag">#{{.Name}}</a>
             {{end}}
         </div>
         {{end}}

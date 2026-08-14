@@ -75,7 +75,7 @@ templ formSuccessView(data PublicFormViewData) {
 					{ formT(data.Lang, "forms.public.default_success") }
 				}
 			</p>
-			@button.Button(button.Props{Href: "/forms/" + data.FormSlug, Variant: button.VariantOutline}) {
+			@button.Button(button.Props{Href: data.Base.LangPrefix + "/forms/" + data.FormSlug, Variant: button.VariantOutline}) {
 				{ formT(data.Lang, "forms.public.submit_another") }
 			}
 		}
@@ -103,7 +103,7 @@ templ formEntryView(data PublicFormViewData) {
 			}
 		}
 	}
-	<form method="POST" action={ templ.SafeURL("/forms/" + data.FormSlug) } class="space-y-6">
+	<form method="POST" action={ templ.SafeURL(data.Base.LangPrefix + "/forms/" + data.FormSlug) } class="space-y-6">
 		<!-- Honeypot -->
 		<div class="sr-only" aria-hidden="true">
 			<label for="_website">{ formT(data.Lang, "forms.public.honeypot_label") }</label>

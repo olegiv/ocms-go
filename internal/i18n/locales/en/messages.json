@@ -2514,13 +2514,28 @@
         },
         {
             "id": "languages.code_hint",
-            "message": "ISO 639-1 code (2-5 characters)",
-            "translation": "ISO 639-1 code (2-5 characters)"
+            "message": "Language code (2-10 lowercase ASCII letters, digits, or hyphens)",
+            "translation": "Language code (2-10 lowercase ASCII letters, digits, or hyphens)"
+        },
+        {
+            "id": "languages.error_code_required",
+            "message": "Language code is required",
+            "translation": "Language code is required"
+        },
+        {
+            "id": "languages.error_code_format",
+            "message": "Language code must be 2-10 lowercase ASCII letters, digits, or hyphens",
+            "translation": "Language code must be 2-10 lowercase ASCII letters, digits, or hyphens"
+        },
+        {
+            "id": "languages.error_code_reserved",
+            "message": "Language code conflicts with a reserved route prefix",
+            "translation": "Language code conflicts with a reserved route prefix"
         },
         {
             "id": "languages.code_placeholder",
-            "message": "e.g., en, ru, de",
-            "translation": "e.g., en, ru, de"
+            "message": "e.g., en, ru, zh-hans",
+            "translation": "e.g., en, ru, zh-hans"
         },
         {
             "id": "languages.name_hint",

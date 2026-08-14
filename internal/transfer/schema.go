@@ -177,6 +177,7 @@ type ExportForm struct {
 	EmailTo        string                 `json:"email_to,omitempty"`
 	IsActive       bool                   `json:"is_active"`
 	LanguageCode   string                 `json:"language_code,omitempty"` // Language code for this form
+	Translations   map[string]int64       `json:"translations,omitempty"`
 	Fields         []ExportFormField      `json:"fields,omitempty"`
 	Submissions    []ExportFormSubmission `json:"submissions,omitempty"`
 	CreatedAt      time.Time              `json:"created_at"`

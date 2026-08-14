@@ -14,11 +14,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 
 	"github.com/alexedwards/scs/v2"
@@ -26,18 +28,208 @@ import (
 
 // LanguagesHandler handles language management in admin.
 type LanguagesHandler struct {
+	db             *sql.DB
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	cacheManager   *cache.Manager
+}
+
+const languageStateRefreshTimeout = 5 * time.Second
+
+func detachedLanguageStateContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), languageStateRefreshTimeout)
 }
 
 // NewLanguagesHandler creates a new LanguagesHandler.
-func NewLanguagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *LanguagesHandler {
-	return &LanguagesHandler{
+func NewLanguagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager,
+	cacheManagers ...*cache.Manager) *LanguagesHandler {
+	h := &LanguagesHandler{
+		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
 	}
+	if len(cacheManagers) > 0 {
+		h.cacheManager = cacheManagers[0]
+	}
+	return h
+}
+
+// updateLanguage atomically propagates a legacy code rename through every
+// table that denormalizes languages.code into a language_code column. These
+// columns intentionally have no foreign key, so updating only languages would
+// make the existing content, menus, taxonomy, media and forms unreachable.
+func (h *LanguagesHandler) updateLanguage(ctx context.Context, params store.UpdateLanguageParams,
+	previousCode string) error {
+	if params.Code == previousCode {
+		_, err := h.queries.UpdateLanguage(ctx, params)
+		return err
+	}
+
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin language rename: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, query := range []string{
+		`UPDATE pages SET language_code = ? WHERE language_code = ?`,
+		`UPDATE tags SET language_code = ? WHERE language_code = ?`,
+		`UPDATE categories SET language_code = ? WHERE language_code = ?`,
+		`UPDATE menus SET language_code = ? WHERE language_code = ?`,
+		`UPDATE forms SET language_code = ? WHERE language_code = ?`,
+		`UPDATE form_fields SET language_code = ? WHERE language_code = ?`,
+		`UPDATE form_submissions SET language_code = ? WHERE language_code = ?`,
+		`UPDATE widgets SET language_code = ? WHERE language_code = ?`,
+		`UPDATE media SET language_code = ? WHERE language_code = ?`,
+		`UPDATE config SET language_code = ? WHERE language_code = ?`,
+	} {
+		if _, err := tx.ExecContext(ctx, query, params.Code, previousCode); err != nil {
+			return fmt.Errorf("propagate language code %q to %q: %w",
+				previousCode, params.Code, err)
+		}
+	}
+
+	_, err = store.New(h.db).WithTx(tx).UpdateLanguage(ctx, params)
+	if err != nil {
+		return fmt.Errorf("update renamed language: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit language rename: %w", err)
+	}
+	return nil
+}
+
+func refreshI18nLanguageState(ctx context.Context, queries *store.Queries) error {
+	activeLanguages, err := queries.ListActiveLanguages(ctx)
+	if err != nil {
+		return fmt.Errorf("list active languages: %w", err)
+	}
+	defaultLanguage, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return fmt.Errorf("get default language: %w", err)
+	}
+	activeCodes := make([]string, 0, len(activeLanguages))
+	for _, language := range activeLanguages {
+		activeCodes = append(activeCodes, language.Code)
+	}
+	i18n.ConfigureLanguages(activeCodes, defaultLanguage.Code)
+	return nil
+}
+
+func (h *LanguagesHandler) invalidateLanguageCaches(ctx context.Context) {
+	refreshCtx, cancel := detachedLanguageStateContext(ctx)
+	defer cancel()
+	if err := refreshI18nLanguageState(refreshCtx, h.queries); err != nil {
+		slog.Error("failed to refresh runtime language state", "error", err)
+	}
+	if h.cacheManager == nil {
+		return
+	}
+	h.cacheManager.InvalidateLanguages()
+	h.cacheManager.InvalidateTranslations()
+	h.cacheManager.InvalidateContent()
+	h.cacheManager.InvalidateMenus()
+	h.cacheManager.InvalidateConfig()
+	h.cacheManager.General.Clear()
+}
+
+func (h *LanguagesHandler) setDefaultLanguage(ctx context.Context, id int64) error {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin default-language switch: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	queries := store.New(h.db).WithTx(tx)
+	target, err := queries.GetLanguageByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("re-read default-language target: %w", err)
+	}
+	if !target.IsActive {
+		return errors.New("cannot set an inactive language as default")
+	}
+	if validationError := validateLanguageCodeForSave(target.Code, true, target.Code); validationError != "" {
+		return fmt.Errorf("cannot set language %q as default: %s", target.Code, validationError)
+	}
+	if err := queries.ClearDefaultLanguage(ctx); err != nil {
+		return fmt.Errorf("clear previous default language: %w", err)
+	}
+	if err := queries.SetDefaultLanguage(ctx, store.SetDefaultLanguageParams{
+		ID: id, UpdatedAt: time.Now(),
+	}); err != nil {
+		return fmt.Errorf("set new default language: %w", err)
+	}
+	var defaults int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM languages WHERE is_default = 1 AND is_active = 1`).Scan(&defaults); err != nil {
+		return fmt.Errorf("verify default language: %w", err)
+	}
+	if defaults != 1 {
+		return fmt.Errorf("default-language switch produced %d active defaults", defaults)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit default-language switch: %w", err)
+	}
+	h.invalidateLanguageCaches(ctx)
+	return nil
+}
+
+type languageReferenceQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func languageReferenceCount(ctx context.Context, queryer languageReferenceQueryer, language store.Language) (int64, error) {
+	var count int64
+	err := queryer.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM pages WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM tags WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM categories WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM menus WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM forms WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM form_fields WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM form_submissions WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM widgets WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM media WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM config WHERE language_code = ?) +
+			(SELECT COUNT(*) FROM translations WHERE language_id = ?) +
+			(SELECT COUNT(*) FROM config_translations WHERE language_id = ?) +
+			(SELECT COUNT(*) FROM media_translations WHERE language_id = ?)`,
+		language.Code, language.Code, language.Code, language.Code, language.Code,
+		language.Code, language.Code, language.Code, language.Code, language.Code,
+		language.ID, language.ID, language.ID).Scan(&count)
+	return count, err
+}
+
+type languageInUseError struct{ count int64 }
+
+func (e *languageInUseError) Error() string {
+	return fmt.Sprintf("cannot delete language: %d record(s) are using this language", e.count)
+}
+
+func (h *LanguagesHandler) deleteLanguageIfUnused(ctx context.Context, language store.Language) error {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin language deletion: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	usageCount, err := languageReferenceCount(ctx, tx, language)
+	if err != nil {
+		return fmt.Errorf("check language usage: %w", err)
+	}
+	if usageCount > 0 {
+		return &languageInUseError{count: usageCount}
+	}
+	if err := store.New(h.db).WithTx(tx).DeleteLanguage(ctx, language.ID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit language deletion: %w", err)
+	}
+	h.invalidateLanguageCaches(ctx)
+	return nil
 }
 
 // languageFormInput holds parsed form values for language create/update.
@@ -76,6 +268,25 @@ func (input languageFormInput) toFormValues() map[string]string {
 		fv["is_active"] = "1"
 	}
 	return fv
+}
+
+// validateLanguageCodeForSave validates codes used by the public language
+// router. An unchanged legacy code may be saved only while deactivating it, so
+// administrators can remediate rows that predate the routing restrictions.
+func validateLanguageCodeForSave(code string, isActive bool, existingCode string) string {
+	if code == "" {
+		return "languages.error_code_required"
+	}
+
+	isLegacyDeactivation := existingCode != "" && code == existingCode && !isActive
+	if !util.IsValidLangCode(code) && !isLegacyDeactivation {
+		return "languages.error_code_format"
+	}
+	if util.IsReservedLanguageCode(code) && !isLegacyDeactivation {
+		return "languages.error_code_reserved"
+	}
+
+	return ""
 }
 
 // getLanguageByIDParam parses the language ID from URL and fetches the language.
@@ -201,12 +412,9 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	validationErrors := make(map[string]string)
 
 	// Validate code
-	switch {
-	case input.Code == "":
-		validationErrors["code"] = "Language code is required"
-	case len(input.Code) < 2 || len(input.Code) > 5:
-		validationErrors["code"] = "Language code must be 2-5 characters"
-	default:
+	if validationError := validateLanguageCodeForSave(input.Code, input.IsActive, ""); validationError != "" {
+		validationErrors["code"] = i18n.T(h.renderer.GetAdminLang(r), validationError)
+	} else {
 		exists, err := h.queries.LanguageCodeExists(r.Context(), input.Code)
 		if err != nil {
 			slog.Error("database error checking language code", "error", err)
@@ -253,6 +461,7 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.invalidateLanguageCaches(r.Context())
 	slog.Info("language created", "language_id", newLang.ID, "code", newLang.Code)
 	flashSuccess(w, r, h.renderer, redirectAdminLanguages, "Language created successfully")
 }
@@ -320,12 +529,9 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	validationErrors := make(map[string]string)
 
 	// Validate code
-	switch {
-	case input.Code == "":
-		validationErrors["code"] = "Language code is required"
-	case len(input.Code) < 2 || len(input.Code) > 5:
-		validationErrors["code"] = "Language code must be 2-5 characters"
-	default:
+	if validationError := validateLanguageCodeForSave(input.Code, input.IsActive, existingLang.Code); validationError != "" {
+		validationErrors["code"] = i18n.T(h.renderer.GetAdminLang(r), validationError)
+	} else {
 		exists, err := h.queries.LanguageCodeExistsExcluding(r.Context(), store.LanguageCodeExistsExcludingParams{
 			Code: input.Code,
 			ID:   existingLang.ID,
@@ -363,7 +569,7 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	_, err := h.queries.UpdateLanguage(r.Context(), store.UpdateLanguageParams{
+	err := h.updateLanguage(r.Context(), store.UpdateLanguageParams{
 		ID:         existingLang.ID,
 		Code:       input.Code,
 		Name:       input.Name,
@@ -373,13 +579,14 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Direction:  direction,
 		Position:   position,
 		UpdatedAt:  now,
-	})
+	}, existingLang.Code)
 	if err != nil {
 		slog.Error("failed to update language", "error", err)
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminLanguagesID, existingLang.ID), "Error updating language")
 		return
 	}
 
+	h.invalidateLanguageCaches(r.Context())
 	slog.Info("language updated", "language_id", existingLang.ID, "code", input.Code)
 	flashSuccess(w, r, h.renderer, redirectAdminLanguages, "Language updated successfully")
 }
@@ -443,23 +650,12 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if there are pages linked to this language
-	pageCount, err := h.queries.CountPagesByLanguageCode(r.Context(), lang.Code)
-	if err != nil {
-		slog.Error("failed to count pages for language", "error", err, "language_code", lang.Code)
-		if r.Header.Get("HX-Request") == "true" {
-			w.Header().Set("HX-Reswap", "none")
-			http.Error(w, "Failed to check language usage", http.StatusInternalServerError)
-			return
-		}
-		flashError(w, r, h.renderer, redirectAdminLanguages, "Failed to check language usage")
-		return
-	}
-
-	if pageCount > 0 {
-		errMsg := fmt.Sprintf("Cannot delete language: %d page(s) are using this language", pageCount)
-		slog.Warn("attempted to delete language with linked pages",
-			"language_id", id, "code", lang.Code, "page_count", pageCount)
+	err = h.deleteLanguageIfUnused(r.Context(), lang)
+	var inUse *languageInUseError
+	if errors.As(err, &inUse) {
+		errMsg := inUse.Error()
+		slog.Warn("attempted to delete language with linked records",
+			"language_id", id, "code", lang.Code, "reference_count", inUse.count)
 		if r.Header.Get("HX-Request") == "true" {
 			w.Header().Set("HX-Reswap", "none")
 			http.Error(w, errMsg, http.StatusConflict)
@@ -468,20 +664,18 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, redirectAdminLanguages, errMsg)
 		return
 	}
-
-	if err := h.queries.DeleteLanguage(r.Context(), id); err != nil {
+	if err != nil {
 		slog.Error("failed to delete language", "error", err, "language_id", id, "code", lang.Code)
-		errMsg := "Error deleting language"
 		if r.Header.Get("HX-Request") == "true" {
 			w.Header().Set("HX-Reswap", "none")
-			http.Error(w, errMsg, http.StatusInternalServerError)
+			http.Error(w, "Error deleting language", http.StatusInternalServerError)
 			return
 		}
-		flashError(w, r, h.renderer, redirectAdminLanguages, errMsg)
+		flashError(w, r, h.renderer, redirectAdminLanguages, "Error deleting language")
 		return
 	}
-
 	slog.Info("language deleted", "language_id", id, "code", lang.Code)
+	h.invalidateLanguageCaches(r.Context())
 
 	// For HTMX requests, return empty response to remove the row
 	if r.Header.Get("HX-Request") == "true" {
@@ -504,20 +698,13 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, redirectAdminLanguages, "Cannot set an inactive language as default")
 		return
 	}
-
-	// Clear current default
-	if err := h.queries.ClearDefaultLanguage(r.Context()); err != nil {
-		slog.Error("failed to clear default language", "error", err)
-		flashError(w, r, h.renderer, redirectAdminLanguages, "Error setting default language")
+	if validationError := validateLanguageCodeForSave(lang.Code, true, lang.Code); validationError != "" {
+		flashError(w, r, h.renderer, redirectAdminLanguages,
+			i18n.T(h.renderer.GetAdminLang(r), validationError))
 		return
 	}
 
-	// Set new default
-	now := time.Now()
-	if err := h.queries.SetDefaultLanguage(r.Context(), store.SetDefaultLanguageParams{
-		ID:        lang.ID,
-		UpdatedAt: now,
-	}); err != nil {
+	if err := h.setDefaultLanguage(r.Context(), lang.ID); err != nil {
 		slog.Error("failed to set default language", "error", err)
 		flashError(w, r, h.renderer, redirectAdminLanguages, "Error setting default language")
 		return
@@ -528,14 +715,18 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 }
 
 // FindDefaultLanguage returns a pointer to the default language from a slice.
-// Returns nil if no default language is found or the slice is empty.
+// Returns nil unless the slice contains exactly one default language.
 func FindDefaultLanguage(languages []store.Language) *store.Language {
+	var found *store.Language
 	for i := range languages {
 		if languages[i].IsDefault {
-			return &languages[i]
+			if found != nil {
+				return nil
+			}
+			found = &languages[i]
 		}
 	}
-	return nil
+	return found
 }
 
 // ListActiveLanguagesWithFallback returns all active languages, or an empty slice on error.
@@ -546,5 +737,26 @@ func ListActiveLanguagesWithFallback(ctx context.Context, queries *store.Queries
 		slog.Error("failed to list languages", "error", err)
 		return []store.Language{}
 	}
-	return languages
+	routable := make([]store.Language, 0, len(languages))
+	for _, language := range languages {
+		if isRoutableContentLanguage(language) {
+			routable = append(routable, language)
+		}
+	}
+	return routable
+}
+
+func isRoutableContentLanguage(language store.Language) bool {
+	return language.IsActive && util.IsValidLangCode(language.Code) && !util.IsReservedLanguageCode(language.Code)
+}
+
+func getRoutableContentLanguage(ctx context.Context, queries *store.Queries, code string) (store.Language, error) {
+	language, err := queries.GetLanguageByCode(ctx, strings.TrimSpace(code))
+	if err != nil {
+		return store.Language{}, err
+	}
+	if !isRoutableContentLanguage(language) {
+		return store.Language{}, fmt.Errorf("language %q is not active and routable", language.Code)
+	}
+	return language, nil
 }
