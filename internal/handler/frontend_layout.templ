@@ -101,7 +101,7 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			<!-- HTMX -->
 			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/htmx.min.js") } integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
 			<!-- Alpine.js -->
-			<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L" crossorigin="anonymous"></script>
+			<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-75oSay1c6HzSZ8dPUa3pKH8KLR9R2yAq9zTvyhTrR3gy1qI9w3AExggq3/RE57uR" crossorigin="anonymous"></script>
 			<!-- Prism.js syntax highlighting -->
 			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/prism-bundle.min.js") } integrity="sha384-/HRXpyLsWgi91NKkl3jPRfbRhgj2vlv4f6wwxcmGEe9hKePmXqpOaPf9B1uk1jeL" crossorigin="anonymous"></script>
 			<!-- Image lightbox -->
