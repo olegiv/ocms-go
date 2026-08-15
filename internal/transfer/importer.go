@@ -2700,7 +2700,7 @@ func (i *Importer) simulatedLanguagePlan(ctx context.Context, data *ExportData, 
 	defaults := make([]store.Language, 0, 1)
 	known := make(map[string]struct{}, len(byCode))
 	for code, language := range byCode {
-		if language.IsActive && util.IsValidLangCode(code) && !util.IsReservedLanguageCode(code) {
+		if language.IsActive && util.IsRoutableLanguageCode(code) {
 			known[code] = struct{}{}
 		}
 		if language.IsDefault {
@@ -2747,6 +2747,7 @@ func (i *Importer) preflightLanguageContract(
 		}
 	}
 	errs = append(errs, validateArchiveSlugOwnership(data, opts, plan.defaultCode)...)
+	errs = append(errs, validateSlugsAgainstLanguagePrefixes(data, opts, plan.known)...)
 	relationErrors, err := i.preflightRelations(ctx, data, opts)
 	if err != nil {
 		return importLanguagePlan{}, nil, err
@@ -2988,6 +2989,35 @@ func (i *Importer) previewLanguageContract(
 		}
 	}
 	return fallbackPlan, fallbackErrors, fallbackErr
+}
+
+// validateSlugsAgainstLanguagePrefixes refuses an archive whose page routes
+// the destination's languages would swallow.
+//
+// known holds the codes that route once this import settles, archive languages
+// included, so an archive carrying both a language "eng" and a page "eng"
+// contradicts itself and is caught here rather than importing a page no URL
+// reaches. This runs in preflight, before anything is written, so the report
+// names every offending slug at once instead of failing on the first.
+func validateSlugsAgainstLanguagePrefixes(
+	data *ExportData, opts ImportOptions, known map[string]struct{},
+) []ImportError {
+	if !opts.ImportPages || len(known) == 0 {
+		return nil
+	}
+	var errs []ImportError
+	for _, page := range data.Pages {
+		if _, shadowed := known[page.Slug]; !shadowed {
+			continue
+		}
+		errs = append(errs, ImportError{
+			Entity: "page",
+			ID:     page.Slug,
+			Message: fmt.Sprintf("page slug %q is the URL prefix of active language %q; "+
+				"the imported page would be unreachable", page.Slug, page.Slug),
+		})
+	}
+	return errs
 }
 
 func validateArchiveSlugOwnership(data *ExportData, opts ImportOptions, defaultCode string) []ImportError {

@@ -1058,3 +1058,39 @@ func TestHostShapeRulesAgreeOnBothSides(t *testing.T) {
 		})
 	}
 }
+
+// TestMakeUniqueSlugAvoidsActiveLanguagePrefixes keeps imported pages
+// reachable. The language middleware strips a first path segment matching an
+// active language code before the frontend router runs, so a page imported at
+// "eng" is answered by the language homepage and never by itself. A suffix
+// costs one character; the alternative is importing a dead URL.
+func TestMakeUniqueSlugAvoidsActiveLanguagePrefixes(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true,
+		Direction: "ltr", Position: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage: %v", err)
+	}
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fra", Name: "French (inactive)", NativeName: "Français", IsActive: false,
+		Direction: "ltr", Position: 4, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage: %v", err)
+	}
+
+	if got := MakeUniqueSlug(ctx, queries, "eng"); got != "eng-2" {
+		t.Errorf("MakeUniqueSlug(%q) = %q, want a suffixed slug the language prefix cannot swallow", "eng", got)
+	}
+	if got := MakeUniqueSlug(ctx, queries, "fra"); got != "fra" {
+		t.Errorf("MakeUniqueSlug(%q) = %q, want an inactive language to leave the slug free", "fra", got)
+	}
+	if got := MakeUniqueSlug(ctx, queries, "engineering"); got != "engineering" {
+		t.Errorf("MakeUniqueSlug(%q) = %q, want an unrelated slug untouched", "engineering", got)
+	}
+}

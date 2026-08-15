@@ -3188,3 +3188,29 @@ func TestImportAliasesKeepsNonSlugPaths(t *testing.T) {
 			st.result.Notices)
 	}
 }
+
+// TestNodeSlugIsNotFreeUnderActiveLanguagePrefix documents, and holds in
+// place, the reason the Drupal source needs no separate language-prefix check.
+//
+// A page stored at a slug matching an active language code is answered by the
+// language homepage, because the middleware strips that segment before the
+// frontend router runs. The source's own route-ownership check already treats
+// the prefix namespace as taken, so uniqueNodeSlug suffixes around it. The
+// cross-package guard test in internal/handler relies on that, and this is
+// what proves it rather than reading the call chain.
+func TestNodeSlugIsNotFreeUnderActiveLanguagePrefix(t *testing.T) {
+	st, _, _ := newTestState(t, &fakeReader{}, types.ImportOptions{})
+	st.addAvailableLanguage("eng")
+
+	source := &Source{}
+	ctx := context.Background()
+	if source.nodeSlugIsFree(ctx, st, "eng", 1, st.defaultLang) {
+		t.Error("a slug matching an active language prefix was accepted; the page would be unreachable")
+	}
+	if !source.nodeSlugIsFree(ctx, st, "engineering", 1, st.defaultLang) {
+		t.Error("an unrelated slug was rejected")
+	}
+	if got := source.uniqueNodeSlug(ctx, st, "eng", 1, st.defaultLang); got != "eng-2" {
+		t.Errorf("uniqueNodeSlug(%q) = %q, want a suffix that clears the language prefix", "eng", got)
+	}
+}

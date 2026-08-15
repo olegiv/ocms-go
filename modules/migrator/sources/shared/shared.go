@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"mime"
 	"net/url"
 	"os"
@@ -230,8 +231,10 @@ func MakeUniqueSlugWithGuard(
 	baseSlug string,
 	available func(string) bool,
 ) string {
+	languagePrefixes := routableLanguagePrefixes(ctx, queries)
 	isAvailable := func(slug string) bool {
-		return slugIsFree(ctx, queries, slug) && (available == nil || available(slug))
+		return slugIsFree(ctx, queries, slug) && !languagePrefixes[slug] &&
+			(available == nil || available(slug))
 	}
 	if isAvailable(baseSlug) {
 		return baseSlug
@@ -259,6 +262,31 @@ func MakeUniqueSlugWithGuard(
 		}
 	}
 	return ""
+}
+
+// routableLanguagePrefixes returns the first path segments active languages
+// own. A page stored at one of them is unreachable: the language middleware
+// strips the segment before the frontend router matches anything, so the
+// language homepage answers the URL instead of the imported page. Suffixing
+// the slug keeps the content reachable, which beats importing a dead URL.
+//
+// A failed lookup yields no prefixes rather than treating everything as taken.
+// Language codes share their grammar with ordinary slugs, so the pessimistic
+// reading would suffix "news", "about" and most other imported pages over one
+// transient database error.
+func routableLanguagePrefixes(ctx context.Context, queries *store.Queries) map[string]bool {
+	languages, err := queries.ListActiveLanguages(ctx)
+	if err != nil {
+		slog.Warn("failed to read active languages for slug routing check", "error", err)
+		return nil
+	}
+	prefixes := make(map[string]bool, len(languages))
+	for _, language := range languages {
+		if util.IsRoutableLanguageCode(language.Code) {
+			prefixes[language.Code] = true
+		}
+	}
+	return prefixes
 }
 
 // slugIsFree reports whether a slug is claimed by neither a page nor an alias.

@@ -1704,29 +1704,41 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 	})
 }
 
-// languagePrefixConflict reports the error message for a page route that an
-// active language would swallow, or an empty string when the path is free.
+// LanguagePrefixConflict reports the message for a page route that an active
+// language would swallow, or an empty string when the path is free.
 //
 // The language middleware runs ahead of the frontend router and strips a
 // leading segment that matches an active language code, so a page saved at
 // that segment can never be reached — the language homepage answers instead.
 // Slug uniqueness is checked only against pages and aliases and would let this
 // through silently, so the two namespaces are compared here.
-func (h *PagesHandler) languagePrefixConflict(ctx context.Context, firstSegment string) string {
+//
+// Exported because every path that writes a page slug owes callers the same
+// answer: the admin form, the v2 API, and anything added later. A path that
+// skips it stores a URL that resolves to something else.
+func LanguagePrefixConflict(ctx context.Context, queries *store.Queries, firstSegment string) (string, error) {
 	if firstSegment == "" || !util.IsRoutableLanguageCode(firstSegment) {
-		return ""
+		return "", nil
 	}
-	languages, err := h.queries.ListActiveLanguages(ctx)
+	languages, err := queries.ListActiveLanguages(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list active languages: %w", err)
+	}
+	for _, language := range languages {
+		if language.Code == firstSegment {
+			return fmt.Sprintf("Conflicts with the URL prefix of active language %q", language.Code), nil
+		}
+	}
+	return "", nil
+}
+
+func (h *PagesHandler) languagePrefixConflict(ctx context.Context, firstSegment string) string {
+	conflict, err := LanguagePrefixConflict(ctx, h.queries, firstSegment)
 	if err != nil {
 		slog.Error("database error checking language prefixes", "error", err)
 		return "Error checking slug"
 	}
-	for _, language := range languages {
-		if language.Code == firstSegment {
-			return fmt.Sprintf("Conflicts with the URL prefix of active language %q", language.Code)
-		}
-	}
-	return ""
+	return conflict
 }
 
 // loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is

@@ -1638,3 +1638,54 @@ func TestTransferRoundTripPreservesLanguagesAndTranslations(t *testing.T) {
 		assert.Equal(t, want.targetID, link.TranslationID)
 	}
 }
+
+// TestImportRejectsPageSlugShadowedByLanguagePrefix stops an archive importing
+// a page that no URL can reach.
+//
+// The language middleware strips a first path segment matching an active
+// language code before the frontend router runs, so a page slug equal to one
+// of those codes is answered by the language homepage forever. Preflight
+// catches it because the shadowing language can arrive in the same archive:
+// nothing about the page alone is wrong, only the pair.
+func TestImportRejectsPageSlugShadowedByLanguagePrefix(t *testing.T) {
+	for name, importLanguages := range map[string]bool{
+		"language already in the destination": false,
+		"language carried by the archive":     true,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ts := setupTest(t)
+			defer ts.Cleanup()
+			data := ExportData{Version: ExportVersion, Pages: []ExportPage{
+				{ID: 1, Title: "Engineering", Slug: "eng", Status: "draft", LanguageCode: "en"},
+			}}
+			opts := ImportOptions{ConflictStrategy: ConflictSkip, ImportPages: true}
+			if importLanguages {
+				opts.ImportLanguages = true
+				data.Languages = []ExportLanguage{
+					{Code: "en", Name: "English", NativeName: "English", IsDefault: true, IsActive: true, Direction: "ltr"},
+					{Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true, Direction: "ltr"},
+				}
+			} else {
+				_, err := ts.Queries.CreateLanguage(ts.Ctx, store.CreateLanguageParams{
+					Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true,
+					Direction: "ltr", CreatedAt: ts.Now, UpdatedAt: ts.Now,
+				})
+				require.NoError(t, err)
+			}
+
+			result, err := NewImporter(ts.Queries, ts.DB, slog.Default()).Import(ts.Ctx, &data, opts)
+			require.ErrorContains(t, err, "language contract validation failed")
+			require.NotNil(t, result)
+			require.Condition(t, func() bool {
+				for _, item := range result.Errors {
+					if strings.Contains(item.Message, `page slug "eng" is the URL prefix of active language`) {
+						return true
+					}
+				}
+				return false
+			})
+			_, lookupErr := ts.Queries.GetPageBySlug(ts.Ctx, "eng")
+			assert.ErrorIs(t, lookupErr, sql.ErrNoRows)
+		})
+	}
+}
