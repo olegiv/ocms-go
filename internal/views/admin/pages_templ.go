@@ -7712,7 +7712,7 @@ func pageFormScripts(pc *PageContext, data PageFormViewData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 412, "\" integrity=\"sha384-g2H58OoUcLyeq1GVAL/DpTIo0uwFVTMvuLTS0DR1wosEpBnw06SvK/yyBmyPXg6H\" crossorigin=\"anonymous\"></script><script nonce=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 412, "\" integrity=\"sha384-kQFXtaaOwYJZRv3mOp/85WuQu8TKozRCjv2naQr8GlOnF+PNM3znFC+tSbMabvht\" crossorigin=\"anonymous\"></script><script nonce=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
