@@ -880,16 +880,20 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 	// Strip the prefix to get the requested file path
 	reqPath := r.URL.Path
 	prefix := fmt.Sprintf("/themes/%s/static/", themeName)
-	requestedPath := reqPath[len(prefix):]
+	requestedPath := strings.TrimPrefix(reqPath, prefix)
+	if requestedPath == reqPath {
+		http.NotFound(w, r)
+		return
+	}
 
 	// Clean the path to resolve any .. sequences
 	// Use path.Clean (not filepath.Clean) for URL paths - filepath.Clean uses
 	// OS-specific separators (backslashes on Windows), which breaks embed.FS
 	// lookups that require forward slashes.
-	cleanPath := path.Clean(requestedPath)
+	cleanPath := strings.TrimPrefix(path.Clean("/"+requestedPath), "/")
 
 	// Reject paths that try to escape (start with .. or are absolute)
-	if strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
+	if cleanPath == "" || strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
 		http.NotFound(w, r)
 		return
 	}
@@ -913,29 +917,18 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 	}
 
 	// Serve from filesystem for external themes
-	filePath := filepath.Join(thm.StaticPath, cleanPath)
-
-	// Verify the resolved path is within the static directory
 	absStaticPath, err := filepath.Abs(thm.StaticPath)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	absFilePath, err := filepath.Abs(filePath)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
+	absStaticPath = filepath.Clean(absStaticPath)
 
-	// Check that file is within static directory
-	if !strings.HasPrefix(absFilePath, absStaticPath+string(filepath.Separator)) && absFilePath != absStaticPath {
-		http.NotFound(w, r)
-		return
-	}
+	absFilePath := filepath.Clean(filepath.Join(absStaticPath, cleanPath))
 
 	// Verify containment using filepath.Rel (CodeQL-recognized pattern)
 	rel, err := filepath.Rel(absStaticPath, absFilePath)
-	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
 		http.NotFound(w, r)
 		return
 	}
