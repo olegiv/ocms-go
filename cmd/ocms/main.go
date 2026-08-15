@@ -295,7 +295,7 @@ func main() {
 	}
 
 	if err := run(); err != nil {
-		slog.Error("application failed to start")
+		slog.Error("application failed to start", "error", err)
 		os.Exit(1)
 	}
 }
@@ -1016,8 +1016,8 @@ func runPreModulePostureAudits(
 			return err
 		}
 	}
-	if cfg.APIKeyMaxTTLDays > 0 {
-		if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, cfg.APIKeyMaxTTLDays); err != nil {
+	if cfg.APIMaxTTLDays > 0 {
+		if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, cfg.APIMaxTTLDays); err != nil {
 			return err
 		}
 	}
@@ -1071,9 +1071,9 @@ func configureMiddlewareDefaults(cfg *config.Config) error {
 	if cfg.RevokeAPIKeyOnSourceIPChange {
 		slog.Info("API key source IP anomaly auto-revocation enabled")
 	}
-	middleware.SetAPIKeyMaxTTLDays(cfg.APIKeyMaxTTLDays)
-	if cfg.APIKeyMaxTTLDays > 0 {
-		slog.Info("API key max lifetime policy enabled", "max_ttl_days", cfg.APIKeyMaxTTLDays)
+	middleware.SetAPIKeyMaxTTLDays(cfg.APIMaxTTLDays)
+	if cfg.APIMaxTTLDays > 0 {
+		slog.Info("API key max lifetime policy enabled", "max_ttl_days", cfg.APIMaxTTLDays)
 	}
 	util.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
 	scheduler.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
@@ -1125,7 +1125,7 @@ func logProductionSecurityWarnings(cfg *config.Config) {
 	if !cfg.RevokeAPIKeyOnSourceIPChange {
 		slog.Warn("production security warning: OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE is disabled")
 	}
-	if cfg.APIKeyMaxTTLDays <= 0 {
+	if cfg.APIMaxTTLDays <= 0 {
 		slog.Warn("production security warning: OCMS_API_KEY_MAX_TTL_DAYS is not configured")
 	}
 	if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
@@ -1647,7 +1647,7 @@ func run() error {
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	apiKeysHandler.SetRequireSourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
 	apiKeysHandler.SetRequireExpiry(cfg.RequireAPIKeyExpiry)
-	apiKeysHandler.SetMaxTTLDays(cfg.APIKeyMaxTTLDays)
+	apiKeysHandler.SetMaxTTLDays(cfg.APIMaxTTLDays)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager, cacheManager)

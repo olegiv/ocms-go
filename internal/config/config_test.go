@@ -69,8 +69,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RevokeAPIKeyOnSourceIPChange {
 		t.Error("RevokeAPIKeyOnSourceIPChange = true, want false")
 	}
-	if cfg.APIKeyMaxTTLDays != 0 {
-		t.Errorf("APIKeyMaxTTLDays = %d, want 0", cfg.APIKeyMaxTTLDays)
+	if cfg.APIMaxTTLDays != 0 {
+		t.Errorf("APIMaxTTLDays = %d, want 0", cfg.APIMaxTTLDays)
 	}
 	if cfg.EmbedAllowedOrigins != "" {
 		t.Errorf("EmbedAllowedOrigins = %q, want empty", cfg.EmbedAllowedOrigins)
@@ -200,8 +200,8 @@ func TestLoad_CustomValues(t *testing.T) {
 	if !cfg.RevokeAPIKeyOnSourceIPChange {
 		t.Error("RevokeAPIKeyOnSourceIPChange = false, want true")
 	}
-	if cfg.APIKeyMaxTTLDays != 90 {
-		t.Errorf("APIKeyMaxTTLDays = %d, want %d", cfg.APIKeyMaxTTLDays, 90)
+	if cfg.APIMaxTTLDays != 90 {
+		t.Errorf("APIMaxTTLDays = %d, want %d", cfg.APIMaxTTLDays, 90)
 	}
 	if cfg.EmbedAllowedOrigins != "https://example.com,https://app.example.com" {
 		t.Errorf("EmbedAllowedOrigins = %q, want %q", cfg.EmbedAllowedOrigins, "https://example.com,https://app.example.com")
@@ -457,8 +457,8 @@ func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 	if !cfg.RequireBlockSuspiciousPageHTML {
 		t.Error("RequireBlockSuspiciousPageHTML = false, want true in production when unset")
 	}
-	if cfg.APIKeyMaxTTLDays != DefaultProductionAPIKeyMaxTTLDays {
-		t.Errorf("APIKeyMaxTTLDays = %d, want %d", cfg.APIKeyMaxTTLDays, DefaultProductionAPIKeyMaxTTLDays)
+	if cfg.APIMaxTTLDays != DefaultProductionAPIMaxTTLDays {
+		t.Errorf("APIMaxTTLDays = %d, want %d", cfg.APIMaxTTLDays, DefaultProductionAPIMaxTTLDays)
 	}
 }
 
@@ -486,8 +486,8 @@ func TestLoad_ProductionSecureDefaults_ExplicitOverrideRespected(t *testing.T) {
 	if cfg.RequireWebhookAllowedHosts {
 		t.Error("RequireWebhookAllowedHosts = true, want false due to explicit override")
 	}
-	if cfg.APIKeyMaxTTLDays != 0 {
-		t.Errorf("APIKeyMaxTTLDays = %d, want 0 due to explicit override", cfg.APIKeyMaxTTLDays)
+	if cfg.APIMaxTTLDays != 0 {
+		t.Errorf("APIMaxTTLDays = %d, want 0 due to explicit override", cfg.APIMaxTTLDays)
 	}
 }
 
@@ -567,7 +567,7 @@ func TestLoad_InvalidWebhookFormDataMode(t *testing.T) {
 	}
 }
 
-func TestLoad_InvalidAPIKeyMaxTTLDays(t *testing.T) {
+func TestLoad_InvalidAPIMaxTTLDays(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "-1")
@@ -578,7 +578,7 @@ func TestLoad_InvalidAPIKeyMaxTTLDays(t *testing.T) {
 	}
 }
 
-func TestLoad_APIKeyMaxTTLDaysTooLarge(t *testing.T) {
+func TestLoad_APIMaxTTLDaysTooLarge(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "366")
