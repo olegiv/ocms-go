@@ -5,6 +5,7 @@ package transfer
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -65,6 +66,69 @@ func TestExportWithMediaStagesBeforePublishingLaterOriginalFailure(t *testing.T)
 	}
 	if output.Len() != 0 {
 		t.Fatalf("failed staged export published %d bytes", output.Len())
+	}
+}
+
+// TestExportWithMediaStopsStagingOnCanceledRequest covers the request that
+// times out while its archive is still being built. The handler's writer has
+// already carried a 503 by then, so every further media file copied into the
+// staged archive is work for a reader that will never arrive.
+//
+// Cancellation has to happen after the export data is read: a context that is
+// already canceled fails in the first database query, which reaches none of
+// this.
+func TestExportWithMediaStopsStagingOnCanceledRequest(t *testing.T) {
+	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	uploadRoot := t.TempDir()
+	content := []byte("existing")
+	createExportMedia(t, ts, mediaUUID, "existing.pdf", model.MimeTypePDF, int64(len(content)))
+	existingPath := filepath.Join(uploadRoot, model.OriginalsDir, mediaUUID, "existing.pdf")
+	if err := os.MkdirAll(filepath.Dir(existingPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(existingPath, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(ts.Ctx)
+	defer cancel()
+	exporter := NewExporter(ts.Queries, slog.Default())
+	exporter.SetUploadDir(uploadRoot)
+	exporter.afterExportData = cancel
+	var output bytes.Buffer
+	err := exporter.ExportWithMedia(ctx, ExportOptions{IncludeMedia: true, IncludeMediaFiles: true}, &output)
+	if err == nil || !strings.Contains(err.Error(), "media export canceled") {
+		t.Fatalf("ExportWithMedia() error = %v, want staging to stop on cancellation", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ExportWithMedia() error = %v, want a wrapped context.Canceled", err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("canceled export wrote %d bytes to the response", output.Len())
+	}
+}
+
+// TestExportWithMediaWithholdsCompletedArchiveFromCanceledRequest is the same
+// timeout one step later: with no media files to stage, the archive completes,
+// and only the check before the copy stops those bytes being appended to the
+// 503 the timeout middleware already sent.
+func TestExportWithMediaWithholdsCompletedArchiveFromCanceledRequest(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	ctx, cancel := context.WithCancel(ts.Ctx)
+	defer cancel()
+	exporter := NewExporter(ts.Queries, slog.Default())
+	exporter.SetUploadDir(t.TempDir())
+	exporter.afterExportData = cancel
+	var output bytes.Buffer
+	err := exporter.ExportWithMedia(ctx, ExportOptions{IncludeMedia: true, IncludeMediaFiles: true}, &output)
+	if err == nil || !strings.Contains(err.Error(), "canceled before delivery") {
+		t.Fatalf("ExportWithMedia() error = %v, want delivery withheld", err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("canceled export delivered %d bytes after the response was closed", output.Len())
 	}
 }
 

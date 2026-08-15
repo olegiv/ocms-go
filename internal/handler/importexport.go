@@ -588,6 +588,15 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 		// Perform zip import
 		result, err = importer.ImportFromZipBytes(r.Context(), zipData, opts)
+		// Invalidated before the error is examined, not after. A ZIP import can
+		// fail once the transaction has already committed — media ownership
+		// verification and the uploads-root identity re-check both run after the
+		// commit — and that result describes content the database now holds.
+		// Returning early from the error branch used to leave those pages, menus
+		// and languages behind caches built before the commit, with process-wide
+		// i18n state still unaware of the imported languages. The call is a no-op
+		// for a nil or dry-run result, so it belongs ahead of every branch.
+		h.invalidateCachesAfterImport(r.Context(), result)
 		if err != nil {
 			h.logger.Error("zip import failed", "error", err)
 			h.renderImportError(w, r, user, "Import failed: "+err.Error())
@@ -618,6 +627,7 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 		// Perform JSON import
 		result, err = importer.Import(r.Context(), &exportData, opts)
+		h.invalidateCachesAfterImport(r.Context(), result)
 		if err != nil {
 			h.logger.Error("import failed", "error", err)
 			h.renderImportError(w, r, user, "Import failed: "+err.Error())
@@ -630,7 +640,6 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	// Clear common session data
 	h.sessionManager.Remove(r.Context(), "import_is_zip")
-	h.invalidateCachesAfterImport(r.Context(), result)
 
 	// Set flash message based on result
 	if result.Success {

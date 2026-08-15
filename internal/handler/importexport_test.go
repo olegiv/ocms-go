@@ -10,6 +10,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -303,4 +306,82 @@ func TestApplyImportPageSecurityPolicy_AllowsWhenPagesNotImported(t *testing.T) 
 	if err := h.applyImportPageSecurityPolicy(nil, data, "import", false); err != nil {
 		t.Fatalf("expected no error when page import is disabled, got %v", err)
 	}
+}
+
+// TestImportCallsInvalidateCachesBeforeBranching enforces where the cache
+// invalidation sits, not merely that it exists somewhere.
+//
+// A ZIP import can fail after its transaction has committed: media ownership
+// verification and the uploads-root identity re-check both run past the
+// commit. The error branch used to return before the single invalidation at
+// the end of the handler, serving pages, menus and languages that were already
+// in the database from caches built before the commit. Putting the call
+// directly after the import — where it is a no-op for a nil or dry-run result
+// — makes that unreachable, and this test fails if anyone moves it back behind
+// a branch.
+func TestImportCallsInvalidateCachesBeforeBranching(t *testing.T) {
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, "importexport.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse importexport.go: %v", err)
+	}
+
+	importCalls := 0
+	ast.Inspect(file, func(node ast.Node) bool {
+		block, ok := node.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		for index, statement := range block.List {
+			if !statementRunsImport(statement) {
+				continue
+			}
+			importCalls++
+			if index+1 >= len(block.List) || !statementInvalidatesCaches(block.List[index+1]) {
+				t.Errorf("%s: the statement after the import must be invalidateCachesAfterImport; "+
+					"a post-commit failure otherwise returns with stale caches",
+					fileSet.Position(statement.Pos()))
+			}
+		}
+		return true
+	})
+	if importCalls != 2 {
+		t.Fatalf("found %d import calls, want the ZIP and JSON paths; update this test with the new one",
+			importCalls)
+	}
+}
+
+// statementRunsImport reports whether a statement assigns the result of an
+// importer call that can commit content.
+func statementRunsImport(statement ast.Stmt) bool {
+	assign, ok := statement.(*ast.AssignStmt)
+	if !ok || len(assign.Rhs) != 1 {
+		return false
+	}
+	call, ok := assign.Rhs[0].(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	receiver, ok := selector.X.(*ast.Ident)
+	if !ok || receiver.Name != "importer" {
+		return false
+	}
+	return selector.Sel.Name == "ImportFromZipBytes" || selector.Sel.Name == "Import"
+}
+
+func statementInvalidatesCaches(statement ast.Stmt) bool {
+	expression, ok := statement.(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+	call, ok := expression.X.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	return ok && selector.Sel.Name == "invalidateCachesAfterImport"
 }

@@ -352,7 +352,16 @@ func rewriteKnownMediaURLs(value string, replacements map[string]string) string 
 			if offset < 0 {
 				break
 			}
-			uuidStart := searchFrom + offset + len(prefix)
+			matchStart := searchFrom + offset
+			uuidStart := matchStart + len(prefix)
+			// Only this site's own URLs are rewritten. An external link whose
+			// path happens to carry an imported UUID belongs to another server,
+			// which may treat the path as case-sensitive, so recasing it would
+			// quietly break a link this import does not own.
+			if !startsLocalMediaURL(value, matchStart) {
+				searchFrom = uuidStart
+				continue
+			}
 			uuidEnd := uuidStart + 36
 			if uuidEnd >= len(value) || value[uuidEnd] != '/' {
 				searchFrom = uuidStart

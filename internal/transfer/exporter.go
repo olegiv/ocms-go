@@ -31,6 +31,12 @@ type Exporter struct {
 	logger     *slog.Logger
 	uploadDir  string
 	createFile func(string) (io.WriteCloser, error)
+
+	// afterExportData runs once the export data has been read and before any
+	// archive bytes are staged. Tests use it to cancel the request mid-build,
+	// which is the only way to reach the checks that refuse to keep staging —
+	// or to deliver — an archive whose caller has already been answered.
+	afterExportData func()
 }
 
 type mediaExportBudget struct {
@@ -392,6 +398,14 @@ func (e *Exporter) ExportWithMedia(ctx context.Context, opts ExportOptions, w io
 		return err
 	}
 
+	// Staging can outlast the request. Once the server's timeout has fired, the
+	// handler's ResponseWriter has already carried a 503 to the client, and
+	// copying the archive into it now would append archive bytes to that
+	// response. The archive is complete and correct — it just has no reader.
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("media export canceled before delivery: %w", err)
+	}
+
 	// #nosec G304 -- stagedPath is created by os.CreateTemp above and never
 	// accepts caller-controlled path components.
 	complete, err := os.Open(stagedPath)
@@ -418,6 +432,9 @@ func (e *Exporter) writeMediaArchive(ctx context.Context, opts ExportOptions, w 
 	if err != nil {
 		return fmt.Errorf("failed to generate export: %w", err)
 	}
+	if e.afterExportData != nil {
+		e.afterExportData()
+	}
 
 	// Create zip writer
 	zipWriter := zip.NewWriter(w)
@@ -431,6 +448,13 @@ func (e *Exporter) writeMediaArchive(ctx context.Context, opts ExportOptions, w 
 	if opts.IncludeMediaFiles && len(data.Media) > 0 {
 		budget := &mediaExportBudget{}
 		for i := range data.Media {
+			// A large library can take longer than the request allows. Copying
+			// file after file into an archive nobody will read wastes the disk
+			// and delays the staged file's cleanup, so stop at the first item
+			// once the caller is gone.
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("media export canceled: %w", err)
+			}
 			mediaItem := &data.Media[i]
 			if err := e.addMediaToZip(zipWriter, mediaItem, budget); err != nil {
 				return fmt.Errorf("add media %q to zip: %w", mediaItem.UUID, err)

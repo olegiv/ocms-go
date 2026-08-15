@@ -1088,6 +1088,32 @@ func TestNormalizedTransferMediaIdentitiesRewritesKnownURLsWithoutMutatingCaller
 	}
 }
 
+// TestNormalizedTransferMediaIdentitiesLeavesExternalURLsAlone keeps the
+// case normalization to this site's own URLs. Another server may serve a path
+// that looks like local media and treat it case-sensitively, so recasing the
+// UUID inside it silently breaks a link this import has no claim on.
+func TestNormalizedTransferMediaIdentitiesLeavesExternalURLsAlone(t *testing.T) {
+	const upperUUID = "550E8400-E29B-41D4-A716-446655440000"
+	const lowerUUID = "550e8400-e29b-41d4-a716-446655440000"
+	externalURL := "https://cdn.example/uploads/originals/" + upperUUID + "/image.png"
+	localURL := "/uploads/originals/" + upperUUID + "/image.png"
+	data := &ExportData{
+		Media: []ExportMedia{{UUID: upperUUID, Filename: "image.png"}},
+		Pages: []ExportPage{
+			{Body: `<img src="` + externalURL + `">`},
+			{Body: `<img src="` + localURL + `">`},
+		},
+	}
+	normalized := normalizedTransferMediaIdentities(data, true)
+	if normalized.Pages[0].Body != `<img src="`+externalURL+`">` {
+		t.Fatalf("external URL was rewritten: %q", normalized.Pages[0].Body)
+	}
+	wantLocal := `<img src="/uploads/originals/` + lowerUUID + `/image.png">`
+	if normalized.Pages[1].Body != wantLocal {
+		t.Fatalf("local URL = %q, want %q", normalized.Pages[1].Body, wantLocal)
+	}
+}
+
 func TestImportFromZipFileOnlyRestoreRequiresMatchingDestination(t *testing.T) {
 	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
 	data := ExportData{Version: ExportVersion, Media: []ExportMedia{{

@@ -799,3 +799,88 @@ func TestLanguageGetMaxPosition(t *testing.T) {
 		t.Fatal("maxPos should not be nil")
 	}
 }
+
+// TestLanguagePrefixCannotShadowExistingPageRoute covers the gap between two
+// namespaces that are validated apart. Page slugs are checked against pages
+// and aliases; language codes are checked against the application's reserved
+// routes. Neither consults the other, so an active language whose code matches
+// a page's URL used to take that URL over — the middleware strips the segment
+// and the language homepage answers, leaving the page unreachable with no
+// error anywhere.
+func TestLanguagePrefixCannotShadowExistingPageRoute(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "eng", Body: "Content", Status: "published", AuthorID: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+	if _, err := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+		PageID: page.ID, Alias: "esp/equipo", CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("CreatePageAlias failed: %v", err)
+	}
+
+	for name, tc := range map[string]struct {
+		code        string
+		isActive    bool
+		wantMessage string
+	}{
+		"slug taken":                 {code: "eng", isActive: true, wantMessage: "languages.error_code_page_conflict"},
+		"alias parent taken":         {code: "esp", isActive: true, wantMessage: "languages.error_code_page_conflict"},
+		"free prefix":                {code: "fra", isActive: true, wantMessage: ""},
+		"inactive never routes":      {code: "eng", isActive: false, wantMessage: ""},
+		"reserved handled elsewhere": {code: "admin", isActive: true, wantMessage: ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := validateLanguagePrefixAgainstPages(ctx, queries, tc.code, tc.isActive)
+			if err != nil {
+				t.Fatalf("validateLanguagePrefixAgainstPages() error = %v", err)
+			}
+			if got != tc.wantMessage {
+				t.Fatalf("validateLanguagePrefixAgainstPages(%q, active=%v) = %q, want %q",
+					tc.code, tc.isActive, got, tc.wantMessage)
+			}
+		})
+	}
+}
+
+// TestSetDefaultLanguageRejectsPageShadowingPrefix proves the transactional
+// path refuses the switch too, not just the form validation ahead of it.
+func TestSetDefaultLanguageRejectsPageShadowingPrefix(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+
+	if _, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "eng", Body: "Content", Status: "published", AuthorID: user.ID,
+	}); err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+	lang, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true,
+		Direction: "ltr", Position: 3, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateLanguage failed: %v", err)
+	}
+
+	h := NewLanguagesHandler(db, nil, sm, cache.NewManager(queries))
+	err = h.setDefaultLanguage(ctx, lang.ID)
+	if err == nil {
+		t.Fatal("setDefaultLanguage() accepted a code that shadows an existing page")
+	}
+	updated, getErr := queries.GetLanguageByID(ctx, lang.ID)
+	if getErr != nil {
+		t.Fatal(getErr)
+	}
+	if updated.IsDefault {
+		t.Fatal("rejected default-language switch was committed anyway")
+	}
+}

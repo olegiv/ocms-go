@@ -152,6 +152,15 @@ func (h *LanguagesHandler) setDefaultLanguage(ctx context.Context, id int64) err
 	if validationError := validateLanguageCodeForSave(target.Code, true, target.Code); validationError != "" {
 		return fmt.Errorf("cannot set language %q as default: %s", target.Code, validationError)
 	}
+	// Read through the transaction: a page created between this check and the
+	// commit would otherwise become unreachable behind the new default's prefix.
+	conflict, err := validateLanguagePrefixAgainstPages(ctx, queries, target.Code, true)
+	if err != nil {
+		return err
+	}
+	if conflict != "" {
+		return fmt.Errorf("cannot set language %q as default: %s", target.Code, conflict)
+	}
 	if err := queries.ClearDefaultLanguage(ctx); err != nil {
 		return fmt.Errorf("clear previous default language: %w", err)
 	}
@@ -289,6 +298,55 @@ func validateLanguageCodeForSave(code string, isActive bool, existingCode string
 	return ""
 }
 
+// addPagePrefixConflictError records the page-collision error, if any, under
+// the form's code field. A lookup failure is logged and treated as no
+// conflict: the collision is rare, and refusing every save because one query
+// failed would be worse than the shadowing it prevents.
+func (h *LanguagesHandler) addPagePrefixConflictError(
+	r *http.Request, validationErrors map[string]string, code string, isActive bool,
+) {
+	conflict, err := validateLanguagePrefixAgainstPages(r.Context(), h.queries, code, isActive)
+	if err != nil {
+		slog.Error("database error checking page routes for language prefix", "error", err, "code", code)
+		return
+	}
+	if conflict != "" {
+		validationErrors["code"] = i18n.T(h.renderer.GetAdminLang(r), conflict)
+	}
+}
+
+// pageRouteQueryer reads whether a page already answers at the first path
+// segment a language code would take over.
+type pageRouteQueryer interface {
+	PageRouteExistsUnderPrefix(ctx context.Context, prefix string) (int64, error)
+}
+
+// validateLanguagePrefixAgainstPages guards the boundary between two
+// namespaces that are validated separately and can therefore collide.
+//
+// A page slug is checked against pages and aliases; a language code is checked
+// against the application's own reserved routes. Neither looks at the other, so
+// activating a language whose code matches an existing page — /eng, say — sends
+// the language middleware in first: it strips the segment, the language
+// homepage answers, and the page becomes unreachable with nothing reporting a
+// conflict. Only an active, routable code takes a prefix, so an inactive or
+// reserved one is left alone.
+func validateLanguagePrefixAgainstPages(
+	ctx context.Context, queries pageRouteQueryer, code string, isActive bool,
+) (string, error) {
+	if queries == nil || !isActive || !util.IsRoutableLanguageCode(code) {
+		return "", nil
+	}
+	exists, err := queries.PageRouteExistsUnderPrefix(ctx, code)
+	if err != nil {
+		return "", fmt.Errorf("check page routes under language prefix %q: %w", code, err)
+	}
+	if exists != 0 {
+		return "languages.error_code_page_conflict", nil
+	}
+	return "", nil
+}
+
 // getLanguageByIDParam parses the language ID from URL and fetches the language.
 // Returns nil and sends an error response if the language is not found.
 func (h *LanguagesHandler) getLanguageByIDParam(w http.ResponseWriter, r *http.Request) *store.Language {
@@ -421,6 +479,9 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		} else if exists != 0 {
 			validationErrors["code"] = "Language code already exists"
 		}
+		if validationErrors["code"] == "" {
+			h.addPagePrefixConflictError(r, validationErrors, input.Code, input.IsActive)
+		}
 	}
 
 	// Validate name
@@ -540,6 +601,9 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			slog.Error("database error checking language code", "error", err)
 		} else if exists != 0 {
 			validationErrors["code"] = "Language code already exists"
+		}
+		if validationErrors["code"] == "" {
+			h.addPagePrefixConflictError(r, validationErrors, input.Code, input.IsActive)
 		}
 	}
 
@@ -701,6 +765,18 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 	if validationError := validateLanguageCodeForSave(lang.Code, true, lang.Code); validationError != "" {
 		flashError(w, r, h.renderer, redirectAdminLanguages,
 			i18n.T(h.renderer.GetAdminLang(r), validationError))
+		return
+	}
+	// setDefaultLanguage repeats this inside its transaction, which is what
+	// actually holds the line. Checking here too turns the generic failure
+	// flash into one that names the conflict the administrator can fix.
+	conflict, err := validateLanguagePrefixAgainstPages(r.Context(), h.queries, lang.Code, true)
+	if err != nil {
+		logAndInternalError(w, "failed to check page routes for language prefix", "error", err, "code", lang.Code)
+		return
+	}
+	if conflict != "" {
+		flashError(w, r, h.renderer, redirectAdminLanguages, i18n.T(h.renderer.GetAdminLang(r), conflict))
 		return
 	}
 

@@ -5,6 +5,7 @@ package migrator
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -285,5 +286,67 @@ func TestCheckActivationUsesTheRegistryContext(t *testing.T) {
 	dev := &module.Context{Config: &config.Config{Env: "development"}}
 	if err := m.CheckActivation(dev); err != nil {
 		t.Errorf("activation refused outside production: %v", err)
+	}
+}
+
+// nilResultSource imports rows and then fails outright, the shape a source
+// takes when a mid-import query dies: the work already done is real, but there
+// is no result to report it with.
+type nilResultSource struct {
+	tracker func(types.ImportTracker)
+}
+
+func (s *nilResultSource) Name() string                           { return "drupal" }
+func (s *nilResultSource) DisplayName() string                    { return "Drupal" }
+func (s *nilResultSource) Description() string                    { return "test source" }
+func (s *nilResultSource) ConfigFields() []types.ConfigField      { return nil }
+func (s *nilResultSource) TestConnection(map[string]string) error { return nil }
+
+func (s *nilResultSource) Import(
+	_ context.Context, _ *sql.DB, _ map[string]string, _ types.ImportOptions, tracker types.ImportTracker,
+) (*types.ImportResult, error) {
+	if s.tracker != nil {
+		s.tracker(tracker)
+	}
+	return nil, errors.New("source database went away")
+}
+
+// TestFailedRunFlushesPendingProgressBeforeFinalizing covers the plain failure
+// path the panic handler already covered.
+//
+// Bug state: stopping the flush ticker does not persist what the accumulator
+// holds, and finishJob keeps the database counters as they are when the result
+// is nil. A source that imported rows and then returned (nil, error) inside the
+// first one-second tick therefore reported zero imported while the rows sat in
+// the database — and the obvious response, running the import again, duplicates
+// every one of them.
+func TestFailedRunFlushesPendingProgressBeforeFinalizing(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	source := &nilResultSource{tracker: func(tracker types.ImportTracker) {
+		for id := 1; id <= 3; id++ {
+			if err := tracker.TrackImportedItem(ctx, "drupal", string(types.EntityPage), int64(id)); err != nil {
+				t.Errorf("TrackImportedItem() error = %v", err)
+			}
+		}
+	}}
+
+	jobID, err := m.startJob(ctx, "drupal", "tester@example.com", 0, ImportOptions{})
+	if err != nil {
+		t.Fatalf("startJob: %v", err)
+	}
+	m.jobsWG.Add(1)
+	m.runImportJob(ctx, jobRun{ID: jobID, SourceName: "drupal", Source: source})
+
+	job, err := m.latestJob(ctx, "drupal")
+	if err != nil {
+		t.Fatalf("latestJob: %v", err)
+	}
+	if job.Status != JobFailed {
+		t.Fatalf("status = %q, want %q", job.Status, JobFailed)
+	}
+	if got := job.Counters[string(types.EntityPage)]; got != 3 {
+		t.Fatalf("persisted page count = %d, want 3; the rows this run imported "+
+			"before failing are invisible, so a rerun duplicates them", got)
 	}
 }

@@ -2533,6 +2533,11 @@
             "translation": "Код языка конфликтует с зарезервированным префиксом маршрута"
         },
         {
+            "id": "languages.error_code_page_conflict",
+            "message": "Language code conflicts with an existing page URL",
+            "translation": "Код языка конфликтует с URL существующей страницы"
+        },
+        {
             "id": "languages.code_placeholder",
             "message": "e.g., en, ru, zh-hans",
             "translation": "напр., en, ru, zh-hans"

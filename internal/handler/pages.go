@@ -1675,6 +1675,9 @@ func validatePageTitle(title string) string {
 // validatePageSlugCreate validates a page slug for creation.
 // Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) string {
+	if conflict := h.languagePrefixConflict(ctx, slug); conflict != "" {
+		return conflict
+	}
 	return ValidateSlugWithChecker(slug, func() (int64, error) {
 		return h.queries.SlugOrAliasExists(ctx, store.SlugOrAliasExistsParams{
 			Slug:  slug,
@@ -1686,6 +1689,11 @@ func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) 
 // validatePageSlugUpdate validates the page slug for update (checks uniqueness excluding current page).
 // Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, currentSlug string, pageID int64) string {
+	if slug != currentSlug {
+		if conflict := h.languagePrefixConflict(ctx, slug); conflict != "" {
+			return conflict
+		}
+	}
 	return ValidateSlugForUpdate(slug, currentSlug, func() (int64, error) {
 		return h.queries.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{
 			Slug:   slug,
@@ -1694,6 +1702,31 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 			PageID: pageID,
 		})
 	})
+}
+
+// languagePrefixConflict reports the error message for a page route that an
+// active language would swallow, or an empty string when the path is free.
+//
+// The language middleware runs ahead of the frontend router and strips a
+// leading segment that matches an active language code, so a page saved at
+// that segment can never be reached — the language homepage answers instead.
+// Slug uniqueness is checked only against pages and aliases and would let this
+// through silently, so the two namespaces are compared here.
+func (h *PagesHandler) languagePrefixConflict(ctx context.Context, firstSegment string) string {
+	if firstSegment == "" || !util.IsRoutableLanguageCode(firstSegment) {
+		return ""
+	}
+	languages, err := h.queries.ListActiveLanguages(ctx)
+	if err != nil {
+		slog.Error("database error checking language prefixes", "error", err)
+		return "Error checking slug"
+	}
+	for _, language := range languages {
+		if language.Code == firstSegment {
+			return fmt.Sprintf("Conflicts with the URL prefix of active language %q", language.Code)
+		}
+	}
+	return ""
 }
 
 // loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is
@@ -1831,6 +1864,16 @@ func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasS
 		// Validate alias format (allows path-like aliases with slashes)
 		if !util.IsValidAlias(alias) {
 			slog.Warn("skipping invalid alias format", "page_id", pageID, "alias", alias)
+			continue
+		}
+		// An alias is matched against the path the language middleware has
+		// already stripped, so one beginning with an active language code —
+		// "eng" or "eng/team" — is dead on arrival. Storing it would only
+		// promise a URL that never resolves.
+		firstSegment, _, _ := strings.Cut(alias, "/")
+		if conflict := h.languagePrefixConflict(ctx, firstSegment); conflict != "" {
+			slog.Warn("skipping alias that a language prefix would shadow",
+				"page_id", pageID, "alias", alias, "reason", conflict)
 			continue
 		}
 		_, err := h.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{

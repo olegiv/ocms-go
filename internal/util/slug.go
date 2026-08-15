@@ -121,6 +121,14 @@ func IsReservedLanguageCode(s string) bool {
 	}
 }
 
+// IsRoutableLanguageCode reports whether a code may serve as a public URL
+// prefix. A code that is malformed or owned by an application route stays
+// editable in the admin UI but never routes, so callers deciding what a
+// language claims in the URL namespace ask this rather than re-deriving it.
+func IsRoutableLanguageCode(s string) bool {
+	return IsValidLangCode(s) && !IsReservedLanguageCode(s)
+}
+
 // isAlphanumeric checks if a rune is a lowercase letter or digit.
 func isAlphanumeric(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')

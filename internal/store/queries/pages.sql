@@ -63,6 +63,20 @@ SELECT EXISTS(
     SELECT 1 FROM page_aliases pa WHERE pa.alias = ?
 );
 
+-- name: PageRouteExistsUnderPrefix :one
+-- Reports whether any page route lives at a first path segment, either as a
+-- page slug, as an alias, or as an alias nested under it. A language whose
+-- code equals that segment would swallow all three: the language middleware
+-- strips the segment before the frontend router ever sees it.
+-- The LIKE pattern needs no escaping because language codes are restricted to
+-- lowercase letters, digits and hyphens, none of which are LIKE wildcards.
+SELECT EXISTS(
+    SELECT 1 FROM pages p WHERE p.slug = sqlc.arg(prefix)
+    UNION ALL
+    SELECT 1 FROM page_aliases pa
+     WHERE pa.alias = sqlc.arg(prefix) OR pa.alias LIKE sqlc.arg(prefix) || '/%'
+);
+
 -- name: SlugOrAliasExistsExcluding :one
 SELECT EXISTS(
     SELECT 1 FROM pages p WHERE p.slug = ? AND p.id != ?

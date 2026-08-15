@@ -384,19 +384,7 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			m.ctx.Logger.Error("import panicked", "source", run.SourceName, "job_id", run.ID, "panic", rec)
-			// Persist whatever the accumulator holds before finalizing.
-			// finishJob preserves already-flushed counters when the result is
-			// nil, but the flush ticker runs only once a second — a panic
-			// inside the first interval, or after work done since the last
-			// tick, would otherwise lose those counts entirely.
-			if progress != nil {
-				snap := progress.forceSnapshot()
-				flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
-				if err := m.flushJobProgress(flushCtx, run.ID, snap); err != nil {
-					m.ctx.Logger.Warn("failed to flush progress after panic", "job_id", run.ID, "error", err)
-				}
-				cancel()
-			}
+			m.flushPendingProgress(ctx, run.ID, progress, "panic")
 			m.finalizeJob(ctx, run, JobFailed, nil, fmt.Errorf("import panicked: %v", rec))
 		}
 	}()
@@ -421,6 +409,13 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 
 	result, err := run.Source.Import(ctx, m.ctx.DB, run.Cfg, run.Opts, m)
 	stopFlush()
+	if result == nil {
+		// No result means finishJob keeps the counters already in the database,
+		// and stopping the ticker does not persist what the accumulator holds.
+		// A source that imported rows and then failed would report zero, or a
+		// count up to a second stale, inviting a rerun that imports them twice.
+		m.flushPendingProgress(ctx, run.ID, progress, "failure")
+	}
 
 	status := deriveJobStatus(err, ctx.Err(), result)
 	switch status {
@@ -459,6 +454,29 @@ func deriveJobStatus(err, ctxErr error, result *ImportResult) JobStatus {
 		return JobPartial
 	default:
 		return JobCompleted
+	}
+}
+
+// flushPendingProgress persists whatever the accumulator holds right now.
+//
+// finishJob keeps the counters already in the database when a run produces no
+// result, and the flush ticker only fires once a second, so work done inside
+// the first interval or since the last tick lives nowhere else. Both paths
+// that finalize a run without a result — a panic and a plain failure — go
+// through here so the recorded count matches the rows that were imported.
+//
+// The context is detached: the job's own context is often already canceled by
+// the time this runs, and the point is to record work that survived it.
+func (m *Module) flushPendingProgress(ctx context.Context, jobID int64, progress *jobProgress, reason string) {
+	if progress == nil {
+		return
+	}
+	snap := progress.forceSnapshot()
+	flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
+	defer cancel()
+	if err := m.flushJobProgress(flushCtx, jobID, snap); err != nil {
+		m.ctx.Logger.Warn("failed to flush progress before finalizing",
+			"job_id", jobID, "reason", reason, "error", err)
 	}
 }
 

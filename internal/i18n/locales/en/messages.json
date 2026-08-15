@@ -2533,6 +2533,11 @@
             "translation": "Language code conflicts with a reserved route prefix"
         },
         {
+            "id": "languages.error_code_page_conflict",
+            "message": "Language code conflicts with an existing page URL",
+            "translation": "Language code conflicts with an existing page URL"
+        },
+        {
             "id": "languages.code_placeholder",
             "message": "e.g., en, ru, zh-hans",
             "translation": "e.g., en, ru, zh-hans"
