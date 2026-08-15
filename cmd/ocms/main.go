@@ -295,7 +295,7 @@ func main() {
 	}
 
 	if err := run(); err != nil {
-		slog.Error("application error", "error", err)
+		slog.Error("application failed to start")
 		os.Exit(1)
 	}
 }
