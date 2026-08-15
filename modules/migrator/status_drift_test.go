@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/module"
@@ -348,5 +349,68 @@ func TestFailedRunFlushesPendingProgressBeforeFinalizing(t *testing.T) {
 	if got := job.Counters[string(types.EntityPage)]; got != 3 {
 		t.Fatalf("persisted page count = %d, want 3; the rows this run imported "+
 			"before failing are invisible, so a rerun duplicates them", got)
+	}
+}
+
+// TestFailedTerminalWriteReleasesJobOwnership covers the lock nobody could
+// clear.
+//
+// Bug state: when the terminal status write failed, runImportJob still dropped
+// the job from m.live, leaving a row that read "running" and carried this
+// process's run ID. In-process reaping deliberately skips rows this process
+// owns — they normally have a live goroutine behind them — while the source's
+// partial unique index refuses every later import for as long as the row
+// stands. The source stayed locked until someone restarted the server.
+func TestFailedTerminalWriteReleasesJobOwnership(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+
+	jobID, err := m.startJob(ctx, "drupal", "tester@example.com", 0, ImportOptions{})
+	if err != nil {
+		t.Fatalf("startJob: %v", err)
+	}
+	var ownerBefore string
+	if err := m.ctx.DB.QueryRowContext(ctx,
+		`SELECT owner_run_id FROM migrator_import_jobs WHERE id = ?`, jobID).Scan(&ownerBefore); err != nil {
+		t.Fatal(err)
+	}
+	if ownerBefore != m.runID {
+		t.Fatalf("owner_run_id = %q, want this run's ID", ownerBefore)
+	}
+
+	// Fail every terminal write, including the retries.
+	if _, err := m.ctx.DB.ExecContext(ctx, fmt.Sprintf(`
+		CREATE TRIGGER fail_terminal_write
+		BEFORE UPDATE OF status ON migrator_import_jobs WHEN OLD.id = %d
+		BEGIN SELECT RAISE(FAIL, 'forced terminal write failure'); END`, jobID)); err != nil {
+		t.Fatal(err)
+	}
+	m.finalizeJob(ctx, jobRun{ID: jobID, SourceName: "drupal"}, JobFailed, nil, errors.New("import failed"))
+	if _, err := m.ctx.DB.ExecContext(ctx, `DROP TRIGGER fail_terminal_write`); err != nil {
+		t.Fatal(err)
+	}
+
+	var status, owner string
+	if err := m.ctx.DB.QueryRowContext(ctx,
+		`SELECT status, owner_run_id FROM migrator_import_jobs WHERE id = ?`, jobID).Scan(&status, &owner); err != nil {
+		t.Fatal(err)
+	}
+	if status != string(JobRunning) {
+		t.Fatalf("status = %q, want the failed write to have left it running", status)
+	}
+	if owner == m.runID {
+		t.Fatal("the stuck row still belongs to this run; nothing in this process will ever reap it, " +
+			"so the source stays locked until a restart")
+	}
+
+	// With ownership released, the reaper this process runs before each import
+	// can finish the row and let the source accept work again.
+	if _, err := m.ctx.DB.ExecContext(ctx,
+		`UPDATE migrator_import_jobs SET updated_at = ? WHERE id = ?`,
+		time.Now().Add(-2*staleJobThreshold), jobID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.startJob(ctx, "drupal", "tester@example.com", 0, ImportOptions{}); err != nil {
+		t.Fatalf("startJob after release: %v, want the stale row reaped and the source free", err)
 	}
 }

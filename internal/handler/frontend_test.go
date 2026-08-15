@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -2509,4 +2511,45 @@ func fetchAgentSkills(t *testing.T, h *FrontendHandler) string {
 		t.Fatalf("status = %d; want 200", resp.StatusCode)
 	}
 	return w.Body.String()
+}
+
+// TestPublishedPageForRouteServesFromCacheWithinItsLanguage covers a
+// performance regression with a correctness cause.
+//
+// Page lookup was moved off the page cache and onto a direct query because the
+// cache's miss path did a global slug lookup and could not honour the language
+// a URL owns. That silently turned every page view on a cache-configured site
+// into a database read. The cache now scopes its miss path by language, so the
+// handler can use it again — this test fails if either half regresses: the
+// cache going unused, or a page answering outside its language.
+func TestPublishedPageForRouteServesFromCacheWithinItsLanguage(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	createTestLanguage(t, db, "fr", true)
+	createPublishedLanguagePage(t, db, "equipe", "fr", admin.ID)
+	ctx := context.Background()
+
+	cacheManager := cache.NewManager(store.New(db))
+	h := NewFrontendHandler(db, testThemeManager(), cacheManager, slog.Default(), nil, nil)
+	frenchCtx := cache.NewContext("fr", model.RoleAnonymous)
+
+	first, err := h.publishedPageForRoute(ctx, frenchCtx, "equipe", "fr")
+	if err != nil {
+		t.Fatalf("publishedPageForRoute() error = %v", err)
+	}
+	if first.Slug != "equipe" {
+		t.Fatalf("page slug = %q, want %q", first.Slug, "equipe")
+	}
+	if _, err := h.publishedPageForRoute(ctx, frenchCtx, "equipe", "fr"); err != nil {
+		t.Fatalf("publishedPageForRoute() error = %v on the second read", err)
+	}
+	if hits := cacheManager.Page.Stats().Hits; hits < 1 {
+		t.Fatalf("page cache hits = %d; the handler is bypassing the cache and reading the database "+
+			"on every page view", hits)
+	}
+
+	englishCtx := cache.NewContext("en", model.RoleAnonymous)
+	if _, err := h.publishedPageForRoute(ctx, englishCtx, "equipe", "en"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("publishedPageForRoute() error = %v, want sql.ErrNoRows for another language's slug", err)
+	}
 }

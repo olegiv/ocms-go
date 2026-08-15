@@ -1082,3 +1082,91 @@ func TestPageCache_Invalidate_ClearsAll(t *testing.T) {
 		t.Errorf("Count() = %d, want 0 after Invalidate", c.Count())
 	}
 }
+
+// createLanguageScopedPages seeds one published page per language sharing a
+// slug, which is what makes the language boundary observable: slugs are unique
+// site-wide, so only the language distinguishes these two rows.
+func createLanguageScopedPages(t *testing.T, q *store.Queries, slug string) (english, french store.Page) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now()
+	author, err := q.CreateUser(ctx, store.CreateUserParams{
+		Email: "cache@example.com", PasswordHash: "x", Role: "admin", Name: "Cache",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if _, err := q.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", IsActive: true,
+		Direction: "ltr", Position: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage: %v", err)
+	}
+	english, err = q.CreatePage(ctx, store.CreatePageParams{
+		Title: "English", Slug: slug + "-en", Body: "b", Status: "published",
+		AuthorID: author.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage: %v", err)
+	}
+	french, err = q.CreatePage(ctx, store.CreatePageParams{
+		Title: "French", Slug: slug, Body: "b", Status: "published",
+		AuthorID: author.ID, LanguageCode: "fr", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage: %v", err)
+	}
+	return english, french
+}
+
+// TestPageCacheGetBySlugStaysInsideItsLanguage pins the reason the frontend can
+// use this cache at all.
+//
+// Slugs are unique across the site, not per language, so the miss path has to
+// filter by language: without it a French page answers a request routed to
+// English and is then cached under the English key, which is precisely the
+// boundary the language router exists to hold. The handler worked around it by
+// bypassing the cache, turning every page view into a database read.
+func TestPageCacheGetBySlugStaysInsideItsLanguage(t *testing.T) {
+	q := newTestDB(t)
+	c := NewPageCache(q)
+	ctx := context.Background()
+	_, french := createLanguageScopedPages(t, q, "equipe")
+
+	if _, err := c.GetBySlug(ctx, NewContext("en", "anonymous"), "equipe"); err == nil {
+		t.Fatal("GetBySlug() returned a French page to an English route")
+	}
+	got, err := c.GetBySlug(ctx, NewContext("fr", "anonymous"), "equipe")
+	if err != nil || got == nil || got.ID != french.ID {
+		t.Fatalf("GetBySlug() = (%+v, %v), want the French page", got, err)
+	}
+	// Second read proves it is served from cache, which is the point of the fix.
+	if _, err := c.GetBySlug(ctx, NewContext("fr", "anonymous"), "equipe"); err != nil {
+		t.Fatalf("GetBySlug() error = %v on a cached read", err)
+	}
+	if stats := c.Stats(); stats.Hits != 1 {
+		t.Fatalf("cache hits = %d, want the second lookup served from cache", stats.Hits)
+	}
+	if _, err := c.GetBySlug(ctx, Context{Role: "anonymous"}, "equipe"); err == nil {
+		t.Fatal("GetBySlug() accepted a lookup with no language")
+	}
+}
+
+// TestPageCacheByIDDoesNotSeedForeignLanguageSlugKeys covers the back door.
+// An ID lookup names one page whatever language asked for it, but it also warms
+// the slug index — under the caller's language, a French page could answer a
+// later English slug lookup straight from cache.
+func TestPageCacheByIDDoesNotSeedForeignLanguageSlugKeys(t *testing.T) {
+	q := newTestDB(t)
+	c := NewPageCache(q)
+	ctx := context.Background()
+	_, french := createLanguageScopedPages(t, q, "equipe")
+
+	if _, err := c.GetByID(ctx, NewContext("en", "anonymous"), french.ID); err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+	if _, err := c.GetBySlug(ctx, NewContext("en", "anonymous"), "equipe"); err == nil {
+		t.Fatal("an English slug lookup was answered by the French page an ID lookup cached")
+	}
+}

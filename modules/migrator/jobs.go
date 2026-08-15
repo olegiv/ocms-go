@@ -56,6 +56,14 @@ const (
 
 	// finishJobTimeout bounds the terminal write.
 	finishJobTimeout = 15 * time.Second
+
+	// finishJobAttempts and finishJobRetryDelay retry the terminal write. It is
+	// the one write that cannot be left undone: a row that stays "running"
+	// holds the source's partial unique index and blocks every later import,
+	// and SQLite answers a concurrent writer with BUSY often enough that one
+	// attempt is not a fair test.
+	finishJobAttempts   = 3
+	finishJobRetryDelay = 100 * time.Millisecond
 )
 
 // errImportRunning is returned by startJob when the source already has a
@@ -445,6 +453,30 @@ func (m *Module) finishJob(ctx context.Context, jobID int64, status JobStatus, r
 		fatalText, now, now, jobID, string(JobRunning))
 	if err != nil {
 		return fmt.Errorf("failed to finalize import job: %w", err)
+	}
+	return nil
+}
+
+// releaseJobOwnership hands a still-running row back to the stale reaper.
+//
+// Nothing in this process reaps a row this process owns — correctly, since an
+// owned row normally has a live goroutine behind it. When the terminal write
+// fails anyway, that reasoning inverts: the goroutine is gone, the row still
+// says "running", and the source's partial unique index refuses every later
+// import until a restart. Clearing the owner lets reapStaleJobs finish the row
+// once the heartbeat ages past staleJobThreshold, which the next import does
+// before it starts.
+//
+// updated_at is deliberately left alone: staleness is measured from the last
+// heartbeat, and touching it here would postpone the recovery this enables.
+func (m *Module) releaseJobOwnership(ctx context.Context, jobID int64) error {
+	_, err := m.ctx.DB.ExecContext(ctx, `
+		UPDATE migrator_import_jobs
+		SET owner_run_id = ''
+		WHERE id = ? AND status = ? AND owner_run_id = ?`,
+		jobID, string(JobRunning), m.runID)
+	if err != nil {
+		return fmt.Errorf("failed to release import job ownership: %w", err)
 	}
 	return nil
 }

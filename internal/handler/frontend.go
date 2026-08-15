@@ -837,6 +837,31 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 }
 
 // Page handles single page display.
+// publishedPageForRoute reads the published page this URL owns, through the
+// page cache when one is configured.
+//
+// Both paths are scoped to the same language: slugs are unique site-wide
+// rather than per language, so an unscoped read would hand a request routed to
+// one language a page belonging to another.
+func (h *FrontendHandler) publishedPageForRoute(
+	ctx context.Context, cacheCtx cache.Context, slug, languageCode string,
+) (store.Page, error) {
+	if h.cacheManager != nil {
+		cached, err := h.cacheManager.GetPublishedPageBySlug(ctx, cacheCtx, slug)
+		if err != nil {
+			return store.Page{}, err
+		}
+		if cached == nil {
+			return store.Page{}, sql.ErrNoRows
+		}
+		return *cached, nil
+	}
+	return h.queries.GetPublishedPageBySlugAndLanguage(ctx, store.GetPublishedPageBySlugAndLanguageParams{
+		Slug:         slug,
+		LanguageCode: languageCode,
+	})
+}
+
 func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
@@ -867,13 +892,11 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		routeLanguageCode = defaultLang.Code
 	}
 
-	// Query by both slug and route language. The page cache's current miss path
-	// performs a global slug lookup, so it cannot enforce this boundary.
-	var page store.Page
-	page, err := h.queries.GetPublishedPageBySlugAndLanguage(ctx, store.GetPublishedPageBySlugAndLanguageParams{
-		Slug:         slug,
-		LanguageCode: routeLanguageCode,
-	})
+	// The cache context is built from the language this URL owns rather than
+	// from request context, so the key, the cache's miss query and the routing
+	// boundary all name the same language.
+	cacheCtx := cache.NewContext(routeLanguageCode, cache.RoleFromUser(middleware.GetUser(r)))
+	page, err := h.publishedPageForRoute(ctx, cacheCtx, slug, routeLanguageCode)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

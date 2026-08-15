@@ -551,8 +551,31 @@ func (m *Module) finalizeJob(ctx context.Context, run jobRun, status JobStatus, 
 	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
 	defer cancel()
 
-	if err := m.finishJob(finishCtx, run.ID, status, result, fatal); err != nil {
-		m.ctx.Logger.Error("failed to record import job result", "job_id", run.ID, "error", err)
+	var finishErr error
+	for attempt := 1; attempt <= finishJobAttempts; attempt++ {
+		if finishErr = m.finishJob(finishCtx, run.ID, status, result, fatal); finishErr == nil {
+			break
+		}
+		if attempt < finishJobAttempts {
+			time.Sleep(finishJobRetryDelay * time.Duration(attempt))
+		}
+	}
+	if finishErr != nil {
+		m.ctx.Logger.Error("failed to record import job result", "job_id", run.ID, "error", finishErr)
+		// runImportJob is about to drop this job from m.live, leaving a row that
+		// still reads "running" and still carries this process's run ID. Nothing
+		// here reaps a row it owns, so the source would refuse every later
+		// import until a restart. A fresh context because finishCtx may be the
+		// very thing that expired.
+		releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), finishJobTimeout)
+		if releaseErr := m.releaseJobOwnership(releaseCtx, run.ID); releaseErr != nil {
+			m.ctx.Logger.Error("failed to release stuck import job",
+				"job_id", run.ID, "source", run.SourceName, "error", releaseErr)
+		} else {
+			m.ctx.Logger.Warn("released stuck import job for stale reaping",
+				"job_id", run.ID, "source", run.SourceName)
+		}
+		releaseCancel()
 	}
 
 	if result != nil {
