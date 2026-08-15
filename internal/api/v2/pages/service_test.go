@@ -227,3 +227,77 @@ func TestCreateRejectsLanguagesThePublicRouterWillNotServe(t *testing.T) {
 		t.Fatalf("Create() with the default language error = %v", err)
 	}
 }
+
+// TestURLSchemeAllowlistIsEnforced covers the service-level scheme check on
+// canonical_url and video_url, which is the only gate those fields have.
+//
+// The huma `uri-reference` format accepts any relative reference, and a value
+// like "javascript:alert(1)" parses as one — request validation will not stop
+// it. Both URLs are rendered into page markup, so the allowlist in
+// validateSafeURL is what keeps a scripting scheme out of an href.
+//
+// Bug state: widen the scheme switch in service.go and this reports the value
+// that got through.
+func TestURLSchemeAllowlistIsEnforced(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	svc := pages.NewService(db, queries, nil, nil, pages.Policy{})
+	ctx := context.Background()
+	now := time.Now()
+
+	// The accepted cases below reach the insert, which needs a real author row.
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "scheme@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "API",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	writer := v2.Actor{
+		APIKey:      &store.ApiKey{ID: 1, CreatedBy: author.ID},
+		Permissions: []string{model.PermissionPagesWrite},
+	}
+
+	rejected := map[string]string{
+		"javascript": "javascript:alert(1)",
+		"data":       "data:text/html;base64,PHNjcmlwdD4=",
+		"file":       "file:///etc/passwd",
+	}
+	for name, raw := range rejected {
+		t.Run("canonical "+name, func(t *testing.T) {
+			_, err := svc.Create(ctx, writer, pages.CreatePageBody{
+				Title: "T", Slug: "scheme-" + name, Body: "b", CanonicalURL: raw,
+			})
+			var de *v2.Error
+			if !errors.As(err, &de) || de.Kind != v2.ErrValidation {
+				t.Fatalf("Create(canonical_url=%q) error = %v, want a validation error", raw, err)
+			}
+		})
+		t.Run("video "+name, func(t *testing.T) {
+			_, err := svc.Create(ctx, writer, pages.CreatePageBody{
+				Title: "T", Slug: "video-scheme-" + name, Body: "b", VideoURL: raw,
+			})
+			var de *v2.Error
+			if !errors.As(err, &de) || de.Kind != v2.ErrValidation {
+				t.Fatalf("Create(video_url=%q) error = %v, want a validation error", raw, err)
+			}
+		})
+	}
+
+	// Relative and absolute http(s) values stay accepted, including the empty
+	// string a client sends to clear the field.
+	for name, raw := range map[string]string{
+		"empty":    "",
+		"relative": "/about",
+		"https":    "https://example.com/a",
+	} {
+		t.Run("accepted "+name, func(t *testing.T) {
+			if _, err := svc.Create(ctx, writer, pages.CreatePageBody{
+				Title: "T", Slug: "ok-" + name, Body: "b", CanonicalURL: raw,
+			}); err != nil {
+				t.Fatalf("Create(canonical_url=%q) error = %v, want it accepted", raw, err)
+			}
+		})
+	}
+}
