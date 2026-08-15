@@ -6,17 +6,17 @@ package geoip
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/oschwald/maxminddb-golang"
+	"github.com/oschwald/maxminddb-golang/v2"
 )
 
 // privateCIDRs contains parsed CIDR blocks for private IP ranges.
 // Initialized once at package load time for efficiency.
-var privateCIDRs []*net.IPNet
+var privateCIDRs []netip.Prefix
 
 func init() {
 	privateBlocks := []string{
@@ -28,9 +28,9 @@ func init() {
 	}
 
 	for _, block := range privateBlocks {
-		_, cidr, err := net.ParseCIDR(block)
+		prefix, err := netip.ParsePrefix(block)
 		if err == nil {
-			privateCIDRs = append(privateCIDRs, cidr)
+			privateCIDRs = append(privateCIDRs, prefix)
 		}
 	}
 }
@@ -140,10 +140,13 @@ func (g *Lookup) LookupCountry(ip string) string {
 		return ""
 	}
 
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
+	parsedIP, err := netip.ParseAddr(ip)
+	if err != nil {
 		return ""
 	}
+	// Unmap 4-in-6 addresses so an IPv4 address written as ::ffff:10.0.0.1
+	// is matched against the IPv4 private prefixes below.
+	parsedIP = parsedIP.Unmap()
 
 	// Check for private/local IPs
 	if isPrivateIP(parsedIP) {
@@ -160,9 +163,10 @@ func (g *Lookup) LookupCountry(ip string) string {
 		return ""
 	}
 
-	// Lookup in MaxMind database
+	// Lookup in MaxMind database. A miss decodes to a zero record, so an
+	// unknown address yields an empty country code rather than an error.
 	var record geoRecord
-	if err := g.db.Lookup(parsedIP, &record); err != nil {
+	if err := g.db.Lookup(parsedIP).Decode(&record); err != nil {
 		return ""
 	}
 
@@ -191,9 +195,9 @@ func (g *Lookup) Close() error {
 }
 
 // isPrivateIP checks if an IP address is in a private range.
-func isPrivateIP(ip net.IP) bool {
-	for _, cidr := range privateCIDRs {
-		if cidr.Contains(ip) {
+func isPrivateIP(ip netip.Addr) bool {
+	for _, prefix := range privateCIDRs {
+		if prefix.Contains(ip) {
 			return true
 		}
 	}
