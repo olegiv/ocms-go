@@ -546,8 +546,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		if !tryAcquireAPIKeyVerifySlot() {
 			slog.Warn("API key verification throttled due to concurrency limit",
 				"ip", clientIP,
-				"path", r.URL.Path,
-				"prefix", prefix)
+				"path", r.URL.Path)
 			if required {
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many authentication attempts. Please slow down.", nil)
 				return nil, true
