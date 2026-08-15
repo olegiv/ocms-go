@@ -1496,6 +1496,54 @@ func TestImportFromZipSameTargetReplacementSurvivesCompensation(t *testing.T) {
 	}
 }
 
+// TestImportFromZipSameInodeRewriteIsRejected covers the replacement an inode
+// comparison cannot see. The extracted original is edited in place rather than
+// deleted and recreated, so its inode number is unchanged on every platform
+// and only the recorded size and modification time distinguish it. Without
+// that comparison the import adopts another actor's bytes as its own.
+func TestImportFromZipSameInodeRewriteIsRejected(t *testing.T) {
+	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	original := transferTestPNG(t, 800, 600)
+	width, height := int64(800), int64(600)
+	data := ExportData{Version: ExportVersion, Media: []ExportMedia{{
+		UUID: mediaUUID, Filename: "image.png", MimeType: model.MimeTypePNG,
+		Size: int64(len(original)), Width: &width, Height: &height,
+		FilePath: "media/originals/" + mediaUUID + "/image.png",
+	}}}
+	uploadRoot := t.TempDir()
+	originalPath := filepath.Join(uploadRoot, model.OriginalsDir, mediaUUID, "image.png")
+	importer := NewImporter(ts.Queries, ts.DB, slog.Default())
+	importer.SetUploadDir(uploadRoot)
+	// Trailing bytes keep the file a decodable 800x600 PNG, so the image
+	// validation ahead of the identity check still passes and this test fails
+	// only when the replacement itself goes unnoticed.
+	appended := append(append([]byte(nil), original...), []byte("appended by another actor")...)
+	importer.beforeMediaImport = func() {
+		file, err := os.OpenFile(originalPath, os.O_WRONLY|os.O_APPEND, 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, writeErr := file.Write([]byte("appended by another actor"))
+		if err := errors.Join(writeErr, file.Close()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := importer.ImportFromZipBytes(ts.Ctx, mediaArchiveBytes(t, data, []mediaArchiveEntry{{
+		name: data.Media[0].FilePath, body: original,
+	}}), ImportOptions{ConflictStrategy: ConflictSkip, ImportMedia: true, ImportMediaFiles: true})
+	if err == nil || !strings.Contains(err.Error(), "was replaced") {
+		t.Fatalf("ImportFromZipBytes() = (%+v, %v), want replacement rejection", result, err)
+	}
+	if content, err := os.ReadFile(originalPath); err != nil || !bytes.Equal(content, appended) {
+		t.Fatalf("rewritten file = %d bytes, error = %v; want the replacement preserved", len(content), err)
+	}
+	if _, err := ts.Queries.GetMediaByUUID(ts.Ctx, mediaUUID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("media row lookup = %v, want sql.ErrNoRows", err)
+	}
+}
+
 func TestImportFromZipGeneratesThroughCapturedRootBeforeReplacementRejection(t *testing.T) {
 	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
 	ts := setupTest(t)

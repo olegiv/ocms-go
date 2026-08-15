@@ -22,9 +22,38 @@ import (
 // RootFileIdentity identifies a file created through an already-open root.
 // Callers retain the FileInfo snapshot so compensating cleanup can distinguish
 // their file from a same-path replacement created by another actor.
+//
+// For a file, Info describes the published contents — it is taken through the
+// writing descriptor after the last byte lands, so SameRootFile can compare
+// size and modification time as well as the inode number.
 type RootFileIdentity struct {
 	Path string
 	Info fs.FileInfo
+}
+
+// SameRootFile reports whether current is still the exact file recorded in
+// identity.
+//
+// os.SameFile compares only the device and inode numbers, and a filesystem is
+// free to hand the inode number of a deleted file straight back to the next
+// file created in its place. On Linux that happens routinely: removing a file
+// and recreating it at the same path usually reuses the inode, so a check
+// built on os.SameFile alone accepts the replacement as the recorded file and
+// then deletes, or vouches for, content it does not own. Requiring the
+// recorded size and modification time to match as well closes that window,
+// since a replacement writes its own bytes at its own time.
+//
+// Directories cannot use this: an import adds entries to a directory it owns
+// after recording it, which moves both size and modification time. Their
+// replacement is caught instead by the per-file checks of the entries inside.
+func SameRootFile(current, recorded fs.FileInfo) bool {
+	if current == nil || recorded == nil {
+		return false
+	}
+	if !os.SameFile(current, recorded) {
+		return false
+	}
+	return current.Size() == recorded.Size() && current.ModTime().Equal(recorded.ModTime())
 }
 
 // RootFileCreation contains the published file identity and, when this write
@@ -153,26 +182,41 @@ func writeRootFileExclusive(uploadRoot *os.Root, relativePath string, data []byt
 		removeDirErr := removeRootDirectoryIfSameAndEmpty(uploadRoot, directoryIdentity)
 		return nil, errors.Join(fmt.Errorf("create destination file: %w", err), removeDirErr)
 	}
-	identityInfo, identityErr := file.Stat()
+	createdInfo, identityErr := file.Stat()
 	if identityErr != nil {
 		closeErr := file.Close()
 		return nil, errors.Join(fmt.Errorf("inspect destination file: %w", identityErr), closeErr)
 	}
-	identity := &RootFileIdentity{Path: relativePath, Info: identityInfo}
+	created := &RootFileIdentity{Path: relativePath, Info: createdInfo}
 
 	written, writeErr := file.Write(data)
 	if writeErr == nil && written != len(data) {
 		writeErr = io.ErrShortWrite
 	}
+	// Stat the descriptor once more before closing it. The caller keeps this
+	// identity for the rest of the import, so it has to describe the published
+	// file rather than the empty one O_EXCL created: SameRootFile compares size
+	// and modification time, which only the finished file carries.
+	publishedInfo, publishedErr := file.Stat()
 	closeErr := file.Close()
-	if err := errors.Join(writeErr, closeErr); err != nil {
-		cleanupErr := removeRootFileIfSame(uploadRoot, identity)
+	if err := errors.Join(writeErr, publishedErr, closeErr); err != nil {
+		cleanupErr := removeRootFileIfSame(uploadRoot, created)
 		removeDirErr := removeRootDirectoryIfSameAndEmpty(uploadRoot, directoryIdentity)
 		return nil, errors.Join(fmt.Errorf("write destination file: %w", err), cleanupErr, removeDirErr)
 	}
-	return &RootFileCreation{File: *identity, Directory: directoryIdentity}, nil
+	return &RootFileCreation{
+		File:      RootFileIdentity{Path: relativePath, Info: publishedInfo},
+		Directory: directoryIdentity,
+	}, nil
 }
 
+// removeRootFileIfSame withdraws a file whose own write just failed.
+//
+// This one compares inode identity alone rather than through SameRootFile: the
+// recorded identity belongs to the empty file O_EXCL created, and the partial
+// write that has to be withdrawn no longer matches it by size. The window
+// between that failed write and this call is a few microseconds inside one
+// function, unlike the whole-import window SameRootFile guards.
 func removeRootFileIfSame(uploadRoot *os.Root, identity *RootFileIdentity) error {
 	if identity == nil || identity.Info == nil {
 		return nil

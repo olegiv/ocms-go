@@ -118,6 +118,12 @@ type Reader struct {
 	present    map[string]bool
 	safePrefix string
 
+	// mediaFieldColumns holds the columns of every media__* field table,
+	// lowercased and keyed by table name. Which column a media source field
+	// stores depends on its source plugin, not on its name, so the columns
+	// decide which fields can be read as file references.
+	mediaFieldColumns map[string]map[string]bool
+
 	// warnings collects degraded-read notices the importer should surface. The
 	// reader has no access to ImportResult, so without this an alt-text read
 	// failure was visible only in the server log — a whole media library
@@ -264,6 +270,58 @@ func (r *Reader) detectSchema(ctx context.Context) error {
 		HasConfig:     has(tableConfig),
 		HasMediaData:  has(tableMediaData),
 	}
+	if r.schema.HasMedia {
+		if err := r.detectMediaFieldColumns(ctx, safePrefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// detectMediaFieldColumns records the columns of every media field table.
+//
+// A media type's source field lives in media__<field>, but what that table
+// stores depends on the type's source plugin rather than on the field name:
+// an entity reference to a file keeps <field>_target_id, while core's Remote
+// video keeps <field>_oembed_video_value and holds no file at all. Selecting
+// the missing column fails the whole statement, which used to cost the import
+// every file-to-media mapping — including the image embeds that had already
+// been collected. Reading the columns once here lets the media types that hold
+// no file be skipped instead.
+func (r *Reader) detectMediaFieldColumns(ctx context.Context, safePrefix string) error {
+	// The pattern is a bound parameter, never interpolated. An underscore is a
+	// single-character wildcard in LIKE, so this can match a little more than
+	// media field tables; matching extra tables only adds unused entries.
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT TABLE_NAME, COLUMN_NAME
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE ?
+	`, safePrefix+mediaFieldTablePrefix+"%")
+	if err != nil {
+		return fmt.Errorf("failed to read media field columns: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
+
+	columns := make(map[string]map[string]bool)
+	for rows.Next() {
+		var table, column string
+		if err := rows.Scan(&table, &column); err != nil {
+			return fmt.Errorf("failed to scan media field column: %w", err)
+		}
+		table = strings.ToLower(table)
+		if columns[table] == nil {
+			columns[table] = make(map[string]bool)
+		}
+		columns[table][strings.ToLower(column)] = true
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating media field columns: %w", err)
+	}
+	r.mediaFieldColumns = columns
 	return nil
 }
 
@@ -278,6 +336,23 @@ func (r *Reader) hasTable(name string) bool {
 		return false
 	}
 	return r.present[strings.ToLower(r.safePrefix+name)]
+}
+
+// hasMediaFieldColumn reports whether a media field table holds the column.
+//
+// An unread column list means "unknown", and unknown answers yes: the column
+// list is what narrows a query that would otherwise be attempted, so a reader
+// built without it — every unit test does — keeps behaving as before rather
+// than silently dropping every media mapping.
+func (r *Reader) hasMediaFieldColumn(table, column string) bool {
+	if r.mediaFieldColumns == nil {
+		return true
+	}
+	columns, known := r.mediaFieldColumns[strings.ToLower(r.safePrefix+table)]
+	if !known {
+		return true
+	}
+	return columns[strings.ToLower(column)]
 }
 
 // NodeCount returns the number of default-language nodes.
@@ -860,6 +935,14 @@ var coreMediaSourceFields = []string{
 // field. Drupal stores media.type.<bundle> as PHP-serialized data.
 const mediaSourceFieldMarkerKey = "source_field"
 
+// mediaFieldTablePrefix names the table Drupal creates for a media field, and
+// mediaFileReferenceColumnSuffix the column an entity reference to a file
+// stores in it. A source field that references no file has neither.
+const (
+	mediaFieldTablePrefix          = "media__"
+	mediaFileReferenceColumnSuffix = "_target_id"
+)
+
 // mediaSourceFields returns the field names this site's media types use to hold
 // their file, discovered from media.type.* configuration.
 //
@@ -986,9 +1069,19 @@ func (r *Reader) MediaUUIDsByFile(ctx context.Context) (map[int64][]string, erro
 		return nil, err
 	}
 
+	var skipped []string
 	for _, field := range r.mediaSourceFields(ctx) {
-		table := "media__" + field
+		table := mediaFieldTablePrefix + field
 		if !r.hasTable(table) {
+			continue
+		}
+		// A media type whose source is not a file reference — core's Remote
+		// video, for one — has a source field table with no _target_id column.
+		// Querying it anyway fails on an unknown column and takes down every
+		// mapping collected so far, so those types are skipped and reported.
+		column := field + mediaFileReferenceColumnSuffix
+		if !r.hasMediaFieldColumn(table, column) {
+			skipped = append(skipped, field)
 			continue
 		}
 		fieldTbl, err := r.table(table)
@@ -997,9 +1090,15 @@ func (r *Reader) MediaUUIDsByFile(ctx context.Context) (map[int64][]string, erro
 		}
 
 		if err := r.collectMediaUUIDs(ctx, mediaTbl, mediaDataTbl, fieldTbl,
-			field+"_target_id", table, byFile); err != nil {
+			column, table, byFile); err != nil {
 			return nil, err
 		}
+	}
+	if len(skipped) > 0 {
+		r.warnings = append(r.warnings, fmt.Sprintf(
+			"media types whose source field holds no file reference were skipped (%s); "+
+				"embeds of those media types are not mapped to imported files",
+			strings.Join(skipped, ", ")))
 	}
 	return byFile, nil
 }

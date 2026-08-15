@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/imaging"
@@ -84,7 +85,11 @@ func RoutableDefaultLanguage(ctx context.Context, queries *store.Queries) (store
 // underscores, and Unicode), while traversal, ambiguous separators, absolute
 // URLs, control characters, query strings, and fragments remain forbidden.
 func IsSafeImportedAliasPath(alias string) bool {
-	if alias == "" || len(alias) > MaxImportedAliasLength {
+	// Counted in runes, not bytes: the source column's limit is 255 characters,
+	// and this function exists to let Unicode aliases through. Measuring UTF-8
+	// bytes would reject a 200-character Cyrillic path the source site serves
+	// happily, and the established URL would 404 after the migration.
+	if alias == "" || utf8.RuneCountInString(alias) > MaxImportedAliasLength {
 		return false
 	}
 	if strings.ContainsAny(alias, "?#\\") || strings.HasPrefix(alias, "/") || strings.HasSuffix(alias, "/") {

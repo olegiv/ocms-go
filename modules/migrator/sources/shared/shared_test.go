@@ -115,6 +115,27 @@ func TestIsSafeImportedAliasPath(t *testing.T) {
 	}
 }
 
+// TestIsSafeImportedAliasPathCountsCharactersNotBytes fails if the length
+// limit goes back to counting UTF-8 bytes: a Cyrillic alias occupies two bytes
+// per character, so a byte-counted limit rejects paths at 128 characters that
+// the source site stores and serves within its own 255-character column.
+func TestIsSafeImportedAliasPathCountsCharactersNotBytes(t *testing.T) {
+	atLimit := strings.Repeat("о", MaxImportedAliasLength)
+	if len(atLimit) <= MaxImportedAliasLength {
+		t.Fatalf("alias is %d bytes; it must exceed the limit in bytes to test rune counting", len(atLimit))
+	}
+	if !IsSafeImportedAliasPath(atLimit) {
+		t.Errorf("IsSafeImportedAliasPath() rejected a %d-character Unicode alias at the limit",
+			MaxImportedAliasLength)
+	}
+	if IsSafeImportedAliasPath(atLimit + "о") {
+		t.Errorf("IsSafeImportedAliasPath() accepted a %d-character alias", MaxImportedAliasLength+1)
+	}
+	if IsSafeImportedAliasPath(strings.Repeat("x", MaxImportedAliasLength+1)) {
+		t.Errorf("IsSafeImportedAliasPath() accepted a %d-character ASCII alias", MaxImportedAliasLength+1)
+	}
+}
+
 func TestUploadDir(t *testing.T) {
 	t.Setenv("OCMS_UPLOADS_DIR", "/custom/uploads")
 	if got := UploadDir(); got != "/custom/uploads" {

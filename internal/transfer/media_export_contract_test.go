@@ -578,6 +578,74 @@ func TestPageOnlyExportRejectsInvalidEmbeddedMediaUUID(t *testing.T) {
 	}
 }
 
+// TestExportIgnoresExternalUploadLikeURLs keeps the media scan to this site's
+// own URLs. A page linking to another host that happens to serve a path under
+// /uploads/originals is not referencing local media, and reading the segment
+// after that prefix as a media UUID failed the whole export over a resource
+// this installation does not own.
+func TestExportIgnoresExternalUploadLikeURLs(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	language, err := ts.Queries.GetDefaultLanguage(ts.Ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
+		Title: "External CDN", Slug: "external-cdn",
+		Body: `<img src="https://cdn.example/uploads/originals/avatar/file.png">` +
+			`<a href="//cdn.example/uploads/originals/team/photo.png">team</a>`,
+		Status: "draft", AuthorID: ts.User.ID, LanguageCode: language.Code,
+		CreatedAt: ts.Now, UpdatedAt: ts.Now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := NewExporter(ts.Queries, slog.Default()).ExportToWriter(
+		ts.Ctx, ExportOptions{IncludePages: true}, &output,
+	); err != nil {
+		t.Fatalf("ExportToWriter() error = %v, want external URLs ignored", err)
+	}
+	if output.Len() == 0 {
+		t.Fatal("export published no bytes")
+	}
+}
+
+// TestExportStillRejectsRootRelativeInvalidMediaURL is the other half of the
+// above: narrowing the scan to root-relative URLs must not stop it seeing a
+// malformed local one, in an attribute or in prose.
+func TestExportStillRejectsRootRelativeInvalidMediaURL(t *testing.T) {
+	for name, body := range map[string]string{
+		"attribute": `<img src="/uploads/originals/not-a-uuid/photo.jpg">`,
+		"prose":     `See /uploads/originals/not-a-uuid/photo.jpg for details.`,
+		"css":       `<div style="background:url(/uploads/originals/not-a-uuid/photo.jpg)"></div>`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ts := setupTest(t)
+			defer ts.Cleanup()
+			language, err := ts.Queries.GetDefaultLanguage(ts.Ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
+				Title: "Local", Slug: "local", Body: body, Status: "draft",
+				AuthorID: ts.User.ID, LanguageCode: language.Code, CreatedAt: ts.Now, UpdatedAt: ts.Now,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			err = NewExporter(ts.Queries, slog.Default()).ExportToWriter(
+				ts.Ctx, ExportOptions{IncludePages: true}, &output,
+			)
+			if err == nil || !strings.Contains(err.Error(), "invalid UUID") {
+				t.Fatalf("ExportToWriter() error = %v, want the local media URL rejected", err)
+			}
+			if output.Len() != 0 {
+				t.Fatalf("invalid local media URL published %d bytes", output.Len())
+			}
+		})
+	}
+}
+
 func TestExportRejectsCaseFoldAmbiguityAcrossSelectedContent(t *testing.T) {
 	const lowerUUID = "550e8400-e29b-41d4-a716-446655440000"
 	const upperUUID = "550E8400-E29B-41D4-A716-446655440000"

@@ -24,6 +24,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -862,7 +864,7 @@ func importNeedsMediaIdentityResolution(data *ExportData, opts ImportOptions) bo
 
 func containsKnownMediaURL(value string) bool {
 	for _, storageDir := range model.MediaStorageDirs() {
-		if strings.Contains(value, mediaURLStoragePrefix(storageDir)) {
+		if len(localMediaURLOffsets(value, mediaURLStoragePrefix(storageDir))) > 0 {
 			return true
 		}
 	}
@@ -874,13 +876,8 @@ func knownMediaUUIDs(value string) ([]string, error) {
 	seen := make(map[string]struct{})
 	for _, storageDir := range model.MediaStorageDirs() {
 		prefix := mediaURLStoragePrefix(storageDir)
-		for searchFrom := 0; searchFrom < len(value); {
-			offset := strings.Index(value[searchFrom:], prefix)
-			if offset < 0 {
-				break
-			}
-			uuidStart := searchFrom + offset + len(prefix)
-			remainder := value[uuidStart:]
+		for _, offset := range localMediaURLOffsets(value, prefix) {
+			remainder := value[offset+len(prefix):]
 			slashOffset := strings.IndexByte(remainder, '/')
 			if slashOffset < 0 {
 				return nil, fmt.Errorf("media URL under %q has no filename", prefix)
@@ -893,10 +890,48 @@ func knownMediaUUIDs(value string) ([]string, error) {
 				seen[candidate] = struct{}{}
 				mediaUUIDs = append(mediaUUIDs, candidate)
 			}
-			searchFrom = uuidStart + slashOffset + 1
 		}
 	}
 	return mediaUUIDs, nil
+}
+
+// mediaURLBoundaryChars are the characters that may sit immediately before a
+// root-relative URL: HTML attribute quoting and delimiters, CSS url(),
+// Markdown link syntax, JSON, and ordinary prose punctuation.
+const mediaURLBoundaryChars = "\"'()<>[]{},;=|`"
+
+// localMediaURLOffsets returns every offset in value where a root-relative URL
+// under prefix begins.
+//
+// Only root-relative matches belong to this installation. Content carries
+// other sites' URLs whose paths happen to read like local media — a CDN
+// serving https://cdn.example/uploads/originals/avatar/file.png, say — and
+// treating the text after the prefix as a media UUID rejected one such link as
+// malformed and failed the entire export over a resource this site does not
+// own. A match preceded by anything other than a boundary is part of some
+// other URL, so it is left alone.
+func localMediaURLOffsets(value, prefix string) []int {
+	var offsets []int
+	for searchFrom := 0; searchFrom < len(value); {
+		offset := strings.Index(value[searchFrom:], prefix)
+		if offset < 0 {
+			break
+		}
+		matchStart := searchFrom + offset
+		if startsLocalMediaURL(value, matchStart) {
+			offsets = append(offsets, matchStart)
+		}
+		searchFrom = matchStart + len(prefix)
+	}
+	return offsets
+}
+
+func startsLocalMediaURL(value string, index int) bool {
+	if index == 0 {
+		return true
+	}
+	previous, _ := utf8.DecodeLastRuneInString(value[:index])
+	return unicode.IsSpace(previous) || strings.ContainsRune(mediaURLBoundaryChars, previous)
 }
 
 func mediaURLStoragePrefix(storageDir string) string {
@@ -1505,10 +1540,32 @@ func (ledger *mediaFileLedger) hasDirectory(relativePath string) bool {
 }
 
 // cleanupOwnedMediaFiles removes only files whose current identity still
-// matches the descriptor snapshot captured immediately after O_EXCL creation.
+// matches the descriptor snapshot captured once the extracted bytes landed.
 // UUID directories are pruned non-recursively, so a same-path replacement or
 // another actor's same-UUID sentinel is never removed as compensation.
 func cleanupOwnedMediaFiles(uploadRoot *os.Root, ledger *mediaFileLedger, mediaUUIDs []string) error {
+	return cleanupMediaFiles(uploadRoot, ledger, mediaUUIDs, imaging.SameRootFile)
+}
+
+// cleanupPartialMediaFile withdraws a file whose own extraction just failed.
+//
+// Its recorded identity is the empty file O_EXCL created, so the partial write
+// being withdrawn no longer matches it by size and imaging.SameRootFile would
+// leave the fragment behind to block the next import. Inode identity is enough
+// over the microseconds between that failed copy and this call, unlike the
+// whole-import window cleanupOwnedMediaFiles has to survive.
+func cleanupPartialMediaFile(uploadRoot *os.Root, ledger *mediaFileLedger) error {
+	return cleanupMediaFiles(uploadRoot, ledger, nil, func(current, recorded fs.FileInfo) bool {
+		return os.SameFile(current, recorded)
+	})
+}
+
+func cleanupMediaFiles(
+	uploadRoot *os.Root,
+	ledger *mediaFileLedger,
+	mediaUUIDs []string,
+	sameFile func(current, recorded fs.FileInfo) bool,
+) error {
 	if uploadRoot == nil || ledger == nil || (len(ledger.files) == 0 && len(ledger.directories) == 0) {
 		return nil
 	}
@@ -1536,7 +1593,7 @@ func cleanupOwnedMediaFiles(uploadRoot *os.Root, ledger *mediaFileLedger, mediaU
 				fmt.Errorf("inspect owned media path %q: %w", owned.relativePath, err))
 			continue
 		}
-		if current.Mode()&os.ModeSymlink != 0 || !current.Mode().IsRegular() || !os.SameFile(current, owned.identity) {
+		if current.Mode()&os.ModeSymlink != 0 || !current.Mode().IsRegular() || !sameFile(current, owned.identity) {
 			continue
 		}
 		if err := uploadRoot.Remove(owned.relativePath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -1689,6 +1746,11 @@ func validateOwnedMediaStorage(uploadRoot *os.Root, ledger *mediaFileLedger, med
 			if err != nil {
 				return fmt.Errorf("inspect owned media directory %q: %w", directoryPath, err)
 			}
+			// A directory keeps inode identity alone: this import adds the files it
+			// owns after recording the directory, so its size and modification time
+			// move by design. A directory swapped out from under the import is
+			// caught by the per-file identity checks of the entries below, which a
+			// replacement cannot reproduce.
 			if currentDirectory.Mode()&os.ModeSymlink != 0 || !currentDirectory.IsDir() ||
 				!os.SameFile(currentDirectory, expectedDirectory.identity) {
 				return fmt.Errorf("owned media directory %q was replaced", directoryPath)
@@ -1712,7 +1774,8 @@ func validateOwnedMediaStorage(uploadRoot *os.Root, ledger *mediaFileLedger, med
 				if err != nil {
 					return fmt.Errorf("inspect owned media path %q: %w", owned.relativePath, err)
 				}
-				if current.Mode()&os.ModeSymlink != 0 || !current.Mode().IsRegular() || !os.SameFile(current, owned.identity) {
+				if current.Mode()&os.ModeSymlink != 0 || !current.Mode().IsRegular() ||
+					!imaging.SameRootFile(current, owned.identity) {
 					return fmt.Errorf("owned media path %q was replaced", owned.relativePath)
 				}
 				delete(expectedNames, file.Name())
@@ -2082,7 +2145,7 @@ func (i *Importer) extractMediaFile(
 	if err != nil {
 		return nil, 0, errors.Join(fmt.Errorf("failed to create destination file: %w", err), rc.Close())
 	}
-	identityInfo, identityErr := destFile.Stat()
+	createdInfo, identityErr := destFile.Stat()
 	if identityErr != nil {
 		return nil, 0, errors.Join(
 			fmt.Errorf("failed to inspect destination file: %w", identityErr),
@@ -2090,19 +2153,24 @@ func (i *Importer) extractMediaFile(
 			rc.Close(),
 		)
 	}
-	identity := &imaging.RootFileIdentity{Path: destPath, Info: identityInfo}
 
 	written, copyErr := copyWithLimit(destFile, rc, maxZipMediaFileUncompressedBytes)
+	// The identity handed to the ledger is taken after the bytes land, through
+	// the same descriptor: it has to describe the extracted file rather than
+	// the empty one, so imaging.SameRootFile can weigh size and modification
+	// time against a same-path replacement that inherited the inode number.
+	publishedInfo, publishedErr := destFile.Stat()
 	closeDestErr := destFile.Close()
 	closeSourceErr := rc.Close()
-	if err := errors.Join(copyErr, closeDestErr, closeSourceErr); err != nil {
+	if err := errors.Join(copyErr, publishedErr, closeDestErr, closeSourceErr); err != nil {
 		partialLedger := newMediaFileLedger()
-		recordErr := partialLedger.recordFile(parsedPath.uuid, identity)
-		cleanupErr := cleanupOwnedMediaFiles(uploadRoot, partialLedger, nil)
+		recordErr := partialLedger.recordFile(parsedPath.uuid,
+			&imaging.RootFileIdentity{Path: destPath, Info: createdInfo})
+		cleanupErr := cleanupPartialMediaFile(uploadRoot, partialLedger)
 		return nil, 0, errors.Join(fmt.Errorf("failed to copy media file: %w", err), recordErr, cleanupErr)
 	}
 
-	return identity, written, nil
+	return &imaging.RootFileIdentity{Path: destPath, Info: publishedInfo}, written, nil
 }
 
 func parseMediaZipPath(zipPath string) (mediaZipPath, error) {

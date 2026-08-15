@@ -593,3 +593,61 @@ func TestIsSafeAliasPath(t *testing.T) {
 		})
 	}
 }
+
+// TestMediaUUIDsByFileSkipsNonFileSourceFields covers a Drupal site that has a
+// media type whose source holds no file — core's Remote video keeps a _value
+// column where a file reference would keep _target_id. Selecting the column
+// that type does not have fails the statement, and the mappings gathered from
+// the image media type ahead of it used to go down with it, leaving every
+// <drupal-media> image embed unresolvable and stripped from imported bodies.
+func TestMediaUUIDsByFileSkipsNonFileSourceFields(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`
+		CREATE TABLE config (collection TEXT, name TEXT, data TEXT);
+		CREATE TABLE media (mid INTEGER, vid INTEGER, uuid TEXT);
+		CREATE TABLE media_field_data (mid INTEGER, vid INTEGER, langcode TEXT, default_langcode INTEGER);
+		CREATE TABLE media__field_media_image (
+			entity_id INTEGER, revision_id INTEGER, langcode TEXT, deleted INTEGER, delta INTEGER,
+			field_media_image_target_id INTEGER
+		);
+		CREATE TABLE media__field_media_oembed_video (
+			entity_id INTEGER, revision_id INTEGER, langcode TEXT, deleted INTEGER, delta INTEGER,
+			field_media_oembed_video_value TEXT
+		);
+		INSERT INTO config VALUES
+			('', 'media.type.image', 'a:1:{s:12:"source_field";s:17:"field_media_image";}'),
+			('', 'media.type.remote_video', 'a:1:{s:12:"source_field";s:24:"field_media_oembed_video";}');
+		INSERT INTO media VALUES (1, 7, 'media-uuid-image');
+		INSERT INTO media_field_data VALUES (1, 7, 'en', 1);
+		INSERT INTO media__field_media_image VALUES (1, 7, 'en', 0, 0, 42);
+		INSERT INTO media__field_media_oembed_video VALUES (2, 8, 'en', 0, 0, 'https://example.com/v');
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	reader := &Reader{
+		db:      db,
+		present: map[string]bool{"media__field_media_image": true, "media__field_media_oembed_video": true},
+		schema:  Schema{HasMedia: true, HasMediaData: true, HasConfig: true},
+		mediaFieldColumns: map[string]map[string]bool{
+			"media__field_media_image":        {"field_media_image_target_id": true},
+			"media__field_media_oembed_video": {"field_media_oembed_video_value": true},
+		},
+	}
+	byFile, err := reader.MediaUUIDsByFile(context.Background())
+	if err != nil {
+		t.Fatalf("MediaUUIDsByFile() error = %v, want the image mapping despite the remote video type", err)
+	}
+	if len(byFile) != 1 || len(byFile[42]) != 1 || byFile[42][0] != "media-uuid-image" {
+		t.Fatalf("MediaUUIDsByFile() = %v, want file 42 mapped to media-uuid-image", byFile)
+	}
+	warnings := reader.Warnings()
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "field_media_oembed_video") {
+		t.Fatalf("warnings = %v, want the skipped non-file source field reported", warnings)
+	}
+}
