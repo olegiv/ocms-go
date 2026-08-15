@@ -5,11 +5,13 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // SitemapCache provides cached sitemap XML generation.
@@ -69,15 +71,30 @@ func (c *SitemapCache) regenerate(ctx context.Context, siteURL string) ([]byte, 
 
 	// Build sitemap
 	builder := seo.NewSitemapBuilder(siteURL)
-	builder.AddHomepage()
+	defaultLang, err := c.queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve the single default language for sitemap: %w", err)
+	}
+	activeLanguages, err := c.queries.ListActiveLanguages(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active languages for sitemap: %w", err)
+	}
+	for _, language := range activeLanguages {
+		if !util.IsValidLangCode(language.Code) || util.IsReservedLanguageCode(language.Code) {
+			continue
+		}
+		builder.AddLanguageHomepage(language.Code, language.ID == defaultLang.ID)
+	}
 
 	// Add published pages (excluding noindex pages)
 	pages, err := c.queries.ListPublishedPagesForSitemap(ctx)
 	if err == nil {
 		for _, p := range pages {
 			builder.AddPage(seo.SitemapPage{
-				Slug:      p.Slug,
-				UpdatedAt: p.UpdatedAt,
+				Slug:         p.Slug,
+				LanguageCode: p.LanguageCode,
+				IsDefault:    p.IsDefault,
+				UpdatedAt:    p.UpdatedAt,
 			})
 		}
 	}
@@ -87,8 +104,10 @@ func (c *SitemapCache) regenerate(ctx context.Context, siteURL string) ([]byte, 
 	if err == nil {
 		for _, cat := range categories {
 			builder.AddCategory(seo.SitemapCategory{
-				Slug:      cat.Slug,
-				UpdatedAt: cat.UpdatedAt,
+				Slug:         cat.Slug,
+				LanguageCode: cat.LanguageCode,
+				IsDefault:    cat.IsDefault,
+				UpdatedAt:    cat.UpdatedAt,
 			})
 		}
 	}
@@ -98,8 +117,10 @@ func (c *SitemapCache) regenerate(ctx context.Context, siteURL string) ([]byte, 
 	if err == nil {
 		for _, t := range tags {
 			builder.AddTag(seo.SitemapTag{
-				Slug:      t.Slug,
-				UpdatedAt: t.UpdatedAt,
+				Slug:         t.Slug,
+				LanguageCode: t.LanguageCode,
+				IsDefault:    t.IsDefault,
+				UpdatedAt:    t.UpdatedAt,
 			})
 		}
 	}

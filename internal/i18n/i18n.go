@@ -172,9 +172,12 @@ func GetSupportedLanguages() []string {
 // MatchLanguage finds the best matching supported language for the given string.
 // Returns the language code (e.g., "en", "ru").
 func MatchLanguage(acceptLang string) string {
-	if catalog == nil {
+	c := catalog
+	if c == nil {
 		return "en"
 	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	// Try to parse the Accept-Language header or language code
 	tags, _, err := language.ParseAcceptLanguage(acceptLang)
@@ -182,18 +185,18 @@ func MatchLanguage(acceptLang string) string {
 		// Try as a single language code
 		tag, err := language.Parse(acceptLang)
 		if err != nil {
-			return catalog.defaultLang
+			return c.defaultLang
 		}
 		tags = []language.Tag{tag}
 	}
 
 	// Match against supported languages
-	_, idx, _ := catalog.matcher.Match(tags...)
-	if idx >= 0 && idx < len(catalog.supported) {
-		return catalog.supported[idx].String()
+	_, idx, _ := c.matcher.Match(tags...)
+	if idx >= 0 && idx < len(c.supported) {
+		return c.supported[idx].String()
 	}
 
-	return catalog.defaultLang
+	return c.defaultLang
 }
 
 // IsSupported checks if a language code is supported for the admin UI.
@@ -262,6 +265,35 @@ func SetActiveLanguages(activeCodes []string) {
 
 	catalog.supported = activeTags
 	catalog.matcher = language.NewMatcher(activeTags)
+}
+
+// ConfigureLanguages synchronizes the process-wide admin-language matcher with
+// the database state. Unsupported public-site defaults fall back to English,
+// matching a fresh process initialization, while the active list is still
+// filtered to the admin UI catalogs that are actually bundled.
+func ConfigureLanguages(activeCodes []string, defaultCode string) {
+	c := catalog
+	if c == nil {
+		return
+	}
+	if !IsSupported(defaultCode) {
+		defaultCode = "en"
+	}
+	activeTags := make([]language.Tag, 0, len(activeCodes))
+	for _, code := range activeCodes {
+		if IsSupported(code) {
+			activeTags = append(activeTags, language.MustParse(code))
+		}
+	}
+	if len(activeTags) == 0 {
+		activeTags = []language.Tag{language.MustParse(defaultCode)}
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.defaultLang = defaultCode
+	c.supported = activeTags
+	c.matcher = language.NewMatcher(activeTags)
 }
 
 // AddTranslations merges additional translations into the catalog for a language.

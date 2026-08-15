@@ -155,7 +155,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 
 ### Multi-Language Support
 - **Content Translation**: Translate pages, categories, and tags into multiple languages
-- **Language Management**: Configure site languages with ISO 639-1 codes
+- **Language Management**: Configure 2–10 character codes using lowercase ASCII letters, digits, and hyphens
 - **Translation Linking**: Link content across languages for seamless switching
 - **Language Switcher**: Built-in frontend component for language navigation
 - **URL Prefixes**: Language-prefixed URLs (e.g., `/ru/about-us`)
@@ -321,6 +321,9 @@ Available release archives:
 | `OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION` | Fail startup in production when form webhook payload mode is `full` | `false` (`true` in production when unset) | No |
 | `OCMS_WEBHOOK_ALLOWED_HOSTS` | Allowed destination hosts for active webhook deliveries (exact hostname match) | - | No |
 | `OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS` | Fail startup in production when active webhooks exist without destination host allowlist | `false` (`true` in production when unset) | No |
+| `OCMS_MIGRATOR_ALLOWED_DB_HOSTS` | Allowed source-database hosts for the Migrator module (bare hostnames or IPs, no port). Empty = no restriction; migrator routes are admin-only regardless (see `docs/migrator-module.md`) | - | No |
+| `OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS` | Fail startup in production when the Migrator module is active without a source-database host allowlist | `false` (`true` in production when unset) | No |
+| `OCMS_MIGRATOR_ALLOWED_FILE_ROOTS` | Comma-separated absolute roots from which the Migrator may read local media. `DRUPAL_FILES` and `ELEFANT_FILES` are also trusted roots; media import fails closed when none are configured | - | No |
 | `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` (`true` in production when unset) | No |
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` (`true` in production when unset) | No |
 | `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | Reject page writes containing suspicious HTML patterns | `false` (`true` in production when unset) | No |

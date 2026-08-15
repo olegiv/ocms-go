@@ -17,6 +17,15 @@ type (
 	ImportOptions = types.ImportOptions
 	ImportResult  = types.ImportResult
 	ImportTracker = types.ImportTracker
+	Progress      = types.Progress
+	EntityType    = types.EntityType
+)
+
+// Compile-time proof that the module satisfies both tracker interfaces, so a
+// signature change breaks the build rather than silently disabling progress.
+var (
+	_ types.ImportTracker    = (*Module)(nil)
+	_ types.ProgressReporter = (*Module)(nil)
 )
 
 // Source registry

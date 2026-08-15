@@ -11,10 +11,18 @@ SELECT * FROM page_aliases WHERE page_id = ? ORDER BY created_at;
 -- name: ClearPageAliases :exec
 DELETE FROM page_aliases WHERE page_id = ?;
 
+-- name: DeletePageAlias :exec
+DELETE FROM page_aliases WHERE id = ?;
+
 -- name: GetPublishedPageByAlias :one
 SELECT p.* FROM pages p
 INNER JOIN page_aliases pa ON pa.page_id = p.id
 WHERE pa.alias = ? AND p.status = 'published';
+
+-- name: GetPageByAlias :one
+SELECT p.* FROM pages p
+INNER JOIN page_aliases pa ON pa.page_id = p.id
+WHERE pa.alias = ?;
 
 -- name: AliasExists :one
 SELECT EXISTS(SELECT 1 FROM page_aliases WHERE alias = ?);

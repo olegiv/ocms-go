@@ -131,7 +131,8 @@ func (s *Service) resolveLanguageCode(ctx context.Context, langCode *string) (st
 				"Validation failed",
 			)
 		}
-		if _, err := s.queries.GetLanguageByCode(ctx, *langCode); err != nil {
+		language, err := s.queries.GetLanguageByCode(ctx, *langCode)
+		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return "", v2.NewValidationError(
 					map[string]string{"language_code": fmt.Sprintf("Language %q is not configured", *langCode)},
@@ -140,18 +141,62 @@ func (s *Service) resolveLanguageCode(ctx context.Context, langCode *string) (st
 			}
 			return "", v2.NewError(v2.ErrInternal, "Failed to look up language")
 		}
-		return *langCode, nil
+		if err := validateRoutableLanguage(language); err != nil {
+			return "", err
+		}
+		return language.Code, nil
 	}
 	def, err := s.queries.GetDefaultLanguage(ctx)
 	if err != nil {
 		return "", fmt.Errorf("loading default language: %w", err)
 	}
+	if err := validateRoutableLanguage(def); err != nil {
+		return "", err
+	}
 	return def.Code, nil
 }
 
-// ensureSlugUnique reports a conflict error if slug is taken by a page whose
-// id is NOT exceptID. Pass 0 to check uniqueness across all pages.
-func (s *Service) ensureSlugUnique(ctx context.Context, slug string, exceptID int64) error {
+// validateRoutableLanguage refuses a language the public router will not serve.
+//
+// Existence is not enough. An inactive language, or a legacy row whose code is
+// malformed or owned by an application route, keeps its rows visible in the
+// admin UI but is never installed as a public language, so the frontend
+// answers 404 for every page filed under it. Creating published content there
+// through the API produced pages that were unreachable from the moment they
+// were written.
+func validateRoutableLanguage(language store.Language) error {
+	if !language.IsActive {
+		return v2.NewValidationError(
+			map[string]string{"language_code": fmt.Sprintf("Language %q is inactive", language.Code)},
+			"Validation failed",
+		)
+	}
+	if !util.IsRoutableLanguageCode(language.Code) {
+		return v2.NewValidationError(
+			map[string]string{"language_code": fmt.Sprintf("Language %q cannot be served on a public route", language.Code)},
+			"Validation failed",
+		)
+	}
+	return nil
+}
+
+// ensureSlugAvailable reports a conflict error when the slug cannot serve as
+// this page's route: an active language owns the prefix, or another page whose
+// id is NOT exceptID already holds it. Pass 0 to check against all pages.
+func (s *Service) ensureSlugAvailable(ctx context.Context, slug string, exceptID int64) error {
+	// Uniqueness is not the whole of availability. The language middleware
+	// strips a first path segment that matches an active language code before
+	// the frontend router runs, so a page written at that segment answers to
+	// nobody — the language homepage takes the URL. An API client renaming a
+	// page to "eng" used to succeed and quietly lose the page.
+	conflict, err := handler.LanguagePrefixConflict(ctx, s.queries, slug)
+	if err != nil {
+		return fmt.Errorf("checking language prefixes: %w", err)
+	}
+	if conflict != "" {
+		return v2.NewValidationError(map[string]string{"slug": conflict}, "Validation failed")
+	}
+
 	existing, err := s.queries.GetPageBySlug(ctx, slug)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -315,7 +360,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 	if err := s.validateBodyMarkup(in.Body); err != nil {
 		return nil, err
 	}
-	if err := s.ensureSlugUnique(ctx, in.Slug, 0); err != nil {
+	if err := s.ensureSlugAvailable(ctx, in.Slug, 0); err != nil {
 		return nil, err
 	}
 	status := in.Status
@@ -541,7 +586,7 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 		if msg := handler.ValidateSlugFormat(*in.Slug); msg != "" {
 			return v2.NewValidationError(map[string]string{"slug": msg}, "Validation failed")
 		}
-		if err := s.ensureSlugUnique(ctx, *in.Slug, existing.ID); err != nil {
+		if err := s.ensureSlugAvailable(ctx, *in.Slug, existing.ID); err != nil {
 			return err
 		}
 		params.Slug = *in.Slug

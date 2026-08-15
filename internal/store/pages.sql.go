@@ -1320,16 +1320,20 @@ func (q *Queries) ListPublishedPagesByCategoryAndLanguage(ctx context.Context, a
 }
 
 const listPublishedPagesForSitemap = `-- name: ListPublishedPagesForSitemap :many
-SELECT id, slug, updated_at, no_index FROM pages
-WHERE status = 'published' AND no_index = 0
-ORDER BY updated_at DESC
+SELECT p.id, p.slug, p.updated_at, p.no_index, p.language_code, l.is_default
+FROM pages p
+INNER JOIN languages l ON l.code = p.language_code AND l.is_active = 1
+WHERE p.status = 'published' AND p.no_index = 0
+ORDER BY p.updated_at DESC
 `
 
 type ListPublishedPagesForSitemapRow struct {
-	ID        int64     `json:"id"`
-	Slug      string    `json:"slug"`
-	UpdatedAt time.Time `json:"updated_at"`
-	NoIndex   int64     `json:"no_index"`
+	ID           int64     `json:"id"`
+	Slug         string    `json:"slug"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	NoIndex      int64     `json:"no_index"`
+	LanguageCode string    `json:"language_code"`
+	IsDefault    bool      `json:"is_default"`
 }
 
 func (q *Queries) ListPublishedPagesForSitemap(ctx context.Context) ([]ListPublishedPagesForSitemapRow, error) {
@@ -1346,6 +1350,8 @@ func (q *Queries) ListPublishedPagesForSitemap(ctx context.Context) ([]ListPubli
 			&i.Slug,
 			&i.UpdatedAt,
 			&i.NoIndex,
+			&i.LanguageCode,
+			&i.IsDefault,
 		); err != nil {
 			return nil, err
 		}
@@ -1611,6 +1617,28 @@ func (q *Queries) ListScheduledPages(ctx context.Context, arg ListScheduledPages
 		return nil, err
 	}
 	return items, nil
+}
+
+const pageRouteExistsUnderPrefix = `-- name: PageRouteExistsUnderPrefix :one
+SELECT EXISTS(
+    SELECT 1 FROM pages p WHERE p.slug = ?1
+    UNION ALL
+    SELECT 1 FROM page_aliases pa
+     WHERE pa.alias = ?1 OR pa.alias LIKE ?1 || '/%'
+)
+`
+
+// Reports whether any page route lives at a first path segment, either as a
+// page slug, as an alias, or as an alias nested under it. A language whose
+// code equals that segment would swallow all three: the language middleware
+// strips the segment before the frontend router ever sees it.
+// The LIKE pattern needs no escaping because language codes are restricted to
+// lowercase letters, digits and hyphens, none of which are LIKE wildcards.
+func (q *Queries) PageRouteExistsUnderPrefix(ctx context.Context, prefix string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, pageRouteExistsUnderPrefix, prefix)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const publishPage = `-- name: PublishPage :one

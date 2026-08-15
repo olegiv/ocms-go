@@ -5,6 +5,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -40,9 +41,19 @@ func NewPageCache(queries *store.Queries) *PageCache {
 	}
 }
 
-// GetBySlug retrieves a published page by slug with context awareness.
+// GetBySlug retrieves a published page by slug within the context's language.
 // Returns the page if found in cache or database, nil if not found.
+//
+// The miss path is scoped to cacheCtx.LanguageCode, not a global slug lookup.
+// Slugs are unique across the whole site rather than per language, so the
+// global form let a page belonging to one language answer a request routed to
+// another — and then cached it under the requesting language's key, which is
+// the boundary the frontend router exists to hold. The frontend stopped using
+// this cache over exactly that, turning every page view into a database read.
 func (c *PageCache) GetBySlug(ctx context.Context, cacheCtx Context, slug string) (*store.Page, error) {
+	if cacheCtx.LanguageCode == "" {
+		return nil, errors.New("page cache lookup requires a language")
+	}
 	key := cacheCtx.PageKey(slug)
 
 	c.mu.RLock()
@@ -56,7 +67,10 @@ func (c *PageCache) GetBySlug(ctx context.Context, cacheCtx Context, slug string
 	// Cache miss - fetch from database
 	c.cache.misses.Add(1)
 
-	page, err := c.queries.GetPublishedPageBySlug(ctx, slug)
+	page, err := c.queries.GetPublishedPageBySlugAndLanguage(ctx, store.GetPublishedPageBySlugAndLanguageParams{
+		Slug:         slug,
+		LanguageCode: cacheCtx.LanguageCode,
+	})
 	if err != nil {
 		return nil, err // Return error (including sql.ErrNoRows) to caller
 	}
@@ -95,8 +109,15 @@ func (c *PageCache) GetByID(ctx context.Context, cacheCtx Context, id int64) (*s
 }
 
 // store adds a page to caches with context-aware keys.
+//
+// The slug key carries the page's own language rather than the caller's. A
+// page fetched by ID may belong to a different language than the request that
+// fetched it, and filing it under the caller's language would let a later slug
+// lookup in that language answer with a page the router would never route
+// there. The ID key keeps the caller's context: an ID names one page whatever
+// language asked for it.
 func (c *PageCache) store(page *store.Page, cacheCtx Context) {
-	slugKey := cacheCtx.PageKey(page.Slug)
+	slugKey := Context{LanguageCode: page.LanguageCode, Role: cacheCtx.Role}.PageKey(page.Slug)
 	idKey := cacheCtx.PageIDKey(page.ID)
 
 	c.mu.Lock()
@@ -208,7 +229,13 @@ func (c *PageCache) Preload(ctx context.Context, cacheCtx Context, limit int) er
 		return fmt.Errorf("failed to preload pages: %w", err)
 	}
 
+	// Warming happens per context, while ListPublishedPages spans every
+	// language. Pages are stored under their own language key, so a mismatched
+	// row would only occupy memory no lookup in this context can reach.
 	for i := range pages {
+		if pages[i].LanguageCode != cacheCtx.LanguageCode {
+			continue
+		}
 		c.store(&pages[i], cacheCtx)
 	}
 

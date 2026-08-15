@@ -106,6 +106,12 @@ oCMS implements defense-in-depth security measures:
 - Magic number checking
 - UUID-based storage
 
+### Migrator Filesystem Security
+- **Trusted source roots**: `OCMS_MIGRATOR_ALLOWED_FILE_ROOTS` limits local-media reads to configured, existing absolute directories; `DRUPAL_FILES` and `ELEFANT_FILES` are trusted roots for their sources. Safe root symlinks are canonicalized, and roots resolving to the filesystem root are rejected
+- **Fail-closed media import**: Without a trusted root, database/content migration remains available but local-media import is refused
+- **Root-relative access**: Lexical and symlink containment are verified before scanning, and files are opened through `os.Root` with relative paths
+- **Durable cleanup**: Failed UUID directory cleanup remains queued across restarts instead of being reported as complete
+
 ## Security Documentation
 
 For detailed information, see:

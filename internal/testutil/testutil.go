@@ -79,6 +79,7 @@ func MinimalThemeFuncMap() template.FuncMap {
 		"raw":                  func(s string) string { return s },
 		"nl2br":                func(s string) string { return s },
 		"addCacheBuster":       func(s string) string { return s },
+		"scriptURL":            func(s string) string { return s },
 		"analyticsHead":        func() string { return "" },
 		"analyticsBody":        func() string { return "" },
 		"hcaptchaEnabled":      func() bool { return false },

@@ -11,6 +11,46 @@ import (
 	"time"
 )
 
+const countContentReferencingMediaPath = `-- name: CountContentReferencingMediaPath :one
+SELECT
+    (SELECT COUNT(*) FROM pages
+      WHERE instr(body, ?1) > 0
+         OR instr(summary, ?1) > 0
+         OR instr(video_url, ?1) > 0
+         OR instr(canonical_url, ?1) > 0
+         OR instr(meta_description, ?1) > 0)
+  + (SELECT COUNT(*) FROM menu_items WHERE instr(COALESCE(url, ''), ?1) > 0)
+  + (SELECT COUNT(*) FROM categories WHERE instr(COALESCE(description, ''), ?1) > 0)
+  + (SELECT COUNT(*) FROM forms
+      WHERE instr(COALESCE(description, ''), ?1) > 0
+         OR instr(COALESCE(success_message, ''), ?1) > 0)
+  + (SELECT COUNT(*) FROM form_fields
+      WHERE instr(COALESCE(placeholder, ''), ?1) > 0
+         OR instr(COALESCE(help_text, ''), ?1) > 0
+         OR instr(COALESCE(options, ''), ?1) > 0
+         OR instr(COALESCE(validation, ''), ?1) > 0)
+  + (SELECT COUNT(*) FROM form_submissions WHERE instr(data, ?1) > 0)
+  + (SELECT COUNT(*) FROM widgets
+      WHERE instr(COALESCE(content, ''), ?1) > 0
+         OR instr(COALESCE(settings, ''), ?1) > 0)
+  + (SELECT COUNT(*) FROM config WHERE instr(value, ?1) > 0)
+  AS reference_count
+`
+
+// Counts every content record still pointing at a media storage path.
+//
+// Media URLs are plain text with no foreign key, so nothing in the schema
+// stops a file being deleted while a menu item, category description, form,
+// submission, widget or config value still links to it. The caller passes the
+// full '/uploads/<dir>/<uuid>/' prefix; matching the prefix rather than a whole
+// URL keeps filenames, variants and query strings out of the comparison.
+func (q *Queries) CountContentReferencingMediaPath(ctx context.Context, mediaPath string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countContentReferencingMediaPath, mediaPath)
+	var reference_count int64
+	err := row.Scan(&reference_count)
+	return reference_count, err
+}
+
 const countMedia = `-- name: CountMedia :one
 SELECT COUNT(*) FROM media
 `
@@ -61,6 +101,43 @@ SELECT COUNT(*) FROM media WHERE folder_id IS NULL
 
 func (q *Queries) CountMediaInRootFolder(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countMediaInRootFolder)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPagesEmbeddingMediaUUID = `-- name: CountPagesEmbeddingMediaUUID :one
+SELECT COUNT(*) FROM pages
+WHERE instr(
+    body,
+    '/uploads/' || ?1 || '/' || ?2 || '/'
+) > 0
+`
+
+type CountPagesEmbeddingMediaUUIDParams struct {
+	StorageDir sql.NullString `json:"storage_dir"`
+	MediaUuid  sql.NullString `json:"media_uuid"`
+}
+
+func (q *Queries) CountPagesEmbeddingMediaUUID(ctx context.Context, arg CountPagesEmbeddingMediaUUIDParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPagesEmbeddingMediaUUID, arg.StorageDir, arg.MediaUuid)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPagesUsingMedia = `-- name: CountPagesUsingMedia :one
+SELECT COUNT(*) FROM pages
+WHERE featured_image_id = ? OR og_image_id = ?
+`
+
+type CountPagesUsingMediaParams struct {
+	FeaturedImageID sql.NullInt64 `json:"featured_image_id"`
+	OgImageID       sql.NullInt64 `json:"og_image_id"`
+}
+
+func (q *Queries) CountPagesUsingMedia(ctx context.Context, arg CountPagesUsingMediaParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPagesUsingMedia, arg.FeaturedImageID, arg.OgImageID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -953,6 +1030,64 @@ func (q *Queries) UpdateMediaFolder(ctx context.Context, arg UpdateMediaFolderPa
 		&i.ParentID,
 		&i.Position,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateMediaForImport = `-- name: UpdateMediaForImport :one
+UPDATE media
+SET filename = ?, mime_type = ?, size = ?, width = ?, height = ?, alt = ?,
+    caption = ?, folder_id = ?, uploaded_by = ?, language_code = ?, updated_at = ?
+WHERE id = ?
+RETURNING id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at
+`
+
+type UpdateMediaForImportParams struct {
+	Filename     string         `json:"filename"`
+	MimeType     string         `json:"mime_type"`
+	Size         int64          `json:"size"`
+	Width        sql.NullInt64  `json:"width"`
+	Height       sql.NullInt64  `json:"height"`
+	Alt          sql.NullString `json:"alt"`
+	Caption      sql.NullString `json:"caption"`
+	FolderID     sql.NullInt64  `json:"folder_id"`
+	UploadedBy   int64          `json:"uploaded_by"`
+	LanguageCode string         `json:"language_code"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	ID           int64          `json:"id"`
+}
+
+func (q *Queries) UpdateMediaForImport(ctx context.Context, arg UpdateMediaForImportParams) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, updateMediaForImport,
+		arg.Filename,
+		arg.MimeType,
+		arg.Size,
+		arg.Width,
+		arg.Height,
+		arg.Alt,
+		arg.Caption,
+		arg.FolderID,
+		arg.UploadedBy,
+		arg.LanguageCode,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Filename,
+		&i.MimeType,
+		&i.Size,
+		&i.Width,
+		&i.Height,
+		&i.Alt,
+		&i.Caption,
+		&i.FolderID,
+		&i.UploadedBy,
+		&i.LanguageCode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

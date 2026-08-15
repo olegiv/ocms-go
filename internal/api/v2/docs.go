@@ -18,6 +18,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/views/utils"
 )
 
 // DocsServer renders /api/v2/docs (Swagger UI) and serves /api/v2/openapi.json
@@ -32,7 +33,13 @@ type DocsServer struct {
 // NewDocsServer parses the embedded Swagger UI template and binds it to the
 // v2 huma handler.
 func NewDocsServer(templatesFS fs.FS, h *Handler) (*DocsServer, error) {
-	tmpl, err := template.ParseFS(templatesFS, "api/docs.html")
+	// The docs page loads vendored swagger-ui bundles, which carry SRI hashes
+	// and therefore need the same cache-busted URLs as every other vendored
+	// script — a stale cached copy would fail the integrity check and blank
+	// the page.
+	tmpl, err := template.New("docs.html").
+		Funcs(template.FuncMap{"scriptURL": utils.ScriptURL}).
+		ParseFS(templatesFS, "api/docs.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing api docs template: %w", err)
 	}

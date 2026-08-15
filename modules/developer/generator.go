@@ -8,18 +8,19 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"math/big"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -560,18 +561,16 @@ func (m *Module) createCategoryTranslations(ctx context.Context, p categoryTrans
 }
 
 // generateMedia creates random placeholder images
-func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, error) {
+func (m *Module) generateMedia(ctx context.Context, uploaderID int64, defaultLanguageCode string) ([]int64, error) {
 	count := generateRandomCount()
 	var mediaIDs []int64
 	queries := store.New(m.ctx.DB)
-
-	// Get default language for media creation
-	defaultLang, err := queries.GetDefaultLanguage(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get default language: %w", err)
+	if !util.IsValidLangCode(defaultLanguageCode) || util.IsReservedLanguageCode(defaultLanguageCode) {
+		return nil, fmt.Errorf("default language %q is not routable", defaultLanguageCode)
 	}
 
-	uploadDir := "./uploads"
+	uploadDir := developerUploadDir()
+	processor := imaging.NewProcessor(uploadDir)
 
 	for i := 0; i < count; i++ {
 		mediaUUID := uuid.New().String()
@@ -587,12 +586,7 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 		}
 
 		// Save original
-		originalsDir := filepath.Join(uploadDir, "originals", mediaUUID)
-		if err := os.MkdirAll(originalsDir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create originals directory: %w", err)
-		}
-		originalPath := filepath.Join(originalsDir, filename)
-		if err := os.WriteFile(originalPath, imgData, 0644); err != nil {
+		if _, err := processor.SaveMediaImage(model.OriginalsDir, mediaUUID, filename, imgData); err != nil {
 			return nil, fmt.Errorf("failed to save original image: %w", err)
 		}
 
@@ -617,12 +611,7 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 				continue // Skip variant on error
 			}
 
-			variantDir := filepath.Join(uploadDir, v.name, mediaUUID)
-			if err := os.MkdirAll(variantDir, 0755); err != nil {
-				continue
-			}
-			variantPath := filepath.Join(variantDir, filename)
-			if err := os.WriteFile(variantPath, variantData, 0644); err != nil {
+			if _, err := processor.SaveMediaImage(v.name, mediaUUID, filename, variantData); err != nil {
 				continue
 			}
 		}
@@ -644,7 +633,7 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 			Caption:      sql.NullString{String: caption, Valid: true},
 			FolderID:     sql.NullInt64{Valid: false},
 			UploadedBy:   uploaderID,
-			LanguageCode: defaultLang.Code,
+			LanguageCode: defaultLanguageCode,
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		})
@@ -1015,7 +1004,15 @@ func (m *Module) generateMenuItems(ctx context.Context, languages []store.Langua
 // deleteAllGeneratedItems deletes all items created by this module
 func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 	queries := store.New(m.ctx.DB)
-	uploadDir := "./uploads"
+	uploadDir := developerUploadDir()
+	cleanupCtx, cleanupCancel := context.WithTimeout(
+		context.WithoutCancel(ctx), developerCleanupDrainTimeout,
+	)
+	if err := m.drainMediaCleanup(cleanupCtx); err != nil {
+		cleanupCancel()
+		return fmt.Errorf("developer media cleanup remains pending: %w", err)
+	}
+	cleanupCancel()
 
 	// Helper for simple entity deletion
 	deleteEntities := func(entityType string, deleteFn func(context.Context, int64) error) error {
@@ -1060,12 +1057,51 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 		return fmt.Errorf("failed to get tracked media: %w", err)
 	}
 	for _, id := range mediaIDs {
-		if media, err := queries.GetMediaByID(ctx, id); err == nil {
-			deleteMediaFiles(uploadDir, media.Uuid)
+		media, err := queries.GetMediaByID(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
 		}
-		_ = queries.DeleteMediaVariants(ctx, id)
-		if err := queries.DeleteMedia(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete media", "id", id, "error", err)
+		if err != nil {
+			return fmt.Errorf("failed to read media %d before cleanup: %w", id, err)
+		}
+		// Validate the irreversible filesystem target before changing the
+		// database, but remove files only after the row and its variants commit.
+		// A database failure must never leave a live media row pointing at files
+		// that were already deleted.
+		cleanupRoot, err := canonicalDeveloperUploadRoot(uploadDir)
+		if err != nil {
+			return fmt.Errorf("failed to resolve media cleanup root for %d: %w", id, err)
+		}
+		if err := imaging.ValidateMediaCleanupTarget(cleanupRoot, media.Uuid); err != nil {
+			return fmt.Errorf("failed to validate media cleanup for %d: %w", id, err)
+		}
+		tx, err := m.ctx.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to begin media delete for %d: %w", id, err)
+		}
+		txQueries := store.New(m.ctx.DB).WithTx(tx)
+		if err := enqueueDeveloperMediaCleanup(ctx, tx, cleanupRoot, media.Uuid); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("failed to persist media cleanup for %d: %w", id, err)
+		}
+		if err := txQueries.DeleteMediaVariants(ctx, id); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("failed to delete media variants for %d: %w", id, err)
+		}
+		if err := txQueries.DeleteMedia(ctx, id); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("failed to delete media %d: %w", id, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit media delete for %d: %w", id, err)
+		}
+		drainCtx, drainCancel := context.WithTimeout(
+			context.WithoutCancel(ctx), developerCleanupDrainTimeout,
+		)
+		drainErr := m.drainMediaCleanup(drainCtx)
+		drainCancel()
+		if drainErr != nil {
+			return fmt.Errorf("failed to drain committed media cleanup for %d: %w", id, drainErr)
 		}
 	}
 
@@ -1081,15 +1117,9 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 	return m.clearTrackedItems(ctx)
 }
 
-// deleteMediaFiles removes all files associated with a media item
-func deleteMediaFiles(uploadDir, mediaUUID string) {
-	// Delete original
-	originalsDir := filepath.Join(uploadDir, "originals", mediaUUID)
-	_ = os.RemoveAll(originalsDir)
-
-	// Delete variants (must match variants created in generateMedia)
-	for _, variant := range []string{"thumbnail", "grid", "small", "medium", "large", "og"} {
-		variantDir := filepath.Join(uploadDir, variant, mediaUUID)
-		_ = os.RemoveAll(variantDir)
+func developerUploadDir() string {
+	if uploadDir := os.Getenv("OCMS_UPLOADS_DIR"); uploadDir != "" {
+		return uploadDir
 	}
+	return "./uploads"
 }

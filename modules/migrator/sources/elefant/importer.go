@@ -7,32 +7,46 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
+	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/olegiv/ocms-go/internal/imaging"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
-	"golang.org/x/crypto/bcrypt"
 )
 
+// PublicRouteChecker reports whether a concrete URL belongs to a registered
+// module route. Core routes are protected separately below.
+type PublicRouteChecker interface {
+	OwnsPublicPath(path string) bool
+}
+
 // Source implements the migrator.Source interface for Elefant CMS.
-type Source struct{}
+type Source struct {
+	publicRouteChecker PublicRouteChecker
+}
 
 // NewSource creates a new Elefant CMS source.
 func NewSource() *Source {
 	return &Source{}
+}
+
+// SetPublicRouteChecker supplies destination module-route ownership checks for
+// imported page slugs and aliases.
+func (s *Source) SetPublicRouteChecker(checker PublicRouteChecker) {
+	s.publicRouteChecker = checker
 }
 
 // Name returns the unique identifier for this source.
@@ -64,80 +78,445 @@ func (s *Source) ConfigFields() []types.ConfigField {
 	}
 }
 
-// envOrDefault returns the environment variable value or the default if not set.
-func envOrDefault(key, defaultValue string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+// SupportedImportOptions declares the import options this source acts on.
+//
+// Elefant has no vocabulary or navigation tables to read, so ImportCategories
+// and ImportMenus are absent — Import does not consult either. They used to be
+// offered anyway, checked by default, which made every Elefant run promise
+// categories and menus and silently deliver neither.
+//
+// TestSourcesDeclareTheOptionsTheyRead keeps this in step with the code.
+func (s *Source) SupportedImportOptions() []string {
+	return []string{
+		"import_tags",
+		"import_media",
+		"import_posts",
+		"import_pages",
+		"import_users",
+		"skip_existing",
 	}
-	return defaultValue
 }
 
+// envOrDefault returns the environment variable value or the default if not set.
+var envOrDefault = shared.EnvOrDefault
+
+// Connection bounds for the source database. Mirrors the Drupal source: a
+// migration is a long sequence of modest reads, so the pool stays small and
+// every statement is bounded.
+const (
+	connectTimeout          = 10 * time.Second
+	readTimeout             = 60 * time.Second
+	trackingRollbackTimeout = 30 * time.Second
+	maxOpenConns            = 4
+	connMaxLifetime         = 30 * time.Minute
+)
+
 // buildDSN builds a MySQL DSN from the config.
-func (s *Source) buildDSN(cfg map[string]string) string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
-		cfg["mysql_user"],
-		cfg["mysql_password"],
-		cfg["mysql_host"],
-		cfg["mysql_port"],
-		cfg["mysql_database"],
-	)
+//
+// It delegates to shared.BuildMySQLDSN rather than formatting a string: raw
+// interpolation let a database name such as "db?allowAllFiles=true" inject
+// driver parameters and turn on LOCAL INFILE handling, and it bypassed the
+// OCMS_MIGRATOR_ALLOWED_DB_HOSTS allowlist entirely.
+func (s *Source) buildDSN(cfg map[string]string) (string, error) {
+	return shared.BuildMySQLDSN(cfg, shared.MySQLDSNOptions{
+		ConnectTimeout: connectTimeout,
+		ReadTimeout:    readTimeout,
+	})
+}
+
+// openReader builds the DSN and opens a bounded connection to the source.
+func (s *Source) openReader(ctx context.Context, cfg map[string]string) (*Reader, error) {
+	dsn, err := s.buildDSN(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return NewReader(ctx, dsn, cfg["table_prefix"])
+}
+
+// closeReader closes a reader, logging rather than dropping a close failure.
+func closeReader(reader *Reader) {
+	if err := reader.Close(); err != nil {
+		slog.Error("failed to close elefant reader", "error", err)
+	}
+}
+
+// track records a created entity so the module can undo the import later.
+//
+// A tracking failure does not abort the import, but it must not be silent: an
+// untracked item is invisible to "delete imported content" and is left behind
+// as an orphan with no record of where it came from.
+func (s *Source) track(ctx context.Context, tracker types.ImportTracker, result *types.ImportResult,
+	entityType types.EntityType, id int64, rollback func(context.Context) error) bool {
+	if tracker == nil {
+		return true
+	}
+	if err := tracker.TrackImportedItem(ctx, s.Name(), string(entityType), id); err != nil {
+		result.AddError("Failed to track imported %s %d: %v", entityType, id, err)
+		if rollback != nil {
+			// Tracking commonly fails because the import context was canceled.
+			// Compensation must still get a short independent window or the
+			// database driver will reject it immediately with the same error.
+			rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), trackingRollbackTimeout)
+			rollbackErr := rollback(rollbackCtx)
+			cancel()
+			if rollbackErr != nil {
+				result.AddError("Failed to roll back untracked %s %d: %v", entityType, id, rollbackErr)
+			}
+		}
+		return false
+	}
+	return true
+}
+
+// createTrackedPageAlias creates an alias and makes it subject to the same
+// compensating tracking guarantee as every other imported entity.
+func (s *Source) createTrackedPageAlias(ctx context.Context, queries *store.Queries,
+	pageID int64, alias string, createdAt time.Time, result *types.ImportResult,
+	tracker types.ImportTracker) error {
+	page, err := queries.GetPageByID(ctx, pageID)
+	if err != nil {
+		return fmt.Errorf("load page %d for alias %q: %w", pageID, alias, err)
+	}
+	alias = strings.Trim(alias, "/")
+	if alias == "" {
+		return errors.New("alias is empty")
+	}
+	if elefantCorePathReserved(alias) && !isElefantBlogPostAlias(alias) {
+		return fmt.Errorf("alias %q conflicts with a reserved oCMS route", alias)
+	}
+	if s.publicRouteChecker != nil && s.publicRouteChecker.OwnsPublicPath("/"+alias) {
+		return fmt.Errorf("alias %q conflicts with a registered oCMS module route", alias)
+	}
+	if prefix, remainder, prefixed, prefixErr := activeLanguageAliasPrefix(ctx, queries, alias); prefixErr != nil {
+		return prefixErr
+	} else if prefixed {
+		if remainder == "" || languageChildRouteReserved(remainder) {
+			return fmt.Errorf("alias %q is owned by the %q language router", alias, prefix)
+		}
+		occupied, occupiedErr := languageAliasRouteOccupied(ctx, queries, prefix, remainder)
+		if occupiedErr != nil {
+			return fmt.Errorf("check language-prefixed alias %q: %w", alias, occupiedErr)
+		}
+		if occupied {
+			return fmt.Errorf("alias %q is already owned in the %q language namespace", alias, prefix)
+		}
+		return s.createTrackedRedirect(ctx, queries, "/"+alias, canonicalPagePath(ctx, queries, page), createdAt, result, tracker)
+	}
+
+	slugOwner, err := queries.GetPageBySlug(ctx, alias)
+	switch {
+	case err == nil && slugOwner.ID == pageID:
+		return nil
+	case err == nil && slugOwner.LanguageCode != page.LanguageCode:
+		aliasOwner, aliasErr := queries.GetPageByAlias(ctx, alias)
+		if aliasErr == nil && aliasOwner.ID != pageID {
+			return fmt.Errorf("alias %q is already owned by page %d", alias, aliasOwner.ID)
+		}
+		if aliasErr != nil && !errors.Is(aliasErr, sql.ErrNoRows) {
+			return fmt.Errorf("check alias %q ownership: %w", alias, aliasErr)
+		}
+		return s.createTrackedRedirect(ctx, queries, "/"+alias, canonicalPagePath(ctx, queries, page), createdAt, result, tracker)
+	case err == nil:
+		return fmt.Errorf("alias %q is shadowed by existing page slug owned by page %d", alias, slugOwner.ID)
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("check alias %q against page slugs: %w", alias, err)
+	}
+	redirectOccupied, err := redirectPathOccupied(ctx, queries, "/"+alias)
+	if err != nil {
+		return fmt.Errorf("check redirect ownership for alias %q: %w", alias, err)
+	}
+	if redirectOccupied {
+		return fmt.Errorf("alias %q is shadowed by an existing redirect", alias)
+	}
+	created, err := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+		PageID: pageID, Alias: alias, CreatedAt: createdAt,
+	})
+	if err != nil {
+		return err
+	}
+	if !s.track(ctx, tracker, result, types.EntityAlias, created.ID, func(rollbackCtx context.Context) error {
+		return queries.DeletePageAlias(rollbackCtx, created.ID)
+	}) {
+		return nil
+	}
+	result.AliasesImported++
+	return nil
+}
+
+func activeLanguageAliasPrefix(ctx context.Context, queries *store.Queries, alias string) (string, string, bool, error) {
+	first, remainder, hasRemainder := strings.Cut(alias, "/")
+	first = strings.ToLower(first)
+	languages, err := queries.ListActiveLanguages(ctx)
+	if err != nil {
+		return "", "", false, fmt.Errorf("list active languages: %w", err)
+	}
+	for _, language := range languages {
+		if strings.EqualFold(language.Code, first) && util.IsValidLangCode(language.Code) && !util.IsReservedLanguageCode(language.Code) {
+			if !hasRemainder {
+				remainder = ""
+			}
+			return language.Code, remainder, true, nil
+		}
+	}
+	return "", "", false, nil
+}
+
+func languageChildRouteReserved(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		return true
+	}
+	switch parts[0] {
+	case "blog", "search":
+		return len(parts) == 1 || (parts[0] == "blog" && len(parts) == 3 && parts[1] == "tag")
+	case "category", "tag", "page", "forms":
+		return len(parts) == 2
+	default:
+		return false
+	}
+}
+
+func languageAliasRouteOccupied(ctx context.Context, queries *store.Queries, languageCode, alias string) (bool, error) {
+	page, err := queries.GetPageBySlug(ctx, alias)
+	switch {
+	case err == nil && page.LanguageCode == languageCode:
+		return true, nil
+	case err == nil, errors.Is(err, sql.ErrNoRows):
+	case err != nil:
+		return false, err
+	}
+	page, err = queries.GetPageByAlias(ctx, alias)
+	switch {
+	case err == nil:
+		return page.LanguageCode == languageCode, nil
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+func canonicalPagePath(ctx context.Context, queries *store.Queries, page store.Page) string {
+	defaultLanguage, err := queries.GetDefaultLanguage(ctx)
+	if err == nil && page.LanguageCode != "" && page.LanguageCode != defaultLanguage.Code {
+		return "/" + page.LanguageCode + "/" + page.Slug
+	}
+	return "/" + page.Slug
+}
+
+func (s *Source) makeUniquePageSlug(ctx context.Context, queries *store.Queries, baseSlug string) string {
+	return shared.MakeUniqueSlugWithGuard(ctx, queries, baseSlug, func(slug string) bool {
+		if elefantCorePathReserved(slug) {
+			return false
+		}
+		if s.publicRouteChecker != nil && s.publicRouteChecker.OwnsPublicPath("/"+slug) {
+			return false
+		}
+		occupied, err := redirectPathOccupied(ctx, queries, "/"+slug)
+		return err == nil && !occupied
+	})
+}
+
+func elefantCorePathReserved(path string) bool {
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return true
+	}
+	first, _, _ := strings.Cut(path, "/")
+	if util.IsReservedLanguageCode(strings.ToLower(first)) {
+		return true
+	}
+	switch path {
+	case "sitemap.xml", "robots.txt", "favicon.ico":
+		return true
+	}
+	return path == ".well-known" || strings.HasPrefix(path, ".well-known/")
+}
+
+func isElefantBlogPostAlias(alias string) bool {
+	parts := strings.Split(strings.Trim(alias, "/"), "/")
+	if len(parts) != 3 || parts[0] != "blog" || parts[1] != "post" {
+		return false
+	}
+	for _, char := range parts[2] {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return parts[2] != ""
+}
+
+func redirectPathOccupied(ctx context.Context, queries *store.Queries, sourcePath string) (bool, error) {
+	_, err := queries.GetRedirectBySourcePath(ctx, sourcePath)
+	switch {
+	case err == nil:
+		return true, nil
+	case !errors.Is(err, sql.ErrNoRows):
+		return false, err
+	}
+	redirects, err := queries.ListEnabledRedirects(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, redirect := range redirects {
+		if redirect.SourcePath == sourcePath ||
+			(redirect.IsWildcard && wildcardRedirectMatchesPath(redirect.SourcePath, sourcePath)) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Source) createTrackedRedirect(ctx context.Context, queries *store.Queries,
+	sourcePath, targetURL string, createdAt time.Time, result *types.ImportResult,
+	tracker types.ImportTracker) error {
+	redirects, err := queries.ListEnabledRedirects(ctx)
+	if err != nil {
+		return fmt.Errorf("list redirects before creating %q: %w", sourcePath, err)
+	}
+	for _, redirect := range redirects {
+		if redirect.IsWildcard && wildcardRedirectMatchesPath(redirect.SourcePath, sourcePath) {
+			return fmt.Errorf("redirect %q is shadowed by enabled wildcard redirect %q", sourcePath, redirect.SourcePath)
+		}
+	}
+	existing, err := queries.GetRedirectBySourcePath(ctx, sourcePath)
+	switch {
+	case err == nil && existing.TargetUrl == targetURL && existing.Enabled:
+		result.RedirectsSkipped++
+		return nil
+	case err == nil:
+		return fmt.Errorf("redirect %q already targets %q", sourcePath, existing.TargetUrl)
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("check redirect %q: %w", sourcePath, err)
+	}
+	redirect, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: sourcePath,
+		TargetUrl:  targetURL,
+		StatusCode: http.StatusMovedPermanently,
+		IsWildcard: false,
+		TargetType: model.TargetSelf,
+		Enabled:    true,
+		CreatedAt:  createdAt,
+		UpdatedAt:  createdAt,
+	})
+	if err != nil {
+		return err
+	}
+	if !s.track(ctx, tracker, result, types.EntityRedirect, redirect.ID, func(rollbackCtx context.Context) error {
+		return queries.DeleteRedirect(rollbackCtx, redirect.ID)
+	}) {
+		return nil
+	}
+	result.RedirectsImported++
+	return nil
+}
+
+func wildcardRedirectMatchesPath(pattern, requestPath string) bool {
+	if strings.HasSuffix(pattern, "*") && !strings.HasSuffix(pattern, "**") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		if !strings.HasSuffix(prefix, "/") {
+			requestPath = strings.TrimSuffix(requestPath, "/")
+			prefixWithoutSlash := strings.TrimSuffix(prefix, "/")
+			return requestPath == prefixWithoutSlash || strings.HasPrefix(requestPath, prefix)
+		}
+	}
+	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
+	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
+	return wildcardRedirectPartsMatch(patternParts, requestParts, 0, 0)
+}
+
+func wildcardRedirectPartsMatch(pattern, request []string, patternIndex, requestIndex int) bool {
+	if patternIndex >= len(pattern) {
+		return requestIndex >= len(request)
+	}
+	if requestIndex >= len(request) {
+		for ; patternIndex < len(pattern); patternIndex++ {
+			if pattern[patternIndex] != "**" {
+				return false
+			}
+		}
+		return true
+	}
+	switch pattern[patternIndex] {
+	case "*":
+		return wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
+	case "**":
+		if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex) {
+			return true
+		}
+		for end := requestIndex + 1; end <= len(request); end++ {
+			if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, end) {
+				return true
+			}
+		}
+		return false
+	default:
+		return pattern[patternIndex] == request[requestIndex] &&
+			wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
+	}
+}
+
+func (s *Source) cleanupMediaFiles(ctx context.Context, tracker types.ImportTracker,
+	canonicalUploadRoot, mediaUUID string) error {
+	err := imaging.DeleteMediaFilesFromCanonicalRoot(canonicalUploadRoot, mediaUUID)
+	if err == nil {
+		return nil
+	}
+	queuer, ok := tracker.(types.MediaCleanupQueuer)
+	if !ok {
+		return err
+	}
+	queueCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), trackingRollbackTimeout)
+	queueErr := queuer.QueueMediaCleanup(queueCtx, s.Name(), canonicalUploadRoot, mediaUUID)
+	cancel()
+	if queueErr != nil {
+		return errors.Join(err, fmt.Errorf("queue media cleanup: %w", queueErr))
+	}
+	return fmt.Errorf("%w (durable cleanup retry queued)", err)
 }
 
 // TestConnection tests the connection to the Elefant database.
 func (s *Source) TestConnection(cfg map[string]string) error {
-	dsn := s.buildDSN(cfg)
+	return s.TestConnectionContext(context.Background(), cfg)
+}
+
+// TestConnectionContext tests the connection while honoring cancellation from
+// the HTTP request that initiated it.
+func (s *Source) TestConnectionContext(parent context.Context, cfg map[string]string) error {
+	ctx, cancel := context.WithTimeout(parent, connectTimeout+readTimeout)
+	defer cancel()
+
 	prefix := cfg["table_prefix"]
-	reader, err := NewReader(dsn, prefix)
+	reader, err := s.openReader(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := reader.Close(); err != nil {
-			slog.Error("failed to close elefant reader", "error", err)
-		}
-	}()
+	defer closeReader(reader)
 
-	// Try to get counts to verify tables exist
-	postCount, err := reader.GetPostCount()
-	if err != nil {
+	// Query both counts to verify the expected tables exist.
+	if _, err := reader.GetPostCount(ctx); err != nil {
 		return fmt.Errorf("failed to query %sblog_post table: %w", prefix, err)
 	}
-
-	tagCount, err := reader.GetTagCount()
-	if err != nil {
+	if _, err := reader.GetTagCount(ctx); err != nil {
 		return fmt.Errorf("failed to query %sblog_tag table: %w", prefix, err)
 	}
-
-	_ = postCount
-	_ = tagCount
 
 	return nil
 }
 
 // getUploadDir returns the oCMS uploads directory from env or default.
-func getUploadDir() string {
-	if dir := os.Getenv("OCMS_UPLOADS_DIR"); dir != "" {
-		return dir
-	}
-	return "./uploads"
-}
+var getUploadDir = shared.UploadDir
 
 // Import imports content from Elefant CMS into oCMS.
 func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, opts types.ImportOptions, tracker types.ImportTracker) (*types.ImportResult, error) {
 	result := &types.ImportResult{}
 
 	// Connect to Elefant database
-	dsn := s.buildDSN(cfg)
-	prefix := cfg["table_prefix"]
-	reader, err := NewReader(dsn, prefix)
+	reader, err := s.openReader(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Elefant database: %w", err)
 	}
-	defer func() {
-		if err := reader.Close(); err != nil {
-			slog.Error("failed to close elefant reader", "error", err)
-		}
-	}()
+	defer closeReader(reader)
 
 	// Get oCMS store
 	queries := store.New(db)
@@ -149,7 +528,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	}
 
 	// Get the default language for imported content
-	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	defaultLang, err := shared.RoutableDefaultLanguage(ctx, queries)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get default language: %w", err)
 	}
@@ -159,7 +538,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if opts.ImportTags {
 		tagMap, err = s.importTags(ctx, queries, reader, defaultLang.Code, opts, result, tracker)
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Tags import error: %v", err))
+			result.AddError("Tags import error: %v", err)
 		}
 	} else {
 		// Build tag map from existing tags
@@ -177,7 +556,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 			uploadDir := getUploadDir()
 			mediaMap, err = s.importMedia(ctx, queries, filesPath, uploadDir, authorID, result, tracker)
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Media import error: %v", err))
+				result.AddError("Media import error: %v", err)
 			}
 		}
 	}
@@ -185,21 +564,21 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	// Import posts
 	if opts.ImportPosts {
 		if err := s.importPosts(ctx, queries, reader, authorID, defaultLang.Code, tagMap, mediaMap, opts, result, tracker); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Posts import error: %v", err))
+			result.AddError("Posts import error: %v", err)
 		}
 	}
 
 	// Import pages (static webpages)
 	if opts.ImportPages {
 		if err := s.importPages(ctx, queries, reader, authorID, defaultLang.Code, mediaMap, opts, result, tracker); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Pages import error: %v", err))
+			result.AddError("Pages import error: %v", err)
 		}
 	}
 
 	// Import users (as public users only)
 	if opts.ImportUsers {
 		if err := s.importUsers(ctx, queries, reader, opts, result, tracker); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Users import error: %v", err))
+			result.AddError("Users import error: %v", err)
 		}
 	}
 
@@ -207,7 +586,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if opts.ImportPosts || opts.ImportPages {
 		searchService := service.NewSearchService(db)
 		if err := searchService.RebuildIndex(ctx); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("FTS index rebuild error: %v", err))
+			result.AddError("FTS index rebuild error: %v", err)
 		}
 	}
 
@@ -245,7 +624,7 @@ func (s *Source) buildExistingTagMap(ctx context.Context, queries *store.Queries
 
 // importTags imports tags from Elefant.
 func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader *Reader, defaultLangCode string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) (map[string]int64, error) {
-	elefantTags, err := reader.GetTags()
+	elefantTags, err := reader.GetTags(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tags from Elefant: %w", err)
 	}
@@ -272,6 +651,10 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 			result.TagsSkipped++
 			continue
 		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			result.AddError("Failed to check for existing tag '%s': %v", name, err)
+			continue
+		}
 
 		// Create new tag
 		tag, err := queries.CreateTag(ctx, store.CreateTagParams{
@@ -282,13 +665,14 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 			UpdatedAt:    now,
 		})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create tag '%s': %v", name, err))
+			result.AddError("Failed to create tag '%s': %v", name, err)
 			continue
 		}
 
-		// Track imported tag for later deletion
-		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "tag", tag.ID)
+		if !s.track(ctx, tracker, result, types.EntityTag, tag.ID, func(rollbackCtx context.Context) error {
+			return queries.DeleteTag(rollbackCtx, tag.ID)
+		}) {
+			continue
 		}
 
 		tagMap[slug] = tag.ID
@@ -306,8 +690,17 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 	// Map: old Elefant path → new oCMS URL
 	mediaMap := make(map[string]string)
 
-	// Scan Elefant files directory
-	files, err := ScanMediaFiles(filesPath)
+	mediaRoot, err := shared.OpenMediaRoot(filesPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open media root: %w", err)
+	}
+	defer func() {
+		if err := mediaRoot.Close(); err != nil {
+			slog.Error("failed to close elefant media root", "error", err)
+		}
+	}()
+
+	files, err := mediaRoot.Scan()
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan media files: %w", err)
 	}
@@ -317,12 +710,16 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 	}
 
 	// Get default language for media creation
-	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	defaultLang, err := shared.RoutableDefaultLanguage(ctx, queries)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get default language: %w", err)
 	}
 
-	processor := imaging.NewProcessor(uploadDir)
+	canonicalUploadRoot, err := imaging.CanonicalUploadRoot(uploadDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open uploads root: %w", err)
+	}
+	processor := imaging.NewProcessor(canonicalUploadRoot)
 	now := time.Now()
 
 	for _, file := range files {
@@ -337,9 +734,9 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 		// might have the same name. Each import creates new media entries.
 
 		// Open source file
-		srcFile, err := os.Open(file.FullPath)
+		srcFile, err := mediaRoot.Open(file.Path)
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to open %s: %v", file.Path, err))
+			result.AddError("Failed to open %s: %v", file.Path, err)
 			continue
 		}
 
@@ -347,13 +744,21 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 
 		// Process based on type
 		if processor.IsImage(file.MimeType) {
-			// Process image - creates original and variants
-			processResult, err := processor.ProcessImage(srcFile, fileUUID, file.Filename)
-			if closeErr := srcFile.Close(); closeErr != nil {
-				slog.Error("failed to close source file", "path", file.Path, "error", closeErr)
+			// Process image - creates original and variants. Migration files
+			// come from a trusted local directory, so an oversized photo is
+			// downscaled rather than dropped.
+			processResult, processErr := processor.ProcessImageWithOptions(srcFile, fileUUID, file.Filename,
+				imaging.ProcessOptions{DownscaleOversized: true})
+			closeErr := srcFile.Close()
+			if processErr != nil {
+				cleanupErr := s.cleanupMediaFiles(ctx, tracker, canonicalUploadRoot, fileUUID)
+				result.AddError("Failed to process %s: %v", file.Path,
+					errors.Join(processErr, closeErr, cleanupErr))
+				continue
 			}
-			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to process %s: %v", file.Path, err))
+			if closeErr != nil {
+				cleanupErr := s.cleanupMediaFiles(ctx, tracker, canonicalUploadRoot, fileUUID)
+				result.AddError("Failed to close %s: %v", file.Path, errors.Join(closeErr, cleanupErr))
 				continue
 			}
 
@@ -374,39 +779,55 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				UpdatedAt:    now,
 			})
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create media record for %s: %v", file.Path, err))
+				cleanupErr := s.cleanupMediaFiles(ctx, tracker, canonicalUploadRoot, fileUUID)
+				result.AddError("Failed to create media record for %s: %v", file.Path,
+					errors.Join(err, cleanupErr))
 				continue
 			}
 
-			// Create variants (best effort - don't fail if variants fail)
-			variants, _ := processor.CreateAllVariants(processResult.FilePath, fileUUID, file.Filename)
+			if !s.track(ctx, tracker, result, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
+				if err := queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
+					return err
+				}
+				return s.cleanupMediaFiles(rollbackCtx, tracker, canonicalUploadRoot, fileUUID)
+			}) {
+				continue
+			}
+
+			// Best effort for a partial failure, but CreateAllVariants errors
+			// only when every variant failed — the signal that the whole
+			// library will have no thumbnails. See the Drupal source.
+			variants, varErr := processor.CreateAllVariants(processResult.FilePath, fileUUID, file.Filename)
+			if varErr != nil {
+				result.AddError("%s: no resized variants could be created: %v", file.Filename, varErr)
+			}
 			for _, v := range variants {
-				_, _ = queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+				if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
 					MediaID:   media.ID,
 					Type:      v.Type,
 					Width:     int64(v.Width),
 					Height:    int64(v.Height),
 					Size:      v.Size,
 					CreatedAt: now,
-				})
-			}
-
-			// Track imported media for later deletion
-			if tracker != nil {
-				_ = tracker.TrackImportedItem(ctx, s.Name(), "media", media.ID)
+				}); err != nil {
+					slog.Warn("failed to record media variant",
+						"media_id", media.ID, "variant", v.Type, "error", err)
+				}
 			}
 
 			// Map old path to new URL
-			mediaMap["/files/"+file.Path] = fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, file.Filename)
+			mediaMap["/files/"+file.Path] = model.MediaURL(model.VariantOriginal, fileUUID, file.Filename)
 
 		} else {
 			// Non-image file - save directly without processing
-			err := s.saveNonImageFile(srcFile, uploadDir, fileUUID, file.Filename)
-			if closeErr := srcFile.Close(); closeErr != nil {
-				slog.Error("failed to close source file", "path", file.Path, "error", closeErr)
-			}
-			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to save %s: %v", file.Path, err))
+			writtenRoot, saveErr := s.saveNonImageFile(srcFile, canonicalUploadRoot, fileUUID, file.Filename)
+			closeErr := srcFile.Close()
+			if err := errors.Join(saveErr, closeErr); err != nil {
+				var cleanupErr error
+				if writtenRoot != "" {
+					cleanupErr = s.cleanupMediaFiles(ctx, tracker, writtenRoot, fileUUID)
+				}
+				result.AddError("Failed to save %s: %v", file.Path, errors.Join(err, cleanupErr))
 				continue
 			}
 
@@ -427,17 +848,23 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				UpdatedAt:    now,
 			})
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create media record for %s: %v", file.Path, err))
+				cleanupErr := s.cleanupMediaFiles(ctx, tracker, writtenRoot, fileUUID)
+				result.AddError("Failed to create media record for %s: %v", file.Path,
+					errors.Join(err, cleanupErr))
 				continue
 			}
 
-			// Track imported media for later deletion
-			if tracker != nil {
-				_ = tracker.TrackImportedItem(ctx, s.Name(), "media", media.ID)
+			if !s.track(ctx, tracker, result, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
+				if err := queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
+					return err
+				}
+				return s.cleanupMediaFiles(rollbackCtx, tracker, writtenRoot, fileUUID)
+			}) {
+				continue
 			}
 
 			// Map old path to new URL
-			mediaMap["/files/"+file.Path] = fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, file.Filename)
+			mediaMap["/files/"+file.Path] = model.MediaURL(model.VariantOriginal, fileUUID, file.Filename)
 		}
 
 		result.MediaImported++
@@ -448,76 +875,13 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 
 // saveNonImageFile saves a non-image file to the uploads directory.
 // The filename is sanitized to prevent path traversal attacks.
-func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename string) error {
-	// Sanitize filename to prevent path traversal (e.g., "../../../etc/passwd")
-	safeFilename, err := util.SanitizeFilename(filename)
-	if err != nil {
-		return fmt.Errorf("invalid filename %q: %w", filename, err)
-	}
-
-	// Create directory structure using safe path construction
-	destDir := filepath.Join(uploadDir, "originals", fileUUID)
-
-	// Validate destination is within upload directory
-	if err := util.ValidatePathWithinBase(uploadDir, destDir); err != nil {
-		return fmt.Errorf("invalid destination directory: %w", err)
-	}
-
-	// Additional inline validation for CodeQL
-	cleanDestDir := filepath.Clean(destDir)
-	if strings.Contains(cleanDestDir, "..") || filepath.IsAbs(fileUUID) {
-		return fmt.Errorf("invalid destination directory: path traversal detected")
-	}
-
-	if err := os.MkdirAll(cleanDestDir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	// Create destination file with sanitized filename
-	destPath := filepath.Join(cleanDestDir, safeFilename)
-
-	// Double-check the final path is still within uploadDir
-	if err := util.ValidatePathWithinBase(uploadDir, destPath); err != nil {
-		return fmt.Errorf("invalid destination path: %w", err)
-	}
-
-	dest, err := os.Create(destPath)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer func() {
-		if err := dest.Close(); err != nil {
-			slog.Error("failed to close destination file", "path", destPath, "error", err)
-		}
-	}()
-
-	// Copy file content
-	if _, err := src.Seek(0, 0); err != nil {
-		return fmt.Errorf("failed to seek source file: %w", err)
-	}
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, readErr := src.Read(buf)
-		if n > 0 {
-			if _, writeErr := dest.Write(buf[:n]); writeErr != nil {
-				return fmt.Errorf("failed to write file: %w", writeErr)
-			}
-		}
-		if readErr != nil {
-			if readErr == io.EOF {
-				break
-			}
-			return fmt.Errorf("failed to read file: %w", readErr)
-		}
-	}
-
-	return nil
+func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename string) (string, error) {
+	return shared.SaveNonImageFileWithCanonicalRoot(src, uploadDir, fileUUID, filename)
 }
 
 // importPosts imports blog posts from Elefant.
 func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, defaultLangCode string, tagMap map[string]int64, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
-	posts, err := reader.GetBlogPosts()
+	posts, err := reader.GetBlogPosts(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get posts from Elefant: %w", err)
 	}
@@ -539,10 +903,18 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 				result.PostsSkipped++
 				continue
 			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				result.AddError("Failed to check for existing page '%s': %v", post.Title, err)
+				continue
+			}
 		}
 
 		// Make slug unique if it already exists (handles duplicates)
-		slug := makeUniqueSlug(ctx, queries, baseSlug)
+		slug := s.makeUniquePageSlug(ctx, queries, baseSlug)
+		if slug == "" {
+			result.AddError("Failed to allocate a reachable slug for post '%s'", post.Title)
+			continue
+		}
 
 		// Map Elefant published status to oCMS status
 		status := "draft"
@@ -574,24 +946,22 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			UpdatedAt:       now,
 		})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create page '%s': %v", post.Title, err))
+			result.AddError("Failed to create page '%s': %v", post.Title, err)
 			continue
 		}
 
-		// Track imported post for later deletion
-		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "post", page.ID)
+		if !s.track(ctx, tracker, result, types.EntityPost, page.ID, func(rollbackCtx context.Context) error {
+			return queries.DeletePage(rollbackCtx, page.ID)
+		}) {
+			continue
 		}
 
 		// Create page alias for old Elefant URL (blog/post/{id})
 		alias := fmt.Sprintf("blog/post/%d", post.ID)
-		_, aliasErr := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
-			PageID:    page.ID,
-			Alias:     alias,
-			CreatedAt: now,
-		})
+		aliasErr := s.createTrackedPageAlias(ctx, queries, page.ID, alias, now, result, tracker)
 		if aliasErr != nil {
-			// Log warning but continue - alias is not critical
+			result.AddError("Failed to create legacy alias '%s' for page '%s': %v",
+				alias, post.Title, aliasErr)
 			slog.Warn("failed to create blog alias for page",
 				"page_id", page.ID,
 				"alias", alias,
@@ -605,7 +975,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 				UpdatedAt:   now,
 				ID:          page.ID,
 			}); err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to set published_at for '%s': %v", post.Title, err))
+				result.AddError("Failed to set published_at for '%s': %v", post.Title, err)
 			}
 		}
 
@@ -619,7 +989,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 						PageID: page.ID,
 						TagID:  tagID,
 					}); err != nil {
-						result.Errors = append(result.Errors, fmt.Sprintf("Failed to add tag '%s' to page '%s': %v", tagSlug, post.Title, err))
+						result.AddError("Failed to add tag '%s' to page '%s': %v", tagSlug, post.Title, err)
 					}
 				}
 			}
@@ -633,7 +1003,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 
 // importPages imports static webpages from Elefant.
 func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, defaultLangCode string, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
-	pages, err := reader.GetWebpages()
+	pages, err := reader.GetWebpages(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get webpages from Elefant: %w", err)
 	}
@@ -654,10 +1024,18 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 				result.PagesSkipped++
 				continue
 			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				result.AddError("Failed to check for existing page '%s': %v", wp.Title, err)
+				continue
+			}
 		}
 
 		// Make slug unique if it already exists
-		slug := makeUniqueSlug(ctx, queries, baseSlug)
+		slug := s.makeUniquePageSlug(ctx, queries, baseSlug)
+		if slug == "" {
+			result.AddError("Failed to allocate a reachable slug for page '%s'", wp.Title)
+			continue
+		}
 
 		// Map Elefant access to oCMS status
 		status := "draft"
@@ -694,23 +1072,24 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 			UpdatedAt:       now,
 		})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create page '%s': %v", wp.Title, err))
+			result.AddError("Failed to create page '%s': %v", wp.Title, err)
 			continue
 		}
 
-		// Track imported page for later deletion
-		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "page", page.ID)
+		if !s.track(ctx, tracker, result, types.EntityPage, page.ID, func(rollbackCtx context.Context) error {
+			return queries.DeletePage(rollbackCtx, page.ID)
+		}) {
+			continue
 		}
 
-		// Create page alias for old Elefant URL path (only if it is a safe alias format)
-		if wp.ID != slug && util.IsValidAlias(wp.ID) {
-			_, aliasErr := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
-				PageID:    page.ID,
-				Alias:     wp.ID,
-				CreatedAt: now,
-			})
+		// Preserve safe source paths verbatim. Imported aliases intentionally
+		// allow established mixed-case, underscore, and Unicode paths that are
+		// broader than the administrator slug grammar.
+		if wp.ID != slug && shared.IsSafeImportedAliasPath(wp.ID) {
+			aliasErr := s.createTrackedPageAlias(ctx, queries, page.ID, wp.ID, now, result, tracker)
 			if aliasErr != nil {
+				result.AddError("Failed to create legacy alias '%s' for page '%s': %v",
+					wp.ID, wp.Title, aliasErr)
 				slog.Warn("failed to create page alias",
 					"page_id", page.ID,
 					"alias", wp.ID,
@@ -729,7 +1108,7 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 				UpdatedAt:   now,
 				ID:          page.ID,
 			}); err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to set published_at for page '%s': %v", wp.Title, err))
+				result.AddError("Failed to set published_at for page '%s': %v", wp.Title, err)
 			}
 		}
 
@@ -740,37 +1119,10 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 }
 
 // replaceMediaURLs replaces Elefant file paths with oCMS media URLs in HTML content.
-func replaceMediaURLs(body string, mediaMap map[string]string) string {
-	for oldPath, newPath := range mediaMap {
-		body = strings.ReplaceAll(body, oldPath, newPath)
-	}
-	return body
-}
+var replaceMediaURLs = shared.ReplaceURLs
 
 // makeUniqueSlug generates a unique slug by appending -2, -3, etc. if needed.
-func makeUniqueSlug(ctx context.Context, queries *store.Queries, baseSlug string) string {
-	slug := baseSlug
-
-	// Try the base slug first
-	_, err := queries.GetPageBySlug(ctx, slug)
-	if err != nil {
-		// Slug doesn't exist, use it
-		return slug
-	}
-
-	// Slug exists, try with suffix
-	for i := 2; i <= 100; i++ {
-		slug = baseSlug + "-" + strconv.Itoa(i)
-		_, err := queries.GetPageBySlug(ctx, slug)
-		if err != nil {
-			// This slug is available
-			return slug
-		}
-	}
-
-	// Fallback: append timestamp
-	return baseSlug + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-}
+var makeUniqueSlug = shared.MakeUniqueSlug
 
 // parseElefantTags parses the JSON array of tags from Elefant.
 func parseElefantTags(tagsJSON string) []string {
@@ -792,34 +1144,29 @@ func parseElefantTags(tagsJSON string) []string {
 }
 
 // nullStringToString converts sql.NullString to string.
-func nullStringToString(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return ""
-}
+var nullStringToString = shared.NullString
 
 // importUsers imports users from Elefant as public users.
 // Note: Passwords cannot be migrated due to different hashing algorithms,
 // so new random passwords are generated for imported users.
 // Users will need to use "forgot password" to set their own passwords.
 func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader *Reader, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
-	users, err := reader.GetUsers()
+	users, err := reader.GetUsers(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get users from Elefant: %w", err)
 	}
 
 	now := time.Now()
 
-	// Pre-generate a single password hash to use for all imported users.
-	// This is much faster than hashing individually, and since users need
-	// to reset their passwords anyway, using the same placeholder is fine.
-	// We use MinCost since this is just a placeholder password.
-	placeholderHash, err := bcrypt.GenerateFromPassword([]byte("imported-user-must-reset"), bcrypt.MinCost)
+	// One hash for every user in this run — hashing per user is needlessly
+	// expensive when nobody can use the credential anyway. It must be random,
+	// though: this previously bcrypt-hashed the constant
+	// "imported-user-must-reset" at MinCost, which let anyone sign in as any
+	// imported account.
+	passwordHash, err := shared.UnguessablePlaceholderHash()
 	if err != nil {
-		return fmt.Errorf("failed to generate placeholder password hash: %w", err)
+		return err
 	}
-	passwordHash := string(placeholderHash)
 
 	for _, user := range users {
 		// Check context for cancellation
@@ -831,10 +1178,16 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 
 		// Check if user already exists by email
 		if opts.SkipExisting {
-			_, err := queries.GetUserByEmail(ctx, user.Email)
-			if err == nil {
+			_, lookupErr := queries.GetUserByEmail(ctx, user.Email)
+			switch {
+			case lookupErr == nil:
 				// User exists, skip
 				result.UsersSkipped++
+				continue
+			case errors.Is(lookupErr, sql.ErrNoRows):
+				// Not present: create it below.
+			default:
+				result.AddError("Failed to check for existing user '%s': %v", user.Email, lookupErr)
 				continue
 			}
 		}
@@ -849,13 +1202,14 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 			UpdatedAt:    now,
 		})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create user '%s': %v", user.Email, err))
+			result.AddError("Failed to create user '%s': %v", user.Email, err)
 			continue
 		}
 
-		// Track imported user for later deletion
-		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "user", createdUser.ID)
+		if !s.track(ctx, tracker, result, types.EntityUser, createdUser.ID, func(rollbackCtx context.Context) error {
+			return queries.DeleteUser(rollbackCtx, createdUser.ID)
+		}) {
+			continue
 		}
 
 		result.UsersImported++

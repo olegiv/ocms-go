@@ -6,10 +6,18 @@ package developer
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/imaging"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -134,11 +142,14 @@ func TestMigrationDown(t *testing.T) {
 	m := New()
 	moduleutil.RunMigrations(t, db, m.Migrations())
 
-	// Down should drop the table
-	if err := m.Migrations()[0].Down(db); err != nil {
-		t.Fatalf("migration down: %v", err)
+	// Down should drop both tables in reverse order.
+	for index := len(m.Migrations()) - 1; index >= 0; index-- {
+		if err := m.Migrations()[index].Down(db); err != nil {
+			t.Fatalf("migration %d down: %v", m.Migrations()[index].Version, err)
+		}
 	}
 	moduleutil.AssertTableNotExists(t, db, "developer_generated_items")
+	moduleutil.AssertTableNotExists(t, db, "developer_media_cleanup_queue")
 }
 
 // --- assignRandomTaxonomy ---
@@ -358,7 +369,7 @@ func TestGeneratePagesWithMedia(t *testing.T) {
 	languages := []store.Language{fixtures.Language}
 
 	// Generate media first
-	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID)
+	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID, fixtures.Language.Code)
 	if err != nil {
 		t.Fatalf("generateMedia: %v", err)
 	}
@@ -386,6 +397,255 @@ func TestDeleteAllGeneratedItemsEmpty(t *testing.T) {
 	// No items tracked → should succeed with no error
 	if err := m.deleteAllGeneratedItems(ctx); err != nil {
 		t.Errorf("deleteAllGeneratedItems with no items: %v", err)
+	}
+}
+
+func TestDeleteAllGeneratedItemsRetainsMediaAfterUnsafeCleanupTarget(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	m := testModule(t, db)
+	ctx := context.Background()
+	fixtures := createTestFixtures(t, db)
+	t.Setenv("OCMS_UPLOADS_DIR", t.TempDir())
+	now := time.Now()
+	media, err := store.New(db).CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: "not-a-canonical-uuid", Filename: "unsafe.jpg", MimeType: model.MimeTypeJPEG,
+		Size: 1, UploadedBy: fixtures.User.ID, LanguageCode: fixtures.Language.Code,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.trackItem(ctx, "media", media.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	err = m.deleteAllGeneratedItems(ctx)
+	if err == nil || !strings.Contains(err.Error(), "invalid media UUID") {
+		t.Fatalf("deleteAllGeneratedItems() error = %v, want validated cleanup failure", err)
+	}
+	if _, err := store.New(db).GetMediaByID(ctx, media.ID); err != nil {
+		t.Fatalf("media row was removed after filesystem cleanup failed: %v", err)
+	}
+	tracked, err := m.getTrackedItems(ctx, "media")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracked) != 1 || tracked[0] != media.ID {
+		t.Fatalf("tracked media after failed cleanup = %v, want [%d]", tracked, media.ID)
+	}
+}
+
+func TestDeleteAllGeneratedItemsKeepsFilesAndVariantsWhenMediaDeleteFails(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	m := testModule(t, db)
+	ctx := context.Background()
+	fixtures := createTestFixtures(t, db)
+	uploadDir := t.TempDir()
+	t.Setenv("OCMS_UPLOADS_DIR", uploadDir)
+	now := time.Now()
+	const mediaUUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	queries := store.New(db)
+	media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: mediaUUID, Filename: "must-remain.jpg", MimeType: model.MimeTypeJPEG,
+		Size: 1, UploadedBy: fixtures.User.ID, LanguageCode: fixtures.Language.Code,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+		MediaID: media.ID, Type: model.VariantThumbnail, Width: 1, Height: 1, Size: 1, CreatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	filePath := filepath.Join(uploadDir, model.OriginalsDir, mediaUUID, media.Filename)
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filePath, []byte("must remain"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.trackItem(ctx, "media", media.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE TRIGGER fail_generated_media_delete
+		BEFORE DELETE ON media WHEN OLD.id = %d
+		BEGIN SELECT RAISE(FAIL, 'forced generated media delete failure'); END`, media.ID)); err != nil {
+		t.Fatal(err)
+	}
+
+	err = m.deleteAllGeneratedItems(ctx)
+	if err == nil || !strings.Contains(err.Error(), "failed to delete media") {
+		t.Fatalf("deleteAllGeneratedItems() error = %v, want media delete failure", err)
+	}
+	if _, err := queries.GetMediaByID(ctx, media.ID); err != nil {
+		t.Fatalf("media row was removed after its delete failed: %v", err)
+	}
+	variants, err := queries.GetMediaVariants(ctx, media.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(variants) != 1 {
+		t.Fatalf("media variants after failed row delete = %d, want 1", len(variants))
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil || string(data) != "must remain" {
+		t.Fatalf("media file after failed row delete = %q, error %v", data, err)
+	}
+	tracked, err := m.getTrackedItems(ctx, "media")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracked) != 1 || tracked[0] != media.ID {
+		t.Fatalf("tracked media after failed row delete = %v, want [%d]", tracked, media.ID)
+	}
+	var queued int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM developer_media_cleanup_queue`).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 0 {
+		t.Fatalf("cleanup queue rows after rolled-back media delete = %d, want 0", queued)
+	}
+}
+
+func TestDeveloperCleanupRejectsCanonicalRootRetargetedInsideRemoval(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	m := testModule(t, db)
+	ctx := context.Background()
+	queuedRoot := filepath.Join(t.TempDir(), "uploads")
+	if err := os.MkdirAll(queuedRoot, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	canonicalRoot, err := canonicalDeveloperUploadRoot(queuedRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := enqueueDeveloperMediaCleanup(ctx, db, canonicalRoot, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"); err != nil {
+		t.Fatal(err)
+	}
+	outsideRoot := t.TempDir()
+	outsideMedia := filepath.Join(outsideRoot, model.OriginalsDir, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	if err := os.MkdirAll(outsideMedia, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	outsideFile := filepath.Join(outsideMedia, "must-remain.jpg")
+	if err := os.WriteFile(outsideFile, []byte("outside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.removeMediaFiles = func(root, mediaUUID string) error {
+		if err := os.Rename(root, root+"-original"); err != nil {
+			return err
+		}
+		if err := os.Symlink(outsideRoot, root); err != nil {
+			return err
+		}
+		return imaging.DeleteMediaFilesFromCanonicalRoot(root, mediaUUID)
+	}
+
+	if err := m.drainMediaCleanup(ctx); err == nil {
+		t.Fatal("drainMediaCleanup() accepted a root retargeted after its outer validation")
+	}
+	if data, err := os.ReadFile(outsideFile); err != nil || string(data) != "outside" {
+		t.Fatalf("retargeted developer cleanup changed outside file: data=%q error=%v", data, err)
+	}
+	var pending int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM developer_media_cleanup_queue`).Scan(&pending); err != nil {
+		t.Fatal(err)
+	}
+	if pending != 1 {
+		t.Fatalf("pending developer cleanup rows = %d, want 1", pending)
+	}
+}
+
+func TestDeleteAllGeneratedItemsRetriesCommittedMediaCleanupAfterRestart(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	m := testModule(t, db)
+	ctx := context.Background()
+	fixtures := createTestFixtures(t, db)
+	uploadDir := t.TempDir()
+	t.Setenv("OCMS_UPLOADS_DIR", uploadDir)
+	now := time.Now()
+	const mediaUUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	queries := store.New(db)
+	media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: mediaUUID, Filename: "retry.jpg", MimeType: model.MimeTypeJPEG,
+		Size: 1, UploadedBy: fixtures.User.ID, LanguageCode: fixtures.Language.Code,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	filePath := filepath.Join(uploadDir, model.OriginalsDir, mediaUUID, media.Filename)
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filePath, []byte("retry me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.trackItem(ctx, "media", media.ID); err != nil {
+		t.Fatal(err)
+	}
+	m.removeMediaFiles = func(_, _ string) error {
+		return errors.New("forced post-commit cleanup failure")
+	}
+
+	err = m.deleteAllGeneratedItems(ctx)
+	if err == nil || !strings.Contains(err.Error(), "forced post-commit cleanup failure") {
+		t.Fatalf("deleteAllGeneratedItems() error = %v, want durable cleanup failure", err)
+	}
+	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("media row after committed delete = %v, want sql.ErrNoRows", err)
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Fatalf("media file disappeared after forced cleanup failure: %v", err)
+	}
+	var queued int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM developer_media_cleanup_queue`).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 1 {
+		t.Fatalf("queued cleanup rows = %d, want 1", queued)
+	}
+	tracked, err := m.getTrackedItems(ctx, "media")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracked) != 1 || tracked[0] != media.ID {
+		t.Fatalf("tracked media after cleanup failure = %v, want [%d]", tracked, media.ID)
+	}
+
+	// A fresh module instance drains the durable UUID intent during Init even
+	// though the media row no longer exists. A later delete then clears the
+	// numeric tracking row without losing the filesystem recovery key.
+	restarted := New()
+	if err := restarted.Init(&module.Context{
+		DB: db, Logger: testutil.TestLogger(), Config: &config.Config{Env: "development"},
+	}); err != nil {
+		t.Fatalf("restart Init: %v", err)
+	}
+	if _, err := os.Stat(filePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("media file after restart drain error = %v, want os.ErrNotExist", err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM developer_media_cleanup_queue`).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 0 {
+		t.Fatalf("queued cleanup rows after restart = %d, want 0", queued)
+	}
+	if err := restarted.deleteAllGeneratedItems(ctx); err != nil {
+		t.Fatalf("delete after restart cleanup: %v", err)
+	}
+	tracked, err = restarted.getTrackedItems(ctx, "media")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracked) != 0 {
+		t.Fatalf("tracked media after restart retry = %v, want empty", tracked)
 	}
 }
 

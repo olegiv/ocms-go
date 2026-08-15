@@ -98,7 +98,7 @@
             <div class="dev-article-category">
                 <span class="dev-label">{{if gt (len .Page.Categories) 1}}{{TTheme $.LangCode "frontend.categories_label"}}{{else}}{{TTheme $.LangCode "frontend.category_label"}}{{end}}</span>
                 {{range .Page.Categories}}
-                <a href="{{$.LangPrefix}}/category/{{.Slug}}" class="dev-category-link">
+                <a href="{{.URL}}" class="dev-category-link">
                     {{.Name}}
                 </a>
                 {{end}}
@@ -110,7 +110,7 @@
                 <span class="dev-label">{{TTheme $.LangCode "frontend.tags_label"}}</span>
                 <div class="dev-tags">
                     {{range .Page.Tags}}
-                    <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+                    <a href="{{.URL}}" class="dev-tag">#{{.Name}}</a>
                     {{end}}
                 </div>
             </div>

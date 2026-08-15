@@ -97,7 +97,9 @@ func (q *Queries) DeleteLanguage(ctx context.Context, id int64) error {
 }
 
 const getDefaultLanguage = `-- name: GetDefaultLanguage :one
-SELECT id, code, name, native_name, is_default, is_active, direction, position, created_at, updated_at FROM languages WHERE is_default = 1
+SELECT id, code, name, native_name, is_default, is_active, direction, position, created_at, updated_at FROM languages
+WHERE is_default = 1
+  AND (SELECT COUNT(*) FROM languages WHERE is_default = 1) = 1
 `
 
 func (q *Queries) GetDefaultLanguage(ctx context.Context) (Language, error) {

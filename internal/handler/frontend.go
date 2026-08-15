@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -173,6 +174,7 @@ type BaseTemplateData struct {
 	OGImageHeight        int         // Open Graph image height
 	OGImageType          string      // Open Graph image MIME type (e.g. image/jpeg)
 	OGType               string      // Open Graph type (website, article)
+	OGURL                string      // Open Graph canonical URL
 	ArticlePublishedTime string      // article:published_time (ISO 8601)
 	ArticleModifiedTime  string      // article:modified_time (ISO 8601)
 	ArticleAuthor        string      // article:author
@@ -230,6 +232,7 @@ type BaseTemplateData struct {
 	LangCode           string            // Current language code (shortcut)
 	LangDirection      string            // Current language direction (ltr/rtl)
 	LangPrefix         string            // URL prefix for current language (e.g., "/ru" or "" for default)
+	HomeURL            string            // Canonical home path ("/" for default, "/ru" for non-default)
 	ShowLanguagePicker bool              // Whether to show language picker
 	CSPNonce           string            // CSP nonce for inline scripts
 	PageOrigin         string            // Normalized scheme://host the page is served from — used by template funcs like embedBody that need to bind render-time tokens to the page origin
@@ -636,12 +639,16 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	var languageCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
 		languageCode = langInfo.Code
+	} else {
+		h.renderNotFound(w, r)
+		return
 	}
 
 	// Get base template data
 	base := h.getBaseTemplateData(r, "", "")
 	base.MetaDescription = base.Site.Description
-	base.Canonical = strings.TrimRight(h.getSiteURL(ctx, r), "/") + base.LangPrefix + "/"
+	base.Canonical = strings.TrimRight(h.getSiteURL(ctx, r), "/") + base.HomeURL
+	base.OGURL = base.Canonical
 	base.BodyClass = "home"
 
 	// Get recent published posts (not pages) filtered by language
@@ -690,7 +697,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 					Excerpt:     pv.Excerpt,
 				})
 			}
-			body := mdneg.HomeToMarkdown(base.SiteName, base.Site.Description, siteURL+base.LangPrefix+"/", mdRecent, h.markdownLabels(r))
+			body := mdneg.HomeToMarkdown(base.SiteName, base.Site.Description, siteURL+base.HomeURL, mdRecent, h.markdownLabels(r))
 			mdneg.WriteMarkdown(w, body)
 			return
 		}
@@ -701,6 +708,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	var tagViews []TagView
 
 	if languageCode != "" {
+		taxonomyPrefixes := map[string]string{languageCode: base.LangPrefix}
 		// Get categories with usage counts filtered by language
 		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, languageCode)
 		if err != nil {
@@ -708,32 +716,41 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		}
 		categoryViews = make([]CategoryView, 0, len(categoriesWithCount))
 		for _, c := range categoriesWithCount {
+			entityURL, ok := canonicalTaxonomyEntityURL(taxonomyPrefixes, c.LanguageCode, redirectCategory, c.Slug)
+			if !ok {
+				continue
+			}
 			categoryViews = append(categoryViews, CategoryView{
 				ID:          c.ID,
 				Name:        c.Name,
 				Slug:        c.Slug,
 				Description: c.Description.String,
-				URL:         redirectCategory + c.Slug,
+				URL:         entityURL,
 				PageCount:   c.UsageCount,
 			})
 		}
 
 		// Get tags with usage counts filtered by language
 		tagsWithCount, err := h.queries.GetTagUsageCountsByLanguage(ctx, store.GetTagUsageCountsByLanguageParams{
-			LanguageCode: languageCode,
-			Limit:        20,
-			Offset:       0,
+			LanguageCode:   languageCode,
+			LanguageCode_2: languageCode,
+			Limit:          20,
+			Offset:         0,
 		})
 		if err != nil {
 			h.logger.Error("failed to get tags", "error", err)
 		}
 		tagViews = make([]TagView, 0, len(tagsWithCount))
 		for _, t := range tagsWithCount {
+			entityURL, ok := canonicalTaxonomyEntityURL(taxonomyPrefixes, t.LanguageCode, redirectTag, t.Slug)
+			if !ok {
+				continue
+			}
 			tagViews = append(tagViews, TagView{
 				ID:        t.ID,
 				Name:      t.Name,
 				Slug:      t.Slug,
-				URL:       redirectTag + t.Slug,
+				URL:       entityURL,
 				PageCount: t.UsageCount,
 			})
 		}
@@ -798,7 +815,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 
 	// Build homepage translations for language switcher
 	if base.ShowLanguagePicker {
-		base.Translations = h.getHomepageTranslations(base.LangCode, base.Languages)
+		base.Translations, base.HrefLangs = h.getHomepageTranslations(base.LangCode, base.SiteURL, base.Languages)
 	}
 
 	// Enable sidebar for homepage
@@ -820,43 +837,79 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 }
 
 // Page handles single page display.
+// publishedPageForRoute reads the published page this URL owns, through the
+// page cache when one is configured.
+//
+// Both paths are scoped to the same language: slugs are unique site-wide
+// rather than per language, so an unscoped read would hand a request routed to
+// one language a page belonging to another.
+func (h *FrontendHandler) publishedPageForRoute(
+	ctx context.Context, cacheCtx cache.Context, slug, languageCode string,
+) (store.Page, error) {
+	if h.cacheManager != nil {
+		cached, err := h.cacheManager.GetPublishedPageBySlug(ctx, cacheCtx, slug)
+		if err != nil {
+			return store.Page{}, err
+		}
+		if cached == nil {
+			return store.Page{}, sql.ErrNoRows
+		}
+		return *cached, nil
+	}
+	return h.queries.GetPublishedPageBySlugAndLanguage(ctx, store.GetPublishedPageBySlugAndLanguageParams{
+		Slug:         slug,
+		LanguageCode: languageCode,
+	})
+}
+
 func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
-
-	// Build cache context from request (language + user role)
-	cacheCtx := h.getCacheContext(r)
-
-	// Get published page by slug (try cache first, then database)
-	var page store.Page
-	var err error
-
-	if h.cacheManager != nil {
-		pagePtr, cacheErr := h.cacheManager.GetPublishedPageBySlug(ctx, cacheCtx, slug)
-		if cacheErr == nil && pagePtr != nil {
-			page = *pagePtr
-		} else {
-			err = cacheErr
-		}
-	} else {
-		// Fallback to direct DB query if cache not available
-		page, err = h.queries.GetPublishedPageBySlug(ctx, slug)
+	explicitLangCode, validExplicitLanguage := explicitPageLanguage(r)
+	if !validExplicitLanguage {
+		h.renderNotFound(w, r)
+		return
 	}
+
+	// Resolve the language owned by this URL before looking up the page. An
+	// explicit prefix was already verified by Language middleware; an
+	// unprefixed URL belongs only to the active configured default language.
+	// This prevents globally unique slugs from exposing non-default, inactive,
+	// orphaned, or legacy-unsafe language content at the root namespace.
+	routeLanguageCode := explicitLangCode
+	if routeLanguageCode == "" {
+		defaultLang, err := h.queries.GetDefaultLanguage(ctx)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && (!defaultLang.IsActive ||
+			!util.IsValidLangCode(defaultLang.Code) || util.IsReservedLanguageCode(defaultLang.Code))) {
+			h.renderNotFound(w, r)
+			return
+		}
+		if err != nil {
+			h.logger.Error("failed to resolve default page language", "slug", slug, "error", err)
+			h.renderInternalError(w)
+			return
+		}
+		routeLanguageCode = defaultLang.Code
+	}
+
+	// The cache context is built from the language this URL owns rather than
+	// from request context, so the key, the cache's miss query and the routing
+	// boundary all name the same language.
+	cacheCtx := cache.NewContext(routeLanguageCode, cache.RoleFromUser(middleware.GetUser(r)))
+	page, err := h.publishedPageForRoute(ctx, cacheCtx, slug, routeLanguageCode)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Slug not found - check if it's an alias
-			aliasPage, aliasErr := h.queries.GetPublishedPageByAlias(ctx, slug)
-			if aliasErr == nil {
-				// Alias found - redirect to canonical URL (HTTP 301 Moved Permanently)
-				http.Redirect(w, r, "/"+aliasPage.Slug, http.StatusMovedPermanently)
+			if h.redirectPageAlias(w, r, slug) {
 				return
 			}
 
 			// Draft preview for admin/editor users
 			if user := middleware.GetUser(r); user != nil && (user.Role == model.RoleAdmin || user.Role == model.RoleEditor) {
 				draftPage, draftErr := h.queries.GetPageBySlug(ctx, slug)
-				if draftErr == nil && draftPage.Status != PageStatusPublished {
+				if draftErr == nil && draftPage.Status != PageStatusPublished &&
+					draftPage.LanguageCode == routeLanguageCode {
 					page = draftPage
 					err = nil
 				}
@@ -871,6 +924,11 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 			h.renderInternalError(w)
 			return
 		}
+	}
+	canonicalLanguagePrefix, ok := h.canonicalPageLanguagePrefix(ctx, page)
+	if !ok {
+		h.renderNotFound(w, r)
+		return
 	}
 
 	// Content negotiation: serve Markdown when the client prefers it.
@@ -888,7 +946,11 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 				t := page.PublishedAt.Time
 				publishedAt = &t
 			}
-			canonical := siteURL + "/" + page.Slug
+			canonicalPath := "/" + page.Slug
+			if canonicalLanguagePrefix != "" {
+				canonicalPath = "/" + canonicalLanguagePrefix + "/" + page.Slug
+			}
+			canonical := siteURL + canonicalPath
 			mdBody, mdErr := mdneg.PageToMarkdown(page.Title, page.Summary, page.Body, canonical, publishedAt, h.markdownLabels(r))
 			if mdErr != nil {
 				slog.Error("markdown conversion failed", "error", mdErr, "slug", page.Slug)
@@ -901,24 +963,15 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	// Update language context based on page's language (fixes translated pages like /slug-ru)
 	// This ensures that when visiting a translated page directly, the UI language matches the content
-	if page.LanguageCode != "" {
-		if pageLang, err := h.queries.GetLanguageByCode(ctx, page.LanguageCode); err == nil {
-			// Update the request context with the page's language
-			langInfo := middleware.LanguageInfo{
-				ID:         pageLang.ID,
-				Code:       pageLang.Code,
-				Name:       pageLang.Name,
-				NativeName: pageLang.NativeName,
-				Direction:  pageLang.Direction,
-				IsDefault:  pageLang.IsDefault,
-			}
-			ctx = context.WithValue(ctx, middleware.ContextKeyLanguage, langInfo)
-			ctx = context.WithValue(ctx, middleware.ContextKeyLanguageCode, pageLang.Code)
-			r = r.WithContext(ctx)
+	if pageLang, err := h.queries.GetLanguageByCode(ctx, page.LanguageCode); err == nil {
+		r = requestWithFrontendLanguage(r, pageLang)
+		ctx = r.Context()
 
-			// Set language cookie to remember the preference
-			middleware.SetLanguageCookie(w, pageLang.Code)
-		}
+		// Set language cookie to remember the preference
+		middleware.SetLanguageCookie(w, pageLang.Code)
+	} else {
+		h.renderNotFound(w, r)
+		return
 	}
 
 	// Get base template data first (for site info and language context)
@@ -943,10 +996,11 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	// Get related pages (same category)
 	var relatedPages []PageView
 	if pageView.Category != nil {
-		related, err := h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
-			CategoryID: pageView.Category.ID,
-			Limit:      4,
-			Offset:     0,
+		related, err := h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
+			CategoryID:   pageView.Category.ID,
+			LanguageCode: base.LangCode,
+			Limit:        4,
+			Offset:       0,
 		})
 		if err == nil {
 			for _, p := range related {
@@ -987,7 +1041,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	pageData := &seo.PageData{
 		Title:           pageView.Title,
 		Body:            string(pageView.Body),
-		Slug:            pageView.Slug,
+		Slug:            pageSEOSlug(base.LangPrefix, pageView.Slug),
 		MetaTitle:       pageView.MetaTitle,
 		MetaDescription: pageView.MetaDescription,
 		MetaKeywords:    pageView.MetaKeywords,
@@ -1017,6 +1071,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	base.OGImageHeight = pageView.OGImageHeight
 	base.OGImageType = pageView.OGImageType
 	base.OGType = meta.OGType
+	base.OGURL = meta.OGURL
 	base.ArticlePublishedTime = meta.ArticlePublishedTime
 	base.ArticleModifiedTime = meta.ArticleModifiedTime
 	base.ArticleAuthor = meta.ArticleAuthor
@@ -1095,26 +1150,17 @@ func (h *FrontendHandler) PageByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !util.IsValidSlug(page.Slug) || (page.LanguageCode != "" && !util.IsValidLangCode(strings.ToLower(page.LanguageCode))) {
+	languagePrefix, ok := h.canonicalPageLanguagePrefix(ctx, page)
+	if !ok {
 		h.logger.Warn("invalid page slug or language code for PageByID redirect", "page_id", page.ID, "slug", page.Slug, "language_code", page.LanguageCode)
 		h.renderNotFound(w, r)
 		return
 	}
 
-	// Build the redirect URL
-	// Check if language prefix is needed (non-default language)
-	redirectURL := "/" + page.Slug
-	if page.LanguageCode != "" {
-		// Check if this is the default language
-		if defaultLang, err := h.queries.GetDefaultLanguage(ctx); err == nil {
-			if page.LanguageCode != defaultLang.Code {
-				redirectURL = "/" + page.LanguageCode + "/" + page.Slug
-			}
-		}
-	}
-
 	// HTTP 301 Moved Permanently - signals that this URL permanently redirects to the canonical
-	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
+	if !writePermanentPageRedirect(w, languagePrefix, page.Slug) {
+		h.renderNotFound(w, r)
+	}
 }
 
 // Category handles category archive display.
@@ -1122,10 +1168,17 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
 
-	// Get current language for filtering
-	var languageCode string
-	if langInfo := middleware.GetLanguage(r); langInfo != nil {
-		languageCode = langInfo.Code
+	// Taxonomy URLs are canonical by language: a verified prefix owns its
+	// language, while an unprefixed URL always belongs to the default language.
+	routeLanguage, validLanguage, err := h.taxonomyRouteLanguage(ctx, r)
+	if err != nil {
+		h.logger.Error("failed to resolve category route language", "slug", slug, "error", err)
+		h.renderInternalError(w)
+		return
+	}
+	if !validLanguage {
+		h.renderNotFound(w, r)
+		return
 	}
 
 	// Get category
@@ -1139,6 +1192,13 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		h.renderInternalError(w)
 		return
 	}
+	if category.LanguageCode != routeLanguage.Code {
+		h.renderNotFound(w, r)
+		return
+	}
+	r = requestWithFrontendLanguage(r, routeLanguage)
+	ctx = r.Context()
+	languageCode := routeLanguage.Code
 
 	// Pagination
 	page := h.getPageNum(r)
@@ -1168,9 +1228,12 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		Name:        category.Name,
 		Slug:        category.Slug,
 		Description: category.Description.String,
-		URL:         redirectCategory + category.Slug,
+		URL:         base.LangPrefix + redirectCategory + category.Slug,
 	}
 	base.BodyClass = "archive category"
+	if base.ShowLanguagePicker {
+		base.Translations, base.HrefLangs = h.getCategoryTranslations(ctx, category.ID, base.LangCode, base.SiteURL)
+	}
 
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/category/%s", base.LangPrefix, slug))
@@ -1197,10 +1260,17 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
 
-	// Get current language for filtering
-	var languageCode string
-	if langInfo := middleware.GetLanguage(r); langInfo != nil {
-		languageCode = langInfo.Code
+	// Taxonomy URLs are canonical by language: a verified prefix owns its
+	// language, while an unprefixed URL always belongs to the default language.
+	routeLanguage, validLanguage, err := h.taxonomyRouteLanguage(ctx, r)
+	if err != nil {
+		h.logger.Error("failed to resolve tag route language", "slug", slug, "error", err)
+		h.renderInternalError(w)
+		return
+	}
+	if !validLanguage {
+		h.renderNotFound(w, r)
+		return
 	}
 
 	// Get tag
@@ -1214,6 +1284,13 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		h.renderInternalError(w)
 		return
 	}
+	if tag.LanguageCode != routeLanguage.Code {
+		h.renderNotFound(w, r)
+		return
+	}
+	r = requestWithFrontendLanguage(r, routeLanguage)
+	ctx = r.Context()
+	languageCode := routeLanguage.Code
 
 	// Pagination
 	page := h.getPageNum(r)
@@ -1242,9 +1319,12 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		ID:   tag.ID,
 		Name: tag.Name,
 		Slug: tag.Slug,
-		URL:  redirectTag + tag.Slug,
+		URL:  base.LangPrefix + redirectTag + tag.Slug,
 	}
 	base.BodyClass = "archive tag"
+	if base.ShowLanguagePicker {
+		base.Translations, base.HrefLangs = h.getTagTranslations(ctx, tag.ID, base.LangCode, base.SiteURL)
+	}
 
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/tag/%s", base.LangPrefix, slug))
@@ -1274,6 +1354,9 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	var languageCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
 		languageCode = langInfo.Code
+	} else {
+		h.renderNotFound(w, r)
+		return
 	}
 
 	// Pagination
@@ -1357,6 +1440,9 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	var languageCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
 		languageCode = langInfo.Code
+	} else {
+		h.renderNotFound(w, r)
+		return
 	}
 
 	// Get base template data early for language prefix
@@ -1401,43 +1487,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	// Convert search results to PageViews
 	pageViews := make([]PageView, 0, len(searchResults))
 	for _, sr := range searchResults {
-		// Clean highlight by stripping HTML but preserving <mark> tags
-		cleanHighlight := h.stripHTMLPreserveMark(sr.Highlight)
-
-		pv := PageView{
-			ID:        sr.ID,
-			Title:     sr.Title,
-			Slug:      sr.Slug,
-			Body:      h.trustedPageBody(sr.Body),
-			Excerpt:   sr.Excerpt,
-			Highlight: cleanHighlight,
-			URL:       "/" + sr.Slug,
-			Status:    sr.Status,
-			Type:      "page",
-			CreatedAt: sr.CreatedAt,
-			UpdatedAt: sr.UpdatedAt,
-		}
-
-		// Set published date
-		if sr.PublishedAt.Valid {
-			t := sr.PublishedAt.Time
-			pv.PublishedAt = &t
-			pv.PublishedAtFormatted = t.Format("Jan 2, 2006")
-		}
-
-		// Get featured image
-		if sr.FeaturedImageID.Valid {
-			media, err := h.queries.GetMediaByID(ctx, sr.FeaturedImageID.Int64)
-			if err == nil {
-				pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
-				pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
-				pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
-				pv.FeaturedImageID = media.ID
-				pv.FeaturedImageAlt = media.Alt.String
-			}
-		}
-
-		pageViews = append(pageViews, pv)
+		pageViews = append(pageViews, h.searchResultToPageView(ctx, sr, base.LangPrefix))
 	}
 
 	// Update base template title with search query
@@ -1458,6 +1508,41 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, r, "search", data)
+}
+
+func (h *FrontendHandler) searchResultToPageView(ctx context.Context, sr service.SearchResult, langPrefix string) PageView {
+	pv := PageView{
+		ID:        sr.ID,
+		Title:     sr.Title,
+		Slug:      sr.Slug,
+		Body:      h.trustedPageBody(sr.Body),
+		Excerpt:   sr.Excerpt,
+		Highlight: h.stripHTMLPreserveMark(sr.Highlight),
+		URL:       languagePrefixedURL(langPrefix, "/"+sr.Slug),
+		Status:    sr.Status,
+		Type:      "page",
+		CreatedAt: sr.CreatedAt,
+		UpdatedAt: sr.UpdatedAt,
+	}
+
+	if sr.PublishedAt.Valid {
+		t := sr.PublishedAt.Time
+		pv.PublishedAt = &t
+		pv.PublishedAtFormatted = t.Format("Jan 2, 2006")
+	}
+
+	if sr.FeaturedImageID.Valid {
+		media, err := h.queries.GetMediaByID(ctx, sr.FeaturedImageID.Int64)
+		if err == nil {
+			pv.FeaturedImage = model.MediaURL("thumbnail", media.Uuid, media.Filename)
+			pv.FeaturedImageSmall = model.MediaURL("small", media.Uuid, media.Filename)
+			pv.FeaturedImageMedium = model.MediaURL("medium", media.Uuid, media.Filename)
+			pv.FeaturedImageID = media.ID
+			pv.FeaturedImageAlt = media.Alt.String
+		}
+	}
+
+	return pv
 }
 
 // NotFound renders the 404 page.
@@ -1501,7 +1586,20 @@ func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 // generateSitemap generates sitemap XML without caching.
 func (h *FrontendHandler) generateSitemap(ctx context.Context, siteURL string) ([]byte, error) {
 	builder := seo.NewSitemapBuilder(siteURL)
-	builder.AddHomepage()
+	defaultLang, err := h.queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve the single default language for sitemap: %w", err)
+	}
+	activeLanguages, err := h.queries.ListActiveLanguages(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active languages for sitemap: %w", err)
+	}
+	for _, language := range activeLanguages {
+		if !util.IsValidLangCode(language.Code) || util.IsReservedLanguageCode(language.Code) {
+			continue
+		}
+		builder.AddLanguageHomepage(language.Code, language.ID == defaultLang.ID)
+	}
 
 	// Add published pages (excluding noindex pages)
 	pages, err := h.queries.ListPublishedPagesForSitemap(ctx)
@@ -1510,8 +1608,10 @@ func (h *FrontendHandler) generateSitemap(ctx context.Context, siteURL string) (
 	} else {
 		for _, p := range pages {
 			builder.AddPage(seo.SitemapPage{
-				Slug:      p.Slug,
-				UpdatedAt: p.UpdatedAt,
+				Slug:         p.Slug,
+				LanguageCode: p.LanguageCode,
+				IsDefault:    p.IsDefault,
+				UpdatedAt:    p.UpdatedAt,
 			})
 		}
 	}
@@ -1523,8 +1623,10 @@ func (h *FrontendHandler) generateSitemap(ctx context.Context, siteURL string) (
 	} else {
 		for _, c := range categories {
 			builder.AddCategory(seo.SitemapCategory{
-				Slug:      c.Slug,
-				UpdatedAt: c.UpdatedAt,
+				Slug:         c.Slug,
+				LanguageCode: c.LanguageCode,
+				IsDefault:    c.IsDefault,
+				UpdatedAt:    c.UpdatedAt,
 			})
 		}
 	}
@@ -1536,8 +1638,10 @@ func (h *FrontendHandler) generateSitemap(ctx context.Context, siteURL string) (
 	} else {
 		for _, t := range tags {
 			builder.AddTag(seo.SitemapTag{
-				Slug:      t.Slug,
-				UpdatedAt: t.UpdatedAt,
+				Slug:         t.Slug,
+				LanguageCode: t.LanguageCode,
+				IsDefault:    t.IsDefault,
+				UpdatedAt:    t.UpdatedAt,
 			})
 		}
 	}
@@ -1709,7 +1813,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		Title:      p.Title,
 		Slug:       p.Slug,
 		Body:       h.trustedPageBody(p.Body),
-		URL:        "/" + p.Slug,
+		URL:        languagePrefixedURL(langPrefix, "/"+p.Slug),
 		Status:     p.Status,
 		Type:       p.PageType,
 		CreatedAt:  p.CreatedAt,
@@ -1748,7 +1852,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 			featuredMediaUUID = media.Uuid
 			featuredMediaFilename = media.Filename
 			featuredMediaMimeType = media.MimeType
-			pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
+			pv.FeaturedImage = model.MediaURL("thumbnail", media.Uuid, media.Filename)
 			pv.FeaturedImageID = media.ID
 			pv.FeaturedImageAlt = media.Alt.String
 
@@ -1759,13 +1863,13 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 				for _, v := range variants {
 					switch v.Type {
 					case "small":
-						pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageSmall = model.MediaURL("small", media.Uuid, media.Filename)
 					case "medium":
-						pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageMedium = model.MediaURL("medium", media.Uuid, media.Filename)
 					case "large":
-						pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageLarge = model.MediaURL("large", media.Uuid, media.Filename)
 					case "og":
-						pv.FeaturedImageOG = fmt.Sprintf("/uploads/og/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageOG = model.MediaURL("og", media.Uuid, media.Filename)
 						pv.FeaturedImageOGWidth = int(v.Width)
 						pv.FeaturedImageOGHeight = int(v.Height)
 					}
@@ -1802,33 +1906,47 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		}
 	}
 
-	// Get categories
+	// Load taxonomy associations before building views so every association URL
+	// is derived from the taxonomy entity's own active language, not the page's
+	// request prefix. Associations whose language has no public canonical route
+	// are omitted instead of emitting a guaranteed-404 link.
 	categories, err := h.queries.GetCategoriesForPage(ctx, p.ID)
-	if err == nil && len(categories) > 0 {
-		pv.Categories = make([]CategoryView, len(categories))
-		for i, c := range categories {
-			pv.Categories[i] = CategoryView{
-				ID:          c.ID,
-				Name:        c.Name,
-				Slug:        c.Slug,
-				Description: c.Description.String,
-				URL:         redirectCategory + c.Slug,
+	tags, tagsErr := h.queries.GetTagsForPage(ctx, p.ID)
+	if (err == nil && len(categories) > 0) || (tagsErr == nil && len(tags) > 0) {
+		languages, languagesErr := h.queries.ListActiveLanguages(ctx)
+		if languagesErr == nil {
+			prefixes := canonicalTaxonomyLanguagePrefixes(languages)
+			pv.Categories = make([]CategoryView, 0, len(categories))
+			for _, c := range categories {
+				entityURL, ok := canonicalTaxonomyEntityURL(prefixes, c.LanguageCode, redirectCategory, c.Slug)
+				if err != nil || !ok {
+					continue
+				}
+				pv.Categories = append(pv.Categories, CategoryView{
+					ID:          c.ID,
+					Name:        c.Name,
+					Slug:        c.Slug,
+					Description: c.Description.String,
+					URL:         entityURL,
+				})
 			}
-		}
-		// Set primary category (first one)
-		pv.Category = &pv.Categories[0]
-	}
+			if len(pv.Categories) > 0 {
+				// Set primary category to the first publicly routable association.
+				pv.Category = &pv.Categories[0]
+			}
 
-	// Get tags
-	tags, err := h.queries.GetTagsForPage(ctx, p.ID)
-	if err == nil {
-		pv.Tags = make([]TagView, len(tags))
-		for i, t := range tags {
-			pv.Tags[i] = TagView{
-				ID:   t.ID,
-				Name: t.Name,
-				Slug: t.Slug,
-				URL:  redirectTag + t.Slug,
+			pv.Tags = make([]TagView, 0, len(tags))
+			for _, tag := range tags {
+				entityURL, ok := canonicalTaxonomyEntityURL(prefixes, tag.LanguageCode, redirectTag, tag.Slug)
+				if tagsErr != nil || !ok {
+					continue
+				}
+				pv.Tags = append(pv.Tags, TagView{
+					ID:   tag.ID,
+					Name: tag.Name,
+					Slug: tag.Slug,
+					URL:  entityURL,
+				})
 			}
 		}
 	}
@@ -1846,14 +1964,13 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	if p.OgImageID.Valid {
 		ogMedia, err := h.queries.GetMediaByID(ctx, p.OgImageID.Int64)
 		if err == nil {
-			ogBase := fmt.Sprintf("/uploads/%%s/%s/%s", ogMedia.Uuid, ogMedia.Filename)
-			pv.OGImage = fmt.Sprintf(ogBase, "originals")
+			pv.OGImage = model.MediaURL(model.VariantOriginal, ogMedia.Uuid, ogMedia.Filename)
 			pv.OGImageType = ogMedia.MimeType
 			variants, varErr := h.queries.GetMediaVariants(ctx, ogMedia.ID)
 			if varErr == nil {
 				bestOG := pickOGVariant(variants)
 				if bestOG != nil {
-					pv.OGImage = fmt.Sprintf(ogBase, bestOG.Type)
+					pv.OGImage = model.MediaURL(bestOG.Type, ogMedia.Uuid, ogMedia.Filename)
 					pv.OGImageWidth = int(bestOG.Width)
 					pv.OGImageHeight = int(bestOG.Height)
 				}
@@ -1863,7 +1980,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		// Fall back to featured image — pick best variant for OG
 		pv.OGImageType = featuredMediaMimeType
 		if bestOG := pickOGVariant(featuredVariants); bestOG != nil {
-			pv.OGImage = fmt.Sprintf("/uploads/%s/%s/%s", bestOG.Type, featuredMediaUUID, featuredMediaFilename)
+			pv.OGImage = model.MediaURL(bestOG.Type, featuredMediaUUID, featuredMediaFilename)
 			pv.OGImageWidth = int(bestOG.Width)
 			pv.OGImageHeight = int(bestOG.Height)
 		} else {
@@ -1939,6 +2056,7 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode, lang
 	var recentPageViews []PageView
 
 	if languageCode != "" {
+		taxonomyPrefixes := map[string]string{languageCode: langPrefix}
 		// Get categories with usage counts filtered by language
 		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, languageCode)
 		if err != nil {
@@ -1946,32 +2064,41 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode, lang
 		}
 		categoryViews = make([]CategoryView, 0, len(categoriesWithCount))
 		for _, c := range categoriesWithCount {
+			entityURL, ok := canonicalTaxonomyEntityURL(taxonomyPrefixes, c.LanguageCode, redirectCategory, c.Slug)
+			if !ok {
+				continue
+			}
 			categoryViews = append(categoryViews, CategoryView{
 				ID:          c.ID,
 				Name:        c.Name,
 				Slug:        c.Slug,
 				Description: c.Description.String,
-				URL:         redirectCategory + c.Slug,
+				URL:         entityURL,
 				PageCount:   c.UsageCount,
 			})
 		}
 
 		// Get tags with usage counts filtered by language
 		tagsWithCount, err := h.queries.GetTagUsageCountsByLanguage(ctx, store.GetTagUsageCountsByLanguageParams{
-			LanguageCode: languageCode,
-			Limit:        20,
-			Offset:       0,
+			LanguageCode:   languageCode,
+			LanguageCode_2: languageCode,
+			Limit:          20,
+			Offset:         0,
 		})
 		if err != nil {
 			h.logger.Error("failed to get sidebar tags", "error", err)
 		}
 		tagViews = make([]TagView, 0, len(tagsWithCount))
 		for _, t := range tagsWithCount {
+			entityURL, ok := canonicalTaxonomyEntityURL(taxonomyPrefixes, t.LanguageCode, redirectTag, t.Slug)
+			if !ok {
+				continue
+			}
 			tagViews = append(tagViews, TagView{
 				ID:        t.ID,
 				Name:      t.Name,
 				Slug:      t.Slug,
-				URL:       redirectTag + t.Slug,
+				URL:       entityURL,
 				PageCount: t.UsageCount,
 			})
 		}
@@ -2039,6 +2166,45 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode, lang
 	}
 
 	return categoryViews, tagViews, recentPageViews
+}
+
+// languagePrefixedURL applies the already-validated request language prefix to
+// an internal public path. Callers pass paths beginning with "/" and prefixes
+// produced by BaseTemplateData (either empty or "/<language-code>").
+func languagePrefixedURL(langPrefix, path string) string {
+	return strings.TrimSuffix(langPrefix, "/") + "/" + strings.TrimPrefix(path, "/")
+}
+
+// canonicalTaxonomyLanguagePrefixes maps active, routable taxonomy languages
+// to their public URL prefix. Invalid and reserved legacy codes are ignored,
+// including a misconfigured default, until an administrator remediates them.
+func canonicalTaxonomyLanguagePrefixes(languages []store.Language) map[string]string {
+	prefixes := make(map[string]string, len(languages))
+	for _, lang := range languages {
+		if !lang.IsActive || !util.IsValidLangCode(lang.Code) || util.IsReservedLanguageCode(lang.Code) {
+			continue
+		}
+		if lang.IsDefault {
+			prefixes[lang.Code] = ""
+			continue
+		}
+		prefixes[lang.Code] = "/" + lang.Code
+	}
+	return prefixes
+}
+
+func canonicalTaxonomyEntityURL(prefixes map[string]string, languageCode, route, slug string) (string, bool) {
+	prefix, ok := prefixes[languageCode]
+	if !ok || !util.IsValidSlug(slug) {
+		return "", false
+	}
+	return languagePrefixedURL(prefix, route+slug), true
+}
+
+// pageSEOSlug returns the relative canonical path shape expected by the SEO
+// package, which adds the configured site URL and its own leading slash.
+func pageSEOSlug(langPrefix, slug string) string {
+	return strings.TrimPrefix(languagePrefixedURL(langPrefix, "/"+slug), "/")
 }
 
 // stripHTMLPreserveMark strips HTML tags from a string but preserves <mark> and </mark> tags.
@@ -2198,8 +2364,8 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		SearchQuery:     r.URL.Query().Get("q"),
 		CSPNonce:        middleware.GetCSPNonce(r),
 		PageOrigin:      pageOrigin,
+		HomeURL:         "/",
 	}
-
 	// Populate module HTML for templ-based layouts by calling known template funcs.
 	// HTML themes call these directly; templ layouts need the aggregated output.
 	// Fetched per-request so module toggle takes effect without restart.
@@ -2250,6 +2416,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		if !langInfo.IsDefault {
 			data.LangPrefix = "/" + langInfo.Code
 		}
+		data.HomeURL = frontendHomePath(data.LangPrefix)
 
 		// Apply translated config values for current language
 		if translatedName, err := h.queries.GetConfigTranslationByKeyAndLangCode(ctx, store.GetConfigTranslationByKeyAndLangCodeParams{
@@ -2294,9 +2461,14 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		data.Widgets = h.widgetService.GetAllWidgetsForTheme(ctx, activeTheme.Name)
 	}
 
-	// Load all active languages for language picker
+	// Load routable active languages for the public language picker. Legacy
+	// invalid or reserved active rows remain manageable in admin, but must not
+	// produce public links that collide with core routes.
 	activeLanguages, err := h.queries.ListActiveLanguages(ctx)
-	if err == nil && len(activeLanguages) > 1 {
+	if err == nil {
+		activeLanguages = routableLanguages(activeLanguages)
+	}
+	if len(activeLanguages) > 1 {
 		data.ShowLanguagePicker = true
 		data.Languages = make([]LanguageView, 0, len(activeLanguages))
 		for _, lang := range activeLanguages {
@@ -2320,18 +2492,79 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	if data.CopyrightText == "" {
 		data.CopyrightText = h.getConfigValue(ctx, "copyright")
 	}
+	if data.SiteURL != "" {
+		canonicalURL := strings.TrimRight(data.SiteURL, "/") + canonicalFrontendPath(r, data.LangPrefix)
+		data.Canonical = canonicalURL
+		data.OGURL = canonicalURL
+	}
 
 	return data
 }
 
+func canonicalFrontendPath(r *http.Request, languagePrefix string) string {
+	path := r.URL.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+
+	explicitCode := middleware.GetLanguagePrefix(r)
+	if explicitCode != "" && languagePrefix == "" {
+		explicitPrefix := "/" + explicitCode
+		switch {
+		case path == explicitPrefix:
+			path = "/"
+		case strings.HasPrefix(path, explicitPrefix+"/"):
+			path = strings.TrimPrefix(path, explicitPrefix)
+		}
+	} else if explicitCode == "" && languagePrefix != "" {
+		path = languagePrefixedURL(languagePrefix, path)
+	}
+
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	// Preserve functional search and pagination parameters while dropping
+	// tracking and language-preference inputs. Page one canonicalizes to the
+	// collection root; later pages are distinct indexable resources.
+	canonicalQuery := make(url.Values)
+	if path == "/search" || strings.HasSuffix(path, "/search") {
+		if query := r.URL.Query().Get("q"); query != "" {
+			canonicalQuery.Set("q", query)
+		}
+	}
+	if pageNumber, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && pageNumber > 1 {
+		canonicalQuery.Set("page", strconv.Itoa(pageNumber))
+	}
+	if encoded := canonicalQuery.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	return path
+}
+
+func frontendHomePath(languagePrefix string) string {
+	if languagePrefix == "" {
+		return "/"
+	}
+	return languagePrefix
+}
+
+func routableLanguages(languages []store.Language) []store.Language {
+	result := make([]store.Language, 0, len(languages))
+	for _, lang := range languages {
+		if !util.IsValidLangCode(lang.Code) || util.IsReservedLanguageCode(lang.Code) {
+			continue
+		}
+		result = append(result, lang)
+	}
+	return result
+}
+
 // loadMenu loads a menu by slug and language, and marks active items.
 func loadMenu(ms *service.MenuService, slug, currentPath, langCode string) []MenuItem {
-	var items []service.MenuItem
-	if langCode != "" {
-		items = ms.GetMenuForLanguage(slug, langCode)
-	} else {
-		items = ms.GetMenu(slug)
+	if langCode == "" {
+		return nil
 	}
+	items := ms.GetMenuForLanguage(slug, langCode)
 	if items == nil {
 		return nil
 	}
@@ -2384,94 +2617,158 @@ func (h *FrontendHandler) getCacheContext(r *http.Request) cache.Context {
 	return cache.NewContext(langCode, role)
 }
 
+type availableEntityTranslation struct {
+	languageID        int64
+	languageCode      string
+	languageName      string
+	languageNative    string
+	languageDirection string
+	isDefault         bool
+	entityID          int64
+	slug              string
+	title             string
+}
+
+func buildEntityTranslationLinks(
+	translations []availableEntityTranslation,
+	currentLangCode,
+	siteURL,
+	entityPathPrefix string,
+) ([]TranslationLink, []HrefLangLink) {
+	links := make([]TranslationLink, 0, len(translations))
+	hrefLangs := make([]HrefLangLink, 0, len(translations)+1)
+	defaultLangURL := ""
+
+	for _, translation := range translations {
+		if !util.IsValidLangCode(translation.languageCode) || util.IsReservedLanguageCode(translation.languageCode) {
+			continue
+		}
+
+		language := LanguageView{
+			ID:         translation.languageID,
+			Code:       translation.languageCode,
+			Name:       translation.languageName,
+			NativeName: translation.languageNative,
+			Direction:  translation.languageDirection,
+			IsDefault:  translation.isDefault,
+			IsCurrent:  translation.languageCode == currentLangCode,
+		}
+		hasEntity := translation.entityID != 0 && translation.slug != ""
+		entityURL := frontendHomePath("")
+		if !language.IsDefault {
+			entityURL = frontendHomePath("/" + language.Code)
+		}
+		if hasEntity {
+			prefix := ""
+			if !language.IsDefault {
+				prefix = "/" + language.Code
+			}
+			entityURL = prefix + entityPathPrefix + translation.slug
+		}
+
+		links = append(links, TranslationLink{
+			Language: language, URL: entityURL, PageTitle: translation.title, HasPage: hasEntity,
+		})
+		if !hasEntity || siteURL == "" {
+			continue
+		}
+		fullURL := strings.TrimRight(siteURL, "/") + entityURL
+		hrefLangs = append(hrefLangs, HrefLangLink{Lang: language.Code, Href: fullURL})
+		if language.IsDefault {
+			defaultLangURL = fullURL
+		}
+	}
+
+	if defaultLangURL != "" {
+		hrefLangs = append(hrefLangs, HrefLangLink{Lang: "x-default", Href: defaultLangURL})
+	}
+	return links, hrefLangs
+}
+
 // getPageTranslations returns translation links for a page for the language switcher.
 func (h *FrontendHandler) getPageTranslations(ctx context.Context, pageID int64, currentLangCode, siteURL string) ([]TranslationLink, []HrefLangLink) {
-	translations, err := h.queries.GetPageAvailableTranslations(ctx, store.GetPageAvailableTranslationsParams{
-		EntityID:      pageID,
-		ID:            pageID,
-		EntityID_2:    pageID,
-		TranslationID: pageID,
-	})
+	rows, err := h.queries.GetPageAvailableTranslations(ctx, pageID)
 	if err != nil {
 		h.logger.Error("failed to get page translations", "pageID", pageID, "error", err)
 		return nil, nil
 	}
-
-	var links []TranslationLink
-	var hrefLangs []HrefLangLink
-	var defaultLangURL string
-
-	for _, t := range translations {
-		lv := LanguageView{
-			ID:         t.LanguageID,
-			Code:       t.LanguageCode,
-			Name:       t.LanguageName,
-			NativeName: t.LanguageNativeName,
-			Direction:  t.LanguageDirection,
-			IsDefault:  t.IsDefault,
-			IsCurrent:  t.LanguageCode == currentLangCode,
-		}
-
-		hasPage := t.PageID != 0 && t.PageSlug != ""
-
-		// Build URL
-		var url string
-		if hasPage {
-			if lv.IsDefault {
-				// Default language uses root URL
-				url = "/" + t.PageSlug
-			} else {
-				// Non-default language uses language prefix
-				url = "/" + t.LanguageCode + "/" + t.PageSlug
-			}
-		} else {
-			// No translation - link to homepage in that language
-			if lv.IsDefault {
-				url = "/"
-			} else {
-				url = "/" + t.LanguageCode + "/"
-			}
-		}
-
-		links = append(links, TranslationLink{
-			Language:  lv,
-			URL:       url,
-			PageTitle: t.PageTitle,
-			HasPage:   hasPage,
-		})
-
-		// Build hreflang link
-		if hasPage && siteURL != "" {
-			fullURL := strings.TrimRight(siteURL, "/") + url
-			hrefLangs = append(hrefLangs, HrefLangLink{
-				Lang: t.LanguageCode,
-				Href: fullURL,
-			})
-			if lv.IsDefault {
-				defaultLangURL = fullURL
-			}
-		}
-	}
-
-	// Add x-default hreflang (points to default language version)
-	if defaultLangURL != "" {
-		hrefLangs = append(hrefLangs, HrefLangLink{
-			Lang: "x-default",
-			Href: defaultLangURL,
+	translations := make([]availableEntityTranslation, 0, len(rows))
+	for _, row := range rows {
+		translations = append(translations, availableEntityTranslation{
+			languageID: row.LanguageID, languageCode: row.LanguageCode,
+			languageName: row.LanguageName, languageNative: row.LanguageNativeName,
+			languageDirection: row.LanguageDirection, isDefault: row.IsDefault,
+			entityID: row.PageID, slug: row.PageSlug, title: row.PageTitle,
 		})
 	}
-
-	return links, hrefLangs
+	return buildEntityTranslationLinks(translations, currentLangCode, siteURL, "/")
 }
 
-// getHomepageTranslations returns translation links for the homepage.
-// All language links use ?lang=XX to explicitly set the language preference cookie.
-func (h *FrontendHandler) getHomepageTranslations(currentLangCode string, languages []LanguageView) []TranslationLink {
+func (h *FrontendHandler) getCategoryTranslations(ctx context.Context, categoryID int64, currentLangCode, siteURL string) ([]TranslationLink, []HrefLangLink) {
+	rows, err := h.queries.GetCategoryAvailableTranslations(ctx, categoryID)
+	if err != nil {
+		h.logger.Error("failed to get category translations", "categoryID", categoryID, "error", err)
+		return nil, nil
+	}
+	translations := make([]availableEntityTranslation, 0, len(rows))
+	for _, row := range rows {
+		translations = append(translations, availableEntityTranslation{
+			languageID: row.LanguageID, languageCode: row.LanguageCode,
+			languageName: row.LanguageName, languageNative: row.LanguageNativeName,
+			languageDirection: row.LanguageDirection, isDefault: row.IsDefault,
+			entityID: row.CategoryID, slug: row.CategorySlug, title: row.CategoryName,
+		})
+	}
+	return buildEntityTranslationLinks(translations, currentLangCode, siteURL, "/category/")
+}
+
+func (h *FrontendHandler) getTagTranslations(ctx context.Context, tagID int64, currentLangCode, siteURL string) ([]TranslationLink, []HrefLangLink) {
+	rows, err := h.queries.GetTagAvailableTranslations(ctx, tagID)
+	if err != nil {
+		h.logger.Error("failed to get tag translations", "tagID", tagID, "error", err)
+		return nil, nil
+	}
+	translations := make([]availableEntityTranslation, 0, len(rows))
+	for _, row := range rows {
+		translations = append(translations, availableEntityTranslation{
+			languageID: row.LanguageID, languageCode: row.LanguageCode,
+			languageName: row.LanguageName, languageNative: row.LanguageNativeName,
+			languageDirection: row.LanguageDirection, isDefault: row.IsDefault,
+			entityID: row.TagID, slug: row.TagSlug, title: row.TagName,
+		})
+	}
+	return buildEntityTranslationLinks(translations, currentLangCode, siteURL, "/tag/")
+}
+
+func (h *FrontendHandler) getFormTranslations(ctx context.Context, formID int64, currentLangCode, siteURL string) ([]TranslationLink, []HrefLangLink) {
+	rows, err := h.queries.GetFormAvailableTranslations(ctx, formID)
+	if err != nil {
+		h.logger.Error("failed to get form translations", "formID", formID, "error", err)
+		return nil, nil
+	}
+	translations := make([]availableEntityTranslation, 0, len(rows))
+	for _, row := range rows {
+		translations = append(translations, availableEntityTranslation{
+			languageID: row.LanguageID, languageCode: row.LanguageCode,
+			languageName: row.LanguageName, languageNative: row.LanguageNativeName,
+			languageDirection: row.LanguageDirection, isDefault: row.IsDefault,
+			entityID: row.FormID, slug: row.FormSlug, title: row.FormName,
+		})
+	}
+	return buildEntityTranslationLinks(translations, currentLangCode, siteURL, "/forms/")
+}
+
+// getHomepageTranslations returns canonical homepage links and SEO alternates.
+func (h *FrontendHandler) getHomepageTranslations(currentLangCode, siteURL string, languages []LanguageView) ([]TranslationLink, []HrefLangLink) {
 	links := make([]TranslationLink, 0, len(languages))
+	hrefLangs := make([]HrefLangLink, 0, len(languages)+1)
+	defaultURL := ""
 	for _, lang := range languages {
-		// Use ?lang= parameter for all languages to ensure cookie is set correctly
-		// This fixes the issue where clicking a language link didn't update the cookie
-		url := "/?lang=" + lang.Code
+		prefix := ""
+		if !lang.IsDefault {
+			prefix = "/" + lang.Code
+		}
+		homeURL := frontendHomePath(prefix)
 
 		links = append(links, TranslationLink{
 			Language: LanguageView{
@@ -2483,12 +2780,22 @@ func (h *FrontendHandler) getHomepageTranslations(currentLangCode string, langua
 				IsDefault:  lang.IsDefault,
 				IsCurrent:  lang.Code == currentLangCode,
 			},
-			URL:       url,
+			URL:       homeURL,
 			PageTitle: "",
 			HasPage:   true,
 		})
+		if siteURL != "" {
+			fullURL := strings.TrimRight(siteURL, "/") + homeURL
+			hrefLangs = append(hrefLangs, HrefLangLink{Lang: lang.Code, Href: fullURL})
+			if lang.IsDefault {
+				defaultURL = fullURL
+			}
+		}
 	}
-	return links
+	if defaultURL != "" {
+		hrefLangs = append(hrefLangs, HrefLangLink{Lang: "x-default", Href: defaultURL})
+	}
+	return links, hrefLangs
 }
 
 // getPageNum extracts page number from request query params.
@@ -2790,15 +3097,11 @@ func (h *FrontendHandler) renderHTML(w http.ResponseWriter, activeTheme *theme.T
 // Before rendering 404, it checks if the requested path is a registered page alias.
 // If so, it redirects to the canonical page URL (HTTP 301).
 func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request) {
-	// Check if the path (without leading slash) is a page alias
-	path := strings.TrimPrefix(r.URL.Path, "/")
-	if path != "" {
-		aliasPage, aliasErr := h.queries.GetPublishedPageByAlias(r.Context(), path)
-		if aliasErr == nil {
-			// Alias found - redirect to canonical URL (HTTP 301 Moved Permanently)
-			http.Redirect(w, r, "/"+aliasPage.Slug, http.StatusMovedPermanently)
-			return
-		}
+	// Check arbitrary, including multi-segment, page aliases. Language
+	// middleware leaves r.URL.Path intact for logging and canonical URL work, so
+	// remove only the verified active prefix before querying the alias table.
+	if alias := pageAliasLookupPath(r); alias != "" && h.redirectPageAlias(w, r, alias) {
+		return
 	}
 
 	// Log 404 for monitoring and debugging
@@ -2826,15 +3129,28 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 	base := h.getBaseTemplateData(r, "Page Not Found", "")
 	base.BodyClass = "error-404"
 
-	// Get suggested pages (5 most recent published)
+	// Get suggested pages in the current route language only. Applying the
+	// current prefix to a page from another language would create a link that the
+	// language-scoped Page handler correctly rejects.
 	var suggestedPages []PageView
-	pages, err := h.queries.ListPublishedPages(r.Context(), store.ListPublishedPagesParams{
-		Limit:  5,
-		Offset: 0,
-	})
-	if err == nil {
-		for _, p := range pages {
-			suggestedPages = append(suggestedPages, h.pageToView(r.Context(), p, base.LangCode, base.LangPrefix))
+	languageCode := base.LangCode
+	if languageCode == "" {
+		if defaultLang, err := h.queries.GetDefaultLanguage(r.Context()); err == nil && defaultLang.IsActive &&
+			util.IsValidLangCode(defaultLang.Code) && !util.IsReservedLanguageCode(defaultLang.Code) {
+			languageCode = defaultLang.Code
+		}
+	}
+	if languageCode != "" {
+		pages, err := h.queries.ListPagesByLanguageAndStatus(r.Context(), store.ListPagesByLanguageAndStatusParams{
+			LanguageCode: languageCode,
+			Status:       PageStatusPublished,
+			Limit:        5,
+			Offset:       0,
+		})
+		if err == nil {
+			for _, p := range pages {
+				suggestedPages = append(suggestedPages, h.pageToView(r.Context(), p, base.LangCode, base.LangPrefix))
+			}
 		}
 	}
 
@@ -2844,6 +3160,178 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 	}
 	w.WriteHeader(http.StatusNotFound)
 	h.render(w, r, "404", data)
+}
+
+func pageAliasLookupPath(r *http.Request) string {
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	prefix := middleware.GetLanguagePrefix(r)
+	if prefix == "" {
+		return path
+	}
+	if path == prefix {
+		return ""
+	}
+
+	remainder, ok := strings.CutPrefix(path, prefix+"/")
+	if !ok {
+		return ""
+	}
+	return remainder
+}
+
+// explicitPageLanguage returns the active, routable language selected by an
+// explicit URL prefix. Language middleware is the authority that populates
+// both context values; validating their agreement here keeps Page safe when it
+// is invoked by a custom router or test harness.
+func explicitPageLanguage(r *http.Request) (string, bool) {
+	prefix := middleware.GetLanguagePrefix(r)
+	if prefix == "" {
+		return "", true
+	}
+
+	lang := middleware.GetLanguage(r)
+	if lang == nil || lang.Code != prefix || !util.IsValidLangCode(prefix) ||
+		util.IsReservedLanguageCode(prefix) {
+		return "", false
+	}
+	return prefix, true
+}
+
+func (h *FrontendHandler) taxonomyRouteLanguage(ctx context.Context, r *http.Request) (store.Language, bool, error) {
+	explicitCode, validExplicitLanguage := explicitPageLanguage(r)
+	if !validExplicitLanguage {
+		return store.Language{}, false, nil
+	}
+	if explicitCode != "" {
+		lang := middleware.GetLanguage(r)
+		if lang == nil {
+			return store.Language{}, false, nil
+		}
+		return store.Language{
+			ID:         lang.ID,
+			Code:       lang.Code,
+			Name:       lang.Name,
+			NativeName: lang.NativeName,
+			IsDefault:  lang.IsDefault,
+			IsActive:   true,
+			Direction:  lang.Direction,
+		}, true, nil
+	}
+
+	defaultLang, err := h.queries.GetDefaultLanguage(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return store.Language{}, false, nil
+	}
+	if err != nil {
+		return store.Language{}, false, err
+	}
+	if defaultLang.Code == "" || !defaultLang.IsActive || !util.IsValidLangCode(defaultLang.Code) ||
+		util.IsReservedLanguageCode(defaultLang.Code) {
+		return store.Language{}, false, nil
+	}
+	return defaultLang, true, nil
+}
+
+func requestWithFrontendLanguage(r *http.Request, lang store.Language) *http.Request {
+	langInfo := middleware.LanguageInfo{
+		ID:         lang.ID,
+		Code:       lang.Code,
+		Name:       lang.Name,
+		NativeName: lang.NativeName,
+		Direction:  lang.Direction,
+		IsDefault:  lang.IsDefault,
+	}
+	ctx := context.WithValue(r.Context(), middleware.ContextKeyLanguage, langInfo)
+	ctx = context.WithValue(ctx, middleware.ContextKeyLanguageCode, lang.Code)
+	return r.WithContext(ctx)
+}
+
+// redirectPageAlias redirects an alias to the target page's canonical
+// language-aware URL. An explicitly prefixed alias only resolves for a page in
+// that same language, preventing one global alias from leaking across every
+// active language prefix.
+func (h *FrontendHandler) redirectPageAlias(w http.ResponseWriter, r *http.Request, alias string) bool {
+	page, err := h.queries.GetPublishedPageByAlias(r.Context(), alias)
+	if err != nil {
+		return false
+	}
+
+	prefix, ok := h.canonicalAliasLanguagePrefix(r, page)
+	if !ok {
+		h.logger.Warn("invalid page slug for alias redirect", "page_id", page.ID, "slug", page.Slug, "alias", alias)
+		return false
+	}
+
+	return writePermanentPageRedirect(w, prefix, page.Slug)
+}
+
+// canonicalPageLanguagePrefix resolves a stored page language to its only
+// public canonical form. Inactive, orphaned, invalid, and reserved language
+// codes fail closed, including unsafe legacy defaults.
+func (h *FrontendHandler) canonicalPageLanguagePrefix(ctx context.Context, page store.Page) (string, bool) {
+	if !util.IsValidSlug(page.Slug) {
+		return "", false
+	}
+	defaultLang, err := h.queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		// Public language routing deliberately installs no namespace when the
+		// database has zero or multiple defaults. Do not advertise a canonical
+		// redirect that the router cannot serve in that state.
+		return "", false
+	}
+
+	lang, err := h.queries.GetLanguageByCode(ctx, page.LanguageCode)
+	if err != nil || !lang.IsActive || lang.Code != page.LanguageCode {
+		return "", false
+	}
+	if !util.IsValidLangCode(lang.Code) || util.IsReservedLanguageCode(lang.Code) {
+		return "", false
+	}
+	if lang.ID == defaultLang.ID && lang.Code == defaultLang.Code {
+		return "", true
+	}
+	return lang.Code, true
+}
+
+func (h *FrontendHandler) canonicalAliasLanguagePrefix(r *http.Request, page store.Page) (string, bool) {
+	canonicalPrefix, ok := h.canonicalPageLanguagePrefix(r.Context(), page)
+	if !ok {
+		return "", false
+	}
+
+	explicitPrefix, validExplicitLanguage := explicitPageLanguage(r)
+	if !validExplicitLanguage {
+		return "", false
+	}
+	if explicitPrefix == "" {
+		return canonicalPrefix, true
+	}
+	if page.LanguageCode != explicitPrefix {
+		return "", false
+	}
+
+	return canonicalPrefix, true
+}
+
+// writePermanentPageRedirect emits only a same-origin path assembled from
+// validated route segments. Writing the fixed local Location directly avoids
+// passing request-derived data to the generic redirect API.
+func writePermanentPageRedirect(w http.ResponseWriter, languageCode, slug string) bool {
+	if !util.IsValidSlug(slug) {
+		return false
+	}
+
+	location := "/" + slug
+	if languageCode != "" {
+		if !util.IsValidLangCode(languageCode) || util.IsReservedLanguageCode(languageCode) {
+			return false
+		}
+		location = "/" + languageCode + "/" + slug
+	}
+
+	w.Header().Set("Location", location)
+	w.WriteHeader(http.StatusMovedPermanently)
+	return true
 }
 
 // renderInternalError renders a 500 Internal Server Error page.

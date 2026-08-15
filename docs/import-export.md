@@ -54,7 +54,8 @@ Best for:
 
 Creates a `.zip` archive containing:
 - `export.json` - Content data
-- `media/` - All media files
+- `media/originals/<uuid>/<filename>` - Required original for each selected media item
+- `media/<variant>/<uuid>/<filename>` - Every variant declared in `export.json`
 
 ```bash
 # Download results in:
@@ -65,6 +66,39 @@ Best for:
 - Complete site backups
 - Migration between servers
 - Sites with media files
+
+ZIP output is staged and completely validated before download or publication.
+An unreadable original or declared variant fails the export without publishing a
+partial archive or replacing an existing target file.
+
+### Media Archive Contract
+
+Media UUIDs use the canonical hyphenated UUID form. Archive-declared media
+identities accept uppercase hexadecimal input and normalize new database,
+reference, and filesystem identities to lowercase. A page-only import may reuse
+an existing media row only when its structured reference and recognized upload
+URLs use that row's exact stored UUID spelling; case-mismatched or ambiguous
+destination identities are rejected before any write. A media path has exactly
+this shape:
+
+```text
+media/<storage>/<uuid>/<filename>
+```
+
+`<storage>` is `originals` or a standard image variant directory. Each media
+record declares its original `file_path`; each exported variant declares its own
+`file_path`. The manifest and ZIP are checked in both directions: undeclared ZIP
+entries, missing declared entries, duplicate paths, UUID/filename mismatches,
+unknown storage directories, and declared-size mismatches are rejected.
+
+The compressed ZIP limit is 100 MiB. A ZIP may contain at most 5,000 media file
+entries, each entry may expand to at most 32 MiB, and all media entries together
+may expand to at most 512 MiB. The uncompressed `export.json` entry is limited
+to 32 MiB. Only `export.json` and declared media files are allowed; undeclared
+files and explicit directory entries are rejected. Multi-disk and ZIP64
+archives are not supported, and the central-directory entry count is bounded
+before ZIP parsing. Exports enforce the same limits as validation and import,
+so oCMS does not emit an archive it would refuse to restore.
 
 ### Export Schema
 
@@ -165,8 +199,8 @@ Content is imported in this order to maintain relationships:
 2. Users
 3. Categories
 4. Tags
-5. Pages
-6. Media
+5. Media
+6. Pages
 7. Menus
 8. Forms
 
@@ -177,6 +211,48 @@ The validator checks for:
 - Required fields present
 - Reference integrity (authors, categories exist)
 - File format compatibility
+- Canonical media UUID and manifest/path consistency
+
+### Media Restore Modes
+
+- **Metadata only**: importing media from JSON changes database metadata only;
+  it never creates, replaces, or deletes upload files.
+- **Archive kind is enforced**: the media-file restore option is rejected for
+  JSON imports and is available only to ZIP entry points with a validated
+  manifest.
+- **Metadata and files**: every selected media item must have an original in the
+  ZIP. Every declared variant must also be present. New and overwritten image
+  rows generate only absent standard variants; declared variant bytes are never
+  overwritten. Every restored image original and declared image variant is
+  fully decoded and checked against its declared dimensions. The actual
+  generated dimensions and sizes are stored in the same database transaction
+  as the media row.
+- **Files only**: the destination must already contain the same UUID, filename,
+  MIME type, size, dimensions, and variant metadata. No media row or variant row
+  is created or changed.
+
+When either file restore mode is selected, its option-aware preflight checks the
+destination media identity and whole-UUID storage freshness before writing. A
+dry run additionally stages extraction, image decoding, and missing-variant
+generation in an isolated temporary root, leaving the configured uploads tree
+unchanged.
+
+File restoration owns the complete storage namespace for a UUID. Before any
+write, oCMS requires every standard storage directory for that UUID to be
+absent. Existing files are never truncated or merged, including with
+`Overwrite`. Extraction and generated variants use one verified upload-root
+capability and exclusive file creation. Immediately before the database commit,
+oCMS verifies an exact identity ledger for every created file and directory and
+rejects extra entries, case aliases, or replacements. Failure compensation
+removes only files and empty directories whose filesystem identity still
+matches that ledger; concurrent replacements and unowned sentinels are
+preserved. Operational ownership uncertainty likewise preserves files and
+returns an explicit error rather than deleting potentially committed media.
+
+Dry-run performs the same manifest, destination-relation, freshness, extraction,
+image-decoding, and variant-generation checks as a real file import, but runs
+filesystem work in an isolated temporary upload root and leaves both the
+configured uploads directory and database unchanged.
 
 Example validation output:
 ```
@@ -304,8 +380,9 @@ For automated backups, consider:
 For very large sites:
 
 1. **Split the import**: Export/import content types separately
-2. **Increase timeout**: Set longer PHP/server timeouts
-3. **Import via CLI**: Future feature
+2. **Keep media batches within archive limits**: 100 MiB compressed, 5,000
+   files, 32 MiB per file, and 512 MiB expanded media per ZIP
+3. **Validate each batch** before importing it
 
 ### Export Too Large
 
@@ -424,14 +501,27 @@ curl -X POST "http://localhost:8080/admin/import" \
     ],
     "media": [
         {
-            "uuid": "string",
+            "uuid": "550e8400-e29b-41d4-a716-446655440000",
             "filename": "string",
-            "original_name": "string",
             "mime_type": "string",
             "size": "number",
-            "path": "string",
-            "alt_text": "string",
-            "caption": "string"
+            "width": "number|null",
+            "height": "number|null",
+            "alt": "string",
+            "caption": "string",
+            "folder_path": "string",
+            "uploaded_by": "email",
+            "language_code": "string",
+            "file_path": "media/originals/<uuid>/<filename>",
+            "variants": [
+                {
+                    "type": "thumbnail",
+                    "width": "number",
+                    "height": "number",
+                    "size": "number",
+                    "file_path": "media/thumbnail/<uuid>/<filename>"
+                }
+            ]
         }
     ],
     "menus": [

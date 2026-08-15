@@ -481,10 +481,25 @@ func TestIsValidLangCode(t *testing.T) {
 			input:    "zh-hans",
 			expected: true,
 		},
+		{
+			name:     "valid maximum length code",
+			input:    "abcdefghij",
+			expected: true,
+		},
+		{
+			name:     "valid code with digits",
+			input:    "a1-b2",
+			expected: true,
+		},
 		// Invalid language codes
 		{
 			name:     "invalid - empty",
 			input:    "",
+			expected: false,
+		},
+		{
+			name:     "invalid - one character",
+			input:    "x",
 			expected: false,
 		},
 		{
@@ -561,5 +576,25 @@ func TestIsValidLangCode(t *testing.T) {
 				t.Errorf("IsValidLangCode(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestIsReservedLanguageCode(t *testing.T) {
+	reserved := []string{
+		"admin", "api", "blog", "uploads", "static", "themes", "health",
+		"login", "logout", "language", "forms", "search", "tag", "category",
+		"page", "session",
+	}
+
+	for _, code := range reserved {
+		if !IsReservedLanguageCode(code) {
+			t.Errorf("IsReservedLanguageCode(%q) = false, want true", code)
+		}
+	}
+
+	for _, code := range []string{"en", "zh-hans", "administrator", "blogs", "docs"} {
+		if IsReservedLanguageCode(code) {
+			t.Errorf("IsReservedLanguageCode(%q) = true, want false", code)
+		}
 	}
 }

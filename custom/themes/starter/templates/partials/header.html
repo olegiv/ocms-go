@@ -4,11 +4,11 @@
         <div class="st-header__inner">
             <div class="st-header__brand">
                 {{if .SiteLogo}}
-                <a href="/" class="st-header__logo">
+                <a href="{{.HomeURL}}" class="st-header__logo">
                     <img src="{{.SiteLogo}}" alt="{{.SiteName}}">
                 </a>
                 {{else}}
-                <a href="/" class="st-header__title">{{.SiteName}}</a>
+                <a href="{{.HomeURL}}" class="st-header__title">{{.SiteName}}</a>
                 {{end}}
                 {{if .SiteTagline}}
                 <p class="st-header__tagline">{{.SiteTagline}}</p>

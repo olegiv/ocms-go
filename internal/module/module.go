@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
@@ -22,6 +23,11 @@ import (
 )
 
 // Context provides access to application services for modules.
+//
+// Every field must be populated where the context is built in cmd/ocms; the
+// drift test TestModuleContextFieldsWiredInMain enforces that, because a field
+// added here but forgotten there fails silently at runtime rather than at
+// compile time.
 type Context struct {
 	DB                *sql.DB
 	Store             *store.Queries
@@ -31,6 +37,47 @@ type Context struct {
 	Events            *service.EventService
 	Hooks             *HookRegistry
 	SchedulerRegistry *scheduler.Registry
+	// Cache lets a module invalidate cached content after a bulk write. It may
+	// be nil in tests and in embedders that do not wire it, so every use must
+	// be nil-guarded.
+	Cache *cache.Manager
+	// RedirectCacheInvalidator lets modules that write redirects make those
+	// changes visible immediately without depending on the concrete middleware.
+	// It may be nil in tests and embedders.
+	RedirectCacheInvalidator RedirectCacheInvalidator
+	// PublicRouteChecker lets modules that create database redirects avoid
+	// shadowing routes registered by core or another module. The registry wires
+	// itself during InitAll, after every module has been registered.
+	PublicRouteChecker PublicRouteChecker
+}
+
+// RedirectCacheInvalidator is the narrow cache capability exposed to modules
+// that create or delete redirects.
+type RedirectCacheInvalidator interface {
+	InvalidateCache()
+}
+
+// PublicRouteChecker reports whether a concrete URL path is owned by a
+// registered module route. Core routes are protected separately by the shared
+// reserved-prefix policy because the module registry does not register them.
+type PublicRouteChecker interface {
+	OwnsPublicPath(path string) bool
+}
+
+// ActivationGuard is an optional interface a module may implement to refuse
+// activation when its runtime security posture is not satisfied.
+//
+// Production posture audits run once at startup, so a module that was inactive
+// then could previously be switched on through the admin UI without any of
+// those checks re-running — the policy held only until someone toggled it.
+type ActivationGuard interface {
+	// CheckActivation returns an error explaining why the module must not be
+	// activated right now. It runs before Init and before the row is marked
+	// active, so the module's own context is not wired yet — the registry
+	// context is passed in instead. Reading m.ctx here would observe nil for
+	// precisely the module this guard exists to stop: one that was inactive at
+	// startup.
+	CheckActivation(ctx *Context) error
 }
 
 // Module defines the interface that all modules must implement.

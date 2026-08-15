@@ -4,13 +4,18 @@
 package service
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
 func TestClientError(t *testing.T) {
@@ -94,10 +99,10 @@ func TestSanitizeFilename(t *testing.T) {
 
 func TestValidateMediaStoredFilename(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		want     string
-		wantErr  bool
+		name    string
+		input   string
+		want    string
+		wantErr bool
 	}{
 		{name: "valid filename", input: "image.jpg", want: "image.jpg"},
 		{name: "valid with spaces", input: "my image.jpg", want: "my image.jpg"},
@@ -408,4 +413,224 @@ func TestGetAdminGridPreviewURL(t *testing.T) {
 			t.Errorf("GetAdminGridPreviewURL() = %q, want empty string", got)
 		}
 	})
+}
+
+func TestMediaServiceDeleteRejectsMalformedUUIDBeforeDatabaseMutation(t *testing.T) {
+	ctx := context.Background()
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	now := time.Now()
+	user, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "cleanup@example.com", PasswordHash: "hash", Role: "admin", Name: "Cleanup",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	language, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("GetDefaultLanguage() error = %v", err)
+	}
+	media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: "legacy-media-1", Filename: "legacy.pdf", MimeType: model.MimeTypePDF, Size: 6,
+		Width: sql.NullInt64{}, Height: sql.NullInt64{}, UploadedBy: user.ID,
+		LanguageCode: language.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMedia() error = %v", err)
+	}
+	if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+		MediaID: media.ID, Type: model.VariantThumbnail, Width: 150, Height: 150, Size: 1, CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateMediaVariant() error = %v", err)
+	}
+	uploadRoot := t.TempDir()
+	sentinel := filepath.Join(uploadRoot, model.OriginalsDir, media.Uuid, media.Filename)
+	if err := os.MkdirAll(filepath.Dir(sentinel), 0o750); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(sentinel, []byte("legacy"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	err = NewMediaService(db, uploadRoot).Delete(ctx, media.ID)
+	if err == nil || !strings.Contains(err.Error(), "invalid media UUID") {
+		t.Fatalf("Delete() error = %v, want malformed UUID rejection", err)
+	}
+	if _, err := queries.GetMediaByID(ctx, media.ID); err != nil {
+		t.Fatalf("media row was deleted after failed cleanup validation: %v", err)
+	}
+	variants, err := queries.GetMediaVariants(ctx, media.ID)
+	if err != nil || len(variants) != 1 {
+		t.Fatalf("media variants = %+v, error = %v; want preserved variant", variants, err)
+	}
+	if content, err := os.ReadFile(sentinel); err != nil || string(content) != "legacy" {
+		t.Fatalf("legacy file = %q, error = %v; want preserved", content, err)
+	}
+}
+
+func TestMediaServiceDeleteKeepsCapturedRootAcrossReplacement(t *testing.T) {
+	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
+	ctx := context.Background()
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	now := time.Now()
+	user, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "replace-root@example.com", PasswordHash: "hash", Role: "admin", Name: "Cleanup",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	language, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: mediaUUID, Filename: "report.pdf", MimeType: model.MimeTypePDF, Size: 6,
+		UploadedBy: user.ID, LanguageCode: language.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := t.TempDir()
+	uploadRoot := filepath.Join(parent, "uploads")
+	originalFile := filepath.Join(uploadRoot, model.OriginalsDir, mediaUUID, "report.pdf")
+	if err := os.MkdirAll(filepath.Dir(originalFile), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(originalFile, []byte("report"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	renamedRoot := filepath.Join(parent, "uploads-renamed")
+	replacementSentinel := filepath.Join(uploadRoot, model.OriginalsDir, mediaUUID, "outside.pdf")
+	svc := NewMediaService(db, uploadRoot)
+	svc.beforeMediaCleanup = func() {
+		if err := os.Rename(uploadRoot, renamedRoot); err != nil {
+			t.Fatalf("Rename(upload root): %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(replacementSentinel), 0o750); err != nil {
+			t.Fatalf("MkdirAll(replacement): %v", err)
+		}
+		if err := os.WriteFile(replacementSentinel, []byte("replacement"), 0o600); err != nil {
+			t.Fatalf("WriteFile(replacement): %v", err)
+		}
+	}
+	if err := svc.Delete(ctx, media.ID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("deleted media lookup = %v, want sql.ErrNoRows", err)
+	}
+	if _, err := os.Stat(filepath.Join(renamedRoot, model.OriginalsDir, mediaUUID)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("captured original storage remains: %v", err)
+	}
+	if content, err := os.ReadFile(replacementSentinel); err != nil || string(content) != "replacement" {
+		t.Fatalf("replacement sentinel = %q, error = %v", content, err)
+	}
+}
+
+func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
+	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
+	ctx := context.Background()
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	now := time.Now()
+	user, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "cleanup-failure@example.com", PasswordHash: "hash", Role: "admin", Name: "Cleanup",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	language, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: mediaUUID, Filename: "report.pdf", MimeType: model.MimeTypePDF, Size: 6,
+		UploadedBy: user.ID, LanguageCode: language.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+		MediaID: media.ID, Type: model.VariantThumbnail, Width: 10, Height: 10, Size: 1, CreatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	uploadRoot := t.TempDir()
+	svc := NewMediaService(db, uploadRoot)
+	svc.deleteMediaFiles = func(*os.Root, string) error { return errors.New("injected cleanup failure") }
+	err = svc.Delete(ctx, media.ID)
+	if err == nil || !strings.Contains(err.Error(), "injected cleanup failure") {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("media row lookup = %v, want committed deletion", err)
+	}
+	variants, err := queries.GetMediaVariants(ctx, media.ID)
+	if err != nil || len(variants) != 0 {
+		t.Fatalf("variant rows = %+v, error = %v; want committed deletion", variants, err)
+	}
+}
+
+func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *testing.T) {
+	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
+	ctx, cancel := context.WithCancel(context.Background())
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	now := time.Now()
+	user, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "cleanup-cancel@example.com", PasswordHash: "hash", Role: "admin", Name: "Cleanup",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	language, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: mediaUUID, Filename: "report.pdf", MimeType: model.MimeTypePDF, Size: 6,
+		UploadedBy: user.ID, LanguageCode: language.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+		MediaID: media.ID, Type: model.VariantThumbnail, Width: 10, Height: 10, Size: 1, CreatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	uploadRoot := t.TempDir()
+	original := filepath.Join(uploadRoot, model.OriginalsDir, mediaUUID, "report.pdf")
+	if err := os.MkdirAll(filepath.Dir(original), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(original, []byte("report"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewMediaService(db, uploadRoot)
+	svc.beforeMediaCommit = cancel
+	err = svc.Delete(ctx, media.ID)
+	if err == nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("Delete() error = %v, want context.Canceled", err)
+	}
+	if _, err := queries.GetMediaByID(context.Background(), media.ID); err != nil {
+		t.Fatalf("media row was not rolled back: %v", err)
+	}
+	variants, err := queries.GetMediaVariants(context.Background(), media.ID)
+	if err != nil || len(variants) != 1 {
+		t.Fatalf("variant rows = %+v, error = %v; want rollback", variants, err)
+	}
+	if content, err := os.ReadFile(original); err != nil || string(content) != "report" {
+		t.Fatalf("original = %q, error = %v; want preserved", content, err)
+	}
 }

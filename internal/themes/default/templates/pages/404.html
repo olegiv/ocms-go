@@ -7,7 +7,7 @@
             {{TTheme .LangCode "frontend.page_not_found_message"}}
         </p>
         <div class="error-actions">
-            <a href="/" class="btn btn-primary">{{TTheme .LangCode "frontend.go_home"}}</a>
+            <a href="{{.HomeURL}}" class="btn btn-primary">{{TTheme .LangCode "frontend.go_home"}}</a>
             {{if .ShowSearch}}
             <span class="or">{{TTheme .LangCode "frontend.or"}}</span>
             <form action="{{.LangPrefix}}/search" method="get" class="search-form inline">

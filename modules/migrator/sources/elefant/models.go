@@ -6,6 +6,8 @@ package elefant
 import (
 	"database/sql"
 	"time"
+
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
 // BlogPost represents a blog post from Elefant CMS.
@@ -61,10 +63,4 @@ func (w *Webpage) IsPublic() bool {
 }
 
 // MediaFile represents a file found in Elefant's files directory.
-type MediaFile struct {
-	Path     string // Relative path from files_path (e.g., "images/photo.jpg")
-	FullPath string // Absolute path
-	Filename string // Just the filename
-	Size     int64  // File size in bytes
-	MimeType string // MIME type (e.g., "image/jpeg")
-}
+type MediaFile = shared.MediaFile

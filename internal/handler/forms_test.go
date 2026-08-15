@@ -8,12 +8,16 @@ import (
 	"context"
 	"database/sql"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -26,6 +30,136 @@ func TestNewFormsHandler(t *testing.T) {
 	}
 	if h.queries == nil {
 		t.Error("queries should not be nil")
+	}
+}
+
+func TestPublicFormPathFailsClosedWithAmbiguousDefaults(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+	fr, err := queries.CreateLanguage(context.Background(), store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", IsDefault: true, IsActive: true,
+		Direction: "ltr", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateLanguage(fr): %v", err)
+	}
+	form, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name: "French", Slug: "contact", Title: "Contact", IsActive: true,
+		LanguageCode: fr.Code, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm: %v", err)
+	}
+	if got := publicFormPath(context.Background(), queries, form); got != "" {
+		t.Fatalf("publicFormPath = %q; want empty with multiple defaults", got)
+	}
+}
+
+func TestFormsHandlerShowScopesSameSlugToVerifiedLanguageRoute(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+	seedSiteURL(t, db, "https://example.com")
+	for _, language := range []store.CreateLanguageParams{
+		{Code: "fr", Name: "French", NativeName: "Français", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+		{Code: "es", Name: "Spanish", NativeName: "Español", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+		{Code: "ru", Name: "Russian", NativeName: "Русский", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+		{Code: "de", Name: "German", NativeName: "Deutsch", IsActive: false, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+		{Code: "blog", Name: "Legacy", NativeName: "Legacy", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+		{Code: "x", Name: "Invalid", NativeName: "Invalid", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+	} {
+		if _, err := queries.CreateLanguage(context.Background(), language); err != nil {
+			t.Fatalf("CreateLanguage(%q): %v", language.Code, err)
+		}
+	}
+	createdForms := make(map[string]store.Form)
+	for _, form := range []store.CreateFormParams{
+		{Name: "English", Slug: "contact", Title: "Contact EN", IsActive: true, LanguageCode: "en", CreatedAt: now, UpdatedAt: now},
+		{Name: "French", Slug: "contact", Title: "Contact FR", IsActive: true, LanguageCode: "fr", CreatedAt: now, UpdatedAt: now},
+		{Name: "Spanish", Slug: "contact", Title: "Contact ES", IsActive: true, LanguageCode: "es", CreatedAt: now, UpdatedAt: now},
+		{Name: "Inactive Russian", Slug: "contact", Title: "Contact RU", IsActive: false, LanguageCode: "ru", CreatedAt: now, UpdatedAt: now},
+		{Name: "Inactive", Slug: "contact-de", Title: "Contact DE", IsActive: true, LanguageCode: "de", CreatedAt: now, UpdatedAt: now},
+		{Name: "Reserved", Slug: "contact-blog", Title: "Contact Blog", IsActive: true, LanguageCode: "blog", CreatedAt: now, UpdatedAt: now},
+		{Name: "Invalid", Slug: "contact-x", Title: "Contact X", IsActive: true, LanguageCode: "x", CreatedAt: now, UpdatedAt: now},
+		{Name: "Orphan", Slug: "contact-zz", Title: "Contact ZZ", IsActive: true, LanguageCode: "zz", CreatedAt: now, UpdatedAt: now},
+	} {
+		created, err := queries.CreateForm(context.Background(), form)
+		if err != nil {
+			t.Fatalf("CreateForm(%q): %v", form.Slug, err)
+		}
+		createdForms[form.Title] = created
+	}
+	for _, translation := range []struct {
+		languageCode string
+		targetTitle  string
+	}{
+		{languageCode: "fr", targetTitle: "Contact FR"},
+		{languageCode: "es", targetTitle: "Contact ES"},
+		{languageCode: "ru", targetTitle: "Contact RU"},
+	} {
+		language, err := queries.GetLanguageByCode(context.Background(), translation.languageCode)
+		if err != nil {
+			t.Fatalf("GetLanguageByCode(%q): %v", translation.languageCode, err)
+		}
+		if _, err := queries.CreateTranslation(context.Background(), store.CreateTranslationParams{
+			EntityType: "form", EntityID: createdForms["Contact EN"].ID, LanguageID: language.ID,
+			TranslationID: createdForms[translation.targetTitle].ID, CreatedAt: now,
+		}); err != nil {
+			t.Fatalf("CreateTranslation(%q): %v", translation.languageCode, err)
+		}
+	}
+
+	tm := loadedFrontendThemeManager(t, "default")
+	menuService := service.NewMenuService(db, nil)
+	frontend := NewFrontendHandler(db, tm, nil, slog.Default(), menuService, nil)
+	h := NewFormsHandler(db, nil, sm, nil, tm, nil, menuService, frontend)
+	router := chi.NewRouter()
+	formsRouter := chi.NewRouter()
+	formsRouter.Use(middleware.Language(db))
+	formsRouter.Get(RouteFormsSlug, h.Show)
+	router.Mount(RouteRoot, formsRouter)
+
+	for _, tc := range []struct {
+		path      string
+		title     string
+		canonical string
+		action    string
+	}{
+		{path: "/forms/contact", title: "Contact EN", canonical: "https://example.com/forms/contact", action: `/forms/contact`},
+		{path: "/fr/forms/contact", title: "Contact FR", canonical: "https://example.com/fr/forms/contact", action: `/fr/forms/contact`},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d; body = %s", w.Code, w.Body.String())
+			}
+			body := w.Body.String()
+			if !strings.Contains(body, tc.title) ||
+				!strings.Contains(body, `rel="canonical" href="`+tc.canonical+`"`) ||
+				!strings.Contains(body, `property="og:url" content="`+tc.canonical+`"`) ||
+				!strings.Contains(body, `action="`+tc.action+`"`) {
+				t.Fatalf("language-scoped form output is incomplete: %s", body)
+			}
+			if !strings.Contains(body, `hreflang="en" href="https://example.com/forms/contact"`) ||
+				!strings.Contains(body, `hreflang="fr" href="https://example.com/fr/forms/contact"`) ||
+				!strings.Contains(body, `hreflang="es" href="https://example.com/es/forms/contact"`) ||
+				!strings.Contains(body, `href="/es/forms/contact"`) ||
+				strings.Contains(body, `/ru/forms/contact`) {
+				t.Fatalf("form translation links are incomplete or expose an inactive form: %s", body)
+			}
+		})
+	}
+
+	for _, slug := range []string{"contact-de", "contact-blog", "contact-x", "contact-zz"} {
+		t.Run(slug, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/forms/"+slug, nil))
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("status = %d; want %d", w.Code, http.StatusNotFound)
+			}
+		})
 	}
 }
 

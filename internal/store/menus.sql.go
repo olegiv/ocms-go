@@ -11,6 +11,21 @@ import (
 	"time"
 )
 
+const convertMenuItemToURL = `-- name: ConvertMenuItemToURL :exec
+UPDATE menu_items SET page_id = NULL, url = ?, updated_at = ? WHERE id = ?
+`
+
+type ConvertMenuItemToURLParams struct {
+	Url       sql.NullString `json:"url"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	ID        int64          `json:"id"`
+}
+
+func (q *Queries) ConvertMenuItemToURL(ctx context.Context, arg ConvertMenuItemToURLParams) error {
+	_, err := q.db.ExecContext(ctx, convertMenuItemToURL, arg.Url, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const countMenuItems = `-- name: CountMenuItems :one
 SELECT COUNT(*) FROM menu_items WHERE menu_id = ?
 `
@@ -277,6 +292,33 @@ func (q *Queries) GetMenuItemByID(ctx context.Context, id int64) (MenuItem, erro
 	return i, err
 }
 
+const listChildMenuItemIDs = `-- name: ListChildMenuItemIDs :many
+SELECT id FROM menu_items WHERE parent_id = ?
+`
+
+func (q *Queries) ListChildMenuItemIDs(ctx context.Context, parentID sql.NullInt64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listChildMenuItemIDs, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChildMenuItems = `-- name: ListChildMenuItems :many
 SELECT id, menu_id, parent_id, title, url, target, page_id, position, css_class, is_active, created_at, updated_at FROM menu_items WHERE parent_id = ? ORDER BY position
 `
@@ -307,6 +349,33 @@ func (q *Queries) ListChildMenuItems(ctx context.Context, parentID sql.NullInt64
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMenuItemIDsForPage = `-- name: ListMenuItemIDsForPage :many
+SELECT id FROM menu_items WHERE page_id = ?
+`
+
+func (q *Queries) ListMenuItemIDsForPage(ctx context.Context, pageID sql.NullInt64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listMenuItemIDsForPage, pageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -362,28 +431,35 @@ const listMenuItemsWithPage = `-- name: ListMenuItemsWithPage :many
 SELECT
     mi.id, mi.menu_id, mi.parent_id, mi.title, mi.url, mi.target, mi.page_id, mi.position, mi.css_class, mi.is_active, mi.created_at, mi.updated_at,
     p.title as page_title,
-    p.slug as page_slug
+    p.slug as page_slug,
+    p.language_code as page_language_code,
+    pl.is_active as page_language_is_active,
+    pl.is_default as page_language_is_default
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id
+LEFT JOIN languages pl ON p.language_code = pl.code
 WHERE mi.menu_id = ?
 ORDER BY mi.position
 `
 
 type ListMenuItemsWithPageRow struct {
-	ID        int64          `json:"id"`
-	MenuID    int64          `json:"menu_id"`
-	ParentID  sql.NullInt64  `json:"parent_id"`
-	Title     string         `json:"title"`
-	Url       sql.NullString `json:"url"`
-	Target    sql.NullString `json:"target"`
-	PageID    sql.NullInt64  `json:"page_id"`
-	Position  int64          `json:"position"`
-	CssClass  sql.NullString `json:"css_class"`
-	IsActive  bool           `json:"is_active"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	PageTitle sql.NullString `json:"page_title"`
-	PageSlug  sql.NullString `json:"page_slug"`
+	ID                    int64          `json:"id"`
+	MenuID                int64          `json:"menu_id"`
+	ParentID              sql.NullInt64  `json:"parent_id"`
+	Title                 string         `json:"title"`
+	Url                   sql.NullString `json:"url"`
+	Target                sql.NullString `json:"target"`
+	PageID                sql.NullInt64  `json:"page_id"`
+	Position              int64          `json:"position"`
+	CssClass              sql.NullString `json:"css_class"`
+	IsActive              bool           `json:"is_active"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	PageTitle             sql.NullString `json:"page_title"`
+	PageSlug              sql.NullString `json:"page_slug"`
+	PageLanguageCode      sql.NullString `json:"page_language_code"`
+	PageLanguageIsActive  sql.NullBool   `json:"page_language_is_active"`
+	PageLanguageIsDefault sql.NullBool   `json:"page_language_is_default"`
 }
 
 // Menu item with page info
@@ -411,6 +487,9 @@ func (q *Queries) ListMenuItemsWithPage(ctx context.Context, menuID int64) ([]Li
 			&i.UpdatedAt,
 			&i.PageTitle,
 			&i.PageSlug,
+			&i.PageLanguageCode,
+			&i.PageLanguageIsActive,
+			&i.PageLanguageIsDefault,
 		); err != nil {
 			return nil, err
 		}
@@ -429,7 +508,8 @@ const listMenuItemsWithPublishedPage = `-- name: ListMenuItemsWithPublishedPage 
 SELECT
     mi.id, mi.menu_id, mi.parent_id, mi.title, mi.url, mi.target, mi.page_id, mi.position, mi.css_class, mi.is_active, mi.created_at, mi.updated_at,
     p.title as page_title,
-    p.slug as page_slug
+    p.slug as page_slug,
+    p.language_code as page_language_code
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id AND p.status = 'published'
 WHERE mi.menu_id = ?
@@ -437,20 +517,21 @@ ORDER BY mi.position
 `
 
 type ListMenuItemsWithPublishedPageRow struct {
-	ID        int64          `json:"id"`
-	MenuID    int64          `json:"menu_id"`
-	ParentID  sql.NullInt64  `json:"parent_id"`
-	Title     string         `json:"title"`
-	Url       sql.NullString `json:"url"`
-	Target    sql.NullString `json:"target"`
-	PageID    sql.NullInt64  `json:"page_id"`
-	Position  int64          `json:"position"`
-	CssClass  sql.NullString `json:"css_class"`
-	IsActive  bool           `json:"is_active"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	PageTitle sql.NullString `json:"page_title"`
-	PageSlug  sql.NullString `json:"page_slug"`
+	ID               int64          `json:"id"`
+	MenuID           int64          `json:"menu_id"`
+	ParentID         sql.NullInt64  `json:"parent_id"`
+	Title            string         `json:"title"`
+	Url              sql.NullString `json:"url"`
+	Target           sql.NullString `json:"target"`
+	PageID           sql.NullInt64  `json:"page_id"`
+	Position         int64          `json:"position"`
+	CssClass         sql.NullString `json:"css_class"`
+	IsActive         bool           `json:"is_active"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	PageTitle        sql.NullString `json:"page_title"`
+	PageSlug         sql.NullString `json:"page_slug"`
+	PageLanguageCode sql.NullString `json:"page_language_code"`
 }
 
 func (q *Queries) ListMenuItemsWithPublishedPage(ctx context.Context, menuID int64) ([]ListMenuItemsWithPublishedPageRow, error) {
@@ -477,6 +558,7 @@ func (q *Queries) ListMenuItemsWithPublishedPage(ctx context.Context, menuID int
 			&i.UpdatedAt,
 			&i.PageTitle,
 			&i.PageSlug,
+			&i.PageLanguageCode,
 		); err != nil {
 			return nil, err
 		}
@@ -661,6 +743,21 @@ func (q *Queries) MenuSlugExistsForLanguageExcluding(ctx context.Context, arg Me
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const reparentMenuItemChildren = `-- name: ReparentMenuItemChildren :exec
+UPDATE menu_items SET parent_id = ?, updated_at = ? WHERE parent_id = ?
+`
+
+type ReparentMenuItemChildrenParams struct {
+	ParentID   sql.NullInt64 `json:"parent_id"`
+	UpdatedAt  time.Time     `json:"updated_at"`
+	ParentID_2 sql.NullInt64 `json:"parent_id_2"`
+}
+
+func (q *Queries) ReparentMenuItemChildren(ctx context.Context, arg ReparentMenuItemChildrenParams) error {
+	_, err := q.db.ExecContext(ctx, reparentMenuItemChildren, arg.ParentID, arg.UpdatedAt, arg.ParentID_2)
+	return err
 }
 
 const updateMenu = `-- name: UpdateMenu :one

@@ -41,10 +41,10 @@ func testModule(t *testing.T, db *sql.DB) *Module {
 		Logger: logger,
 		Config: &config.Config{Env: "development"},
 	}
+	moduleutil.RunMigrations(t, db, m.Migrations())
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	moduleutil.RunMigrations(t, db, m.Migrations())
 	return m
 }
 
@@ -429,7 +429,7 @@ func TestGenerateMedia(t *testing.T) {
 	fixtures := createTestFixtures(t, db)
 
 	// Generate media
-	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID)
+	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID, fixtures.Language.Code)
 	if err != nil {
 		t.Fatalf("generateMedia: %v", err)
 	}
@@ -461,6 +461,29 @@ func TestGenerateMedia(t *testing.T) {
 	}
 	if len(tracked) != len(mediaIDs) {
 		t.Errorf("tracked media = %d, generated = %d", len(tracked), len(mediaIDs))
+	}
+}
+
+func TestRoutableGeneratorLanguagesFiltersLegacyRowsAndRequiresSafeDefault(t *testing.T) {
+	languages, defaultLanguage, err := routableGeneratorLanguages([]store.Language{
+		{ID: 1, Code: "en", IsActive: true, IsDefault: true},
+		{ID: 2, Code: "admin", IsActive: true},
+		{ID: 3, Code: "x", IsActive: true},
+		{ID: 4, Code: "fr", IsActive: false},
+	})
+	if err != nil {
+		t.Fatalf("routableGeneratorLanguages: %v", err)
+	}
+	if len(languages) != 1 || languages[0].Code != "en" || defaultLanguage.Code != "en" {
+		t.Fatalf("languages = %+v, default = %+v", languages, defaultLanguage)
+	}
+	for _, code := range []string{"admin", "x"} {
+		_, _, err := routableGeneratorLanguages([]store.Language{{
+			ID: 1, Code: code, IsActive: true, IsDefault: true,
+		}})
+		if err == nil {
+			t.Fatalf("unsafe default %q was accepted", code)
+		}
 	}
 }
 
@@ -737,7 +760,7 @@ func TestDeleteAllGeneratedItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generateCategories: %v", err)
 	}
-	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID)
+	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID, fixtures.Language.Code)
 	if err != nil {
 		t.Fatalf("generateMedia: %v", err)
 	}
@@ -802,7 +825,7 @@ func TestModuleNew(t *testing.T) {
 
 func TestModuleMigrations(t *testing.T) {
 	m := New()
-	moduleutil.AssertMigrations(t, m.Migrations(), 1)
+	moduleutil.AssertMigrations(t, m.Migrations(), 2)
 }
 
 func TestModuleInitBlocksProduction(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -390,7 +391,7 @@ func TestValidateFile_ValidJSON(t *testing.T) {
 		Version:    ExportVersion,
 		ExportedAt: time.Now(),
 		Languages: []ExportLanguage{
-			{Code: "en", Name: "English", NativeName: "English"},
+			{Code: "en", Name: "English", NativeName: "English", IsActive: true, IsDefault: true},
 		},
 	}
 	data, err := json.Marshal(exportData)
@@ -500,8 +501,21 @@ func TestValidateZip_TooManyMediaFiles(t *testing.T) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
-	// Add export.json first
-	exportData := ExportData{Version: ExportVersion, ExportedAt: time.Now()}
+	// Build canonical, declared UUIDs so this test reaches the count limit rather
+	// than failing an earlier media-identity invariant.
+	exportData := ExportData{
+		Version: ExportVersion, ExportedAt: time.Now(),
+		Media: make([]ExportMedia, 0, maxZipMediaFiles+1),
+	}
+	paths := make([]string, 0, maxZipMediaFiles+1)
+	for i := 0; i <= maxZipMediaFiles; i++ {
+		mediaUUID := fmt.Sprintf("%08x-0000-4000-8000-%012x", i, i)
+		archivePath := "media/originals/" + mediaUUID + "/file.jpg"
+		exportData.Media = append(exportData.Media, ExportMedia{
+			UUID: mediaUUID, Filename: "file.jpg", Size: 1, FilePath: archivePath,
+		})
+		paths = append(paths, archivePath)
+	}
 	jsonData, _ := json.Marshal(exportData)
 	jw, err := zw.Create("export.json")
 	if err != nil {
@@ -509,13 +523,8 @@ func TestValidateZip_TooManyMediaFiles(t *testing.T) {
 	}
 	_, _ = jw.Write(jsonData)
 
-	// Add maxZipMediaFiles+1 media entries with valid paths
-	for i := 0; i <= maxZipMediaFiles; i++ {
-		name := "media/originals/uuid-00000000-0000-0000-0000-000000000001/file.jpg"
-		if i > 0 {
-			// Vary uuid to pass path validation
-			name = "media/originals/uuid-0000000000000000000000000000" + string(rune('a'+i%26)) + "/file.jpg"
-		}
+	// Add maxZipMediaFiles+1 media entries with valid declared paths.
+	for _, name := range paths {
 		mw, err := zw.Create(name)
 		if err != nil {
 			// Stop if we can't create more (shouldn't happen)
@@ -527,9 +536,8 @@ func TestValidateZip_TooManyMediaFiles(t *testing.T) {
 
 	result, err := importer.ValidateZipBytes(ctx, buf.Bytes())
 	require.NoError(t, err)
-	// Either too many files reported or entries with duplicate names are collapsed by zip library
-	// The important thing is the validation runs without panic
-	_ = result
+	require.False(t, result.Valid)
+	require.Contains(t, result.Errors[0].Message, "too many media files")
 }
 
 func TestValidateData_CountsAllEntities(t *testing.T) {
@@ -547,7 +555,7 @@ func TestValidateData_CountsAllEntities(t *testing.T) {
 		Categories: []ExportCategory{{ID: 1, Name: "Cat", Slug: "cat"}},
 		Tags:       []ExportTag{{ID: 1, Name: "Tag", Slug: "tag"}},
 		Pages:      []ExportPage{{ID: 1, Title: "Page", Slug: "page"}},
-		Media:      []ExportMedia{{UUID: "uuid1", Filename: "f.jpg"}},
+		Media:      []ExportMedia{{UUID: "550e8400-e29b-41d4-a716-446655440000", Filename: "f.jpg"}},
 		Menus:      []ExportMenu{{ID: 1, Name: "Menu", Slug: "menu"}},
 		Forms:      []ExportForm{{ID: 1, Name: "Form", Slug: "form"}},
 		Config:     map[string]string{"key": "val"},

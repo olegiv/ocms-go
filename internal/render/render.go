@@ -34,6 +34,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/views/utils"
 )
 
 // SessionKeyAdminLang is the session key for storing admin UI language preference.
@@ -263,6 +264,12 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"lower": strings.ToLower,
 		"upper": strings.ToUpper,
 		"now":   time.Now,
+		// scriptURL appends a per-process version to a static asset URL.
+		// /static/dist/* is served with a one-year max-age and no version in
+		// the path, so without this a browser keeps a cached copy across an
+		// upgrade — which, combined with a Subresource Integrity hash for the
+		// new build, silently breaks the script.
+		"scriptURL": utils.ScriptURL,
 		"timeBefore": func(t1, t2 time.Time) bool {
 			return t1.Before(t2)
 		},

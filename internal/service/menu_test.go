@@ -179,15 +179,21 @@ func TestBuildMenuTreeWithPageLinks(t *testing.T) {
 	// Create item linked to a page
 	items := []store.ListMenuItemsWithPageRow{
 		{
-			ID:        1,
-			MenuID:    1,
-			Title:     "About Page",
-			PageID:    sql.NullInt64{Int64: 42, Valid: true},
-			PageSlug:  sql.NullString{String: "about-us", Valid: true},
-			IsActive:  true,
-			Position:  0,
-			CreatedAt: now,
-			UpdatedAt: now,
+			ID:       1,
+			MenuID:   1,
+			Title:    "About Page",
+			PageID:   sql.NullInt64{Int64: 42, Valid: true},
+			PageSlug: sql.NullString{String: "about-us", Valid: true},
+			PageLanguageCode: sql.NullString{
+				String: "en",
+				Valid:  true,
+			},
+			PageLanguageIsActive:  sql.NullBool{Bool: true, Valid: true},
+			PageLanguageIsDefault: sql.NullBool{Bool: true, Valid: true},
+			IsActive:              true,
+			Position:              0,
+			CreatedAt:             now,
+			UpdatedAt:             now,
 		},
 	}
 

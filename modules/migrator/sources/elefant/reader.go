@@ -4,16 +4,19 @@
 package elefant
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"mime"
-	"os"
-	"path/filepath"
-	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
+
+// pingTimeout bounds the initial connectivity check.
+const pingTimeout = 10 * time.Second
 
 // Reader reads data from an Elefant CMS MySQL database.
 type Reader struct {
@@ -27,54 +30,67 @@ type Reader struct {
 	schemaDetected bool
 }
 
-// maxTablePrefixLength is the maximum allowed length for a table prefix.
-const maxTablePrefixLength = 20
-
-// sanitizeTablePrefix validates that a table prefix contains only safe SQL identifier characters
-// (alphanumeric and underscore, max 20 characters) and returns the sanitized value.
-// This prevents SQL injection when the prefix is used in query building.
-func sanitizeTablePrefix(prefix string) (string, error) {
-	if prefix == "" {
-		return "", nil
-	}
-	if len(prefix) > maxTablePrefixLength {
-		return "", fmt.Errorf("invalid table prefix: exceeds maximum length of %d characters", maxTablePrefixLength)
-	}
-	// Create a new string by only copying valid characters.
-	// This helps break the taint trace in some static analysis tools.
-	var builder strings.Builder
-	for _, c := range prefix {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '_' {
-			builder.WriteRune(c)
-		} else {
-			return "", fmt.Errorf("invalid table prefix: contains invalid character %q", c)
-		}
-	}
-	return builder.String(), nil
-}
+// sanitizeTablePrefix validates a table prefix and returns the sanitized value.
+// The implementation is shared with every other migrator source.
+var sanitizeTablePrefix = shared.SanitizeTablePrefix
 
 // NewReader creates a new Elefant database reader.
-func NewReader(dsn string, tablePrefix string) (*Reader, error) {
-	// Validate table prefix to prevent SQL injection
-	if _, err := sanitizeTablePrefix(tablePrefix); err != nil {
+func NewReader(ctx context.Context, dsn string, tablePrefix string) (*Reader, error) {
+	// Validate the table prefix and keep the sanitizer's own output, never the
+	// raw config string, so a tainted value cannot survive on the struct.
+	safePrefix, err := sanitizeTablePrefix(tablePrefix)
+	if err != nil {
 		return nil, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+	db, openErr := sql.Open("mysql", dsn)
+	if openErr != nil {
+		return nil, fmt.Errorf("failed to open database: %w", openErr)
 	}
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetConnMaxLifetime(connMaxLifetime)
 
-	// Test connection
-	if err := db.Ping(); err != nil {
+	// Test connection under its own deadline so a black-holed host cannot pin
+	// this goroutine and its socket for the OS TCP timeout.
+	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
+	defer cancel()
+	if err := db.PingContext(pingCtx); err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			slog.Error("failed to close database after ping failure", "error", closeErr)
 		}
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	return &Reader{db: db, prefix: tablePrefix}, nil
+	return &Reader{db: db, prefix: safePrefix}, nil
+}
+
+// countRows runs a COUNT(*) against a prefixed table under the caller's context.
+//
+// It takes a publishedOnly flag rather than a WHERE fragment. The previous
+// signature accepted a raw SQL string, so a future caller could interpolate
+// anything it liked into the query; both real call shapes are covered by the
+// flag, so nothing is lost by removing that freedom.
+func (r *Reader) countRows(ctx context.Context, table string, publishedOnly bool, failMsg string) (int, error) {
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return 0, fmt.Errorf("invalid table prefix: %w", err)
+	}
+	safeTable, err := shared.SanitizeIdentifier(table)
+	if err != nil {
+		return 0, fmt.Errorf("invalid table name: %w", err)
+	}
+
+	whereClause := ""
+	if publishedOnly {
+		whereClause = " WHERE published = 'yes'"
+	}
+
+	var count int
+	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s%s`%s", safePrefix, safeTable, whereClause)
+	if err := r.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
+		return 0, fmt.Errorf("%s: %w", failMsg, err)
+	}
+	return count, nil
 }
 
 // Close closes the database connection.
@@ -84,7 +100,7 @@ func (r *Reader) Close() error {
 
 // detectColumns checks which columns exist in the blog_post table.
 // Columns slug, description, and keywords were added in Elefant v1.1.5.
-func (r *Reader) detectColumns() error {
+func (r *Reader) detectColumns(ctx context.Context) error {
 	if r.schemaDetected {
 		return nil
 	}
@@ -97,7 +113,7 @@ func (r *Reader) detectColumns() error {
 	`
 
 	tableName := r.prefix + "blog_post"
-	rows, err := r.db.Query(query, tableName)
+	rows, err := r.db.QueryContext(ctx, query, tableName)
 	if err != nil {
 		return fmt.Errorf("failed to query column information: %w", err)
 	}
@@ -187,7 +203,7 @@ func (r *Reader) scanBlogPost(rows *sql.Rows) (BlogPost, error) {
 }
 
 // queryBlogPosts executes a blog post query and returns the results.
-func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
+func (r *Reader) queryBlogPosts(ctx context.Context, whereClause string) ([]BlogPost, error) {
 	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
@@ -195,14 +211,14 @@ func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
 	}
 
 	// Detect schema to know which columns exist
-	if err := r.detectColumns(); err != nil {
+	if err := r.detectColumns(ctx); err != nil {
 		return nil, fmt.Errorf("failed to detect schema: %w", err)
 	}
 
 	cols := r.buildBlogPostColumns()
 	query := fmt.Sprintf("SELECT %s FROM `%sblog_post` %s ORDER BY ts DESC", cols, safePrefix, whereClause)
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query blog posts: %w", err)
 	}
@@ -229,17 +245,17 @@ func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
 }
 
 // GetBlogPosts retrieves all blog posts from the database.
-func (r *Reader) GetBlogPosts() ([]BlogPost, error) {
-	return r.queryBlogPosts("")
+func (r *Reader) GetBlogPosts(ctx context.Context) ([]BlogPost, error) {
+	return r.queryBlogPosts(ctx, "")
 }
 
 // GetPublishedBlogPosts retrieves only published blog posts.
-func (r *Reader) GetPublishedBlogPosts() ([]BlogPost, error) {
-	return r.queryBlogPosts(" WHERE published = 'yes'")
+func (r *Reader) GetPublishedBlogPosts(ctx context.Context) ([]BlogPost, error) {
+	return r.queryBlogPosts(ctx, " WHERE published = 'yes'")
 }
 
 // GetWebpages retrieves all webpages from the database.
-func (r *Reader) GetWebpages() ([]Webpage, error) {
+func (r *Reader) GetWebpages(ctx context.Context) ([]Webpage, error) {
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
 		return nil, fmt.Errorf("invalid table prefix: %w", err)
@@ -250,7 +266,7 @@ func (r *Reader) GetWebpages() ([]Webpage, error) {
 		safePrefix,
 	)
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query webpages: %w", err)
 	}
@@ -277,23 +293,12 @@ func (r *Reader) GetWebpages() ([]Webpage, error) {
 }
 
 // GetWebpageCount returns the total number of webpages.
-func (r *Reader) GetWebpageCount() (int, error) {
-	safePrefix, err := sanitizeTablePrefix(r.prefix)
-	if err != nil {
-		return 0, fmt.Errorf("invalid table prefix: %w", err)
-	}
-
-	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%swebpage`", safePrefix)
-	err = r.db.QueryRow(query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count webpages: %w", err)
-	}
-	return count, nil
+func (r *Reader) GetWebpageCount(ctx context.Context) (int, error) {
+	return r.countRows(ctx, "webpage", false, "failed to count webpages")
 }
 
 // GetTags retrieves all unique tags from the blog_tag table.
-func (r *Reader) GetTags() ([]BlogTag, error) {
+func (r *Reader) GetTags(ctx context.Context) ([]BlogTag, error) {
 	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
@@ -302,7 +307,7 @@ func (r *Reader) GetTags() ([]BlogTag, error) {
 
 	query := fmt.Sprintf("SELECT id FROM `%sblog_tag` ORDER BY id", safePrefix)
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tags: %w", err)
 	}
@@ -329,7 +334,7 @@ func (r *Reader) GetTags() ([]BlogTag, error) {
 }
 
 // GetUsers retrieves all users from the database.
-func (r *Reader) GetUsers() ([]User, error) {
+func (r *Reader) GetUsers(ctx context.Context) ([]User, error) {
 	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
 	safePrefix, err := sanitizeTablePrefix(r.prefix)
 	if err != nil {
@@ -338,7 +343,7 @@ func (r *Reader) GetUsers() ([]User, error) {
 
 	query := fmt.Sprintf("SELECT id, email, name FROM `%suser` ORDER BY id", safePrefix)
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
@@ -365,195 +370,25 @@ func (r *Reader) GetUsers() ([]User, error) {
 }
 
 // GetPostCount returns the total number of blog posts.
-func (r *Reader) GetPostCount() (int, error) {
-	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
-	safePrefix, err := sanitizeTablePrefix(r.prefix)
-	if err != nil {
-		return 0, fmt.Errorf("invalid table prefix: %w", err)
-	}
-
-	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%sblog_post`", safePrefix)
-	err = r.db.QueryRow(query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count posts: %w", err)
-	}
-	return count, nil
+func (r *Reader) GetPostCount(ctx context.Context) (int, error) {
+	return r.countRows(ctx, "blog_post", false, "failed to count posts")
 }
 
 // GetPublishedPostCount returns the number of published blog posts.
-func (r *Reader) GetPublishedPostCount() (int, error) {
-	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
-	safePrefix, err := sanitizeTablePrefix(r.prefix)
-	if err != nil {
-		return 0, fmt.Errorf("invalid table prefix: %w", err)
-	}
-
-	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%sblog_post` WHERE published = 'yes'", safePrefix)
-	err = r.db.QueryRow(query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count published posts: %w", err)
-	}
-	return count, nil
+func (r *Reader) GetPublishedPostCount(ctx context.Context) (int, error) {
+	return r.countRows(ctx, "blog_post", true, "failed to count published posts")
 }
 
 // GetTagCount returns the total number of tags.
-func (r *Reader) GetTagCount() (int, error) {
-	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
-	safePrefix, err := sanitizeTablePrefix(r.prefix)
-	if err != nil {
-		return 0, fmt.Errorf("invalid table prefix: %w", err)
-	}
-
-	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%sblog_tag`", safePrefix)
-	err = r.db.QueryRow(query).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count tags: %w", err)
-	}
-	return count, nil
+func (r *Reader) GetTagCount(ctx context.Context) (int, error) {
+	return r.countRows(ctx, "blog_tag", false, "failed to count tags")
 }
 
 // allowedMediaMimeTypes defines MIME types that can be imported.
-var allowedMediaMimeTypes = map[string]bool{
-	"image/jpeg":      true,
-	"image/png":       true,
-	"image/gif":       true,
-	"image/webp":      true,
-	"application/pdf": true,
-	"video/mp4":       true,
-	"video/webm":      true,
-}
+var allowedMediaMimeTypes = shared.AllowedMediaMimeTypes
 
 // ScanMediaFiles scans the Elefant files directory for media files.
-// It returns a list of MediaFile structs for files that match allowed MIME types.
-// Note: filesPath comes from admin configuration, reducing injection risk,
-// but we still validate it for defense in depth.
-func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
-	if filesPath == "" {
-		return nil, fmt.Errorf("files path is empty")
-	}
-
-	// Clean the path and check for traversal attempts
-	cleanPath := filepath.Clean(filesPath)
-	if strings.Contains(cleanPath, "..") {
-		return nil, fmt.Errorf("invalid files path: path traversal detected")
-	}
-
-	// Verify directory exists
-	info, err := os.Stat(cleanPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to access files directory: %w", err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("files path is not a directory: %s", cleanPath)
-	}
-
-	realRoot, err := filepath.EvalSymlinks(cleanPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve files directory: %w", err)
-	}
-	realRoot, err = filepath.Abs(realRoot)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve files directory absolute path: %w", err)
-	}
-
-	var files []MediaFile
-
-	err = filepath.Walk(cleanPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Skip symlinks to prevent importing files outside filesPath.
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil
-		}
-
-		resolvedPath, err := filepath.EvalSymlinks(path)
-		if err != nil {
-			return nil
-		}
-		resolvedPath, err = filepath.Abs(resolvedPath)
-		if err != nil {
-			return nil
-		}
-		relResolvedPath, err := filepath.Rel(realRoot, resolvedPath)
-		if err != nil || relResolvedPath == ".." || strings.HasPrefix(relResolvedPath, ".."+string(os.PathSeparator)) {
-			return nil
-		}
-
-		// Get MIME type from extension
-		mimeType := getMimeTypeFromExt(path)
-		if mimeType == "" || !allowedMediaMimeTypes[mimeType] {
-			return nil
-		}
-
-		// Get relative path from cleanPath
-		relPath, err := filepath.Rel(cleanPath, path)
-		if err != nil {
-			relPath = filepath.Base(path)
-		}
-
-		files = append(files, MediaFile{
-			Path:     relPath,
-			FullPath: resolvedPath,
-			Filename: info.Name(),
-			Size:     info.Size(),
-			MimeType: mimeType,
-		})
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan files directory: %w", err)
-	}
-
-	return files, nil
-}
+var ScanMediaFiles = shared.ScanMediaFiles
 
 // getMimeTypeFromExt returns the MIME type for a file based on its extension.
-func getMimeTypeFromExt(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == "" {
-		return ""
-	}
-
-	// Known types first for consistent cross-platform results
-	// (e.g., mime.TypeByExtension(".webm") returns "audio/webm" on some OS)
-	switch ext {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".gif":
-		return "image/gif"
-	case ".webp":
-		return "image/webp"
-	case ".pdf":
-		return "application/pdf"
-	case ".mp4":
-		return "video/mp4"
-	case ".webm":
-		return "video/webm"
-	}
-
-	// Fall back to standard library for other types
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType != "" {
-		// Strip charset suffix if present (e.g., "text/plain; charset=utf-8")
-		if idx := strings.Index(mimeType, ";"); idx != -1 {
-			mimeType = strings.TrimSpace(mimeType[:idx])
-		}
-		return mimeType
-	}
-
-	return ""
-}
+var getMimeTypeFromExt = shared.MimeTypeFromExt

@@ -6,6 +6,7 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -621,11 +622,11 @@ func TestPageVideoURL(t *testing.T) {
 		}
 
 		updated, err := queries.UpdatePage(context.Background(), store.UpdatePageParams{
-			ID:       page.ID,
-			Title:    page.Title,
-			Slug:     page.Slug,
-			Body:     page.Body,
-			Status:   page.Status,
+			ID:         page.ID,
+			Title:      page.Title,
+			Slug:       page.Slug,
+			Body:       page.Body,
+			Status:     page.Status,
 			VideoUrl:   "https://youtu.be/dQw4w9WgXcQ",
 			VideoTitle: "Updated Video Title",
 		})
@@ -908,4 +909,146 @@ func TestUpdateSkipsFeaturedImageValidationWhenUnchanged(t *testing.T) {
 			t.Error("cleared vs set image should not be equal — validation path should run")
 		}
 	})
+}
+
+// TestPageSlugCannotClaimActiveLanguagePrefix is the other direction of the
+// same cross-namespace collision: a page saved at an active language's code
+// can never be served, because the language middleware strips that segment
+// before the frontend router matches anything. Slug validation looks only at
+// pages and aliases, so without this check the save succeeds and the page is
+// simply invisible.
+func TestPageSlugCannotClaimActiveLanguagePrefix(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true,
+		Direction: "ltr", Position: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage failed: %v", err)
+	}
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fra", Name: "French (inactive)", NativeName: "Français", IsActive: false,
+		Direction: "ltr", Position: 4, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage failed: %v", err)
+	}
+
+	h := NewPagesHandler(db, nil, sm)
+	if got := h.validatePageSlugCreate(ctx, "eng"); got == "" {
+		t.Fatal("validatePageSlugCreate() accepted a slug that an active language prefix shadows")
+	}
+	if got := h.validatePageSlugCreate(ctx, "fra"); got != "" {
+		t.Fatalf("validatePageSlugCreate(\"fra\") = %q, want an inactive language to leave the slug free", got)
+	}
+	if got := h.validatePageSlugCreate(ctx, "engineering"); got != "" {
+		t.Fatalf("validatePageSlugCreate(\"engineering\") = %q, want a longer slug to be unaffected", got)
+	}
+
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "engineering", Body: "Content", Status: "published", AuthorID: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+	if got := h.validatePageSlugUpdate(ctx, "eng", page.Slug, page.ID); got == "" {
+		t.Fatal("validatePageSlugUpdate() accepted a rename onto an active language prefix")
+	}
+	if got := h.validatePageSlugUpdate(ctx, page.Slug, page.Slug, page.ID); got != "" {
+		t.Fatalf("validatePageSlugUpdate() rejected an unchanged slug: %q", got)
+	}
+}
+
+// TestPageAliasesSkipLanguagePrefixCollisions covers aliases, which are stored
+// without going through slug validation. An alias under an active language's
+// segment resolves to nothing, so it is dropped rather than promised.
+func TestPageAliasesSkipLanguagePrefixCollisions(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true,
+		Direction: "ltr", Position: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage failed: %v", err)
+	}
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "engineering", Body: "Content", Status: "published", AuthorID: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+
+	h := NewPagesHandler(db, nil, sm)
+	h.savePageAliases(ctx, page.ID, []string{"eng", "eng/team", "about/team"})
+
+	aliases, err := queries.GetAliasesForPage(ctx, page.ID)
+	if err != nil {
+		t.Fatalf("GetAliasesForPage failed: %v", err)
+	}
+	var stored []string
+	for _, alias := range aliases {
+		stored = append(stored, alias.Alias)
+	}
+	if len(stored) != 1 || stored[0] != "about/team" {
+		t.Fatalf("stored aliases = %v, want only the one no language prefix shadows", stored)
+	}
+}
+
+// TestPageWritesRefuseLanguagePrefixInsideTheirTransaction is the same race
+// from the page side: a language activated between a page's validation and its
+// insert would otherwise leave the page stored at a URL the language owns.
+func TestPageWritesRefuseLanguagePrefixInsideTheirTransaction(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true,
+		Direction: "ltr", Position: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage: %v", err)
+	}
+	h := NewPagesHandler(db, nil, sm)
+
+	_, err := h.createPageGuarded(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "eng", Body: "Content", Status: "published",
+		AuthorID: user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+	})
+	if !errors.Is(err, errPageRouteTaken) {
+		t.Fatalf("createPageGuarded() error = %v, want the write itself to refuse", err)
+	}
+	if _, lookupErr := queries.GetPageBySlug(ctx, "eng"); lookupErr == nil {
+		t.Fatal("the refused page was written anyway")
+	}
+
+	page, err := h.createPageGuarded(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "engineering", Body: "Content", Status: "published",
+		AuthorID: user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("createPageGuarded() for a free slug error = %v", err)
+	}
+	_, err = h.updatePageGuarded(ctx, store.UpdatePageParams{
+		ID: page.ID, Title: page.Title, Slug: "eng", Body: page.Body, Status: page.Status,
+		LanguageCode: page.LanguageCode, UpdatedAt: now,
+	}, page.Slug)
+	if !errors.Is(err, errPageRouteTaken) {
+		t.Fatalf("updatePageGuarded() error = %v, want the rename refused by the write", err)
+	}
+	unchanged, err := queries.GetPageByID(ctx, page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.Slug != "engineering" {
+		t.Fatalf("stored slug = %q, want the refused rename rolled back", unchanged.Slug)
+	}
 }

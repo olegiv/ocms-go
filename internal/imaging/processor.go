@@ -5,17 +5,22 @@ package imaging
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
+	"io/fs"
+	"math"
 	"net/http"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 
+	"github.com/HugoSmits86/nativewebp"
 	"github.com/disintegration/imaging"
 	"github.com/rwcarlsen/goexif/exif"
 	_ "golang.org/x/image/webp" // WebP decoder
@@ -23,11 +28,51 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
+// MaxImageWidth and MaxImageHeight are the stored-image dimension caps. They
+// are exported so callers that downscale can report the limit they fitted to.
 const (
-	maxImageWidth  = 10000
-	maxImageHeight = 10000
-	maxImagePixels = 50000000 // 50 megapixels
+	MaxImageWidth  = 10000
+	MaxImageHeight = 10000
 )
+
+const (
+	maxImageWidth  = MaxImageWidth
+	maxImageHeight = MaxImageHeight
+	maxImagePixels = 50000000 // 50 megapixels
+
+	// maxDecodablePixels and maxDecodableDimension bound a decode even when the
+	// caller opts into downscaling.
+	//
+	// Peak allocation is the decoded source plus the NRGBA working image, so
+	// roughly 5-8 bytes per pixel: 120 MP is a ~0.7-1.0 GB transient. That
+	// clears the largest real files a CMS migration carries (a 102 MP
+	// medium-format frame; the worst seen here was 84 MP) while keeping a
+	// decode bomb from exhausting memory. The per-side limit stops an absurd
+	// aspect ratio (100000x1000) from slipping under the pixel count.
+	maxDecodablePixels    = 120000000 // 120 megapixels
+	maxDecodableDimension = 30000
+
+	// maxDecodableBytes caps how many bytes are read into memory before the
+	// dimension checks above can even run.
+	//
+	// The HTTP upload path is already bounded by a 100 MiB request body limit,
+	// but that bound lives in the router, not here — so a caller that does not
+	// arrive over HTTP inherits nothing. The migrator opens files straight off
+	// disk with os.Open, so without this a single oversized file in a source
+	// install is read fully into memory before any validation happens, and the
+	// byte slice stays live through decode. Matching the HTTP limit keeps the
+	// two paths consistent.
+	maxDecodableBytes = 100 << 20 // 100 MiB
+)
+
+// ProcessOptions controls how ProcessImageWithOptions treats an image that
+// exceeds the dimension caps.
+type ProcessOptions struct {
+	// DownscaleOversized fits an oversized image inside the caps instead of
+	// rejecting it. Intended for trusted local files (content migrations), not
+	// for untrusted uploads, which must keep the strict reject.
+	DownscaleOversized bool
+}
 
 // ProcessResult contains the result of processing an uploaded image.
 type ProcessResult struct {
@@ -36,6 +81,13 @@ type ProcessResult struct {
 	MimeType string
 	Size     int64
 	FilePath string
+
+	// Downscaled reports whether the image was fitted to the caps. When true,
+	// OriginalWidth and OriginalHeight hold the pre-fit dimensions so callers
+	// can tell the user what happened.
+	Downscaled     bool
+	OriginalWidth  int
+	OriginalHeight int
 }
 
 // VariantResult contains the result of creating an image variant.
@@ -59,13 +111,53 @@ func NewProcessor(uploadDir string) *Processor {
 	}
 }
 
+// SaveMediaImage writes one image into a declared media storage directory.
+// It is used by internal generators that already hold encoded image bytes but
+// still need the same UUID validation and root-relative filesystem boundary as
+// uploaded and migrated images.
+func (p *Processor) SaveMediaImage(storageDir, mediaUUID, filename string, data []byte) (string, error) {
+	if !IsCanonicalMediaUUID(mediaUUID) {
+		return "", fmt.Errorf("invalid media UUID %q", mediaUUID)
+	}
+	allowed := false
+	for _, candidate := range model.MediaStorageDirs() {
+		if storageDir == candidate {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return "", fmt.Errorf("invalid media storage directory %q", storageDir)
+	}
+	return p.saveImageFile(filepath.Join(storageDir, mediaUUID), filename, data)
+}
+
 // ProcessImage reads an uploaded image file and returns its metadata.
 // It saves the original file and returns processing results.
+//
+// Oversized images are rejected. This is the entry point for untrusted uploads;
+// callers handling trusted local files can opt into downscaling with
+// ProcessImageWithOptions.
 func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*ProcessResult, error) {
-	// Read all data from reader
-	data, err := io.ReadAll(reader)
+	return p.ProcessImageWithOptions(reader, uuid, filename, ProcessOptions{})
+}
+
+// ProcessImageWithOptions reads an image file and returns its metadata, saving
+// the processed original.
+//
+// With opts.DownscaleOversized the image is fitted inside the dimension caps
+// rather than rejected, so a content migration does not lose an oversized
+// photo. maxDecodablePixels still applies: past that point the file is refused
+// whatever the caller asked for, because the decode itself is the risk.
+func (p *Processor) ProcessImageWithOptions(reader io.Reader, uuid, filename string, opts ProcessOptions) (*ProcessResult, error) {
+	// Read at most maxDecodableBytes, plus one byte so an oversized file is
+	// detected rather than silently truncated into a corrupt image.
+	data, err := io.ReadAll(io.LimitReader(reader, maxDecodableBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read image data: %w", err)
+	}
+	if len(data) > maxDecodableBytes {
+		return nil, fmt.Errorf("image exceeds maximum size of %d bytes", int64(maxDecodableBytes))
 	}
 
 	// Detect format
@@ -79,7 +171,8 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 	if err != nil {
 		return nil, fmt.Errorf("failed to read image config: %w", err)
 	}
-	if err := validateImageDimensions(cfg.Width, cfg.Height); err != nil {
+	fit, err := validateDecodable(cfg.Width, cfg.Height, opts)
+	if err != nil {
 		return nil, err
 	}
 
@@ -92,6 +185,17 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 	// Read EXIF orientation and auto-rotate
 	orientation := readExifOrientation(bytes.NewReader(data))
 	img = applyOrientation(img, orientation)
+
+	// Record the pre-fit size, then fit. Fitting after the rotation matters:
+	// a 90-degree turn swaps the axes, so fitting first could leave the stored
+	// image back over the cap on its long side.
+	origBounds := img.Bounds()
+	origWidth := origBounds.Dx()
+	origHeight := origBounds.Dy()
+	if fit {
+		fitW, fitH := fitBounds(origWidth, origHeight)
+		img = imaging.Fit(img, fitW, fitH, imaging.Lanczos)
+	}
 
 	// Get final dimensions
 	bounds := img.Bounds()
@@ -112,11 +216,14 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 	}
 
 	return &ProcessResult{
-		Width:    width,
-		Height:   height,
-		MimeType: formatToMimeType(format),
-		Size:     int64(len(processed)),
-		FilePath: filePath,
+		Width:          width,
+		Height:         height,
+		MimeType:       formatToMimeType(format),
+		Size:           int64(len(processed)),
+		FilePath:       filePath,
+		Downscaled:     width != origWidth || height != origHeight,
+		OriginalWidth:  origWidth,
+		OriginalHeight: origHeight,
 	}, nil
 }
 
@@ -234,6 +341,39 @@ func (p *Processor) GetImageDimensions(path string) (width, height int, err erro
 	return config.Width, config.Height, nil
 }
 
+// ValidateImage fully decodes an untrusted image after enforcing the same byte,
+// dimension, and pixel limits as ProcessImage. It performs no filesystem writes.
+func ValidateImage(reader io.Reader) (width, height int, mimeType string, resultErr error) {
+	data, err := io.ReadAll(io.LimitReader(reader, maxDecodableBytes+1))
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("failed to read image data: %w", err)
+	}
+	if len(data) > maxDecodableBytes {
+		return 0, 0, "", fmt.Errorf("image exceeds maximum size of %d bytes", int64(maxDecodableBytes))
+	}
+	format := detectFormat(data)
+	if format == "" {
+		return 0, 0, "", errors.New("unsupported image format")
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("failed to read image config: %w", err)
+	}
+	if _, err := validateDecodable(config.Width, config.Height, ProcessOptions{}); err != nil {
+		return 0, 0, "", err
+	}
+	decoded, err := imaging.Decode(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("failed to decode image: %w", err)
+	}
+	bounds := decoded.Bounds()
+	width, height = bounds.Dx(), bounds.Dy()
+	if err := validateImageDimensions(width, height); err != nil {
+		return 0, 0, "", err
+	}
+	return width, height, formatToMimeType(format), nil
+}
+
 // IsImage checks if a MIME type represents an image that can be processed.
 func (p *Processor) IsImage(mimeType string) bool {
 	switch mimeType {
@@ -261,21 +401,7 @@ func (p *Processor) DetectMimeType(data []byte) string {
 
 // DeleteMediaFiles removes all files associated with a media item.
 func (p *Processor) DeleteMediaFiles(uuid string) error {
-	// Delete original
-	originalsDir := filepath.Join(p.uploadDir, "originals", uuid)
-	if err := os.RemoveAll(originalsDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete originals: %w", err)
-	}
-
-	// Delete all variants
-	for variantType := range model.ImageVariants {
-		variantDir := filepath.Join(p.uploadDir, variantType, uuid)
-		if err := os.RemoveAll(variantDir); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to delete %s variant: %w", variantType, err)
-		}
-	}
-
-	return nil
+	return DeleteMediaFiles(p.uploadDir, uuid)
 }
 
 // readExifOrientation reads the EXIF orientation tag from image data.
@@ -348,9 +474,10 @@ func encodeImage(img image.Image, format string, quality int) ([]byte, error) {
 			return nil, err
 		}
 	case "webp":
-		// WebP decoding is supported but encoding is not in pure Go
-		// Convert to JPEG for output
-		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+		// nativewebp writes lossless VP8L using pure Go. Unlike the old JPEG
+		// fallback, this keeps the encoded bytes consistent with the .webp
+		// filename and image/webp metadata and preserves transparency.
+		if err := nativewebp.Encode(&buf, img, nil); err != nil {
 			return nil, err
 		}
 	default:
@@ -417,6 +544,58 @@ func formatToMimeType(format string) string {
 	}
 }
 
+// fitBounds returns the largest box, in the image's own aspect ratio, that
+// satisfies every dimension cap.
+//
+// imaging.Fit alone is not enough: it bounds each side, but maxImagePixels
+// constrains the area, and an image can sit inside 10000x10000 while still
+// being over 50 MP (9422x6486 is 61 MP). Scaling by sqrt of the area ratio is
+// what brings the pixel count under the cap.
+func fitBounds(width, height int) (int, int) {
+	scale := 1.0
+	if s := float64(maxImageWidth) / float64(width); s < scale {
+		scale = s
+	}
+	if s := float64(maxImageHeight) / float64(height); s < scale {
+		scale = s
+	}
+	area := float64(width) * float64(height)
+	if s := math.Sqrt(float64(maxImagePixels) / area); s < scale {
+		scale = s
+	}
+
+	// Floor rather than round so rounding can never land back over a cap.
+	w := int(math.Floor(float64(width) * scale))
+	h := int(math.Floor(float64(height) * scale))
+	return max(w, 1), max(h, 1)
+}
+
+// validateDecodable decides whether an image of these dimensions may be
+// decoded, and whether it must be downscaled afterwards.
+//
+// It returns fit=true when the image is over the caps and the caller opted into
+// downscaling. Without that opt-in the caps are hard limits, so untrusted
+// uploads behave exactly as before.
+func validateDecodable(width, height int, opts ProcessOptions) (fit bool, err error) {
+	if width <= 0 || height <= 0 {
+		return false, fmt.Errorf("invalid image dimensions: %dx%d", width, height)
+	}
+	if err := validateImageDimensions(width, height); err == nil {
+		return false, nil
+	} else if !opts.DownscaleOversized {
+		return false, err
+	}
+	if width > maxDecodableDimension || height > maxDecodableDimension {
+		return false, fmt.Errorf("image dimensions exceed maximum decodable: %dx%d (max %dx%d)",
+			width, height, maxDecodableDimension, maxDecodableDimension)
+	}
+	if int64(width)*int64(height) > maxDecodablePixels {
+		return false, fmt.Errorf("image pixel count exceeds maximum decodable: %d (max %d)",
+			int64(width)*int64(height), maxDecodablePixels)
+	}
+	return true, nil
+}
+
 func validateImageDimensions(width, height int) error {
 	if width <= 0 || height <= 0 {
 		return fmt.Errorf("invalid image dimensions: %dx%d", width, height)
@@ -433,40 +612,87 @@ func validateImageDimensions(width, height int) error {
 // saveImageFile creates the directory if needed and saves image data to a file.
 // The filename is sanitized and the target directory is validated to be within uploadDir.
 func (p *Processor) saveImageFile(subDir, filename string, data []byte) (string, error) {
-	// Sanitize filename to prevent path traversal
-	safeFilename := filepath.Base(filename)
-	if safeFilename == "." || safeFilename == ".." || safeFilename == "" {
+	return p.saveImageFileWith(subDir, filename, data, (*os.Root).WriteFile, (*os.Root).Close)
+}
+
+// saveImageFileWith is the write seam used by tests to prove that a failed
+// write cannot leave a partial image behind. Production always passes
+// os.Root.WriteFile through saveImageFile.
+func (p *Processor) saveImageFileWith(
+	subDir, filename string,
+	data []byte,
+	writeFile func(*os.Root, string, []byte, os.FileMode) error,
+	closeRoot func(*os.Root) error,
+) (resultPath string, resultErr error) {
+	if filename == "" || filename != filepath.Base(filename) || !fs.ValidPath(filename) {
 		return "", fmt.Errorf("invalid filename")
 	}
-
-	// Validate subDir doesn't contain path traversal sequences
-	cleanSubDir := filepath.Clean(subDir)
-	if strings.Contains(cleanSubDir, "..") || filepath.IsAbs(cleanSubDir) {
+	relSubDir := filepath.ToSlash(subDir)
+	if filepath.IsAbs(subDir) || relSubDir == "." || !fs.ValidPath(relSubDir) {
 		return "", fmt.Errorf("invalid subdirectory path")
 	}
-
-	// Resolve base directory to absolute path
-	absBase, err := filepath.Abs(p.uploadDir)
+	uploadRoot, err := openOrCreateUploadRoot(p.uploadDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve base directory: %w", err)
+		return "", err
 	}
+	canonicalUploadRoot := uploadRoot.Name()
+	rootClosed := false
+	defer func() {
+		if !rootClosed {
+			if closeErr := closeRoot(uploadRoot); closeErr != nil {
+				resultErr = errors.Join(resultErr, fmt.Errorf("close uploads directory: %w", closeErr))
+			}
+		}
+	}()
 
-	// Build target path using validated subDir
-	absTarget := filepath.Join(absBase, cleanSubDir)
-
-	// Verify containment using filepath.Rel
-	rel, err := filepath.Rel(absBase, absTarget)
-	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("path traversal detected")
+	_, statErr := uploadRoot.Stat(relSubDir)
+	createdDir := errors.Is(statErr, os.ErrNotExist)
+	if statErr != nil && !createdDir {
+		return "", fmt.Errorf("failed to inspect destination directory: %w", statErr)
 	}
-
-	if err := os.MkdirAll(absTarget, 0755); err != nil {
-		return "", fmt.Errorf("failed to create directory: %w", err)
+	if err := uploadRoot.MkdirAll(relSubDir, 0o750); err != nil {
+		cleanupErr := cleanupFailedImageWrite(uploadRoot, "", relSubDir, createdDir)
+		return "", errors.Join(fmt.Errorf("failed to create directory: %w", err), cleanupErr)
 	}
-
-	filePath := filepath.Join(absTarget, safeFilename)
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		return "", fmt.Errorf("failed to save image: %w", err)
+	relFile := pathpkg.Join(relSubDir, filename)
+	if err := writeFile(uploadRoot, relFile, data, 0o640); err != nil {
+		cleanupErr := cleanupFailedImageWrite(uploadRoot, relFile, relSubDir, createdDir)
+		return "", errors.Join(fmt.Errorf("failed to save image: %w", err), cleanupErr)
 	}
-	return filePath, nil
+	resultPath = filepath.Join(uploadRoot.Name(), filepath.FromSlash(relFile))
+	if closeErr := closeRoot(uploadRoot); closeErr != nil {
+		rootClosed = true
+		cleanupRoot, openErr := openVerifiedUploadRootWithPolicy(canonicalUploadRoot, nil, true)
+		var cleanupErr, cleanupCloseErr error
+		if openErr == nil && cleanupRoot != nil {
+			cleanupErr = cleanupFailedImageWrite(cleanupRoot, relFile, relSubDir, createdDir)
+			cleanupCloseErr = cleanupRoot.Close()
+		}
+		return "", errors.Join(
+			fmt.Errorf("close uploads directory: %w", closeErr),
+			openErr,
+			cleanupErr,
+			cleanupCloseErr,
+		)
+	}
+	rootClosed = true
+	return resultPath, nil
+}
+
+// cleanupFailedImageWrite removes a possibly partial output file. When this
+// call created the UUID directory, it removes that directory as well so a
+// failed first write cannot accumulate empty media directories.
+func cleanupFailedImageWrite(root *os.Root, filePath, targetDir string, createdDir bool) error {
+	var cleanupErrors []error
+	if filePath != "" {
+		if err := root.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("remove partial image: %w", err))
+		}
+	}
+	if createdDir {
+		if err := root.RemoveAll(targetDir); err != nil && !os.IsNotExist(err) {
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("remove partial image directory: %w", err))
+		}
+	}
+	return errors.Join(cleanupErrors...)
 }

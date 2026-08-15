@@ -21,7 +21,7 @@
     <meta property="og:type" content="{{if .OGType}}{{.OGType}}{{else if .Page}}article{{else}}website{{end}}">
     <meta property="og:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
     {{if .MetaDescription}}<meta property="og:description" content="{{.MetaDescription}}">{{end}}
-    {{if .SiteURL}}<meta property="og:url" content="{{.SiteURL}}{{.RequestURI}}">{{end}}
+    {{if .OGURL}}<meta property="og:url" content="{{.OGURL}}">{{end}}
     {{if .OGImage}}<meta property="og:image" content="{{.OGImage}}">{{else if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
     {{if .OGImageWidth}}<meta property="og:image:width" content="{{.OGImageWidth}}">{{end}}
     {{if .OGImageHeight}}<meta property="og:image:height" content="{{.OGImageHeight}}">{{end}}
@@ -112,13 +112,13 @@
     {{template "footer.html" .}}
 
     {{/* Alpine.js Collapse Plugin (must load before Alpine) */}}
-    <script nonce="{{.CSPNonce}}" defer src="/static/dist/js/alpine-collapse.min.js"></script>
+    <script nonce="{{.CSPNonce}}" defer src="{{ scriptURL "/static/dist/js/alpine-collapse.min.js" }}" integrity="sha384-NArNwzWsUSF+kY2lgW4YriEkjLqi+J+za6HrENUn/3nZqkBnWbxV22kCJEK5Uu6n" crossorigin="anonymous"></script>
     {{/* Alpine.js */}}
-    <script nonce="{{.CSPNonce}}" defer src="/static/dist/js/alpine.min.js"></script>
+    <script nonce="{{.CSPNonce}}" defer src="{{ scriptURL "/static/dist/js/alpine.min.js" }}" integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L" crossorigin="anonymous"></script>
     {{/* Theme JavaScript */}}
     <script nonce="{{.CSPNonce}}" src="/themes/starter/static/js/theme.js"></script>
     {{/* Prism.js syntax highlighting */}}
-    <script nonce="{{.CSPNonce}}" src="/static/dist/js/prism-bundle.min.js"></script>
+    <script nonce="{{.CSPNonce}}" src="{{ scriptURL "/static/dist/js/prism-bundle.min.js" }}" integrity="sha384-/HRXpyLsWgi91NKkl3jPRfbRhgj2vlv4f6wwxcmGEe9hKePmXqpOaPf9B1uk1jeL" crossorigin="anonymous"></script>
     {{/* Image lightbox */}}
     <script nonce="{{.CSPNonce}}" src="/static/dist/js/lightbox.js"></script>
 

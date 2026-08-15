@@ -4,7 +4,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
+
+	"github.com/olegiv/ocms-go/internal/views/utils"
 
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
@@ -48,6 +51,9 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			if base.OGType != "" {
 				<meta property="og:type" content={ base.OGType }/>
 			}
+			if base.OGURL != "" {
+				<meta property="og:url" content={ base.OGURL }/>
+			}
 			if base.OGImage != "" {
 				<meta property="og:image" content={ absoluteURL(base.SiteURL, base.OGImage) }/>
 			}
@@ -72,9 +78,7 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			}
 			<!-- JSON-LD structured data -->
 			if base.JSONLD != "" {
-				<script nonce={ templ.GetNonce(ctx) } type="application/ld+json">
-					{ string(base.JSONLD) }
-				</script>
+				@templ.JSONScript("", json.RawMessage(base.JSONLD)).WithType("application/ld+json")
 			}
 			<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
 			<link rel="stylesheet" href="/static/dist/main.css"/>
@@ -95,11 +99,11 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			}
 			{ children... }
 			<!-- HTMX -->
-			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js"></script>
+			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/htmx.min.js") } integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
 			<!-- Alpine.js -->
-			<script nonce={ templ.GetNonce(ctx) } defer src="/static/dist/js/alpine.min.js"></script>
+			<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L" crossorigin="anonymous"></script>
 			<!-- Prism.js syntax highlighting -->
-			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/prism-bundle.min.js"></script>
+			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/prism-bundle.min.js") } integrity="sha384-/HRXpyLsWgi91NKkl3jPRfbRhgj2vlv4f6wwxcmGEe9hKePmXqpOaPf9B1uk1jeL" crossorigin="anonymous"></script>
 			<!-- Image lightbox -->
 			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/lightbox.js"></script>
 			if base.ModuleBodyEndHTML != "" {
@@ -113,7 +117,7 @@ templ frontendBaseLayout(base BaseTemplateData) {
 templ frontendNav(base BaseTemplateData) {
 	<header class="fe-header sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 		<div class="fe-container fe-header-inner mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-			<a href={ templ.SafeURL(base.LangPrefix + "/") } class="fe-logo flex items-center gap-2 text-lg font-bold tracking-tight text-foreground no-underline hover:opacity-80 transition-opacity">
+			<a href={ templ.SafeURL(base.HomeURL) } class="fe-logo flex items-center gap-2 text-lg font-bold tracking-tight text-foreground no-underline hover:opacity-80 transition-opacity">
 				if base.SiteLogo != "" {
 					<img src={ base.SiteLogo } alt={ base.SiteName } class="fe-logo-img h-8 w-auto"/>
 				} else {
@@ -149,19 +153,36 @@ templ frontendNav(base BaseTemplateData) {
 						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
 					</button>
 					<ul class="fe-lang-list absolute right-0 top-full mt-1 min-w-[120px] rounded-md border bg-background p-1 shadow-md" x-show="open" @click.outside="open = false" x-cloak>
-						for _, tl := range base.Translations {
-							<li class="list-none">
-								<a
-									href={ templ.SafeURL(tl.URL) }
-									class={
-										"fe-lang-link block rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-accent",
-										templ.KV("fe-lang-active font-semibold text-foreground", tl.Language.IsCurrent),
-										templ.KV("text-muted-foreground", !tl.Language.IsCurrent),
-									}
-								>
-									{ tl.Language.NativeName }
-								</a>
-							</li>
+						if len(base.Translations) > 0 {
+							for _, tl := range base.Translations {
+								<li class="list-none">
+									<a
+										href={ templ.SafeURL(tl.URL) }
+										class={
+											"fe-lang-link block rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-accent",
+											templ.KV("fe-lang-active font-semibold text-foreground", tl.Language.IsCurrent),
+											templ.KV("text-muted-foreground", !tl.Language.IsCurrent),
+										}
+									>
+										{ tl.Language.NativeName }
+									</a>
+								</li>
+							}
+						} else {
+							for _, lang := range base.Languages {
+								<li class="list-none">
+									<a
+										href={ templ.SafeURL("/?lang=" + lang.Code) }
+										class={
+											"fe-lang-link block rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-accent",
+											templ.KV("fe-lang-active font-semibold text-foreground", lang.IsCurrent),
+											templ.KV("text-muted-foreground", !lang.IsCurrent),
+										}
+									>
+										{ lang.NativeName }
+									</a>
+								</li>
+							}
 						}
 					</ul>
 				</div>

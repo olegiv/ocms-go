@@ -81,9 +81,13 @@ SELECT COALESCE(MAX(position), -1) FROM menu_items WHERE menu_id = ? AND (parent
 SELECT
     mi.*,
     p.title as page_title,
-    p.slug as page_slug
+    p.slug as page_slug,
+    p.language_code as page_language_code,
+    pl.is_active as page_language_is_active,
+    pl.is_default as page_language_is_default
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id
+LEFT JOIN languages pl ON p.language_code = pl.code
 WHERE mi.menu_id = ?
 ORDER BY mi.position;
 
@@ -91,7 +95,8 @@ ORDER BY mi.position;
 SELECT
     mi.*,
     p.title as page_title,
-    p.slug as page_slug
+    p.slug as page_slug,
+    p.language_code as page_language_code
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id AND p.status = 'published'
 WHERE mi.menu_id = ?
@@ -116,3 +121,15 @@ LEFT JOIN languages l ON m.language_code = l.code
 WHERE m.slug = ? AND (m.language_code = ? OR l.is_default = 1)
 ORDER BY CASE WHEN m.language_code = ? THEN 0 ELSE 1 END
 LIMIT 1;
+
+-- name: ListChildMenuItemIDs :many
+SELECT id FROM menu_items WHERE parent_id = ?;
+
+-- name: ReparentMenuItemChildren :exec
+UPDATE menu_items SET parent_id = ?, updated_at = ? WHERE parent_id = ?;
+
+-- name: ListMenuItemIDsForPage :many
+SELECT id FROM menu_items WHERE page_id = ?;
+
+-- name: ConvertMenuItemToURL :exec
+UPDATE menu_items SET page_id = NULL, url = ?, updated_at = ? WHERE id = ?;

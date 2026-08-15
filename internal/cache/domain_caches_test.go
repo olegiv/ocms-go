@@ -243,6 +243,26 @@ func TestLanguageCache_GetDefault_EmptyDB(t *testing.T) {
 	}
 }
 
+func TestLanguageCache_GetDefault_AmbiguousDefaultsFailClosed(t *testing.T) {
+	q := newTestDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := q.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", IsDefault: true,
+		IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage: %v", err)
+	}
+	c := NewLanguageCache(q)
+	defaultLang, err := c.GetDefault(ctx)
+	if err != nil {
+		t.Fatalf("GetDefault: %v", err)
+	}
+	if defaultLang != nil {
+		t.Fatalf("GetDefault = %+v, want nil for ambiguous defaults", defaultLang)
+	}
+}
+
 func TestLanguageCache_IsActiveCode_Unknown(t *testing.T) {
 	q := newTestDB(t)
 	c := NewLanguageCache(q)
@@ -620,6 +640,61 @@ func TestTranslationCache_GetBatch(t *testing.T) {
 	}
 	if len(result) != 3 {
 		t.Errorf("GetBatch() = %d entries, want 3", len(result))
+	}
+}
+
+func TestTranslationCache_UsesCompleteTranslationComponent(t *testing.T) {
+	q := newTestDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	for _, language := range []store.CreateLanguageParams{
+		{Code: "fr", Name: "French", NativeName: "Français", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+		{Code: "de", Name: "German", NativeName: "Deutsch", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
+	} {
+		if _, err := q.CreateLanguage(ctx, language); err != nil {
+			t.Fatalf("CreateLanguage(%q): %v", language.Code, err)
+		}
+	}
+	createCategory := func(name, slug, languageCode string) store.Category {
+		t.Helper()
+		category, err := q.CreateCategory(ctx, store.CreateCategoryParams{
+			Name: name, Slug: slug, LanguageCode: languageCode, CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreateCategory(%q): %v", slug, err)
+		}
+		return category
+	}
+	english := createCategory("News", "news-cache", "en")
+	french := createCategory("Actualités", "actualites-cache", "fr")
+	german := createCategory("Nachrichten", "nachrichten-cache", "de")
+	for languageCode, targetID := range map[string]int64{"fr": french.ID, "de": german.ID} {
+		language, err := q.GetLanguageByCode(ctx, languageCode)
+		if err != nil {
+			t.Fatalf("GetLanguageByCode(%q): %v", languageCode, err)
+		}
+		if _, err := q.CreateTranslation(ctx, store.CreateTranslationParams{
+			EntityType: "category", EntityID: english.ID, LanguageID: language.ID,
+			TranslationID: targetID, CreatedAt: now,
+		}); err != nil {
+			t.Fatalf("CreateTranslation(%q): %v", languageCode, err)
+		}
+	}
+
+	c := NewTranslationCache(q)
+	got, err := c.Get(ctx, "category", french.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got["en"] != english.ID || got["de"] != german.ID || len(got) != 2 {
+		t.Fatalf("French component map = %#v; want en=%d de=%d", got, english.ID, german.ID)
+	}
+	batch, err := c.GetBatch(ctx, "category", []int64{french.ID, german.ID})
+	if err != nil {
+		t.Fatalf("GetBatch: %v", err)
+	}
+	if batch[german.ID]["en"] != english.ID || batch[german.ID]["fr"] != french.ID {
+		t.Fatalf("German batch component map = %#v", batch[german.ID])
 	}
 }
 
@@ -1005,5 +1080,93 @@ func TestPageCache_Invalidate_ClearsAll(t *testing.T) {
 
 	if c.Count() != 0 {
 		t.Errorf("Count() = %d, want 0 after Invalidate", c.Count())
+	}
+}
+
+// createLanguageScopedPages seeds one published page per language sharing a
+// slug, which is what makes the language boundary observable: slugs are unique
+// site-wide, so only the language distinguishes these two rows.
+func createLanguageScopedPages(t *testing.T, q *store.Queries, slug string) (english, french store.Page) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now()
+	author, err := q.CreateUser(ctx, store.CreateUserParams{
+		Email: "cache@example.com", PasswordHash: "x", Role: "admin", Name: "Cache",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if _, err := q.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "fr", Name: "French", NativeName: "Français", IsActive: true,
+		Direction: "ltr", Position: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage: %v", err)
+	}
+	english, err = q.CreatePage(ctx, store.CreatePageParams{
+		Title: "English", Slug: slug + "-en", Body: "b", Status: "published",
+		AuthorID: author.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage: %v", err)
+	}
+	french, err = q.CreatePage(ctx, store.CreatePageParams{
+		Title: "French", Slug: slug, Body: "b", Status: "published",
+		AuthorID: author.ID, LanguageCode: "fr", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage: %v", err)
+	}
+	return english, french
+}
+
+// TestPageCacheGetBySlugStaysInsideItsLanguage pins the reason the frontend can
+// use this cache at all.
+//
+// Slugs are unique across the site, not per language, so the miss path has to
+// filter by language: without it a French page answers a request routed to
+// English and is then cached under the English key, which is precisely the
+// boundary the language router exists to hold. The handler worked around it by
+// bypassing the cache, turning every page view into a database read.
+func TestPageCacheGetBySlugStaysInsideItsLanguage(t *testing.T) {
+	q := newTestDB(t)
+	c := NewPageCache(q)
+	ctx := context.Background()
+	_, french := createLanguageScopedPages(t, q, "equipe")
+
+	if _, err := c.GetBySlug(ctx, NewContext("en", "anonymous"), "equipe"); err == nil {
+		t.Fatal("GetBySlug() returned a French page to an English route")
+	}
+	got, err := c.GetBySlug(ctx, NewContext("fr", "anonymous"), "equipe")
+	if err != nil || got == nil || got.ID != french.ID {
+		t.Fatalf("GetBySlug() = (%+v, %v), want the French page", got, err)
+	}
+	// Second read proves it is served from cache, which is the point of the fix.
+	if _, err := c.GetBySlug(ctx, NewContext("fr", "anonymous"), "equipe"); err != nil {
+		t.Fatalf("GetBySlug() error = %v on a cached read", err)
+	}
+	if stats := c.Stats(); stats.Hits != 1 {
+		t.Fatalf("cache hits = %d, want the second lookup served from cache", stats.Hits)
+	}
+	if _, err := c.GetBySlug(ctx, Context{Role: "anonymous"}, "equipe"); err == nil {
+		t.Fatal("GetBySlug() accepted a lookup with no language")
+	}
+}
+
+// TestPageCacheByIDDoesNotSeedForeignLanguageSlugKeys covers the back door.
+// An ID lookup names one page whatever language asked for it, but it also warms
+// the slug index — under the caller's language, a French page could answer a
+// later English slug lookup straight from cache.
+func TestPageCacheByIDDoesNotSeedForeignLanguageSlugKeys(t *testing.T) {
+	q := newTestDB(t)
+	c := NewPageCache(q)
+	ctx := context.Background()
+	_, french := createLanguageScopedPages(t, q, "equipe")
+
+	if _, err := c.GetByID(ctx, NewContext("en", "anonymous"), french.ID); err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+	if _, err := c.GetBySlug(ctx, NewContext("en", "anonymous"), "equipe"); err == nil {
+		t.Fatal("an English slug lookup was answered by the French page an ID lookup cached")
 	}
 }

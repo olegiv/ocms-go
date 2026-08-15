@@ -5,6 +5,7 @@ package migrator
 
 import (
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/modules/migrator/types"
 	"fmt"
 )
 
@@ -28,6 +29,132 @@ type MigratorSourceFormViewData struct {
 	ConfigFields   []ConfigField
 	Config         map[string]string
 	ImportedCounts map[string]int
+	// PendingMediaCleanup is the durable filesystem-cleanup backlog. Those rows
+	// are already included in ImportedCounts[media], but remain separate so the
+	// UI does not present queued work as ordinary imported media.
+	PendingMediaCleanup int
+	Job            *ImportJob
+	// JobReadErr carries a failed job lookup into the initial render. Passing
+	// nil said "no import has ever run" and dropped hx-trigger, so a transient
+	// error while the page loaded hid a running import until a manual reload —
+	// the status endpoint already keeps polling in exactly this case.
+	JobReadErr error
+	// SupportedOptions maps an import option's form key to whether this source
+	// acts on it. Options the source ignores are not rendered at all, so the
+	// form cannot promise content it will not import.
+	SupportedOptions map[string]bool
+}
+
+// HasImportedContent reports whether anything was imported from this source.
+func (d MigratorSourceFormViewData) HasImportedContent() bool {
+	for _, count := range d.ImportedCounts {
+		if count > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// EntityTypes exposes the trackable entity types to the template so the stats
+// block stays in step with types.AllEntityTypes automatically.
+func (d MigratorSourceFormViewData) EntityTypes() []EntityType {
+	return types.AllEntityTypes
+}
+
+// Count returns the imported count for an entity type.
+func (d MigratorSourceFormViewData) Count(entityType EntityType) int {
+	return d.ImportedCounts[string(entityType)]
+}
+
+// MigratorJobStatusViewData holds data for the import job status fragment.
+type MigratorJobStatusViewData struct {
+	SourceName string
+	StatusURL  string
+	Job        *ImportJob // nil when no import has ever run for this source
+	Stale      bool
+	Polling    bool
+	// ReadFailed marks a job lookup that errored, as distinct from a source
+	// that has never been imported. Both used to render as "no import has run",
+	// and because the poller stopped on the empty result a single transient
+	// SQLite BUSY stranded the panel until a manual refresh.
+	ReadFailed bool
+}
+
+// StatusKey returns the i18n key for the job's status label.
+func (d MigratorJobStatusViewData) StatusKey() string {
+	if d.Job == nil {
+		return "migrator.job_idle"
+	}
+	if d.Stale {
+		return "migrator.job_" + string(JobInterrupted)
+	}
+	return "migrator.job_" + string(d.Job.Status)
+}
+
+// PhaseKey returns the i18n key for the job's current phase.
+func (d MigratorJobStatusViewData) PhaseKey() string {
+	if d.Job == nil || d.Job.Phase == "" {
+		return ""
+	}
+	return "migrator.phase_" + d.Job.Phase
+}
+
+// StatusClass returns a CSS modifier for the status card.
+func (d MigratorJobStatusViewData) StatusClass() string {
+	if d.Job == nil {
+		return "job-status-idle"
+	}
+	if d.Stale {
+		return "job-status-" + string(JobInterrupted)
+	}
+	return "job-status-" + string(d.Job.Status)
+}
+
+// ProgressText renders the processed/total counter.
+func (d MigratorJobStatusViewData) ProgressText(pc *adminviews.PageContext) string {
+	if d.Job == nil {
+		return ""
+	}
+	if d.Job.Total > 0 {
+		return pc.T("migrator.job_progress", d.Job.Processed, d.Job.Total)
+	}
+	if d.Job.Processed > 0 {
+		return pc.T("migrator.job_progress_unknown", d.Job.Processed)
+	}
+	return ""
+}
+
+// EntityTypes exposes the trackable entity types to the status fragment.
+func (d MigratorJobStatusViewData) EntityTypes() []EntityType {
+	return types.AllEntityTypes
+}
+
+// FormURL is the page the status card belongs to, used by the manual refresh
+// link shown while a job is running.
+func (d MigratorJobStatusViewData) FormURL() string {
+	return "/admin/migrator/" + d.SourceName
+}
+
+// hasCounts reports whether any entity type has a non-zero count.
+func hasCounts(counts map[string]int) bool {
+	for _, n := range counts {
+		if n > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// oobAttrs returns the out-of-band swap attribute, or nothing at all.
+//
+// The attribute must be absent rather than empty on the page copy: htmx treats
+// any present hx-swap-oob as an out-of-band element, so rendering it as
+// hx-swap-oob="" would make the page's own card try to swap itself on load.
+func oobAttrs(oob bool) templ.Attributes {
+	if !oob {
+		return templ.Attributes{}
+	}
+	return templ.Attributes{"hx-swap-oob": "true"}
 }
 
 templ MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) {
@@ -146,6 +273,249 @@ templ MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) {
 	}
 }
 
+// MigratorImportOptions renders the import-option checkboxes. It is a separate
+// component so TestImportOptionsHaveFormCheckboxes can render it in isolation
+// and assert every ImportOptions field has a control.
+//
+// supported maps a form key to whether the selected source acts on it. An
+// option the source ignores is omitted entirely rather than shown disabled: a
+// greyed-out control still reads as "this source could do that", and it could
+// not. A nil map means every option is supported, which is what the isolated
+// render in the drift test passes.
+templ MigratorImportOptions(pc *adminviews.PageContext, supported map[string]bool) {
+	<div class="form-checkboxes">
+		if optionEnabled(supported, "import_tags") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_tags" checked/>
+				<span>{ pc.T("migrator.option_import_tags") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_categories") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_categories" checked/>
+				<span>{ pc.T("migrator.option_import_categories") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_media") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_media" checked/>
+				<span>{ pc.T("migrator.option_import_media") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_posts") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_posts" checked/>
+				<span>{ pc.T("migrator.option_import_posts") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_pages") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_pages" checked/>
+				<span>{ pc.T("migrator.option_import_pages") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_menus") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_menus" checked/>
+				<span>{ pc.T("migrator.option_import_menus") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "import_users") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="import_users"/>
+				<span>{ pc.T("migrator.option_import_users") }</span>
+			</label>
+		}
+		if optionEnabled(supported, "skip_existing") {
+			<label class="checkbox-label">
+				<input type="checkbox" name="skip_existing"/>
+				<span>{ pc.T("migrator.option_skip_existing") }</span>
+			</label>
+		}
+	</div>
+}
+
+// optionEnabled reports whether an import option should be offered. A nil map
+// means "no source-specific restriction", so every option renders.
+func optionEnabled(supported map[string]bool, formKey string) bool {
+	if supported == nil {
+		return true
+	}
+	return supported[formKey]
+}
+
+// MigratorImportedContent renders the Imported Content card.
+//
+// It lives behind a stable id so the status poll can refresh it out of band:
+// the card sits outside the polled fragment, so without this an import that has
+// just finished would still show pre-import counts — and on a first import, no
+// Delete button at all — until the operator refreshed by hand.
+//
+// oob marks the copy returned by the status endpoint rather than the page.
+templ MigratorImportedContent(pc *adminviews.PageContext, sourceName string, counts map[string]int, pendingMediaCleanup int, oob bool) {
+	<div id="migrator-imported-content" { oobAttrs(oob)... }>
+		<div class="card card-danger">
+			<div class="card-header">
+				<h2>{ pc.T("migrator.imported_content") }</h2>
+			</div>
+			<div class="card-body">
+				if counts == nil {
+					<div class="alert alert-warning" role="alert">
+						{ pc.T("migrator.warning_imported_state_unknown") }
+					</div>
+				}
+				if pendingMediaCleanup > 0 {
+					<div class="alert alert-warning" role="alert">
+						{ pc.T("migrator.warning_media_cleanup_pending") }
+					</div>
+				}
+				if hasCounts(counts) {
+					<div class="imported-stats">
+						for _, entityType := range types.AllEntityTypes {
+							if counts[string(entityType)] > 0 {
+								<div class="stat-item">
+									<span class="migrator-stat-label">{ pc.T("migrator.imported_" + string(entityType)) }:</span>
+									<span class="migrator-stat-value">{ fmt.Sprintf("%d", counts[string(entityType)]) }</span>
+								</div>
+							}
+						}
+					</div>
+				}
+				if hasCounts(counts) || counts == nil {
+					<form method="POST" action={ templ.URL("/admin/migrator/" + sourceName + "/delete") } id="delete-imported-form" data-confirm={ pc.T("migrator.confirm_delete") }>
+						<button type="submit" class="btn btn-danger">
+							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M3 6h18"></path>
+								<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+								<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+								<line x1="10" x2="10" y1="11" y2="17"></line>
+								<line x1="14" x2="14" y1="11" y2="17"></line>
+							</svg>
+							{ pc.T("migrator.delete_imported") }
+						</button>
+					</form>
+				}
+				if counts != nil && !hasCounts(counts) {
+					<p class="text-muted">{ pc.T("migrator.no_imported_content") }</p>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+// MigratorJobStatusResponse is the body of the status endpoint: the job card
+// plus an out-of-band copy of the Imported Content card, so a single poll keeps
+// both regions current without reloading the page.
+templ MigratorJobStatusResponse(pc *adminviews.PageContext, data MigratorJobStatusViewData, counts map[string]int, pendingMediaCleanup int, countsOK bool) {
+	@MigratorJobStatus(pc, data)
+	if countsOK {
+		@MigratorImportedContent(pc, data.SourceName, counts, pendingMediaCleanup, true)
+	}
+}
+
+// MigratorJobStatus renders the import job status card.
+//
+// It is both the server-rendered initial state and the htmx poll response, so
+// it carries its own polling attributes. Polling stops by returning the same
+// element without hx-trigger: hx-swap="outerHTML" replaces the poller with a
+// version that has no trigger, so no JavaScript is involved. hx-select guards
+// the session-expiry case — RequireRole redirects to /login, htmx follows the
+// redirect, and without the selector the login page would be swapped into the
+// card.
+templ MigratorJobStatus(pc *adminviews.PageContext, data MigratorJobStatusViewData) {
+	if data.Polling {
+		<div
+			id="migrator-job-status"
+			class={ "job-status", data.StatusClass() }
+			hx-get={ data.StatusURL }
+			hx-trigger="every 2s"
+			hx-swap="outerHTML"
+			hx-select="#migrator-job-status"
+		>
+			@migratorJobStatusBody(pc, data)
+		</div>
+	} else {
+		<div id="migrator-job-status" class={ "job-status", data.StatusClass() }>
+			@migratorJobStatusBody(pc, data)
+		</div>
+	}
+}
+
+// migratorJobStatusBody renders the inner content of the status card.
+templ migratorJobStatusBody(pc *adminviews.PageContext, data MigratorJobStatusViewData) {
+	if data.ReadFailed {
+		// Say so rather than rendering an empty card. Polling continues, so a
+		// transient read error recovers on the next tick instead of stranding
+		// the panel until someone reloads the page.
+		<div class="job-status-header">
+			<span class="job-status-label">{ pc.T("migrator.job_status") }:</span>
+			<span class="job-status-value">{ pc.T("migrator.job_read_failed") }</span>
+			<span class="job-status-spinner" aria-hidden="true"></span>
+		</div>
+	} else if data.Job != nil {
+		<div class="job-status-header">
+			<span class="job-status-label">{ pc.T("migrator.job_status") }:</span>
+			<span class="job-status-value">{ pc.T(data.StatusKey()) }</span>
+			if data.Polling {
+				<span class="job-status-spinner" aria-hidden="true"></span>
+			}
+		</div>
+		if data.PhaseKey() != "" && data.Polling {
+			<p class="job-status-phase">{ pc.T(data.PhaseKey()) }</p>
+		}
+		if data.Polling {
+			// Escape hatch: a frozen card and a slow import look identical, and
+			// that is exactly how a broken poll went unnoticed. This gives the
+			// operator a way to see the truth without knowing to hit F5.
+			<p class="job-status-refresh">
+				<a href={ templ.URL(data.FormURL()) }>{ pc.T("migrator.job_refresh") }</a>
+			</p>
+		}
+		if data.ProgressText(pc) != "" {
+			<p class="job-status-progress">{ data.ProgressText(pc) }</p>
+		}
+		<div class="job-status-counts">
+			for _, entityType := range data.EntityTypes() {
+				if data.Job.Count(entityType) > 0 {
+					<span class="job-status-count">
+						{ fmt.Sprintf("%d", data.Job.Count(entityType)) } { pc.T("migrator.imported_" + string(entityType)) }
+					</span>
+				}
+			}
+			for _, entityType := range data.EntityTypes() {
+				if data.Job.SkippedCount(entityType) > 0 {
+					<span class="job-status-count job-status-count-skipped">
+						{ fmt.Sprintf("%d", data.Job.SkippedCount(entityType)) } { pc.T("migrator.skipped_" + string(entityType)) }
+					</span>
+				}
+			}
+		</div>
+		if data.Job.FatalError != "" {
+			<p class="job-status-error">{ data.Job.FatalError }</p>
+		}
+		if len(data.Job.Errors) > 0 {
+			<details class="job-status-errors">
+				<summary>{ pc.T("migrator.job_errors", len(data.Job.Errors)) }</summary>
+				<ul>
+					for _, msg := range data.Job.Errors {
+						<li>{ msg }</li>
+					}
+				</ul>
+			</details>
+		}
+		if len(data.Job.Notices) > 0 {
+			<details class="job-status-notices">
+				<summary>{ pc.T("migrator.job_notices", len(data.Job.Notices)) }</summary>
+				<ul>
+					for _, msg := range data.Job.Notices {
+						<li>{ msg }</li>
+					}
+				</ul>
+			</details>
+		}
+	}
+}
+
 templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormViewData) {
 	@adminviews.AdminLayout(pc) {
 		<div class="page-header">
@@ -165,6 +535,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 		</div>
 		<div id="migrator-data" data-confirm-import={ pc.T("migrator.confirm_import") } data-confirm-delete={ pc.T("migrator.confirm_delete") } data-source-name={ data.SourceName } style="display:none"></div>
 		<div class="migrator-form-container">
+			@MigratorJobStatus(pc, buildJobStatusView(data.SourceName, data.Job, data.JobReadErr))
 			<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/import") } id="import-form" data-confirm={ pc.T("migrator.confirm_import") }>
 				<div class="card">
 					<div class="card-header">
@@ -181,7 +552,10 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 										}
 									</label>
 									if field.Type == "password" {
-										<input type="password" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } class="form-control"/>
+										// No value= and no autocomplete: the secret is never
+										// round-tripped through the session, so there is nothing
+										// to repopulate and nothing to leak into the DOM.
+										<input type="password" id={ field.Name } name={ field.Name } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } autocomplete="off" class="form-control"/>
 									} else if field.Type == "number" {
 										<input type="number" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } class="form-control"/>
 									} else {
@@ -206,32 +580,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 						<h2>{ pc.T("migrator.import_options") }</h2>
 					</div>
 					<div class="card-body">
-						<div class="form-checkboxes">
-							<label class="checkbox-label">
-								<input type="checkbox" name="import_tags" checked/>
-								<span>{ pc.T("migrator.option_import_tags") }</span>
-							</label>
-							<label class="checkbox-label">
-								<input type="checkbox" name="import_media" checked/>
-								<span>{ pc.T("migrator.option_import_media") }</span>
-							</label>
-							<label class="checkbox-label">
-								<input type="checkbox" name="import_posts" checked/>
-								<span>{ pc.T("migrator.option_import_posts") }</span>
-							</label>
-							<label class="checkbox-label">
-								<input type="checkbox" name="import_pages" checked/>
-								<span>{ pc.T("migrator.option_import_pages") }</span>
-							</label>
-							<label class="checkbox-label">
-								<input type="checkbox" name="import_users"/>
-								<span>{ pc.T("migrator.option_import_users") }</span>
-							</label>
-							<label class="checkbox-label">
-								<input type="checkbox" name="skip_existing"/>
-								<span>{ pc.T("migrator.option_skip_existing") }</span>
-							</label>
-						</div>
+						@MigratorImportOptions(pc, data.SupportedOptions)
 					</div>
 				</div>
 				<div class="form-submit">
@@ -245,55 +594,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 					</button>
 				</div>
 			</form>
-			<div class="card card-danger">
-				<div class="card-header">
-					<h2>{ pc.T("migrator.imported_content") }</h2>
-				</div>
-				<div class="card-body">
-					if data.ImportedCounts != nil {
-						if data.ImportedCounts["post"] > 0 || data.ImportedCounts["page"] > 0 || data.ImportedCounts["tag"] > 0 || data.ImportedCounts["media"] > 0 || data.ImportedCounts["user"] > 0 {
-							<div class="imported-stats">
-								<div class="stat-item">
-									<span class="migrator-stat-label">{ pc.T("migrator.imported_posts") }:</span>
-									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["post"]) }</span>
-								</div>
-								<div class="stat-item">
-									<span class="migrator-stat-label">{ pc.T("migrator.imported_pages") }:</span>
-									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["page"]) }</span>
-								</div>
-								<div class="stat-item">
-									<span class="migrator-stat-label">{ pc.T("migrator.imported_tags") }:</span>
-									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["tag"]) }</span>
-								</div>
-								<div class="stat-item">
-									<span class="migrator-stat-label">{ pc.T("migrator.imported_media") }:</span>
-									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["media"]) }</span>
-								</div>
-								<div class="stat-item">
-									<span class="migrator-stat-label">{ pc.T("migrator.imported_users") }:</span>
-									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["user"]) }</span>
-								</div>
-							</div>
-							<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/delete") } id="delete-imported-form" data-confirm={ pc.T("migrator.confirm_delete") }>
-								<button type="submit" class="btn btn-danger">
-									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-										<path d="M3 6h18"></path>
-										<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-										<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-										<line x1="10" x2="10" y1="11" y2="17"></line>
-										<line x1="14" x2="14" y1="11" y2="17"></line>
-									</svg>
-									{ pc.T("migrator.delete_imported") }
-								</button>
-							</form>
-						} else {
-							<p class="text-muted">{ pc.T("migrator.no_imported_content") }</p>
-						}
-					} else {
-						<p class="text-muted">{ pc.T("migrator.no_imported_content") }</p>
-					}
-				</div>
-			</div>
+			@MigratorImportedContent(pc, data.SourceName, data.ImportedCounts, data.PendingMediaCleanup, false)
 		</div>
 		<style>
 			.migrator-form-container {
@@ -432,6 +733,96 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 			.btn-danger:hover {
 				background-color: #dc2626;
 			}
+
+			/* Import job status card */
+			.job-status {
+				border: 1px solid var(--border-color, #e5e7eb);
+				border-left-width: 4px;
+				border-radius: 8px;
+				padding: 1rem 1.25rem;
+				margin-bottom: 1.5rem;
+				background: var(--card-bg, #fff);
+			}
+
+			.job-status-idle { display: none; }
+			.job-status-running { border-left-color: var(--primary-color, #3b82f6); }
+			.job-status-completed { border-left-color: var(--success-color, #10b981); }
+			.job-status-failed { border-left-color: var(--danger-color, #ef4444); }
+			/* A run that finished but recorded per-item errors. Deliberately
+			   warning-coloured, not success: it used to render green. */
+			.job-status-partial { border-left-color: var(--warning-color, #f59e0b); }
+			.job-status-interrupted { border-left-color: var(--warning-color, #f59e0b); }
+
+			.job-status-header {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+
+			.job-status-label { font-weight: 500; }
+			.job-status-value { font-weight: 600; }
+
+			.job-status-spinner {
+				width: 12px;
+				height: 12px;
+				border: 2px solid var(--primary-color, #3b82f6);
+				border-top-color: transparent;
+				border-radius: 50%;
+				animation: job-status-spin 0.8s linear infinite;
+			}
+
+			@keyframes job-status-spin {
+				to { transform: rotate(360deg); }
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				.job-status-spinner { animation: none; }
+			}
+
+			.job-status-phase,
+			.job-status-progress {
+				margin: 0.35rem 0 0 0;
+				color: var(--text-muted, #6b7280);
+				font-size: 0.875rem;
+			}
+
+			.job-status-counts {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				margin-top: 0.6rem;
+			}
+
+			.job-status-count {
+				background: var(--bg-subtle, #f3f4f6);
+				border-radius: 999px;
+				padding: 0.15rem 0.6rem;
+				font-size: 0.8125rem;
+			}
+
+			.job-status-error {
+				margin: 0.6rem 0 0 0;
+				color: var(--danger-color, #ef4444);
+				font-size: 0.875rem;
+			}
+
+			.job-status-errors,
+			.job-status-notices {
+				margin-top: 0.6rem;
+				font-size: 0.875rem;
+			}
+
+			.job-status-errors > summary { color: var(--danger-color, #ef4444); }
+
+			/* Notices are expected outcomes, not failures — a missing optional
+			   source table or out-of-scope content. They must not read as errors. */
+			.job-status-notices > summary { color: var(--text-muted, #6b7280); }
+
+			.job-status-errors ul,
+			.job-status-notices ul {
+				margin: 0.4rem 0 0 1.1rem;
+				padding: 0;
+			}
 		</style>
 		<script nonce={ templ.GetNonce(ctx) }>
 			function testConnection() {
@@ -471,23 +862,24 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 				testForm.submit();
 			}
 
-			function bindConfirm(form) {
+			// Delegated, not bound per element. The status poll replaces the
+			// imported-content card out of band on every tick, so a listener
+			// attached at DOMContentLoaded was lost with the first swap and the
+			// destructive delete button then submitted with no confirmation at
+			// all. Delegation survives any number of swaps.
+			document.addEventListener('submit', function(event) {
+				const form = event.target.closest('[data-confirm]');
 				if (!form) return;
-				form.addEventListener('submit', function(event) {
-					const message = form.dataset.confirm || 'Are you sure?';
-					if (!confirm(message)) {
-						event.preventDefault();
-					}
-				});
-			}
+				if (!confirm(form.dataset.confirm)) {
+					event.preventDefault();
+				}
+			}, true);
 
 			document.addEventListener('DOMContentLoaded', function() {
 				const testButton = document.getElementById('test-connection-btn');
 				if (testButton) {
 					testButton.addEventListener('click', testConnection);
 				}
-				bindConfirm(document.getElementById('import-form'));
-				bindConfirm(document.getElementById('delete-imported-form'));
 			});
 		</script>
 	}

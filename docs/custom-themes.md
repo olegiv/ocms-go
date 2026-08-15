@@ -298,6 +298,7 @@ Common data available in all templates:
 | `.SiteName` | string | Site name |
 | `.LangCode` | string | Current language code |
 | `.LangPrefix` | string | URL prefix for current language |
+| `.HomeURL` | string | Canonical home path (`/` for default, `/fr` for non-default); use this for logo and home links instead of appending `/` to `.LangPrefix` |
 | `.MetaDescription` | string | Page meta description |
 | `.Canonical` | string | Canonical URL |
 | `.Page` | object | Current page data |

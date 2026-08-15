@@ -69,6 +69,10 @@ type Config struct {
 	WebhookAllowedHosts              string `env:"OCMS_WEBHOOK_ALLOWED_HOSTS"`                                   // Comma-separated exact hosts allowed for webhook destinations
 	RequireWebhookAllowedHosts       bool   `env:"OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS" envDefault:"false"`        // Reject startup in production when active webhooks exist without destination host allowlist
 
+	// Migrator source-database security configuration
+	MigratorAllowedDBHosts        string `env:"OCMS_MIGRATOR_ALLOWED_DB_HOSTS"`                                // Comma-separated hosts a migrator source may connect to; empty = no restriction
+	RequireMigratorAllowedDBHosts bool   `env:"OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS" envDefault:"false"`     // Reject startup in production when the migrator module is active without a source DB host allowlist
+
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
 
@@ -290,6 +294,7 @@ func applyProductionSecurityDefaults(cfg *Config) {
 	setBoolIfUnset("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.BlockSuspiciousPageHTML)
 	setBoolIfUnset("OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.RequireBlockSuspiciousPageHTML)
 	setBoolIfUnset("OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS", &cfg.RequireWebhookAllowedHosts)
+	setBoolIfUnset("OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS", &cfg.RequireMigratorAllowedDBHosts)
 	setIntIfUnset("OCMS_API_KEY_MAX_TTL_DAYS", &cfg.APIKeyMaxTTLDays, DefaultProductionAPIKeyMaxTTLDays)
 }
 

@@ -29,6 +29,13 @@ UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, language_cod
 WHERE id = ?
 RETURNING *;
 
+-- name: UpdateMediaForImport :one
+UPDATE media
+SET filename = ?, mime_type = ?, size = ?, width = ?, height = ?, alt = ?,
+    caption = ?, folder_id = ?, uploaded_by = ?, language_code = ?, updated_at = ?
+WHERE id = ?
+RETURNING *;
+
 -- name: DeleteMedia :exec
 DELETE FROM media WHERE id = ?;
 
@@ -127,3 +134,46 @@ WHERE mt.media_id = ? AND l.code = ? AND mt.alt != '';
 SELECT mt.caption FROM media_translations mt
 JOIN languages l ON l.id = mt.language_id
 WHERE mt.media_id = ? AND l.code = ? AND mt.caption != '';
+
+-- name: CountPagesUsingMedia :one
+SELECT COUNT(*) FROM pages
+WHERE featured_image_id = ? OR og_image_id = ?;
+
+-- name: CountPagesEmbeddingMediaUUID :one
+SELECT COUNT(*) FROM pages
+WHERE instr(
+    body,
+    '/uploads/' || sqlc.arg(storage_dir) || '/' || sqlc.arg(media_uuid) || '/'
+) > 0;
+
+-- name: CountContentReferencingMediaPath :one
+-- Counts every content record still pointing at a media storage path.
+--
+-- Media URLs are plain text with no foreign key, so nothing in the schema
+-- stops a file being deleted while a menu item, category description, form,
+-- submission, widget or config value still links to it. The caller passes the
+-- full '/uploads/<dir>/<uuid>/' prefix; matching the prefix rather than a whole
+-- URL keeps filenames, variants and query strings out of the comparison.
+SELECT
+    (SELECT COUNT(*) FROM pages
+      WHERE instr(body, sqlc.arg(media_path)) > 0
+         OR instr(summary, sqlc.arg(media_path)) > 0
+         OR instr(video_url, sqlc.arg(media_path)) > 0
+         OR instr(canonical_url, sqlc.arg(media_path)) > 0
+         OR instr(meta_description, sqlc.arg(media_path)) > 0)
+  + (SELECT COUNT(*) FROM menu_items WHERE instr(COALESCE(url, ''), sqlc.arg(media_path)) > 0)
+  + (SELECT COUNT(*) FROM categories WHERE instr(COALESCE(description, ''), sqlc.arg(media_path)) > 0)
+  + (SELECT COUNT(*) FROM forms
+      WHERE instr(COALESCE(description, ''), sqlc.arg(media_path)) > 0
+         OR instr(COALESCE(success_message, ''), sqlc.arg(media_path)) > 0)
+  + (SELECT COUNT(*) FROM form_fields
+      WHERE instr(COALESCE(placeholder, ''), sqlc.arg(media_path)) > 0
+         OR instr(COALESCE(help_text, ''), sqlc.arg(media_path)) > 0
+         OR instr(COALESCE(options, ''), sqlc.arg(media_path)) > 0
+         OR instr(COALESCE(validation, ''), sqlc.arg(media_path)) > 0)
+  + (SELECT COUNT(*) FROM form_submissions WHERE instr(data, sqlc.arg(media_path)) > 0)
+  + (SELECT COUNT(*) FROM widgets
+      WHERE instr(COALESCE(content, ''), sqlc.arg(media_path)) > 0
+         OR instr(COALESCE(settings, ''), sqlc.arg(media_path)) > 0)
+  + (SELECT COUNT(*) FROM config WHERE instr(value, sqlc.arg(media_path)) > 0)
+  AS reference_count;

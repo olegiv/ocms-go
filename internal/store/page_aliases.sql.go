@@ -72,6 +72,15 @@ func (q *Queries) CreatePageAlias(ctx context.Context, arg CreatePageAliasParams
 	return i, err
 }
 
+const deletePageAlias = `-- name: DeletePageAlias :exec
+DELETE FROM page_aliases WHERE id = ?
+`
+
+func (q *Queries) DeletePageAlias(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deletePageAlias, id)
+	return err
+}
+
 const getAliasesForPage = `-- name: GetAliasesForPage :many
 SELECT id, page_id, alias, created_at FROM page_aliases WHERE page_id = ? ORDER BY created_at
 `
@@ -102,6 +111,45 @@ func (q *Queries) GetAliasesForPage(ctx context.Context, pageID int64) ([]PageAl
 		return nil, err
 	}
 	return items, nil
+}
+
+const getPageByAlias = `-- name: GetPageByAlias :one
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
+INNER JOIN page_aliases pa ON pa.page_id = p.id
+WHERE pa.alias = ?
+`
+
+func (q *Queries) GetPageByAlias(ctx context.Context, alias string) (Page, error) {
+	row := q.db.QueryRowContext(ctx, getPageByAlias, alias)
+	var i Page
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Body,
+		&i.Status,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+		&i.FeaturedImageID,
+		&i.MetaTitle,
+		&i.MetaDescription,
+		&i.MetaKeywords,
+		&i.OgImageID,
+		&i.NoIndex,
+		&i.NoFollow,
+		&i.CanonicalUrl,
+		&i.ScheduledAt,
+		&i.LanguageCode,
+		&i.HideFeaturedImage,
+		&i.PageType,
+		&i.ExcludeFromLists,
+		&i.Summary,
+		&i.VideoUrl,
+		&i.VideoTitle,
+	)
+	return i, err
 }
 
 const getPublishedPageByAlias = `-- name: GetPublishedPageByAlias :one

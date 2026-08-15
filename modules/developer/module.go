@@ -7,10 +7,12 @@
 package developer
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
 	"html/template"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -24,7 +26,8 @@ var localesFS embed.FS
 // Module implements the module.Module interface for the developer module.
 type Module struct {
 	module.BaseModule
-	ctx *module.Context
+	ctx              *module.Context
+	removeMediaFiles func(uploadDir, mediaUUID string) error
 }
 
 // New creates a new instance of the developer module.
@@ -54,6 +57,13 @@ func (m *Module) Init(ctx *module.Context) error {
 	}
 
 	m.ctx = ctx
+	if ctx.DB != nil {
+		drainCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := m.drainMediaCleanup(drainCtx); err != nil {
+			ctx.Logger.Warn("developer media cleanup remains pending", "error", err)
+		}
+	}
 	m.ctx.Logger.Info("Developer module initialized", "env", ctx.Config.Env)
 	return nil
 }
@@ -121,6 +131,32 @@ func (m *Module) Migrations() []module.Migration {
 			},
 			Down: func(db *sql.DB) error {
 				_, err := db.Exec(`DROP TABLE IF EXISTS developer_generated_items`)
+				return err
+			},
+		},
+		{
+			Version:     2,
+			Description: "Create developer media cleanup retry queue",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`
+					CREATE TABLE IF NOT EXISTS developer_media_cleanup_queue (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						upload_root TEXT NOT NULL,
+						media_uuid TEXT NOT NULL,
+						generation INTEGER NOT NULL DEFAULT 1,
+						attempts INTEGER NOT NULL DEFAULT 0,
+						last_error TEXT NOT NULL DEFAULT '',
+						created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						UNIQUE(upload_root, media_uuid)
+					);
+					CREATE INDEX IF NOT EXISTS idx_developer_media_cleanup_created
+						ON developer_media_cleanup_queue(created_at);
+				`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`DROP TABLE IF EXISTS developer_media_cleanup_queue`)
 				return err
 			},
 		},

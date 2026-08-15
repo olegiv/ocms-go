@@ -247,14 +247,14 @@ func TestMediaHandler_BulkDelete_Success(t *testing.T) {
 	now := time.Now()
 
 	media1, err := q.CreateMedia(context.Background(), store.CreateMediaParams{
-		Uuid: "bulk-media-1", Filename: "one.jpg", MimeType: "image/jpeg", Size: 100,
+		Uuid: "11111111-1111-4111-8111-111111111111", Filename: "one.jpg", MimeType: "image/jpeg", Size: 100,
 		UploadedBy: user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("CreateMedia(1) failed: %v", err)
 	}
 	media2, err := q.CreateMedia(context.Background(), store.CreateMediaParams{
-		Uuid: "bulk-media-2", Filename: "two.jpg", MimeType: "image/jpeg", Size: 100,
+		Uuid: "22222222-2222-4222-8222-222222222222", Filename: "two.jpg", MimeType: "image/jpeg", Size: 100,
 		UploadedBy: user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {

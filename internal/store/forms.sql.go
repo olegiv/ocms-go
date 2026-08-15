@@ -294,6 +294,19 @@ func (q *Queries) FormSlugExistsForLanguage(ctx context.Context, arg FormSlugExi
 }
 
 const getFormAvailableTranslations = `-- name: GetFormAvailableTranslations :many
+WITH RECURSIVE translation_component(entity_id) AS (
+    SELECT CAST(?1 AS INTEGER) AS entity_id FROM (SELECT 1 AS seed)
+    UNION
+    SELECT CASE
+        WHEN t.entity_id = translation_component.entity_id THEN t.translation_id
+        ELSE t.entity_id
+    END AS entity_id
+    FROM translations t
+    INNER JOIN translation_component
+        ON t.entity_id = translation_component.entity_id
+        OR t.translation_id = translation_component.entity_id
+    WHERE t.entity_type = 'form'
+)
 SELECT
     l.id as language_id,
     l.code as language_code,
@@ -306,34 +319,14 @@ SELECT
     COALESCE(f.name, '') as form_name
 FROM languages l
 LEFT JOIN (
-    -- Get forms that are translations of the source form
     SELECT f.id, f.slug, f.name, f.language_code
     FROM forms f
-    INNER JOIN translations t ON t.translation_id = f.id
-    WHERE t.entity_type = 'form' AND t.entity_id = ?
-    UNION
-    -- Get the source form itself
-    SELECT f.id, f.slug, f.name, f.language_code
-    FROM forms f
-    WHERE f.id = ?
-    UNION
-    -- Get forms where current form is a translation (sibling translations)
-    SELECT f2.id, f2.slug, f2.name, f2.language_code
-    FROM translations t
-    INNER JOIN forms f2 ON (f2.id = t.entity_id OR f2.id = t.translation_id)
-    WHERE t.entity_type = 'form'
-    AND (t.entity_id = ? OR t.translation_id = ?)
+    INNER JOIN translation_component tc ON tc.entity_id = f.id
+    WHERE f.is_active = 1
 ) f ON f.language_code = l.code
 WHERE l.is_active = 1
 ORDER BY l.position
 `
-
-type GetFormAvailableTranslationsParams struct {
-	EntityID      int64 `json:"entity_id"`
-	ID            int64 `json:"id"`
-	EntityID_2    int64 `json:"entity_id_2"`
-	TranslationID int64 `json:"translation_id"`
-}
 
 type GetFormAvailableTranslationsRow struct {
 	LanguageID         int64  `json:"language_id"`
@@ -348,14 +341,10 @@ type GetFormAvailableTranslationsRow struct {
 }
 
 // Get all available translations for a form (for language switcher)
-// Note: translations table still uses language_id to reference the target language
-func (q *Queries) GetFormAvailableTranslations(ctx context.Context, arg GetFormAvailableTranslationsParams) ([]GetFormAvailableTranslationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getFormAvailableTranslations,
-		arg.EntityID,
-		arg.ID,
-		arg.EntityID_2,
-		arg.TranslationID,
-	)
+// Translation edges are traversed as an undirected connected component so a
+// sibling remains visible even when it is more than one hop from this form.
+func (q *Queries) GetFormAvailableTranslations(ctx context.Context, entityID int64) ([]GetFormAvailableTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getFormAvailableTranslations, entityID)
 	if err != nil {
 		return nil, err
 	}

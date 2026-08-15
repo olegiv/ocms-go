@@ -220,6 +220,19 @@ func (q *Queries) GetPublishedTagUsageCounts(ctx context.Context, arg GetPublish
 }
 
 const getTagAvailableTranslations = `-- name: GetTagAvailableTranslations :many
+WITH RECURSIVE translation_component(entity_id) AS (
+    SELECT CAST(?1 AS INTEGER) AS entity_id FROM (SELECT 1 AS seed)
+    UNION
+    SELECT CASE
+        WHEN tr.entity_id = translation_component.entity_id THEN tr.translation_id
+        ELSE tr.entity_id
+    END AS entity_id
+    FROM translations tr
+    INNER JOIN translation_component
+        ON tr.entity_id = translation_component.entity_id
+        OR tr.translation_id = translation_component.entity_id
+    WHERE tr.entity_type = 'tag'
+)
 SELECT
     l.id as language_id,
     l.code as language_code,
@@ -232,34 +245,13 @@ SELECT
     COALESCE(t.name, '') as tag_name
 FROM languages l
 LEFT JOIN (
-    -- Get tags that are translations of the source tag
     SELECT t.id, t.slug, t.name, t.language_code
     FROM tags t
-    INNER JOIN translations tr ON tr.translation_id = t.id
-    WHERE tr.entity_type = 'tag' AND tr.entity_id = ?
-    UNION
-    -- Get the source tag itself
-    SELECT t.id, t.slug, t.name, t.language_code
-    FROM tags t
-    WHERE t.id = ?
-    UNION
-    -- Get tags where current tag is a translation (sibling translations)
-    SELECT t2.id, t2.slug, t2.name, t2.language_code
-    FROM translations tr
-    INNER JOIN tags t2 ON (t2.id = tr.entity_id OR t2.id = tr.translation_id)
-    WHERE tr.entity_type = 'tag'
-    AND (tr.entity_id = ? OR tr.translation_id = ?)
+    INNER JOIN translation_component tc ON tc.entity_id = t.id
 ) t ON t.language_code = l.code
 WHERE l.is_active = 1
 ORDER BY l.position
 `
-
-type GetTagAvailableTranslationsParams struct {
-	EntityID      int64 `json:"entity_id"`
-	ID            int64 `json:"id"`
-	EntityID_2    int64 `json:"entity_id_2"`
-	TranslationID int64 `json:"translation_id"`
-}
 
 type GetTagAvailableTranslationsRow struct {
 	LanguageID         int64  `json:"language_id"`
@@ -274,14 +266,10 @@ type GetTagAvailableTranslationsRow struct {
 }
 
 // Get all available translations for a tag (for language switcher)
-// Note: translations table still uses language_id to reference the target language
-func (q *Queries) GetTagAvailableTranslations(ctx context.Context, arg GetTagAvailableTranslationsParams) ([]GetTagAvailableTranslationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTagAvailableTranslations,
-		arg.EntityID,
-		arg.ID,
-		arg.EntityID_2,
-		arg.TranslationID,
-	)
+// Translation edges are traversed as an undirected connected component so a
+// sibling remains visible even when it is more than one hop from this tag.
+func (q *Queries) GetTagAvailableTranslations(ctx context.Context, entityID int64) ([]GetTagAvailableTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTagAvailableTranslations, entityID)
 	if err != nil {
 		return nil, err
 	}
@@ -476,33 +464,41 @@ func (q *Queries) GetTagUsageCounts(ctx context.Context, arg GetTagUsageCountsPa
 }
 
 const getTagUsageCountsByLanguage = `-- name: GetTagUsageCountsByLanguage :many
-SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(p.id) as usage_count
+SELECT t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at, COUNT(p.id) as usage_count
 FROM tags t
 INNER JOIN page_tags pt ON pt.tag_id = t.id
 INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND p.language_code = ?
-GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
+WHERE t.language_code = ?
+GROUP BY t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at
 ORDER BY usage_count DESC, t.name
 LIMIT ? OFFSET ?
 `
 
 type GetTagUsageCountsByLanguageParams struct {
-	LanguageCode string `json:"language_code"`
-	Limit        int64  `json:"limit"`
-	Offset       int64  `json:"offset"`
+	LanguageCode   string `json:"language_code"`
+	LanguageCode_2 string `json:"language_code_2"`
+	Limit          int64  `json:"limit"`
+	Offset         int64  `json:"offset"`
 }
 
 type GetTagUsageCountsByLanguageRow struct {
-	ID         int64     `json:"id"`
-	Name       string    `json:"name"`
-	Slug       string    `json:"slug"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
-	UsageCount int64     `json:"usage_count"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	LanguageCode string    `json:"language_code"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	UsageCount   int64     `json:"usage_count"`
 }
 
-// Tag usage counts filtered by page language (for frontend sidebar)
+// Tag usage counts filtered by both page and tag language (for frontend sidebar)
 func (q *Queries) GetTagUsageCountsByLanguage(ctx context.Context, arg GetTagUsageCountsByLanguageParams) ([]GetTagUsageCountsByLanguageRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTagUsageCountsByLanguage, arg.LanguageCode, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, getTagUsageCountsByLanguage,
+		arg.LanguageCode,
+		arg.LanguageCode_2,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -514,6 +510,7 @@ func (q *Queries) GetTagUsageCountsByLanguage(ctx context.Context, arg GetTagUsa
 			&i.ID,
 			&i.Name,
 			&i.Slug,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.UsageCount,
@@ -680,13 +677,18 @@ func (q *Queries) ListTagsByLanguage(ctx context.Context, languageCode string) (
 }
 
 const listTagsForSitemap = `-- name: ListTagsForSitemap :many
-SELECT id, slug, updated_at FROM tags ORDER BY updated_at DESC
+SELECT t.id, t.slug, t.updated_at, t.language_code, l.is_default
+FROM tags t
+INNER JOIN languages l ON l.code = t.language_code AND l.is_active = 1
+ORDER BY t.updated_at DESC
 `
 
 type ListTagsForSitemapRow struct {
-	ID        int64     `json:"id"`
-	Slug      string    `json:"slug"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           int64     `json:"id"`
+	Slug         string    `json:"slug"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	LanguageCode string    `json:"language_code"`
+	IsDefault    bool      `json:"is_default"`
 }
 
 func (q *Queries) ListTagsForSitemap(ctx context.Context) ([]ListTagsForSitemapRow, error) {
@@ -698,7 +700,13 @@ func (q *Queries) ListTagsForSitemap(ctx context.Context) ([]ListTagsForSitemapR
 	items := []ListTagsForSitemapRow{}
 	for rows.Next() {
 		var i ListTagsForSitemapRow
-		if err := rows.Scan(&i.ID, &i.Slug, &i.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.UpdatedAt,
+			&i.LanguageCode,
+			&i.IsDefault,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

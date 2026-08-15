@@ -25,10 +25,10 @@ func TestSaveNonImageFile_AllowsDoubleDotInFilename(t *testing.T) {
 	defer func() { _ = src.Close() }()
 
 	uploadDir := filepath.Join(tempDir, "uploads")
-	fileUUID := "abc123"
+	fileUUID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 	filename := "report..pdf"
 
-	if err := s.saveNonImageFile(src, uploadDir, fileUUID, filename); err != nil {
+	if _, err := s.saveNonImageFile(src, uploadDir, fileUUID, filename); err != nil {
 		t.Fatalf("saveNonImageFile() returned error for valid filename: %v", err)
 	}
 

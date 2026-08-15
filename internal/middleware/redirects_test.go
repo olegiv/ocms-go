@@ -4,10 +4,58 @@
 package middleware
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+func TestRedirectHandlerSkipsOnlyAdminAndAPISegments(t *testing.T) {
+	rm := &RedirectsMiddleware{
+		redirects: []store.Redirect{{
+			SourcePath: "/administrator",
+			TargetUrl:  "/target",
+			StatusCode: http.StatusMovedPermanently,
+			Enabled:    true,
+		}, {
+			SourcePath: "/apiary",
+			TargetUrl:  "/target",
+			StatusCode: http.StatusMovedPermanently,
+			Enabled:    true,
+		}},
+		lastLoad: time.Now(),
+		cacheTTL: time.Hour,
+	}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := rm.Handler(next)
+
+	tests := []struct {
+		path       string
+		wantStatus int
+	}{
+		{path: "/admin", wantStatus: http.StatusNoContent},
+		{path: "/admin/users", wantStatus: http.StatusNoContent},
+		{path: "/api", wantStatus: http.StatusNoContent},
+		{path: "/api/v2/pages", wantStatus: http.StatusNoContent},
+		{path: "/administrator", wantStatus: http.StatusMovedPermanently},
+		{path: "/apiary", wantStatus: http.StatusMovedPermanently},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, tt.wantStatus)
+			}
+		})
+	}
+}
 
 func TestMatchPathWithCaptures(t *testing.T) {
 	tests := []struct {

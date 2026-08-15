@@ -63,6 +63,20 @@ SELECT EXISTS(
     SELECT 1 FROM page_aliases pa WHERE pa.alias = ?
 );
 
+-- name: PageRouteExistsUnderPrefix :one
+-- Reports whether any page route lives at a first path segment, either as a
+-- page slug, as an alias, or as an alias nested under it. A language whose
+-- code equals that segment would swallow all three: the language middleware
+-- strips the segment before the frontend router ever sees it.
+-- The LIKE pattern needs no escaping because language codes are restricted to
+-- lowercase letters, digits and hyphens, none of which are LIKE wildcards.
+SELECT EXISTS(
+    SELECT 1 FROM pages p WHERE p.slug = sqlc.arg(prefix)
+    UNION ALL
+    SELECT 1 FROM page_aliases pa
+     WHERE pa.alias = sqlc.arg(prefix) OR pa.alias LIKE sqlc.arg(prefix) || '/%'
+);
+
 -- name: SlugOrAliasExistsExcluding :one
 SELECT EXISTS(
     SELECT 1 FROM pages p WHERE p.slug = ? AND p.id != ?
@@ -196,9 +210,11 @@ INNER JOIN pages p ON p.og_image_id = m.id
 WHERE p.id = ?;
 
 -- name: ListPublishedPagesForSitemap :many
-SELECT id, slug, updated_at, no_index FROM pages
-WHERE status = 'published' AND no_index = 0
-ORDER BY updated_at DESC;
+SELECT p.id, p.slug, p.updated_at, p.no_index, p.language_code, l.is_default
+FROM pages p
+INNER JOIN languages l ON l.code = p.language_code AND l.is_active = 1
+WHERE p.status = 'published' AND p.no_index = 0
+ORDER BY p.updated_at DESC;
 
 -- Scheduled publishing queries
 

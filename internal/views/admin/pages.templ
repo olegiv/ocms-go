@@ -7,6 +7,7 @@ import "fmt"
 import "strings"
 import "net/url"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/utils"
 import "github.com/olegiv/ocms-go/internal/views/components/alert"
 import "github.com/olegiv/ocms-go/internal/views/components/badge"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
@@ -27,6 +28,7 @@ type PageListItemView struct {
 	ID               int64
 	Title            string
 	Slug             string
+	PublicURL        string
 	Status           string
 	PageType         string
 	IsScheduled      bool
@@ -74,6 +76,7 @@ type PageFormViewData struct {
 	PageID        int64
 	PageTitle     string
 	PageSlug      string
+	PublicURL     string
 	PageBody      string
 	PageSummary   string
 	PageStatus    string
@@ -726,7 +729,11 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 			}
 		}
 		@table.Cell() {
-			<a href={ templ.SafeURL(fmt.Sprintf("/%s", page.Slug)) } class="page-title-link" target="_blank" rel="noopener noreferrer">{ page.Title }</a>
+			if page.PublicURL != "" {
+				<a href={ templ.SafeURL(page.PublicURL) } class="page-title-link" target="_blank" rel="noopener noreferrer">{ page.Title }</a>
+			} else {
+				<span class="page-title-link">{ page.Title }</span>
+			}
 		}
 		@table.Cell() {
 			if len(page.Tags) > 0 {
@@ -843,9 +850,11 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
 		if data.IsEdit {
 			@PageHeader(pc.T("pages.edit"), pc.T("pages.edit_description")) {
-				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/" + data.PageSlug, Target: "_blank"}) {
-					@icon.Eye(icon.Props{Size: 16})
-					{ pc.T("btn.preview") }
+				if data.PublicURL != "" {
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: data.PublicURL, Target: "_blank"}) {
+						@icon.Eye(icon.Props{Size: 16})
+						{ pc.T("btn.preview") }
+					}
 				}
 				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d/versions", data.PageID)}) {
 					@iconClockHistory()
@@ -1820,7 +1829,8 @@ templ editorImageModal(pc *PageContext) {
 
 templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	<!-- TinyMCE Editor Scripts -->
-	<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/tinymce/tinymce.min.js"></script>
+	<div id="tinymce-config" data-cache-suffix={ "?v=" + utils.ScriptVersion } style="display:none"></div>
+	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js") } integrity="sha384-g2H58OoUcLyeq1GVAL/DpTIo0uwFVTMvuLTS0DR1wosEpBnw06SvK/yyBmyPXg6H" crossorigin="anonymous"></script>
 	<script nonce={ templ.GetNonce(ctx) }>
 	// Store TinyMCE editor instance
 	let tinymceEditor = null;
@@ -1976,6 +1986,12 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			promotion: false,
 			branding: false,
 			base_url: '/static/dist/js/tinymce',
+			// TinyMCE resolves plugins, themes, models, icons and skins from
+			// base_url at runtime. /static/dist/ is served with a one-year
+			// lifetime, so without a suffix a returning browser could pair a
+			// freshly upgraded core with year-old plugin assets. cache_suffix
+			// is TinyMCE's own hook for exactly this.
+			cache_suffix: document.getElementById('tinymce-config').dataset.cacheSuffix,
 			convert_urls: false,
 			codesample_languages: [
 				{ text: 'C', value: 'c' },

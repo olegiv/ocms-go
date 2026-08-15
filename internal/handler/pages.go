@@ -78,6 +78,7 @@ func defaultPagesSort(_, _ string) (string, string) {
 
 // PagesHandler handles page management routes.
 type PagesHandler struct {
+	db                    *sql.DB
 	queries               *store.Queries
 	renderer              *render.Renderer
 	sessionManager        *scs.SessionManager
@@ -92,6 +93,7 @@ type PagesHandler struct {
 // NewPagesHandler creates a new PagesHandler.
 func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *PagesHandler {
 	return &PagesHandler{
+		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
@@ -166,6 +168,7 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 // PagesListData holds data for the pages list template.
 type PagesListData struct {
 	Pages              []store.Page
+	PagePublicURLs     map[int64]string             // Canonical public URL by page ID; empty means not publicly routable
 	PageTags           map[int64][]store.Tag        // Map of page ID to tags
 	PageCategories     map[int64][]store.Category   // Map of page ID to categories
 	PageFeaturedImages map[int64]*FeaturedImageData // Map of page ID to featured image
@@ -296,8 +299,8 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 			pageFeaturedImages[p.ID] = &FeaturedImageData{
 				ID:        media.ID,
 				Filename:  media.Filename,
-				Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-				Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+				Filepath:  model.MediaURL(model.VariantOriginal, media.Uuid, media.Filename),
+				Thumbnail: model.MediaURL("thumbnail", media.Uuid, media.Filename),
 				Mimetype:  media.MimeType,
 			}
 		}
@@ -315,6 +318,15 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			pageLanguages[p.ID] = &language
+		}
+	}
+	pagePublicURLs := make(map[int64]string, len(pages))
+	defaultLanguage, defaultErr := h.queries.GetDefaultLanguage(r.Context())
+	if defaultErr == nil {
+		for _, p := range pages {
+			if language := pageLanguages[p.ID]; language != nil {
+				pagePublicURLs[p.ID] = publicPagePathWithLanguages(p, *language, defaultLanguage)
+			}
 		}
 	}
 
@@ -339,6 +351,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageCategories:     pageCategories,
 		PageFeaturedImages: pageFeaturedImages,
 		PageLanguages:      pageLanguages,
+		PagePublicURLs:     pagePublicURLs,
 		TotalCount:         totalCount,
 		StatusFilter:       statusFilter,
 		PageTypeFilter:     pageTypeFilter,
@@ -375,6 +388,7 @@ type FeaturedImageData struct {
 // PageFormData holds data for the page form template.
 type PageFormData struct {
 	Page          *store.Page
+	PublicURL     string
 	Tags          []store.Tag
 	Categories    []store.Category   // Selected categories for the page
 	AllCategories []PageCategoryNode // All categories for selection (with tree structure)
@@ -409,6 +423,31 @@ func (h *PagesHandler) loadPageLanguageInfo(ctx context.Context, page store.Page
 		return PageTranslationInfo{Language: lang, Page: p}
 	}
 	return loadLanguageInfo(ctx, h.queries, model.EntityTypePage, page.ID, page.LanguageCode, fetcher, maker)
+}
+
+func publicPagePath(ctx context.Context, queries *store.Queries, page store.Page) string {
+	defaultLanguage, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return ""
+	}
+	language, err := queries.GetLanguageByCode(ctx, page.LanguageCode)
+	if err != nil {
+		return ""
+	}
+	return publicPagePathWithLanguages(page, language, defaultLanguage)
+}
+
+func publicPagePathWithLanguages(page store.Page, language, defaultLanguage store.Language) string {
+	if page.Status != PageStatusPublished || !util.IsValidSlug(page.Slug) ||
+		!language.IsActive || language.Code != page.LanguageCode ||
+		!util.IsValidLangCode(language.Code) || util.IsReservedLanguageCode(language.Code) {
+		return ""
+	}
+	prefix := ""
+	if language.ID != defaultLanguage.ID || language.Code != defaultLanguage.Code {
+		prefix = "/" + language.Code
+	}
+	return prefix + "/" + page.Slug
 }
 
 // buildPageCategoryTree builds a flat list with depth for display.
@@ -519,6 +558,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Validate
 	validationErrors := make(map[string]string)
+	if _, err := getRoutableContentLanguage(r.Context(), h.queries, input.LanguageCode); err != nil {
+		validationErrors["language_code"] = "Select an active, routable language"
+	}
 
 	// Title validation
 	if err := validatePageTitle(input.Title); err != "" {
@@ -606,7 +648,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizedBody := h.normalizePageBodyForStorage(rawBody)
 
-	newPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
+	newPage, err := h.createPageGuarded(r.Context(), store.CreatePageParams{
 		Title:             input.Title,
 		Slug:              input.Slug,
 		Body:              normalizedBody,
@@ -632,6 +674,12 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
 	})
+	if errors.Is(err, errPageRouteTaken) {
+		// A language claimed the prefix between validation and this write.
+		flashError(w, r, h.renderer, redirectAdminPagesNew,
+			"Slug conflicts with the URL prefix of an active language")
+		return
+	}
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
 		flashError(w, r, h.renderer, redirectAdminPagesNew, "Error creating page")
@@ -742,6 +790,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	data := PageFormData{
 		Page:             &page,
+		PublicURL:        publicPagePath(r.Context(), h.queries, page),
 		Tags:             tags,
 		Categories:       categories,
 		AllCategories:    categoryTree,
@@ -850,6 +899,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 		data := PageFormData{
 			Page:          &existingPage,
+			PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
 			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
 			AllCategories: categoryTree,
 			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
@@ -888,7 +938,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizedBody := h.normalizePageBodyForStorage(rawBody)
 
-	updatedPage, err := h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
+	updatedPage, err := h.updatePageGuarded(r.Context(), store.UpdatePageParams{
 		ID:                id,
 		Title:             input.Title,
 		Slug:              input.Slug,
@@ -912,7 +962,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
-	})
+	}, existingPage.Slug)
+	if errors.Is(err, errPageRouteTaken) {
+		// A language claimed the prefix between validation and this write.
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id),
+			"Slug conflicts with the URL prefix of an active language")
+		return
+	}
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Error updating page")
@@ -1422,6 +1478,8 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to create translation link", "error", err)
 		// Page was created, so we should still redirect to it
+	} else if h.cacheManager != nil {
+		h.cacheManager.Translation.InvalidateType(model.EntityTypePage)
 	}
 
 	slog.Info("page translation created",
@@ -1631,6 +1689,9 @@ func validatePageTitle(title string) string {
 // validatePageSlugCreate validates a page slug for creation.
 // Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) string {
+	if conflict := h.languagePrefixConflict(ctx, slug); conflict != "" {
+		return conflict
+	}
 	return ValidateSlugWithChecker(slug, func() (int64, error) {
 		return h.queries.SlugOrAliasExists(ctx, store.SlugOrAliasExistsParams{
 			Slug:  slug,
@@ -1642,6 +1703,11 @@ func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) 
 // validatePageSlugUpdate validates the page slug for update (checks uniqueness excluding current page).
 // Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, currentSlug string, pageID int64) string {
+	if slug != currentSlug {
+		if conflict := h.languagePrefixConflict(ctx, slug); conflict != "" {
+			return conflict
+		}
+	}
 	return ValidateSlugForUpdate(slug, currentSlug, func() (int64, error) {
 		return h.queries.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{
 			Slug:   slug,
@@ -1650,6 +1716,111 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 			PageID: pageID,
 		})
 	})
+}
+
+// errPageRouteTaken reports that an active language claimed this page's first
+// path segment, discovered inside the write's own transaction.
+var errPageRouteTaken = errors.New("page route is taken by a language prefix")
+
+// createPageGuarded writes a page only if no active language owns its slug,
+// deciding both inside one transaction.
+//
+// Form validation checks the same thing beforehand, but a check outside the
+// write is advisory: an administrator activating the language "eng" while
+// another saves a page at "eng" leaves both requests looking at a clear
+// namespace, and both writes land. Reading the languages through this
+// transaction ties the answer to the write, so SQLite refuses the second
+// writer rather than interleaving them.
+func (h *PagesHandler) createPageGuarded(
+	ctx context.Context, params store.CreatePageParams,
+) (store.Page, error) {
+	return h.writePageGuarded(ctx, params.Slug, "", func(queries *store.Queries) (store.Page, error) {
+		return queries.CreatePage(ctx, params)
+	})
+}
+
+// updatePageGuarded is createPageGuarded for an edit. A slug left unchanged
+// skips the check, exactly as the form validation does: a language that
+// already shadows a stored page is a pre-existing condition, and refusing to
+// save any other edit to that page would trap its content.
+func (h *PagesHandler) updatePageGuarded(
+	ctx context.Context, params store.UpdatePageParams, currentSlug string,
+) (store.Page, error) {
+	return h.writePageGuarded(ctx, params.Slug, currentSlug, func(queries *store.Queries) (store.Page, error) {
+		return queries.UpdatePage(ctx, params)
+	})
+}
+
+func (h *PagesHandler) writePageGuarded(
+	ctx context.Context, slug, currentSlug string, write func(*store.Queries) (store.Page, error),
+) (store.Page, error) {
+	if h.db == nil {
+		// Never skip the guard quietly. A handler without a database handle
+		// cannot open the transaction this check depends on, and writing
+		// anyway would put back the unguarded path the transaction replaced.
+		return store.Page{}, errors.New("page write requires a database handle")
+	}
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return store.Page{}, fmt.Errorf("begin page write: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	queries := store.New(h.db).WithTx(tx)
+	if slug != currentSlug {
+		conflict, conflictErr := LanguagePrefixConflict(ctx, queries, slug)
+		if conflictErr != nil {
+			return store.Page{}, conflictErr
+		}
+		if conflict != "" {
+			return store.Page{}, errPageRouteTaken
+		}
+	}
+	page, err := write(queries)
+	if err != nil {
+		return store.Page{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return store.Page{}, fmt.Errorf("commit page write: %w", err)
+	}
+	return page, nil
+}
+
+// LanguagePrefixConflict reports the message for a page route that an active
+// language would swallow, or an empty string when the path is free.
+//
+// The language middleware runs ahead of the frontend router and strips a
+// leading segment that matches an active language code, so a page saved at
+// that segment can never be reached — the language homepage answers instead.
+// Slug uniqueness is checked only against pages and aliases and would let this
+// through silently, so the two namespaces are compared here.
+//
+// Exported because every path that writes a page slug owes callers the same
+// answer: the admin form, the v2 API, and anything added later. A path that
+// skips it stores a URL that resolves to something else.
+func LanguagePrefixConflict(ctx context.Context, queries *store.Queries, firstSegment string) (string, error) {
+	if firstSegment == "" || !util.IsRoutableLanguageCode(firstSegment) {
+		return "", nil
+	}
+	languages, err := queries.ListActiveLanguages(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list active languages: %w", err)
+	}
+	for _, language := range languages {
+		if language.Code == firstSegment {
+			return fmt.Sprintf("Conflicts with the URL prefix of active language %q", language.Code), nil
+		}
+	}
+	return "", nil
+}
+
+func (h *PagesHandler) languagePrefixConflict(ctx context.Context, firstSegment string) string {
+	conflict, err := LanguagePrefixConflict(ctx, h.queries, firstSegment)
+	if err != nil {
+		slog.Error("database error checking language prefixes", "error", err)
+		return "Error checking slug"
+	}
+	return conflict
 }
 
 // loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is
@@ -1665,8 +1836,8 @@ func (h *PagesHandler) loadImageData(ctx context.Context, id sql.NullInt64) *Fea
 	return &FeaturedImageData{
 		ID:        media.ID,
 		Filename:  media.Filename,
-		Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-		Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+		Filepath:  model.MediaURL(model.VariantOriginal, media.Uuid, media.Filename),
+		Thumbnail: model.MediaURL("thumbnail", media.Uuid, media.Filename),
 		Mimetype:  media.MimeType,
 	}
 }
@@ -1787,6 +1958,16 @@ func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasS
 		// Validate alias format (allows path-like aliases with slashes)
 		if !util.IsValidAlias(alias) {
 			slog.Warn("skipping invalid alias format", "page_id", pageID, "alias", alias)
+			continue
+		}
+		// An alias is matched against the path the language middleware has
+		// already stripped, so one beginning with an active language code —
+		// "eng" or "eng/team" — is dead on arrival. Storing it would only
+		// promise a URL that never resolves.
+		firstSegment, _, _ := strings.Cut(alias, "/")
+		if conflict := h.languagePrefixConflict(ctx, firstSegment); conflict != "" {
+			slog.Warn("skipping alias that a language prefix would shadow",
+				"page_id", pageID, "alias", alias, "reason", conflict)
 			continue
 		}
 		_, err := h.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{

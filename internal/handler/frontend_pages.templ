@@ -320,7 +320,7 @@ templ FrontendNotFoundPage(data NotFoundData) {
 				<p class="fe-404-text mt-4 text-2xl font-semibold text-foreground">Page not found</p>
 				<p class="fe-404-sub mt-2 text-muted-foreground">The page you're looking for doesn't exist or has been moved.</p>
 				<div class="mt-8">
-					@button.Button(button.Props{Href: data.BaseTemplateData.LangPrefix + "/"}) {
+					@button.Button(button.Props{Href: data.BaseTemplateData.HomeURL}) {
 						Go Home
 					}
 				</div>

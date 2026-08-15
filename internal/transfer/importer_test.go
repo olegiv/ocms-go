@@ -4,13 +4,20 @@
 package transfer
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,6 +36,45 @@ func TestImportOptions_Defaults(t *testing.T) {
 	assert.True(t, opts.ImportForms)
 	assert.True(t, opts.ImportConfig)
 	assert.True(t, opts.ImportLanguages)
+}
+
+func TestJSONImportRejectsMediaFileRestoreOption(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	data := &ExportData{Version: ExportVersion, Pages: []ExportPage{{
+		ID: 1, Title: "ZIP-only files", Slug: "zip-only-files", Status: "draft",
+		AuthorEmail: ts.User.Email,
+	}}}
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	importer := NewImporter(ts.Queries, ts.DB, slog.Default())
+
+	for _, dryRun := range []bool{true, false} {
+		for _, entryPoint := range []string{"data", "reader"} {
+			t.Run(entryPoint+"/dry_run="+strconv.FormatBool(dryRun), func(t *testing.T) {
+				opts := ImportOptions{
+					DryRun: dryRun, ConflictStrategy: ConflictSkip,
+					ImportPages: true, ImportMediaFiles: true,
+				}
+				var result *ImportResult
+				var importErr error
+				if entryPoint == "reader" {
+					result, importErr = importer.ImportFromReader(ts.Ctx, bytes.NewReader(encoded), opts)
+				} else {
+					result, importErr = importer.Import(ts.Ctx, data, opts)
+				}
+				if importErr == nil || result == nil || result.Success ||
+					!strings.Contains(importErr.Error(), "media file import requires a ZIP archive") {
+					t.Fatalf("Import() = (%+v, %v)", result, importErr)
+				}
+			})
+		}
+	}
+	if _, err := ts.Queries.GetPageBySlug(ts.Ctx, "zip-only-files"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("rejected JSON import page lookup = %v, want sql.ErrNoRows", err)
+	}
 }
 
 func TestImportResult_Operations(t *testing.T) {
@@ -87,7 +133,7 @@ func TestImporter_Validate(t *testing.T) {
 				Version:    "1.0",
 				ExportedAt: time.Now(),
 				Languages: []ExportLanguage{
-					{Code: "en", Name: "English", NativeName: "English"},
+					{Code: "en", Name: "English", NativeName: "English", IsActive: true, IsDefault: true},
 				},
 				Users: []ExportUser{
 					{Email: "test@example.com", Name: "Test", Role: "admin"},
@@ -102,7 +148,7 @@ func TestImporter_Validate(t *testing.T) {
 					{ID: 1, Title: "Test", Slug: "test"},
 				},
 				Media: []ExportMedia{
-					{UUID: "test-uuid", Filename: "test.jpg"},
+					{UUID: "550e8400-e29b-41d4-a716-446655440000", Filename: "test.jpg"},
 				},
 				Menus: []ExportMenu{
 					{ID: 1, Name: "Test", Slug: "test"},
@@ -131,6 +177,50 @@ func TestImporter_Validate(t *testing.T) {
 			},
 			expectErrors:  true,
 			errorContains: "language code",
+		},
+		{
+			name: "active invalid language code",
+			data: &ExportData{
+				Version: "1.0",
+				Languages: []ExportLanguage{
+					{Code: "x", Name: "Legacy invalid", NativeName: "Legacy invalid", IsActive: true},
+				},
+			},
+			expectErrors:  true,
+			errorContains: "invalid format",
+		},
+		{
+			name: "active reserved language code",
+			data: &ExportData{
+				Version: "1.0",
+				Languages: []ExportLanguage{
+					{Code: "blog", Name: "Legacy reserved", NativeName: "Legacy reserved", IsActive: true},
+				},
+			},
+			expectErrors:  true,
+			errorContains: "reserved route prefix",
+		},
+		{
+			name: "inactive invalid and reserved language codes remain remediable",
+			data: &ExportData{
+				Version: "1.0",
+				Languages: []ExportLanguage{
+					{Code: "en", Name: "English", NativeName: "English", IsActive: true, IsDefault: true},
+					{Code: "x", Name: "Legacy invalid", NativeName: "Legacy invalid"},
+					{Code: "blog", Name: "Legacy reserved", NativeName: "Legacy reserved"},
+				},
+			},
+		},
+		{
+			name: "inactive default language is rejected",
+			data: &ExportData{
+				Version: "1.0",
+				Languages: []ExportLanguage{
+					{Code: "en", Name: "English", NativeName: "English", IsDefault: true},
+				},
+			},
+			expectErrors:  true,
+			errorContains: "default language",
 		},
 		{
 			name: "missing user email",
@@ -230,6 +320,98 @@ func TestImporter_Validate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestImporterValidateMediaUUIDShape(t *testing.T) {
+	tests := []struct {
+		name      string
+		mediaUUID string
+		wantError bool
+	}{
+		{name: "canonical lowercase", mediaUUID: "550e8400-e29b-41d4-a716-446655440000"},
+		{name: "canonical uppercase", mediaUUID: "550E8400-E29B-41D4-A716-446655440000"},
+		{name: "readable noncanonical", mediaUUID: "legacy-media-1", wantError: true},
+		{name: "URN", mediaUUID: "urn:uuid:550e8400-e29b-41d4-a716-446655440000", wantError: true},
+		{name: "braced", mediaUUID: "{550e8400-e29b-41d4-a716-446655440000}", wantError: true},
+		{name: "unhyphenated", mediaUUID: "550e8400e29b41d4a716446655440000", wantError: true},
+		{name: "short", mediaUUID: "550e8400-e29b-41d4-a716-44665544000", wantError: true},
+		{name: "long", mediaUUID: "550e8400-e29b-41d4-a716-4466554400000", wantError: true},
+		{name: "wrong hyphen position", mediaUUID: "550e840-0e29b-41d4-a716-446655440000", wantError: true},
+		{name: "nonhex", mediaUUID: "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz", wantError: true},
+		{name: "leading whitespace", mediaUUID: " 550e8400-e29b-41d4-a716-446655440000", wantError: true},
+		{name: "trailing whitespace", mediaUUID: "550e8400-e29b-41d4-a716-446655440000 ", wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := NewImporter(nil, nil, nil).Validate(&ExportData{
+				Version: ExportVersion,
+				Media:   []ExportMedia{{UUID: tt.mediaUUID, Filename: "report.pdf"}},
+			})
+			if tt.wantError {
+				if len(errs) == 0 || !containsIgnoreCase(errs[0].Message, "canonical UUID") {
+					t.Fatalf("Validate() errors = %v, want canonical UUID rejection", errs)
+				}
+				return
+			}
+			if len(errs) != 0 {
+				t.Fatalf("Validate() errors = %v, want accepted UUID", errs)
+			}
+		})
+	}
+}
+
+func TestImporter_LegacyReservedLanguageCanOnlyBeImportedInactive(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+
+	legacy, err := ts.Queries.CreateLanguage(ts.Ctx, store.CreateLanguageParams{
+		Code:       "blog",
+		Name:       "Legacy reserved",
+		NativeName: "Legacy reserved",
+		IsActive:   true,
+		Direction:  "ltr",
+		Position:   1,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
+	})
+	require.NoError(t, err)
+
+	importer := NewImporter(ts.Queries, ts.DB, slog.Default())
+	opts := DefaultImportOptions()
+	opts.ConflictStrategy = ConflictOverwrite
+	data := &ExportData{
+		Version: ExportVersion,
+		Languages: []ExportLanguage{
+			{
+				Code: "en", Name: "English", NativeName: "English",
+				IsDefault: true, IsActive: true, Direction: "ltr",
+			},
+			{
+				Code:       "blog",
+				Name:       "Legacy reserved",
+				NativeName: "Legacy reserved",
+				IsActive:   false,
+				Direction:  "ltr",
+				Position:   1,
+			},
+		},
+	}
+
+	result, err := importer.Import(ts.Ctx, data, opts)
+	require.NoError(t, err)
+	require.True(t, result.Success, "import errors: %v", result.Errors)
+	updated, err := ts.Queries.GetLanguageByID(ts.Ctx, legacy.ID)
+	require.NoError(t, err)
+	assert.False(t, updated.IsActive)
+
+	data.Languages[1].IsActive = true
+	result, err = importer.Import(ts.Ctx, data, opts)
+	require.ErrorContains(t, err, "validation failed")
+	require.False(t, result.Success)
+	updated, err = ts.Queries.GetLanguageByID(ts.Ctx, legacy.ID)
+	require.NoError(t, err)
+	assert.False(t, updated.IsActive, "rejected import must not reactivate reserved language")
 }
 
 func TestImporter_ImportFromFile_NotExists(t *testing.T) {

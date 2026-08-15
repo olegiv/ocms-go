@@ -205,6 +205,7 @@ type FormListItem struct {
 	Form            store.Form
 	SubmissionCount int64
 	UnreadCount     int64
+	PublicURL       string
 }
 
 // formInput holds parsed form input values.
@@ -425,10 +426,46 @@ func (h *FormsHandler) verifyCaptcha(ctx context.Context, r *http.Request, lang 
 // getActiveFormBySlug retrieves a form by slug and checks if it's active.
 // Returns nil if form not found or inactive (response already sent).
 func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Request, slug string) *store.Form {
-	form, err := h.queries.GetFormBySlug(r.Context(), slug)
+	var routeLanguage store.Language
+	var err error
+	prefix := middleware.GetLanguagePrefix(r)
+	if prefix != "" {
+		routeLanguage, err = h.queries.GetLanguageByCode(r.Context(), prefix)
+	} else {
+		routeLanguage, err = h.queries.GetDefaultLanguage(r.Context())
+	}
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.frontendHandler.NotFound(w, r)
+			h.publicFormNotFound(w, r)
+		} else {
+			slog.Error("failed to resolve public form route language", "error", err, "slug", slug)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return nil
+	}
+	if !routeLanguage.IsActive || !util.IsValidLangCode(routeLanguage.Code) ||
+		util.IsReservedLanguageCode(routeLanguage.Code) {
+		h.publicFormNotFound(w, r)
+		return nil
+	}
+
+	form, err := h.queries.GetFormBySlugAndLanguage(r.Context(), store.GetFormBySlugAndLanguageParams{
+		Slug: slug, LanguageCode: routeLanguage.Code,
+	})
+	if errors.Is(err, sql.ErrNoRows) && prefix == "" {
+		// Old data and third-party callers may have inserted an empty code before
+		// language_code became mandatory in the admin flow. It belongs only to
+		// the default, unprefixed namespace; never let it claim a prefix.
+		form, err = h.queries.GetFormBySlugAndLanguage(r.Context(), store.GetFormBySlugAndLanguageParams{
+			Slug: slug, LanguageCode: "",
+		})
+		if err == nil {
+			form.LanguageCode = routeLanguage.Code
+		}
+	}
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.publicFormNotFound(w, r)
 		} else {
 			slog.Error("failed to get form", "error", err, "slug", slug)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -437,10 +474,18 @@ func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Reques
 	}
 
 	if !form.IsActive {
-		h.frontendHandler.NotFound(w, r)
+		h.publicFormNotFound(w, r)
 		return nil
 	}
 	return &form
+}
+
+func (h *FormsHandler) publicFormNotFound(w http.ResponseWriter, r *http.Request) {
+	if h.frontendHandler != nil {
+		h.frontendHandler.NotFound(w, r)
+		return
+	}
+	http.NotFound(w, r)
 }
 
 // updateLanguageContext updates the request context with the form's language.
@@ -451,7 +496,8 @@ func (h *FormsHandler) updateLanguageContext(w http.ResponseWriter, r *http.Requ
 	}
 
 	formLang, err := h.queries.GetLanguageByCode(r.Context(), languageCode)
-	if err != nil {
+	if err != nil || !formLang.IsActive || !util.IsValidLangCode(formLang.Code) ||
+		util.IsReservedLanguageCode(formLang.Code) {
 		return r
 	}
 
@@ -508,6 +554,7 @@ func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 			Form:            form,
 			SubmissionCount: submissionCount,
 			UnreadCount:     unreadCount,
+			PublicURL:       publicFormPath(r.Context(), h.queries, form),
 		}
 	}
 
@@ -538,6 +585,7 @@ type FormFormData struct {
 	AllLanguages     []store.Language      // All active languages for selection
 	Translations     []FormTranslationInfo // Existing translations
 	MissingLanguages []store.Language      // Languages without translations
+	PublicURL        string
 }
 
 // NewForm handles GET /admin/forms/new - displays the new form form.
@@ -580,13 +628,13 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Get default language for form creation
 	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
-	if err != nil {
+	if err != nil || !isRoutableContentLanguage(defaultLang) {
 		slog.Error("failed to get default language", "error", err)
 		flashError(w, r, h.renderer, redirectAdminFormsNew, "Error creating form")
 		return
 	}
 
-	// Check slug uniqueness for this language
+	// Public forms are scoped by their language route.
 	if validationErrors["slug"] == "" && input.Slug != "" {
 		exists, err := h.queries.FormSlugExistsForLanguage(r.Context(), store.FormSlugExistsForLanguageParams{
 			Slug:         input.Slug,
@@ -669,6 +717,7 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		AllLanguages:     langInfo.AllLanguages,
 		Translations:     langInfo.Translations,
 		MissingLanguages: langInfo.MissingLanguages,
+		PublicURL:        publicFormPath(r.Context(), h.queries, *form),
 	}
 
 	h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), formsEditBreadcrumbs(lang, form.Name, form.ID))
@@ -699,7 +748,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	input := parseFormInput(r)
 	validationErrors := validateFormInput(&input)
 
-	// Check slug uniqueness for this language (Update: only if slug changed)
+	// Public form slugs are unique within the form's language route.
 	if validationErrors["slug"] == "" && input.Slug != "" && input.Slug != form.Slug {
 		exists, err := h.queries.FormSlugExistsExcludingForLanguage(r.Context(), store.FormSlugExistsExcludingForLanguageParams{
 			Slug:         input.Slug,
@@ -1067,7 +1116,7 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build template data with theme support
-	base := h.getBaseTemplateData(r, form.Title)
+	base := h.getPublicFormBaseTemplateData(r, *form)
 	data := FormTemplateData{
 		BaseTemplateData: base,
 		Form:             *form,
@@ -1352,7 +1401,7 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Build template data with theme support
-	base := h.getBaseTemplateData(r, form.Title)
+	base := h.getPublicFormBaseTemplateData(r, form)
 	data := FormTemplateData{
 		BaseTemplateData: base,
 		Form:             form,
@@ -1368,7 +1417,7 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 // renderFormSuccess renders the form success page.
 func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request, form store.Form, fields []store.FormField) {
 	// Build template data with theme support
-	base := h.getBaseTemplateData(r, form.Title)
+	base := h.getPublicFormBaseTemplateData(r, form)
 	data := FormTemplateData{
 		BaseTemplateData: base,
 		Form:             form,
@@ -1414,6 +1463,7 @@ type SubmissionsListData struct {
 	TotalCount  int64
 	UnreadCount int64
 	Pagination  AdminPagination
+	PublicURL   string
 }
 
 var formSubmissionsSortableFields = map[string]SortConfig{
@@ -1511,6 +1561,7 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 		TotalCount:  totalCount,
 		UnreadCount: unreadCount,
 		Pagination:  pagination,
+		PublicURL:   publicFormPath(r.Context(), h.queries, *form),
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer,
@@ -1932,9 +1983,11 @@ func (h *FormsHandler) setupFormTranslation(
 		return nil, false
 	}
 
-	// Generate a unique slug using FormSlugExists
+	// Generate a unique slug within the target language's public form route.
 	translatedSlug, err := generateUniqueSlug(sourceSlug, langCode, func(slug string) (int64, error) {
-		return h.queries.FormSlugExists(r.Context(), slug)
+		return h.queries.FormSlugExistsForLanguage(r.Context(), store.FormSlugExistsForLanguageParams{
+			Slug: slug, LanguageCode: langCode,
+		})
 	})
 	if err != nil {
 		slog.Error("database error checking slug", "error", err)
@@ -2029,6 +2082,8 @@ func (h *FormsHandler) TranslateForm(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to create translation link", "error", err)
 		// Form was created, so we should still redirect to it
+	} else if h.cacheManager != nil {
+		h.cacheManager.Translation.InvalidateType(model.EntityTypeForm)
 	}
 
 	slog.Info("form translation created",
@@ -2189,4 +2244,46 @@ func (h *FormsHandler) getBaseTemplateData(r *http.Request, title string) BaseTe
 	data := h.frontendHandler.getBaseTemplateData(r, title, "")
 	data.ShowSidebar = false
 	return data
+}
+
+// getPublicFormBaseTemplateData keeps default-language forms unprefixed and
+// non-default forms below their verified language route.
+func (h *FormsHandler) getPublicFormBaseTemplateData(r *http.Request, form store.Form) BaseTemplateData {
+	data := h.getBaseTemplateData(r, form.Title)
+	if data.SiteURL != "" && util.IsValidSlug(form.Slug) {
+		canonical := strings.TrimRight(data.SiteURL, "/") + data.LangPrefix + "/forms/" + form.Slug
+		data.Canonical = canonical
+		data.OGURL = canonical
+	}
+	if data.ShowLanguagePicker {
+		data.Translations, data.HrefLangs = h.frontendHandler.getFormTranslations(
+			r.Context(), form.ID, data.LangCode, data.SiteURL,
+		)
+	}
+	return data
+}
+
+func publicFormPath(ctx context.Context, queries *store.Queries, form store.Form) string {
+	if !util.IsValidSlug(form.Slug) {
+		return ""
+	}
+	defaultLanguage, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return ""
+	}
+	var language store.Language
+	if form.LanguageCode == "" {
+		language = defaultLanguage
+	} else {
+		language, err = queries.GetLanguageByCode(ctx, form.LanguageCode)
+	}
+	if err != nil || !language.IsActive || !util.IsValidLangCode(language.Code) ||
+		util.IsReservedLanguageCode(language.Code) {
+		return ""
+	}
+	prefix := ""
+	if language.ID != defaultLanguage.ID || language.Code != defaultLanguage.Code {
+		prefix = "/" + language.Code
+	}
+	return prefix + "/forms/" + form.Slug
 }

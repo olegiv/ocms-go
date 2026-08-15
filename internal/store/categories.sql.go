@@ -211,6 +211,19 @@ func (q *Queries) GetCategoriesForPage(ctx context.Context, pageID int64) ([]Cat
 }
 
 const getCategoryAvailableTranslations = `-- name: GetCategoryAvailableTranslations :many
+WITH RECURSIVE translation_component(entity_id) AS (
+    SELECT CAST(?1 AS INTEGER) AS entity_id FROM (SELECT 1 AS seed)
+    UNION
+    SELECT CASE
+        WHEN t.entity_id = translation_component.entity_id THEN t.translation_id
+        ELSE t.entity_id
+    END AS entity_id
+    FROM translations t
+    INNER JOIN translation_component
+        ON t.entity_id = translation_component.entity_id
+        OR t.translation_id = translation_component.entity_id
+    WHERE t.entity_type = 'category'
+)
 SELECT
     l.id as language_id,
     l.code as language_code,
@@ -223,34 +236,13 @@ SELECT
     COALESCE(c.name, '') as category_name
 FROM languages l
 LEFT JOIN (
-    -- Get categories that are translations of the source category
     SELECT c.id, c.slug, c.name, c.language_code
     FROM categories c
-    INNER JOIN translations t ON t.translation_id = c.id
-    WHERE t.entity_type = 'category' AND t.entity_id = ?
-    UNION
-    -- Get the source category itself
-    SELECT c.id, c.slug, c.name, c.language_code
-    FROM categories c
-    WHERE c.id = ?
-    UNION
-    -- Get categories where current category is a translation (sibling translations)
-    SELECT c2.id, c2.slug, c2.name, c2.language_code
-    FROM translations t
-    INNER JOIN categories c2 ON (c2.id = t.entity_id OR c2.id = t.translation_id)
-    WHERE t.entity_type = 'category'
-    AND (t.entity_id = ? OR t.translation_id = ?)
+    INNER JOIN translation_component tc ON tc.entity_id = c.id
 ) c ON c.language_code = l.code
 WHERE l.is_active = 1
 ORDER BY l.position
 `
-
-type GetCategoryAvailableTranslationsParams struct {
-	EntityID      int64 `json:"entity_id"`
-	ID            int64 `json:"id"`
-	EntityID_2    int64 `json:"entity_id_2"`
-	TranslationID int64 `json:"translation_id"`
-}
 
 type GetCategoryAvailableTranslationsRow struct {
 	LanguageID         int64  `json:"language_id"`
@@ -265,14 +257,10 @@ type GetCategoryAvailableTranslationsRow struct {
 }
 
 // Get all available translations for a category (for language switcher)
-// Note: translations table still uses language_id to reference the target language
-func (q *Queries) GetCategoryAvailableTranslations(ctx context.Context, arg GetCategoryAvailableTranslationsParams) ([]GetCategoryAvailableTranslationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getCategoryAvailableTranslations,
-		arg.EntityID,
-		arg.ID,
-		arg.EntityID_2,
-		arg.TranslationID,
-	)
+// Translation edges are traversed as an undirected connected component so a
+// sibling remains visible even when it is more than one hop from this category.
+func (q *Queries) GetCategoryAvailableTranslations(ctx context.Context, entityID int64) ([]GetCategoryAvailableTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getCategoryAvailableTranslations, entityID)
 	if err != nil {
 		return nil, err
 	}
@@ -525,7 +513,8 @@ const getCategoryUsageCountsByLanguage = `-- name: GetCategoryUsageCountsByLangu
 SELECT c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.created_at, c.updated_at, c.language_code, COUNT(p.id) as usage_count
 FROM categories c
 INNER JOIN page_categories pc ON pc.category_id = c.id
-INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND p.language_code = ?
+INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND p.language_code = ?1
+WHERE c.language_code = ?1
 GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_code, c.created_at, c.updated_at
 ORDER BY c.position, c.name
 `
@@ -543,7 +532,7 @@ type GetCategoryUsageCountsByLanguageRow struct {
 	UsageCount   int64          `json:"usage_count"`
 }
 
-// Category usage counts filtered by page language (for frontend sidebar)
+// Category usage counts filtered by both page and category language (for frontend sidebar)
 func (q *Queries) GetCategoryUsageCountsByLanguage(ctx context.Context, languageCode string) ([]GetCategoryUsageCountsByLanguageRow, error) {
 	rows, err := q.db.QueryContext(ctx, getCategoryUsageCountsByLanguage, languageCode)
 	if err != nil {
@@ -746,13 +735,18 @@ func (q *Queries) ListCategoriesByLanguage(ctx context.Context, languageCode str
 }
 
 const listCategoriesForSitemap = `-- name: ListCategoriesForSitemap :many
-SELECT id, slug, updated_at FROM categories ORDER BY updated_at DESC
+SELECT c.id, c.slug, c.updated_at, c.language_code, l.is_default
+FROM categories c
+INNER JOIN languages l ON l.code = c.language_code AND l.is_active = 1
+ORDER BY c.updated_at DESC
 `
 
 type ListCategoriesForSitemapRow struct {
-	ID        int64     `json:"id"`
-	Slug      string    `json:"slug"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           int64     `json:"id"`
+	Slug         string    `json:"slug"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	LanguageCode string    `json:"language_code"`
+	IsDefault    bool      `json:"is_default"`
 }
 
 func (q *Queries) ListCategoriesForSitemap(ctx context.Context) ([]ListCategoriesForSitemapRow, error) {
@@ -764,7 +758,13 @@ func (q *Queries) ListCategoriesForSitemap(ctx context.Context) ([]ListCategorie
 	items := []ListCategoriesForSitemapRow{}
 	for rows.Next() {
 		var i ListCategoriesForSitemapRow
-		if err := rows.Scan(&i.ID, &i.Slug, &i.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.UpdatedAt,
+			&i.LanguageCode,
+			&i.IsDefault,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

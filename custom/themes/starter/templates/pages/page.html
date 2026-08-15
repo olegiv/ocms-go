@@ -66,7 +66,7 @@
         <div class="st-article__category">
             <span class="st-label">{{if gt (len .Page.Categories) 1}}{{TTheme $.LangCode "frontend.categories_label"}}{{else}}{{TTheme $.LangCode "frontend.category_label"}}{{end}}</span>
             {{range .Page.Categories}}
-            <a href="{{$.LangPrefix}}/category/{{.Slug}}" class="st-category">{{.Name}}</a>
+            <a href="{{.URL}}" class="st-category">{{.Name}}</a>
             {{end}}
         </div>
         {{end}}
@@ -74,7 +74,7 @@
         <div class="st-article__tags">
             <span class="st-label">{{TTheme $.LangCode "frontend.tags_label"}}</span>
             {{range .Page.Tags}}
-            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="st-tag">{{.Name}}</a>
+            <a href="{{.URL}}" class="st-tag">{{.Name}}</a>
             {{end}}
         </div>
         {{end}}

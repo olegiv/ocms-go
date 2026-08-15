@@ -7,7 +7,7 @@
         <ul class="category-list">
             {{range .Categories}}
             <li>
-                <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
+                <a href="{{.URL}}">{{.Name}}</a>
                 {{if .PageCount}}<span class="count">({{.PageCount}})</span>{{end}}
             </li>
             {{end}}
@@ -21,7 +21,7 @@
         <h3 class="widget-title">{{TTheme .LangCode "sidebar.tags"}}</h3>
         <div class="tag-cloud">
             {{range .Tags}}
-            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+            <a href="{{.URL}}" class="tag">{{.Name}}</a>
             {{end}}
         </div>
     </div>

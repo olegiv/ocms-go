@@ -6,6 +6,7 @@
 package elefant
 
 import (
+	"context"
 	"os"
 	"testing"
 )
@@ -51,14 +52,17 @@ func TestImportFromElefant(t *testing.T) {
 
 	// Test reading posts (this exercises schema detection)
 	t.Run("ReadPosts", func(t *testing.T) {
-		dsn := source.buildDSN(cfg)
-		reader, err := NewReader(dsn, cfg["table_prefix"])
+		dsn, err := source.buildDSN(cfg)
+		if err != nil {
+			t.Fatalf("buildDSN failed: %v", err)
+		}
+		reader, err := NewReader(context.Background(), dsn, cfg["table_prefix"])
 		if err != nil {
 			t.Fatalf("NewReader failed: %v", err)
 		}
 		defer func() { _ = reader.Close() }()
 
-		posts, err := reader.GetBlogPosts()
+		posts, err := reader.GetBlogPosts(context.Background())
 		if err != nil {
 			t.Fatalf("GetBlogPosts failed: %v", err)
 		}
@@ -83,14 +87,17 @@ func TestSlugGeneration(t *testing.T) {
 
 	source := NewSource()
 	cfg := buildTestConfig()
-	dsn := source.buildDSN(cfg)
-	reader, err := NewReader(dsn, cfg["table_prefix"])
+	dsn, err := source.buildDSN(cfg)
+	if err != nil {
+		t.Fatalf("buildDSN failed: %v", err)
+	}
+	reader, err := NewReader(context.Background(), dsn, cfg["table_prefix"])
 	if err != nil {
 		t.Fatalf("NewReader failed: %v", err)
 	}
 	defer func() { _ = reader.Close() }()
 
-	posts, err := reader.GetBlogPosts()
+	posts, err := reader.GetBlogPosts(context.Background())
 	if err != nil {
 		t.Fatalf("GetBlogPosts failed: %v", err)
 	}

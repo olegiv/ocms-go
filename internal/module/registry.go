@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,12 @@ type Registry struct {
 	ctx           *Context
 	logger        *slog.Logger
 	mu            sync.RWMutex
+	// publicRoutes records route shapes as modules register them on the real
+	// application router. RegisterRoutes is not replayed: implementations may
+	// allocate middleware or have other side effects. All registered modules,
+	// including inactive ones, pass through RouteAll, so later activation cannot
+	// expose a route shadowed by an imported database redirect.
+	publicRoutes map[string]map[string]struct{}
 }
 
 // NewRegistry creates a new module registry.
@@ -45,6 +52,7 @@ func NewRegistry(logger *slog.Logger) *Registry {
 		activeStatus:  make(map[string]bool),
 		sidebarStatus: make(map[string]bool),
 		initStatus:    make(map[string]bool),
+		publicRoutes:  make(map[string]map[string]struct{}),
 		logger:        logger,
 	}
 }
@@ -96,6 +104,10 @@ func (r *Registry) List() []Module {
 func (r *Registry) InitAll(ctx *Context) error {
 	r.mu.Lock()
 	r.ctx = ctx
+	// Expose the registry through a narrow capability rather than making
+	// modules depend on its concrete type. Imports happen only after startup,
+	// when all public route declarations are available.
+	ctx.PublicRouteChecker = r
 	r.mu.Unlock()
 
 	// First, verify all dependencies are met
@@ -145,6 +157,62 @@ func (r *Registry) InitAll(ctx *Context) error {
 	}
 
 	return nil
+}
+
+// OwnsPublicPath reports whether any registered module owns path for at least
+// one HTTP method. Redirect middleware runs before method routing, so a GET
+// redirect must not steal a POST-only endpoint such as /analytics/read.
+func (r *Registry) OwnsPublicPath(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, method := range []string{
+		http.MethodConnect,
+		http.MethodDelete,
+		http.MethodGet,
+		http.MethodHead,
+		http.MethodOptions,
+		http.MethodPatch,
+		http.MethodPost,
+		http.MethodPut,
+		http.MethodTrace,
+	} {
+		if patterns := r.publicRoutes[method]; routePatternsOwnPath(patterns, method, path) {
+			return true
+		}
+	}
+	return false
+}
+
+func routePatternsOwnPath(patterns map[string]struct{}, method, path string) bool {
+	for pattern := range patterns {
+		matcher := chi.NewRouter()
+		matcher.Method(method, pattern, http.NotFoundHandler())
+		if matcher.Match(chi.NewRouteContext(), method, path) {
+			return true
+		}
+	}
+	return false
+}
+
+func routePatternSnapshot(routes chi.Routes) map[string]map[string]struct{} {
+	snapshot := make(map[string]map[string]struct{})
+	_ = chi.Walk(routes, func(method, pattern string, _ http.Handler,
+		_ ...func(http.Handler) http.Handler) error {
+		if snapshot[method] == nil {
+			snapshot[method] = make(map[string]struct{})
+		}
+		snapshot[method][pattern] = struct{}{}
+		return nil
+	})
+	return snapshot
 }
 
 // checkDependencies verifies that all module dependencies are registered.
@@ -344,6 +412,16 @@ func (r *Registry) SetActive(name string, active bool) error {
 	ctx := r.ctx
 	r.mu.Unlock()
 
+	// A module may veto its own activation. Startup posture audits cannot cover
+	// this path: they ran before the operator flipped the switch.
+	if active {
+		if guard, ok := m.(ActivationGuard); ok {
+			if err := guard.CheckActivation(ctx); err != nil {
+				return fmt.Errorf("refusing to activate module %q: %w", name, err)
+			}
+		}
+	}
+
 	// Initialize the module if needed (outside lock, matching InitAll pattern)
 	if needsInit {
 		r.logger.Info("initializing module on activation", "name", name)
@@ -512,9 +590,23 @@ func (r *Registry) routeAllWithFunc(router chi.Router, isAdmin bool, registerFun
 
 // RouteAll registers all module public routes with active status middleware.
 func (r *Registry) RouteAll(router chi.Router) {
+	// Diff the real router before and after this single registration pass.
+	// Calling RegisterRoutes again on a scratch router is unsafe: modules may
+	// allocate rate limiters, start goroutines, or perform other setup there.
+	before := routePatternSnapshot(router)
 	r.routeAllWithFunc(router, false, func(m Module, subRouter chi.Router) {
 		m.RegisterRoutes(subRouter)
 	})
+
+	after := routePatternSnapshot(router)
+	for method, patterns := range after {
+		for pattern := range before[method] {
+			delete(patterns, pattern)
+		}
+	}
+	r.mu.Lock()
+	r.publicRoutes = after
+	r.mu.Unlock()
 }
 
 // AdminRouteAll registers all module admin routes with active status middleware.

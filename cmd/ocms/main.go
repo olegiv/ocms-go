@@ -126,7 +126,7 @@ func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 
 		// Build target URL
 		var targetPath string
-		lang := chi.URLParam(req, "lang")
+		lang := middleware.GetLanguagePrefix(req)
 		if lang != "" {
 			// Validate language code to prevent open URL redirect (CWE-601)
 			if !util.IsValidLangCode(lang) {
@@ -146,6 +146,21 @@ func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 		}
 		http.Redirect(w, req, target.String(), http.StatusMovedPermanently)
 	})
+}
+
+// mountLanguageAwareFrontendRoutes mounts a child router whose language
+// middleware runs before endpoint selection. This lets the middleware strip a
+// verified active language prefix while leaving inactive one-segment paths for
+// the normal page-slug route.
+func mountLanguageAwareFrontendRoutes(
+	r chi.Router,
+	languageMiddleware func(http.Handler) http.Handler,
+	configure func(chi.Router),
+) {
+	frontendRouter := chi.NewRouter()
+	frontendRouter.Use(languageMiddleware)
+	configure(frontendRouter)
+	r.Mount(handler.RouteRoot, frontendRouter)
 }
 
 func logSeedingSecuritySignals(ctx context.Context, cfg *config.Config, events *service.EventService, hasDefaultAdminCreds bool) {
@@ -756,21 +771,17 @@ func auditRequiredSuspiciousPageHTMLPosture(ctx context.Context, db *sql.DB) err
 
 // initI18nFromDB updates i18n settings from database (active languages, default language).
 func initI18nFromDB(ctx context.Context, queries *store.Queries) {
-	if activeLanguages, err := queries.ListActiveLanguages(ctx); err == nil {
-		var activeCodes []string
-		for _, lang := range activeLanguages {
-			activeCodes = append(activeCodes, lang.Code)
-		}
-		i18n.SetActiveLanguages(activeCodes)
-		slog.Info("i18n active languages set from database", "languages", activeCodes)
+	activeLanguages, activeErr := queries.ListActiveLanguages(ctx)
+	defaultLang, defaultErr := queries.GetDefaultLanguage(ctx)
+	if activeErr != nil || defaultErr != nil {
+		return
 	}
-
-	if defaultLang, err := queries.GetDefaultLanguage(ctx); err == nil {
-		if i18n.IsSupported(defaultLang.Code) {
-			i18n.SetDefaultLanguage(defaultLang.Code)
-			slog.Info("i18n default language set from database", "language", defaultLang.Code)
-		}
+	activeCodes := make([]string, 0, len(activeLanguages))
+	for _, lang := range activeLanguages {
+		activeCodes = append(activeCodes, lang.Code)
 	}
+	i18n.ConfigureLanguages(activeCodes, defaultLang.Code)
+	slog.Info("i18n languages set from database", "active", activeCodes, "default", defaultLang.Code)
 }
 
 // initCacheManager creates and starts the cache manager, preloads caches.
@@ -973,6 +984,13 @@ func runPostModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql
 		if err := auditRequiredFormCaptchaPosture(ctx, db, hookRegistry, captchaVerifierEnabled); err != nil {
 			return err
 		}
+	}
+	if cfg.RequireMigratorAllowedDBHosts &&
+		strings.TrimSpace(cfg.MigratorAllowedDBHosts) == "" &&
+		moduleRegistry.IsActive("migrator") {
+		return fmt.Errorf(
+			"refusing to start in production: migrator module is active but OCMS_MIGRATOR_ALLOWED_DB_HOSTS is not configured",
+		)
 	}
 	return nil
 }
@@ -1433,16 +1451,23 @@ func run() error {
 	// Initialize module registry
 	moduleRegistry := module.NewRegistry(logger)
 
+	// Modules may import or delete redirects during initialization and bulk
+	// operations. Construct the one global middleware instance before module
+	// initialization so its narrow invalidator can be shared with them.
+	redirectsMiddleware := middleware.NewRedirectsMiddleware(db)
+
 	// Create module context
 	moduleCtx := &module.Context{
-		DB:                db,
-		Store:             store.New(db),
-		Logger:            logger,
-		Config:            cfg,
-		Render:            renderer,
-		Events:            eventService,
-		Hooks:             hookRegistry,
-		SchedulerRegistry: schedulerRegistry,
+		DB:                       db,
+		Store:                    store.New(db),
+		Logger:                   logger,
+		Config:                   cfg,
+		Render:                   renderer,
+		Events:                   eventService,
+		Hooks:                    hookRegistry,
+		SchedulerRegistry:        schedulerRegistry,
+		Cache:                    cacheManager,
+		RedirectCacheInvalidator: redirectsMiddleware,
 	}
 
 	// Register all modules
@@ -1549,7 +1574,6 @@ func run() error {
 	r.Use(middleware.StripTrailingSlash)        // Redirect /path/ to /path (301)
 
 	// Global redirects middleware (database-driven URL redirects)
-	redirectsMiddleware := middleware.NewRedirectsMiddleware(db)
 	r.Use(redirectsMiddleware.Handler)
 
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.)
@@ -1605,6 +1629,7 @@ func run() error {
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
+	taxonomyHandler.SetCacheManager(cacheManager)
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, cfg.UploadsDir)
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService(), eventService)
@@ -1625,14 +1650,15 @@ func run() error {
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
 	schedulerHandler := handler.NewSchedulerHandler(db, renderer, sessionManager, schedulerRegistry, taskExecutor, eventService)
-	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
+	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager, cacheManager)
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	apiKeysHandler.SetRequireSourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
 	apiKeysHandler.SetRequireExpiry(cfg.RequireAPIKeyExpiry)
 	apiKeysHandler.SetMaxTTLDays(cfg.APIKeyMaxTTLDays)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)
-	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
+	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager, cacheManager)
+	importExportHandler.SetUploadDir(cfg.UploadsDir)
 	importExportHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, cfg.UploadsDir)
 	docsHandler := handler.NewDocsHandler(renderer, sessionManager, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
@@ -1651,9 +1677,7 @@ func run() error {
 	r.Get("/health/live", healthHandler.Liveness)
 	r.Get("/health/ready", healthHandler.Readiness)
 
-	// Public frontend routes (with language detection and analytics tracking)
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.Language(db))
+	useFrontendMiddleware := func(r chi.Router) {
 		// Optionally load user for context-aware caching (doesn't require login)
 		r.Use(middleware.OptionalLoadUser(sessionManager, db))
 		// Add internal analytics tracking middleware (if module is enabled)
@@ -1664,9 +1688,14 @@ func run() error {
 		// OpenAPI surface so AI agents can discover the programmable
 		// interface from a single GET of the homepage.
 		r.Use(middleware.LinkHeaders)
+	}
 
-		// Default language routes (no prefix)
-		// Specific routes first (before catch-all in registerFrontendRoutes)
+	// Public discovery files are unprefixed routes. Keep them outside the
+	// language-aware child router so /{lang}/... exposes only frontend content
+	// routes, matching the existing public URL surface.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Language(db))
+		useFrontendMiddleware(r)
 		r.Get("/sitemap.xml", frontendHandler.Sitemap)
 		r.Get("/robots.txt", frontendHandler.Robots)
 		r.Get("/.well-known/security.txt", frontendHandler.Security)
@@ -1674,13 +1703,25 @@ func run() error {
 		r.Get("/.well-known/api-catalog", frontendHandler.APICatalog)
 		r.Get("/.well-known/agent-skills/index.json", frontendHandler.AgentSkillsIndex)
 		r.Get("/.well-known/mcp/server-card.json", frontendHandler.MCPServerCard)
+	})
+
+	// Public frontend content routes. The child router allows Language to
+	// resolve and strip an active prefix before endpoint matching.
+	mountLanguageAwareFrontendRoutes(r, middleware.Language(db), func(r chi.Router) {
+		useFrontendMiddleware(r)
+		// Default-language forms remain /forms/{slug}; active non-default
+		// languages own /{lang}/forms/{slug} through the same verified prefix
+		// stripping as pages and taxonomy.
+		r.Group(func(r chi.Router) {
+			r.Use(csrfMiddleware)
+			r.Get(handler.RouteFormsSlug, formsHandler.Show)
+			r.With(formSubmitRateLimiter.HTMLMiddleware()).Post(handler.RouteFormsSlug, formsHandler.Submit)
+		})
 		// Common frontend routes (RouteParamSlug catch-all is registered last)
 		registerFrontendRoutes(r, frontendHandler)
-
-		// Language-prefixed routes (e.g., /ru/, /ru/page-slug)
-		r.Route("/{lang:[a-z]{2}}", func(r chi.Router) {
-			registerFrontendRoutes(r, frontendHandler)
-		})
+		// A root-mounted child router owns unmatched multi-segment frontend
+		// paths. Resolve those through the themed alias-aware 404 handler.
+		r.NotFound(frontendHandler.NotFound)
 	})
 
 	// Auth routes (public, with CSRF and rate limiting)
@@ -2006,14 +2047,6 @@ func run() error {
 		frontendHandler.SetOpenAPISpecProvider(apiV2Docs.OpenAPIJSONBytes)
 	})
 	slog.Info("REST API v2 mounted at /api/v2")
-
-	// Public form routes (no authentication required, with CSRF protection and language detection)
-	r.Group(func(r chi.Router) {
-		r.Use(csrfMiddleware)
-		r.Use(middleware.Language(db))
-		r.Get(handler.RouteFormsSlug, formsHandler.Show)
-		r.With(formSubmitRateLimiter.HTMLMiddleware()).Post(handler.RouteFormsSlug, formsHandler.Submit)
-	})
 
 	// Favicon route - serve from theme settings or embedded default
 	defaultFavicon, _ := web.Static.ReadFile("static/dist/favicon.ico")

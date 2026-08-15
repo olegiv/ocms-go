@@ -289,7 +289,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Get default language for media creation
 	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
-	if err != nil {
+	if err != nil || !isRoutableContentLanguage(defaultLang) {
 		slog.Error("failed to get default language", "error", err)
 		if r.Header.Get("HX-Request") == "true" {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1103,13 +1103,13 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 		item := MediaAPIItem{
 			ID:       m.ID,
 			Filename: m.Filename,
-			Filepath: fmt.Sprintf("/uploads/originals/%s/%s", m.Uuid, m.Filename),
+			Filepath: model.MediaURL(model.VariantOriginal, m.Uuid, m.Filename),
 			Mimetype: m.MimeType,
 			Size:     m.Size,
 		}
 		// Add thumbnail path for images
 		if strings.HasPrefix(m.MimeType, "image/") {
-			item.Thumbnail = fmt.Sprintf("/uploads/thumbnail/%s/%s", m.Uuid, m.Filename)
+			item.Thumbnail = model.MediaURL("thumbnail", m.Uuid, m.Filename)
 		}
 		items[i] = item
 	}

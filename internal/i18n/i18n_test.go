@@ -680,7 +680,7 @@ func TestConcurrentTranslationAccess(t *testing.T) {
 
 	const goroutines = 20
 	var wg sync.WaitGroup
-	wg.Add(goroutines * 3)
+	wg.Add(goroutines * 4)
 
 	// Concurrent readers.
 	for range goroutines {
@@ -690,7 +690,21 @@ func TestConcurrentTranslationAccess(t *testing.T) {
 			_ = T("ru", "btn.cancel")
 			_ = TranslationCount("en")
 			_ = GetDefaultLanguage()
+			_ = MatchLanguage("ru,en;q=0.8")
 		}()
+	}
+
+	// Concurrent atomic matcher reconfiguration, as performed after an admin
+	// language mutation or a committed transfer import.
+	for i := range goroutines {
+		go func(n int) {
+			defer wg.Done()
+			if n%2 == 0 {
+				ConfigureLanguages([]string{"en"}, "en")
+			} else {
+				ConfigureLanguages([]string{"ru"}, "ru")
+			}
+		}(i)
 	}
 
 	// Concurrent writers via AddTranslations.

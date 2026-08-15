@@ -251,6 +251,8 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
+| `OCMS_MIGRATOR_ALLOWED_DB_HOSTS` | No | - | Allowed source-database hosts for the Migrator module (bare hostnames/IPs, no port); empty = no restriction |
+| `OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS` | No | `false` (effective `true` in prod) | Fail startup in production when the Migrator module is active without a source-database host allowlist |
 | `OCMS_WEBHOOK_ALLOWED_HOSTS` | No | - | Allowed destination hosts for active webhook deliveries (exact hostname match) |
 | `OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS` | No | `false` (effective `true` in prod) | Fail startup in production when active webhooks exist without destination host allowlist |
 | `OCMS_WEBHOOK_FORM_DATA_MODE` | No | `redacted` | `form.submitted` payload mode: `redacted`, `none`, or `full` |

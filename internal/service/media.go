@@ -81,9 +81,12 @@ type UploadResult struct {
 
 // MediaService handles media file operations.
 type MediaService struct {
-	db        *sql.DB
-	processor *imaging.Processor
-	uploadDir string
+	db                 *sql.DB
+	processor          *imaging.Processor
+	uploadDir          string
+	deleteMediaFiles   func(*os.Root, string) error
+	beforeMediaCleanup func()
+	beforeMediaCommit  func()
 }
 
 // NewMediaService creates a new media service.
@@ -92,9 +95,10 @@ func NewMediaService(db *sql.DB, uploadDir string) *MediaService {
 		uploadDir = DefaultUploadDir
 	}
 	return &MediaService{
-		db:        db,
-		processor: imaging.NewProcessor(uploadDir),
-		uploadDir: uploadDir,
+		db:               db,
+		processor:        imaging.NewProcessor(uploadDir),
+		uploadDir:        uploadDir,
+		deleteMediaFiles: imaging.DeleteMediaFilesFromRoot,
 	}
 }
 
@@ -219,13 +223,37 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 }
 
 // Delete removes a media item and its files.
-func (s *MediaService) Delete(ctx context.Context, mediaID int64) error {
-	queries := store.New(s.db)
+func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to start media deletion: %w", err)
+	}
+	queries := store.New(s.db).WithTx(tx)
+	var uploadRoot *os.Root
+	committed := false
+	defer func() {
+		if !committed {
+			resultErr = errors.Join(resultErr, tx.Rollback())
+		}
+		if uploadRoot != nil {
+			resultErr = errors.Join(resultErr, uploadRoot.Close())
+		}
+	}()
 
-	// Get media record first
 	media, err := queries.GetMediaByID(ctx, mediaID)
 	if err != nil {
 		return fmt.Errorf("failed to get media: %w", err)
+	}
+	if !imaging.IsCanonicalMediaUUID(media.Uuid) {
+		return fmt.Errorf("failed to validate media cleanup target: invalid media UUID %q", media.Uuid)
+	}
+
+	// Capture one verified canonical root before the database mutation. Cleanup
+	// never re-resolves the configured path, so retargeting an allowed upload
+	// symlink cannot redirect deletion to another tree.
+	uploadRoot, err = imaging.OpenExistingUploadRoot(s.uploadDir)
+	if err != nil {
+		return fmt.Errorf("failed to validate media cleanup target: %w", err)
 	}
 
 	// Delete variants from DB
@@ -238,10 +266,26 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) error {
 		return fmt.Errorf("failed to delete media record: %w", err)
 	}
 
-	// Delete files from disk
-	if err := s.processor.DeleteMediaFiles(media.Uuid); err != nil {
-		// Log but don't fail - DB records are already deleted
-		fmt.Printf("Warning: failed to delete files for media %d: %v\n", mediaID, err)
+	if s.beforeMediaCommit != nil {
+		s.beforeMediaCommit()
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit media deletion: %w", err)
+	}
+	committed = true
+
+	if uploadRoot != nil {
+		if s.beforeMediaCleanup != nil {
+			s.beforeMediaCleanup()
+		}
+		remove := s.deleteMediaFiles
+		if remove == nil {
+			remove = imaging.DeleteMediaFilesFromRoot
+		}
+		if err := remove(uploadRoot, media.Uuid); err != nil {
+			return fmt.Errorf("failed to delete media files: %w", err)
+		}
 	}
 
 	return nil
@@ -249,10 +293,7 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) error {
 
 // GetURL returns the URL path for a media item.
 func (s *MediaService) GetURL(media store.Medium, variant string) string {
-	if variant == "" || variant == "original" {
-		return fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename)
-	}
-	return fmt.Sprintf("/uploads/%s/%s/%s", variant, media.Uuid, media.Filename)
+	return model.MediaURL(variant, media.Uuid, media.Filename)
 }
 
 // GetThumbnailURL returns the thumbnail URL for a media item.

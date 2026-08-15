@@ -4,13 +4,39 @@
 package developer
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
+
+func routableGeneratorLanguages(languages []store.Language) ([]store.Language, store.Language, error) {
+	routable := make([]store.Language, 0, len(languages))
+	var defaultLanguage store.Language
+	for _, language := range languages {
+		if !language.IsActive || !util.IsValidLangCode(language.Code) || util.IsReservedLanguageCode(language.Code) {
+			if language.IsDefault {
+				return nil, store.Language{}, fmt.Errorf("default language %q is not routable", language.Code)
+			}
+			continue
+		}
+		routable = append(routable, language)
+		if language.IsDefault {
+			if defaultLanguage.ID != 0 {
+				return nil, store.Language{}, fmt.Errorf("multiple routable default languages")
+			}
+			defaultLanguage = language
+		}
+	}
+	if defaultLanguage.ID == 0 {
+		return nil, store.Language{}, fmt.Errorf("no routable default language")
+	}
+	return routable, defaultLanguage, nil
+}
 
 // handleDashboard handles GET /admin/developer - shows the developer dashboard
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +88,12 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_get_languages")+": "+err.Error())
 		return
 	}
+	languages, defaultLanguage, err := routableGeneratorLanguages(languages)
+	if err != nil {
+		m.ctx.Logger.Error("cannot generate content without a routable default language", "error", err)
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_get_languages")+": "+err.Error())
+		return
+	}
 
 	if len(languages) == 0 {
 		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_no_languages"))
@@ -91,7 +123,7 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	m.ctx.Logger.Info("generated categories", "count", len(catIDs))
 
 	// Generate media
-	mediaIDs, err := m.generateMedia(ctx, user.ID)
+	mediaIDs, err := m.generateMedia(ctx, user.ID, defaultLanguage.Code)
 	if err != nil {
 		m.ctx.Logger.Error("failed to generate media", "error", err)
 		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_generate_media")+": "+err.Error())

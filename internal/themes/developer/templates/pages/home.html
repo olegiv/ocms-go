@@ -83,7 +83,7 @@
                 </h3>
                 <div class="dev-tag-cloud">
                     {{range .Tags}}
-                    <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="dev-tag">{{.Name}}</a>
+                    <a href="{{.URL}}" class="dev-tag">{{.Name}}</a>
                     {{end}}
                 </div>
             </div>
@@ -115,7 +115,7 @@
                 <ul class="dev-category-list">
                     {{range .Categories}}
                     <li>
-                        <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
+                        <a href="{{.URL}}">{{.Name}}</a>
                         {{if .PageCount}}<span class="dev-count">({{.PageCount}})</span>{{end}}
                     </li>
                     {{end}}
