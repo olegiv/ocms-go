@@ -393,7 +393,14 @@ type pageRouteQueryer interface {
 func validateLanguagePrefixAgainstPages(
 	ctx context.Context, queries pageRouteQueryer, code string, isActive bool,
 ) (string, error) {
-	if queries == nil || !isActive || !util.IsRoutableLanguageCode(code) {
+	if queries == nil {
+		// An unusable store must not read as "no conflict": that would hand
+		// back a clean answer nobody checked.
+		return "", errors.New("language prefix check requires a store")
+	}
+	// Only an active, routable code takes a URL prefix, so an inactive or
+	// reserved one shadows nothing.
+	if !isActive || !util.IsRoutableLanguageCode(code) {
 		return "", nil
 	}
 	exists, err := queries.PageRouteExistsUnderPrefix(ctx, code)

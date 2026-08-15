@@ -1755,7 +1755,10 @@ func (h *PagesHandler) writePageGuarded(
 	ctx context.Context, slug, currentSlug string, write func(*store.Queries) (store.Page, error),
 ) (store.Page, error) {
 	if h.db == nil {
-		return write(h.queries)
+		// Never skip the guard quietly. A handler without a database handle
+		// cannot open the transaction this check depends on, and writing
+		// anyway would put back the unguarded path the transaction replaced.
+		return store.Page{}, errors.New("page write requires a database handle")
 	}
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
