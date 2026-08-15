@@ -793,3 +793,61 @@ func TestExportAllowsCarriedMediaToNormalizeMixedCaseReferences(t *testing.T) {
 		t.Fatalf("imported page = %+v, error = %v", page, err)
 	}
 }
+
+// cancelOnWrite cancels the request the moment the archive starts arriving,
+// standing in for a deadline that expires part-way through delivery to a slow
+// client.
+type cancelOnWrite struct {
+	cancel  context.CancelFunc
+	written int
+}
+
+func (w *cancelOnWrite) Write(data []byte) (int, error) {
+	w.written += len(data)
+	w.cancel()
+	return len(data), nil
+}
+
+// TestCopyArchiveWithContextStopsMidDelivery covers the half of the timeout a
+// single check could not reach.
+//
+// io.Copy cannot be interrupted, so an archive large enough to outlast the
+// request deadline kept writing into a ResponseWriter the timeout middleware
+// had already finished with — appending archive bytes to the 503 it sent. A
+// check before the copy only catches archives that were late before they
+// started.
+func TestCopyArchiveWithContextStopsMidDelivery(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	source := bytes.NewReader(make([]byte, archiveCopyChunkBytes*4))
+	destination := &cancelOnWrite{cancel: cancel}
+
+	written, err := copyArchiveWithContext(ctx, destination, source)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("copyArchiveWithContext() error = %v, want a context cancellation", err)
+	}
+	if written >= int64(archiveCopyChunkBytes*4) {
+		t.Fatalf("wrote %d bytes; the whole archive reached a response nobody is reading", written)
+	}
+	if written == 0 {
+		t.Fatal("wrote nothing; the copy is not making progress before the deadline")
+	}
+}
+
+// TestCopyArchiveWithContextDeliversWholeArchive is the other half: an
+// uncancelled request still receives every byte.
+func TestCopyArchiveWithContextDeliversWholeArchive(t *testing.T) {
+	payload := make([]byte, archiveCopyChunkBytes*2+17)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+	var destination bytes.Buffer
+	written, err := copyArchiveWithContext(context.Background(), &destination, bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("copyArchiveWithContext() error = %v", err)
+	}
+	if written != int64(len(payload)) || !bytes.Equal(destination.Bytes(), payload) {
+		t.Fatalf("copied %d of %d bytes, content equal = %v",
+			written, len(payload), bytes.Equal(destination.Bytes(), payload))
+	}
+}

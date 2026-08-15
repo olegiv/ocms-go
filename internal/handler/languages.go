@@ -60,18 +60,38 @@ func NewLanguagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionM
 // table that denormalizes languages.code into a language_code column. These
 // columns intentionally have no foreign key, so updating only languages would
 // make the existing content, menus, taxonomy, media and forms unreachable.
+//
+// Every update runs in a transaction, rename or not, because the page-prefix
+// check belongs inside it. Deciding outside the write leaves room for a page
+// saved at the same first segment to commit in between, after which the
+// language middleware consumes that page's URL with neither request having
+// seen a conflict.
 func (h *LanguagesHandler) updateLanguage(ctx context.Context, params store.UpdateLanguageParams,
 	previousCode string) error {
-	if params.Code == previousCode {
-		_, err := h.queries.UpdateLanguage(ctx, params)
-		return err
-	}
-
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin language rename: %w", err)
+		return fmt.Errorf("begin language update: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	queries := store.New(h.db).WithTx(tx)
+
+	conflict, err := validateLanguagePrefixAgainstPages(ctx, queries, params.Code, params.IsActive)
+	if err != nil {
+		return err
+	}
+	if conflict != "" {
+		return errLanguagePrefixTaken
+	}
+
+	if params.Code == previousCode {
+		if _, err := queries.UpdateLanguage(ctx, params); err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit language update: %w", err)
+		}
+		return nil
+	}
 
 	for _, query := range []string{
 		`UPDATE pages SET language_code = ? WHERE language_code = ?`,
@@ -91,8 +111,7 @@ func (h *LanguagesHandler) updateLanguage(ctx context.Context, params store.Upda
 		}
 	}
 
-	_, err = store.New(h.db).WithTx(tx).UpdateLanguage(ctx, params)
-	if err != nil {
+	if _, err := queries.UpdateLanguage(ctx, params); err != nil {
 		return fmt.Errorf("update renamed language: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -296,6 +315,46 @@ func validateLanguageCodeForSave(code string, isActive bool, existingCode string
 	}
 
 	return ""
+}
+
+// errLanguagePrefixTaken reports that a page route already owns the prefix a
+// language write is claiming, discovered inside the write's own transaction.
+var errLanguagePrefixTaken = errors.New("language prefix is taken by a page route")
+
+// createLanguageGuarded writes a language only if no page route holds its
+// prefix, deciding both inside one transaction.
+//
+// The form validation ahead of this checks the same thing, but a check outside
+// the write is advisory: two admins saving at once — one creating the language
+// "eng", one creating a page at "eng" — each see a clear namespace and both
+// writes land, after which the language middleware eats the page's URL.
+// Reading the pages through this transaction ties the answer to the write, so
+// SQLite refuses the second writer instead of interleaving them.
+func (h *LanguagesHandler) createLanguageGuarded(
+	ctx context.Context, params store.CreateLanguageParams,
+) (store.Language, error) {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return store.Language{}, fmt.Errorf("begin language create: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	queries := store.New(h.db).WithTx(tx)
+	conflict, err := validateLanguagePrefixAgainstPages(ctx, queries, params.Code, params.IsActive)
+	if err != nil {
+		return store.Language{}, err
+	}
+	if conflict != "" {
+		return store.Language{}, errLanguagePrefixTaken
+	}
+	language, err := queries.CreateLanguage(ctx, params)
+	if err != nil {
+		return store.Language{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return store.Language{}, fmt.Errorf("commit language create: %w", err)
+	}
+	return language, nil
 }
 
 // addPagePrefixConflictError records the page-collision error, if any, under
@@ -505,7 +564,7 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	newLang, err := h.queries.CreateLanguage(r.Context(), store.CreateLanguageParams{
+	newLang, err := h.createLanguageGuarded(r.Context(), store.CreateLanguageParams{
 		Code:       input.Code,
 		Name:       input.Name,
 		NativeName: input.NativeName,
@@ -516,6 +575,12 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
+	if errors.Is(err, errLanguagePrefixTaken) {
+		// A page claimed the prefix between validation and this write.
+		validationErrors["code"] = i18n.T(h.renderer.GetAdminLang(r), "languages.error_code_page_conflict")
+		h.renderLanguageForm(w, r, nil, validationErrors, input.toFormValues(), false)
+		return
+	}
 	if err != nil {
 		slog.Error("failed to create language", "error", err)
 		flashError(w, r, h.renderer, redirectAdminLanguagesNew, "Error creating language")
@@ -644,6 +709,12 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Position:   position,
 		UpdatedAt:  now,
 	}, existingLang.Code)
+	if errors.Is(err, errLanguagePrefixTaken) {
+		// A page claimed the prefix between validation and this write.
+		validationErrors["code"] = i18n.T(h.renderer.GetAdminLang(r), "languages.error_code_page_conflict")
+		h.renderLanguageForm(w, r, existingLang, validationErrors, input.toFormValues(), true)
+		return
+	}
 	if err != nil {
 		slog.Error("failed to update language", "error", err)
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminLanguagesID, existingLang.ID), "Error updating language")

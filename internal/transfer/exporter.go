@@ -412,7 +412,7 @@ func (e *Exporter) ExportWithMedia(ctx context.Context, opts ExportOptions, w io
 	if err != nil {
 		return fmt.Errorf("reopen completed media export: %w", err)
 	}
-	_, copyErr := io.Copy(w, complete)
+	_, copyErr := copyArchiveWithContext(ctx, w, complete)
 	if copyErr != nil {
 		copyErr = fmt.Errorf("copy staged media export: %w", copyErr)
 	}
@@ -421,6 +421,48 @@ func (e *Exporter) ExportWithMedia(ctx context.Context, opts ExportOptions, w io
 		readCloseErr = fmt.Errorf("close completed media export: %w", readCloseErr)
 	}
 	return errors.Join(copyErr, readCloseErr)
+}
+
+// archiveCopyChunkBytes bounds how much of a completed archive is written
+// between cancellation checks. Large enough that the checks cost nothing on a
+// healthy transfer, small enough that a slow client cannot hold the writer for
+// long past the deadline.
+const archiveCopyChunkBytes = 256 * 1024
+
+// copyArchiveWithContext writes src to dst in chunks, stopping at the first
+// chunk boundary after ctx is done.
+//
+// A single io.Copy cannot be interrupted. Delivering a large archive to a slow
+// client can outlast the request deadline mid-copy, and every byte written
+// after that goes through a ResponseWriter the timeout middleware has already
+// finished with — appending archive data to the 503 it sent. Checking once
+// before the copy only covers archives that were already late when they
+// started.
+func copyArchiveWithContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, error) {
+	var written int64
+	buffer := make([]byte, archiveCopyChunkBytes)
+	for {
+		if err := ctx.Err(); err != nil {
+			return written, fmt.Errorf("media export canceled after %d bytes: %w", written, err)
+		}
+		read, readErr := src.Read(buffer)
+		if read > 0 {
+			out, writeErr := dst.Write(buffer[:read])
+			written += int64(out)
+			if writeErr != nil {
+				return written, writeErr
+			}
+			if out != read {
+				return written, io.ErrShortWrite
+			}
+		}
+		if errors.Is(readErr, io.EOF) {
+			return written, nil
+		}
+		if readErr != nil {
+			return written, readErr
+		}
+	}
 }
 
 func (e *Exporter) writeMediaArchive(ctx context.Context, opts ExportOptions, w io.Writer) (resultErr error) {

@@ -884,3 +884,62 @@ func TestSetDefaultLanguageRejectsPageShadowingPrefix(t *testing.T) {
 		t.Fatal("rejected default-language switch was committed anyway")
 	}
 }
+
+// TestLanguageWritesRefuseTakenPrefixInsideTheirTransaction pins where the
+// collision check lives.
+//
+// Checking during form validation is advisory: two administrators saving at
+// once — one creating the language "eng", one creating a page at "eng" — each
+// see a clear namespace, and both writes land. The check now runs inside the
+// transaction that writes the language, so the write itself refuses. These
+// call the write helpers directly, bypassing form validation, which is exactly
+// the path a race takes.
+func TestLanguageWritesRefuseTakenPrefixInsideTheirTransaction(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+
+	if _, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "eng", Body: "Content", Status: "published", AuthorID: user.ID,
+	}); err != nil {
+		t.Fatalf("CreatePage: %v", err)
+	}
+	h := NewLanguagesHandler(db, nil, sm, cache.NewManager(queries))
+
+	_, err := h.createLanguageGuarded(ctx, store.CreateLanguageParams{
+		Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true,
+		Direction: "ltr", Position: 3, CreatedAt: now, UpdatedAt: now,
+	})
+	if !errors.Is(err, errLanguagePrefixTaken) {
+		t.Fatalf("createLanguageGuarded() error = %v, want the write itself to refuse", err)
+	}
+	if _, lookupErr := queries.GetLanguageByCode(ctx, "eng"); lookupErr == nil {
+		t.Fatal("the refused language was written anyway")
+	}
+
+	// An inactive language takes no prefix, so it may be created — and then
+	// activating it through the same guarded path must be refused.
+	inactive, err := h.createLanguageGuarded(ctx, store.CreateLanguageParams{
+		Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: false,
+		Direction: "ltr", Position: 3, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("createLanguageGuarded() for an inactive language error = %v", err)
+	}
+	err = h.updateLanguage(ctx, store.UpdateLanguageParams{
+		ID: inactive.ID, Code: "eng", Name: inactive.Name, NativeName: inactive.NativeName,
+		IsDefault: false, IsActive: true, Direction: "ltr", Position: 3, UpdatedAt: now,
+	}, inactive.Code)
+	if !errors.Is(err, errLanguagePrefixTaken) {
+		t.Fatalf("updateLanguage() error = %v, want activation refused by the write", err)
+	}
+	stored, err := queries.GetLanguageByCode(ctx, "eng")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.IsActive {
+		t.Fatal("the refused activation was committed anyway")
+	}
+}

@@ -78,6 +78,7 @@ func defaultPagesSort(_, _ string) (string, string) {
 
 // PagesHandler handles page management routes.
 type PagesHandler struct {
+	db                    *sql.DB
 	queries               *store.Queries
 	renderer              *render.Renderer
 	sessionManager        *scs.SessionManager
@@ -92,6 +93,7 @@ type PagesHandler struct {
 // NewPagesHandler creates a new PagesHandler.
 func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *PagesHandler {
 	return &PagesHandler{
+		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
@@ -646,7 +648,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizedBody := h.normalizePageBodyForStorage(rawBody)
 
-	newPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
+	newPage, err := h.createPageGuarded(r.Context(), store.CreatePageParams{
 		Title:             input.Title,
 		Slug:              input.Slug,
 		Body:              normalizedBody,
@@ -672,6 +674,12 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
 	})
+	if errors.Is(err, errPageRouteTaken) {
+		// A language claimed the prefix between validation and this write.
+		flashError(w, r, h.renderer, redirectAdminPagesNew,
+			"Slug conflicts with the URL prefix of an active language")
+		return
+	}
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
 		flashError(w, r, h.renderer, redirectAdminPagesNew, "Error creating page")
@@ -930,7 +938,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizedBody := h.normalizePageBodyForStorage(rawBody)
 
-	updatedPage, err := h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
+	updatedPage, err := h.updatePageGuarded(r.Context(), store.UpdatePageParams{
 		ID:                id,
 		Title:             input.Title,
 		Slug:              input.Slug,
@@ -954,7 +962,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
-	})
+	}, existingPage.Slug)
+	if errors.Is(err, errPageRouteTaken) {
+		// A language claimed the prefix between validation and this write.
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id),
+			"Slug conflicts with the URL prefix of an active language")
+		return
+	}
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Error updating page")
@@ -1702,6 +1716,71 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 			PageID: pageID,
 		})
 	})
+}
+
+// errPageRouteTaken reports that an active language claimed this page's first
+// path segment, discovered inside the write's own transaction.
+var errPageRouteTaken = errors.New("page route is taken by a language prefix")
+
+// createPageGuarded writes a page only if no active language owns its slug,
+// deciding both inside one transaction.
+//
+// Form validation checks the same thing beforehand, but a check outside the
+// write is advisory: an administrator activating the language "eng" while
+// another saves a page at "eng" leaves both requests looking at a clear
+// namespace, and both writes land. Reading the languages through this
+// transaction ties the answer to the write, so SQLite refuses the second
+// writer rather than interleaving them.
+func (h *PagesHandler) createPageGuarded(
+	ctx context.Context, params store.CreatePageParams,
+) (store.Page, error) {
+	return h.writePageGuarded(ctx, params.Slug, "", func(queries *store.Queries) (store.Page, error) {
+		return queries.CreatePage(ctx, params)
+	})
+}
+
+// updatePageGuarded is createPageGuarded for an edit. A slug left unchanged
+// skips the check, exactly as the form validation does: a language that
+// already shadows a stored page is a pre-existing condition, and refusing to
+// save any other edit to that page would trap its content.
+func (h *PagesHandler) updatePageGuarded(
+	ctx context.Context, params store.UpdatePageParams, currentSlug string,
+) (store.Page, error) {
+	return h.writePageGuarded(ctx, params.Slug, currentSlug, func(queries *store.Queries) (store.Page, error) {
+		return queries.UpdatePage(ctx, params)
+	})
+}
+
+func (h *PagesHandler) writePageGuarded(
+	ctx context.Context, slug, currentSlug string, write func(*store.Queries) (store.Page, error),
+) (store.Page, error) {
+	if h.db == nil {
+		return write(h.queries)
+	}
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return store.Page{}, fmt.Errorf("begin page write: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	queries := store.New(h.db).WithTx(tx)
+	if slug != currentSlug {
+		conflict, conflictErr := LanguagePrefixConflict(ctx, queries, slug)
+		if conflictErr != nil {
+			return store.Page{}, conflictErr
+		}
+		if conflict != "" {
+			return store.Page{}, errPageRouteTaken
+		}
+	}
+	page, err := write(queries)
+	if err != nil {
+		return store.Page{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return store.Page{}, fmt.Errorf("commit page write: %w", err)
+	}
+	return page, nil
 }
 
 // LanguagePrefixConflict reports the message for a page route that an active

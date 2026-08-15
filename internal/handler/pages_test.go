@@ -6,6 +6,7 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -997,5 +998,57 @@ func TestPageAliasesSkipLanguagePrefixCollisions(t *testing.T) {
 	}
 	if len(stored) != 1 || stored[0] != "about/team" {
 		t.Fatalf("stored aliases = %v, want only the one no language prefix shadows", stored)
+	}
+}
+
+// TestPageWritesRefuseLanguagePrefixInsideTheirTransaction is the same race
+// from the page side: a language activated between a page's validation and its
+// insert would otherwise leave the page stored at a URL the language owns.
+func TestPageWritesRefuseLanguagePrefixInsideTheirTransaction(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "eng", Name: "English (legacy)", NativeName: "English", IsActive: true,
+		Direction: "ltr", Position: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateLanguage: %v", err)
+	}
+	h := NewPagesHandler(db, nil, sm)
+
+	_, err := h.createPageGuarded(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "eng", Body: "Content", Status: "published",
+		AuthorID: user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+	})
+	if !errors.Is(err, errPageRouteTaken) {
+		t.Fatalf("createPageGuarded() error = %v, want the write itself to refuse", err)
+	}
+	if _, lookupErr := queries.GetPageBySlug(ctx, "eng"); lookupErr == nil {
+		t.Fatal("the refused page was written anyway")
+	}
+
+	page, err := h.createPageGuarded(ctx, store.CreatePageParams{
+		Title: "Engineering", Slug: "engineering", Body: "Content", Status: "published",
+		AuthorID: user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("createPageGuarded() for a free slug error = %v", err)
+	}
+	_, err = h.updatePageGuarded(ctx, store.UpdatePageParams{
+		ID: page.ID, Title: page.Title, Slug: "eng", Body: page.Body, Status: page.Status,
+		LanguageCode: page.LanguageCode, UpdatedAt: now,
+	}, page.Slug)
+	if !errors.Is(err, errPageRouteTaken) {
+		t.Fatalf("updatePageGuarded() error = %v, want the rename refused by the write", err)
+	}
+	unchanged, err := queries.GetPageByID(ctx, page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.Slug != "engineering" {
+		t.Fatalf("stored slug = %q, want the refused rename rolled back", unchanged.Slug)
 	}
 }

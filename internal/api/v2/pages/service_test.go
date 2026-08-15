@@ -168,3 +168,62 @@ func TestCreateAndUpdateRejectSlugsShadowedByLanguagePrefix(t *testing.T) {
 		t.Fatalf("stored slug = %q, want the rejected rename not to have landed", unchanged.Slug)
 	}
 }
+
+// TestCreateRejectsLanguagesThePublicRouterWillNotServe covers content the API
+// could write but no visitor could ever read.
+//
+// A language row can exist while being inactive, or carry a legacy code that
+// is malformed or owned by an application route. The public router installs
+// none of those, so a published page filed under one answers 404 on every URL.
+// Existence checks alone let the API create exactly that.
+func TestCreateRejectsLanguagesThePublicRouterWillNotServe(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	svc := pages.NewService(db, queries, nil, nil, pages.Policy{})
+	ctx := context.Background()
+	now := time.Now()
+
+	for code, active := range map[string]bool{"de": false, "admin": true} {
+		if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+			Code: code, Name: code, NativeName: code, IsActive: active,
+			Direction: "ltr", CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("CreateLanguage(%q): %v", code, err)
+		}
+	}
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "unroutable@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "API",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	writer := v2.Actor{
+		APIKey:      &store.ApiKey{ID: 1, CreatedBy: author.ID},
+		Permissions: []string{model.PermissionPagesWrite},
+	}
+
+	for name, code := range map[string]string{"inactive": "de", "reserved route": "admin"} {
+		t.Run(name, func(t *testing.T) {
+			langCode := code
+			_, err := svc.Create(ctx, writer, pages.CreatePageBody{
+				Title: "Unreachable", Slug: "unreachable-" + code, Body: "b", LanguageCode: &langCode,
+			})
+			var de *v2.Error
+			if !errors.As(err, &de) || de.Kind != v2.ErrValidation {
+				t.Fatalf("Create() error = %v, want a validation error for an unroutable language", err)
+			}
+			if _, lookupErr := queries.GetPageBySlug(ctx, "unreachable-"+code); lookupErr == nil {
+				t.Fatal("the rejected page was written anyway")
+			}
+		})
+	}
+
+	// The site default still works, so the guard has not closed the ordinary path.
+	if _, err := svc.Create(ctx, writer, pages.CreatePageBody{
+		Title: "Reachable", Slug: "reachable", Body: "b",
+	}); err != nil {
+		t.Fatalf("Create() with the default language error = %v", err)
+	}
+}

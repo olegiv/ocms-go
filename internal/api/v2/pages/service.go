@@ -131,7 +131,8 @@ func (s *Service) resolveLanguageCode(ctx context.Context, langCode *string) (st
 				"Validation failed",
 			)
 		}
-		if _, err := s.queries.GetLanguageByCode(ctx, *langCode); err != nil {
+		language, err := s.queries.GetLanguageByCode(ctx, *langCode)
+		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return "", v2.NewValidationError(
 					map[string]string{"language_code": fmt.Sprintf("Language %q is not configured", *langCode)},
@@ -140,13 +141,43 @@ func (s *Service) resolveLanguageCode(ctx context.Context, langCode *string) (st
 			}
 			return "", v2.NewError(v2.ErrInternal, "Failed to look up language")
 		}
-		return *langCode, nil
+		if err := validateRoutableLanguage(language); err != nil {
+			return "", err
+		}
+		return language.Code, nil
 	}
 	def, err := s.queries.GetDefaultLanguage(ctx)
 	if err != nil {
 		return "", fmt.Errorf("loading default language: %w", err)
 	}
+	if err := validateRoutableLanguage(def); err != nil {
+		return "", err
+	}
 	return def.Code, nil
+}
+
+// validateRoutableLanguage refuses a language the public router will not serve.
+//
+// Existence is not enough. An inactive language, or a legacy row whose code is
+// malformed or owned by an application route, keeps its rows visible in the
+// admin UI but is never installed as a public language, so the frontend
+// answers 404 for every page filed under it. Creating published content there
+// through the API produced pages that were unreachable from the moment they
+// were written.
+func validateRoutableLanguage(language store.Language) error {
+	if !language.IsActive {
+		return v2.NewValidationError(
+			map[string]string{"language_code": fmt.Sprintf("Language %q is inactive", language.Code)},
+			"Validation failed",
+		)
+	}
+	if !util.IsRoutableLanguageCode(language.Code) {
+		return v2.NewValidationError(
+			map[string]string{"language_code": fmt.Sprintf("Language %q cannot be served on a public route", language.Code)},
+			"Validation failed",
+		)
+	}
+	return nil
 }
 
 // ensureSlugAvailable reports a conflict error when the slug cannot serve as
