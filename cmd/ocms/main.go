@@ -1166,6 +1166,62 @@ func logProductionSecurityWarnings(cfg *config.Config) {
 	}
 }
 
+// applySiteURLOverride writes OCMS_SITE_URL into the site config, the same way
+// OCMS_ACTIVE_THEME overrides the theme chosen in the admin UI.
+//
+// site_url is not seeded (it is absent from store.DefaultConfig), so a
+// containerized deployment has no way to set it without logging into the admin
+// UI — and until it is set the sitemap, the agent-discovery documents, and
+// canonical/OG URLs all refuse to render. An empty OCMS_SITE_URL leaves
+// whatever the admin UI holds untouched.
+func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error {
+	siteURL := strings.TrimSpace(rawURL)
+	if siteURL == "" {
+		return nil
+	}
+	queries := store.New(db)
+
+	parsed, err := url.Parse(siteURL)
+	if err != nil {
+		return fmt.Errorf("OCMS_SITE_URL is not a valid URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("OCMS_SITE_URL must use http or https, got %q", parsed.Scheme)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("OCMS_SITE_URL must include a host")
+	}
+
+	// Writing on every boot would churn updated_at and invalidate caches for a
+	// value that has not changed.
+	if existing, gerr := queries.GetConfigByKey(ctx, model.ConfigKeySiteURL); gerr == nil &&
+		existing.Value == siteURL {
+		return nil
+	} else if gerr != nil && !errors.Is(gerr, sql.ErrNoRows) {
+		return fmt.Errorf("reading site_url config: %w", gerr)
+	}
+
+	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return fmt.Errorf("getting default language for site_url: %w", err)
+	}
+
+	if _, err := queries.UpsertConfig(ctx, store.UpsertConfigParams{
+		Key:          model.ConfigKeySiteURL,
+		Value:        siteURL,
+		Type:         model.ConfigTypeString,
+		Description:  "Full site URL for canonical links and OG tags (set from OCMS_SITE_URL)",
+		LanguageCode: defaultLang.Code,
+		UpdatedAt:    time.Now(),
+		UpdatedBy:    sql.NullInt64{Valid: false},
+	}); err != nil {
+		return fmt.Errorf("writing site_url config: %w", err)
+	}
+
+	slog.Info("site URL set from OCMS_SITE_URL", "site_url", siteURL)
+	return nil
+}
+
 // loadActiveTheme determines and activates the appropriate theme.
 func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *theme.Manager, renderer *render.Renderer, cfg *config.Config) {
 	themeManager.SetFuncMap(renderer.TemplateFuncs())
@@ -1341,6 +1397,9 @@ func run() error {
 		if err := store.SeedDemo(ctx, db); err != nil {
 			return fmt.Errorf("seeding demo content: %w", err)
 		}
+	}
+	if err := applySiteURLOverride(ctx, db, cfg.SiteURL); err != nil {
+		return err
 	}
 	demoAdminPassword, err := store.RotateDemoAdminPassword(ctx, db)
 	if err != nil {

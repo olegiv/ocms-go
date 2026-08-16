@@ -766,6 +766,35 @@ func TestLoad_GeoIPDBPath(t *testing.T) {
 	}
 }
 
+func TestLoad_SiteURL(t *testing.T) {
+	t.Run("unset", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+		if cfg.SiteURL != "" {
+			t.Errorf("SiteURL = %q, want empty so the admin setting is left alone", cfg.SiteURL)
+		}
+	})
+
+	t.Run("set", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_SITE_URL", "https://ocms-demo.fly.dev")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+		if cfg.SiteURL != "https://ocms-demo.fly.dev" {
+			t.Errorf("SiteURL = %q, want %q", cfg.SiteURL, "https://ocms-demo.fly.dev")
+		}
+	})
+}
+
 func TestLoad_UploadsDir(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		os.Clearenv()
