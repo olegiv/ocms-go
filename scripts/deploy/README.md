@@ -586,13 +586,40 @@ location / {
     proxy_pass http://127.0.0.1:8081;
 }
 
-# CORRECT - regex pattern avoids conflict
+# CORRECT - regex pattern avoids conflict, and no URI after the port
 location ~ ^/(.*)$ {
-    proxy_pass http://127.0.0.1:8081/$1$is_args$args;
+    proxy_pass http://127.0.0.1:8081;
 }
 ```
 
 Also ensure **Proxy mode** is unchecked in Apache & nginx Settings.
+
+### Images or URLs With Spaces Return 400
+
+Symptom: `/uploads/large/<id>/My%20Photo.jpg` returns **400 Bad Request** through
+nginx, while the same path returns 200 straight from the app on `127.0.0.1:<port>`.
+
+Cause: a `proxy_pass` with a URI component, such as
+`proxy_pass http://127.0.0.1:8081/$1$is_args$args;`. The `$1` capture is the
+**decoded** path, so nginx rebuilds the upstream request with a literal space in
+the request line. That is a malformed HTTP request and the upstream rejects it.
+
+Fix: drop the URI so nginx forwards the original request URI unchanged:
+
+```nginx
+location ~ ^/(.*)$ {
+    proxy_pass http://127.0.0.1:8081;
+}
+```
+
+This only shows up once content has filenames containing spaces or other
+percent-encoded characters, so a site can run for a long time before hitting it.
+Check with:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' "https://example.com/uploads/large/x/a%20b.jpg"
+# 404 = encoding is handled correctly; 400 = proxy_pass still has a URI
+```
 
 ### Permission Errors
 
