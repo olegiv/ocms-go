@@ -7,6 +7,161 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-08-16
+
+### Added
+
+#### Migrator
+- **Drupal 8–11 migration source** — a second source alongside Elefant. It
+  reads a Drupal MySQL database and its public files directory and writes oCMS
+  users, taxonomy, media, nodes, URL aliases and menus. The source schema is
+  detected through `INFORMATION_SCHEMA` rather than assumed, so contrib-heavy
+  Drupal 8/9/10/11 installs work and absent optional tables are reported
+  instead of fatal. Node bundles map to page types through a configurable
+  field; vocabularies map to flat tags or hierarchical categories. Path
+  aliases become page slugs and `page_aliases` rows, and every imported page
+  also gets a `node/<nid>` alias, so a migrated site keeps its existing URLs
+  and inbound links. Only default-language content is imported; translations
+  are counted and reported.
+- **Background imports** — imports run detached instead of inline under the
+  30s request timeout, which used to cancel a run part-way and leave
+  half-written content behind. Jobs are tracked in a new
+  `migrator_import_jobs` table with an htmx status card that polls every two
+  seconds, a partial unique index guarding against concurrent imports across
+  processes, heartbeats so a quiet stage is not reaped, and panic recovery.
+- **Import notices** — expected outcomes (an optional source table the site
+  does not have, out-of-scope translations, a `private://` file) are recorded
+  and rendered separately from errors, so a clean import no longer reports
+  itself as broken.
+- **Per-source import options** — sources declare which options they honour,
+  so the form offers only what the source acts on and a forged POST cannot
+  record an option the source never reads.
+- `OCMS_MIGRATOR_ALLOWED_DB_HOSTS`, `OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS`
+  and `OCMS_MIGRATOR_ALLOWED_FILE_ROOTS` restrict which source databases and
+  local media roots the Migrator may reach.
+
+#### Configuration
+- **`OCMS_SITE_URL`** writes the site URL into site config at startup, the way
+  `OCMS_ACTIVE_THEME` overrides the theme. A containerized deploy previously
+  had no way to set it, so the sitemap and agent-discovery documents answered
+  503. The value must be scheme and host only — a path, query, fragment,
+  credentials or an out-of-range port fails startup.
+
+### Changed
+
+#### Migrator
+- The Migrator declares its allowed environments, so new installs no longer
+  register it active.
+- Deleting imported content leaves original content alone: menus, menu items,
+  tags, categories, media and users that original content references are
+  untracked rather than deleted, and an item whose delete fails keeps its
+  tracking row so it can still be found.
+- Shared source helpers moved to `sources/shared`; Elefant delegates to the
+  same hardened DSN, path and prefix handling rather than keeping a copy.
+- Imports invalidate content and menu caches, which no import path did before.
+
+#### Content & routing
+- Page lookups use the cache again. The cache scopes both its miss query and
+  its slug keys by language, so a cache-configured site stops doing a database
+  read on every page view without giving up the language boundary.
+- A language code that collides with an existing page slug is rejected on both
+  sides, and the decision is made inside the write transaction so two
+  concurrent saves cannot both pass it. Every page-writing path — admin form,
+  v2 API, Migrator and transfer import — reaches a guard suited to it.
+- Page URL fields in the v2 API declare `uri-reference` rather than `uri`, so
+  relative URLs and the empty string that clears a field keep working under
+  huma v2.39.
+
+#### Frontend
+- Vendored scripts (htmx, Alpine, Alpine sort, TinyMCE, Klaro, Prism,
+  swagger-ui) are cache-busted across all six layouts and the shipped themes.
+  TinyMCE's `cache_suffix` propagates the version to the plugins, skins and
+  icons it loads at runtime.
+
+#### Deployment & Operations
+- The generated Plesk nginx snippet no longer gives `proxy_pass` a URI, so
+  percent-encoded request paths reach the app byte for byte. A media filename
+  containing a space previously produced a 400.
+
+### Fixed
+- **htmx was inert across the entire admin UI.** Both layouts pinned an SRI
+  hash for htmx 2.0.8 while the vendored file was 2.0.10, so browsers refused
+  to execute it and no `hx-*` attribute did anything — degrading webhooks,
+  media, redirects and the Migrator status card. Alpine had the identical bug.
+- **Images with a space in the filename rendered broken.** `html/template`
+  replaces a `srcset` URL containing a space with `#ZgotmplZ`, and browsers
+  prefer `srcset`; all `/uploads` URLs now go through `model.MediaURL`.
+- **WebP variants were JPEG bytes under a `.webp` name**, losing transparency.
+  They are now real lossless VP8L WebP, encoded in pure Go.
+- **Taxonomy archives absorbed post view counts.** Page stats matched
+  `%/slug`, so a post whose slug doubled as a category or tag slug counted its
+  own archive's views.
+- **Deactivating a module could take the active theme down.** Module template
+  functions resolve at template parse time, so a theme calling one had a hard
+  dependency on that module being active at boot; every shipped module —
+  built-in and custom — now registers a no-op placeholder.
+- Drupal node import no longer aborts when the optional `node__body` table is
+  absent, and repeated Drupal imports are idempotent.
+- The page cache is invalidated after a version restore.
+- Public form submissions are no longer treated as orphans by media cleanup.
+
+### Security
+- **Migrator DSN injection enabling local file read.** The Elefant source
+  built its MySQL DSN with `fmt.Sprintf`, so a submitted database name could
+  inject `allowAllFiles=true` and turn on `LOAD DATA LOCAL INFILE`, letting a
+  hostile source server read files off the CMS host. Both sources now build
+  DSNs through one hardened choke point that also enforces the host allowlist.
+  Source database passwords are no longer persisted in the session store.
+- **Imported users had a guessable password.** Both sources hashed a literal
+  string that is in the repository, and the login handler applies no
+  forced-reset gate, so anyone knowing an imported email address could sign in
+  as that user. Both now hash a random secret whose plaintext never leaves the
+  helper. Blocked Drupal accounts are no longer imported at all.
+- **XSS in the admin image picker and in footer configuration.** Footer text
+  is sanitized through an allowlist in every theme, and TinyMCE
+  `insertContent` serializes its `<img>` through a DOM element so a
+  filename-derived `alt` cannot break out of the attribute context.
+- **M-03 / M-04: module admin routes gated to admins.** The dbmanager,
+  hcaptcha and Migrator admin routes were reachable by any editor.
+- **M-01: webhook redirects re-validated per hop**, so a 302 to a
+  non-allowlisted host cannot leak the signing secret or custom headers.
+- **L-01: the embed proxy re-checks its upstream-host allowlist on every
+  redirect hop.**
+- **M-02: suspicious page-HTML pre-filter hardened.** Inline `on*` handlers
+  are matched structurally with an HTML tokenizer instead of a regex, closing
+  a boundary-evasion class, and `<object>`, `<embed>`, `<svg>`, `<base>` and
+  `srcdoc=` were added. The production startup audit reuses the same detector
+  as the save path.
+- **L-06: a low-entropy session secret blocks startup in production**,
+  including repeated-block patterns that clear a distinct-character floor.
+- **Module security posture is re-checked on runtime activation.** Production
+  posture audits ran only at startup, so a module inactive at boot could be
+  switched on from the admin UI without any of them re-running.
+- Interpolated SQL identifiers are validated rather than trusted to be
+  constants at every call site.
+- Every vendored script now requires an integrity attribute and its digest is
+  recomputed from the embedded bytes, so a stale hash fails the test suite
+  instead of silently disabling the library in browsers.
+- CodeQL alerts 40, 41, 42 and 43 closed.
+- Image reads are capped at 100 MiB inside the processor, imported filenames
+  are sanitized once for both the database row and the disk write, and media
+  UUID shape is validated before deleting a media directory.
+
+Security fixes in this release ship with drift tests verified against their bug
+state, so the same class of defect cannot return through another code path.
+
+### Dependencies
+- Go 1.26.6. Update Go modules: huma v2.39.1, chi v5.3.1, go-redis v9.22.0,
+  modernc.org/sqlite v1.56.0, go-sqlite3 v1.14.49, goose v3.27.3, goldmark
+  v1.8.5, x/crypto v0.55.0, x/net v0.58.0, x/image v0.45.0, and x/text v0.41.0
+  (GO-2026-5970, an infinite loop reachable from slug generation). maxminddb
+  migrated to v2; added `nativewebp` for pure-Go WebP encoding.
+- Update npm assets: Alpine.js 3.16.1, TinyMCE 8.8.2, swagger-ui-dist 5.32.13,
+  Tailwind CSS 4.3.3. Fix brace-expansion DoS (GHSA-mh99-v99m-4gvg,
+  GHSA-rgw5-rvv9-x895; Dependabot alerts #17 and #18) and bump js-yaml 4.3.1
+  and immutable 5.1.9. Obsolete `overrides` pins removed now that npm resolves
+  patched versions on its own.
+
 ## [0.22.0] - 2026-07-05
 
 ### Added
@@ -1245,7 +1400,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/olegiv/ocms-go/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/olegiv/ocms-go/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/olegiv/ocms-go/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/olegiv/ocms-go/compare/v0.19.0...v0.20.0
