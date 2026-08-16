@@ -1359,6 +1359,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, versionsURL, "Error restoring version")
 		return
 	}
+	h.invalidatePageCache(id)
 
 	// Create new version to record the restore
 	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
