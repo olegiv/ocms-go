@@ -37,6 +37,13 @@ primary_region = 'fra'
   # internal/handler/forms.go). Leave false unless hCaptcha keys are added via
   # `fly secrets set OCMS_HCAPTCHA_SITE_KEY=... OCMS_HCAPTCHA_SECRET_KEY=...`.
   OCMS_REQUIRE_FORM_CAPTCHA = 'false'
+  # The migrator module is active in this demo's database (it predates
+  # AllowedEnvs) and registers admin routes reachable with the published demo
+  # credentials. Rather than lifting OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS,
+  # point the allowlist at a host that runs no database: the startup posture
+  # audit is satisfied, enforcement stays on, and no source database is
+  # reachable from Fly's network.
+  OCMS_MIGRATOR_ALLOWED_DB_HOSTS = 'localhost'
 
 [processes]
   app = '/app/ocms'

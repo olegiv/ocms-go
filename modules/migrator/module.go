@@ -69,6 +69,22 @@ func New() *Module {
 	}
 }
 
+// AllowedEnvs restricts the migrator to non-production environments. On first
+// run the module is auto-inserted as inactive outside this list.
+//
+// The migrator is a one-shot import tool that dials external databases and
+// takes source credentials; a live site does not need it running. Registering
+// it active by default is what put an unrestricted migrator on the public
+// demo, where the admin routes it registers are reachable with the published
+// demo credentials.
+//
+// This is a default for installs that have no modules row yet — existing
+// deployments keep whatever state they already have, so an operator running a
+// legitimate one-off import in production is unaffected.
+func (m *Module) AllowedEnvs() []string {
+	return []string{"development"}
+}
+
 // Init initializes the module with the given context.
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
