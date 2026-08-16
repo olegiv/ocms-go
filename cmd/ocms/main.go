@@ -1191,6 +1191,23 @@ func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error 
 	if parsed.Host == "" {
 		return fmt.Errorf("OCMS_SITE_URL must include a host")
 	}
+	// Every consumer builds links by concatenating a path onto this value after
+	// trimming a trailing slash — internal/seo/sitemap.go:110, meta.go:351 and
+	// wellknown.go:20 — so a query or fragment silently swallows the path:
+	// "https://example.com?preview=1" + "/about" reads as a query, not a route.
+	// A path base such as https://example.com/blog concatenates correctly and
+	// stays allowed, since that is how a subdirectory install is configured.
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return fmt.Errorf("OCMS_SITE_URL must not contain a query string")
+	}
+	if strings.Contains(siteURL, "#") {
+		return fmt.Errorf("OCMS_SITE_URL must not contain a fragment")
+	}
+	// Credentials in the base would be published in every sitemap entry and
+	// discovery document.
+	if parsed.User != nil {
+		return fmt.Errorf("OCMS_SITE_URL must not contain credentials")
+	}
 
 	// Writing on every boot would churn updated_at and invalidate caches for a
 	// value that has not changed.

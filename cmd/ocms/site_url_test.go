@@ -116,6 +116,38 @@ func TestApplySiteURLOverrideReplacesAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestApplySiteURLOverrideAcceptsUsableShapes guards the other side of the
+// query/fragment rejection: a path base is how a subdirectory install is
+// configured, and it concatenates correctly, so it must keep working.
+func TestApplySiteURLOverrideAcceptsUsableShapes(t *testing.T) {
+	tests := map[string]string{
+		"host only":         "https://example.com",
+		"subdirectory":      "https://example.com/blog",
+		"trailing slash":    "https://example.com/",
+		"explicit port":     "https://example.com:8443",
+		"plain http (dev)":  "http://localhost:8090",
+		"surrounding space": "  https://example.com  ",
+	}
+	for name, raw := range tests {
+		t.Run(name, func(t *testing.T) {
+			db, cleanup := testutil.TestDB(t)
+			defer cleanup()
+			ctx := context.Background()
+
+			if err := applySiteURLOverride(ctx, db, raw); err != nil {
+				t.Fatalf("applySiteURLOverride(%q) = %v, want it accepted", raw, err)
+			}
+			got, gerr := store.New(db).GetConfigByKey(ctx, model.ConfigKeySiteURL)
+			if gerr != nil {
+				t.Fatalf("reading site_url: %v", gerr)
+			}
+			if got.Value == "" {
+				t.Errorf("applySiteURLOverride(%q) wrote nothing", raw)
+			}
+		})
+	}
+}
+
 // TestApplySiteURLOverrideRejectsUnusableValues fails startup loudly rather
 // than writing a site_url that would render broken canonical links, or a
 // scripting scheme into markup.
@@ -126,6 +158,14 @@ func TestApplySiteURLOverrideRejectsUnusableValues(t *testing.T) {
 		"no host":          "https://",
 		"bare hostname":    "ocms-demo.fly.dev",
 		"control bytes":    "https://exa\x7fmple.com",
+		// Consumers concatenate a path onto this value, so a query or fragment
+		// swallows the route: "https://example.com?preview=1" + "/about" is a
+		// query, not a path. An empty "?" or "#" does the same damage.
+		"query string":       "https://example.com?preview=1",
+		"empty forced query": "https://example.com?",
+		"fragment":           "https://example.com#preview",
+		"empty fragment":     "https://example.com#",
+		"credentials":        "https://user:pass@example.com",
 	}
 	for name, raw := range tests {
 		t.Run(name, func(t *testing.T) {
