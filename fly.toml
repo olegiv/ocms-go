@@ -45,10 +45,13 @@ primary_region = 'fra'
   # The migrator module is active in this demo's database (it predates
   # AllowedEnvs) and registers admin routes reachable with the published demo
   # credentials. Rather than lifting OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS,
-  # point the allowlist at a host that runs no database: the startup posture
-  # audit is satisfied, enforcement stays on, and no source database is
-  # reachable from Fly's network.
-  OCMS_MIGRATOR_ALLOWED_DB_HOSTS = 'localhost'
+  # satisfy the startup posture audit with a name that can never resolve:
+  # .invalid is reserved by RFC 6761, so a connection attempt fails at DNS.
+  # Not 'localhost' — the allowlist matches hostnames only, so allowing it
+  # would cover every local port including this server's own listener, where a
+  # database driver would park a request until its handshake times out. The
+  # routes that dial a host are also blocked in demo mode.
+  OCMS_MIGRATOR_ALLOWED_DB_HOSTS = 'db.invalid'
 
 [processes]
   app = '/app/ocms'

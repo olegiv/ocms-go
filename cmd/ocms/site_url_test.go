@@ -166,6 +166,10 @@ func TestApplySiteURLOverrideRejectsUnusableValues(t *testing.T) {
 		"fragment":           "https://example.com#preview",
 		"empty fragment":     "https://example.com#",
 		"credentials":        "https://user:pass@example.com",
+		// url.Parse only checks that a port is numeric, so an out-of-range one
+		// survives into every generated link.
+		"port above range": "https://example.com:99999",
+		"port zero":        "https://example.com:0",
 	}
 	for name, raw := range tests {
 		t.Run(name, func(t *testing.T) {

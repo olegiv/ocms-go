@@ -57,7 +57,8 @@ var demoGates = map[string]demoGate{
 		how:       satisfiedInDemo,
 		companion: "OCMS_MIGRATOR_ALLOWED_DB_HOSTS",
 		why: "the migrator module is active in the demo database, so the gate " +
-			"bites; the allowlist points at a host running no database",
+			"bites; the allowlist names an RFC 6761 .invalid host that cannot " +
+			"resolve, and the routes that dial one are blocked in demo mode",
 	},
 
 	"OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION": {

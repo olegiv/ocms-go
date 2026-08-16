@@ -19,6 +19,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -1190,6 +1191,14 @@ func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error 
 	}
 	if parsed.Host == "" {
 		return fmt.Errorf("OCMS_SITE_URL must include a host")
+	}
+	// url.Parse only checks that a port is numeric, so ":99999" survives and
+	// would be baked into every canonical, sitemap and discovery link.
+	if port := parsed.Port(); port != "" {
+		number, perr := strconv.Atoi(port)
+		if perr != nil || number < 1 || number > 65535 {
+			return fmt.Errorf("OCMS_SITE_URL port %q is not in the range 1-65535", port)
+		}
 	}
 	// Every consumer builds links by concatenating a path onto this value after
 	// trimming a trailing slash — internal/seo/sitemap.go:110, meta.go:351 and

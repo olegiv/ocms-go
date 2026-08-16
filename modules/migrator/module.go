@@ -195,9 +195,20 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 		r.Get("/migrator", m.handleListSources)
 		r.Get("/migrator/{source}", m.handleSourceForm)
 		r.Get("/migrator/{source}/status", m.handleJobStatus)
-		r.Post("/migrator/{source}/test", m.handleTestConnection)
-		r.Post("/migrator/{source}/import", m.handleImport)
-		r.Post("/migrator/{source}/delete", m.handleDeleteImported)
+
+		// A demo publishes its admin credentials, which turns every route that
+		// dials a caller-supplied host into an open outbound connector: the
+		// host allowlist matches on hostname only, so an allowed entry covers
+		// all of its ports, and pointing a source at the server's own listener
+		// parks a request until the driver's handshake times out. Repeat that
+		// and a small demo machine runs out of handlers. dbmanager gates its
+		// SQL execution the same way.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.BlockInDemoMode(middleware.RestrictionImportData))
+			r.Post("/migrator/{source}/test", m.handleTestConnection)
+			r.Post("/migrator/{source}/import", m.handleImport)
+			r.Post("/migrator/{source}/delete", m.handleDeleteImported)
+		})
 	})
 }
 
