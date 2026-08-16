@@ -4,6 +4,9 @@
 package transfer
 
 import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
 	"log/slog"
 	"strings"
 	"testing"
@@ -80,6 +83,72 @@ func TestImportClearsUnusableCanonicalURL(t *testing.T) {
 				t.Errorf("clearing canonical_url=%q produced no warning; warnings = %+v", raw, result.Warnings)
 			}
 		})
+	}
+}
+
+// TestImportFromZipReportsClearedCanonicalURL covers the ZIP entry point, which
+// runs the whole preflight twice over one ExportData — once as a dry run, once
+// for real. An in-place clear during the first pass would leave the second pass
+// with nothing to report, so the operator would see a successful import and no
+// hint that a stored URL had been dropped.
+//
+// Bug state: have normalizeImportedPageCanonicalURLs mutate its argument instead
+// of copying, and the final result carries no warning.
+func TestImportFromZipReportsClearedCanonicalURL(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+
+	const slug = "zip-canonical"
+	archive := canonicalURLArchive(ts.User.Email, slug, "javascript:alert(1)")
+	encoded, err := json.Marshal(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+	entry, err := zipWriter.Create("export.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write(encoded); err != nil {
+		t.Fatal(err)
+	}
+	if err := zipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	zipReader, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	importer := NewImporter(ts.Queries, ts.DB, slog.Default())
+	result, err := importer.ImportFromZip(ts.Ctx, zipReader,
+		ImportOptions{ConflictStrategy: ConflictSkip, ImportPages: true})
+	if err != nil {
+		t.Fatalf("ImportFromZip error = %v, want the archive to land", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("ImportFromZip result = %+v, want a successful result", result)
+	}
+
+	var reported bool
+	for _, warning := range result.Warnings {
+		if warning.ID == slug && strings.Contains(warning.Message, "canonical URL") {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Errorf("the real import result carries no canonical URL warning; warnings = %+v", result.Warnings)
+	}
+
+	page, lookupErr := ts.Queries.GetPageBySlug(ts.Ctx, slug)
+	if lookupErr != nil {
+		t.Fatalf("page lookup after import = %v", lookupErr)
+	}
+	if page.CanonicalUrl != "" {
+		t.Errorf("stored canonical_url = %q, want it cleared", page.CanonicalUrl)
 	}
 }
 

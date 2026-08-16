@@ -436,7 +436,7 @@ func (i *Importer) importWithPreCommit(
 	// below: an archive is an untrusted payload, and this is the only gate
 	// between it and a value that gets published into a canonical link and an
 	// og:url meta tag.
-	normalizeImportedPageCanonicalURLs(data, opts, result)
+	data = normalizeImportedPageCanonicalURLs(data, opts, result)
 
 	if importNeedsMediaIdentityResolution(data, opts) {
 		if i.store == nil {
@@ -715,27 +715,51 @@ func validateImportedPageMediaReferences(
 // one is empty.
 //
 // Valid values are written back trimmed, so the string that was validated is
-// the string that gets stored. Mutating data is safe because
-// normalizedTransferMediaIdentities deep-copies Pages and each SEO block, and
-// this runs after that rewrite so the value checked is the value stored.
-func normalizeImportedPageCanonicalURLs(data *ExportData, opts ImportOptions, result *ImportResult) {
+// the string that gets stored.
+//
+// The caller's payload is never modified: a ZIP import runs this whole function
+// twice over one ExportData, once for the dry-run preflight and once for real.
+// Mutating in place would let the preflight clear the value and keep the
+// warning, leaving the real result silent about a URL it had already discarded.
+// Pages and the SEO blocks that change are copied instead, so each pass sees the
+// archive as it arrived and reports what it did.
+func normalizeImportedPageCanonicalURLs(data *ExportData, opts ImportOptions, result *ImportResult) *ExportData {
 	if !opts.ImportPages {
-		return
+		return data
 	}
+
+	// Copy on first change: an archive with nothing to fix keeps the original.
+	normalized := data
+	ownPages := func() {
+		if normalized != data {
+			return
+		}
+		clone := *data
+		clone.Pages = append([]ExportPage(nil), data.Pages...)
+		normalized = &clone
+	}
+
 	for index := range data.Pages {
-		page := &data.Pages[index]
-		if page.SEO == nil || page.SEO.CanonicalURL == "" {
+		seo := data.Pages[index].SEO
+		if seo == nil || seo.CanonicalURL == "" {
 			continue
 		}
-		trimmed, err := util.ValidateCanonicalURL(page.SEO.CanonicalURL)
+		trimmed, err := util.ValidateCanonicalURL(seo.CanonicalURL)
+		if err == nil && trimmed == seo.CanonicalURL {
+			continue
+		}
+		ownPages()
+		updated := *seo
 		if err != nil {
-			result.AddWarning("page", page.Slug, fmt.Sprintf(
-				"canonical URL %q was cleared: %v", page.SEO.CanonicalURL, err))
-			page.SEO.CanonicalURL = ""
-			continue
+			result.AddWarning("page", data.Pages[index].Slug, fmt.Sprintf(
+				"canonical URL %q was cleared: %v", seo.CanonicalURL, err))
+			updated.CanonicalURL = ""
+		} else {
+			updated.CanonicalURL = trimmed
 		}
-		page.SEO.CanonicalURL = trimmed
+		normalized.Pages[index].SEO = &updated
 	}
+	return normalized
 }
 
 func validateImportedContentMediaURLs(
