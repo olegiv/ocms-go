@@ -1189,8 +1189,10 @@ func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return fmt.Errorf("OCMS_SITE_URL must use http or https, got %q", parsed.Scheme)
 	}
-	if parsed.Host == "" {
-		return fmt.Errorf("OCMS_SITE_URL must include a host")
+	// Hostname(), not Host: "https://:443" parses to a non-empty Host of ":443"
+	// with no hostname at all, and every generated link would point nowhere.
+	if parsed.Hostname() == "" {
+		return fmt.Errorf("OCMS_SITE_URL must include a hostname")
 	}
 	// url.Parse only checks that a port is numeric, so ":99999" survives and
 	// would be baked into every canonical, sitemap and discovery link.
@@ -1218,8 +1220,18 @@ func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error 
 		return fmt.Errorf("OCMS_SITE_URL must not contain credentials")
 	}
 
+	// Store a canonical base rather than the operator's exact spelling. Consumers
+	// append an absolute path to this value, and while most trim a trailing slash
+	// first, some do not — internal/handler/frontend.go:1743 builds the
+	// security.txt Canonical as siteURL+"/.well-known/security.txt", which on a
+	// value ending in "/" advertises a URL that does not identify the route that
+	// served it. Normalising here fixes every consumer at once, including the
+	// next one written.
+	siteURL = parsed.Scheme + "://" + parsed.Host + strings.TrimRight(parsed.EscapedPath(), "/")
+
 	// Writing on every boot would churn updated_at and invalidate caches for a
-	// value that has not changed.
+	// value that has not changed. Compare the normalised form, or a value that
+	// differs only by a trailing slash would be rewritten on every restart.
 	if existing, gerr := queries.GetConfigByKey(ctx, model.ConfigKeySiteURL); gerr == nil &&
 		existing.Value == siteURL {
 		return nil

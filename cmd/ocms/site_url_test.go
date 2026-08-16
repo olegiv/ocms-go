@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
@@ -116,35 +117,76 @@ func TestApplySiteURLOverrideReplacesAndIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestApplySiteURLOverrideAcceptsUsableShapes guards the other side of the
-// query/fragment rejection: a path base is how a subdirectory install is
-// configured, and it concatenates correctly, so it must keep working.
-func TestApplySiteURLOverrideAcceptsUsableShapes(t *testing.T) {
-	tests := map[string]string{
-		"host only":         "https://example.com",
-		"subdirectory":      "https://example.com/blog",
-		"trailing slash":    "https://example.com/",
-		"explicit port":     "https://example.com:8443",
-		"plain http (dev)":  "http://localhost:8090",
-		"surrounding space": "  https://example.com  ",
+// TestApplySiteURLOverrideNormalizes pins the stored form, not just acceptance.
+//
+// Consumers append an absolute path to this value. Most trim a trailing slash
+// first, but not all: internal/handler/frontend.go:1743 builds the security.txt
+// Canonical as siteURL+"/.well-known/security.txt", so a stored "https://x/"
+// advertises "https://x//.well-known/security.txt". Storing a canonical base
+// makes every consumer correct, including ones written later, which is why this
+// asserts the exact value rather than merely that something was written.
+func TestApplySiteURLOverrideNormalizes(t *testing.T) {
+	tests := map[string]struct{ raw, want string }{
+		"host only":            {"https://example.com", "https://example.com"},
+		"trailing slash":       {"https://example.com/", "https://example.com"},
+		"repeated slashes":     {"https://example.com///", "https://example.com"},
+		"subdirectory":         {"https://example.com/blog", "https://example.com/blog"},
+		"subdirectory slashed": {"https://example.com/blog/", "https://example.com/blog"},
+		"explicit port":        {"https://example.com:8443", "https://example.com:8443"},
+		"plain http (dev)":     {"http://localhost:8090", "http://localhost:8090"},
+		"surrounding space":    {"  https://example.com  ", "https://example.com"},
 	}
-	for name, raw := range tests {
+	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			db, cleanup := testutil.TestDB(t)
 			defer cleanup()
 			ctx := context.Background()
 
-			if err := applySiteURLOverride(ctx, db, raw); err != nil {
-				t.Fatalf("applySiteURLOverride(%q) = %v, want it accepted", raw, err)
+			if err := applySiteURLOverride(ctx, db, tc.raw); err != nil {
+				t.Fatalf("applySiteURLOverride(%q) = %v, want it accepted", tc.raw, err)
 			}
 			got, gerr := store.New(db).GetConfigByKey(ctx, model.ConfigKeySiteURL)
 			if gerr != nil {
 				t.Fatalf("reading site_url: %v", gerr)
 			}
-			if got.Value == "" {
-				t.Errorf("applySiteURLOverride(%q) wrote nothing", raw)
+			if got.Value != tc.want {
+				t.Errorf("applySiteURLOverride(%q) stored %q, want %q", tc.raw, got.Value, tc.want)
+			}
+			if strings.HasSuffix(got.Value, "/") {
+				t.Errorf("stored %q ends in a slash; every consumer that appends "+
+					"an absolute path would emit a doubled separator", got.Value)
 			}
 		})
+	}
+}
+
+// TestApplySiteURLOverrideNormalizedFormIsStable checks that spellings which
+// normalize to the same base do not rewrite the row, so a restart with a
+// differently-spelled value does not churn updated_at and the config cache.
+func TestApplySiteURLOverrideNormalizedFormIsStable(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	queries := store.New(db)
+
+	if err := applySiteURLOverride(ctx, db, "https://example.com"); err != nil {
+		t.Fatalf("first override: %v", err)
+	}
+	before, err := queries.GetConfigByKey(ctx, model.ConfigKeySiteURL)
+	if err != nil {
+		t.Fatalf("reading site_url: %v", err)
+	}
+
+	if err := applySiteURLOverride(ctx, db, "https://example.com/"); err != nil {
+		t.Fatalf("second override: %v", err)
+	}
+	after, err := queries.GetConfigByKey(ctx, model.ConfigKeySiteURL)
+	if err != nil {
+		t.Fatalf("re-reading site_url: %v", err)
+	}
+	if !after.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Errorf("a trailing slash rewrote the row (updated_at %v -> %v)",
+			before.UpdatedAt, after.UpdatedAt)
 	}
 }
 
@@ -170,6 +212,8 @@ func TestApplySiteURLOverrideRejectsUnusableValues(t *testing.T) {
 		// survives into every generated link.
 		"port above range": "https://example.com:99999",
 		"port zero":        "https://example.com:0",
+		// Host is ":443" here, non-empty, but there is no hostname at all.
+		"port without host": "https://:443",
 	}
 	for name, raw := range tests {
 		t.Run(name, func(t *testing.T) {

@@ -1740,7 +1740,10 @@ func (h *FrontendHandler) Security(w http.ResponseWriter, r *http.Request) {
 
 	// Set canonical URL
 	if siteURL != "" {
-		config.Canonical = siteURL + "/.well-known/security.txt"
+		// Trim first: site_url set through the admin UI may carry a trailing
+		// slash, and a Canonical of "https://example.com//.well-known/..." does
+		// not identify the route that served this document.
+		config.Canonical = strings.TrimRight(siteURL, "/") + "/.well-known/security.txt"
 	}
 
 	builder := seo.NewSecurityTxtBuilder(config)
