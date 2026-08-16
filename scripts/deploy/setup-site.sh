@@ -92,7 +92,12 @@ print_nginx_snippet() {
     cat << NGINX_EOF
 # oCMS reverse proxy to port $port
 location ~ ^/(.*)\$ {
-    proxy_pass http://127.0.0.1:${port}/\$1\$is_args\$args;
+    # No URI after the port, deliberately. Giving proxy_pass a URI makes nginx
+    # rebuild the upstream request from the DECODED path, so a percent-encoded
+    # character is sent raw: /a%20b.jpg becomes a literal space in the request
+    # line, which is a malformed request and the upstream answers 400. With no
+    # URI, nginx forwards the original request URI byte for byte.
+    proxy_pass http://127.0.0.1:${port};
     proxy_http_version 1.1;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
