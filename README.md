@@ -291,6 +291,7 @@ Available release archives:
 | `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes and modules | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
+| `OCMS_SITE_URL` | Full site URL written into site config on startup (overrides DB/admin setting). Required for the sitemap and agent-discovery documents, which answer 503 while it is unset | - | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
 | `OCMS_CACHE_TTL` | Default cache TTL in seconds | `3600` | No |
 | `OCMS_REDIS_URL` | Redis URL for distributed caching | - | No |

@@ -23,6 +23,11 @@ primary_region = 'fra'
   OCMS_LOG_LEVEL = 'info'
   OCMS_SERVER_HOST = '0.0.0.0'
   OCMS_SERVER_PORT = '8080'
+  # site_url ships empty (migration 20260130235529 inserts a blank row) and is
+  # otherwise only settable through the admin UI, so the sitemap and the
+  # agent-discovery documents answer 503 until it is filled in. Setting it here
+  # keeps it correct across redeploys and demo resets.
+  OCMS_SITE_URL = 'https://ocms-demo.fly.dev'
   OCMS_UPLOADS_DIR = '/app/data/uploads'
   # Disable production security enforcement checks for demo instance
   OCMS_REQUIRE_API_ALLOWED_CIDRS = 'false'
@@ -37,6 +42,16 @@ primary_region = 'fra'
   # internal/handler/forms.go). Leave false unless hCaptcha keys are added via
   # `fly secrets set OCMS_HCAPTCHA_SITE_KEY=... OCMS_HCAPTCHA_SECRET_KEY=...`.
   OCMS_REQUIRE_FORM_CAPTCHA = 'false'
+  # The migrator module is active in this demo's database (it predates
+  # AllowedEnvs) and registers admin routes reachable with the published demo
+  # credentials. Rather than lifting OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS,
+  # satisfy the startup posture audit with a name that can never resolve:
+  # .invalid is reserved by RFC 6761, so a connection attempt fails at DNS.
+  # Not 'localhost' — the allowlist matches hostnames only, so allowing it
+  # would cover every local port including this server's own listener, where a
+  # database driver would park a request until its handshake times out. The
+  # routes that dial a host are also blocked in demo mode.
+  OCMS_MIGRATOR_ALLOWED_DB_HOSTS = 'db.invalid'
 
 [processes]
   app = '/app/ocms'

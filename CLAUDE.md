@@ -195,6 +195,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes/modules |
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
+| `OCMS_SITE_URL` | No | - | Full site URL written into site config on startup (overrides DB/admin setting); sitemap and agent-discovery docs 503 until set |
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
 | `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
 

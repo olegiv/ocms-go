@@ -69,6 +69,22 @@ func New() *Module {
 	}
 }
 
+// AllowedEnvs restricts the migrator to non-production environments. On first
+// run the module is auto-inserted as inactive outside this list.
+//
+// The migrator is a one-shot import tool that dials external databases and
+// takes source credentials; a live site does not need it running. Registering
+// it active by default is what put an unrestricted migrator on the public
+// demo, where the admin routes it registers are reachable with the published
+// demo credentials.
+//
+// This is a default for installs that have no modules row yet — existing
+// deployments keep whatever state they already have, so an operator running a
+// legitimate one-off import in production is unaffected.
+func (m *Module) AllowedEnvs() []string {
+	return []string{"development"}
+}
+
 // Init initializes the module with the given context.
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
@@ -179,9 +195,20 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 		r.Get("/migrator", m.handleListSources)
 		r.Get("/migrator/{source}", m.handleSourceForm)
 		r.Get("/migrator/{source}/status", m.handleJobStatus)
-		r.Post("/migrator/{source}/test", m.handleTestConnection)
-		r.Post("/migrator/{source}/import", m.handleImport)
-		r.Post("/migrator/{source}/delete", m.handleDeleteImported)
+
+		// A demo publishes its admin credentials, which turns every route that
+		// dials a caller-supplied host into an open outbound connector: the
+		// host allowlist matches on hostname only, so an allowed entry covers
+		// all of its ports, and pointing a source at the server's own listener
+		// parks a request until the driver's handshake times out. Repeat that
+		// and a small demo machine runs out of handlers. dbmanager gates its
+		// SQL execution the same way.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.BlockInDemoMode(middleware.RestrictionImportData))
+			r.Post("/migrator/{source}/test", m.handleTestConnection)
+			r.Post("/migrator/{source}/import", m.handleImport)
+			r.Post("/migrator/{source}/delete", m.handleDeleteImported)
+		})
 	})
 }
 

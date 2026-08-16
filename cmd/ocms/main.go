@@ -19,6 +19,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -1166,6 +1167,108 @@ func logProductionSecurityWarnings(cfg *config.Config) {
 	}
 }
 
+// applySiteURLOverride writes OCMS_SITE_URL into the site config, the same way
+// OCMS_ACTIVE_THEME overrides the theme chosen in the admin UI.
+//
+// site_url is not seeded (it is absent from store.DefaultConfig), so a
+// containerized deployment has no way to set it without logging into the admin
+// UI — and until it is set the sitemap, the agent-discovery documents, and
+// canonical/OG URLs all refuse to render. An empty OCMS_SITE_URL leaves
+// whatever the admin UI holds untouched.
+func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error {
+	siteURL := strings.TrimSpace(rawURL)
+	if siteURL == "" {
+		return nil
+	}
+	queries := store.New(db)
+
+	parsed, err := url.Parse(siteURL)
+	if err != nil {
+		return fmt.Errorf("OCMS_SITE_URL is not a valid URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("OCMS_SITE_URL must use http or https, got %q", parsed.Scheme)
+	}
+	// Hostname(), not Host: "https://:443" parses to a non-empty Host of ":443"
+	// with no hostname at all, and every generated link would point nowhere.
+	if parsed.Hostname() == "" {
+		return fmt.Errorf("OCMS_SITE_URL must include a hostname")
+	}
+	// url.Parse only checks that a port is numeric, so ":99999" survives and
+	// would be baked into every canonical, sitemap and discovery link.
+	if port := parsed.Port(); port != "" {
+		number, perr := strconv.Atoi(port)
+		if perr != nil || number < 1 || number > 65535 {
+			return fmt.Errorf("OCMS_SITE_URL port %q is not in the range 1-65535", port)
+		}
+	}
+	// Consumers build links by concatenating an absolute path onto this value —
+	// internal/seo/sitemap.go:110, meta.go:351, wellknown.go:20 — so a query or
+	// fragment silently swallows the path: "https://example.com?preview=1" plus
+	// "/about" reads as a query, not a route.
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return fmt.Errorf("OCMS_SITE_URL must not contain a query string")
+	}
+	if strings.Contains(siteURL, "#") {
+		return fmt.Errorf("OCMS_SITE_URL must not contain a fragment")
+	}
+	// Credentials in the base would be published in every sitemap entry and
+	// discovery document.
+	if parsed.User != nil {
+		return fmt.Errorf("OCMS_SITE_URL must not contain credentials")
+	}
+
+	// A path here would be advertised but not served: sitemap.xml, robots.txt,
+	// /.well-known/* and /api/v2 are all registered at the router root (see run)
+	// and nothing in the application mounts a base prefix, so a base of
+	// https://example.com/blog publishes discovery links that 404 unless an
+	// external rewrite happens to exist. Reject it rather than emit them.
+	if strings.Trim(parsed.EscapedPath(), "/") != "" {
+		return fmt.Errorf(
+			"OCMS_SITE_URL must not contain a path (%q): routes are served from the "+
+				"root and generated links would 404", parsed.EscapedPath())
+	}
+
+	// Store a canonical scheme://host base rather than the operator's exact
+	// spelling. Consumers append an absolute path, and while most trim a
+	// trailing slash first, some do not — internal/handler/frontend.go:1743
+	// builds the security.txt Canonical as siteURL+"/.well-known/security.txt",
+	// which on a value ending in "/" advertises a URL that does not identify the
+	// route that served it. Normalising here fixes every consumer at once,
+	// including the next one written.
+	siteURL = parsed.Scheme + "://" + parsed.Host
+
+	// Writing on every boot would churn updated_at and invalidate caches for a
+	// value that has not changed. Compare the normalised form, or a value that
+	// differs only by a trailing slash would be rewritten on every restart.
+	if existing, gerr := queries.GetConfigByKey(ctx, model.ConfigKeySiteURL); gerr == nil &&
+		existing.Value == siteURL {
+		return nil
+	} else if gerr != nil && !errors.Is(gerr, sql.ErrNoRows) {
+		return fmt.Errorf("reading site_url config: %w", gerr)
+	}
+
+	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return fmt.Errorf("getting default language for site_url: %w", err)
+	}
+
+	if _, err := queries.UpsertConfig(ctx, store.UpsertConfigParams{
+		Key:          model.ConfigKeySiteURL,
+		Value:        siteURL,
+		Type:         model.ConfigTypeString,
+		Description:  "Full site URL for canonical links and OG tags (set from OCMS_SITE_URL)",
+		LanguageCode: defaultLang.Code,
+		UpdatedAt:    time.Now(),
+		UpdatedBy:    sql.NullInt64{Valid: false},
+	}); err != nil {
+		return fmt.Errorf("writing site_url config: %w", err)
+	}
+
+	slog.Info("site URL set from OCMS_SITE_URL", "site_url", siteURL)
+	return nil
+}
+
 // loadActiveTheme determines and activates the appropriate theme.
 func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *theme.Manager, renderer *render.Renderer, cfg *config.Config) {
 	themeManager.SetFuncMap(renderer.TemplateFuncs())
@@ -1341,6 +1444,9 @@ func run() error {
 		if err := store.SeedDemo(ctx, db); err != nil {
 			return fmt.Errorf("seeding demo content: %w", err)
 		}
+	}
+	if err := applySiteURLOverride(ctx, db, cfg.SiteURL); err != nil {
+		return err
 	}
 	demoAdminPassword, err := store.RotateDemoAdminPassword(ctx, db)
 	if err != nil {

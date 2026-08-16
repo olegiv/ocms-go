@@ -31,6 +31,7 @@ type Config struct {
 	CustomDir     string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
 	UploadsDir    string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
 	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
+	SiteURL       string `env:"OCMS_SITE_URL"` // Full site URL written into site config on startup (overrides the admin setting)
 
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching
