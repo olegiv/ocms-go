@@ -1202,12 +1202,10 @@ func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error 
 			return fmt.Errorf("OCMS_SITE_URL port %q is not in the range 1-65535", port)
 		}
 	}
-	// Every consumer builds links by concatenating a path onto this value after
-	// trimming a trailing slash — internal/seo/sitemap.go:110, meta.go:351 and
-	// wellknown.go:20 — so a query or fragment silently swallows the path:
-	// "https://example.com?preview=1" + "/about" reads as a query, not a route.
-	// A path base such as https://example.com/blog concatenates correctly and
-	// stays allowed, since that is how a subdirectory install is configured.
+	// Consumers build links by concatenating an absolute path onto this value —
+	// internal/seo/sitemap.go:110, meta.go:351, wellknown.go:20 — so a query or
+	// fragment silently swallows the path: "https://example.com?preview=1" plus
+	// "/about" reads as a query, not a route.
 	if parsed.RawQuery != "" || parsed.ForceQuery {
 		return fmt.Errorf("OCMS_SITE_URL must not contain a query string")
 	}
@@ -1220,14 +1218,25 @@ func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error 
 		return fmt.Errorf("OCMS_SITE_URL must not contain credentials")
 	}
 
-	// Store a canonical base rather than the operator's exact spelling. Consumers
-	// append an absolute path to this value, and while most trim a trailing slash
-	// first, some do not — internal/handler/frontend.go:1743 builds the
-	// security.txt Canonical as siteURL+"/.well-known/security.txt", which on a
-	// value ending in "/" advertises a URL that does not identify the route that
-	// served it. Normalising here fixes every consumer at once, including the
-	// next one written.
-	siteURL = parsed.Scheme + "://" + parsed.Host + strings.TrimRight(parsed.EscapedPath(), "/")
+	// A path here would be advertised but not served: sitemap.xml, robots.txt,
+	// /.well-known/* and /api/v2 are all registered at the router root (see run)
+	// and nothing in the application mounts a base prefix, so a base of
+	// https://example.com/blog publishes discovery links that 404 unless an
+	// external rewrite happens to exist. Reject it rather than emit them.
+	if strings.Trim(parsed.EscapedPath(), "/") != "" {
+		return fmt.Errorf(
+			"OCMS_SITE_URL must not contain a path (%q): routes are served from the "+
+				"root and generated links would 404", parsed.EscapedPath())
+	}
+
+	// Store a canonical scheme://host base rather than the operator's exact
+	// spelling. Consumers append an absolute path, and while most trim a
+	// trailing slash first, some do not — internal/handler/frontend.go:1743
+	// builds the security.txt Canonical as siteURL+"/.well-known/security.txt",
+	// which on a value ending in "/" advertises a URL that does not identify the
+	// route that served it. Normalising here fixes every consumer at once,
+	// including the next one written.
+	siteURL = parsed.Scheme + "://" + parsed.Host
 
 	// Writing on every boot would churn updated_at and invalidate caches for a
 	// value that has not changed. Compare the normalised form, or a value that

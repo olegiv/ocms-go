@@ -127,14 +127,12 @@ func TestApplySiteURLOverrideReplacesAndIsIdempotent(t *testing.T) {
 // asserts the exact value rather than merely that something was written.
 func TestApplySiteURLOverrideNormalizes(t *testing.T) {
 	tests := map[string]struct{ raw, want string }{
-		"host only":            {"https://example.com", "https://example.com"},
-		"trailing slash":       {"https://example.com/", "https://example.com"},
-		"repeated slashes":     {"https://example.com///", "https://example.com"},
-		"subdirectory":         {"https://example.com/blog", "https://example.com/blog"},
-		"subdirectory slashed": {"https://example.com/blog/", "https://example.com/blog"},
-		"explicit port":        {"https://example.com:8443", "https://example.com:8443"},
-		"plain http (dev)":     {"http://localhost:8090", "http://localhost:8090"},
-		"surrounding space":    {"  https://example.com  ", "https://example.com"},
+		"host only":         {"https://example.com", "https://example.com"},
+		"trailing slash":    {"https://example.com/", "https://example.com"},
+		"repeated slashes":  {"https://example.com///", "https://example.com"},
+		"explicit port":     {"https://example.com:8443", "https://example.com:8443"},
+		"plain http (dev)":  {"http://localhost:8090", "http://localhost:8090"},
+		"surrounding space": {"  https://example.com  ", "https://example.com"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -214,6 +212,11 @@ func TestApplySiteURLOverrideRejectsUnusableValues(t *testing.T) {
 		"port zero":        "https://example.com:0",
 		// Host is ":443" here, non-empty, but there is no hostname at all.
 		"port without host": "https://:443",
+		// sitemap.xml, robots.txt, /.well-known/* and /api/v2 are all served
+		// from the router root and nothing mounts a base prefix, so a path here
+		// would advertise discovery links that 404.
+		"subdirectory path": "https://example.com/blog",
+		"single segment":    "https://example.com/x",
 	}
 	for name, raw := range tests {
 		t.Run(name, func(t *testing.T) {
