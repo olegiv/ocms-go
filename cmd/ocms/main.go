@@ -388,6 +388,53 @@ func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *mod
 	return nil
 }
 
+// auditStoredCanonicalURLs reports pages whose stored canonical_url no longer
+// satisfies the rule the write paths enforce. Those rows still render, but the
+// SEO meta builder falls back to the computed canonical, so without this the
+// change is invisible to the operator. It never blocks startup and never
+// rewrites a row — the fix is an edit in the admin UI.
+func auditStoredCanonicalURLs(ctx context.Context, db *sql.DB) {
+	const sampleLimit = 10
+
+	rows, err := db.QueryContext(ctx, `SELECT id, canonical_url FROM pages WHERE canonical_url != ''`)
+	if err != nil {
+		slog.Warn("could not audit stored canonical URLs", "error", err)
+		return
+	}
+	defer func() { _ = rows.Close() }()
+
+	invalid := 0
+	var sample []int64
+	for rows.Next() {
+		var (
+			id           int64
+			canonicalURL string
+		)
+		if err := rows.Scan(&id, &canonicalURL); err != nil {
+			slog.Warn("could not audit stored canonical URLs", "error", err)
+			return
+		}
+		if _, err := util.ValidateCanonicalURL(canonicalURL); err != nil {
+			invalid++
+			if len(sample) < sampleLimit {
+				sample = append(sample, id)
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.Warn("could not audit stored canonical URLs", "error", err)
+		return
+	}
+
+	if invalid > 0 {
+		slog.Warn(
+			"pages have a stored canonical URL that is no longer valid; the computed canonical URL is used instead",
+			"invalid_pages", invalid,
+			"page_ids", sample,
+		)
+	}
+}
+
 func auditRequiredHTTPSOutboundPosture(ctx context.Context, db *sql.DB) error {
 	countNonHTTPS := func(query string) (int, error) {
 		rows, err := db.QueryContext(ctx, query)
@@ -1448,6 +1495,7 @@ func run() error {
 	if err := applySiteURLOverride(ctx, db, cfg.SiteURL); err != nil {
 		return err
 	}
+	auditStoredCanonicalURLs(ctx, db)
 	demoAdminPassword, err := store.RotateDemoAdminPassword(ctx, db)
 	if err != nil {
 		return fmt.Errorf("rotating demo admin password: %w", err)

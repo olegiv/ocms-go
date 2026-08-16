@@ -201,6 +201,41 @@ func TestBuildMetaPageWithCanonicalURL(t *testing.T) {
 	}
 }
 
+// TestBuildMetaIgnoresUnusableStoredCanonicalURL guards the rows that predate
+// write-time validation. The stored value is emitted twice: as the canonical
+// link href, which both template engines scheme-filter, and as the og:url meta
+// content, which neither filters because a content attribute is not a URL
+// context. Falling back to the computed canonical is what keeps the raw value
+// off the page in both places.
+//
+// Bug state: use page.CanonicalURL directly in BuildMeta and each subtest
+// reports the value that reached og:url.
+func TestBuildMetaIgnoresUnusableStoredCanonicalURL(t *testing.T) {
+	site := &SiteConfig{SiteName: "My Site", SiteURL: "https://example.com"}
+	const computed = "https://example.com/test"
+
+	unusable := map[string]string{
+		"javascript scheme": "javascript:alert(1)",
+		"data scheme":       "data:text/html;base64,PHNjcmlwdD4=",
+		"relative path":     "/about",
+		"scheme relative":   "//cdn.example.com/a",
+		"credentials":       "https://user:pass@example.com/a",
+	}
+
+	for name, raw := range unusable {
+		t.Run(name, func(t *testing.T) {
+			meta := BuildMeta(&PageData{Title: "Test", Slug: "test", CanonicalURL: raw}, site)
+
+			if meta.Canonical != computed {
+				t.Errorf("Canonical = %q, want the computed %q", meta.Canonical, computed)
+			}
+			if meta.OGURL != computed {
+				t.Errorf("OGURL = %q, want the computed %q", meta.OGURL, computed)
+			}
+		})
+	}
+}
+
 func TestBuildMetaPageRobotsDirective(t *testing.T) {
 	site := &SiteConfig{
 		SiteName: "My Site",

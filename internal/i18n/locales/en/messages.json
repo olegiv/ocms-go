@@ -4143,6 +4143,11 @@
             "translation": "Featured image must be at least %dx%d pixels. Selected image is %dx%d."
         },
         {
+            "id": "pages.error.invalid_canonical_url",
+            "message": "Invalid canonical URL: %s",
+            "translation": "Invalid canonical URL: %s"
+        },
+        {
             "id": "msg.config_saved",
             "message": "Configuration saved successfully",
             "translation": "Configuration saved successfully"

@@ -1514,8 +1514,12 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 					Type:        input.TypeURL,
 					Value:       formVal(data.FormValues, "canonical_url", data.CanonicalURL),
 					Placeholder: "https://example.com/original-page",
+					HasError:    data.Errors["canonical_url"] != "",
 					Attributes:  templ.Attributes{"maxlength": "2048"},
 				})
+				if data.Errors["canonical_url"] != "" {
+					<span class="form-error">{ data.Errors["canonical_url"] }</span>
+				}
 				<span class="form-hint">{ pc.T("seo.canonical_url_hint") }</span>
 			</div>
 			<!-- Robots Settings -->

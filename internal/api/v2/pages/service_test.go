@@ -6,6 +6,7 @@ package pages_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,16 +229,23 @@ func TestCreateRejectsLanguagesThePublicRouterWillNotServe(t *testing.T) {
 	}
 }
 
-// TestURLSchemeAllowlistIsEnforced covers the service-level scheme check on
-// canonical_url and video_url, which is the only gate those fields have.
+// TestURLSchemeAllowlistIsEnforced covers the service-level URL checks on
+// canonical_url and video_url, which are the only gate those fields have.
 //
 // The huma `uri-reference` format accepts any relative reference, and a value
 // like "javascript:alert(1)" parses as one — request validation will not stop
-// it. Both URLs are rendered into page markup, so the allowlist in
-// validateSafeURL is what keeps a scripting scheme out of an href.
+// it. Both URLs are rendered into page markup, so these checks are what keep a
+// scripting scheme out of an href.
 //
-// Bug state: widen the scheme switch in service.go and this reports the value
-// that got through.
+// The two fields deliberately diverge. video_url keeps the scheme allowlist in
+// validateSafeURL, because a self-hosted clip at "/media/clip.mp4" is valid.
+// canonical_url goes through util.ValidateCanonicalURL, which additionally
+// requires an absolute URL with a host and no credentials: the same value is
+// emitted as og:url, which Open Graph requires to be absolute, and the admin
+// form and the content importer enforce the identical rule.
+//
+// Bug state: widen either check in service.go and this reports the value that
+// got through.
 func TestURLSchemeAllowlistIsEnforced(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
@@ -285,18 +293,54 @@ func TestURLSchemeAllowlistIsEnforced(t *testing.T) {
 		})
 	}
 
-	// Relative and absolute http(s) values stay accepted, including the empty
-	// string a client sends to clear the field.
+	// canonical_url is held to a stricter rule than video_url: it is also
+	// emitted as og:url, which Open Graph requires to be absolute, so a
+	// reference with no usable host is rejected even though the request schema
+	// still declares uri-reference.
 	for name, raw := range map[string]string{
-		"empty":    "",
-		"relative": "/about",
-		"https":    "https://example.com/a",
+		"relative":        "/about",
+		"scheme relative": "//cdn.example.com/a",
+		"credentials":     "https://user:pass@example.com/a",
+	} {
+		t.Run("canonical "+name, func(t *testing.T) {
+			_, err := svc.Create(ctx, writer, pages.CreatePageBody{
+				Title: "T", Slug: "canonical-" + strings.ReplaceAll(name, " ", "-"), Body: "b", CanonicalURL: raw,
+			})
+			var de *v2.Error
+			if !errors.As(err, &de) || de.Kind != v2.ErrValidation {
+				t.Fatalf("Create(canonical_url=%q) error = %v, want a validation error", raw, err)
+			}
+		})
+	}
+
+	// Absolute http(s) values stay accepted, as does the empty string a client
+	// sends to clear the field.
+	for name, raw := range map[string]string{
+		"empty": "",
+		"https": "https://example.com/a",
+		"http":  "http://example.com/a",
 	} {
 		t.Run("accepted "+name, func(t *testing.T) {
 			if _, err := svc.Create(ctx, writer, pages.CreatePageBody{
 				Title: "T", Slug: "ok-" + name, Body: "b", CanonicalURL: raw,
 			}); err != nil {
 				t.Fatalf("Create(canonical_url=%q) error = %v, want it accepted", raw, err)
+			}
+		})
+	}
+
+	// video_url keeps the looser rule: a self-hosted clip is a legitimate
+	// relative reference, so only the scheme allowlist applies there.
+	for name, raw := range map[string]string{
+		"empty":    "",
+		"relative": "/media/clip.mp4",
+		"https":    "https://example.com/clip.mp4",
+	} {
+		t.Run("accepted video "+name, func(t *testing.T) {
+			if _, err := svc.Create(ctx, writer, pages.CreatePageBody{
+				Title: "T", Slug: "ok-video-" + name, Body: "b", VideoURL: raw,
+			}); err != nil {
+				t.Fatalf("Create(video_url=%q) error = %v, want it accepted", raw, err)
 			}
 		})
 	}

@@ -601,6 +601,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
 		validationErrors["video_url"] = errMsg
 	}
+	if errMsg := validateCanonicalURL(input.CanonicalURL, lang); errMsg != "" {
+		validationErrors["canonical_url"] = errMsg
+	}
 	if len(input.VideoTitle) > 255 {
 		validationErrors["video_title"] = "Video title must be at most 255 characters"
 	}
@@ -882,6 +885,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
 		validationErrors["video_url"] = errMsg
+	}
+	if errMsg := validateCanonicalURL(input.CanonicalURL, lang); errMsg != "" {
+		validationErrors["canonical_url"] = errMsg
 	}
 	if len(input.VideoTitle) > 255 {
 		validationErrors["video_title"] = "Video title must be at most 255 characters"
@@ -1330,6 +1336,16 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizedBody := h.normalizePageBodyForStorage(rawVersionBody)
 
+	// The restore carries the page's current SEO fields forward, so a canonical
+	// URL stored before this field was validated would be written back as-is.
+	// Clear it instead of refusing the restore, which would strand the version
+	// behind a value the operator cannot edit from here.
+	canonicalURL, canonicalErr := util.ValidateCanonicalURL(page.CanonicalUrl)
+	if canonicalErr != nil {
+		slog.Warn("clearing invalid canonical URL during version restore",
+			"error", canonicalErr, "page_id", id, "version_id", versionId)
+	}
+
 	// Update page with version content (keeping SEO fields and scheduling intact)
 	now := time.Now()
 	_, err = h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
@@ -1346,7 +1362,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		OgImageID:         page.OgImageID,
 		NoIndex:           page.NoIndex,
 		NoFollow:          page.NoFollow,
-		CanonicalUrl:      page.CanonicalUrl,
+		CanonicalUrl:      canonicalURL,
 		ScheduledAt:       page.ScheduledAt,       // Keep scheduling intact
 		LanguageCode:      page.LanguageCode,      // Keep language intact
 		HideFeaturedImage: page.HideFeaturedImage, // Keep setting intact
@@ -1377,7 +1393,11 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page version restored", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "version_id": versionId})
 	h.logSuspiciousPageContentEvent(r, page.ID, page.Slug, rawVersionBody, "restored")
-	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Version restored successfully")
+	restoreMessage := "Version restored successfully"
+	if canonicalErr != nil {
+		restoreMessage += ". The stored canonical URL was not valid and has been cleared"
+	}
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), restoreMessage)
 }
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
@@ -1683,6 +1703,19 @@ func validatePageTitle(title string) string {
 	}
 	if len(title) < 2 {
 		return "Title must be at least 2 characters"
+	}
+	return ""
+}
+
+// validateCanonicalURL validates the page canonical URL and returns an error
+// message if invalid, or an empty string when the value may be stored.
+//
+// The rule lives in util.ValidateCanonicalURL so this form, the v2 API and the
+// content importer cannot drift apart; the detail from that helper is appended
+// to a translated prefix the same way scheduler task URLs are reported.
+func validateCanonicalURL(rawURL, lang string) string {
+	if _, err := util.ValidateCanonicalURL(rawURL); err != nil {
+		return i18n.T(lang, "pages.error.invalid_canonical_url", err.Error())
 	}
 	return ""
 }

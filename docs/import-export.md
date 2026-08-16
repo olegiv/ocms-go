@@ -212,6 +212,15 @@ The validator checks for:
 - Reference integrity (authors, categories exist)
 - File format compatibility
 - Canonical media UUID and manifest/path consistency
+- Page canonical URLs (`pages[].seo.canonical_url`)
+
+A page canonical URL must be empty or an absolute `http`/`https` URL with a
+host, no embedded credentials, and at most 2048 characters. Relative values such
+as `/about` and scheme-relative values such as `//cdn.example.com/a` are
+rejected, because the same string is published as `og:url`, which must be
+absolute. This is the identical rule the admin page form and the v2 API apply,
+so an archive exported from oCMS always re-imports. The whole archive is
+refused before any write, and the error names the offending page slug.
 
 ### Media Restore Modes
 

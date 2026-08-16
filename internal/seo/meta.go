@@ -9,6 +9,8 @@ import (
 	"html/template"
 	"strings"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Meta holds all SEO meta tag data for a page.
@@ -107,9 +109,13 @@ func BuildMeta(page *PageData, site *SiteConfig) *Meta {
 			meta.OGImage = makeAbsoluteURL(site.DefaultOGImage, site.SiteURL)
 		}
 
-		// Canonical URL
-		if page.CanonicalURL != "" {
-			meta.Canonical = page.CanonicalURL
+		// Canonical URL. A stored value is used only when it still satisfies the
+		// rule the write paths enforce: rows predate that rule, and this same
+		// string is emitted as og:url, where neither template engine applies a
+		// URL filter to a meta content attribute. An unusable value falls back
+		// to the computed canonical rather than reaching the page.
+		if canonical, err := util.ValidateCanonicalURL(page.CanonicalURL); err == nil && canonical != "" {
+			meta.Canonical = canonical
 		} else if page.Slug != "" {
 			meta.Canonical = site.SiteURL + "/" + page.Slug
 		}

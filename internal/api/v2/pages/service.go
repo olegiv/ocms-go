@@ -86,6 +86,19 @@ func validateSafeURL(field, raw string) error {
 	)
 }
 
+// validateCanonicalURLField applies the shared canonical URL rule and returns
+// the trimmed value to store. It is stricter than validateSafeURL: a canonical
+// URL is also emitted as og:url, which Open Graph requires to be absolute, so
+// relative references are rejected here even though the request schema still
+// declares uri-reference for video_url's sake.
+func validateCanonicalURLField(raw string) (string, error) {
+	trimmed, err := util.ValidateCanonicalURL(raw)
+	if err != nil {
+		return "", v2.NewValidationError(map[string]string{"canonical_url": err.Error()}, "Validation failed")
+	}
+	return trimmed, nil
+}
+
 // validateSummary trims whitespace and enforces maxSummaryRunes.
 func validateSummary(summary string) (string, error) {
 	trimmed := strings.TrimSpace(summary)
@@ -351,7 +364,8 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 	if err != nil {
 		return nil, err
 	}
-	if err := validateSafeURL("canonical_url", in.CanonicalURL); err != nil {
+	canonicalURL, err := validateCanonicalURLField(in.CanonicalURL)
+	if err != nil {
 		return nil, err
 	}
 	if err := validateSafeURL("video_url", in.VideoURL); err != nil {
@@ -410,7 +424,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 		MetaTitle:         in.MetaTitle,
 		MetaDescription:   in.MetaDescription,
 		MetaKeywords:      in.MetaKeywords,
-		CanonicalUrl:      in.CanonicalURL,
+		CanonicalUrl:      canonicalURL,
 		NoIndex:           boolToInt64(in.NoIndex),
 		NoFollow:          boolToInt64(in.NoFollow),
 		HideFeaturedImage: boolToInt64(in.HideFeaturedImage),
@@ -643,10 +657,11 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 		params.MetaKeywords = *in.MetaKeywords
 	}
 	if in.CanonicalURL != nil {
-		if err := validateSafeURL("canonical_url", *in.CanonicalURL); err != nil {
+		canonicalURL, err := validateCanonicalURLField(*in.CanonicalURL)
+		if err != nil {
 			return err
 		}
-		params.CanonicalUrl = *in.CanonicalURL
+		params.CanonicalUrl = canonicalURL
 	}
 	if in.NoIndex != nil {
 		params.NoIndex = boolToInt64(*in.NoIndex)

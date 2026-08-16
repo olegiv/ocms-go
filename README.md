@@ -134,7 +134,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 - **Open Graph**: Full Open Graph and Twitter Card support
 - **Sitemap**: Auto-generated sitemap.xml
 - **Robots.txt**: Configurable robots.txt generation
-- **Canonical URLs**: Set canonical URLs to avoid duplicate content
+- **Canonical URLs**: Set canonical URLs to avoid duplicate content (absolute `http`/`https` only, since the value is also published as `og:url`)
 - **NoIndex/NoFollow**: Control search engine indexing per page
 
 ### Administration

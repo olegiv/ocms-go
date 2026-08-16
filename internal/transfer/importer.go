@@ -432,6 +432,15 @@ func (i *Importer) importWithPreCommit(
 		return result, fmt.Errorf("language contract validation failed: %s", contractErrors[0].Message)
 	}
 
+	// Canonical URLs are checked unconditionally, unlike the media checks
+	// below: an archive is an untrusted payload, and this is the only gate
+	// between it and a value that gets published into a canonical link and an
+	// og:url meta tag.
+	if err := validateImportedPageCanonicalURLs(data, opts); err != nil {
+		result.AddError("page", "", err.Error())
+		return result, err
+	}
+
 	if importNeedsMediaIdentityResolution(data, opts) {
 		if i.store == nil {
 			return result, errors.New("import requires a destination store")
@@ -691,6 +700,26 @@ func validateImportedPageMediaReferences(
 			if !exists {
 				return fmt.Errorf("page %q references unavailable media UUID %q", page.Slug, ref.UUID)
 			}
+		}
+	}
+	return nil
+}
+
+// validateImportedPageCanonicalURLs rejects an archive whose page SEO carries a
+// canonical URL that could not be entered through the admin form or the v2 API,
+// so all three write paths agree on what may reach the pages table. It runs
+// after media URL rewriting, so the value checked is the one that would be
+// stored.
+func validateImportedPageCanonicalURLs(data *ExportData, opts ImportOptions) error {
+	if !opts.ImportPages {
+		return nil
+	}
+	for _, page := range data.Pages {
+		if page.SEO == nil {
+			continue
+		}
+		if _, err := util.ValidateCanonicalURL(page.SEO.CanonicalURL); err != nil {
+			return fmt.Errorf("page %q canonical URL: %w", page.Slug, err)
 		}
 	}
 	return nil

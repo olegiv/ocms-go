@@ -24,11 +24,16 @@ var urlFormatFields = []string{"canonical_url", "video_url"}
 // declared with format `uri` on either the create or the update body.
 //
 // huma v2.39.1 made `uri` reject every relative reference AND the empty string.
-// Both are values this API has always accepted: a relative canonical URL is
-// valid content, and an explicit "" is the only way a PATCH can clear the
-// field (Service.Update treats a non-nil pointer as "write this value", so
-// omitting the key means "leave unchanged"). Switching to `uri` would silently
-// make these fields write-once for every API client.
+// Both still have to reach the service layer: a relative video_url is valid
+// content (a self-hosted clip at "/media/clip.mp4"), and an explicit "" is the
+// only way a PATCH can clear either field (Service.Update treats a non-nil
+// pointer as "write this value", so omitting the key means "leave unchanged").
+// Switching to `uri` would silently make these fields write-once for every API
+// client.
+//
+// canonical_url is separately restricted to absolute http/https URLs, but that
+// happens in the service (util.ValidateCanonicalURL), not here — the tag has to
+// stay permissive enough for video_url and for the clearing "".
 //
 // Bug state: change either tag in pages/types.go back to format:"uri" and this
 // names the offending property.
@@ -63,6 +68,13 @@ func TestPageURLFieldsUseURIReference(t *testing.T) {
 // outcomes that clients depend on, at the layer where huma enforces `format`.
 // The schema assertion above catches a tag edit; this catches huma changing
 // what a given format means, which is exactly how v2.39.1 broke `uri`.
+//
+// Scope note: this asserts only that huma lets these values through to the
+// service. It is not a statement that every value here is storable — a relative
+// canonical_url passes request validation and is then rejected by
+// util.ValidateCanonicalURL one layer down, which
+// TestURLSchemeAllowlistIsEnforced covers. Do not "fix" the tag because a case
+// below looks like it contradicts that rule.
 func TestPageURLValidationAcceptsClearAndRelative(t *testing.T) {
 	registry, schemas := pageBodySchemas(t)
 	create := schemas["create"]

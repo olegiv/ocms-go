@@ -3628,6 +3628,11 @@
             "translation": "Изображение должно быть не менее %dx%d пикселей. Выбранное изображение: %dx%d."
         },
         {
+            "id": "pages.error.invalid_canonical_url",
+            "message": "Invalid canonical URL: %s",
+            "translation": "Некорректный канонический URL: %s"
+        },
+        {
             "id": "msg.config_saved",
             "message": "Configuration saved successfully",
             "translation": "Настройки успешно сохранены"
