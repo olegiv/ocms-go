@@ -454,7 +454,7 @@ func createTrackedCleanupMedia(t *testing.T, m *Module) int64 {
 // watching.
 //
 // Media URLs are plain text wherever they appear, with no foreign key behind
-// them, so a menu item, category description, form, submission, widget or
+// them, so a menu item, category description, form, widget or
 // config value can hold one exactly as a page body can. Delete Imported
 // Content checked only page image columns and page bodies, so it removed the
 // row and its files while those administrator-owned records kept pointing at
@@ -468,10 +468,6 @@ func TestDeleteRetainsMediaReferencedOutsidePages(t *testing.T) {
 			VALUES ((SELECT id FROM menus ORDER BY id DESC LIMIT 1),'Brochure','` + mediaURL + `',0);`,
 		"category description": `INSERT INTO categories (name,slug,description,language_code)
 			VALUES ('Docs','docs','<a href="` + mediaURL + `">brochure</a>','en');`,
-		"form submission": `INSERT INTO forms (name,slug,title,language_code,created_at,updated_at)
-			VALUES ('Contact','contact','Contact','en',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
-			INSERT INTO form_submissions (form_id,data,language_code,created_at)
-			VALUES ((SELECT id FROM forms ORDER BY id DESC LIMIT 1),'{"file":"` + mediaURL + `"}','en',CURRENT_TIMESTAMP);`,
 		"config value": `INSERT INTO config (key,value,language_code) VALUES ('site_brochure','` + mediaURL + `','en');`,
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -490,6 +486,32 @@ func TestDeleteRetainsMediaReferencedOutsidePages(t *testing.T) {
 					"points at a file that is gone", name, err)
 			}
 		})
+	}
+}
+
+// Public submissions are attacker-controlled and must not turn a submitted
+// URL into a trusted reference that permanently exempts imported media from
+// cleanup.
+func TestDeleteIgnoresMediaURLsInPublicFormSubmissions(t *testing.T) {
+	m := testModule(t)
+	ctx := context.Background()
+	mediaID := createTrackedCleanupMedia(t, m)
+	mediaURL := "/uploads/originals/" + cleanupTestUUID + "/x.pdf"
+
+	if _, err := m.ctx.DB.Exec(`
+		INSERT INTO forms (name,slug,title,language_code,created_at,updated_at)
+		VALUES ('Contact','contact','Contact','en',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+		INSERT INTO form_submissions (form_id,data,language_code,created_at)
+		VALUES ((SELECT id FROM forms ORDER BY id DESC LIMIT 1), ?, 'en', CURRENT_TIMESTAMP)`,
+		`{"file":"`+mediaURL+`"}`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := m.deleteImportedItems(ctx, "drupal"); err != nil {
+		t.Fatalf("deleteImportedItems() error = %v", err)
+	}
+	if _, err := store.New(m.ctx.DB).GetMediaByID(ctx, mediaID); err == nil {
+		t.Fatal("attacker-controlled public submission preserved imported media")
 	}
 }
 
