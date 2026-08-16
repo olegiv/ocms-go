@@ -1258,7 +1258,7 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 				}
 				// Media URLs are plain text everywhere they appear and no
 				// foreign key follows them, so a menu item, category
-				// description, form, submission, widget or config value can
+				// description, form, widget or config value can
 				// hold one just as a page body can. Checking only pages let
 				// Delete Imported Content remove the row and its files while
 				// administrator-owned records kept pointing at them, leaving

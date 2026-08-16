@@ -151,8 +151,10 @@ WHERE instr(
 --
 -- Media URLs are plain text with no foreign key, so nothing in the schema
 -- stops a file being deleted while a menu item, category description, form,
--- submission, widget or config value still links to it. The caller passes the
--- full '/uploads/<dir>/<uuid>/' prefix; matching the prefix rather than a whole
+-- widget or config value still links to it. Public form submissions are not
+-- trusted references because unauthenticated visitors control their data.
+-- The caller passes the full '/uploads/<dir>/<uuid>/' prefix; matching the
+-- prefix rather than a whole
 -- URL keeps filenames, variants and query strings out of the comparison.
 SELECT
     (SELECT COUNT(*) FROM pages
@@ -171,7 +173,6 @@ SELECT
          OR instr(COALESCE(help_text, ''), sqlc.arg(media_path)) > 0
          OR instr(COALESCE(options, ''), sqlc.arg(media_path)) > 0
          OR instr(COALESCE(validation, ''), sqlc.arg(media_path)) > 0)
-  + (SELECT COUNT(*) FROM form_submissions WHERE instr(data, sqlc.arg(media_path)) > 0)
   + (SELECT COUNT(*) FROM widgets
       WHERE instr(COALESCE(content, ''), sqlc.arg(media_path)) > 0
          OR instr(COALESCE(settings, ''), sqlc.arg(media_path)) > 0)
