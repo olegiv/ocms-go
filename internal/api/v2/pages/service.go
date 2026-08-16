@@ -493,11 +493,10 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 	// BuildMeta refuses to render it — so carrying it forward would only keep
 	// the startup audit warning alive forever. Dropping it here lets any
 	// ordinary edit clean the row, matching what the importer does.
+	// Reported after the commit, not here: this runs before body, slug and
+	// category validation and before the transaction, so warning now would
+	// claim a mutation that a later rejection never makes.
 	baselineCanonicalURL, canonicalErr := util.ValidateCanonicalURL(existing.CanonicalUrl)
-	if canonicalErr != nil {
-		slog.Warn("clearing invalid stored canonical URL on update",
-			"error", canonicalErr, "page_id", existing.ID)
-	}
 
 	params := store.UpdatePageParams{
 		ID:                existing.ID,
@@ -588,6 +587,10 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, v2.NewError(v2.ErrInternal, "Failed to commit page update")
+	}
+	if canonicalErr != nil {
+		slog.Warn("cleared invalid stored canonical URL on update",
+			"error", canonicalErr, "page_id", page.ID)
 	}
 	s.invalidatePageCache(page.ID)
 	s.logPageAudit(ctx, a, "API: Page updated", map[string]any{

@@ -1960,7 +1960,11 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	pv.MetaKeywords = p.MetaKeywords
 	pv.NoIndex = p.NoIndex != 0
 	pv.NoFollow = p.NoFollow != 0
-	pv.CanonicalURL = p.CanonicalUrl
+	// PageView is handed to themes as .Page, and the theme funcmap exposes
+	// safeURL, which returns template.URL and defeats contextual escaping. A
+	// legacy row must therefore be sanitized here, not only where Meta is built:
+	// {{safeURL .Page.CanonicalURL}} in an href would otherwise still be live.
+	pv.CanonicalURL, _ = util.ValidateCanonicalURL(p.CanonicalUrl)
 
 	// Get OG image (from og_image_id or fall back to best featured image variant).
 	// Variant priority: og > large > medium > original.

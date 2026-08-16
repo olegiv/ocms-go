@@ -432,12 +432,6 @@ func (i *Importer) importWithPreCommit(
 		return result, fmt.Errorf("language contract validation failed: %s", contractErrors[0].Message)
 	}
 
-	// Canonical URLs are normalized unconditionally, unlike the media checks
-	// below: an archive is an untrusted payload, and this is the only gate
-	// between it and a value that gets published into a canonical link and an
-	// og:url meta tag.
-	data = normalizeImportedPageCanonicalURLs(data, opts, result)
-
 	if importNeedsMediaIdentityResolution(data, opts) {
 		if i.store == nil {
 			return result, errors.New("import requires a destination store")
@@ -700,66 +694,6 @@ func validateImportedPageMediaReferences(
 		}
 	}
 	return nil
-}
-
-// normalizeImportedPageCanonicalURLs brings archive canonical URLs in line with
-// the rule the admin form and the v2 API enforce, so all three write paths agree
-// on what may reach the pages table.
-//
-// It clears rather than refuses. Every release before this rule shipped let the
-// admin form store any string, and the exporter writes the column out verbatim,
-// so refusing would make an instance's own backups unrestorable — and the rows
-// that fail here are exactly the ones the startup audit already reports. A
-// cleared value is recorded as a warning so the operator sees what changed, and
-// the page still renders: BuildMeta computes the canonical URL when the stored
-// one is empty.
-//
-// Valid values are written back trimmed, so the string that was validated is
-// the string that gets stored.
-//
-// The caller's payload is never modified: a ZIP import runs this whole function
-// twice over one ExportData, once for the dry-run preflight and once for real.
-// Mutating in place would let the preflight clear the value and keep the
-// warning, leaving the real result silent about a URL it had already discarded.
-// Pages and the SEO blocks that change are copied instead, so each pass sees the
-// archive as it arrived and reports what it did.
-func normalizeImportedPageCanonicalURLs(data *ExportData, opts ImportOptions, result *ImportResult) *ExportData {
-	if !opts.ImportPages {
-		return data
-	}
-
-	// Copy on first change: an archive with nothing to fix keeps the original.
-	normalized := data
-	ownPages := func() {
-		if normalized != data {
-			return
-		}
-		clone := *data
-		clone.Pages = append([]ExportPage(nil), data.Pages...)
-		normalized = &clone
-	}
-
-	for index := range data.Pages {
-		seo := data.Pages[index].SEO
-		if seo == nil || seo.CanonicalURL == "" {
-			continue
-		}
-		trimmed, err := util.ValidateCanonicalURL(seo.CanonicalURL)
-		if err == nil && trimmed == seo.CanonicalURL {
-			continue
-		}
-		ownPages()
-		updated := *seo
-		if err != nil {
-			result.AddWarning("page", data.Pages[index].Slug, fmt.Sprintf(
-				"canonical URL %q was cleared: %v", seo.CanonicalURL, err))
-			updated.CanonicalURL = ""
-		} else {
-			updated.CanonicalURL = trimmed
-		}
-		normalized.Pages[index].SEO = &updated
-	}
-	return normalized
 }
 
 func validateImportedContentMediaURLs(
@@ -4261,7 +4195,7 @@ func (i *Importer) importPages(
 				result.IncrementSkipped("pages")
 				continue
 			case ConflictOverwrite:
-				pageID, existsErr = i.updateExistingPage(ctx, queries, page, existing.ID, mediaMap, defaultLangCode, now)
+				pageID, existsErr = i.updateExistingPage(ctx, queries, page, existing.ID, mediaMap, defaultLangCode, now, result)
 				if existsErr != nil {
 					result.AddError("page", page.Slug, existsErr.Error())
 					continue
@@ -4286,7 +4220,7 @@ func (i *Importer) importPages(
 
 		if shouldCreate {
 			var createErr error
-			pageID, createErr = i.createNewPage(ctx, queries, page, userMap, mediaMap, defaultLangCode, now)
+			pageID, createErr = i.createNewPage(ctx, queries, page, userMap, mediaMap, defaultLangCode, now, result)
 			if createErr != nil {
 				result.AddError("page", page.Slug, createErr.Error())
 				continue
@@ -4357,8 +4291,16 @@ type pageImportFields struct {
 	ScheduledAt     sql.NullTime
 }
 
-// extractPageFields extracts common fields from an ExportPage using the provided maps.
-func extractPageFields(page ExportPage, mediaMap map[string]int64, defaultLangCode string) pageImportFields {
+// extractPageFields extracts common fields from an ExportPage using the provided
+// maps. It is the one helper both page write paths share, which is why the
+// canonical URL rule is applied here: validating earlier would report a value as
+// cleared for pages that conflict resolution then skips without writing.
+func extractPageFields(
+	page ExportPage,
+	mediaMap map[string]int64,
+	defaultLangCode string,
+	result *ImportResult,
+) pageImportFields {
 	f := pageImportFields{}
 
 	// Get featured image ID
@@ -4387,7 +4329,15 @@ func extractPageFields(page ExportPage, mediaMap map[string]int64, defaultLangCo
 		f.MetaTitle = page.SEO.MetaTitle
 		f.MetaDescription = page.SEO.MetaDescription
 		f.MetaKeywords = page.SEO.MetaKeywords
-		f.CanonicalURL = page.SEO.CanonicalURL
+		// Cleared rather than refused: releases before this rule let the admin
+		// form store any string and export writes the column out verbatim, so
+		// refusing would make older backups unrestorable.
+		trimmed, err := util.ValidateCanonicalURL(page.SEO.CanonicalURL)
+		if err != nil && result != nil {
+			result.AddWarning("page", page.Slug, fmt.Sprintf(
+				"canonical URL %q was cleared: %v", page.SEO.CanonicalURL, err))
+		}
+		f.CanonicalURL = trimmed
 		if page.SEO.NoIndex {
 			f.NoIndex = 1
 		}
@@ -4413,8 +4363,9 @@ func (i *Importer) updateExistingPage(
 	mediaMap map[string]int64,
 	defaultLangCode string,
 	now time.Time,
+	result *ImportResult,
 ) (int64, error) {
-	f := extractPageFields(page, mediaMap, defaultLangCode)
+	f := extractPageFields(page, mediaMap, defaultLangCode, result)
 
 	updated, err := queries.UpdatePage(ctx, store.UpdatePageParams{
 		ID:              existingID,
@@ -4450,6 +4401,7 @@ func (i *Importer) createNewPage(
 	mediaMap map[string]int64,
 	defaultLangCode string,
 	now time.Time,
+	result *ImportResult,
 ) (int64, error) {
 	// Get author ID
 	authorID := int64(1)
@@ -4459,7 +4411,7 @@ func (i *Importer) createNewPage(
 		}
 	}
 
-	f := extractPageFields(page, mediaMap, defaultLangCode)
+	f := extractPageFields(page, mediaMap, defaultLangCode, result)
 
 	created, err := queries.CreatePage(ctx, store.CreatePageParams{
 		Title:           page.Title,

@@ -152,6 +152,55 @@ func TestImportFromZipReportsClearedCanonicalURL(t *testing.T) {
 	}
 }
 
+// TestImportSkippedPageReportsNoCanonicalWarning pins that a warning describes
+// a write that happened. Under ConflictSkip an existing slug is left alone, so
+// reporting the page as both skipped and cleared would tell the operator their
+// database changed when it did not — which is why the rule is applied where the
+// row is built rather than in a pass over the whole archive.
+//
+// Bug state: validate the payload up front instead of in extractPageFields and
+// this reports a warning for a page nothing touched.
+func TestImportSkippedPageReportsNoCanonicalWarning(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+
+	const slug = "already-here"
+	importer := NewImporter(ts.Queries, ts.DB, slog.Default())
+	opts := ImportOptions{ConflictStrategy: ConflictSkip, ImportPages: true}
+
+	// Seed the destination with a clean row under the same slug.
+	if _, err := importer.Import(ts.Ctx,
+		canonicalURLArchive(ts.User.Email, slug, "https://example.com/kept"), opts); err != nil {
+		t.Fatalf("seed import: %v", err)
+	}
+
+	// Re-import the same slug carrying an invalid canonical URL. The page is
+	// skipped, so nothing is cleared and nothing should be reported.
+	result, err := importer.Import(ts.Ctx,
+		canonicalURLArchive(ts.User.Email, slug, "javascript:alert(1)"), opts)
+	if err != nil {
+		t.Fatalf("Import error = %v, want the archive to land", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("Import result = %+v, want a successful result", result)
+	}
+	if result.Skipped["pages"] != 1 {
+		t.Fatalf("skipped pages = %d, want the existing slug skipped", result.Skipped["pages"])
+	}
+	if len(result.Warnings) != 0 {
+		t.Errorf("a skipped page produced warnings, so the report claims a change that never happened: %+v",
+			result.Warnings)
+	}
+
+	page, lookupErr := ts.Queries.GetPageBySlug(ts.Ctx, slug)
+	if lookupErr != nil {
+		t.Fatalf("page lookup = %v", lookupErr)
+	}
+	if page.CanonicalUrl != "https://example.com/kept" {
+		t.Errorf("stored canonical_url = %q, want the existing row untouched", page.CanonicalUrl)
+	}
+}
+
 // TestImportAcceptsAbsoluteCanonicalURL pins that the check does not disturb the
 // archives an operator actually restores, and that a valid value is stored
 // exactly as validated — trimmed. Storing the untrimmed input while validating

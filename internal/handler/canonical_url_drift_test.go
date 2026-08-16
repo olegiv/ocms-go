@@ -23,8 +23,8 @@ const canonicalURLValidator = "validatecanonicalurl"
 
 // canonicalURLWriter records one pinned write path and the function that is
 // responsible for validating what it stores. validatedIn is usually the writer
-// itself; it differs only where validation happens in an earlier pass over the
-// whole payload, as the importer does in its preflight.
+// itself; it differs only where several writers share one field-building
+// helper, as the importer's create and update paths do.
 type canonicalURLWriter struct {
 	reason      string
 	validatedIn string
@@ -52,12 +52,12 @@ var canonicalURLWriters = map[string]canonicalURLWriter{
 		validatedIn: "RestoreVersion",
 	},
 	"internal/transfer/importer.go:createNewPage": {
-		reason:      "archive import; the whole payload is normalized in preflight",
-		validatedIn: "normalizeImportedPageCanonicalURLs",
+		reason:      "archive import; both write paths build params through extractPageFields",
+		validatedIn: "extractPageFields",
 	},
 	"internal/transfer/importer.go:updateExistingPage": {
-		reason:      "archive import; the whole payload is normalized in preflight",
-		validatedIn: "normalizeImportedPageCanonicalURLs",
+		reason:      "archive import; both write paths build params through extractPageFields",
+		validatedIn: "extractPageFields",
 	},
 	"internal/api/v2/pages/service.go:Create": {
 		reason:      "v2 create",
