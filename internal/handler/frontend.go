@@ -889,7 +889,8 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 				publishedAt = &t
 			}
 			canonical := siteURL + "/" + page.Slug
-			mdBody, mdErr := mdneg.PageToMarkdown(page.Title, page.Summary, page.Body, canonical, publishedAt, h.markdownLabels(r))
+			bodyHTML := string(h.trustedPageBody(page.Body))
+			mdBody, mdErr := mdneg.PageToMarkdown(page.Title, page.Summary, bodyHTML, canonical, publishedAt, h.markdownLabels(r))
 			if mdErr != nil {
 				slog.Error("markdown conversion failed", "error", mdErr, "slug", page.Slug)
 			} else {

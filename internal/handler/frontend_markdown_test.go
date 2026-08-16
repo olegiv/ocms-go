@@ -229,12 +229,13 @@ func TestFrontendHandler_Page_Markdown_ScriptsStripped(t *testing.T) {
 	seedSiteURL(t, db, "https://example.com")
 	seedPageWithHTML(t, db, "evil",
 		"Safe",
-		`<p>Hello</p><script>alert(1)</script><iframe src="javascript:evil"></iframe>`,
+		`<p>Hello</p><script>alert(1)</script><iframe src="javascript:evil"></iframe><a href="javascript:alert('xss')">click</a>`,
 		"",
 		admin.ID,
 	)
 
 	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	h.SetSanitizePageHTML(true)
 	req := newMarkdownPageRequest("evil")
 	w := httptest.NewRecorder()
 
