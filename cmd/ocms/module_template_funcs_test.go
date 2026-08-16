@@ -25,8 +25,15 @@ import (
 // allModules mirrors registerModules() so this test sees exactly the set that
 // ships. Constructing with New() is enough: TemplateFuncs() returns closures
 // over the module value and does not require Init.
+//
+// The custom modules are appended from the registry rather than listed by hand,
+// because registerModules() ends by registering everything in
+// module.CustomModules() — package main blank-imports custom/modules, so the
+// shipped bookmarks module self-registers through init(). Enumerating only the
+// built-ins let bookmarkCount and bookmarkFavorites ship with no placeholder
+// while this test still passed.
 func allModules() []module.Module {
-	return []module.Module{
+	mods := []module.Module{
 		example.New(),
 		developer.New(),
 		analytics_ext.New(),
@@ -38,6 +45,29 @@ func allModules() []module.Module {
 		migrator.New(),
 		dbmanager.New(),
 		analytics_int.New(),
+	}
+	return append(mods, module.CustomModules()...)
+}
+
+// TestAllModulesCoversCustomModules fails if the custom modules stop reaching
+// the enumeration above — through a dropped blank import, say — which would
+// make the placeholder guard silently stop covering them.
+func TestAllModulesCoversCustomModules(t *testing.T) {
+	custom := module.CustomModules()
+	if len(custom) == 0 {
+		t.Fatal("no custom modules registered; package main blank-imports " +
+			"custom/modules, so bookmarks should self-register through init()")
+	}
+
+	enumerated := make(map[string]bool)
+	for _, mod := range allModules() {
+		enumerated[mod.Name()] = true
+	}
+	for _, mod := range custom {
+		if !enumerated[mod.Name()] {
+			t.Errorf("custom module %q is registered at startup but missing from "+
+				"allModules(); its template funcs would go unchecked", mod.Name())
+		}
 	}
 }
 
