@@ -329,21 +329,37 @@ func (m *Module) getPageStats(ctx context.Context, path string) PageStats {
 	// Build LIKE pattern for language-prefixed paths (e.g., "%/my-post" matches "/ru/my-post")
 	langPattern := "%/" + path[1:] // path starts with "/", strip it for the LIKE pattern
 
+	// The language pattern is only anchored at the end, so "%/karfagen" also
+	// matches the taxonomy archives /category/karfagen and /tag/karfagen — a
+	// post whose slug doubles as a category or tag slug would otherwise absorb
+	// its archive's views. Both prefixes are fixed core routes, so excluding
+	// them is safe for every site.
+	//
+	// The leading % is deliberate: it also catches language-prefixed archives
+	// such as /ru/category/karfagen. It cannot swallow a real article, because
+	// the pattern requires a slash AFTER the segment and slugs never contain
+	// slashes — a post whose slug is literally "category" lives at /category
+	// (or /ru/category) and is unaffected.
+	//
+	// page_analytics_reads needs no such filter: reads are only emitted from
+	// pages carrying the single-page body class, which archives never do.
+	const notTaxonomy = ` AND path NOT LIKE '%/category/%' AND path NOT LIKE '%/tag/%'`
+
 	// Count views from daily aggregates + today's raw views
 	today := time.Now().Format(dateFormat)
 	var aggregatedViews int64
 	_ = m.ctx.DB.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(views), 0)
 		FROM page_analytics_daily
-		WHERE path = ? OR path LIKE ?
-	`, path, langPattern).Scan(&aggregatedViews)
+		WHERE (path = ? OR path LIKE ?)`+notTaxonomy,
+		path, langPattern).Scan(&aggregatedViews)
 
 	var todayViews int64
 	_ = m.ctx.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM page_analytics_views
-		WHERE (path = ? OR path LIKE ?) AND DATE(created_at) = ?
-	`, path, langPattern, today).Scan(&todayViews)
+		WHERE (path = ? OR path LIKE ?) AND DATE(created_at) = ?`+notTaxonomy,
+		path, langPattern, today).Scan(&todayViews)
 
 	stats.Views = aggregatedViews + todayViews
 
