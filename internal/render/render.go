@@ -369,6 +369,29 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"analyticsExtBody":  func(args ...any) template.HTML { return "" },
 		"embedHead":         func(args ...any) template.HTML { return "" },
 		"embedBody":         func(args ...any) template.HTML { return "" },
+		// analytics_int no-op placeholders. Without these, a theme that shows
+		// per-post view counts fails to PARSE whenever the module is inactive —
+		// html/template resolves function names at parse time — and a theme that
+		// fails to parse is silently dropped (internal/theme/manager.go), so the
+		// site falls back to whichever theme sorts first. That is a deferred,
+		// near-invisible outage, which is why the placeholders matter.
+		//
+		// analyticsPostStats cannot return analytics_int.PageStats: that package
+		// imports this one. A map carries the same two fields for templates —
+		// {{$s.Views}} and {{gt $s.Reads 0}} both work — and the signature
+		// mismatch is harmless because only the NAME is checked at parse time,
+		// and AddTemplateFuncs replaces these before any theme is parsed.
+		"analyticsPostStats": func(args ...any) map[string]int64 {
+			return map[string]int64{"Views": 0, "Reads": 0}
+		},
+		"analyticsShowPostStats":  func() bool { return false },
+		"analyticsIntReadTracker": func(args ...any) template.HTML { return "" },
+		// Same contract for the remaining module-supplied funcs. These are
+		// surfaced by TestEveryModuleTemplateFuncHasRendererPlaceholder, which
+		// exists so a new module func cannot reintroduce the trap by omission.
+		"exampleFunc":     func() string { return "" },
+		"exampleVersion":  func() string { return "" },
+		"sentinelVersion": func() string { return "" },
 		"deref": func(p *int64) int64 {
 			if p == nil {
 				return 0
