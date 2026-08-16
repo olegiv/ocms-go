@@ -8,9 +8,11 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -19,6 +21,13 @@ import (
 // the create and update flows need to re-render a form that failed validation.
 func newCanonicalURLPagesHandler(t *testing.T) (*PagesHandler, *store.Queries, store.User) {
 	t.Helper()
+
+	// Without a catalog i18n.T echoes the key back, so the assertions below
+	// would pass on a message no operator ever sees. Loading it means the tests
+	// check the rendered English text.
+	if err := i18n.Init(nil); err != nil {
+		t.Fatalf("init i18n: %v", err)
+	}
 
 	db, sm := testHandlerSetup(t)
 	renderer, err := render.New(render.Config{
@@ -81,12 +90,84 @@ func TestCreatePageRejectsUnusableCanonicalURL(t *testing.T) {
 			})
 
 			// A rejected submission re-renders the form in place; only a
-			// successful write redirects to the page list.
-			if w.Code == http.StatusSeeOther || w.Code == http.StatusFound {
-				t.Fatalf("canonical_url=%q produced a redirect (%d), want the form re-rendered with an error", raw, w.Code)
+			// successful write redirects to the page list. Asserting 200 and
+			// the rendered field error keeps an unrelated 500 from satisfying
+			// this test.
+			if w.Code != http.StatusOK {
+				t.Fatalf("canonical_url=%q produced status %d, want 200 with the form re-rendered", raw, w.Code)
+			}
+			if body := w.Body.String(); !strings.Contains(body, "Invalid canonical URL") {
+				t.Errorf("canonical_url=%q did not render a canonical URL field error", raw)
 			}
 			if _, err := queries.GetPageBySlug(t.Context(), slug); err == nil {
 				t.Fatalf("canonical_url=%q was stored, want the write refused", raw)
+			}
+		})
+	}
+}
+
+// TestUpdatePageRejectsUnusableCanonicalURL covers the admin edit form. Create
+// and Update are separate 300-line handlers with their own copy of the
+// validation block, so a test that only drives Create leaves half the form
+// unguarded — and an editor changing an existing page is the more common
+// operation of the two.
+//
+// Bug state: drop the validateCanonicalURL call from Update and every subtest
+// reports the stored value that should have been refused.
+func TestUpdatePageRejectsUnusableCanonicalURL(t *testing.T) {
+	rejected := map[string]string{
+		"javascript scheme": "javascript:alert(1)",
+		"relative path":     "/about",
+		"credentials":       "https://user:pass@example.com/a",
+	}
+
+	for name, raw := range rejected {
+		t.Run(name, func(t *testing.T) {
+			h, queries, user := newCanonicalURLPagesHandler(t)
+			slug := "update-" + strings.ReplaceAll(name, " ", "-")
+
+			// Seed a page through the create handler so the row matches what
+			// the edit form would load.
+			postPageForm(t, h, user, url.Values{
+				"title":         {"Editable"},
+				"slug":          {slug},
+				"body":          {"<p>Body</p>"},
+				"status":        {"draft"},
+				"canonical_url": {"https://example.com/original"},
+			})
+			page, err := queries.GetPageBySlug(t.Context(), slug)
+			if err != nil {
+				t.Fatalf("seed page: %v", err)
+			}
+
+			form := url.Values{
+				"title":         {"Editable"},
+				"slug":          {slug},
+				"body":          {"<p>Body</p>"},
+				"status":        {"draft"},
+				"canonical_url": {raw},
+			}
+			req := httptest.NewRequest(http.MethodPost,
+				"/admin/pages/"+strconv.FormatInt(page.ID, 10), strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req = requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(page.ID, 10)})
+			req = requestWithSession(h.sessionManager, req)
+			req = addUserToContext(req, &user)
+			w := httptest.NewRecorder()
+			h.Update(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("canonical_url=%q produced status %d, want 200 with the form re-rendered", raw, w.Code)
+			}
+			if body := w.Body.String(); !strings.Contains(body, "Invalid canonical URL") {
+				t.Errorf("canonical_url=%q did not render a canonical URL field error", raw)
+			}
+			stored, err := queries.GetPageBySlug(t.Context(), slug)
+			if err != nil {
+				t.Fatalf("reload page: %v", err)
+			}
+			if stored.CanonicalUrl != "https://example.com/original" {
+				t.Errorf("stored canonical_url = %q, want the original value left untouched", stored.CanonicalUrl)
 			}
 		})
 	}

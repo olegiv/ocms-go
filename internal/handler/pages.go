@@ -601,8 +601,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
 		validationErrors["video_url"] = errMsg
 	}
-	if errMsg := validateCanonicalURL(input.CanonicalURL, lang); errMsg != "" {
-		validationErrors["canonical_url"] = errMsg
+	canonicalURL, canonicalErrMsg := validateCanonicalURL(input.CanonicalURL, lang)
+	if canonicalErrMsg != "" {
+		validationErrors["canonical_url"] = canonicalErrMsg
 	}
 	if len(input.VideoTitle) > 255 {
 		validationErrors["video_title"] = "Video title must be at most 255 characters"
@@ -665,7 +666,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		OgImageID:         input.OgImageID,
 		NoIndex:           input.NoIndex,
 		NoFollow:          input.NoFollow,
-		CanonicalUrl:      input.CanonicalURL,
+		CanonicalUrl:      canonicalURL,
 		ScheduledAt:       input.ScheduledAt,
 		LanguageCode:      input.LanguageCode,
 		HideFeaturedImage: input.HideFeaturedImage,
@@ -886,8 +887,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
 		validationErrors["video_url"] = errMsg
 	}
-	if errMsg := validateCanonicalURL(input.CanonicalURL, lang); errMsg != "" {
-		validationErrors["canonical_url"] = errMsg
+	canonicalURL, canonicalErrMsg := validateCanonicalURL(input.CanonicalURL, lang)
+	if canonicalErrMsg != "" {
+		validationErrors["canonical_url"] = canonicalErrMsg
 	}
 	if len(input.VideoTitle) > 255 {
 		validationErrors["video_title"] = "Video title must be at most 255 characters"
@@ -958,7 +960,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		OgImageID:         input.OgImageID,
 		NoIndex:           input.NoIndex,
 		NoFollow:          input.NoFollow,
-		CanonicalUrl:      input.CanonicalURL,
+		CanonicalUrl:      canonicalURL,
 		ScheduledAt:       input.ScheduledAt,
 		LanguageCode:      existingPage.LanguageCode,
 		HideFeaturedImage: input.HideFeaturedImage,
@@ -1338,12 +1340,23 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 
 	// The restore carries the page's current SEO fields forward, so a canonical
 	// URL stored before this field was validated would be written back as-is.
-	// Clear it instead of refusing the restore, which would strand the version
-	// behind a value the operator cannot edit from here.
+	// It is already inert — BuildMeta refuses to render it — so it is cleared
+	// here rather than carried forward. page_versions stores only title, body
+	// and author, so the discarded value goes to the event log, which is the
+	// only place it remains recoverable.
 	canonicalURL, canonicalErr := util.ValidateCanonicalURL(page.CanonicalUrl)
 	if canonicalErr != nil {
 		slog.Warn("clearing invalid canonical URL during version restore",
 			"error", canonicalErr, "page_id", id, "version_id", versionId)
+		_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelWarning,
+			"Invalid page canonical URL cleared during version restore",
+			middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r),
+			map[string]any{
+				"page_id":               id,
+				"version_id":            versionId,
+				"cleared_canonical_url": page.CanonicalUrl,
+				"reason":                canonicalErr.Error(),
+			})
 	}
 
 	// Update page with version content (keeping SEO fields and scheduling intact)
@@ -1393,11 +1406,15 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page version restored", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "version_id": versionId})
 	h.logSuspiciousPageContentEvent(r, page.ID, page.Slug, rawVersionBody, "restored")
-	restoreMessage := "Version restored successfully"
+	redirectURL := fmt.Sprintf(redirectAdminPagesID, id)
 	if canonicalErr != nil {
-		restoreMessage += ". The stored canonical URL was not valid and has been cleared"
+		// The restore succeeded, but a field was discarded — say so where the
+		// operator will notice rather than appending it to a success toast.
+		flashError(w, r, h.renderer, redirectURL,
+			i18n.T(h.renderer.GetAdminLang(r), "pages.canonical_url_cleared_on_restore"))
+		return
 	}
-	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), restoreMessage)
+	flashSuccess(w, r, h.renderer, redirectURL, "Version restored successfully")
 }
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
@@ -1707,17 +1724,20 @@ func validatePageTitle(title string) string {
 	return ""
 }
 
-// validateCanonicalURL validates the page canonical URL and returns an error
-// message if invalid, or an empty string when the value may be stored.
+// validateCanonicalURL validates the page canonical URL. It returns the value
+// to store and an error message, which is empty when the value is usable.
 //
 // The rule lives in util.ValidateCanonicalURL so this form, the v2 API and the
 // content importer cannot drift apart; the detail from that helper is appended
-// to a translated prefix the same way scheduler task URLs are reported.
-func validateCanonicalURL(rawURL, lang string) string {
-	if _, err := util.ValidateCanonicalURL(rawURL); err != nil {
-		return i18n.T(lang, "pages.error.invalid_canonical_url", err.Error())
+// to a translated prefix the same way scheduler task URLs are reported. The
+// trimmed value is returned rather than reusing the caller's string, so the
+// value stored is the one that was checked even if form parsing stops trimming.
+func validateCanonicalURL(rawURL, lang string) (string, string) {
+	trimmed, err := util.ValidateCanonicalURL(rawURL)
+	if err != nil {
+		return "", i18n.T(lang, "pages.error.invalid_canonical_url", err.Error())
 	}
-	return ""
+	return trimmed, ""
 }
 
 // validatePageSlugCreate validates a page slug for creation.

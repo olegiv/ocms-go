@@ -1022,6 +1022,13 @@ func convertImportViewData(data ImportFormData) adminviews.ImportViewData {
 				Message: e.Message,
 			})
 		}
+		for _, w := range data.ImportResult.Warnings {
+			ir.Warnings = append(ir.Warnings, adminviews.ImportErrorView{
+				Entity:  w.Entity,
+				ID:      w.ID,
+				Message: w.Message,
+			})
+		}
 		viewData.ImportResult = ir
 	}
 

@@ -57,6 +57,7 @@ type ImportResultView struct {
 	Updated      map[string]int
 	Skipped      map[string]int
 	Errors       []ImportErrorView
+	Warnings     []ImportErrorView
 }
 
 // ImportErrorView holds a single import error.
@@ -689,6 +690,16 @@ templ importResults(pc *PageContext, data ImportViewData) {
 					for _, importErr := range data.ImportResult.Errors {
 						<div class="error-item">
 							<strong>{ importErr.Entity } ({ importErr.ID }):</strong> { importErr.Message }
+						</div>
+					}
+				</div>
+			}
+			if len(data.ImportResult.Warnings) > 0 {
+				<h4 class="subsection-title">{ pc.T("import.warnings") }</h4>
+				<div class="errors-list">
+					for _, importWarning := range data.ImportResult.Warnings {
+						<div class="error-item">
+							<strong>{ importWarning.Entity } ({ importWarning.ID }):</strong> { importWarning.Message }
 						</div>
 					}
 				</div>

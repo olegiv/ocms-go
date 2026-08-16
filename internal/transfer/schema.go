@@ -286,13 +286,14 @@ func DefaultImportOptions() ImportOptions {
 
 // ImportResult contains the results of an import operation.
 type ImportResult struct {
-	Success bool                 `json:"success"`
-	DryRun  bool                 `json:"dry_run"`
-	Created map[string]int       `json:"created"`
-	Updated map[string]int       `json:"updated"`
-	Skipped map[string]int       `json:"skipped"`
-	Errors  []ImportError        `json:"errors,omitempty"`
-	IDMaps  map[string]IDMapping `json:"-"` // Internal: maps old IDs to new IDs
+	Success  bool                 `json:"success"`
+	DryRun   bool                 `json:"dry_run"`
+	Created  map[string]int       `json:"created"`
+	Updated  map[string]int       `json:"updated"`
+	Skipped  map[string]int       `json:"skipped"`
+	Errors   []ImportError        `json:"errors,omitempty"`
+	Warnings []ImportWarning      `json:"warnings,omitempty"`
+	IDMaps   map[string]IDMapping `json:"-"` // Internal: maps old IDs to new IDs
 }
 
 // IDMapping maps old export IDs to new database IDs.
@@ -318,6 +319,14 @@ type ImportError struct {
 	Message string `json:"message"`
 }
 
+// ImportWarning describes something the import changed or ignored without
+// failing, so the operator can see it after a successful run.
+type ImportWarning struct {
+	Entity  string `json:"entity"`
+	ID      string `json:"id"`
+	Message string `json:"message"`
+}
+
 // AddError adds an error to the import result.
 func (r *ImportResult) AddError(entity, id, message string) {
 	r.Errors = append(r.Errors, ImportError{
@@ -326,6 +335,16 @@ func (r *ImportResult) AddError(entity, id, message string) {
 		Message: message,
 	})
 	r.Success = false
+}
+
+// AddWarning records a non-fatal note. Unlike AddError it leaves Success
+// alone: the archive still imports, and the operator is told what changed.
+func (r *ImportResult) AddWarning(entity, id, message string) {
+	r.Warnings = append(r.Warnings, ImportWarning{
+		Entity:  entity,
+		ID:      id,
+		Message: message,
+	})
 }
 
 // IncrementCreated increments the created count for an entity type.

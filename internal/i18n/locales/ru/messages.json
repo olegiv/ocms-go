@@ -3628,6 +3628,11 @@
             "translation": "Изображение должно быть не менее %dx%d пикселей. Выбранное изображение: %dx%d."
         },
         {
+            "id": "pages.canonical_url_cleared_on_restore",
+            "message": "Version restored. The stored canonical URL was not valid and has been cleared; see the event log for the discarded value.",
+            "translation": "Версия восстановлена. Сохранённый канонический URL был некорректным и очищен; удалённое значение см. в журнале событий."
+        },
+        {
             "id": "pages.error.invalid_canonical_url",
             "message": "Invalid canonical URL: %s",
             "translation": "Некорректный канонический URL: %s"
@@ -5576,6 +5581,11 @@
             "id": "import.details_skipped",
             "message": "Skipped Items",
             "translation": "Пропущенные элементы"
+        },
+        {
+            "id": "import.warnings",
+            "message": "Warnings",
+            "translation": "Предупреждения"
         },
         {
             "id": "import.errors",

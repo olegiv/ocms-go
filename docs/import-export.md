@@ -215,12 +215,18 @@ The validator checks for:
 - Page canonical URLs (`pages[].seo.canonical_url`)
 
 A page canonical URL must be empty or an absolute `http`/`https` URL with a
-host, no embedded credentials, and at most 2048 characters. Relative values such
-as `/about` and scheme-relative values such as `//cdn.example.com/a` are
-rejected, because the same string is published as `og:url`, which must be
-absolute. This is the identical rule the admin page form and the v2 API apply,
-so an archive exported from oCMS always re-imports. The whole archive is
-refused before any write, and the error names the offending page slug.
+host, no embedded credentials, and at most 2048 characters — the same rule the
+admin page form and the v2 API apply. Relative values such as `/about` and
+scheme-relative values such as `//cdn.example.com/a` do not qualify, because the
+same string is published as `og:url`, which must be absolute.
+
+**An offending value never blocks the import.** Releases before this rule
+shipped let the admin form store any string, and export writes the column out
+verbatim, so refusing would make older backups unrestorable. The value is
+cleared instead, the rest of the page imports unchanged, and the import result
+lists a warning naming the page slug and the discarded URL. Valid values are
+stored trimmed. A page with no canonical URL falls back to its own computed
+URL, so nothing breaks in the rendered site.
 
 ### Media Restore Modes
 

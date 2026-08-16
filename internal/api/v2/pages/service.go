@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -488,6 +489,16 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		return nil, v2.NewError(v2.ErrInternal, "Failed to load page")
 	}
 
+	// A canonical URL stored before this rule existed is already inert —
+	// BuildMeta refuses to render it — so carrying it forward would only keep
+	// the startup audit warning alive forever. Dropping it here lets any
+	// ordinary edit clean the row, matching what the importer does.
+	baselineCanonicalURL, canonicalErr := util.ValidateCanonicalURL(existing.CanonicalUrl)
+	if canonicalErr != nil {
+		slog.Warn("clearing invalid stored canonical URL on update",
+			"error", canonicalErr, "page_id", existing.ID)
+	}
+
 	params := store.UpdatePageParams{
 		ID:                existing.ID,
 		Title:             existing.Title,
@@ -501,7 +512,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		MetaTitle:         existing.MetaTitle,
 		MetaDescription:   existing.MetaDescription,
 		MetaKeywords:      existing.MetaKeywords,
-		CanonicalUrl:      existing.CanonicalUrl,
+		CanonicalUrl:      baselineCanonicalURL,
 		NoIndex:           existing.NoIndex,
 		NoFollow:          existing.NoFollow,
 		ScheduledAt:       existing.ScheduledAt,

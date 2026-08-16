@@ -396,9 +396,12 @@ func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *mod
 func auditStoredCanonicalURLs(ctx context.Context, db *sql.DB) {
 	const sampleLimit = 10
 
+	// Each failure carries its phase so a missing table, one unreadable row and
+	// a broken iteration are told apart in the log. Row-level failures break
+	// instead of returning, so whatever was already counted is still reported.
 	rows, err := db.QueryContext(ctx, `SELECT id, canonical_url FROM pages WHERE canonical_url != ''`)
 	if err != nil {
-		slog.Warn("could not audit stored canonical URLs", "error", err)
+		slog.Warn("could not audit stored canonical URLs", "phase", "query", "error", err)
 		return
 	}
 	defer func() { _ = rows.Close() }()
@@ -411,8 +414,8 @@ func auditStoredCanonicalURLs(ctx context.Context, db *sql.DB) {
 			canonicalURL string
 		)
 		if err := rows.Scan(&id, &canonicalURL); err != nil {
-			slog.Warn("could not audit stored canonical URLs", "error", err)
-			return
+			slog.Warn("stopped auditing stored canonical URLs early", "phase", "scan", "error", err)
+			break
 		}
 		if _, err := util.ValidateCanonicalURL(canonicalURL); err != nil {
 			invalid++
@@ -422,8 +425,7 @@ func auditStoredCanonicalURLs(ctx context.Context, db *sql.DB) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		slog.Warn("could not audit stored canonical URLs", "error", err)
-		return
+		slog.Warn("stopped auditing stored canonical URLs early", "phase", "iterate", "error", err)
 	}
 
 	if invalid > 0 {

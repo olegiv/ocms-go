@@ -329,8 +329,13 @@ func TestURLSchemeAllowlistIsEnforced(t *testing.T) {
 		})
 	}
 
-	// video_url keeps the looser rule: a self-hosted clip is a legitimate
-	// relative reference, so only the scheme allowlist applies there.
+	// video_url keeps the looser scheme allowlist here. This pins the v2
+	// behavior only — it is NOT a claim that the rule is coherent across the
+	// codebase. The admin form runs videoRegistry.ValidateURL, which requires a
+	// registered provider and would reject "/media/clip.mp4" outright, and the
+	// importer checks video_url not at all. video_url therefore still has three
+	// write paths with three rules, which is the same defect canonical_url just
+	// had. Out of scope here; see the PR discussion.
 	for name, raw := range map[string]string{
 		"empty":    "",
 		"relative": "/media/clip.mp4",
@@ -341,6 +346,87 @@ func TestURLSchemeAllowlistIsEnforced(t *testing.T) {
 				Title: "T", Slug: "ok-video-" + name, Body: "b", VideoURL: raw,
 			}); err != nil {
 				t.Fatalf("Create(video_url=%q) error = %v, want it accepted", raw, err)
+			}
+		})
+	}
+}
+
+// TestUpdateEnforcesCanonicalURLRule covers the PATCH path, which applies the
+// caller's value in applyUpdate rather than in Update. That is a separate
+// assignment from the create path and had no coverage: a test that only drives
+// Create leaves the field writable through the API.
+//
+// Bug state: replace the validateCanonicalURLField call in applyUpdate with a
+// direct assignment and the rejected subtests report the value that landed.
+func TestUpdateEnforcesCanonicalURLRule(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	svc := pages.NewService(db, queries, nil, nil, pages.Policy{})
+	ctx := context.Background()
+	now := time.Now()
+
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "patch@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "API",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	writer := v2.Actor{
+		APIKey:      &store.ApiKey{ID: 1, CreatedBy: author.ID},
+		Permissions: []string{model.PermissionPagesWrite},
+	}
+
+	created, err := svc.Create(ctx, writer, pages.CreatePageBody{
+		Title: "Patchable", Slug: "patchable", Body: "b",
+		CanonicalURL: "https://example.com/original",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	for name, raw := range map[string]string{
+		"javascript scheme": "javascript:alert(1)",
+		"relative":          "/about",
+		"scheme relative":   "//cdn.example.com/a",
+		"credentials":       "https://user:pass@example.com/a",
+	} {
+		t.Run("rejected "+name, func(t *testing.T) {
+			value := raw
+			_, err := svc.Update(ctx, writer, created.ID, pages.UpdatePageBody{CanonicalURL: &value})
+			var de *v2.Error
+			if !errors.As(err, &de) || de.Kind != v2.ErrValidation {
+				t.Fatalf("Update(canonical_url=%q) error = %v, want a validation error", raw, err)
+			}
+			page, getErr := queries.GetPageByID(ctx, created.ID)
+			if getErr != nil {
+				t.Fatalf("GetPageByID: %v", getErr)
+			}
+			if page.CanonicalUrl != "https://example.com/original" {
+				t.Errorf("stored canonical_url = %q, want the original left untouched", page.CanonicalUrl)
+			}
+		})
+	}
+
+	// The empty string is how a client clears the field, and a valid value is
+	// stored trimmed.
+	for name, tc := range map[string]struct{ raw, want string }{
+		"clears":                {"", ""},
+		"absolute":              {"https://example.com/new", "https://example.com/new"},
+		"whitespace is trimmed": {"  https://example.com/padded  ", "https://example.com/padded"},
+	} {
+		t.Run("accepted "+name, func(t *testing.T) {
+			value := tc.raw
+			if _, err := svc.Update(ctx, writer, created.ID, pages.UpdatePageBody{CanonicalURL: &value}); err != nil {
+				t.Fatalf("Update(canonical_url=%q) error = %v, want it accepted", tc.raw, err)
+			}
+			page, getErr := queries.GetPageByID(ctx, created.ID)
+			if getErr != nil {
+				t.Fatalf("GetPageByID: %v", getErr)
+			}
+			if page.CanonicalUrl != tc.want {
+				t.Errorf("stored canonical_url = %q, want %q", page.CanonicalUrl, tc.want)
 			}
 		})
 	}

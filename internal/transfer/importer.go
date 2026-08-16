@@ -432,14 +432,11 @@ func (i *Importer) importWithPreCommit(
 		return result, fmt.Errorf("language contract validation failed: %s", contractErrors[0].Message)
 	}
 
-	// Canonical URLs are checked unconditionally, unlike the media checks
+	// Canonical URLs are normalized unconditionally, unlike the media checks
 	// below: an archive is an untrusted payload, and this is the only gate
 	// between it and a value that gets published into a canonical link and an
 	// og:url meta tag.
-	if err := validateImportedPageCanonicalURLs(data, opts); err != nil {
-		result.AddError("page", "", err.Error())
-		return result, err
-	}
+	normalizeImportedPageCanonicalURLs(data, opts, result)
 
 	if importNeedsMediaIdentityResolution(data, opts) {
 		if i.store == nil {
@@ -705,24 +702,40 @@ func validateImportedPageMediaReferences(
 	return nil
 }
 
-// validateImportedPageCanonicalURLs rejects an archive whose page SEO carries a
-// canonical URL that could not be entered through the admin form or the v2 API,
-// so all three write paths agree on what may reach the pages table. It runs
-// after media URL rewriting, so the value checked is the one that would be
-// stored.
-func validateImportedPageCanonicalURLs(data *ExportData, opts ImportOptions) error {
+// normalizeImportedPageCanonicalURLs brings archive canonical URLs in line with
+// the rule the admin form and the v2 API enforce, so all three write paths agree
+// on what may reach the pages table.
+//
+// It clears rather than refuses. Every release before this rule shipped let the
+// admin form store any string, and the exporter writes the column out verbatim,
+// so refusing would make an instance's own backups unrestorable — and the rows
+// that fail here are exactly the ones the startup audit already reports. A
+// cleared value is recorded as a warning so the operator sees what changed, and
+// the page still renders: BuildMeta computes the canonical URL when the stored
+// one is empty.
+//
+// Valid values are written back trimmed, so the string that was validated is
+// the string that gets stored. Mutating data is safe because
+// normalizedTransferMediaIdentities deep-copies Pages and each SEO block, and
+// this runs after that rewrite so the value checked is the value stored.
+func normalizeImportedPageCanonicalURLs(data *ExportData, opts ImportOptions, result *ImportResult) {
 	if !opts.ImportPages {
-		return nil
+		return
 	}
-	for _, page := range data.Pages {
-		if page.SEO == nil {
+	for index := range data.Pages {
+		page := &data.Pages[index]
+		if page.SEO == nil || page.SEO.CanonicalURL == "" {
 			continue
 		}
-		if _, err := util.ValidateCanonicalURL(page.SEO.CanonicalURL); err != nil {
-			return fmt.Errorf("page %q canonical URL: %w", page.Slug, err)
+		trimmed, err := util.ValidateCanonicalURL(page.SEO.CanonicalURL)
+		if err != nil {
+			result.AddWarning("page", page.Slug, fmt.Sprintf(
+				"canonical URL %q was cleared: %v", page.SEO.CanonicalURL, err))
+			page.SEO.CanonicalURL = ""
+			continue
 		}
+		page.SEO.CanonicalURL = trimmed
 	}
-	return nil
 }
 
 func validateImportedContentMediaURLs(

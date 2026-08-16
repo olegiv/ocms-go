@@ -4143,6 +4143,11 @@
             "translation": "Featured image must be at least %dx%d pixels. Selected image is %dx%d."
         },
         {
+            "id": "pages.canonical_url_cleared_on_restore",
+            "message": "Version restored. The stored canonical URL was not valid and has been cleared; see the event log for the discarded value.",
+            "translation": "Version restored. The stored canonical URL was not valid and has been cleared; see the event log for the discarded value."
+        },
+        {
             "id": "pages.error.invalid_canonical_url",
             "message": "Invalid canonical URL: %s",
             "translation": "Invalid canonical URL: %s"
@@ -5546,6 +5551,11 @@
             "id": "import.details_skipped",
             "message": "Skipped Items",
             "translation": "Skipped Items"
+        },
+        {
+            "id": "import.warnings",
+            "message": "Warnings",
+            "translation": "Warnings"
         },
         {
             "id": "import.errors",
