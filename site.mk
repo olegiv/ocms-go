@@ -22,7 +22,8 @@
 # otherwise looks for bin/ocms-linux-amd64.
 #
 # Provides: help, dev, run, stop, restart, build, build-prod, build-linux-amd64,
-# build-darwin-arm64, build-all-platforms, assets, test, clean, sync-modules,
+# build-linux-arm64, build-darwin-arm64, build-all-platforms, assets, test, clean,
+# sync-modules,
 # clean-modules, migrate-up, migrate-down, migrate-status.
 #
 # Reads OCMS_SERVER_PORT and OCMS_DB_PATH out of the site .env. OCMS_DB_PATH
@@ -37,7 +38,8 @@
 # vhost path, which are the only genuinely site-specific values.
 
 .PHONY: help sync-modules clean-modules dev run stop restart build build-prod \
-        build-linux-amd64 build-darwin-arm64 build-all-platforms assets clean \
+        build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms \
+        assets clean \
         test require-db-path migrate-up migrate-down migrate-status
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -188,13 +190,17 @@ define with_core_lock
 set -eu; \
 if [ -z "$${OCMS_CORE_LOCK:-}" ]; then \
 	waited=0; \
+	[ -d "$(CORE_DIR)" ] || { echo "site.mk: CORE_DIR does not exist: $(CORE_DIR) (missing core symlink?)" >&2; exit 1; }; \
 	until mkdir "$(LOCK_DIR)" 2>/dev/null; do \
+		[ -d "$(LOCK_DIR)" ] || { echo "site.mk: cannot create $(LOCK_DIR) — core not writable?" >&2; exit 1; }; \
 		waited=$$((waited + 1)); \
 		[ $$waited -lt $(LOCK_WAIT) ] || { echo "site.mk: timed out after $(LOCK_WAIT)s waiting for $(LOCK_DIR)." >&2; echo "site.mk: if no other build is running, remove it: rmdir '$(LOCK_DIR)'" >&2; exit 1; }; \
 		[ $$waited -ne 1 ] || echo "site.mk: another site is using $(CORE_DIR); waiting..." >&2; \
 		sleep 1; \
 	done; \
-	trap 'rmdir "$(LOCK_DIR)" 2>/dev/null || true' EXIT INT TERM; \
+	trap 'rmdir "$(LOCK_DIR)" 2>/dev/null || true' EXIT; \
+	trap 'rmdir "$(LOCK_DIR)" 2>/dev/null || true; exit 130' INT; \
+	trap 'rmdir "$(LOCK_DIR)" 2>/dev/null || true; exit 143' TERM; \
 	OCMS_CORE_LOCK=1; export OCMS_CORE_LOCK; \
 fi;
 endef
@@ -374,7 +380,14 @@ build-darwin-arm64: ## Cross-build for macOS ARM64
 	mkdir -p "$(build_dir)"; \
 	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(build_dir)/$(BINARY_NAME)-darwin-arm64" $(MAIN_DIR)
 
-build-all-platforms: build-linux-amd64 build-darwin-arm64 ## Cross-build every platform
+build-linux-arm64: ## Cross-build for Linux ARM64
+	@echo "Building $(BINARY_NAME) $(VERSION) for Linux ARM64..."
+	@$(with_core_lock) \
+	$(MAKE) --no-print-directory sync-modules; \
+	mkdir -p "$(build_dir)"; \
+	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(build_dir)/$(BINARY_NAME)-linux-arm64" $(MAIN_DIR)
+
+build-all-platforms: build-linux-amd64 build-linux-arm64 build-darwin-arm64 ## Cross-build every platform
 	@echo "All platform builds complete!"
 	@ls -lh "$(build_dir)/$(BINARY_NAME)"-*
 
