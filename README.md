@@ -739,8 +739,13 @@ package modules
 import _ "github.com/olegiv/ocms-go/custom/modules/mymodule"
 ```
 
-Do not add template functions: that is the one extension point requiring a core
-edit. Expose data over a route instead — see `docs/custom-modules.md`.
+**Do not add template functions.** `AllTemplateFuncs()` returns funcs from
+*active* modules only, while `html/template` resolves names at *parse* time — so
+a theme calling one fails to parse on the next restart after the module is
+deactivated, and an unparseable theme is silently dropped rather than erroring.
+Avoiding that needs a no-op placeholder in `internal/render/render.go`, which is
+a core edit. Expose data over a route instead; `custom/modules/bookmarks/` shows
+the shape with `GET /bookmarks?favorites=1`.
 
 See `docs/custom-modules.md` for the full guide and `custom/modules/bookmarks/` for a working example.
 
@@ -780,13 +785,33 @@ usually one line:
 include core/site.mk
 ```
 
-That provides `dev`, `run`, `build*`, `test`, `migrate-*` and `sync-modules`,
-which copies the site's Go modules into this tree so the compiler can see them.
-It adds rather than replaces: one binary serves every instance, so it must carry
-every site's modules. `make clean-modules` removes a site's own copies again.
-Run `make help` in the site repo for the full list. See
-[docs/custom-modules.md](docs/custom-modules.md#modules-in-a-multi-site-deployment)
-for why modules are kept in the site repo and copied in.
+That provides `dev`, `run`, `build`, `build-prod`, the three cross-builds,
+`test`, `migrate-*`, `sync-modules` and `clean-modules`. Run `make help` in the
+site repo for the full list, and override variables *before* the include.
+
+`sync-modules` copies the site's Go modules into this tree so the compiler can
+see them. Things worth knowing about it:
+
+- **It adds; it does not replace.** One binary serves every instance, so it must
+  carry every site's modules. `make clean-modules` removes a site's own copies.
+- **Ownership is tracked** in `custom/modules/.owners`, so a module you delete
+  from your site repo is removed here on your next sync, and two sites picking
+  the same module name is an error rather than a silent overwrite.
+- **`.templ` files are generated in the site repo** before copying, so `make dev`
+  and `make build` cannot disagree about the generated output.
+- **Targets that touch this tree hold a lock** (`.site-build.lock`), so two sites
+  cannot build into it at once.
+- **The union lives only in this working tree.** After a fresh clone or a
+  `git clean -fdx` here, run `make sync-modules` from *each* site that owns
+  modules before building a binary you intend to deploy — otherwise that binary
+  omits the others' modules and the deploy scripts ship it to every instance.
+
+Set `OCMS_DB_PATH` in each site's `.env`; it and `OCMS_CUSTOM_DIR` /
+`OCMS_UPLOADS_DIR` are resolved against the site directory, because `dev` and
+`run` execute from this checkout.
+
+See [docs/custom-modules.md](docs/custom-modules.md#modules-in-a-multi-site-deployment)
+for the full rationale.
 
 ## Testing
 
