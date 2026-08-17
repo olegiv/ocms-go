@@ -280,6 +280,10 @@ validate_custom_symlinks() {
     # supports — fails every deploy on the outside-custom/ check below, and a
     # stale broken symlink there blocks a themes-only deploy outright.
     local modules_dir="${LOCAL_CUSTOM_DIR%/}/modules"
+    # Canonical form, for comparing against resolve_path output below. The
+    # relative one above is what `find -path` needs; mixing the two silently
+    # makes the comparison never match.
+    local modules_root="${custom_root}/modules"
 
     local broken_symlinks find_err
     find_err=$(mktemp)
@@ -329,7 +333,7 @@ validate_custom_symlinks() {
         fi
 
         case "$resolved_target" in
-            "$modules_dir"|"$modules_dir"/*)
+            "$modules_root"|"$modules_root"/*)
                 # Resolves into custom/modules/. Allowed nowhere else in
                 # custom/, because rsync -aL would dereference the link under
                 # its including path — themes/x/link/ — where the anchored

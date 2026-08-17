@@ -144,7 +144,9 @@ env_file    = $(call abspath_site,$(OCMS_ENV_FILE))
 db_path     = $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_DB_PATH),data/ocms.db),OCMS_DB_PATH)))
 custom_dir  = $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_CUSTOM_DIR),custom),OCMS_CUSTOM_DIR)))
 uploads_dir = $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_UPLOADS_DIR),uploads),OCMS_UPLOADS_DIR)))
-server_port = $(call env_no_refs,$(OCMS_SERVER_PORT),OCMS_SERVER_PORT)
+# 8080 mirrors internal/config's own envDefault: with no OCMS_SERVER_PORT set,
+# the server still starts on 8080, so `stop` and `restart` must know that too.
+server_port = $(call env_no_refs,$(or $(OCMS_SERVER_PORT),8080),OCMS_SERVER_PORT)
 
 # Passed explicitly to anything that runs the server from inside CORE_DIR.
 # godotenv.Load does not overwrite variables already in the environment, so these
@@ -320,10 +322,10 @@ clean-modules: ## Remove this site's module copies from core
 	echo "Core module copies removed"
 
 # ── Server ───────────────────────────────────────────────────────────────────
-dev: ## Build assets, sync modules, run the dev server
+dev: ## Sync modules, build assets, run the dev server
 	@$(with_core_lock) \
-	$(MAKE) --no-print-directory assets; \
 	$(MAKE) --no-print-directory sync-modules; \
+	$(MAKE) --no-print-directory assets; \
 	cd "$(CORE_DIR)" && $(site_env) $(GO) run $(MAIN_DIR)
 
 run: ## Run the dev server without rebuilding assets
