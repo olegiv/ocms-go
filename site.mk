@@ -227,6 +227,13 @@ endef
 # active status, so those tables appear everywhere either way — gate a module per
 # instance with EnvironmentChecker/AllowedEnvs, not by leaving it uncompiled.
 #
+# .templ files are generated in the SITE tree, before the copy. The core's
+# `make assets` also runs templ generate, but only against the core copy — and
+# the next sync's `rsync --delete` then overwrites that freshly generated
+# _templ.go with the site's committed one. A developer editing views.templ would
+# see the new output under `make dev` and ship the old output from `make build`.
+# Generating at the source of truth keeps both consistent.
+#
 # OWNERS records which site each copied name came from. It is what lets this
 # target tell "my module, now deleted from my repo" (remove it) from "another
 # site's module" (leave it alone, and refuse to overwrite it). Without it two
@@ -280,6 +287,13 @@ sync-modules: ## Copy custom/modules/ into core (runs before builds)
 		case " $$core_names " in *" $$name "*) continue;; esac; \
 		echo "sync-modules: removing $$name (deleted from $$me)"; rm -rf "$$core/$$name"; \
 	done < "$(OWNERS)"; \
+	if [ -d "$$site" ] && [ -n "$$(find "$$site" -name '*.templ' -print -quit 2>/dev/null)" ]; then \
+		if command -v templ >/dev/null 2>&1; then \
+			out="$$(templ generate -path "$$site" 2>&1)" || { echo "sync-modules: templ generate failed in $$site" >&2; printf '%s\n' "$$out" >&2; exit 1; }; \
+		else \
+			echo "sync-modules: $$site has .templ files but templ is not installed; using the committed *_templ.go as-is" >&2; \
+		fi; \
+	fi; \
 	if [ -d "$$site" ]; then \
 		for dir in "$$site"/*/; do \
 			[ -d "$$dir" ] || continue; \
