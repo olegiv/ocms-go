@@ -269,6 +269,7 @@ sync-modules: ## Copy custom/modules/ into core (runs before builds)
 		[ -n "$$name" ] || continue; \
 		[ "$$owner" = "$$me" ] || continue; \
 		case "$$mine" in *" $$name "*) continue;; esac; \
+		case " $$core_names " in *" $$name "*) continue;; esac; \
 		echo "sync-modules: removing $$name (deleted from $$me)"; rm -rf "$$core/$$name"; \
 	done < "$(OWNERS)"; \
 	if [ -d "$$site" ]; then \
@@ -335,7 +336,9 @@ stop: ## Kill the server on the configured port
 	@lsof -ti:$(server_port) -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
 	@echo "Server stopped on port $(server_port)"
 
-restart: stop dev ## Restart the dev server
+restart: ## Restart the dev server
+	@$(MAKE) --no-print-directory stop
+	@$(MAKE) --no-print-directory dev
 
 # ── Build ────────────────────────────────────────────────────────────────────
 # Cross-builds set CGO_ENABLED=0 to match core's own Makefile: the sqlite driver

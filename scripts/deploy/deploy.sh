@@ -329,6 +329,14 @@ validate_custom_symlinks() {
         fi
 
         case "$resolved_target" in
+            "$modules_dir"|"$modules_dir"/*)
+                # Resolves into custom/modules/. Allowed nowhere else in
+                # custom/, because rsync -aL would dereference the link under
+                # its including path — themes/x/link/ — where the anchored
+                # /modules/ exclusion cannot match, and ship module source to a
+                # vhost that never reads it.
+                escaped_symlinks+="${symlink} -> ${resolved_target} (into custom/modules/)"$'\n'
+                ;;
             "$custom_root"/*|"$custom_root")
                 # Symlink stays within custom/ — allowed
                 ;;
