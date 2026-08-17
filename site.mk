@@ -149,7 +149,7 @@ server_port = $(call env_no_refs,$(OCMS_SERVER_PORT),OCMS_SERVER_PORT)
 # Passed explicitly to anything that runs the server from inside CORE_DIR.
 # godotenv.Load does not overwrite variables already in the environment, so these
 # win over the .env while still being derived from it.
-site_env = OCMS_ENV_FILE="$(env_file)" OCMS_DB_PATH="$(db_path)" OCMS_CUSTOM_DIR="$(custom_dir)" OCMS_UPLOADS_DIR="$(uploads_dir)"
+site_env = OCMS_ENV_FILE="$(env_file)" OCMS_DB_PATH="$(db_path)" OCMS_CUSTOM_DIR="$(custom_dir)" OCMS_UPLOADS_DIR="$(uploads_dir)"$(if $(server_port), OCMS_SERVER_PORT="$(server_port)")
 
 # Self-documenting: scrapes the "## " descriptions off the target lines below.
 # The character class needs digits, or build-linux-amd64 and build-darwin-arm64
@@ -257,7 +257,10 @@ sync-modules: ## Copy custom/modules/ into core (runs before builds)
 			esac; \
 			owner="$$(awk -F'\t' -v n="$$name" '$$1 == n { print $$2; exit }' "$(OWNERS)")"; \
 			if [ -n "$$owner" ] && [ "$$owner" != "$$me" ]; then \
-				echo "sync-modules: $$name is already provided by $$owner; rename one of them" >&2; exit 1; \
+				if [ -d "$$owner" ]; then \
+					echo "sync-modules: $$name is already provided by $$owner; rename one of them" >&2; exit 1; \
+				fi; \
+				echo "sync-modules: reclaiming $$name from $$owner (that site no longer exists)"; \
 			fi; \
 			mine="$$mine$$name "; \
 		done; \
@@ -271,14 +274,26 @@ sync-modules: ## Copy custom/modules/ into core (runs before builds)
 	if [ -d "$$site" ]; then \
 		for dir in "$$site"/*/; do \
 			[ -d "$$dir" ] || continue; \
-			rsync -a --delete "$$dir" "$$core/$$(basename "$$dir")/"; \
+			dest="$$core/$$(basename "$$dir")"; \
+			if [ -L "$$dest" ]; then \
+				echo "sync-modules: replacing symlink $$dest with a real directory"; rm -f "$$dest"; \
+			fi; \
+			rsync -a --delete "$$dir" "$$dest/"; \
 		done; \
 		for file in "$$site"/imports_*.go; do \
 			[ -f "$$file" ] || continue; \
-			cp "$$file" "$$core/"; \
+			dest="$$core/$$(basename "$$file")"; \
+			[ -L "$$dest" ] && rm -f "$$dest"; \
+			cp "$$file" "$$dest"; \
 		done; \
 	fi; \
-	awk -F'\t' -v me="$$me" '$$2 != me' "$(OWNERS)" > "$(OWNERS).tmp"; \
+	: > "$(OWNERS).tmp"; \
+	while IFS="$$(printf '\t')" read -r name owner; do \
+		[ -n "$$name" ] || continue; \
+		[ "$$owner" != "$$me" ] || continue; \
+		case "$$mine" in *" $$name "*) continue;; esac; \
+		printf '%s\t%s\n' "$$name" "$$owner" >> "$(OWNERS).tmp"; \
+	done < "$(OWNERS)"; \
 	for name in $$mine; do printf '%s\t%s\n' "$$name" "$$me" >> "$(OWNERS).tmp"; done; \
 	mv "$(OWNERS).tmp" "$(OWNERS)"
 
