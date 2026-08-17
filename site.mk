@@ -75,7 +75,11 @@ core_names_cmd = cd "$(CORE_DIR)" 2>/dev/null && git -c core.quotePath=false ls-
 # ── Build ────────────────────────────────────────────────────────────────────
 BINARY_NAME ?= ocms
 BUILD_DIR   ?= $(SITE_DIR)/bin
-override BUILD_DIR := $(call abspath_site,$(BUILD_DIR))
+# Resolved at point of use, not with `override ... :=`. An override directive
+# outranks a later plain assignment, so `BUILD_DIR = dist` after the include
+# would be silently ignored — which the docs promise still works. Recursive
+# expansion normalises whatever BUILD_DIR holds when a recipe runs.
+build_dir = $(call abspath_site,$(BUILD_DIR))
 GO          ?= go
 GOFLAGS     ?= -v
 MAIN_DIR    ?= ./cmd/ocms
@@ -119,6 +123,12 @@ env_get = $(shell sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\
 OCMS_SERVER_PORT ?= $(call env_get,OCMS_SERVER_PORT)
 OCMS_DB_PATH     ?= $(call env_get,OCMS_DB_PATH)
 
+# godotenv expands ${VAR} references inside .env values; this sed reader cannot,
+# and silently prefixing SITE_DIR to a literal "${ROOT}/data.db" would create a
+# real directory of that name and open a database the server never uses. Refuse
+# instead — the four values make reads are short enough to spell out literally.
+env_no_refs = $(if $(findstring $$,$(1)),$(error $(2) in $(OCMS_ENV_FILE) uses a $${...} reference, which site.mk cannot expand — write the value literally),$(1))
+
 # Paths the server resolves against its WORKING DIRECTORY. dev/run cd into
 # CORE_DIR to run `go run`, so a site's ./custom and ./uploads would resolve
 # inside the shared core: the site's themes would not load, and every site would
@@ -127,9 +137,9 @@ OCMS_DB_PATH     ?= $(call env_get,OCMS_DB_PATH)
 # these win over the .env while still coming from it.
 OCMS_CUSTOM_DIR  ?= $(call env_get,OCMS_CUSTOM_DIR)
 OCMS_UPLOADS_DIR ?= $(call env_get,OCMS_UPLOADS_DIR)
-override OCMS_CUSTOM_DIR  := $(call abspath_site,$(patsubst ./%,%,$(or $(OCMS_CUSTOM_DIR),custom)))
-override OCMS_UPLOADS_DIR := $(call abspath_site,$(patsubst ./%,%,$(or $(OCMS_UPLOADS_DIR),uploads)))
-override OCMS_DB_PATH     := $(call abspath_site,$(patsubst ./%,%,$(or $(OCMS_DB_PATH),data/ocms.db)))
+override OCMS_CUSTOM_DIR  := $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_CUSTOM_DIR),custom),OCMS_CUSTOM_DIR)))
+override OCMS_UPLOADS_DIR := $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_UPLOADS_DIR),uploads),OCMS_UPLOADS_DIR)))
+override OCMS_DB_PATH     := $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_DB_PATH),data/ocms.db),OCMS_DB_PATH)))
 export OCMS_CUSTOM_DIR OCMS_UPLOADS_DIR OCMS_DB_PATH
 
 # Self-documenting: scrapes the "## " descriptions off the target lines below.
@@ -205,6 +215,13 @@ endef
 # site's module" (leave it alone, and refuse to overwrite it). Without it two
 # sites owning the same module name would silently clobber each other, and a
 # module deleted from a site repo could never be found to remove.
+#
+# The union exists ONLY in this tree: a build sees its own site plus whatever
+# earlier syncs left behind, and nothing else. After a fresh clone or a
+# `git clean -fdx` here, a binary built from one site omits every other site's
+# modules — and deploy-binary.sh ships it to every instance. Re-run
+# `make sync-modules` from each site that owns modules first. Giving each
+# instance its own binary path is the structural fix; see docs/custom-modules.md.
 #
 # Whole recipe in ONE shell per target. Each line of a make recipe otherwise
 # gets its own shell, so `|| exit 0` on its own line exits that line only and
@@ -304,33 +321,33 @@ build: ## Build the binary with debug symbols
 	@echo "Building $(BINARY_NAME) $(VERSION)..."
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
-	mkdir -p "$(BUILD_DIR)"; \
-	cd "$(CORE_DIR)" && $(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS_VERSION)" -o "$(BUILD_DIR)/$(BINARY_NAME)" $(MAIN_DIR)
+	mkdir -p "$(build_dir)"; \
+	cd "$(CORE_DIR)" && $(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS_VERSION)" -o "$(build_dir)/$(BINARY_NAME)" $(MAIN_DIR)
 
 build-prod: ## Build an optimised, stripped binary
 	@echo "Building $(BINARY_NAME) $(VERSION) for production..."
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
-	mkdir -p "$(BUILD_DIR)"; \
-	cd "$(CORE_DIR)" && $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)" $(MAIN_DIR)
+	mkdir -p "$(build_dir)"; \
+	cd "$(CORE_DIR)" && $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(build_dir)/$(BINARY_NAME)" $(MAIN_DIR)
 
 build-linux-amd64: ## Cross-build for Linux AMD64
 	@echo "Building $(BINARY_NAME) $(VERSION) for Linux AMD64..."
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
-	mkdir -p "$(BUILD_DIR)"; \
-	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)-linux-amd64" $(MAIN_DIR)
+	mkdir -p "$(build_dir)"; \
+	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(build_dir)/$(BINARY_NAME)-linux-amd64" $(MAIN_DIR)
 
 build-darwin-arm64: ## Cross-build for macOS ARM64
 	@echo "Building $(BINARY_NAME) $(VERSION) for macOS ARM64..."
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
-	mkdir -p "$(BUILD_DIR)"; \
-	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64" $(MAIN_DIR)
+	mkdir -p "$(build_dir)"; \
+	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(build_dir)/$(BINARY_NAME)-darwin-arm64" $(MAIN_DIR)
 
 build-all-platforms: build-linux-amd64 build-darwin-arm64 ## Cross-build every platform
 	@echo "All platform builds complete!"
-	@ls -lh "$(BUILD_DIR)/$(BINARY_NAME)"-*
+	@ls -lh "$(build_dir)/$(BINARY_NAME)"-*
 
 assets: ## Compile SCSS and copy JS dependencies
 	@$(with_core_lock) \
@@ -342,8 +359,8 @@ test: ## Run the full Go test suite
 	cd "$(CORE_DIR)" && $(GO) test -v ./...
 
 clean: ## Remove build artifacts
-	@[ -n "$(SITE_DIR)" ] && [ -n "$(BUILD_DIR)" ] || { echo "clean: SITE_DIR/BUILD_DIR must be set" >&2; exit 1; }
-	rm -rf "$(BUILD_DIR)"
+	@[ -n "$(SITE_DIR)" ] && [ -n "$(build_dir)" ] || { echo "clean: SITE_DIR/BUILD_DIR must be set" >&2; exit 1; }
+	rm -rf "$(build_dir)"
 
 # ── Database ─────────────────────────────────────────────────────────────────
 # OCMS_DB_PATH comes from the site .env, the same file the server reads, and is

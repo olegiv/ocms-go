@@ -150,6 +150,16 @@ delete from your site repo is removed from this tree on your next sync (no glob
 over your tree could still find it), and two sites that pick the same module
 name get an error instead of silently overwriting one another.
 
+> **The union lives only in this working tree.** A site build knows about its own
+> `custom/modules/` and about whatever previous syncs left here — nothing else.
+> So after anything that empties the tree (a fresh clone, `git clean -fdx`, a
+> manual `rm -rf custom/modules/*`), a binary built from one site will **omit
+> every other site's modules**, and `deploy-binary.sh` ships that binary to every
+> instance. Run `make sync-modules` from each site that owns modules before
+> building a binary you intend to deploy. If that rule is too easy to forget for
+> your deployment, the structural fix is to give each instance its own binary
+> path rather than sharing `/opt/ocms/bin/ocms`.
+
 `sync-modules` refuses outright to overwrite a module that ships with oCMS, so a
 site module named `bookmarks` is an error rather than a silent clobber. Both it
 and `clean-modules` need the core checkout to be a git working tree — that is how
