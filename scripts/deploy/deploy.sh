@@ -246,11 +246,16 @@ has_custom_content() {
         # bare -name modules would prune at any depth, so an ordinary theme
         # asset layout (themes/x/static/js/modules/) would make this return
         # false and the theme would never be deployed at all.
+        # Only custom/themes/ counts. Everything else under custom/ that ships
+        # with the repo — README.md, themes/.gitkeep, modules/.gitkeep — is a
+        # placeholder, and treating it as content makes a themeless site take
+        # the sync path and run `rsync --delete` against the remote, erasing
+        # server-only themes nobody asked to touch.
         local custom_root first_file
         custom_root="${LOCAL_CUSTOM_DIR%/}"
-        first_file=$(find -L "$custom_root" -mindepth 1 \
-            \( -type d -path "$custom_root/modules" -prune \) -o \
-            -type f -print -quit 2>/dev/null || true)
+        [[ -d "$custom_root/themes" ]] || return 1
+        first_file=$(find -L "$custom_root/themes" -mindepth 1 \
+            ! -name '.gitkeep' -type f -print -quit 2>/dev/null || true)
         [[ -n "$first_file" ]]
     else
         return 1

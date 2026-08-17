@@ -119,6 +119,19 @@ env_get = $(shell sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\
 OCMS_SERVER_PORT ?= $(call env_get,OCMS_SERVER_PORT)
 OCMS_DB_PATH     ?= $(call env_get,OCMS_DB_PATH)
 
+# Paths the server resolves against its WORKING DIRECTORY. dev/run cd into
+# CORE_DIR to run `go run`, so a site's ./custom and ./uploads would resolve
+# inside the shared core: the site's themes would not load, and every site would
+# read and write one uploads directory. Resolve them against SITE_DIR and export
+# — godotenv.Load does not overwrite variables already in the environment, so
+# these win over the .env while still coming from it.
+OCMS_CUSTOM_DIR  ?= $(call env_get,OCMS_CUSTOM_DIR)
+OCMS_UPLOADS_DIR ?= $(call env_get,OCMS_UPLOADS_DIR)
+override OCMS_CUSTOM_DIR  := $(call abspath_site,$(patsubst ./%,%,$(or $(OCMS_CUSTOM_DIR),custom)))
+override OCMS_UPLOADS_DIR := $(call abspath_site,$(patsubst ./%,%,$(or $(OCMS_UPLOADS_DIR),uploads)))
+override OCMS_DB_PATH     := $(call abspath_site,$(patsubst ./%,%,$(or $(OCMS_DB_PATH),data/ocms.db)))
+export OCMS_CUSTOM_DIR OCMS_UPLOADS_DIR OCMS_DB_PATH
+
 # Self-documenting: scrapes the "## " descriptions off the target lines below.
 # The character class needs digits, or build-linux-amd64 and build-darwin-arm64
 # are omitted from the listing.
@@ -133,29 +146,36 @@ help: ## Show this help
 .DEFAULT_GOAL := dev
 
 # ── Shared-core lock ─────────────────────────────────────────────────────────
-# Sites share one CORE_DIR, so sync-modules writes into a tree another site's
-# compiler may be reading. `sync-modules` as a plain prerequisite is not enough:
-# it finishes before the build recipe starts, leaving a window in which a second
-# site can replace the modules mid-compile and produce a binary with the wrong
-# site's code. So every target that syncs then reads holds one lock across BOTH.
+# Sites share one CORE_DIR, so one site writes into a tree another site's
+# compiler may be reading. A prerequisite is not enough: it finishes before the
+# build recipe starts, leaving a window for a second site to swap modules
+# mid-compile. So every target that mutates or reads the shared tree holds one
+# lock across ALL of its steps — assets, sync and the build alike. Assets matter
+# because web/static/dist is embedded into the binary.
+#
+# Re-entrant: the holder exports OCMS_CORE_LOCK, so a sub-make invoked inside the
+# lock (build -> assets, sync-modules) does not deadlock on itself.
 #
 # mkdir is the atomic test-and-set; flock is absent on macOS. The trap releases
-# it on normal exit, Ctrl-C and SIGTERM; only SIGKILL or a hard reboot can strand
-# it, hence the explicit hint in the timeout message.
+# it on normal exit, Ctrl-C and SIGTERM — which is why nothing below `exec`s:
+# exec would replace the shell that owns the trap and strand the lock. Only
+# SIGKILL or a hard reboot can strand it, hence the hint in the timeout message.
 LOCK_DIR  ?= $(CORE_DIR)/.site-build.lock
 LOCK_WAIT ?= 900
 
 define with_core_lock
 set -eu; \
-waited=0; \
-until mkdir "$(LOCK_DIR)" 2>/dev/null; do \
-	waited=$$((waited + 1)); \
-	[ $$waited -lt $(LOCK_WAIT) ] || { echo "site.mk: timed out after $(LOCK_WAIT)s waiting for $(LOCK_DIR)." >&2; echo "site.mk: if no other build is running, remove it: rmdir '$(LOCK_DIR)'" >&2; exit 1; }; \
-	[ $$waited -ne 1 ] || echo "site.mk: another site is building; waiting for $(LOCK_DIR)..." >&2; \
-	sleep 1; \
-done; \
-trap 'rmdir "$(LOCK_DIR)" 2>/dev/null || true' EXIT INT TERM; \
-$(MAKE) --no-print-directory sync-modules;
+if [ -z "$${OCMS_CORE_LOCK:-}" ]; then \
+	waited=0; \
+	until mkdir "$(LOCK_DIR)" 2>/dev/null; do \
+		waited=$$((waited + 1)); \
+		[ $$waited -lt $(LOCK_WAIT) ] || { echo "site.mk: timed out after $(LOCK_WAIT)s waiting for $(LOCK_DIR)." >&2; echo "site.mk: if no other build is running, remove it: rmdir '$(LOCK_DIR)'" >&2; exit 1; }; \
+		[ $$waited -ne 1 ] || echo "site.mk: another site is using $(CORE_DIR); waiting..." >&2; \
+		sleep 1; \
+	done; \
+	trap 'rmdir "$(LOCK_DIR)" 2>/dev/null || true' EXIT INT TERM; \
+	OCMS_CORE_LOCK=1; export OCMS_CORE_LOCK; \
+fi;
 endef
 
 # ── Custom modules ───────────────────────────────────────────────────────────
@@ -171,81 +191,103 @@ endef
 # directories, so `go test ./...` would silently skip the module and report
 # success with failing tests inside it.
 #
-# This ADDS; it does not mirror. One binary serves every instance
-# (scripts/deploy/ocmsctl and ocms@.service both exec /opt/ocms/bin/ocms, and a
-# site's deploy-binary.sh pushes it to all of them), so that binary must carry
-# the UNION of every site's modules. Evicting another site's modules here would
-# build a binary without them and then ship it to the instance that needs them.
-# Registry.InitAll migrates every registered module regardless of active status,
-# so those tables appear in every instance's database either way — gate a module
-# per instance with EnvironmentChecker/AllowedEnvs, not by leaving it uncompiled.
+# This ADDS another site's modules; it does not evict them. One binary serves
+# every instance (scripts/deploy/ocmsctl and ocms@.service both exec
+# /opt/ocms/bin/ocms, and a site's deploy-binary.sh pushes it to all of them), so
+# that binary must carry the UNION of every site's modules. Evicting another
+# site's would build a binary without them and ship it to the instance that
+# needs them. Registry.InitAll migrates every registered module regardless of
+# active status, so those tables appear everywhere either way — gate a module per
+# instance with EnvironmentChecker/AllowedEnvs, not by leaving it uncompiled.
 #
-# The cost of adding rather than mirroring: a module deleted from a site repo
-# lingers in core until someone runs `make clean-modules` from the site that
-# owns it. That is a deliberate trade — a stale module compiled in is recoverable,
-# a missing one in production is not.
+# OWNERS records which site each copied name came from. It is what lets this
+# target tell "my module, now deleted from my repo" (remove it) from "another
+# site's module" (leave it alone, and refuse to overwrite it). Without it two
+# sites owning the same module name would silently clobber each other, and a
+# module deleted from a site repo could never be found to remove.
 #
 # Whole recipe in ONE shell per target. Each line of a make recipe otherwise
 # gets its own shell, so `|| exit 0` on its own line exits that line only and
 # the loops below still run — with an empty SITE_MODULES_DIR the glob becomes
 # /*/ and the loop would rsync top-level system directories into core.
-#
-# core_names is the list of names that ship with oCMS. It is what stops a site
-# module from overwriting one of them; if it cannot be determined the recipe
-# aborts rather than guessing.
+OWNERS = $(CORE_MODULES_DIR)/.owners
+
 sync-modules: ## Copy custom/modules/ into core (runs before builds)
-	@set -eu; \
-	site="$(SITE_MODULES_DIR)"; core="$(CORE_MODULES_DIR)"; \
-	[ -n "$$site" ] && [ -n "$$core" ] || { echo "sync-modules: SITE_MODULES_DIR/CORE_MODULES_DIR must be set" >&2; exit 1; }; \
+	@$(with_core_lock) \
+	site="$(SITE_MODULES_DIR)"; core="$(CORE_MODULES_DIR)"; me="$(SITE_DIR)"; \
+	[ -n "$$site" ] && [ -n "$$core" ] && [ -n "$$me" ] || { echo "sync-modules: SITE_MODULES_DIR/CORE_MODULES_DIR/SITE_DIR must be set" >&2; exit 1; }; \
 	mkdir -p "$$core"; \
-	[ -d "$$site" ] || exit 0; \
 	core_names="$$($(core_names_cmd) || true)"; \
 	core_names="$$(echo $$core_names)"; \
 	[ -n "$$core_names" ] || { echo "sync-modules: cannot list oCMS's own modules in $(CORE_DIR) (not a git checkout?); refusing to touch $$core" >&2; exit 1; }; \
-	for path in "$$site"/*/ "$$site"/imports_*.go; do \
-		[ -e "$$path" ] || continue; \
-		name="$$(basename "$$path")"; \
-		case " $$core_names " in *" $$name "*) \
-			echo "sync-modules: $$name ships with oCMS; rename the site module" >&2; exit 1;; \
-		esac; \
-	done; \
-	for dir in "$$site"/*/; do \
-		[ -d "$$dir" ] || continue; \
-		rsync -a --delete "$$dir" "$$core/$$(basename "$$dir")/"; \
-	done; \
-	for file in "$$site"/imports_*.go; do \
-		[ -f "$$file" ] || continue; \
-		cp "$$file" "$$core/"; \
-	done
+	touch "$(OWNERS)"; \
+	mine=" "; \
+	if [ -d "$$site" ]; then \
+		for path in "$$site"/*/ "$$site"/imports_*.go; do \
+			[ -e "$$path" ] || continue; \
+			name="$$(basename "$$path")"; \
+			case " $$core_names " in *" $$name "*) \
+				echo "sync-modules: $$name ships with oCMS; rename the site module" >&2; exit 1;; \
+			esac; \
+			owner="$$(awk -F'\t' -v n="$$name" '$$1 == n { print $$2; exit }' "$(OWNERS)")"; \
+			if [ -n "$$owner" ] && [ "$$owner" != "$$me" ]; then \
+				echo "sync-modules: $$name is already provided by $$owner; rename one of them" >&2; exit 1; \
+			fi; \
+			mine="$$mine$$name "; \
+		done; \
+	fi; \
+	while IFS="$$(printf '\t')" read -r name owner; do \
+		[ -n "$$name" ] || continue; \
+		[ "$$owner" = "$$me" ] || continue; \
+		case "$$mine" in *" $$name "*) continue;; esac; \
+		echo "sync-modules: removing $$name (deleted from $$me)"; rm -rf "$$core/$$name"; \
+	done < "$(OWNERS)"; \
+	if [ -d "$$site" ]; then \
+		for dir in "$$site"/*/; do \
+			[ -d "$$dir" ] || continue; \
+			rsync -a --delete "$$dir" "$$core/$$(basename "$$dir")/"; \
+		done; \
+		for file in "$$site"/imports_*.go; do \
+			[ -f "$$file" ] || continue; \
+			cp "$$file" "$$core/"; \
+		done; \
+	fi; \
+	awk -F'\t' -v me="$$me" '$$2 != me' "$(OWNERS)" > "$(OWNERS).tmp"; \
+	for name in $$mine; do printf '%s\t%s\n' "$$name" "$$me" >> "$(OWNERS).tmp"; done; \
+	mv "$(OWNERS).tmp" "$(OWNERS)"
 
-# Removes only what this site owns, by name. A blanket `rm imports_*.go` would
-# take core's own tracked imports_bookmarks.go with it, and a site module named
-# `bookmarks` would take core's tracked directory — hence the same abort-rather-
-# than-guess rule as sync-modules when the core list cannot be determined.
+# Removes what OWNERS says this site put there — including modules it has since
+# deleted from its own repo, which no glob over the site tree could find. Another
+# site's copies and oCMS's own tracked modules are never touched.
 clean-modules: ## Remove this site's module copies from core
-	@set -eu; \
-	site="$(SITE_MODULES_DIR)"; core="$(CORE_MODULES_DIR)"; \
-	[ -n "$$site" ] && [ -n "$$core" ] || { echo "clean-modules: SITE_MODULES_DIR/CORE_MODULES_DIR must be set" >&2; exit 1; }; \
-	[ -d "$$site" ] || exit 0; \
+	@$(with_core_lock) \
+	core="$(CORE_MODULES_DIR)"; me="$(SITE_DIR)"; \
+	[ -n "$$core" ] && [ -n "$$me" ] || { echo "clean-modules: CORE_MODULES_DIR/SITE_DIR must be set" >&2; exit 1; }; \
+	[ -f "$(OWNERS)" ] || { echo "Core module copies removed"; exit 0; }; \
 	core_names="$$($(core_names_cmd) || true)"; \
 	core_names="$$(echo $$core_names)"; \
 	[ -n "$$core_names" ] || { echo "clean-modules: cannot list oCMS's own modules in $(CORE_DIR) (not a git checkout?); refusing to touch $$core" >&2; exit 1; }; \
-	for path in "$$site"/*/ "$$site"/imports_*.go; do \
-		[ -e "$$path" ] || continue; \
-		name="$$(basename "$$path")"; \
+	while IFS="$$(printf '\t')" read -r name owner; do \
+		[ -n "$$name" ] || continue; \
+		[ "$$owner" = "$$me" ] || continue; \
 		case " $$core_names " in *" $$name "*) continue;; esac; \
 		rm -rf "$$core/$$name"; \
-	done; \
+	done < "$(OWNERS)"; \
+	awk -F'\t' -v me="$$me" '$$2 != me' "$(OWNERS)" > "$(OWNERS).tmp"; \
+	mv "$(OWNERS).tmp" "$(OWNERS)"; \
 	echo "Core module copies removed"
 
 # ── Server ───────────────────────────────────────────────────────────────────
-dev: assets ## Build assets, sync modules, run the dev server
+dev: ## Build assets, sync modules, run the dev server
 	@$(with_core_lock) \
-	cd "$(CORE_DIR)" && exec $(GO) run $(MAIN_DIR)
+	$(MAKE) --no-print-directory assets; \
+	$(MAKE) --no-print-directory sync-modules; \
+	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR)
 
 run: ## Run the dev server without rebuilding assets
 	@$(with_core_lock) \
-	cd "$(CORE_DIR)" && exec $(GO) run $(MAIN_DIR)
+	$(MAKE) --no-print-directory sync-modules; \
+	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR)
 
 stop: ## Kill the server on the configured port
 	@[ -n "$(OCMS_SERVER_PORT)" ] || { echo "stop: OCMS_SERVER_PORT is not set" >&2; exit 1; }
@@ -261,24 +303,28 @@ restart: stop dev ## Restart the dev server
 build: ## Build the binary with debug symbols
 	@echo "Building $(BINARY_NAME) $(VERSION)..."
 	@$(with_core_lock) \
+	$(MAKE) --no-print-directory sync-modules; \
 	mkdir -p "$(BUILD_DIR)"; \
 	cd "$(CORE_DIR)" && $(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS_VERSION)" -o "$(BUILD_DIR)/$(BINARY_NAME)" $(MAIN_DIR)
 
 build-prod: ## Build an optimised, stripped binary
 	@echo "Building $(BINARY_NAME) $(VERSION) for production..."
 	@$(with_core_lock) \
+	$(MAKE) --no-print-directory sync-modules; \
 	mkdir -p "$(BUILD_DIR)"; \
 	cd "$(CORE_DIR)" && $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)" $(MAIN_DIR)
 
 build-linux-amd64: ## Cross-build for Linux AMD64
 	@echo "Building $(BINARY_NAME) $(VERSION) for Linux AMD64..."
 	@$(with_core_lock) \
+	$(MAKE) --no-print-directory sync-modules; \
 	mkdir -p "$(BUILD_DIR)"; \
 	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)-linux-amd64" $(MAIN_DIR)
 
 build-darwin-arm64: ## Cross-build for macOS ARM64
 	@echo "Building $(BINARY_NAME) $(VERSION) for macOS ARM64..."
 	@$(with_core_lock) \
+	$(MAKE) --no-print-directory sync-modules; \
 	mkdir -p "$(BUILD_DIR)"; \
 	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64" $(MAIN_DIR)
 
@@ -287,10 +333,12 @@ build-all-platforms: build-linux-amd64 build-darwin-arm64 ## Cross-build every p
 	@ls -lh "$(BUILD_DIR)/$(BINARY_NAME)"-*
 
 assets: ## Compile SCSS and copy JS dependencies
+	@$(with_core_lock) \
 	cd "$(CORE_DIR)" && $(MAKE) assets
 
 test: ## Run the full Go test suite
 	@$(with_core_lock) \
+	$(MAKE) --no-print-directory sync-modules; \
 	cd "$(CORE_DIR)" && $(GO) test -v ./...
 
 clean: ## Remove build artifacts
@@ -298,15 +346,18 @@ clean: ## Remove build artifacts
 	rm -rf "$(BUILD_DIR)"
 
 # ── Database ─────────────────────────────────────────────────────────────────
-# OCMS_DB_PATH comes from the site .env, the same file the server reads. It must
-# be ABSOLUTE: internal/config defaults to ./data/ocms.db relative to the working
-# directory, and `dev`/`run` cd into core/ — so a relative path would have goose
-# migrating <site>/data/ocms.db while the server opens <core>/data/ocms.db,
-# shared with every other site using that checkout. Migrations would report
-# success against a database the app never opens.
+# OCMS_DB_PATH comes from the site .env, the same file the server reads, and is
+# resolved against SITE_DIR above so goose and the server always agree. Without
+# that, internal/config's ./data/ocms.db default plus `dev`/`run` cd-ing into
+# core/ would have goose migrating <site>/data/ocms.db while the server opened
+# <core>/data/ocms.db — shared with every other site using that checkout, and
+# reporting success against a database the app never opens.
+#
+# The guard below is a backstop against a broken resolution, not a user-facing
+# constraint: a relative path in the .env is fine and gets resolved.
 require-db-path:
-	@[ -n "$(OCMS_DB_PATH)" ] || { echo "OCMS_DB_PATH is not set in $(OCMS_ENV_FILE) — set it to an absolute path" >&2; exit 1; }
-	@case "$(OCMS_DB_PATH)" in /*) ;; *) echo "OCMS_DB_PATH must be absolute, got: $(OCMS_DB_PATH)" >&2; exit 1;; esac
+	@[ -n "$(OCMS_DB_PATH)" ] || { echo "OCMS_DB_PATH is empty (SITE_DIR unset?)" >&2; exit 1; }
+	@case "$(OCMS_DB_PATH)" in /*) ;; *) echo "OCMS_DB_PATH did not resolve to an absolute path: $(OCMS_DB_PATH)" >&2; exit 1;; esac
 
 migrate-up: require-db-path ## Apply pending database migrations
 	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(OCMS_DB_PATH)" up

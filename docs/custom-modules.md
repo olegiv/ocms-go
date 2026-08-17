@@ -144,10 +144,11 @@ a site's `deploy-binary.sh` pushes it to all of them — so that binary must car
 the *union* of every site's modules. Evicting another site's modules here would
 build a binary without them and then ship it to the instance that needs them.
 
-The cost of adding rather than mirroring: a module deleted from a site repo
-lingers in this tree until someone runs `make clean-modules` from the site that
-owns it. That is deliberate — a stale module compiled in is recoverable, a
-missing one in production is not.
+`sync-modules` records which site each copy came from, in
+`custom/modules/.owners`. That ownership record does two things: a module you
+delete from your site repo is removed from this tree on your next sync (no glob
+over your tree could still find it), and two sites that pick the same module
+name get an error instead of silently overwriting one another.
 
 `sync-modules` refuses outright to overwrite a module that ships with oCMS, so a
 site module named `bookmarks` is an error rather than a silent clobber. Both it
@@ -155,17 +156,24 @@ and `clean-modules` need the core checkout to be a git working tree — that is 
 they tell oCMS's own modules from a site's copies — and abort rather than guess
 if it is not.
 
-Because sites share one core tree, every target that syncs and then reads it
-(`dev`, `run`, `build*`, `test`) holds a lock across **both** steps, at
-`$(CORE_DIR)/.site-build.lock`. Without it a second site could replace the
-modules after the first site's sync finished but while its compiler was still
-reading, producing a binary containing the wrong site's code. A build killed
-with `SIGKILL` can strand the lock; the timeout message says how to remove it.
+Because sites share one core tree, every target that touches it — `dev`, `run`,
+`build*`, `test`, `assets`, `sync-modules` and `clean-modules` — holds a lock at
+`$(CORE_DIR)/.site-build.lock` for its whole duration. Without it a second site
+could replace the modules after the first site's sync finished but while its
+compiler was still reading, producing a binary containing the wrong site's code;
+`assets` is included because `web/static/dist` is embedded into the binary. The
+lock is re-entrant, so a build does not deadlock on its own sub-steps. A build
+killed with `SIGKILL` can strand it; the timeout message says how to remove it.
 
-Set `OCMS_DB_PATH` to an **absolute** path in each site's `.env`. The migrate
-targets refuse a relative one: `dev`/`run` `cd` into the core checkout, so a
-relative path would have goose migrating the site's database while the server
-opened one under `core/` shared with every other site.
+`dev` and `run` also export `OCMS_CUSTOM_DIR`, `OCMS_UPLOADS_DIR` and
+`OCMS_DB_PATH` resolved against `SITE_DIR`. They have to: those are resolved by
+the server against its working directory, and `dev`/`run` `cd` into the core
+checkout — so a site's `./custom` would otherwise load the *core's* themes and
+every site would share one uploads directory. A relative value in your `.env` is
+fine; it is resolved for you.
+
+The same resolution applies to the migrate targets, so `goose` and the server
+always open the same database.
 
 Copy, do not symlink: Go's wildcards skip symlinked directories, so
 `go test ./...` would silently omit the module and report success with failing
