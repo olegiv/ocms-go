@@ -3,13 +3,19 @@
 
 // Package bookmarks provides a custom bookmarks module for oCMS.
 // It demonstrates how to create a fully self-contained custom module
-// in the custom/modules/ directory with database migrations, embedded admin
-// template, public routes, template functions, hooks, and i18n translations.
+// in the custom/modules/ directory with database migrations, an embedded admin
+// template, public routes, hooks, and i18n translations.
 //
-// The module self-registers via init() in register.go. To enable it,
-// add a blank import to custom/modules/imports.go:
+// Note what it does NOT do: expose template functions. See the comment above
+// AdminURL for why that is the one thing a custom module cannot do without
+// editing core.
 //
-//	_ "github.com/olegiv/ocms-go/custom/modules/bookmarks"
+// The module self-registers via init() in register.go, and is enabled by its own
+// registration file, custom/modules/imports_bookmarks.go:
+//
+//	package modules
+//
+//	import _ "github.com/olegiv/ocms-go/custom/modules/bookmarks"
 package bookmarks
 
 import (
@@ -86,25 +92,23 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	r.Delete("/bookmarks/{id}", m.handleDelete)
 }
 
-// TemplateFuncs returns template functions provided by the module.
-func (m *Module) TemplateFuncs() template.FuncMap {
-	return template.FuncMap{
-		"bookmarkCount": func() int {
-			count, err := m.countBookmarks()
-			if err != nil {
-				return 0
-			}
-			return count
-		},
-		"bookmarkFavorites": func() []Bookmark {
-			items, err := m.listFavorites()
-			if err != nil {
-				return nil
-			}
-			return items
-		},
-	}
-}
+// This module deliberately does NOT implement TemplateFuncs().
+//
+// It used to expose bookmarkCount and bookmarkFavorites, and that was a mistake
+// worth learning from: Registry.AllTemplateFuncs returns funcs from ACTIVE
+// modules only, while html/template resolves names at PARSE time. Themes are
+// parsed once at boot, so a theme calling one fails to parse on the next restart
+// after the module is deactivated — and a theme that fails to parse is not an
+// error page: internal/theme/manager.go drops it with one warning and cmd/ocms
+// falls back to whichever theme sorts first. Guarding against that requires a
+// no-op placeholder in internal/render, i.e. editing core, which contradicts the
+// promise this very package is meant to demonstrate: "No core files need to be
+// modified" (docs/custom-modules.md).
+//
+// Expose data over a route instead — see handlePublicList, which serves the
+// same favourites through GET /bookmarks?favorites=1.
+//
+// TestModuleExposesNoTemplateFuncs pins this.
 
 // AdminURL returns the admin dashboard URL for the module.
 func (m *Module) AdminURL() string {

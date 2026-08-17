@@ -229,11 +229,28 @@ func init() {
 }
 ```
 
-Then add a blank import to `custom/modules/imports.go`:
+Step 4 above calls `module.RegisterCustomModule`, which is the **custom** module
+path — so put the package in `custom/modules/mymodule/`, not `modules/`, and give
+it its own registration file, one per module, never a shared list:
 
 ```go
-_ "github.com/olegiv/ocms-go/custom/modules/mymodule"
+// custom/modules/imports_mymodule.go
+package modules
+
+import _ "github.com/olegiv/ocms-go/custom/modules/mymodule"
 ```
+
+The import path must match where the package actually lives.
+
+A **built-in** module works differently: it lives in `modules/`, does not call
+`RegisterCustomModule`, and is registered by being added to the `modules` slice
+in `registerModules()` in `cmd/ocms/main.go` — a core edit.
+
+A custom module must not add template functions: every module template func
+needs a matching no-op placeholder in `internal/render/render.go`, and editing
+core is what `custom/` exists to avoid. Expose data over a route instead — see
+`docs/custom-modules.md`. Built-in modules may ship template functions, because
+their placeholder lands in the same change.
 
 ### Step 5: Database Entry
 

@@ -53,11 +53,24 @@ resolve_path() {
     fi
 }
 
-# Hardcoded values
-LOCAL_BINARY="bin/ocms-linux-amd64"
+# Binary name. Sites that override BINARY_NAME in their Makefile (see
+# core/site.mk) must export the same value here: `make build-linux-amd64` then
+# writes bin/<name>-linux-amd64, and this script would otherwise look for
+# bin/ocms-linux-amd64 and abort.
+#
+# NOTE: this affects only which file is built and which path is uploaded. The
+# launchers do NOT derive from it, and do not even match the default: ocmsctl
+# and ocms@.service both hardcode /opt/ocms/bin/ocms, while this uploads
+# /opt/ocms/bin/ocms-linux-amd64. Nothing here renames one to the other — that
+# is an operator step (scripts/deploy/deploy-multi.sh, run on the server, or the
+# manual cp in the Quick Start). ocms@.service is also a single template shared
+# by every instance, so a per-site BINARY_NAME cannot give a site its own
+# running binary.
+BINARY_NAME="${BINARY_NAME:-ocms}"
+LOCAL_BINARY="${LOCAL_BINARY:-bin/${BINARY_NAME}-linux-amd64}"
 LOCAL_CUSTOM_DIR="custom/"
-REMOTE_BIN_DIR="/opt/ocms/bin"
-REMOTE_BINARY="ocms-linux-amd64"
+REMOTE_BIN_DIR="${REMOTE_BIN_DIR:-/opt/ocms/bin}"
+REMOTE_BINARY="${REMOTE_BINARY:-${BINARY_NAME}-linux-amd64}"
 
 # Defaults
 SSH_USER="root"
@@ -83,7 +96,8 @@ Arguments:
   instance    Instance name for ocmsctl (e.g., my_site)
 
 Options:
-  -v, --vhost PATH     Vhost path for custom content sync (e.g., /var/www/vhosts/example.com/domain)
+  -v, --vhost PATH     Instance directory for custom content sync
+                       (e.g., /var/www/vhosts/example.com/ocms)
   -o, --owner USER     Vhost owner for chown (required if -v is provided)
   -g, --group GROUP    Vhost group for chown (default: psaserv)
   -u, --user USER      SSH user (default: root)
@@ -98,10 +112,10 @@ Examples:
   $(basename "$0") server.example.com my_site
 
   # Deploy binary and sync custom themes
-  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com -o hosting
+  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com/ocms -o hosting
 
   # Deploy custom content only (skip binary)
-  $(basename "$0") server.example.com my_site --skip-binary -v /var/www/vhosts/example.com -o hosting
+  $(basename "$0") server.example.com my_site --skip-binary -v /var/www/vhosts/example.com/ocms -o hosting
 
   # Skip build, dry run
   $(basename "$0") server.example.com my_site --skip-build --dry-run
@@ -224,9 +238,19 @@ fi
 # Check if custom directory has content
 has_custom_content() {
     if [[ -d "$LOCAL_CUSTOM_DIR" ]]; then
-        # Follow symlinked theme/module directories and look for at least one file.
-        local first_file
-        first_file=$(find -L "$LOCAL_CUSTOM_DIR" -mindepth 1 -type f -print -quit 2>/dev/null || true)
+        # Follow symlinked theme directories and look for at least one file.
+        # Ignore custom/modules: it is excluded from the sync, so a site with
+        # modules but no themes has nothing to deploy and should be skipped.
+        #
+        # The prune is anchored with -path to the top-level custom/modules. A
+        # bare -name modules would prune at any depth, so an ordinary theme
+        # asset layout (themes/x/static/js/modules/) would make this return
+        # false and the theme would never be deployed at all.
+        local custom_root first_file
+        custom_root="${LOCAL_CUSTOM_DIR%/}"
+        first_file=$(find -L "$custom_root" -mindepth 1 \
+            \( -type d -path "$custom_root/modules" -prune \) -o \
+            -type f -print -quit 2>/dev/null || true)
         [[ -n "$first_file" ]]
     else
         return 1
@@ -245,9 +269,17 @@ validate_custom_symlinks() {
         exit 1
     fi
 
+    # custom/modules/ is excluded from the sync, so its symlinks are never
+    # followed by rsync and must not gate the deploy. Without this prune a site
+    # that symlinks a shared module into custom/modules/ — a layout site.mk
+    # supports — fails every deploy on the outside-custom/ check below, and a
+    # stale broken symlink there blocks a themes-only deploy outright.
+    local modules_dir="${LOCAL_CUSTOM_DIR%/}/modules"
+
     local broken_symlinks find_err
     find_err=$(mktemp)
-    broken_symlinks=$(find "$LOCAL_CUSTOM_DIR" -type l ! -exec test -e {} \; -print 2>"$find_err") || {
+    broken_symlinks=$(find "$LOCAL_CUSTOM_DIR" -path "$modules_dir" -prune -o \
+        -type l ! -exec test -e {} \; -print 2>"$find_err") || {
         echo_error "Failed to scan for broken symlinks in ${LOCAL_CUSTOM_DIR}"
         cat "$find_err" >&2
         rm -f "$find_err"
@@ -270,7 +302,8 @@ validate_custom_symlinks() {
     # This prevents rsync -aL from copying unrelated local files to the server.
     local all_symlinks
     find_err=$(mktemp)
-    all_symlinks=$(find "$LOCAL_CUSTOM_DIR" -type l -print 2>"$find_err") || {
+    all_symlinks=$(find "$LOCAL_CUSTOM_DIR" -path "$modules_dir" -prune -o \
+        -type l -print 2>"$find_err") || {
         echo_error "Failed to enumerate symlinks in ${LOCAL_CUSTOM_DIR}"
         cat "$find_err" >&2
         rm -f "$find_err"
@@ -401,8 +434,11 @@ echo_ok "Instance stopped"
 
 if [[ "$SKIP_BINARY" != true ]]; then
     # Step 4: Transfer binary
+    # Name the destination explicitly: scp to a bare directory would land the
+    # file under basename "$LOCAL_BINARY", so overriding only one of the two
+    # names would put the upload and the backup at different paths.
     echo_step "Transferring binary to server..."
-    scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/"
+    scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/${REMOTE_BINARY}"
     echo_ok "Binary transferred"
 fi
 
@@ -413,8 +449,22 @@ if should_sync_custom && [[ -n "$VHOST" ]]; then
     # Create remote custom directory if it doesn't exist
     ssh_cmd "mkdir -p ${REMOTE_CUSTOM_DIR}"
 
-    # Dereference local symlinks so the server receives real theme/module files.
-    rsync_cmd -aLz --delete "${LOCAL_CUSTOM_DIR}" "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/"
+    # Dereference local symlinks so the server receives real theme files.
+    #
+    # custom/modules/ is excluded deliberately. Modules are Go packages compiled
+    # into the binary by deploy-binary.sh; nothing on the server ever reads them
+    # (OCMS_CUSTOM_DIR feeds only the theme manager). Shipping the sources would
+    # put files on the vhost that no longer necessarily match the running binary
+    # — worse than absent, because they invite edits that can never take effect.
+    #
+    # --delete does not remove already-excluded files on the receiver. To clear
+    # module sources left by an earlier deploy, run this once with
+    # --delete-excluded, or delete <vhost>/custom/modules by hand.
+    #
+    # The leading slash anchors the pattern to the transfer root. Without it
+    # rsync matches the final path component at every depth, so a theme's own
+    # static/js/modules/ would be dropped silently on every deploy.
+    rsync_cmd -aLz --delete --exclude='/modules/' "${LOCAL_CUSTOM_DIR}" "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/"
     echo_ok "Custom content synced"
 
     # Step 6: Fix custom content ownership

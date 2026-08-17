@@ -7,7 +7,6 @@ A custom module example demonstrating the oCMS module system. Provides bookmark 
 - Public JSON API for listing bookmarks
 - Admin dashboard with embedded HTML template
 - Bookmark CRUD (create, list, toggle favorite, delete)
-- Template functions for use in themes
 - Hook handler for page save events
 - Database migrations with rollback support
 - Embedded i18n translations (English, Russian)
@@ -17,9 +16,19 @@ A custom module example demonstrating the oCMS module system. Provides bookmark 
 
 ### Public Routes
 
-| Method | Path         | Description                |
-|--------|--------------|----------------------------|
-| GET    | `/bookmarks` | List all bookmarks (JSON)  |
+| Method | Path         | Description               |
+|--------|--------------|---------------------------|
+| GET    | `/bookmarks` | List all bookmarks (JSON) |
+
+Query parameters:
+
+| Parameter     | Effect                                          |
+|---------------|-------------------------------------------------|
+| `favorites=1` | Return only bookmarks marked favorite           |
+
+Any other value (or no parameter) returns the full list. This filter is what
+replaced the module's former `bookmarkFavorites` template function — see
+[Template Functions](#template-functions--deliberately-none).
 
 Response format:
 
@@ -48,24 +57,30 @@ Response format:
 | POST   | `/admin/bookmarks/{id}/toggle` | Toggle favorite     |
 | DELETE | `/admin/bookmarks/{id}`        | Delete bookmark     |
 
-## Template Functions
+## Template Functions — deliberately none
 
-Available in all theme templates when the module is active:
+This module used to export `bookmarkCount` and `bookmarkFavorites`. It no longer
+does, and that is the point it now exists to teach: a custom module must not
+implement `TemplateFuncs()`.
 
-```html
-<!-- Total bookmark count -->
-<p>You have {{ bookmarkCount }} bookmarks saved.</p>
+`Registry.AllTemplateFuncs()` returns functions from *active* modules only, while
+`html/template` resolves function names at *parse* time. Deactivate the module
+and any theme calling one of its functions fails to parse on the next restart —
+and an unparseable theme is not an error page, it is silently dropped in favour
+of another theme. Guarding against that needs a no-op placeholder in
+`internal/render/render.go`, i.e. a core edit, which is precisely what this
+package is meant to prove unnecessary.
 
-<!-- List favorite bookmarks -->
-{{ range bookmarkFavorites }}
-    <a href="{{ .URL }}">{{ .Title }}</a>
-{{ end }}
+Get the same data from the public route instead:
+
+```bash
+curl 'http://localhost:8080/bookmarks'              # {"bookmarks":[…],"total":N}
+curl 'http://localhost:8080/bookmarks?favorites=1'  # favourites only
 ```
 
-| Function             | Returns       | Description                   |
-|----------------------|---------------|-------------------------------|
-| `bookmarkCount`      | `int`         | Total number of bookmarks     |
-| `bookmarkFavorites`  | `[]Bookmark`  | All bookmarks marked favorite |
+A theme can fetch either with htmx, Alpine, or plain `fetch()`. See
+[docs/custom-modules.md](../../../docs/custom-modules.md#the-one-thing-a-custom-module-cannot-do).
+`TestModuleExposesNoTemplateFuncs` pins this.
 
 ## Hook Handlers
 
@@ -119,9 +134,11 @@ func init() {
 }
 ```
 
-Enabled by a blank import in `custom/modules/imports.go`:
+Enabled by its own registration file, `custom/modules/imports_bookmarks.go`:
 
 ```go
+package modules
+
 import _ "github.com/olegiv/ocms-go/custom/modules/bookmarks"
 ```
 
@@ -145,7 +162,7 @@ The test suite covers:
 - Module metadata (name, version, description, admin URL, sidebar label)
 - Database migrations (up and down)
 - CRUD operations (create, list, toggle favorite, delete)
-- Template functions (with and without data)
+- Absence of template functions (`TestModuleExposesNoTemplateFuncs`)
 - Hook registration and execution
 - HTTP handlers (public API, admin dashboard, create, toggle, delete)
 - Translations filesystem embedding

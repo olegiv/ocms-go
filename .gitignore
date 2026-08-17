@@ -32,7 +32,8 @@ custom/modules/*
 !custom/themes/.gitkeep
 !custom/themes/starter/
 !custom/modules/.gitkeep
-!custom/modules/imports.go
+!custom/modules/doc.go
+!custom/modules/imports_bookmarks.go
 !custom/modules/bookmarks/
 
 # Test coverage artifacts

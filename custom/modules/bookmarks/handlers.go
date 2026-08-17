@@ -37,8 +37,18 @@ type adminPageData struct {
 }
 
 // handlePublicList handles GET /bookmarks - public route returning JSON.
-func (m *Module) handlePublicList(w http.ResponseWriter, _ *http.Request) {
-	items, err := m.listBookmarks()
+//
+// ?favorites=1 narrows the list. This is how a module should surface data to a
+// site: a route the theme (or a script, or anything else) can call, rather than
+// a template function, which would drag a core edit along with it. See the note
+// above AdminURL in module.go.
+func (m *Module) handlePublicList(w http.ResponseWriter, r *http.Request) {
+	list := m.listBookmarks
+	if r.URL.Query().Get("favorites") == "1" {
+		list = m.listFavorites
+	}
+
+	items, err := list()
 	if err != nil {
 		m.ctx.Logger.Error("failed to list bookmarks", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

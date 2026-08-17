@@ -11,10 +11,23 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/helper.sh"
 
-# Hardcoded values
-LOCAL_BINARY="bin/ocms-linux-amd64"
-REMOTE_BIN_DIR="/opt/ocms/bin"
-REMOTE_BINARY="ocms-linux-amd64"
+# Binary name. Sites that override BINARY_NAME in their Makefile (see
+# core/site.mk) must export the same value here: `make build-linux-amd64` then
+# writes bin/<name>-linux-amd64, and this script would otherwise look for
+# bin/ocms-linux-amd64 and abort.
+#
+# NOTE: this affects only which file is built and which path is uploaded. The
+# launchers do NOT derive from it, and do not even match the default: ocmsctl
+# and ocms@.service both hardcode /opt/ocms/bin/ocms, while this uploads
+# /opt/ocms/bin/ocms-linux-amd64. Nothing here renames one to the other — that
+# is an operator step (scripts/deploy/deploy-multi.sh, run on the server, or the
+# manual cp in the Quick Start). ocms@.service is also a single template shared
+# by every instance, so a per-site BINARY_NAME cannot give a site its own
+# running binary.
+BINARY_NAME="${BINARY_NAME:-ocms}"
+LOCAL_BINARY="${LOCAL_BINARY:-bin/${BINARY_NAME}-linux-amd64}"
+REMOTE_BIN_DIR="${REMOTE_BIN_DIR:-/opt/ocms/bin}"
+REMOTE_BINARY="${REMOTE_BINARY:-${BINARY_NAME}-linux-amd64}"
 
 # Defaults
 SSH_USER="root"
@@ -151,8 +164,11 @@ for instance in "${INSTANCES[@]}"; do
 done
 
 # Step 4: Transfer binary
+# Name the destination explicitly: scp to a bare directory would land the file
+# under basename "$LOCAL_BINARY", so overriding only one of the two names would
+# put the upload and the backup at different paths.
 echo_step "Transferring binary to server..."
-scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/"
+scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/${REMOTE_BINARY}"
 echo_ok "Binary transferred"
 
 # Step 5: Start all instances

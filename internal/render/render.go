@@ -392,13 +392,6 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"exampleFunc":     func() string { return "" },
 		"exampleVersion":  func() string { return "" },
 		"sentinelVersion": func() string { return "" },
-		// custom/modules/bookmarks self-registers through init(), so it ships
-		// registered like any built-in and needs the same placeholders. As with
-		// analyticsPostStats, the element type cannot be the module's own —
-		// []any ranges zero times, which is what an inactive module should
-		// render, and only the name is resolved at parse time.
-		"bookmarkCount":     func() int { return 0 },
-		"bookmarkFavorites": func() []any { return nil },
 		"deref": func(p *int64) int64 {
 			if p == nil {
 				return 0
