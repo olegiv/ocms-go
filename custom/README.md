@@ -74,11 +74,18 @@ A reference implementation is included at `custom/modules/bookmarks/`.
 To add a custom module:
 
 1. Create your module package in `custom/modules/mymodule/`
-2. Add a blank import to `custom/modules/imports.go`:
+2. Add a registration file, one per module:
    ```go
-   _ "github.com/olegiv/ocms-go/custom/modules/mymodule"
+   // custom/modules/imports_mymodule.go
+   package modules
+
+   import _ "github.com/olegiv/ocms-go/custom/modules/mymodule"
    ```
 3. Build and run — the module appears at **Admin > Modules**
+
+Do not implement `TemplateFuncs()`: every module template function needs a
+matching placeholder in `internal/render/render.go`, and editing core is exactly
+what `custom/` exists to avoid. Expose data over a route instead.
 
 See `docs/custom-modules.md` for the full guide.
 
@@ -94,11 +101,13 @@ OCMS_CUSTOM_DIR=./custom    # Default value
 
 Most content in this directory is gitignored. The following are tracked:
 
+- `README.md` — this file
 - `themes/starter/` — sample custom theme (reference implementation)
+- `themes/.gitkeep`, `modules/.gitkeep` — keep the empty directories present
 - `modules/bookmarks/` — sample custom module (reference implementation)
-- `modules/imports.go` — blank imports that register custom modules
+- `modules/doc.go` — declares the `modules` package (must exist; never edited)
+- `modules/imports_bookmarks.go` — registers the sample module
 
-User-created themes and modules are automatically ignored by git.
-When you modify `imports.go` to add your own modules, your local
-changes are preserved on `git pull` unless upstream also changed
-the file (standard merge conflict).
+User-created themes and modules are automatically ignored by git, and so is
+your own `modules/imports_<name>.go`. Nothing shared needs editing, so `git
+pull` can never conflict over module registration.

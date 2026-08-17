@@ -118,7 +118,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 - **Extensible Architecture**: Add custom functionality via modules
 - **Module Lifecycle**: Init, routes, admin routes, and shutdown hooks
 - **Module Migrations**: Modules can have their own database migrations
-- **Template Functions**: Modules can add custom template functions
+- **Template Functions**: Built-in modules can add custom template functions (custom modules must not — see below)
 - **Active Status Toggle**: Enable/disable modules from admin UI without restart
 - **Module Translations**: Modules can embed their own i18n locale files
 
@@ -526,9 +526,9 @@ ocms-go/
 │   └── webhook/          # Webhook system
 ├── modules/              # Custom modules directory
 │   └── example/          # Example module implementation
-├── custom/               # User content directory (gitignored)
+├── custom/               # User content (mostly gitignored — see custom/README.md)
 │   ├── themes/           # Custom themes (override or extend core)
-│   └── modules/          # Custom modules (future use)
+│   └── modules/          # Custom modules (see Custom Modules below)
 ├── web/
 │   ├── static/           # Static assets (CSS, JS)
 │   │   └── scss/         # SCSS source files
@@ -542,6 +542,7 @@ ocms-go/
 ├── uploads/              # Media uploads directory
 ├── scripts/              # Build scripts
 ├── Makefile              # Development commands
+├── site.mk               # Shared make targets for site instances (see below)
 ├── package.json          # npm dependencies (htmx, alpine.js)
 └── sqlc.yaml             # sqlc configuration
 ```
@@ -729,11 +730,17 @@ func init() {
 }
 ```
 
-Then add a blank import to `custom/modules/imports.go`:
+Then add a registration file — one per module, never a shared list:
 
 ```go
-_ "github.com/olegiv/ocms-go/custom/modules/mymodule"
+// custom/modules/imports_mymodule.go
+package modules
+
+import _ "github.com/olegiv/ocms-go/custom/modules/mymodule"
 ```
+
+Do not add template functions: that is the one extension point requiring a core
+edit. Expose data over a route instead — see `docs/custom-modules.md`.
 
 See `docs/custom-modules.md` for the full guide and `custom/modules/bookmarks/` for a working example.
 
@@ -761,6 +768,25 @@ Modules can be enabled/disabled from the admin UI at **Admin > Modules**. When a
 - Admin routes redirect to the modules list
 - Template functions are not registered
 - The module remains initialized but inactive
+
+### Site instances
+
+Several sites can share one checkout of oCMS, each a small repository holding
+only its own `custom/themes/`, `custom/modules/`, `.env` and deploy wrappers,
+with `core` symlinked here. Their entire build is shared — the site Makefile is
+usually one line:
+
+```make
+include core/site.mk
+```
+
+That provides `dev`, `run`, `build*`, `test`, `migrate-*` and `sync-modules`,
+which copies the site's Go modules into this tree so the compiler can see them.
+It adds rather than replaces: one binary serves every instance, so it must carry
+every site's modules. `make clean-modules` removes a site's own copies again.
+Run `make help` in the site repo for the full list. See
+[docs/custom-modules.md](docs/custom-modules.md#modules-in-a-multi-site-deployment)
+for why modules are kept in the site repo and copied in.
 
 ## Testing
 

@@ -54,7 +54,8 @@ Options:
   --no-db                Skip database sync
   --no-uploads           Skip uploads sync
   --no-logs              Skip logs sync
-  --sync-custom          Also sync custom/ directory (themes, modules)
+  --sync-custom          Also sync custom/ directory (themes only;
+                         custom/modules/ is never synced)
   --dry-run              Print commands without executing
   -h, --help             Show this help message
 
@@ -288,7 +289,14 @@ sync_custom() {
     fi
 
     # Sync custom directory (no delete - preserve local custom content)
-    rsync_cmd -avz --progress \
+    #
+    # custom/modules/ is excluded in both directions. deploy.sh never ships it,
+    # so anything under it on the server is a leftover from an older deploy that
+    # no longer matches the running binary. Pulling that back would overwrite
+    # the developer's working copy — the source of truth for module code — with
+    # stale sources, and this is the pull direction with no --delete and no -u,
+    # so an older server file wins outright.
+    rsync_cmd -avz --progress --exclude='/modules/' \
         "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/" \
         "${LOCAL_CUSTOM_DIR}/"
 

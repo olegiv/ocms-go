@@ -36,32 +36,181 @@ func init() {
 
 ### 3. Enable the module
 
-Add a blank import to `custom/modules/imports.go`:
+Add your own registration file — one per module, never a shared list:
 
 ```go
-import (
-    _ "github.com/olegiv/ocms-go/custom/modules/bookmarks"
-    _ "github.com/olegiv/ocms-go/custom/modules/mymodule"  // add this line
-)
+// custom/modules/imports_mymodule.go
+package modules
+
+import _ "github.com/olegiv/ocms-go/custom/modules/mymodule"
 ```
 
 Build and run — the module appears at **Admin > Modules**.
+
+Why a per-module file rather than one shared `imports.go`? Because
+`custom/modules/*` is gitignored apart from what ships with oCMS. A tracked
+shared file listing your module would commit a reference to a package that is
+absent from a fresh clone, and the build would fail with `no required module
+provides package`. Your own file is ignored, so this repository still builds
+standalone — and deployments sharing one checkout never edit the same line.
+
+`custom/modules/doc.go` declares the package and must stay: a Go package with no
+source files does not exist, and `cmd/ocms` blank-imports this one.
 
 ## How It Works
 
 The auto-registration flow:
 
 1. Each custom module's `init()` calls `module.RegisterCustomModule(New())`
-2. `custom/modules/imports.go` blank-imports each custom module package, triggering `init()`
+2. Each `custom/modules/imports_*.go` blank-imports one custom module package, triggering `init()`
 3. `cmd/ocms/main.go` blank-imports `custom/modules`, which loads all custom modules
 4. At startup, `module.CustomModules()` returns all registered modules
 5. The main registry initializes them alongside built-in modules
 
 This means adding a new custom module only requires:
 - Creating files in `custom/modules/mymodule/`
-- Adding one import line to `custom/modules/imports.go`
+- Adding `custom/modules/imports_mymodule.go`
 
-No core files need to be modified.
+Both live under `custom/`. No core files need to be modified — with exactly one
+exception, which is worth knowing before you design your module.
+
+### The one thing a custom module cannot do
+
+**Do not implement `TemplateFuncs()`.**
+
+`Registry.AllTemplateFuncs()` returns functions from *active* modules only, and
+`html/template` resolves function names at *parse* time. Themes are parsed once
+at boot (`cmd/ocms/main.go`), so a theme calling your module function fails to
+parse on the next restart after the module is deactivated — the toggle itself
+looks harmless, and the breakage lands later. And a theme that fails to parse is
+not an error page: `internal/theme/manager.go` logs one warning and drops it,
+then `cmd/ocms/main.go` quietly activates whichever theme sorts first — the two
+core themes are always embedded, so there is always one to fall back to and the
+site keeps serving, just not with your theme.
+
+Guarding against that requires a no-op placeholder in
+`internal/render/render.go`, which is a core edit, and
+`TestEveryModuleTemplateFuncHasRendererPlaceholder` enforces it with a
+deliberate no-allowlist policy — so omitting the placeholder turns the core test
+suite red instead.
+
+Expose your data over a route instead. `RegisterRoutes` gives you a public
+endpoint, `RegisterAdminRoutes` an authenticated one, and a theme can call
+either. `custom/modules/bookmarks/` shows the shape: it used to ship
+`bookmarkCount`/`bookmarkFavorites` and now serves the same data from
+`GET /bookmarks` — `?favorites=1` for the favourites, and the `total` field of
+the *unfiltered* response for the count (`total` always reflects the returned
+subset, so under `?favorites=1` it counts favourites).
+
+## Modules in a multi-site deployment
+
+Several sites can share one checkout of this repository, building one binary
+that every instance runs. That arrangement has three consequences worth planning
+for.
+
+**Keep the source in the site repository, not here.** `custom/modules/*` is
+gitignored apart from what ships with oCMS, so a module dropped straight into
+this tree is version-controlled nowhere and one `git clean -fdx` destroys it.
+Keep it in the site repo alongside its themes and copy it in before building.
+
+oCMS ships the target for you. `site.mk` at the root of this repository carries
+the whole site build — including `sync-modules`, which every build and test
+target runs for you — so a site Makefile is normally one line:
+
+```make
+include core/site.mk
+```
+
+Run `make help` in the site repo for the target list, and override any variable
+*before* the include — they all use `?=`, so a later `?=` is a silent no-op (a
+plain `=` after the include still wins). `CORE_DIR` in particular must be set
+before the include. `.DEFAULT_GOAL` is the exception: override it *after*:
+
+```make
+BINARY_NAME ?= mysite
+include core/site.mk
+```
+
+Overriding `BINARY_NAME` also means exporting it for `deploy-binary.sh`, which
+otherwise looks for `bin/ocms-linux-amd64`.
+
+Sharing one definition is the point: `git pull` in this repository updates the
+build logic for every site at once, so a site cannot end up unable to compile a
+module because its hand-copied Makefile predates the feature.
+
+`sync-modules` **adds**; it does not mirror. One binary serves every instance —
+`scripts/deploy/ocmsctl` and `ocms@.service` both exec `/opt/ocms/bin/ocms`, and
+a site's `deploy-binary.sh` pushes it to all of them — so that binary must carry
+the *union* of every site's modules. Evicting another site's modules here would
+build a binary without them and then ship it to the instance that needs them.
+
+`sync-modules` records which site each copy came from, in
+`custom/modules/.owners`. That ownership record does two things: a module you
+delete from your site repo is removed from this tree on your next sync (no glob
+over your tree could still find it), and two sites that pick the same module
+name get an error instead of silently overwriting one another.
+
+> **The union lives only in this working tree.** A site build knows about its own
+> `custom/modules/` and about whatever previous syncs left here — nothing else.
+> So after anything that empties the tree (a fresh clone, `git clean -fdx`, a
+> manual `rm -rf custom/modules/*`), a binary built from one site will **omit
+> every other site's modules**, and `deploy-binary.sh` ships that binary to every
+> instance. Run `make sync-modules` from each site that owns modules before
+> building a binary you intend to deploy. If that rule is too easy to forget for
+> your deployment, the structural fix is to give each instance its own binary
+> path rather than sharing `/opt/ocms/bin/ocms`.
+
+`sync-modules` refuses outright to overwrite a module that ships with oCMS, so a
+site module named `bookmarks` is an error rather than a silent clobber. Both it
+and `clean-modules` need the core checkout to be a git working tree — that is how
+they tell oCMS's own modules from a site's copies — and abort rather than guess
+if it is not.
+
+Because sites share one core tree, every target that touches it — `dev`, `run`,
+`build*`, `test`, `assets`, `sync-modules` and `clean-modules` — holds a lock at
+`$(CORE_DIR)/.site-build.lock` for its whole duration. Without it a second site
+could replace the modules after the first site's sync finished but while its
+compiler was still reading, producing a binary containing the wrong site's code;
+`assets` is included because `web/static/dist` is embedded into the binary. The
+lock is re-entrant, so a build does not deadlock on its own sub-steps. A build
+killed with `SIGKILL` can strand it; the timeout message says how to remove it.
+
+`dev` and `run` also export `OCMS_CUSTOM_DIR`, `OCMS_UPLOADS_DIR` and
+`OCMS_DB_PATH` resolved against `SITE_DIR`. They have to: those are resolved by
+the server against its working directory, and `dev`/`run` `cd` into the core
+checkout — so a site's `./custom` would otherwise load the *core's* themes and
+every site would share one uploads directory. A relative value in your `.env` is
+fine; it is resolved for you.
+
+The same resolution applies to the migrate targets, so `goose` and the server
+always open the same database.
+
+Copy, do not symlink: Go's wildcards skip symlinked directories, so
+`go test ./...` would silently omit the module and report success with failing
+tests inside it.
+
+**The module ships to every instance.** One binary serves them all, and
+`Registry.InitAll` runs migrations for *all* registered modules before it reads
+active status — so a module's tables are created in every instance's database
+whether or not that instance uses it. To keep it switched off elsewhere,
+implement `EnvironmentChecker` and read a per-instance environment variable:
+
+```go
+func (m *Module) AllowedEnvs() []string {
+	if strings.EqualFold(os.Getenv("OCMS_MYMODULE_ENABLED"), "true") {
+		return []string{"development", "production"}
+	}
+	return nil // empty ⇒ every environment disallowed ⇒ registers inactive
+}
+```
+
+Each instance has its own `.env` (systemd `EnvironmentFile=`), so only the sites
+that opt in register it active. Pair it with `ActivationGuard.CheckActivation`
+to refuse a manual toggle from the admin UI elsewhere — `AllowedEnvs` only sets
+the default at first registration; after that the `modules` table wins.
+
+**Registration files never collide.** Because each module brings its own
+`imports_<name>.go`, two sites sharing this checkout never edit the same file.
 
 ## Module Interface
 
@@ -80,7 +229,7 @@ type Module interface {
     RegisterRoutes(r chi.Router)           // Public routes (e.g., /bookmarks)
     RegisterAdminRoutes(r chi.Router)      // Admin routes (e.g., /admin/bookmarks)
 
-    TemplateFuncs() template.FuncMap       // Functions available in all templates
+    TemplateFuncs() template.FuncMap       // Built-in modules only — do not override
     Migrations() []Migration               // Database schema migrations
 
     AdminURL() string                      // Admin dashboard path
@@ -117,6 +266,10 @@ The `module.Context` provides access to application services:
 | `Render` | `*render.Renderer`     | Template renderer (for built-in modules) |
 | `Events` | `*service.EventService`| Event logging service                |
 | `Hooks`  | `*HookRegistry`        | Hook registration and execution      |
+| `SchedulerRegistry` | `*scheduler.Registry` | Register cron jobs (may be nil in tests) |
+| `Cache`  | `*cache.Manager`       | Invalidate cached content (may be nil — nil-guard it) |
+| `RedirectCacheInvalidator` | `RedirectCacheInvalidator` | Make redirect writes visible immediately (may be nil) |
+| `PublicRouteChecker` | `PublicRouteChecker` | Avoid shadowing routes owned by core or another module |
 
 Custom modules that render their own embedded templates typically only need `DB`, `Logger`, and `Hooks`.
 
@@ -203,61 +356,56 @@ func (m *Module) registerHooks() {
 Available hooks:
 - `module.HookPageAfterSave` — triggered after a page is saved
 - `module.HookPageBeforeRender` — triggered before a page is rendered
+- `module.HookSecurityHoneypotTriggered` — triggered when a form honeypot field is filled
 
 Hook handlers from inactive modules are automatically skipped.
 
-## Template Functions
+## Template Functions — not for custom modules
 
-Provide functions accessible in all templates across themes:
+`module.Module` declares `TemplateFuncs()`, and the built-in modules under
+`modules/` use it. **A custom module must not**, for the reason given in
+[The one thing a custom module cannot do](#the-one-thing-a-custom-module-cannot-do):
+every module func needs a matching no-op placeholder in
+`internal/render/render.go`, which is a core edit, and
+`TestEveryModuleTemplateFuncHasRendererPlaceholder` fails without one.
+
+The built-ins can do it because they ship *with* core, so their placeholders are
+part of the same change.
+
+The same applies to layout injection. The frontend renders module HTML into
+`<head>`, body-top and body-end from `BaseTemplateData.ModuleHeadHTML`,
+`ModuleBodyTopHTML` and `ModuleBodyEndHTML` — but those are filled by looking up
+a **hardcoded list of function names** in `internal/handler/frontend.go`
+(`privacyHead`, `analyticsExtHead`, `embedHead`, `informerBar`,
+`analyticsExtBody`, `embedBody`, `analyticsIntReadTracker`). Adding a name means
+editing core, so a custom module cannot join that list either.
+
+### What to do instead
+
+Serve the data or markup from a route and let the theme fetch it:
 
 ```go
-func (m *Module) TemplateFuncs() template.FuncMap {
-    return template.FuncMap{
-        "myItemCount": func() int {
-            count, _ := m.countItems()
-            return count
-        },
-    }
+func (m *Module) RegisterRoutes(r chi.Router) {
+    limiter := middleware.NewGlobalRateLimiter(2.0, 5)
+    r.With(limiter.Middleware()).Get("/myitems", m.handleList)
 }
 ```
 
-Usage in theme templates:
+This is strictly more capable than a template function — the endpoint is
+reachable from a theme, a script, htmx, or anything else — and it costs no core
+edit. Two working examples:
 
-```html
-<p>Total items: {{ myItemCount }}</p>
-```
+- `custom/modules/bookmarks/` serves `GET /bookmarks?favorites=1`, which is what
+  replaced its former `bookmarkCount`/`bookmarkFavorites` funcs.
+- A block that has to appear *inside* page content can be marked with an
+  ordinary link that a small theme script swaps for the fetched markup. A link
+  survives the page-HTML sanitizer, reads as prose in every derived snippet
+  (meta description, list excerpts, search results, Markdown export), and still
+  works when the script does not run.
 
-### Templ Layout Injection
-
-Modules can inject HTML into the templ-based frontend layout by providing template functions with specific convention names. The frontend handler calls these functions automatically and renders their output in the corresponding `<head>`, `<body>` top, or `<body>` end positions.
-
-Convention names by injection point:
-
-| Position | Function Names | Typical Use |
-|----------|---------------|-------------|
-| Before `</head>` | `privacyHead`, `analyticsExtHead`, `embedHead` | Consent banners, analytics scripts, embed styles |
-| After `<body>` | `informerBar`, `analyticsExtBody` | Info bars, analytics noscript fallbacks |
-| Before `</body>` | `embedBody` | Chat widgets, embed scripts |
-
-Functions must use the variadic signature `func(...any) template.HTML`. The first argument is the CSP nonce:
-
-```go
-func (m *Module) TemplateFuncs() template.FuncMap {
-    return template.FuncMap{
-        "embedBody": func(args ...any) template.HTML {
-            nonce := ""
-            if len(args) > 0 {
-                nonce, _ = args[0].(string)
-            }
-            return template.HTML(fmt.Sprintf(
-                `<script nonce="%s" src="/static/chat-widget.js"></script>`, nonce,
-            ))
-        },
-    }
-}
-```
-
-HTML themes call these functions directly in Go templates. Templ-based themes receive the aggregated output via `BaseTemplateData` fields (`ModuleHeadHTML`, `ModuleBodyTopHTML`, `ModuleBodyEndHTML`).
+If you genuinely need output injected into every page's `<head>` or `<body>`,
+that is a built-in module's job — move the code to `modules/` and add the
+placeholder and injection-list entry in the same change.
 
 ## Embedded Admin Templates
 
@@ -365,9 +513,9 @@ When first registered, the module will start as inactive if the current environm
 See the bookmarks module at `custom/modules/bookmarks/` for a complete working example with:
 
 - Database CRUD operations
-- Public JSON API
+- Public JSON API — the `?favorites=1` filter replaced `bookmarkFavorites`, and
+  the `total` field of the unfiltered response replaced `bookmarkCount`
 - Admin dashboard with embedded template
-- Template functions (`bookmarkCount`, `bookmarkFavorites`)
 - Hook handlers
 - i18n translations (English and Russian)
 - Comprehensive test suite

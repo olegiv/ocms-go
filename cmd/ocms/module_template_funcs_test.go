@@ -28,10 +28,12 @@ import (
 //
 // The custom modules are appended from the registry rather than listed by hand,
 // because registerModules() ends by registering everything in
-// module.CustomModules() — package main blank-imports custom/modules, so the
-// shipped bookmarks module self-registers through init(). Enumerating only the
-// built-ins let bookmarkCount and bookmarkFavorites ship with no placeholder
-// while this test still passed.
+// module.CustomModules() — package main blank-imports custom/modules, so every
+// module with a custom/modules/imports_*.go self-registers through init().
+// Enumerating only the built-ins once let bookmarkCount and bookmarkFavorites
+// ship with no placeholder while this test still passed; bookmarks has since
+// dropped its template funcs, but a site-supplied module dropped into
+// custom/modules/ is exactly the case this must keep covering.
 func allModules() []module.Module {
 	mods := []module.Module{
 		example.New(),

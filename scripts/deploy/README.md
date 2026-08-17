@@ -222,18 +222,18 @@ The script:
 
 ### Single Instance — With Custom Content (from local machine)
 
-Use `deploy.sh` when you also need to sync custom themes or modules:
+Use `deploy.sh` when you also need to sync custom themes:
 
 ```bash
 ./scripts/deploy/deploy.sh <server> <instance> [options]
 
 # Deploy binary and sync custom themes
 ./scripts/deploy/deploy.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com -o hosting
+  -v /var/www/vhosts/example.com/ocms -o hosting
 
 # Deploy custom content only (skip binary)
 ./scripts/deploy/deploy.sh server.example.com my_site \
-  --skip-binary -v /var/www/vhosts/example.com -o hosting
+  --skip-binary -v /var/www/vhosts/example.com/ocms -o hosting
 
 # Skip build, dry run
 ./scripts/deploy/deploy.sh server.example.com my_site --skip-build --dry-run
@@ -249,14 +249,16 @@ Options:
 - `--skip-binary` — skip binary build, backup, and transfer (deploy custom content only)
 - `--dry-run` — print commands without executing
 
-Symlinked directories inside `custom/` are followed during deployment. Before syncing, all symlinks are validated: broken symlinks or links that resolve outside `custom/` abort the deploy before the instance is stopped.
+Symlinked directories inside `custom/` are followed during deployment. Before syncing, symlinks outside `custom/modules/` are validated: broken symlinks or links that resolve outside `custom/` abort the deploy before the instance is stopped. Symlinks under `custom/modules/` are exempt, since that directory is never synced.
 
 The script:
 1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
 2. Backs up current binary on server
 3. Stops the instance via `ocmsctl`
 4. Transfers binary via `scp`
-5. (If custom themes exist) Syncs `custom/` to `{vhost}/ocms/custom/` via `rsync -aL --delete`
+5. (If custom themes exist) Syncs `custom/` to `{vhost}/custom/` via
+   `rsync -aLz --delete --exclude='/modules/'` — see [Custom Modules](#custom-modules)
+   (`-v` is the instance directory created by `setup-site.sh`, not the domain root)
 6. (If custom themes exist) Sets ownership to `{owner}:{group}`
 7. Starts the instance
 8. Checks instance status
@@ -294,7 +296,7 @@ Core themes (`default`, `developer`) are embedded in the binary. To use a custom
 2. Deploy with the `-v` and `-o` options:
    ```bash
    ./scripts/deploy/deploy.sh server.example.com my_site \
-     -v /var/www/vhosts/example.com -o hosting
+     -v /var/www/vhosts/example.com/ocms -o hosting
    ```
 3. Set `OCMS_ACTIVE_THEME=mytheme` in the site's `.env` file
 
@@ -305,7 +307,51 @@ custom/themes/default/    # Overrides the embedded 'default' theme
 
 Custom themes with the same name as core themes take priority.
 
-For local development, `custom/` may contain symlinked theme or module directories. `deploy.sh` follows those symlinks and copies the resolved files to the server, but it aborts if any symlink target is missing or resolves outside `custom/`.
+For local development, `custom/` may contain symlinked theme directories. `deploy.sh` follows those symlinks and copies the resolved files to the server, but it aborts if any symlink target is missing or resolves outside `custom/`. Symlinks under `custom/modules/` are exempt from both checks, since that directory is never synced.
+
+## Custom Modules
+
+Custom modules are **not** deployed as files. They are Go packages compiled into
+the binary, so they travel only with a binary deploy.
+
+`deploy.sh` therefore excludes `custom/modules/` from the content sync. Nothing
+on the server would read them — `OCMS_CUSTOM_DIR` feeds only the theme manager —
+and sources sitting on a vhost that no longer necessarily match the running
+binary are worse than absent: they invite edits that can never take effect.
+
+The exclude is anchored (`--exclude='/modules/'`), so it applies only to the
+top-level `custom/modules/`. A theme with its own `static/js/modules/` is
+unaffected — an unanchored pattern would match that too and drop it silently.
+
+Consequences worth knowing:
+
+- **A module change needs a binary deploy.** `deploy.sh` builds and ships the
+  binary too unless you pass `--skip-binary`, so either script will do — but a
+  `--skip-binary` run will not update the module. If the module also ships theme assets (CSS/JS in
+  `custom/themes/<theme>/static/`), you need both.
+- **The build must run from the site repository.** `deploy-binary.sh` invokes
+  `make build-linux-amd64` in the current directory, and it is the *site*
+  Makefile — via `include core/site.mk` — that mirrors `custom/modules/` into the
+  core tree first. Running the build from the core checkout instead produces a
+  binary silently missing the site's modules.
+- **A site that overrides `BINARY_NAME` must export it here too.**
+  The deploy scripts default to `bin/ocms-linux-amd64`; with a different
+  `BINARY_NAME` in the site Makefile, export the same value (or set
+  `LOCAL_BINARY`, which is the path actually checked) or the upload aborts with
+  "Binary not found".
+  This renames only the file that is built and uploaded — `ocmsctl` and
+  `ocms@.service` both hardcode `/opt/ocms/bin/ocms`, and that unit is one
+  template shared by every instance, so a per-site binary name does not give a
+  site its own binary.
+- **`--skip-build` reuses whatever binary is already in `bin/`.** After changing
+  a module, do not skip the build.
+- **Sources left by earlier deploys are not removed automatically.** `--delete`
+  does not touch excluded paths. To clear them once:
+  `rm -rf <instance_dir>/custom/modules` on the server. (`deploy.sh` has no
+  `--delete-excluded` flag; to do it with rsync, re-run the sync by hand adding
+  `--delete-excluded`.)
+
+See [docs/custom-modules.md](../../docs/custom-modules.md) for writing modules.
 
 ## Copying Local Data
 
@@ -338,20 +384,20 @@ Use `sync-prod-to-dev.sh` to pull production data (database, uploads, logs) to y
 
 # Examples:
 ./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com
+  -v /var/www/vhosts/example.com/ocms
 
 ./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com --no-logs
+  -v /var/www/vhosts/example.com/ocms --no-logs
 
 ./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com --sync-custom
+  -v /var/www/vhosts/example.com/ocms --sync-custom
 
 ./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com --dry-run
+  -v /var/www/vhosts/example.com/ocms --dry-run
 ```
 
 Required:
-- `-v, --vhost PATH` — vhost path on server (e.g., `/var/www/vhosts/example.com`)
+- `-v, --vhost PATH` — instance directory on server (e.g., `/var/www/vhosts/example.com/ocms`)
 
 Options:
 - `-u, --user USER` — SSH user (default: `root`)
@@ -359,7 +405,7 @@ Options:
 - `--no-db` — Skip database sync
 - `--no-uploads` — Skip uploads sync
 - `--no-logs` — Skip logs sync
-- `--sync-custom` — Also sync custom/ directory (themes, modules)
+- `--sync-custom` — Also sync custom/ directory (themes only; `custom/modules/` is never synced)
 - `--dry-run` — Print commands without executing
 
 The script:

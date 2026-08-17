@@ -82,70 +82,72 @@ func TestModuleMigrations(t *testing.T) {
 	moduleutil.AssertMigrations(t, m.Migrations(), 1)
 }
 
-func TestModuleTemplateFuncs(t *testing.T) {
-	db, cleanup := testutil.TestDB(t)
-	defer cleanup()
-
-	m := testModule(t, db)
-
-	funcs := m.TemplateFuncs()
-	if funcs == nil {
-		t.Fatal("TemplateFuncs() returned nil")
-	}
-
-	// Check bookmarkCount exists and returns 0 initially
-	if fn, ok := funcs["bookmarkCount"]; !ok {
-		t.Error("bookmarkCount not found")
-	} else {
-		result := fn.(func() int)()
-		if result != 0 {
-			t.Errorf("bookmarkCount() = %d, want 0", result)
+// TestModuleExposesNoTemplateFuncs pins the decision this example is meant to
+// teach. bookmarks once exposed bookmarkCount and bookmarkFavorites, which
+// forced matching no-op placeholders into internal/render — a core edit, in the
+// one package whose whole purpose is to demonstrate that custom modules need
+// none. Data now goes out over GET /bookmarks?favorites=1 instead.
+//
+// Bug state: re-add TemplateFuncs to module.go and
+// TestEveryModuleTemplateFuncHasRendererPlaceholder in cmd/ocms turns red until
+// someone edits core again.
+func TestModuleExposesNoTemplateFuncs(t *testing.T) {
+	if got := New().TemplateFuncs(); len(got) != 0 {
+		names := make([]string, 0, len(got))
+		for name := range got {
+			names = append(names, name)
 		}
-	}
-
-	// Check bookmarkFavorites exists and returns nil initially
-	if fn, ok := funcs["bookmarkFavorites"]; !ok {
-		t.Error("bookmarkFavorites not found")
-	} else {
-		result := fn.(func() []Bookmark)()
-		if len(result) != 0 {
-			t.Errorf("bookmarkFavorites() returned %d items, want 0", len(result))
-		}
+		t.Errorf("TemplateFuncs() returned %v; expose data over a route instead", names)
 	}
 }
 
-func TestModuleTemplateFuncsWithData(t *testing.T) {
+// TestPublicListFavoritesFilter covers the route that replaced the template
+// funcs.
+func TestPublicListFavoritesFilter(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
 
-	// Create some bookmarks
-	_, err := m.createBookmark("Test 1", "https://test1.com", "desc", false)
-	if err != nil {
+	if _, err := m.createBookmark("Test 1", "https://test1.com", "desc", false); err != nil {
 		t.Fatalf("createBookmark: %v", err)
 	}
-	_, err = m.createBookmark("Fav 1", "https://fav1.com", "fav", true)
-	if err != nil {
+	if _, err := m.createBookmark("Fav 1", "https://fav1.com", "fav", true); err != nil {
 		t.Fatalf("createBookmark: %v", err)
 	}
 
-	funcs := m.TemplateFuncs()
+	router := chi.NewRouter()
+	m.RegisterRoutes(router)
 
-	// bookmarkCount should return 2
-	countFn := funcs["bookmarkCount"].(func() int)
-	if got := countFn(); got != 2 {
-		t.Errorf("bookmarkCount() = %d, want 2", got)
+	decode := func(target string) map[string]any {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: status = %d, want 200", target, rec.Code)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decoding %s: %v", target, err)
+		}
+		return payload
 	}
 
-	// bookmarkFavorites should return 1
-	favFn := funcs["bookmarkFavorites"].(func() []Bookmark)
-	favs := favFn()
-	if len(favs) != 1 {
-		t.Errorf("bookmarkFavorites() returned %d items, want 1", len(favs))
+	all := decode("/bookmarks")
+	if got := all["total"]; got != float64(2) {
+		t.Errorf("total = %v, want 2", got)
 	}
-	if len(favs) > 0 && favs[0].Title != "Fav 1" {
-		t.Errorf("favorite title = %q, want Fav 1", favs[0].Title)
+
+	favorites := decode("/bookmarks?favorites=1")
+	if got := favorites["total"]; got != float64(1) {
+		t.Errorf("favorites total = %v, want 1", got)
+	}
+	items, _ := favorites["bookmarks"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("favorites returned %d items, want 1", len(items))
+	}
+	if first, _ := items[0].(map[string]any); first["title"] != "Fav 1" {
+		t.Errorf("favorite title = %v, want Fav 1", first["title"])
 	}
 }
 
