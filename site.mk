@@ -105,42 +105,51 @@ LDFLAGS_VERSION ?= -X main.appVersion=$(VERSION) -X main.appGitCommit=$(GIT_COMM
 # (godotenv in cmd/ocms/main.go), which handles all of that correctly.
 #
 # make dev runs from inside core/, so without this the core's own .env would win.
+# Normalised at point of use (see env_file): a relative override would be read
+# correctly here — make runs in the site — but exported verbatim and then
+# resolved against CORE_DIR by the server, which would silently miss the file.
 OCMS_ENV_FILE ?= $(SITE_DIR)/.env
-export OCMS_ENV_FILE
 
 # Read one key out of the .env with sed rather than include. Matches godotenv,
-# which is what the server itself uses: an optional `export ` prefix, first match
-# wins, surrounding single or double quotes stripped, and an unquoted trailing
-# `# comment` removed. Quotes must be handled or a perfectly valid
-# OCMS_DB_PATH='/srv/data.db' reaches require-db-path with a leading quote and is
-# rejected as relative; the `t` branches stop a quoted value's contents from
-# being mistaken for a comment.
-env_get = $(shell sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}$(1)[[:space:]]*=[[:space:]]*//p' "$(OCMS_ENV_FILE)" 2>/dev/null | head -1 | sed -e 's/^"\([^"]*\)".*$$/\1/; t' -e "s/^'\([^']*\)'.*\$$/\1/; t" -e 's/[[:space:]][[:space:]]*\#.*$$//; s/[[:space:]]*$$//')
-
-# The values make itself needs: OCMS_SERVER_PORT for `stop`, OCMS_DB_PATH for the
-# migrate targets. Both must agree with what the server actually uses, so they
-# come from the same .env the app reads — not from an independent default.
-OCMS_SERVER_PORT ?= $(call env_get,OCMS_SERVER_PORT)
-OCMS_DB_PATH     ?= $(call env_get,OCMS_DB_PATH)
+# which is what the server itself uses: an optional `export ` prefix, surrounding
+# single or double quotes stripped, an unquoted trailing `# comment` removed,
+# and — verified against godotenv v1.5.1 — the LAST assignment winning when a key
+# appears twice, hence `tail -1`. Taking the first would have `make stop` aim at
+# a port the server is not listening on. The `t` branches stop a quoted value's
+# contents from being mistaken for a comment.
+env_get = $(shell sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}$(1)[[:space:]]*=[[:space:]]*//p' "$(env_file)" 2>/dev/null | tail -1 | sed -e 's/^"\([^"]*\)".*$$/\1/; t' -e "s/^'\([^']*\)'.*\$$/\1/; t" -e 's/[[:space:]][[:space:]]*\#.*$$//; s/[[:space:]]*$$//')
 
 # godotenv expands ${VAR} references inside .env values; this sed reader cannot,
 # and silently prefixing SITE_DIR to a literal "${ROOT}/data.db" would create a
 # real directory of that name and open a database the server never uses. Refuse
-# instead — the four values make reads are short enough to spell out literally.
-env_no_refs = $(if $(findstring $$,$(1)),$(error $(2) in $(OCMS_ENV_FILE) uses a $${...} reference, which site.mk cannot expand — write the value literally),$(1))
+# instead — the values make reads are short enough to spell out literally.
+env_no_refs = $(if $(findstring $$,$(1)),$(error $(2) in $(env_file) uses a $${...} reference, which site.mk cannot expand — write the value literally),$(1))
 
-# Paths the server resolves against its WORKING DIRECTORY. dev/run cd into
-# CORE_DIR to run `go run`, so a site's ./custom and ./uploads would resolve
-# inside the shared core: the site's themes would not load, and every site would
-# read and write one uploads directory. Resolve them against SITE_DIR and export
-# — godotenv.Load does not overwrite variables already in the environment, so
-# these win over the .env while still coming from it.
+# Raw inputs, straight from the .env unless the site overrides them.
+OCMS_SERVER_PORT ?= $(call env_get,OCMS_SERVER_PORT)
+OCMS_DB_PATH     ?= $(call env_get,OCMS_DB_PATH)
 OCMS_CUSTOM_DIR  ?= $(call env_get,OCMS_CUSTOM_DIR)
 OCMS_UPLOADS_DIR ?= $(call env_get,OCMS_UPLOADS_DIR)
-override OCMS_CUSTOM_DIR  := $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_CUSTOM_DIR),custom),OCMS_CUSTOM_DIR)))
-override OCMS_UPLOADS_DIR := $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_UPLOADS_DIR),uploads),OCMS_UPLOADS_DIR)))
-override OCMS_DB_PATH     := $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_DB_PATH),data/ocms.db),OCMS_DB_PATH)))
-export OCMS_CUSTOM_DIR OCMS_UPLOADS_DIR OCMS_DB_PATH
+
+# Normalised at point of use, never with `override ... :=`. An override directive
+# outranks a later plain assignment, so a documented post-include
+# `OCMS_DB_PATH = tenant.db` would be silently ignored. Recursive expansion
+# normalises whatever the variable holds when a recipe actually runs.
+#
+# These are paths the server resolves against its WORKING DIRECTORY, and dev/run
+# cd into CORE_DIR to run `go run` — so a site's ./custom and ./uploads would
+# otherwise resolve inside the shared core: the site's themes would not load and
+# every site would read and write one uploads directory.
+env_file    = $(call abspath_site,$(OCMS_ENV_FILE))
+db_path     = $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_DB_PATH),data/ocms.db),OCMS_DB_PATH)))
+custom_dir  = $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_CUSTOM_DIR),custom),OCMS_CUSTOM_DIR)))
+uploads_dir = $(call abspath_site,$(patsubst ./%,%,$(call env_no_refs,$(or $(OCMS_UPLOADS_DIR),uploads),OCMS_UPLOADS_DIR)))
+server_port = $(call env_no_refs,$(OCMS_SERVER_PORT),OCMS_SERVER_PORT)
+
+# Passed explicitly to anything that runs the server from inside CORE_DIR.
+# godotenv.Load does not overwrite variables already in the environment, so these
+# win over the .env while still being derived from it.
+site_env = OCMS_ENV_FILE="$(env_file)" OCMS_DB_PATH="$(db_path)" OCMS_CUSTOM_DIR="$(custom_dir)" OCMS_UPLOADS_DIR="$(uploads_dir)"
 
 # Self-documenting: scrapes the "## " descriptions off the target lines below.
 # The character class needs digits, or build-linux-amd64 and build-darwin-arm64
@@ -299,17 +308,17 @@ dev: ## Build assets, sync modules, run the dev server
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory assets; \
 	$(MAKE) --no-print-directory sync-modules; \
-	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR)
+	cd "$(CORE_DIR)" && $(site_env) $(GO) run $(MAIN_DIR)
 
 run: ## Run the dev server without rebuilding assets
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
-	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR)
+	cd "$(CORE_DIR)" && $(site_env) $(GO) run $(MAIN_DIR)
 
 stop: ## Kill the server on the configured port
-	@[ -n "$(OCMS_SERVER_PORT)" ] || { echo "stop: OCMS_SERVER_PORT is not set" >&2; exit 1; }
-	@lsof -ti:$(OCMS_SERVER_PORT) -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
-	@echo "Server stopped on port $(OCMS_SERVER_PORT)"
+	@[ -n "$(server_port)" ] || { echo "stop: OCMS_SERVER_PORT is not set in $(env_file)" >&2; exit 1; }
+	@lsof -ti:$(server_port) -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
+	@echo "Server stopped on port $(server_port)"
 
 restart: stop dev ## Restart the dev server
 
@@ -356,7 +365,7 @@ assets: ## Compile SCSS and copy JS dependencies
 test: ## Run the full Go test suite
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
-	cd "$(CORE_DIR)" && $(GO) test -v ./...
+	cd "$(CORE_DIR)" && $(site_env) $(GO) test -v ./...
 
 clean: ## Remove build artifacts
 	@[ -n "$(SITE_DIR)" ] && [ -n "$(build_dir)" ] || { echo "clean: SITE_DIR/BUILD_DIR must be set" >&2; exit 1; }
@@ -373,14 +382,14 @@ clean: ## Remove build artifacts
 # The guard below is a backstop against a broken resolution, not a user-facing
 # constraint: a relative path in the .env is fine and gets resolved.
 require-db-path:
-	@[ -n "$(OCMS_DB_PATH)" ] || { echo "OCMS_DB_PATH is empty (SITE_DIR unset?)" >&2; exit 1; }
-	@case "$(OCMS_DB_PATH)" in /*) ;; *) echo "OCMS_DB_PATH did not resolve to an absolute path: $(OCMS_DB_PATH)" >&2; exit 1;; esac
+	@[ -n "$(db_path)" ] || { echo "OCMS_DB_PATH is empty (SITE_DIR unset?)" >&2; exit 1; }
+	@case "$(db_path)" in /*) ;; *) echo "OCMS_DB_PATH did not resolve to an absolute path: $(db_path)" >&2; exit 1;; esac
 
 migrate-up: require-db-path ## Apply pending database migrations
-	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(OCMS_DB_PATH)" up
+	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(db_path)" up
 
 migrate-down: require-db-path ## Roll back the last migration
-	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(OCMS_DB_PATH)" down
+	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(db_path)" down
 
 migrate-status: require-db-path ## Show migration status
-	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(OCMS_DB_PATH)" status
+	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(db_path)" status
