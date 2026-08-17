@@ -36,6 +36,9 @@ custom/modules/*
 !custom/modules/imports_bookmarks.go
 !custom/modules/bookmarks/
 
+# Cross-site build lock (see site.mk)
+.site-build.lock/
+
 # Test coverage artifacts
 coverage.out
 coverage.html

@@ -115,7 +115,7 @@ Keep it in the site repo alongside its themes and copy it in before building.
 
 oCMS ships the target for you. `site.mk` at the root of this repository carries
 the whole site build — including `sync-modules`, which every build and test
-target already depends on — so a site Makefile is normally one line:
+target runs for you — so a site Makefile is normally one line:
 
 ```make
 include core/site.mk
@@ -138,16 +138,29 @@ Sharing one definition is the point: `git pull` in this repository updates the
 build logic for every site at once, so a site cannot end up unable to compile a
 module because its hand-copied Makefile predates the feature.
 
-`sync-modules` mirrors rather than merely copies: before syncing it removes any
-module in this tree that neither ships with oCMS nor belongs to the site being
-built. Without that, the previous site's modules would stay behind and compile
-into the next site's binary — and since `Registry.InitAll` migrates every
-registered module (see below), their tables would appear in a database that
-should never have had them. It refuses outright to overwrite a module that ships
-with oCMS, so a site module named `bookmarks` is an error rather than a silent
-clobber. `make clean-modules` removes the site's own copies again. Both targets need the
-core checkout to be a git working tree — that is how they tell oCMS's own
-modules from a site's copies — and abort rather than guess if it is not.
+`sync-modules` **adds**; it does not mirror. One binary serves every instance —
+`scripts/deploy/ocmsctl` and `ocms@.service` both exec `/opt/ocms/bin/ocms`, and
+a site's `deploy-binary.sh` pushes it to all of them — so that binary must carry
+the *union* of every site's modules. Evicting another site's modules here would
+build a binary without them and then ship it to the instance that needs them.
+
+The cost of adding rather than mirroring: a module deleted from a site repo
+lingers in this tree until someone runs `make clean-modules` from the site that
+owns it. That is deliberate — a stale module compiled in is recoverable, a
+missing one in production is not.
+
+`sync-modules` refuses outright to overwrite a module that ships with oCMS, so a
+site module named `bookmarks` is an error rather than a silent clobber. Both it
+and `clean-modules` need the core checkout to be a git working tree — that is how
+they tell oCMS's own modules from a site's copies — and abort rather than guess
+if it is not.
+
+Because sites share one core tree, every target that syncs and then reads it
+(`dev`, `run`, `build*`, `test`) holds a lock across **both** steps, at
+`$(CORE_DIR)/.site-build.lock`. Without it a second site could replace the
+modules after the first site's sync finished but while its compiler was still
+reading, producing a binary containing the wrong site's code. A build killed
+with `SIGKILL` can strand the lock; the timeout message says how to remove it.
 
 Set `OCMS_DB_PATH` to an **absolute** path in each site's `.env`. The migrate
 targets refuse a relative one: `dev`/`run` `cd` into the core checkout, so a

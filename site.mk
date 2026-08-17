@@ -43,6 +43,12 @@
 # ── Paths ────────────────────────────────────────────────────────────────────
 SITE_DIR         ?= $(shell pwd)
 CORE_DIR         ?= $(SITE_DIR)/core
+# Every recipe below cds into CORE_DIR, so a relative override would resolve
+# against the wrong tree: `BUILD_DIR=bin` would mkdir <site>/bin and then have
+# go write <core>/bin, leaving the deploy scripts to upload a stale binary.
+# Resolve relative values against SITE_DIR once, here.
+abspath_site = $(if $(patsubst /%,,$(1)),$(SITE_DIR)/$(1),$(1))
+override CORE_DIR := $(call abspath_site,$(CORE_DIR))
 MIGRATIONS_DIR   ?= $(CORE_DIR)/internal/store/migrations
 SITE_MODULES_DIR ?= $(SITE_DIR)/custom/modules
 CORE_MODULES_DIR ?= $(CORE_DIR)/custom/modules
@@ -69,6 +75,7 @@ core_names_cmd = cd "$(CORE_DIR)" 2>/dev/null && git -c core.quotePath=false ls-
 # ── Build ────────────────────────────────────────────────────────────────────
 BINARY_NAME ?= ocms
 BUILD_DIR   ?= $(SITE_DIR)/bin
+override BUILD_DIR := $(call abspath_site,$(BUILD_DIR))
 GO          ?= go
 GOFLAGS     ?= -v
 MAIN_DIR    ?= ./cmd/ocms
@@ -97,10 +104,14 @@ LDFLAGS_VERSION ?= -X main.appVersion=$(VERSION) -X main.appGitCommit=$(GIT_COMM
 OCMS_ENV_FILE ?= $(SITE_DIR)/.env
 export OCMS_ENV_FILE
 
-# Read one key out of the .env with sed rather than include. Accepts an optional
-# `export ` prefix (godotenv does) and takes the first match only. Deliberately
-# does not strip quotes: make only uses these for a port and a file path.
-env_get = $(shell sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}$(1)[[:space:]]*=[[:space:]]*//p' "$(OCMS_ENV_FILE)" 2>/dev/null | head -1 | sed 's/[[:space:]][[:space:]]*\#.*$$//; s/[[:space:]]*$$//')
+# Read one key out of the .env with sed rather than include. Matches godotenv,
+# which is what the server itself uses: an optional `export ` prefix, first match
+# wins, surrounding single or double quotes stripped, and an unquoted trailing
+# `# comment` removed. Quotes must be handled or a perfectly valid
+# OCMS_DB_PATH='/srv/data.db' reaches require-db-path with a leading quote and is
+# rejected as relative; the `t` branches stop a quoted value's contents from
+# being mistaken for a comment.
+env_get = $(shell sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}$(1)[[:space:]]*=[[:space:]]*//p' "$(OCMS_ENV_FILE)" 2>/dev/null | head -1 | sed -e 's/^"\([^"]*\)".*$$/\1/; t' -e "s/^'\([^']*\)'.*\$$/\1/; t" -e 's/[[:space:]][[:space:]]*\#.*$$//; s/[[:space:]]*$$//')
 
 # The values make itself needs: OCMS_SERVER_PORT for `stop`, OCMS_DB_PATH for the
 # migrate targets. Both must agree with what the server actually uses, so they
@@ -121,8 +132,34 @@ help: ## Show this help
 # A site overrides it by assigning AFTER the include.
 .DEFAULT_GOAL := dev
 
+# ── Shared-core lock ─────────────────────────────────────────────────────────
+# Sites share one CORE_DIR, so sync-modules writes into a tree another site's
+# compiler may be reading. `sync-modules` as a plain prerequisite is not enough:
+# it finishes before the build recipe starts, leaving a window in which a second
+# site can replace the modules mid-compile and produce a binary with the wrong
+# site's code. So every target that syncs then reads holds one lock across BOTH.
+#
+# mkdir is the atomic test-and-set; flock is absent on macOS. The trap releases
+# it on normal exit, Ctrl-C and SIGTERM; only SIGKILL or a hard reboot can strand
+# it, hence the explicit hint in the timeout message.
+LOCK_DIR  ?= $(CORE_DIR)/.site-build.lock
+LOCK_WAIT ?= 900
+
+define with_core_lock
+set -eu; \
+waited=0; \
+until mkdir "$(LOCK_DIR)" 2>/dev/null; do \
+	waited=$$((waited + 1)); \
+	[ $$waited -lt $(LOCK_WAIT) ] || { echo "site.mk: timed out after $(LOCK_WAIT)s waiting for $(LOCK_DIR)." >&2; echo "site.mk: if no other build is running, remove it: rmdir '$(LOCK_DIR)'" >&2; exit 1; }; \
+	[ $$waited -ne 1 ] || echo "site.mk: another site is building; waiting for $(LOCK_DIR)..." >&2; \
+	sleep 1; \
+done; \
+trap 'rmdir "$(LOCK_DIR)" 2>/dev/null || true' EXIT INT TERM; \
+$(MAKE) --no-print-directory sync-modules;
+endef
+
 # ── Custom modules ───────────────────────────────────────────────────────────
-# Mirror this site's Go modules into the core tree so the compiler can see them.
+# Copy this site's Go modules into the core tree so the compiler can see them.
 #
 # Go resolves packages only under the core module path and there is no go.work,
 # so a site-owned module cannot be compiled from the site repo directly. The
@@ -134,55 +171,44 @@ help: ## Show this help
 # directories, so `go test ./...` would silently skip the module and report
 # success with failing tests inside it.
 #
-# This MIRRORS, it does not merely add. Several sites share one core checkout,
-# so a purely additive copy would leave the previous site's modules in the tree
-# and compile them into this site's binary — and because Registry.InitAll runs
-# migrations for every registered module before it reads active status, their
-# tables would be created in this site's database. Modules a site has since
-# deleted would likewise persist forever with no target able to remove them.
-# So: anything in core's custom/modules that is neither tracked by core nor
-# present in this site's tree is removed first.
+# This ADDS; it does not mirror. One binary serves every instance
+# (scripts/deploy/ocmsctl and ocms@.service both exec /opt/ocms/bin/ocms, and a
+# site's deploy-binary.sh pushes it to all of them), so that binary must carry
+# the UNION of every site's modules. Evicting another site's modules here would
+# build a binary without them and then ship it to the instance that needs them.
+# Registry.InitAll migrates every registered module regardless of active status,
+# so those tables appear in every instance's database either way — gate a module
+# per instance with EnvironmentChecker/AllowedEnvs, not by leaving it uncompiled.
+#
+# The cost of adding rather than mirroring: a module deleted from a site repo
+# lingers in core until someone runs `make clean-modules` from the site that
+# owns it. That is a deliberate trade — a stale module compiled in is recoverable,
+# a missing one in production is not.
 #
 # Whole recipe in ONE shell per target. Each line of a make recipe otherwise
 # gets its own shell, so `|| exit 0` on its own line exits that line only and
 # the loops below still run — with an empty SITE_MODULES_DIR the glob becomes
 # /*/ and the loop would rsync top-level system directories into core.
 #
-# Note the ordering: stale cleanup runs even when this site has no
-# custom/modules/ at all. Returning early there would leave the *previous*
-# site's modules in the tree and compile them into a site that has none, which
-# is the exact failure this target exists to prevent.
-#
-# core_names is the list of module names that ship with oCMS, and everything
-# hinges on it: it decides both what may not be overwritten and what counts as
-# stale. If it cannot be determined the recipe aborts rather than guessing —
-# an empty list would make every core module look stale and delete it.
-sync-modules: ## Mirror custom/modules/ into core (runs before builds)
+# core_names is the list of names that ship with oCMS. It is what stops a site
+# module from overwriting one of them; if it cannot be determined the recipe
+# aborts rather than guessing.
+sync-modules: ## Copy custom/modules/ into core (runs before builds)
 	@set -eu; \
 	site="$(SITE_MODULES_DIR)"; core="$(CORE_MODULES_DIR)"; \
 	[ -n "$$site" ] && [ -n "$$core" ] || { echo "sync-modules: SITE_MODULES_DIR/CORE_MODULES_DIR must be set" >&2; exit 1; }; \
 	mkdir -p "$$core"; \
+	[ -d "$$site" ] || exit 0; \
 	core_names="$$($(core_names_cmd) || true)"; \
 	core_names="$$(echo $$core_names)"; \
 	[ -n "$$core_names" ] || { echo "sync-modules: cannot list oCMS's own modules in $(CORE_DIR) (not a git checkout?); refusing to touch $$core" >&2; exit 1; }; \
-	owned=" "; \
-	if [ -d "$$site" ]; then \
-		for path in "$$site"/*/ "$$site"/imports_*.go; do \
-			[ -e "$$path" ] || continue; \
-			name="$$(basename "$$path")"; \
-			case " $$core_names " in *" $$name "*) \
-				echo "sync-modules: $$name ships with oCMS; rename the site module" >&2; exit 1;; \
-			esac; \
-			owned="$$owned$$name "; \
-		done; \
-	fi; \
-	for path in "$$core"/*/ "$$core"/imports_*.go; do \
+	for path in "$$site"/*/ "$$site"/imports_*.go; do \
 		[ -e "$$path" ] || continue; \
 		name="$$(basename "$$path")"; \
-		case " $$core_names $$owned" in *" $$name "*) continue;; esac; \
-		echo "sync-modules: removing stale $$name"; rm -rf "$$core/$$name"; \
+		case " $$core_names " in *" $$name "*) \
+			echo "sync-modules: $$name ships with oCMS; rename the site module" >&2; exit 1;; \
+		esac; \
 	done; \
-	[ -d "$$site" ] || exit 0; \
 	for dir in "$$site"/*/; do \
 		[ -d "$$dir" ] || continue; \
 		rsync -a --delete "$$dir" "$$core/$$(basename "$$dir")/"; \
@@ -213,11 +239,13 @@ clean-modules: ## Remove this site's module copies from core
 	echo "Core module copies removed"
 
 # ── Server ───────────────────────────────────────────────────────────────────
-dev: assets sync-modules ## Build assets, sync modules, run the dev server
-	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR)
+dev: assets ## Build assets, sync modules, run the dev server
+	@$(with_core_lock) \
+	cd "$(CORE_DIR)" && exec $(GO) run $(MAIN_DIR)
 
-run: sync-modules ## Run the dev server without rebuilding assets
-	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR)
+run: ## Run the dev server without rebuilding assets
+	@$(with_core_lock) \
+	cd "$(CORE_DIR)" && exec $(GO) run $(MAIN_DIR)
 
 stop: ## Kill the server on the configured port
 	@[ -n "$(OCMS_SERVER_PORT)" ] || { echo "stop: OCMS_SERVER_PORT is not set" >&2; exit 1; }
@@ -230,24 +258,28 @@ restart: stop dev ## Restart the dev server
 # Cross-builds set CGO_ENABLED=0 to match core's own Makefile: the sqlite driver
 # is pure Go, and a stray CGO_ENABLED=1 in the environment would otherwise
 # silently change what ships to production.
-build: sync-modules ## Build the binary with debug symbols
+build: ## Build the binary with debug symbols
 	@echo "Building $(BINARY_NAME) $(VERSION)..."
-	@mkdir -p "$(BUILD_DIR)"
+	@$(with_core_lock) \
+	mkdir -p "$(BUILD_DIR)"; \
 	cd "$(CORE_DIR)" && $(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS_VERSION)" -o "$(BUILD_DIR)/$(BINARY_NAME)" $(MAIN_DIR)
 
-build-prod: sync-modules ## Build an optimised, stripped binary
+build-prod: ## Build an optimised, stripped binary
 	@echo "Building $(BINARY_NAME) $(VERSION) for production..."
-	@mkdir -p "$(BUILD_DIR)"
+	@$(with_core_lock) \
+	mkdir -p "$(BUILD_DIR)"; \
 	cd "$(CORE_DIR)" && $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)" $(MAIN_DIR)
 
-build-linux-amd64: sync-modules ## Cross-build for Linux AMD64
+build-linux-amd64: ## Cross-build for Linux AMD64
 	@echo "Building $(BINARY_NAME) $(VERSION) for Linux AMD64..."
-	@mkdir -p "$(BUILD_DIR)"
+	@$(with_core_lock) \
+	mkdir -p "$(BUILD_DIR)"; \
 	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)-linux-amd64" $(MAIN_DIR)
 
-build-darwin-arm64: sync-modules ## Cross-build for macOS ARM64
+build-darwin-arm64: ## Cross-build for macOS ARM64
 	@echo "Building $(BINARY_NAME) $(VERSION) for macOS ARM64..."
-	@mkdir -p "$(BUILD_DIR)"
+	@$(with_core_lock) \
+	mkdir -p "$(BUILD_DIR)"; \
 	cd "$(CORE_DIR)" && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o "$(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64" $(MAIN_DIR)
 
 build-all-platforms: build-linux-amd64 build-darwin-arm64 ## Cross-build every platform
@@ -257,7 +289,8 @@ build-all-platforms: build-linux-amd64 build-darwin-arm64 ## Cross-build every p
 assets: ## Compile SCSS and copy JS dependencies
 	cd "$(CORE_DIR)" && $(MAKE) assets
 
-test: sync-modules ## Run the full Go test suite
+test: ## Run the full Go test suite
+	@$(with_core_lock) \
 	cd "$(CORE_DIR)" && $(GO) test -v ./...
 
 clean: ## Remove build artifacts

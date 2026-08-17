@@ -781,8 +781,9 @@ include core/site.mk
 ```
 
 That provides `dev`, `run`, `build*`, `test`, `migrate-*` and `sync-modules`,
-which mirrors the site's Go modules into this tree so the compiler can see
-them — removing any left by another site, so binaries never cross-contaminate.
+which copies the site's Go modules into this tree so the compiler can see them.
+It adds rather than replaces: one binary serves every instance, so it must carry
+every site's modules. `make clean-modules` removes a site's own copies again.
 Run `make help` in the site repo for the full list. See
 [docs/custom-modules.md](docs/custom-modules.md#modules-in-a-multi-site-deployment)
 for why modules are kept in the site repo and copied in.
