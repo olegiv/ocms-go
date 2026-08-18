@@ -245,6 +245,117 @@ func stringContains(haystack, needle string) bool {
 	return bytes.Contains([]byte(haystack), []byte(needle))
 }
 
+func TestSanitizeNoteHTML(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		check func(t *testing.T, got string)
+	}{
+		{
+			name:  "keeps the inline formatting an editor needs",
+			input: `<b>bold</b> <strong>strong</strong> <i>italic</i> <u>under</u>`,
+			check: func(t *testing.T, got string) {
+				for _, tag := range []string{"<b>", "<strong>", "<i>", "<u>"} {
+					if !stringContains(got, tag) {
+						t.Fatalf("expected %s to survive, got %q", tag, got)
+					}
+				}
+			},
+		},
+		{
+			name:  "keeps span class and allowlisted style",
+			input: `<span class="accent" style="color: #c00">sale</span>`,
+			check: func(t *testing.T, got string) {
+				if !stringContains(got, `class="accent"`) {
+					t.Fatalf("expected class to survive, got %q", got)
+				}
+				if !stringContains(got, "color") {
+					t.Fatalf("expected color style to survive, got %q", got)
+				}
+			},
+		},
+		{
+			// The reason the style attribute is paired with an explicit property
+			// allowlist: without one bluemonday passes the declaration through
+			// untouched, and this overlay would cover the viewport and fire an
+			// outbound request.
+			name:  "strips layout and url styles",
+			input: `<span style="position:fixed;top:0;width:100vw;height:100vh;background:url(https://evil.example/x)">x</span>`,
+			check: func(t *testing.T, got string) {
+				for _, banned := range []string{"position", "100vw", "100vh", "url(", "evil.example"} {
+					if stringContains(got, banned) {
+						t.Fatalf("expected %q to be stripped, got %q", banned, got)
+					}
+				}
+			},
+		},
+		{
+			name:  "strips script and event handlers",
+			input: `hi<script>alert(1)</script><span onclick="alert(1)">x</span>`,
+			check: func(t *testing.T, got string) {
+				if stringContains(got, "<script") || stringContains(got, "onclick") {
+					t.Fatalf("expected script/handler to be removed, got %q", got)
+				}
+			},
+		},
+		{
+			name:  "strips javascript href",
+			input: `<a href="javascript:alert(1)">click</a>`,
+			check: func(t *testing.T, got string) {
+				if stringContains(got, "javascript:") {
+					t.Fatalf("expected javascript URL to be removed, got %q", got)
+				}
+			},
+		},
+		{
+			name:  "forces nofollow and noreferrer on external links",
+			input: `<a href="https://example.com/">out</a>`,
+			check: func(t *testing.T, got string) {
+				for _, want := range []string{"nofollow", "noreferrer"} {
+					if !stringContains(got, want) {
+						t.Fatalf("expected %s on external link, got %q", want, got)
+					}
+				}
+			},
+		},
+		{
+			name:  "strips block and media tags",
+			input: `<div>d</div><img src="x.png"><iframe src="https://example.com"></iframe>`,
+			check: func(t *testing.T, got string) {
+				for _, banned := range []string{"<div", "<img", "<iframe"} {
+					if stringContains(got, banned) {
+						t.Fatalf("expected %q to be stripped, got %q", banned, got)
+					}
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := string(sanitizeNoteHTML(tt.input))
+			tt.check(t, got)
+		})
+	}
+}
+
+// TestNotePolicyDoesNotWidenFooterPolicy guards the shared constructor: both
+// sanitizers are built from newLinkOnlyPolicy, and returning one shared
+// *bluemonday.Policy instead of a fresh instance would let the note policy's
+// AllowElements silently widen the footer's allowlist.
+func TestNotePolicyDoesNotWidenFooterPolicy(t *testing.T) {
+	// Touch the note policy first so any shared state would already be widened.
+	_ = sanitizeNoteHTML(`<b>x</b>`)
+
+	got := string(sanitizeFooterHTML(`Safe <strong>bold</strong> text`))
+	if stringContains(got, "<strong>") {
+		t.Errorf("footer policy accepted <strong>; the note policy leaked into it: %q", got)
+	}
+	if !stringContains(got, "bold") {
+		t.Errorf("expected text content to survive, got %q", got)
+	}
+}
+
 // scanFilesForPattern walks each root and returns "file:line" locations in
 // files matching ext whose line matches re, plus the number of files scanned.
 func scanFilesForPattern(t *testing.T, roots []string, ext string, re *regexp.Regexp) (violations []string, scanned int) {

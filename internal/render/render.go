@@ -50,6 +50,9 @@ var styleCloseTagRegex = regexp.MustCompile(`(?i)</style`)
 var (
 	footerHTMLPolicyOnce sync.Once
 	footerHTMLPolicy     *bluemonday.Policy
+
+	noteHTMLPolicyOnce sync.Once
+	noteHTMLPolicy     *bluemonday.Policy
 )
 
 // sanitizeCustomCSS returns admin-supplied stylesheet content as template.CSS
@@ -61,28 +64,68 @@ func sanitizeCustomCSS(s string) template.CSS {
 	return template.CSS(sanitized) //nolint:gosec // Sanitized for <style> context above
 }
 
+// newLinkOnlyPolicy returns a fresh policy permitting nothing but a hardened
+// <a>: safe schemes only, controlled rel/target, and nofollow/noreferrer forced
+// onto external links.
+//
+// Each caller gets its own instance. Returning a shared policy would let one
+// consumer's AllowElements widen every other consumer's allowlist, which for a
+// sanitizer is the whole ballgame.
+func newLinkOnlyPolicy() *bluemonday.Policy {
+	p := bluemonday.StrictPolicy()
+	p.AllowElements("a")
+	p.AllowAttrs("href").OnElements("a")
+	p.AllowAttrs("rel").Matching(
+		regexp.MustCompile(`^(?i)(noopener|noreferrer|nofollow)(\s+(noopener|noreferrer|nofollow))*$`),
+	).OnElements("a")
+	p.AllowAttrs("target").Matching(regexp.MustCompile(`^_(blank|self)$`)).OnElements("a")
+	p.AllowStandardURLs()
+	p.RequireParseableURLs(true)
+	p.AllowURLSchemes("http", "https", "mailto")
+	p.RequireNoReferrerOnFullyQualifiedLinks(true)
+	p.RequireNoFollowOnFullyQualifiedLinks(true)
+	p.AddTargetBlankToFullyQualifiedLinks(true)
+	return p
+}
+
 func footerHTMLSanitizer() *bluemonday.Policy {
 	footerHTMLPolicyOnce.Do(func() {
-		p := bluemonday.StrictPolicy()
-		p.AllowElements("a")
-		p.AllowAttrs("href").OnElements("a")
-		p.AllowAttrs("rel").Matching(
-			regexp.MustCompile(`^(?i)(noopener|noreferrer|nofollow)(\s+(noopener|noreferrer|nofollow))*$`),
-		).OnElements("a")
-		p.AllowAttrs("target").Matching(regexp.MustCompile(`^_(blank|self)$`)).OnElements("a")
-		p.AllowStandardURLs()
-		p.RequireParseableURLs(true)
-		p.AllowURLSchemes("http", "https", "mailto")
-		p.RequireNoReferrerOnFullyQualifiedLinks(true)
-		p.RequireNoFollowOnFullyQualifiedLinks(true)
-		p.AddTargetBlankToFullyQualifiedLinks(true)
-		footerHTMLPolicy = p
+		footerHTMLPolicy = newLinkOnlyPolicy()
 	})
 	return footerHTMLPolicy
 }
 
 func sanitizeFooterHTML(s string) template.HTML {
 	return template.HTML(footerHTMLSanitizer().Sanitize(s)) //nolint:gosec // Sanitized through strict allowlist policy above
+}
+
+// noteHTMLSanitizer allows the inline formatting an editor needs for a short
+// admin-authored note, on top of the same hardened anchor the footer gets.
+//
+// The style attribute is deliberately paired with an explicit property
+// allowlist. bluemonday only sanitizes style when a style policy exists for the
+// element (sanitize.go: `if htmlAttr.Key == "style" && hasStylePolicies`);
+// allow the attribute without one and the declaration passes through verbatim,
+// which would permit a full-viewport `position:fixed` overlay or an outbound
+// request via `background:url(...)`. The listed properties are value-checked by
+// bluemonday's own CSS handlers.
+func noteHTMLSanitizer() *bluemonday.Policy {
+	noteHTMLPolicyOnce.Do(func() {
+		p := newLinkOnlyPolicy()
+		p.AllowElements("b", "strong", "i", "u", "span")
+		p.AllowAttrs("class").OnElements("span")
+		p.AllowAttrs("style").OnElements("span")
+		p.AllowStyles(
+			"color", "background-color",
+			"font-weight", "font-style", "text-decoration",
+		).OnElements("span")
+		noteHTMLPolicy = p
+	})
+	return noteHTMLPolicy
+}
+
+func sanitizeNoteHTML(s string) template.HTML {
+	return template.HTML(noteHTMLSanitizer().Sanitize(s)) //nolint:gosec // Sanitized through the allowlist policy above
 }
 
 // SidebarModule represents a module to display in the admin sidebar.
@@ -308,6 +351,13 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		// Allowed HTML is intentionally narrow: <a> with safe URL schemes and
 		// controlled rel/target attributes. All other tags/attrs are stripped.
 		"safeFooterHTML": sanitizeFooterHTML,
+		// safeNoteHTML sanitizes a short admin-configurable note. Same hardened
+		// <a> as safeFooterHTML, plus the inline formatting an editor expects:
+		// <b>, <strong>, <i>, <u> and <span> with class and an allowlisted
+		// style. Use it wherever a theme renders a stored setting as markup —
+		// safeHTML applies no allowlist at all, and these settings are editable
+		// by any Editor, not only an Admin.
+		"safeNoteHTML": sanitizeNoteHTML,
 		// safeCSS returns an admin-supplied stylesheet body as template.CSS so
 		// html/template does not apply CSS-value filtering (which replaces
 		// structured CSS like selectors and braces with "ZgotmplZ"). Before
