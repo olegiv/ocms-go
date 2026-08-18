@@ -18,13 +18,24 @@ import (
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
 
-// setupTempUploadDir creates a temporary directory for uploads and changes to it.
-// Returns a cleanup function that removes the temp directory.
+// setupTempUploadDir points media generation at a temporary directory and
+// changes into it, so callers can assert on paths relative to the cwd.
+// Returns a cleanup function that removes the temporary directory.
+//
+// Chdir alone is not enough. developerUploadDir reads OCMS_UPLOADS_DIR on every
+// call and only falls back to ./uploads when it is unset, so an ambient value
+// wins over the cwd — and site.mk exports an absolute OCMS_UPLOADS_DIR pointing
+// at the real site uploads directory for `make test`. The generator then wrote
+// there while these tests looked under the temp cwd, so they failed under
+// `make test` and passed under a bare `go test`, and every run left a few
+// thousand placeholder files in the developer's own uploads directory.
+// Overriding the variable makes the outcome independent of the environment.
 func setupTempUploadDir(t *testing.T) func() {
 	t.Helper()
 
 	tmpDir := t.TempDir()
 	t.Chdir(tmpDir)
+	t.Setenv("OCMS_UPLOADS_DIR", filepath.Join(tmpDir, "uploads"))
 
 	return func() {
 		_ = os.RemoveAll(tmpDir)

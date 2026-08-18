@@ -315,6 +315,11 @@ templ themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting The
 }
 
 // themeSettingText renders a text input.
+//
+// maxlength matches the image URL input above, not the 255 used for names and
+// labels: themes render some settings as markup, where one anchor costs ~150
+// characters and 255 truncated mid-tag. A browser hint only — SaveSettings does
+// not validate length and config.value is an unbounded TEXT column.
 templ themeSettingText(pc *PageContext, data ThemeSettingsViewData, setting ThemeSettingView) {
 	@input.Input(input.Props{
 		ID:       setting.Key,
@@ -324,7 +329,7 @@ templ themeSettingText(pc *PageContext, data ThemeSettingsViewData, setting Them
 		Disabled: data.IsDemoMode,
 		HasError: setting.Error != "",
 		Attributes: templ.Attributes{
-			"maxlength": "255",
+			"maxlength": "2048",
 		},
 	})
 }
