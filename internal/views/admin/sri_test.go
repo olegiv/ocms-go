@@ -214,13 +214,26 @@ func TestVendoredScriptsAreCacheBusted(t *testing.T) {
 	}
 }
 
-// repoRoot walks up from the test's working directory to the module root.
+// repoRoot walks up from the test's working directory to the module root,
+// resolving symlinks on the way.
+//
+// Resolving matters because a site instance reaches this checkout through a
+// symlinked core/ (core -> ../ocms-go.core) and runs `cd core && go test`, so
+// os.Getwd reports the logical path. os.Stat below follows the link and finds
+// go.mod happily, which hides the problem: filepath.WalkDir does NOT follow
+// symlinks, so a walk rooted on the link lstats a non-directory, hands that one
+// entry to the callback and stops. Every scanner built on this root then saw an
+// empty repository — TestEveryVendoredScriptIsProtected reported itself vacuous
+// instead of checking any script, on all four site instances.
 func repoRoot(t *testing.T) string {
 	t.Helper()
 
 	dir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to determine working directory: %v", err)
+	}
+	if resolved, resolveErr := filepath.EvalSymlinks(dir); resolveErr == nil {
+		dir = resolved
 	}
 
 	for i := 0; i < 6; i++ {
