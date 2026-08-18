@@ -94,7 +94,7 @@ The `theme.json` file is the only required file. It defines the theme's metadata
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | Display name |
-| `version` | string | Yes | Semantic version |
+| `version` | string | Yes | Semantic version. Also the asset cache-buster — see [Cache Busting](#cache-busting) |
 | `author` | string | Yes | Theme author |
 | `description` | string | Yes | Brief description |
 | `screenshot` | string | No | Preview image filename |
@@ -388,6 +388,39 @@ Static files (CSS, JS, images) live in `static/` and are served at `/themes/{nam
 <!-- Images -->
 <img src="/themes/mytheme/static/img/logo.svg">
 ```
+
+### Cache Busting
+
+Theme assets are served with `Cache-Control: public, max-age=2592000` — 30 days —
+and no ETag (`serveThemeStaticFile` in `cmd/ocms/main.go`). Nothing revalidates
+inside that window, and oCMS does not fingerprint asset filenames. **An edited
+CSS or JS file therefore never reaches a returning visitor** until the cache
+expires, even though the deploy succeeded and the server is serving the new file.
+
+Version the URLs from `theme.json` and bump `version` whenever an asset changes:
+
+```html
+{{- $v := "" -}}
+{{- with .Site.Theme }}{{ $v = printf "?v=%s" .Version }}{{ end -}}
+...
+<link rel="stylesheet" href="/themes/mytheme/static/css/theme.css{{$v}}">
+<script defer src="/themes/mytheme/static/js/theme.js{{$v}}"></script>
+```
+
+Two traps:
+
+- **`theme.json` is read once, at startup** (`LoadThemes`), so a bumped version
+  changes nothing until the process restarts. Locally, restart the dev server —
+  editing the file while it runs leaves the old version in every URL. A deploy
+  that restarts the instance picks it up by itself.
+- Forgetting the bump fails silently and asymmetrically: a first-time visitor
+  sees the new CSS, so the change looks deployed, while everyone who has
+  visited before keeps the old copy for up to 30 days.
+
+The bundled themes (`default`, `developer`, `starter`) link their assets bare,
+so they have no cache busting and no example to copy. That is survivable for a
+theme embedded in the binary and edited rarely, but the same 30 days apply to
+it — add the token to any theme you iterate on.
 
 ### CSS Best Practices
 
