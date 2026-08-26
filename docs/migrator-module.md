@@ -257,6 +257,29 @@ None, deliberately. PHP-Nuke serves content from query strings such as `modules.
 
 phpBB forums (`bb*`), the 4nAlbum photo gallery, comments, links, downloads, FAQs, journals, blocks, banners, polls, and the analytics/statistics tables (`msanalysis_*`, `stats_*`, `nsnst_*`).
 
+## Running an import in production
+
+`AllowedEnvs()` returns `["development"]`, but that is a **default, not a lock**, and the
+distinction matters operationally. `Registry.loadActiveStatus` consults the allowed-environment
+list only inside its `sql.ErrNoRows` branch — that is, only when the module has no row in the
+`modules` table yet (`internal/module/registry.go:336-365`). Once the row exists the stored flag
+wins, and `SetActive` never re-checks the list; it calls only `ActivationGuard.CheckActivation`.
+So on a production site the module is registered, its migrations run, it appears in Admin >
+Modules as inactive with its routes closed, and an administrator can switch it on deliberately.
+
+A source database normally lives on a developer machine the production host cannot reach. Running
+the migrator on the production server against a reverse SSH tunnel
+(`ssh -N -R 3307:127.0.0.1:3306 user@server`) merges into live content natively, keeps media at
+full fidelity, and retains the per-source undo. It is preferable to a transfer archive because an
+import is a detached background job and so escapes the router's 30-second request timeout, which
+an archive upload of any size does not.
+
+**Teardown order is load-bearing.** Deactivate the module *before* removing
+`OCMS_MIGRATOR_ALLOWED_DB_HOSTS`. The reverse order leaves an active migrator with an empty
+allowlist, and the production startup audit then refuses to boot the site
+(`cmd/ocms/main.go:982-988`) — a configuration change that takes effect only at the next restart,
+which is the worst time to discover it.
+
 ## Undoing an import
 
 **Admin > Migrator > *source* > Delete imported items** deletes every entity tracked in `migrator_imported_items` for that source. Original oCMS content is not touched.
