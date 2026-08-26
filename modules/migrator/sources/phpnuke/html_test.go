@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -129,6 +130,74 @@ func TestDeriveSummaryTruncatesOnRuneBoundary(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, "…") {
 		t.Errorf("truncated summary should end with an ellipsis: %q", got)
+	}
+}
+
+// TestPlainTextNeutralizesEntityEncodedMarkup covers a real audit finding
+// (F-02): the tokenizer decodes entities in text nodes, so source text that
+// merely *displayed* as "<script>" on the old site came back as a genuine
+// "<script>" substring in the stored summary. Harmless while these fields are
+// auto-escaped, and a live hazard the moment one reaches a raw-HTML sink.
+func TestPlainTextNeutralizesEntityEncodedMarkup(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		fragment string
+		want     string
+	}{
+		{"entity-encoded script", "<p>&lt;script&gt;alert(1)&lt;/script&gt; hello</p>", "hello"},
+		{"entity-encoded tag", "<p>a &lt;b&gt; c</p>", "a c"},
+		{"real markup", "<p>x <b>y</b> z</p>", "x y z"},
+		// Doubly encoded input decodes to "&lt;script&gt;" and stops there,
+		// which is correct: a browser decodes entities once, so that string is
+		// inert text even in a raw sink. Decoding repeatedly would be the bug.
+		{"doubly encoded stops at inert entities", "<p>&amp;lt;script&amp;gt;</p>", "&lt;script&gt;"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := plainText(tc.fragment)
+			if got != tc.want {
+				t.Errorf("plainText() = %q, want %q", got, tc.want)
+			}
+			if strings.ContainsAny(got, "<>") {
+				t.Errorf("result still contains angle brackets: %q", got)
+			}
+		})
+	}
+}
+
+// TestPlainTextKeepsLoneAngleBrackets guards the other direction: a blunt
+// strip-everything-bracketed rule would corrupt ordinary prose. The tokenizer
+// only opens a tag when "<" is followed by a name character.
+func TestPlainTextKeepsLoneAngleBrackets(t *testing.T) {
+	if got := plainText("<p>5 &lt; 10 and 20 &gt; 3</p>"); got != "5 < 10 and 20 > 3" {
+		t.Errorf("plainText() = %q, want the comparison text intact", got)
+	}
+}
+
+func TestPlainTextPreservesCyrillic(t *testing.T) {
+	if got := plainText("<p>Отель &lt;b&gt;Royal&lt;/b&gt; Azur</p>"); got != "Отель Royal Azur" {
+		t.Errorf("plainText() = %q", got)
+	}
+}
+
+// TestPlainTextTerminates proves the re-extraction loop is bounded and cannot
+// spin on adversarial nesting.
+func TestPlainTextTerminates(t *testing.T) {
+	done := make(chan string, 1)
+	go func() { done <- plainText(strings.Repeat("&amp;", 200) + "lt;script&gt;") }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("plainText did not terminate")
+	}
+}
+
+func TestDeriveSummaryStripsEntityEncodedMarkup(t *testing.T) {
+	got := deriveSummary("<p>&lt;img src=x onerror=alert(1)&gt; Отель</p>")
+	if strings.ContainsAny(got, "<>") {
+		t.Errorf("summary retained markup characters: %q", got)
+	}
+	if !strings.Contains(got, "Отель") {
+		t.Errorf("summary lost its real text: %q", got)
 	}
 }
 

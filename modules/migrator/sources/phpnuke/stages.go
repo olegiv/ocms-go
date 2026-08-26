@@ -724,15 +724,17 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 		}
 
 		page, err := queries.CreatePage(ctx, store.CreatePageParams{
-			Title:           title,
-			Slug:            slug,
-			Body:            s.prepareBody(assembleStaticPageBody(source), mediaMap),
-			Status:          status,
-			AuthorID:        authorID,
-			LanguageCode:    langCode,
-			PageType:        pageTypePage,
-			MetaTitle:       title,
-			MetaDescription: strings.TrimSpace(source.Subtitle),
+			Title:        title,
+			Slug:         slug,
+			Body:         s.prepareBody(assembleStaticPageBody(source), mediaMap),
+			Status:       status,
+			AuthorID:     authorID,
+			LanguageCode: langCode,
+			PageType:     pageTypePage,
+			MetaTitle:    title,
+			// The subtitle is source-controlled HTML, and a meta description is
+			// plain text by definition — strip markup rather than storing it raw.
+			MetaDescription: plainText(source.Subtitle),
 			PublishedAt:     publishedAt,
 			CreatedAt:       createdAt,
 			UpdatedAt:       now,

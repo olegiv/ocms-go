@@ -545,6 +545,36 @@ func TestImportStaticPagesHonorsActiveFlag(t *testing.T) {
 	}
 }
 
+// TestImportStaticPagesStripsMarkupFromMetaDescription covers audit finding
+// F-03: the PHP-Nuke subtitle is source-controlled and was stored verbatim as
+// the meta description, which is plain text by definition.
+func TestImportStaticPagesStripsMarkupFromMetaDescription(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	result := &types.ImportResult{}
+
+	pages := []StaticPage{{
+		ID:       1,
+		Title:    "Subtitle Test",
+		Subtitle: `<img src=x onerror=alert(1)> Гид по Тунису`,
+		Text:     "<p>body</p>",
+		Active:   1,
+	}}
+	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
+		map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{})
+
+	page, err := queries.GetPageBySlug(ctx, "subtitle-test")
+	if err != nil {
+		t.Fatalf("failed to load imported page: %v", err)
+	}
+	if strings.ContainsAny(page.MetaDescription, "<>") {
+		t.Errorf("meta description retained markup: %q", page.MetaDescription)
+	}
+	if !strings.Contains(page.MetaDescription, "Гид по Тунису") {
+		t.Errorf("meta description lost its real text: %q", page.MetaDescription)
+	}
+}
+
 func TestImportEncyclopediaCreatesOnePagePerEntry(t *testing.T) {
 	queries, adminID := setupDB(t)
 	ctx := context.Background()

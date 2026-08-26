@@ -91,9 +91,40 @@ func buildEncyclopediaBody(entry *EncyclopediaEntry, terms []EncyclopediaTerm) s
 	return b.String()
 }
 
+// maxPlainTextPasses bounds the re-extraction loop in plainText.
+const maxPlainTextPasses = 5
+
+// plainText reduces a source fragment to text that cannot be read as markup by
+// anything downstream.
+//
+// One tokenizer pass is not enough. The tokenizer decodes entities in text
+// nodes, so a source that stored "&lt;script&gt;" — which the old site
+// displayed as harmless literal text — comes back as a real "<script>"
+// substring. Re-extracting until the result stops changing collapses that,
+// including the doubly-encoded "&amp;lt;" form.
+//
+// Lone angle brackets survive: the HTML tokenizer only starts a tag when "<"
+// is followed by a name character, so "5 < 10" is left intact rather than
+// mangled by a blunt strip-everything-bracketed rule.
+//
+// These fields are currently rendered only through auto-escaping bindings, so
+// this is defence in depth: it removes the hazard before someone routes a
+// summary or meta description through a raw-HTML sink.
+func plainText(fragment string) string {
+	text := textContent(fragment)
+	for i := 0; i < maxPlainTextPasses && strings.ContainsAny(text, "<>"); i++ {
+		next := textContent(text)
+		if next == text {
+			break
+		}
+		text = next
+	}
+	return text
+}
+
 // deriveSummary reduces HTML to a short plain-text teaser.
 func deriveSummary(fragment string) string {
-	text := textContent(fragment)
+	text := plainText(fragment)
 	if text == "" {
 		return ""
 	}
