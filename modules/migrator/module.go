@@ -24,6 +24,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/drupal"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/elefant"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/phpnuke"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
@@ -103,6 +104,9 @@ func (m *Module) Init(ctx *module.Context) error {
 	drupalSource := drupal.NewSource()
 	drupalSource.SetPublicRouteChecker(ctx.PublicRouteChecker)
 	RegisterSource(drupalSource)
+	phpnukeSource := phpnuke.NewSource()
+	phpnukeSource.SetPublicRouteChecker(ctx.PublicRouteChecker)
+	RegisterSource(phpnukeSource)
 
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), cleanupDrainTimeout)
 	if err := m.drainMediaCleanup(cleanupCtx, ""); err != nil {

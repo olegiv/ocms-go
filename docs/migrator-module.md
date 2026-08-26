@@ -12,6 +12,7 @@ For the bulk-import/export of *oCMS-to-oCMS* content (Markdown + YAML front-matt
 |--------|-------------|-------|
 | `elefant` | Elefant CMS | MySQL-backed PHP CMS. Imports users, tags, pages, posts, media. |
 | `drupal` | Drupal | Drupal 8/9/10/11 MySQL. Imports users, taxonomy (tags + categories), media, nodes, URL aliases/redirects, menus. |
+| `phpnuke` | PHP-Nuke | PHP-Nuke MySQL. Imports story authors, topics/categories, media, news stories, static pages, encyclopedias. |
 
 Add more sources by implementing `migrator/types/types.go:Source` and calling `RegisterSource` from the module's `Init`.
 
@@ -33,18 +34,18 @@ That order is dictated by the schema's foreign keys — `pages.author_id` is `ON
 
 Not every source can import every entity class. The import form renders only the options the selected source actually acts on:
 
-| Option | Elefant | Drupal |
-|--------|:-------:|:------:|
-| `import_tags` | ✅ | ✅ |
-| `import_categories` | — | ✅ |
-| `import_media` | ✅ | ✅ |
-| `import_posts` | ✅ | ✅ |
-| `import_pages` | ✅ | ✅ |
-| `import_menus` | — | ✅ |
-| `import_users` | ✅ | ✅ |
-| `skip_existing` | ✅ | ✅ |
+| Option | Elefant | Drupal | PHP-Nuke |
+|--------|:-------:|:------:|:--------:|
+| `import_tags` | ✅ | ✅ | ✅ |
+| `import_categories` | — | ✅ | ✅ |
+| `import_media` | ✅ | ✅ | ✅ |
+| `import_posts` | ✅ | ✅ | ✅ |
+| `import_pages` | ✅ | ✅ | ✅ |
+| `import_menus` | — | ✅ | — |
+| `import_users` | ✅ | ✅ | ✅ |
+| `skip_existing` | ✅ | ✅ | ✅ |
 
-Elefant has no vocabulary or navigation tables to read, so categories and menus are absent. They used to be offered anyway and checked by default, which made every Elefant run promise both, import neither, and still report **Completed**.
+Elefant has no vocabulary or navigation tables to read, so categories and menus are absent. PHP-Nuke keeps site navigation in `blocks` as PHP snippets rather than data, so it has no menus to read either. They used to be offered anyway and checked by default, which made every Elefant run promise both, import neither, and still report **Completed**.
 
 A source declares its capabilities through the optional `types.OptionSupporter` interface:
 
@@ -210,6 +211,52 @@ Only each entity's source/original row (`default_langcode = 1`) is imported. Tho
 
 Drupal blocks, views, unsupported custom field types, historical revisions, comments, and non-source translation rows. Taxonomy-reference fields and media source fields are discovered from Drupal configuration rather than limited to hard-coded field names.
 
+## PHP-Nuke Source
+
+Imports a PHP-Nuke news site: `stories`, `pages`, `encyclopedia`, `topics`, and the accounts credited on a story.
+
+### Configuration fields
+
+| Field | Required | Env default | Notes |
+|-------|:--------:|-------------|-------|
+| `mysql_host` | ✅ | `PHPNUKE_HOST` | |
+| `mysql_port` | ✅ | `PHPNUKE_PORT` | |
+| `mysql_user` | ✅ | `PHPNUKE_USER` | |
+| `mysql_password` | ✅ | `PHPNUKE_PASSWORD` | |
+| `mysql_database` | ✅ | `PHPNUKE_DB` | |
+| `table_prefix` | — | `PHPNUKE_PREFIX` | Defaults to `nuke_`, but the prefix is chosen at install time and is frequently site-specific. |
+| `files_path` | — | `PHPNUKE_FILES` | The **document root**, not an uploads directory — story bodies reference images relative to the site root. |
+| `language_code` | — | `PHPNUKE_LANGUAGE` | Target oCMS language. Unset uses the site default. |
+
+### Legacy character sets
+
+This is the failure mode to know about. PHP-Nuke predates UTF-8 defaults, so a non-English install almost always stores text in a single-byte charset — `cp1251` for Russian, `latin2` for Central European, and so on — declared per table.
+
+Nothing special is needed to read it, because `shared.BuildMySQLDSN` pins the connection charset to `utf8mb4` and MySQL transcodes on the way out. What matters is that the guarantee is easy to lose: if the connection instead negotiates the server default, every non-ASCII character arrives as a literal `?` and **no error is raised anywhere** — the import reports Completed having silently destroyed the text. `TestDSNRequestsUTF8MB4` exists to catch exactly that regression.
+
+Verifying by hand needs the same care. The `mysql` CLI's `--default-character-set` flag is ignored by some 5.x servers, which then negotiate `latin1` and print `?`; use an explicit `SET NAMES utf8mb4` instead before concluding the data is corrupt.
+
+### Source tables read
+
+`stories`, `stories_cat`, `topics`, `pages`, `pages_categories`, `encyclopedia`, `encyclopedia_text`, `users`.
+
+### What gets imported
+
+- **Stories → posts.** PHP-Nuke splits an article across `hometext` (the front-page teaser) and `bodytext` (the rest); both are concatenated, or the article is truncated. The teaser also becomes the page summary. `time` becomes both `created_at` and `published_at`.
+- **Topics → categories**, **story categories → tags.** A story carries both, so mapping them to different oCMS taxonomies keeps each one rather than letting one shadow the other. A category whose slug already exists is reused, not duplicated, so re-running does not create `hotels-2`.
+- **Static pages → pages.** `page_header`, `text`, `page_footer` and `signature` are concatenated in render order. `active = 0` imports as a draft.
+- **Encyclopedias → one page each**, with their terms rendered as a definition list. PHP-Nuke serves each term from its own query-string URL, which has no oCMS equivalent; collapsing them keeps the content and its ordering instead of creating hundreds of unreachable pages.
+- **Story authors → users.** Only accounts credited on a story (`stories.aid` or `stories.informant`) are imported — a long-lived PHP-Nuke `users` table is mostly dormant registrations. Posts are attributed to the submitter when it resolves, then the publishing admin, then the fallback author.
+- **Media.** Only files a body actually references are imported, resolved beneath `files_path`. A PHP-Nuke document root also holds theme furniture, banner creatives and smilies; walking it wholesale would fill the library with files no content mentions. Missing files are reported as a job summary and their markup is left untouched.
+
+### URL preservation
+
+None, deliberately. PHP-Nuke serves content from query strings such as `modules.php?name=News&file=article&sid=12`, which cannot be expressed as a page alias. Minting an alias like `article-12` would invent a URL the source site never served, so preserving the old links is left to the reverse proxy.
+
+### Not imported
+
+phpBB forums (`bb*`), the 4nAlbum photo gallery, comments, links, downloads, FAQs, journals, blocks, banners, polls, and the analytics/statistics tables (`msanalysis_*`, `stats_*`, `nsnst_*`).
+
 ## Undoing an import
 
 **Admin > Migrator > *source* > Delete imported items** deletes every entity tracked in `migrator_imported_items` for that source. Original oCMS content is not touched.
@@ -334,7 +381,16 @@ go test -tags fullimport  ./modules/migrator/sources/elefant/
 DRUPAL_HOST=127.0.0.1 DRUPAL_USER=drupal DRUPAL_PASSWORD=drupal DRUPAL_DB=drupal \
 DRUPAL_FILES=/var/www/html/sites/default/files \
   go test -tags drupal_integration -v ./modules/migrator/sources/drupal/
+
+# PHP-Nuke
+OCMS_MIGRATOR_ALLOWED_DB_HOSTS=127.0.0.1 \
+PHPNUKE_TEST_HOST=127.0.0.1 PHPNUKE_TEST_PORT=3306 \
+PHPNUKE_TEST_USER=nuke PHPNUKE_TEST_PASSWORD=nuke PHPNUKE_TEST_DB=nuke \
+PHPNUKE_TEST_PREFIX=nuke_ PHPNUKE_FILES=/var/www/html \
+  go test -tags phpnuke_integration -v ./modules/migrator/sources/phpnuke/
 ```
+
+The PHP-Nuke live test asserts that imported titles contain real Cyrillic and no `??`, which is the only way to prove the legacy-charset conversion end to end.
 
 ### Drift tests
 

@@ -21,6 +21,7 @@ import (
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/drupal"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/elefant"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/phpnuke"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
 
@@ -688,6 +689,7 @@ func TestSourcesDeclareTheOptionsTheyRead(t *testing.T) {
 	declared := map[string]Source{
 		"drupal":  drupal.NewSource(),
 		"elefant": elefant.NewSource(),
+		"phpnuke": phpnuke.NewSource(),
 	}
 
 	optionFields := make(map[string]bool)
@@ -820,6 +822,7 @@ func TestImportFormHidesUnsupportedOptions(t *testing.T) {
 	}{
 		{drupal.NewSource(), "drupal"},
 		{elefant.NewSource(), "elefant"},
+		{phpnuke.NewSource(), "phpnuke"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			supported := types.SupportedImportOptionSet(tc.source)

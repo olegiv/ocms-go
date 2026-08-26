@@ -120,6 +120,19 @@
         {"id": "drupal.field_public_files_url", "message": "Public Files URL", "translation": "Public Files URL"},
         {"id": "drupal.placeholder_public_files_url", "message": "/sites/default/files/", "translation": "/sites/default/files/"},
         {"id": "drupal.placeholder_type_map", "message": "article:post,page:page", "translation": "article:post,page:page"},
-        {"id": "drupal.placeholder_tag_vocabularies", "message": "tags (others become categories)", "translation": "tags (others become categories)"}
+        {"id": "drupal.placeholder_tag_vocabularies", "message": "tags (others become categories)", "translation": "tags (others become categories)"},
+
+        {"id": "phpnuke.description", "message": "Import news stories, static pages, encyclopedias, topics, and story authors from a PHP-Nuke MySQL database", "translation": "Import news stories, static pages, encyclopedias, topics, and story authors from a PHP-Nuke MySQL database"},
+        {"id": "phpnuke.field_mysql_host", "message": "MySQL Host", "translation": "MySQL Host"},
+        {"id": "phpnuke.field_mysql_port", "message": "MySQL Port", "translation": "MySQL Port"},
+        {"id": "phpnuke.field_mysql_user", "message": "MySQL User", "translation": "MySQL User"},
+        {"id": "phpnuke.field_mysql_password", "message": "MySQL Password", "translation": "MySQL Password"},
+        {"id": "phpnuke.field_mysql_database", "message": "Database Name", "translation": "Database Name"},
+        {"id": "phpnuke.field_table_prefix", "message": "Table Prefix", "translation": "Table Prefix"},
+        {"id": "phpnuke.field_files_path", "message": "PHP-Nuke Document Root", "translation": "PHP-Nuke Document Root"},
+        {"id": "phpnuke.field_language_code", "message": "Target Language", "translation": "Target Language"},
+        {"id": "phpnuke.placeholder_table_prefix", "message": "e.g. nuke_", "translation": "e.g. nuke_"},
+        {"id": "phpnuke.placeholder_files_path", "message": "/path/to/phpnuke/htdocs", "translation": "/path/to/phpnuke/htdocs"},
+        {"id": "phpnuke.placeholder_language_code", "message": "defaults to the site language", "translation": "defaults to the site language"}
     ]
 }

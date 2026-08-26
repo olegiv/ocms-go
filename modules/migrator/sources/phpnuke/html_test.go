@@ -1,0 +1,257 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package phpnuke
+
+import (
+	"database/sql"
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
+
+func TestAssembleStoryBodyJoinsBothHalves(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		home string
+		body string
+		want string
+	}{
+		{"both halves", "<p>Teaser</p>", "<p>Rest</p>", "<p>Teaser</p>\n\n<p>Rest</p>"},
+		{"teaser only", "<p>Teaser</p>", "", "<p>Teaser</p>"},
+		{"body only", "", "<p>Rest</p>", "<p>Rest</p>"},
+		{"neither", "", "", ""},
+		{"whitespace teaser", "   ", "<p>Rest</p>", "<p>Rest</p>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			story := &Story{
+				HomeText: sql.NullString{String: tc.home, Valid: tc.home != ""},
+				BodyText: tc.body,
+			}
+			if got := assembleStoryBody(story); got != tc.want {
+				t.Errorf("assembleStoryBody() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAssembleStoryBodyKeepsBodytextWhenHometextIsNull guards the split-body
+// rule specifically: PHP-Nuke stores most of an article in bodytext, so
+// dropping it would silently truncate the archive rather than fail.
+func TestAssembleStoryBodyKeepsBodytextWhenHometextIsNull(t *testing.T) {
+	story := &Story{
+		HomeText: sql.NullString{Valid: false},
+		BodyText: "<p>The entire article.</p>",
+	}
+	if got := assembleStoryBody(story); !strings.Contains(got, "The entire article.") {
+		t.Errorf("bodytext was dropped: got %q", got)
+	}
+}
+
+func TestAssembleStaticPageBodyOrdersSections(t *testing.T) {
+	page := &StaticPage{
+		Header:    "<h1>Head</h1>",
+		Text:      "<p>Main</p>",
+		Footer:    "<p>Foot</p>",
+		Signature: "<em>Sig</em>",
+	}
+	got := assembleStaticPageBody(page)
+	want := "<h1>Head</h1>\n\n<p>Main</p>\n\n<p>Foot</p>\n\n<em>Sig</em>"
+	if got != want {
+		t.Errorf("assembleStaticPageBody() = %q, want %q", got, want)
+	}
+
+	sparse := &StaticPage{Text: "<p>Only body</p>"}
+	if got := assembleStaticPageBody(sparse); got != "<p>Only body</p>" {
+		t.Errorf("empty sections leaked separators: %q", got)
+	}
+}
+
+func TestBuildEncyclopediaBodyRendersTerms(t *testing.T) {
+	entry := &EncyclopediaEntry{Title: "Phrasebook", Description: "<p>Intro</p>"}
+	terms := []EncyclopediaTerm{
+		{Title: "Привет!", Text: "<p>Hello</p>"},
+		{Title: "Как дела?", Text: "<p>How are you</p>"},
+	}
+	got := buildEncyclopediaBody(entry, terms)
+
+	for _, want := range []string{"<p>Intro</p>", "<dl>", "<dt>Привет!</dt>", "<dd><p>Hello</p></dd>", "</dl>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("body missing %q\ngot: %s", want, got)
+		}
+	}
+}
+
+// TestBuildEncyclopediaBodyEscapesTermTitles proves term titles cannot inject
+// markup: only the term body is trusted HTML from the source site.
+func TestBuildEncyclopediaBodyEscapesTermTitles(t *testing.T) {
+	entry := &EncyclopediaEntry{Title: "E"}
+	terms := []EncyclopediaTerm{{Title: `<img src=x onerror=alert(1)>`, Text: "ok"}}
+	got := buildEncyclopediaBody(entry, terms)
+	if strings.Contains(got, "<img src=x") {
+		t.Errorf("term title was not escaped: %s", got)
+	}
+	if !strings.Contains(got, "&lt;img") {
+		t.Errorf("expected escaped title, got: %s", got)
+	}
+}
+
+func TestBuildEncyclopediaBodyWithoutTermsOmitsList(t *testing.T) {
+	entry := &EncyclopediaEntry{Title: "Empty", Description: "<p>Nothing here</p>"}
+	got := buildEncyclopediaBody(entry, nil)
+	if strings.Contains(got, "<dl>") {
+		t.Errorf("empty encyclopedia emitted a definition list: %q", got)
+	}
+	if got != "<p>Nothing here</p>" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestDeriveSummaryStripsMarkupAndCollapsesWhitespace(t *testing.T) {
+	got := deriveSummary("<p>Hello   <b>there</b>\n\nworld</p><script>evil()</script>")
+	want := "Hello there world"
+	if got != want {
+		t.Errorf("deriveSummary() = %q, want %q", got, want)
+	}
+}
+
+func TestDeriveSummaryTruncatesOnRuneBoundary(t *testing.T) {
+	// Cyrillic is multi-byte, so a naive byte slice would split a rune and
+	// produce invalid UTF-8.
+	long := strings.Repeat("зеленый ", 100)
+	got := deriveSummary(long)
+
+	if !utf8.ValidString(got) {
+		t.Fatalf("summary is not valid UTF-8: %q", got)
+	}
+	if runes := utf8.RuneCountInString(got); runes > summaryLimit+1 {
+		t.Errorf("summary is %d runes, want <= %d", runes, summaryLimit+1)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Errorf("truncated summary should end with an ellipsis: %q", got)
+	}
+}
+
+func TestDeriveSummaryLeavesShortTextIntact(t *testing.T) {
+	if got := deriveSummary("<p>Отель Royal Azur</p>"); got != "Отель Royal Azur" {
+		t.Errorf("deriveSummary() = %q", got)
+	}
+}
+
+func TestExtractAssetRefsFindsLocalImages(t *testing.T) {
+	body := `
+		<img src="tourism/hotels/ra_boat_0_prv.jpg" alt="boat">
+		<img src="/tourism/places/eljem/10070007.jpg">
+		<a href="docs/brochure.pdf">Brochure</a>
+	`
+	refs := extractAssetRefs(body)
+
+	paths := make(map[string]string, len(refs))
+	for _, ref := range refs {
+		paths[ref.Raw] = ref.Path
+	}
+	want := map[string]string{
+		"tourism/hotels/ra_boat_0_prv.jpg":   "tourism/hotels/ra_boat_0_prv.jpg",
+		"/tourism/places/eljem/10070007.jpg": "tourism/places/eljem/10070007.jpg",
+		"docs/brochure.pdf":                  "docs/brochure.pdf",
+	}
+	if len(paths) != len(want) {
+		t.Fatalf("got %d refs (%v), want %d", len(paths), paths, len(want))
+	}
+	for raw, wantPath := range want {
+		if paths[raw] != wantPath {
+			t.Errorf("ref %q -> %q, want %q", raw, paths[raw], wantPath)
+		}
+	}
+}
+
+// TestExtractAssetRefsKeepsRawAndNormalizedApart is the reason the two fields
+// exist: the same file is written with and without a leading slash across a
+// PHP-Nuke site, and the body must be rewritten using the exact text it holds.
+func TestExtractAssetRefsKeepsRawAndNormalizedApart(t *testing.T) {
+	refs := extractAssetRefs(`<img src="a/b.jpg"><img src="/a/b.jpg">`)
+	if len(refs) != 2 {
+		t.Fatalf("got %d refs, want 2", len(refs))
+	}
+	for _, ref := range refs {
+		if ref.Path != "a/b.jpg" {
+			t.Errorf("normalized path = %q, want %q", ref.Path, "a/b.jpg")
+		}
+	}
+	if refs[0].Raw == refs[1].Raw {
+		t.Error("raw attribute text was collapsed; body rewriting would miss one form")
+	}
+}
+
+func TestExtractAssetRefsIgnoresNonLocalAndNonMedia(t *testing.T) {
+	body := `
+		<img src="http://example.com/x.jpg">
+		<img src="https://example.com/y.jpg">
+		<img src="//cdn.example.com/z.jpg">
+		<img src="data:image/gif;base64,R0lGOD">
+		<a href="modules.php?name=News&amp;file=article&amp;sid=12">Story</a>
+		<a href="#anchor">Anchor</a>
+		<a href="mailto:someone@example.com">Mail</a>
+		<img src="../secrets/passwd.jpg">
+		<a href="notes.txt">Notes</a>
+		<a href="index.php">Home</a>
+	`
+	if refs := extractAssetRefs(body); len(refs) != 0 {
+		t.Errorf("expected no local media refs, got %v", refs)
+	}
+}
+
+func TestNormalizeAssetPath(t *testing.T) {
+	for _, tc := range []struct {
+		raw      string
+		wantPath string
+		wantOK   bool
+	}{
+		{"images/a.jpg", "images/a.jpg", true},
+		{"/images/a.jpg", "images/a.jpg", true},
+		{"images/a.PNG", "images/a.PNG", true},
+		{"a.pdf", "a.pdf", true},
+		{"", "", false},
+		{"   ", "", false},
+		{"/", "", false},
+		{"http://x/a.jpg", "", false},
+		{"//x/a.jpg", "", false},
+		{"data:image/png;base64,AAAA", "", false},
+		{"a/../b.jpg", "", false},
+		{"a//b.jpg", "", false},
+		{"./a.jpg", "", false},
+		{"a.jpg?v=2", "", false},
+		{"a.jpg#frag", "", false},
+		{"script.php", "", false},
+		{"noextension", "", false},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			got, ok := normalizeAssetPath(tc.raw)
+			if ok != tc.wantOK {
+				t.Fatalf("normalizeAssetPath(%q) ok = %v, want %v", tc.raw, ok, tc.wantOK)
+			}
+			if ok && got != tc.wantPath {
+				t.Errorf("normalizeAssetPath(%q) = %q, want %q", tc.raw, got, tc.wantPath)
+			}
+		})
+	}
+}
+
+func TestExtractAssetRefsIsDeterministic(t *testing.T) {
+	body := `<img src="c.jpg"><img src="a.jpg"><img src="b.jpg">`
+	first := extractAssetRefs(body)
+	for i := 0; i < 5; i++ {
+		again := extractAssetRefs(body)
+		if len(again) != len(first) {
+			t.Fatalf("ref count changed between runs")
+		}
+		for j := range first {
+			if again[j] != first[j] {
+				t.Fatalf("ref order changed between runs at %d: %v vs %v", j, again[j], first[j])
+			}
+		}
+	}
+	if first[0].Path != "a.jpg" {
+		t.Errorf("refs are not sorted: %v", first)
+	}
+}
