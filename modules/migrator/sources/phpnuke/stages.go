@@ -824,9 +824,6 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 	authorID int64, langCode string, pageCategoryMap map[int64]int64, mediaMap map[string]string,
 	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker,
 	bodiesAltered *int) {
-	types.Report(ctx, tracker, types.Progress{
-		Source: s.Name(), Phase: types.EntityPage, Total: len(pages),
-	})
 	now := time.Now()
 
 	for i := range pages {

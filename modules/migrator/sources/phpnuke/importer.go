@@ -334,6 +334,14 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 			topicMap, storyCategoryMap, mediaMap, opts, result, tracker, &bodiesAltered)
 	}
 	if opts.ImportPages {
+		// Both stages write pages, so the phase total is reported here rather
+		// than inside either one. importStaticPages used to announce only its
+		// own count, and the encyclopedia pages that followed then pushed
+		// progress past the stated total.
+		types.Report(ctx, tracker, types.Progress{
+			Source: s.Name(), Phase: types.EntityPage,
+			Total: len(content.staticPages) + len(content.encEntries),
+		})
 		s.importStaticPages(ctx, queries, content.staticPages, fallbackAuthorID, langCode,
 			pageCategoryMap, mediaMap, opts, result, tracker, &bodiesAltered)
 		s.importEncyclopedia(ctx, queries, content, fallbackAuthorID, langCode, mediaMap,

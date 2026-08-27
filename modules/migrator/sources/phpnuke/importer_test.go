@@ -1638,17 +1638,40 @@ func TestStagesReportTheProgressPhaseTheyWork(t *testing.T) {
 		}
 	})
 
-	t.Run("pages and encyclopedia share the page phase", func(t *testing.T) {
+	// The page phase spans two stages, so its total is reported by the
+	// orchestration. Reported from importStaticPages alone it counted only the
+	// static pages, and the encyclopedia pages that followed pushed progress
+	// past the stated total.
+	t.Run("pages and encyclopedia share one page total", func(t *testing.T) {
+		db, _ := setupImportDB(t)
 		tracker := &mockTracker{}
-		pages := []StaticPage{{ID: 1, Title: ns("P"), Active: ni(1)}}
-		source.importStaticPages(ctx, queries, pages, adminID, lang, map[int64]int64{}, nil,
-			types.ImportOptions{}, &types.ImportResult{}, tracker, nil)
+		reader := &fakeReader{
+			staticPages: []StaticPage{
+				{ID: 1, Title: ns("P1"), Active: ni(1)},
+				{ID: 2, Title: ns("P2"), Active: ni(1)},
+			},
+			encEntries: []EncyclopediaEntry{
+				{ID: 1, Title: ns("E1"), Active: ni(1)},
+				{ID: 2, Title: ns("E2"), Active: ni(1)},
+				{ID: 3, Title: ns("E3"), Active: ni(1)},
+			},
+			encTerms: map[int64][]EncyclopediaTerm{},
+		}
+		result, err := NewSource().importWithReader(ctx, db, reader, map[string]string{},
+			types.ImportOptions{ImportPages: true}, tracker)
+		if err != nil {
+			t.Fatalf("importWithReader() error = %v", err)
+		}
 		total, ok := tracker.totalFor(types.EntityPage)
 		if !ok {
-			t.Fatal("importStaticPages reported no page phase")
+			t.Fatal("no page phase was reported")
 		}
-		if total != 1 {
-			t.Errorf("page total = %d, want 1", total)
+		if total != 5 {
+			t.Errorf("page total = %d, want 5 (2 static pages + 3 encyclopedias)", total)
+		}
+		if result.PagesImported > total {
+			t.Errorf("imported %d pages against a stated total of %d; progress would "+
+				"count past its own maximum", result.PagesImported, total)
 		}
 	})
 
