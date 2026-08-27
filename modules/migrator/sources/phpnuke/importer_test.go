@@ -4,9 +4,13 @@
 package phpnuke
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +74,8 @@ func (f *fakeReader) Prefix() string { return "tr_" }
 
 // mockTracker records what an import claimed so the undo path can find it.
 type mockTracker struct {
-	items []trackedItem
+	items    []trackedItem
+	progress []types.Progress
 }
 
 type trackedItem struct {
@@ -81,6 +86,24 @@ type trackedItem struct {
 func (m *mockTracker) TrackImportedItem(_ context.Context, _, entityType string, entityID int64) error {
 	m.items = append(m.items, trackedItem{entityType, entityID})
 	return nil
+}
+
+// ReportProgress makes mockTracker a types.ProgressReporter, so the phase and
+// total each stage announces can be asserted. Without it every types.Report
+// call is a no-op in tests and a stage could report the wrong phase, or a total
+// that does not match the work it does, with nothing failing.
+func (m *mockTracker) ReportProgress(_ context.Context, p types.Progress) {
+	m.progress = append(m.progress, p)
+}
+
+// totalFor returns the total announced for a phase, and whether it was reported.
+func (m *mockTracker) totalFor(phase types.EntityType) (int, bool) {
+	for _, p := range m.progress {
+		if p.Phase == phase {
+			return p.Total, true
+		}
+	}
+	return 0, false
 }
 
 func (m *mockTracker) countOf(entityType types.EntityType) int {
@@ -1441,5 +1464,326 @@ func TestStoryWithoutTimestampIsPublishedNow(t *testing.T) {
 				t.Errorf("published_at = %v; want a real timestamp", page.PublishedAt)
 			}
 		})
+	}
+}
+
+// writeTestPNG puts a real, decodable image on disk so the media success path
+// runs for real rather than against a stub.
+func writeTestPNG(t *testing.T, dir, name string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for x := 0; x < 8; x++ {
+		for y := 0; y < 8; y++ {
+			img.Set(x, y, color.RGBA{R: uint8(x * 32), G: uint8(y * 32), B: 128, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("png.Encode: %v", err)
+	}
+	full := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(full, buf.Bytes(), 0o600); err != nil {
+		t.Fatalf("write image: %v", err)
+	}
+}
+
+// TestImportMediaRewritesEveryRawSpelling is the reason assetRef carries both
+// Raw and Path. A PHP-Nuke body references the same file as "a/b.png" and
+// "/a/b.png"; the file must be imported once, and BOTH spellings must be
+// rewritten. Nothing pinned that, so discarding the raw spellings and keying
+// the map by normalized path alone passed the whole suite — which on a real
+// site leaves half the <img> tags pointing at the dead server.
+func TestImportMediaRewritesEveryRawSpelling(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	uploads := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, root)
+	writeTestPNG(t, root, "tourism/hotels/photo.png")
+
+	content := &importContent{
+		stories: []Story{{
+			ID: 1,
+			BodyText: ns(`<p><img src="tourism/hotels/photo.png">` +
+				`<img src="/tourism/hotels/photo.png"></p>`),
+		}},
+		encTerms: map[int64][]EncyclopediaTerm{},
+	}
+	result := &types.ImportResult{}
+	mediaMap, err := NewSource().importMedia(ctx, queries, content, root, uploads,
+		adminID, defaultLang(t, queries), result, &mockTracker{})
+	if err != nil {
+		t.Fatalf("importMedia() error = %v", err)
+	}
+
+	if result.MediaImported != 1 {
+		t.Fatalf("MediaImported = %d, want 1; errors %v notices %v",
+			result.MediaImported, result.Errors, result.Notices)
+	}
+	// One file, two spellings, one URL.
+	if len(mediaMap) != 2 {
+		t.Fatalf("mediaMap has %d entries, want both raw spellings: %v", len(mediaMap), mediaMap)
+	}
+	bare, hasBare := mediaMap["tourism/hotels/photo.png"]
+	rooted, hasRooted := mediaMap["/tourism/hotels/photo.png"]
+	if !hasBare || !hasRooted {
+		t.Fatalf("both spellings must be rewritten, got %v", mediaMap)
+	}
+	if bare != rooted {
+		t.Errorf("the same file produced two URLs: %q and %q", bare, rooted)
+	}
+	if !strings.HasPrefix(bare, "/uploads/") {
+		t.Errorf("rewritten URL = %q, want an /uploads/ path", bare)
+	}
+
+	// The media row describes a real decoded image, not a placeholder.
+	media, err := queries.ListMedia(ctx, store.ListMediaParams{Limit: 10, Offset: 0})
+	if err != nil {
+		t.Fatalf("failed to list media: %v", err)
+	}
+	if len(media) != 1 {
+		t.Fatalf("got %d media rows, want 1", len(media))
+	}
+	if media[0].MimeType != "image/png" {
+		t.Errorf("mime = %q, want image/png", media[0].MimeType)
+	}
+	if media[0].Size <= 0 {
+		t.Errorf("size = %d, want the real byte count", media[0].Size)
+	}
+	if !media[0].Width.Valid || media[0].Width.Int64 != 8 || media[0].Height.Int64 != 8 {
+		t.Errorf("dimensions = %v x %v, want 8 x 8", media[0].Width, media[0].Height)
+	}
+
+	// End to end: no reference to the old site survives in the written body.
+	body := NewSource().prepareBody(assembleStoryBody(&content.stories[0]), mediaMap, nil)
+	if strings.Contains(body, `"tourism/hotels/photo.png"`) ||
+		strings.Contains(body, `"/tourism/hotels/photo.png"`) {
+		t.Errorf("a source path survived into the imported body: %s", body)
+	}
+	if strings.Count(body, bare) != 2 {
+		t.Errorf("expected both img tags rewritten to %q, got: %s", bare, body)
+	}
+}
+
+// TestImportMediaHandlesNonImageFile covers the other branch of importOneFile,
+// where no decoding happens and no variants are created.
+func TestImportMediaHandlesNonImageFile(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	uploads := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, root)
+	if err := os.WriteFile(filepath.Join(root, "brochure.pdf"),
+		[]byte("%PDF-1.4\n% test\n"), 0o600); err != nil {
+		t.Fatalf("write pdf: %v", err)
+	}
+
+	content := &importContent{
+		stories:  []Story{{ID: 1, BodyText: ns(`<a href="brochure.pdf">Brochure</a>`)}},
+		encTerms: map[int64][]EncyclopediaTerm{},
+	}
+	result := &types.ImportResult{}
+	mediaMap, err := NewSource().importMedia(ctx, queries, content, root, uploads,
+		adminID, defaultLang(t, queries), result, &mockTracker{})
+	if err != nil {
+		t.Fatalf("importMedia() error = %v", err)
+	}
+	if result.MediaImported != 1 {
+		t.Fatalf("MediaImported = %d; errors %v", result.MediaImported, result.Errors)
+	}
+	if len(mediaMap) != 1 {
+		t.Errorf("mediaMap = %v, want the single reference", mediaMap)
+	}
+
+	media, err := queries.ListMedia(ctx, store.ListMediaParams{Limit: 10, Offset: 0})
+	if err != nil {
+		t.Fatalf("failed to list media: %v", err)
+	}
+	if len(media) != 1 || media[0].MimeType != "application/pdf" {
+		t.Fatalf("got %+v, want one application/pdf row", media)
+	}
+	if media[0].Width.Valid || media[0].Height.Valid {
+		t.Errorf("a non-image must have no dimensions, got %v x %v", media[0].Width, media[0].Height)
+	}
+	if media[0].Size <= 0 {
+		t.Errorf("size = %d, want the real byte count", media[0].Size)
+	}
+}
+
+// TestStagesReportTheProgressPhaseTheyWork pins that each stage announces the
+// phase it actually imports, with a total matching the work in front of it.
+// A wrong phase or a total that disagrees with the rows drives a misleading
+// admin progress bar during exactly the long-running job it exists for.
+func TestStagesReportTheProgressPhaseTheyWork(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	lang := defaultLang(t, queries)
+	source := NewSource()
+
+	t.Run("posts", func(t *testing.T) {
+		tracker := &mockTracker{}
+		stories := []Story{{ID: 1, Title: ns("A")}, {ID: 2, Title: ns("B")}}
+		source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
+			map[int64]int64{}, map[int64]int64{}, nil, types.ImportOptions{},
+			&types.ImportResult{}, tracker, nil)
+		total, ok := tracker.totalFor(types.EntityPost)
+		if !ok {
+			t.Fatal("importStories reported no post phase")
+		}
+		if total != 2 {
+			t.Errorf("post total = %d, want 2", total)
+		}
+	})
+
+	t.Run("pages and encyclopedia share the page phase", func(t *testing.T) {
+		tracker := &mockTracker{}
+		pages := []StaticPage{{ID: 1, Title: ns("P"), Active: ni(1)}}
+		source.importStaticPages(ctx, queries, pages, adminID, lang, map[int64]int64{}, nil,
+			types.ImportOptions{}, &types.ImportResult{}, tracker, nil)
+		total, ok := tracker.totalFor(types.EntityPage)
+		if !ok {
+			t.Fatal("importStaticPages reported no page phase")
+		}
+		if total != 1 {
+			t.Errorf("page total = %d, want 1", total)
+		}
+	})
+
+	t.Run("users", func(t *testing.T) {
+		tracker := &mockTracker{}
+		reader := &fakeReader{authors: []User{
+			{ID: 1, Username: ns("a"), Email: ns("a@example.com")},
+			{ID: 2, Username: ns("b"), Email: ns("b@example.com")},
+		}}
+		if err := source.importUsers(ctx, queries, reader, map[string]int64{},
+			types.ImportOptions{}, &types.ImportResult{}, tracker); err != nil {
+			t.Fatalf("importUsers() error = %v", err)
+		}
+		total, ok := tracker.totalFor(types.EntityUser)
+		if !ok {
+			t.Fatal("importUsers reported no user phase")
+		}
+		if total != 2 {
+			t.Errorf("user total = %d, want 2", total)
+		}
+	})
+
+	// The category total must survive the page-category read failing, since
+	// that path nils the slice after the count is taken.
+	t.Run("categories with the optional table absent", func(t *testing.T) {
+		tracker := &mockTracker{}
+		reader := &fakeReader{
+			topics:      []Topic{{ID: 1, Text: ns("One")}, {ID: 2, Text: ns("Two")}},
+			pageCatsErr: &mysql.MySQLError{Number: mysqlErrNoSuchTable},
+		}
+		if err := source.importCategories(ctx, queries, reader, lang,
+			map[int64]int64{}, map[int64]int64{}, types.ImportOptions{},
+			&types.ImportResult{}, tracker); err != nil {
+			t.Fatalf("importCategories() error = %v", err)
+		}
+		total, ok := tracker.totalFor(types.EntityCategory)
+		if !ok {
+			t.Fatal("importCategories reported no category phase")
+		}
+		if total != 2 {
+			t.Errorf("category total = %d, want 2 (topics only)", total)
+		}
+	})
+}
+
+// TestAssociationFailureStillCountsThePage pins the contract the whole
+// continue-on-error design rests on: a page that was genuinely written counts as
+// imported even when attaching its taxonomy fails, and the failure is still
+// reported. No test made a destination write fail, so every
+// AddError("Failed to create ...") branch in the package was unreachable.
+func TestAssociationFailureStillCountsThePage(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+	admin, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "admin@example.com", PasswordHash: "x", Role: "admin", Name: "A",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("seed admin: %v", err)
+	}
+	lang := defaultLang(t, queries)
+	category, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
+		Name: "Hotels", Slug: "hotels", LanguageCode: lang,
+		Description: sql.NullString{String: "", Valid: true},
+		CreatedAt:   now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("seed category: %v", err)
+	}
+
+	// Remove the join table so the association fails while the page write
+	// succeeds — the precise split the contract is about.
+	if _, err := db.Exec(`DROP TABLE page_categories`); err != nil {
+		t.Fatalf("drop join table: %v", err)
+	}
+
+	result := &types.ImportResult{}
+	stories := []Story{{ID: 1, Title: ns("Hotel Review"), BodyText: ns("<p>x</p>"), TopicID: ni(3)}}
+	NewSource().importStories(ctx, queries, stories, map[string]int64{}, admin.ID, lang,
+		map[int64]int64{3: category.ID}, map[int64]int64{}, nil,
+		types.ImportOptions{}, result, &mockTracker{}, nil)
+
+	if result.PostsImported != 1 {
+		t.Errorf("PostsImported = %d; the page was written, so it must be counted", result.PostsImported)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("the association failure must be reported, got %v", result.Errors)
+	}
+	if !strings.Contains(result.Errors[0], "category") {
+		t.Errorf("the error should name what failed: %q", result.Errors[0])
+	}
+	if _, err := queries.GetPageBySlug(ctx, "hotel-review"); err != nil {
+		t.Errorf("the page itself should still exist: %v", err)
+	}
+}
+
+// TestPageWriteFailureIsReportedAndNotCounted covers the other side: when the
+// write itself fails, nothing is counted and the run continues rather than
+// aborting or panicking.
+func TestPageWriteFailureIsReportedAndNotCounted(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+	admin, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "admin@example.com", PasswordHash: "x", Role: "admin", Name: "A",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("seed admin: %v", err)
+	}
+	lang := defaultLang(t, queries)
+
+	if _, err := db.Exec(`DROP TABLE pages`); err != nil {
+		t.Fatalf("drop pages: %v", err)
+	}
+
+	result := &types.ImportResult{}
+	stories := []Story{
+		{ID: 1, Title: ns("First"), BodyText: ns("<p>a</p>")},
+		{ID: 2, Title: ns("Second"), BodyText: ns("<p>b</p>")},
+	}
+	NewSource().importStories(ctx, queries, stories, map[string]int64{}, admin.ID, lang,
+		map[int64]int64{}, map[int64]int64{}, nil,
+		types.ImportOptions{}, result, &mockTracker{}, nil)
+
+	if result.PostsImported != 0 {
+		t.Errorf("PostsImported = %d, want 0 when every write fails", result.PostsImported)
+	}
+	// Both rows are attempted: one bad row must not abort the remaining work.
+	if len(result.Errors) != 2 {
+		t.Errorf("expected one error per story, got %d: %v", len(result.Errors), result.Errors)
 	}
 }
