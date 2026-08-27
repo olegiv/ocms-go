@@ -146,6 +146,95 @@ func authorKey(username string) string {
 	return strings.ToLower(strings.TrimSpace(username))
 }
 
+// phaseProgress publishes how far one import phase has got.
+//
+// A stage that announces only its total leaves the admin job view reading
+// "0 / 669" from the first row to the last, which is indistinguishable from a
+// stalled import — and on a detached job with no console output that view is
+// all an operator has. Pages are written by two stages sharing one total, so
+// the counter is a value a caller can own and hand to both.
+type phaseProgress struct {
+	source    string
+	phase     types.EntityType
+	total     int
+	processed int
+}
+
+func newPhaseProgress(ctx context.Context, tracker types.ImportTracker, source string,
+	phase types.EntityType, total int) *phaseProgress {
+	p := &phaseProgress{source: source, phase: phase, total: total}
+	p.publish(ctx, tracker)
+	return p
+}
+
+// step records one attempted row. Skipped and failed rows count too: the
+// denominator is rows read, so anything else leaves the bar short of its total
+// on a run that skipped anything.
+func (p *phaseProgress) step(ctx context.Context, tracker types.ImportTracker) {
+	if p == nil {
+		return
+	}
+	p.processed++
+	p.publish(ctx, tracker)
+}
+
+func (p *phaseProgress) publish(ctx context.Context, tracker types.ImportTracker) {
+	types.Report(ctx, tracker, types.Progress{
+		Source: p.source, Phase: p.phase, Processed: p.processed, Total: p.total,
+	})
+}
+
+// optionalTableMissing reports whether a read failed only because the table does
+// not exist.
+//
+// On a twenty-year-old install that is routine — a module was never enabled, or
+// the database was stripped to a content archive. Everything else must stay an
+// error: a dropped connection, a missing SELECT grant or a canceled context all
+// produce an empty read that looks exactly like a site which never had the data,
+// so downgrading them to a notice loses content without saying so.
+func optionalTableMissing(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == mysqlErrNoSuchTable
+}
+
+// creditedAuthors merges the two tables that credit a story into one list.
+//
+// A `users` row wins over an `authors` row for the same name: it carries the
+// profile the site actually displays, and `authors.email` is frequently the
+// shared webmaster address, which would collapse several people into a single
+// oCMS account.
+func (s *Source) creditedAuthors(ctx context.Context, reader sourceReader,
+	result *types.ImportResult) ([]User, error) {
+	registered, err := reader.GetStoryAuthors(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get story authors: %w", err)
+	}
+
+	admins, err := reader.GetPublishingAdmins(ctx)
+	if err != nil {
+		if optionalTableMissing(err) {
+			result.AddNotice("The %sauthors table does not exist; publishing bylines were "+
+				"taken from %susers alone, and stories credited only to an administrator "+
+				"account fall back to the default author.", reader.Prefix(), reader.Prefix())
+		} else {
+			result.AddError("Failed to read publishing admins: %v; stories credited only "+
+				"to an administrator account were attributed to the default author", err)
+		}
+		admins = nil
+	}
+
+	seen := make(map[string]bool, len(registered))
+	for i := range registered {
+		seen[authorKey(registered[i].Login())] = true
+	}
+	for i := range admins {
+		if !seen[authorKey(admins[i].Login())] {
+			registered = append(registered, admins[i])
+		}
+	}
+	return registered, nil
+}
+
 // importUsers imports the accounts credited on a story.
 //
 // Imported accounts are deliberately inert: role "public" grants no admin
@@ -154,13 +243,11 @@ func authorKey(username string) string {
 func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader sourceReader,
 	userMap map[string]int64, opts types.ImportOptions, result *types.ImportResult,
 	tracker types.ImportTracker) error {
-	users, err := reader.GetStoryAuthors(ctx)
+	users, err := s.creditedAuthors(ctx, reader, result)
 	if err != nil {
-		return fmt.Errorf("failed to get story authors: %w", err)
+		return err
 	}
-	types.Report(ctx, tracker, types.Progress{
-		Source: s.Name(), Phase: types.EntityUser, Total: len(users),
-	})
+	progress := newPhaseProgress(ctx, tracker, s.Name(), types.EntityUser, len(users))
 
 	// One hash for every user in this run — hashing per user is needlessly
 	// expensive when nobody can use the credential anyway.
@@ -176,6 +263,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 			return ctx.Err()
 		default:
 		}
+		progress.step(ctx, tracker)
 
 		user := &users[i]
 		email := strings.TrimSpace(user.Address())
@@ -243,8 +331,7 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 		// such table. Anything else — a dropped connection, a missing SELECT
 		// grant, a corrupt row — silently imports every static page with no
 		// category, so it must not be downgraded to a notice.
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == mysqlErrNoSuchTable {
+		if optionalTableMissing(err) {
 			result.AddNotice("Static page categories were not imported: the %spages_categories "+
 				"table does not exist; this site never enabled the static pages module.", reader.Prefix())
 		} else {
@@ -253,11 +340,11 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 		}
 		pageCategories = nil
 	}
-	types.Report(ctx, tracker, types.Progress{
-		Source: s.Name(), Phase: types.EntityCategory, Total: len(topics) + len(pageCategories),
-	})
+	progress := newPhaseProgress(ctx, tracker, s.Name(), types.EntityCategory,
+		len(topics)+len(pageCategories))
 
 	for i := range topics {
+		progress.step(ctx, tracker)
 		topic := &topics[i]
 		label := topic.Label()
 		if label == "" {
@@ -270,6 +357,7 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 		}
 	}
 	for i := range pageCategories {
+		progress.step(ctx, tracker)
 		category := &pageCategories[i]
 		title := strings.TrimSpace(category.Name())
 		if title == "" {
@@ -294,31 +382,19 @@ func (s *Source) createCategory(ctx context.Context, queries *store.Queries, nam
 		base = fallbackSlug
 	}
 
-	if existing, err := queries.GetCategoryBySlug(ctx, base); err == nil {
-		// Reuse rather than duplicate: a category named "Hotels" already in
-		// oCMS is the one the operator means, and re-running an import must
-		// not create "hotels-2".
-		result.CategoriesSkipped++
-		return existing.ID, true
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		result.AddError("Failed to check for existing category %q: %v", name, err)
-		return 0, false
-	}
-
-	slug, err := uniqueTaxonomySlug(ctx, base, func(candidate string) (bool, error) {
-		_, err := queries.GetCategoryBySlug(ctx, candidate)
-		switch {
-		case err == nil:
-			return true, nil
-		case errors.Is(err, sql.ErrNoRows):
-			return false, nil
-		default:
-			return false, err
-		}
-	})
+	// Reuse rather than duplicate: a category named "Hotels" already in oCMS is
+	// the one the operator means, and re-running an import must not create
+	// "hotels-2". Reuse now turns on the name rather than the slug — see
+	// resolveTaxonomySlug.
+	existingID, slug, err := resolveTaxonomySlug(ctx, base, name, langCode,
+		categoryTermLookup(ctx, queries))
 	if err != nil {
 		result.AddError("Failed to allocate a free slug for category %q: %v", name, err)
 		return 0, false
+	}
+	if existingID != 0 {
+		result.CategoriesSkipped++
+		return existingID, true
 	}
 
 	now := time.Now()
@@ -357,12 +433,11 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 	if err != nil {
 		return fmt.Errorf("failed to get story categories: %w", err)
 	}
-	types.Report(ctx, tracker, types.Progress{
-		Source: s.Name(), Phase: types.EntityTag, Total: len(categories),
-	})
+	progress := newPhaseProgress(ctx, tracker, s.Name(), types.EntityTag, len(categories))
 
 	now := time.Now()
 	for i := range categories {
+		progress.step(ctx, tracker)
 		category := &categories[i]
 		name := strings.TrimSpace(category.Name())
 		if name == "" {
@@ -375,28 +450,15 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 			base = fmt.Sprintf("category-%d", category.ID)
 		}
 
-		if existing, err := queries.GetTagBySlug(ctx, base); err == nil {
-			storyCategoryMap[category.ID] = existing.ID
-			result.TagsSkipped++
-			continue
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			result.AddError("Failed to check for existing tag %q: %v", name, err)
-			continue
-		}
-
-		slug, slugErr := uniqueTaxonomySlug(ctx, base, func(candidate string) (bool, error) {
-			_, err := queries.GetTagBySlug(ctx, candidate)
-			switch {
-			case err == nil:
-				return true, nil
-			case errors.Is(err, sql.ErrNoRows):
-				return false, nil
-			default:
-				return false, err
-			}
-		})
+		existingID, slug, slugErr := resolveTaxonomySlug(ctx, base, name, langCode,
+			tagTermLookup(ctx, queries))
 		if slugErr != nil {
 			result.AddError("Failed to allocate a free slug for tag %q: %v", name, slugErr)
+			continue
+		}
+		if existingID != 0 {
+			storyCategoryMap[category.ID] = existingID
+			result.TagsSkipped++
 			continue
 		}
 
@@ -429,47 +491,108 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 // "taken". Reading it as free collides with a row that already exists; reading
 // it as taken issues a hundred more doomed probes per row and reports a
 // database outage to the operator as a slug collision.
-func uniqueTaxonomySlug(ctx context.Context, base string, taken func(string) (bool, error)) (string, error) {
+// taxonomyTerm identifies an existing taxonomy row: enough to tell "this is the
+// term being imported" from "this is a different term that happens to slugify
+// the same way".
+type taxonomyTerm struct {
+	ID       int64
+	Name     string
+	Language string
+}
+
+// matches reports whether this row is the term a source label names.
+func (t taxonomyTerm) matches(name, langCode string) bool {
+	return t.Language == langCode &&
+		strings.EqualFold(strings.TrimSpace(t.Name), strings.TrimSpace(name))
+}
+
+// resolveTaxonomySlug walks the suffix family for a base slug and returns
+// either the row that already holds this term or a free slug to create it under.
+//
+// Stopping at the base slug was wrong in both directions. Slugification is
+// lossy — "Hello World" and "Hello, World!" both give "hello-world" — so a
+// matching slug does not mean a matching term, and reusing on the slug alone
+// silently merged the two, refiling every post from the second under the first.
+// Walking the family instead of giving up after the base is what keeps a re-run
+// idempotent: the second term, stored as "hello-world-2" on the first run, is
+// recovered rather than duplicated as "hello-world-3".
+//
+// Reuse is still the default the importer wants — an operator's own "Hotels"
+// category is the one they mean, and re-running must not create "hotels-2".
+// Only the test for "same term" got stricter.
+func resolveTaxonomySlug(ctx context.Context, base, name, langCode string,
+	lookup func(string) (taxonomyTerm, bool, error)) (existingID int64, slug string, err error) {
 	// A probe error still means "not free" — reading a transient failure as
 	// "nothing there" is how an import collides with a row that already exists.
 	// But it also aborts the search: continuing would issue a hundred more
 	// doomed probes per row and report the database outage as a slug collision.
-	isFree := func(candidate string) (bool, error) {
+	probe := func(candidate string) (int64, bool, error) {
 		if err := ctx.Err(); err != nil {
-			return false, err
+			return 0, false, err
 		}
-		exists, err := taken(candidate)
-		if err != nil {
-			return false, err
+		term, found, err := lookup(candidate)
+		switch {
+		case err != nil:
+			return 0, false, err
+		case !found:
+			return 0, true, nil
+		case term.matches(name, langCode):
+			return term.ID, false, nil
+		default:
+			return 0, false, nil
 		}
-		return !exists, nil
 	}
-	free, err := isFree(base)
-	if err != nil {
-		return "", err
-	}
-	if free {
-		return base, nil
-	}
+
+	candidates := make([]string, 0, maxTaxonomySlugSuffix)
+	candidates = append(candidates, base)
 	for i := 2; i <= maxTaxonomySlugSuffix; i++ {
-		candidate := base + "-" + strconv.Itoa(i)
-		free, err := isFree(candidate)
-		if err != nil {
-			return "", err
+		candidates = append(candidates, base+"-"+strconv.Itoa(i))
+	}
+	candidates = append(candidates, base+"-"+strconv.FormatInt(time.Now().UnixNano(), 36))
+
+	for _, candidate := range candidates {
+		id, free, err := probe(candidate)
+		switch {
+		case err != nil:
+			return 0, "", err
+		case id != 0:
+			return id, "", nil
+		case free:
+			return 0, candidate, nil
 		}
-		if free {
-			return candidate, nil
+	}
+	return 0, "", fmt.Errorf("no free slug after %d attempts", maxTaxonomySlugSuffix)
+}
+
+// categoryTermLookup and tagTermLookup adapt the two taxonomy tables to the
+// single slug resolver, so the collision rules cannot drift apart.
+func categoryTermLookup(ctx context.Context, queries *store.Queries) func(string) (taxonomyTerm, bool, error) {
+	return func(slug string) (taxonomyTerm, bool, error) {
+		category, err := queries.GetCategoryBySlug(ctx, slug)
+		switch {
+		case err == nil:
+			return taxonomyTerm{ID: category.ID, Name: category.Name,
+				Language: category.LanguageCode}, true, nil
+		case errors.Is(err, sql.ErrNoRows):
+			return taxonomyTerm{}, false, nil
+		default:
+			return taxonomyTerm{}, false, err
 		}
 	}
-	fallback := base + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	free, err = isFree(fallback)
-	if err != nil {
-		return "", err
+}
+
+func tagTermLookup(ctx context.Context, queries *store.Queries) func(string) (taxonomyTerm, bool, error) {
+	return func(slug string) (taxonomyTerm, bool, error) {
+		tag, err := queries.GetTagBySlug(ctx, slug)
+		switch {
+		case err == nil:
+			return taxonomyTerm{ID: tag.ID, Name: tag.Name, Language: tag.LanguageCode}, true, nil
+		case errors.Is(err, sql.ErrNoRows):
+			return taxonomyTerm{}, false, nil
+		default:
+			return taxonomyTerm{}, false, err
+		}
 	}
-	if free {
-		return fallback, nil
-	}
-	return "", fmt.Errorf("no free slug after %d attempts", maxTaxonomySlugSuffix)
 }
 
 // importMedia copies every file referenced by an imported body into the oCMS
@@ -516,9 +639,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, conten
 	}
 	processor := imaging.NewProcessor(canonicalUploadRoot)
 
-	types.Report(ctx, tracker, types.Progress{
-		Source: s.Name(), Phase: types.EntityMedia, Total: len(paths),
-	})
+	progress := newPhaseProgress(ctx, tracker, s.Name(), types.EntityMedia, len(paths))
 
 	var absent, failed int
 	for _, relPath := range paths {
@@ -527,6 +648,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, conten
 			return mediaMap, ctx.Err()
 		default:
 		}
+		progress.step(ctx, tracker)
 
 		newURL, outcome := s.importOneFile(ctx, queries, mediaRoot, processor, canonicalUploadRoot,
 			relPath, userID, langCode, result, tracker)
@@ -768,9 +890,7 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 	topicMap, storyCategoryMap map[int64]int64, mediaMap map[string]string,
 	skips *plannedSkips, opts types.ImportOptions, result *types.ImportResult,
 	tracker types.ImportTracker, bodiesAltered *int) {
-	types.Report(ctx, tracker, types.Progress{
-		Source: s.Name(), Phase: types.EntityPost, Total: len(stories),
-	})
+	progress := newPhaseProgress(ctx, tracker, s.Name(), types.EntityPost, len(stories))
 	now := time.Now()
 	// Tallied rather than reported per story: 669 individual notices would
 	// exhaust the capped budget and bury everything else.
@@ -782,6 +902,7 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 			return
 		default:
 		}
+		progress.step(ctx, tracker)
 
 		story := &stories[i]
 		title, fallback := storyIdentity(story)
@@ -860,8 +981,8 @@ func namesAnAuthor(story *Story) bool {
 // importStaticPages imports the PHP-Nuke static pages module.
 func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, pages []StaticPage,
 	authorID int64, langCode string, pageCategoryMap map[int64]int64, mediaMap map[string]string,
-	skips *plannedSkips, opts types.ImportOptions, result *types.ImportResult,
-	tracker types.ImportTracker, bodiesAltered *int) {
+	skips *plannedSkips, progress *phaseProgress, opts types.ImportOptions,
+	result *types.ImportResult, tracker types.ImportTracker, bodiesAltered *int) {
 	now := time.Now()
 
 	for i := range pages {
@@ -870,6 +991,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 			return
 		default:
 		}
+		progress.step(ctx, tracker)
 
 		source := &pages[i]
 		title, fallback := staticPageIdentity(source)
@@ -934,8 +1056,8 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 // its terms.
 func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries, content *importContent,
 	authorID int64, langCode string, mediaMap map[string]string, skips *plannedSkips,
-	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker,
-	bodiesAltered *int) {
+	progress *phaseProgress, opts types.ImportOptions, result *types.ImportResult,
+	tracker types.ImportTracker, bodiesAltered *int) {
 	if len(content.encEntries) == 0 {
 		return
 	}
@@ -947,6 +1069,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 			return
 		default:
 		}
+		progress.step(ctx, tracker)
 
 		entry := &content.encEntries[i]
 		title, fallback := encyclopediaIdentity(entry)

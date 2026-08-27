@@ -6,7 +6,6 @@ package phpnuke
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -313,46 +312,17 @@ func (r *Reader) GetEncyclopediaTerms(ctx context.Context) (map[int64][]Encyclop
 	return terms, nil
 }
 
-// GetStoryAuthors retrieves only the accounts credited on a story, either as
-// the publishing author (stories.aid) or the submitter (stories.informant).
+// GetStoryAuthors retrieves the registered accounts credited on a story,
+// either as the publishing author (stories.aid) or the submitter
+// (stories.informant).
 //
 // PHP-Nuke sites accumulate large registration tables — most of which never
 // wrote anything — so importing `users` wholesale would create hundreds of
 // dormant accounts.
 //
-// The two credit columns point at different tables, which is the whole reason
-// this reads twice. `informant` is a `users.username`; `aid` is an
-// `authors.aid`, the separate table PHP-Nuke keeps for the handful of accounts
-// allowed to publish. On many installs an administrator has no `users` row at
-// all, and reading `aid` only from `users` silently dropped their byline —
-// every story they published was attributed to the fallback oCMS account.
+// This covers only the half of the credits that lives in `users`. The other
+// half is GetPublishingAdmins; see there for why one read cannot serve both.
 func (r *Reader) GetStoryAuthors(ctx context.Context) ([]User, error) {
-	registered, err := r.registeredStoryAuthors(ctx)
-	if err != nil {
-		return nil, err
-	}
-	credited, err := r.creditedAdminAuthors(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// A `users` row wins over an `authors` row for the same name: it carries the
-	// profile the site actually displays, and `authors.email` is frequently the
-	// shared webmaster address.
-	seen := make(map[string]bool, len(registered))
-	for i := range registered {
-		seen[authorKey(registered[i].Login())] = true
-	}
-	for i := range credited {
-		if !seen[authorKey(credited[i].Login())] {
-			registered = append(registered, credited[i])
-		}
-	}
-	return registered, nil
-}
-
-// registeredStoryAuthors reads the `users` rows credited on any story.
-func (r *Reader) registeredStoryAuthors(ctx context.Context) ([]User, error) {
 	users, err := r.table("users")
 	if err != nil {
 		return nil, err
@@ -387,15 +357,24 @@ func (r *Reader) registeredStoryAuthors(ctx context.Context) ([]User, error) {
 	return authors, nil
 }
 
-// creditedAdminAuthors reads the `authors` rows credited as stories.aid.
+// GetPublishingAdmins retrieves the `authors` rows credited as stories.aid.
 //
-// A missing `authors` table is not an error. The table is core PHP-Nuke, but
-// installs stripped down to a content archive are exactly the ones this
-// importer is pointed at, and losing the whole import over an absent optional
-// table would be a poor trade for a byline. The rows carry no numeric id —
-// `aid` is the primary key — so User.ID stays zero, which nothing downstream
-// reads.
-func (r *Reader) creditedAdminAuthors(ctx context.Context) ([]User, error) {
+// The two credit columns name rows in different tables, which is the whole
+// reason this is a second read. `informant` is a `users.username`, but `aid` is
+// an `authors.aid` — the separate table PHP-Nuke keeps for the handful of
+// accounts allowed to publish. On many installs an administrator has no `users`
+// row at all, and looking for `aid` in `users` silently dropped their byline:
+// every story they published was attributed to the fallback oCMS account.
+//
+// The rows carry no numeric id — `aid` is the primary key — so User.ID stays
+// zero, which nothing downstream reads.
+//
+// A read failure is returned as-is rather than interpreted here. `authors` is
+// core PHP-Nuke but can be absent from an install stripped to a content
+// archive, and only the caller can weigh losing bylines against failing the
+// import; classifying it here would have to guess, and guessing "absent" for a
+// missing SELECT grant loses the bylines silently.
+func (r *Reader) GetPublishingAdmins(ctx context.Context) ([]User, error) {
 	authorsTable, err := r.table("authors")
 	if err != nil {
 		return nil, err
@@ -411,12 +390,7 @@ func (r *Reader) creditedAdminAuthors(ctx context.Context) ([]User, error) {
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
-		if r.tableMissing(ctx, authorsTable) {
-			slog.Info("phpnuke source has no authors table; publishing bylines "+
-				"will come from users only", "table", authorsTable)
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to query credited authors: %w", err)
+		return nil, fmt.Errorf("failed to query publishing admins: %w", err)
 	}
 	defer closeRows(rows)
 
@@ -424,27 +398,12 @@ func (r *Reader) creditedAdminAuthors(ctx context.Context) ([]User, error) {
 	for rows.Next() {
 		var u User
 		if err := rows.Scan(&u.Username, &u.Name, &u.Email); err != nil {
-			return nil, fmt.Errorf("failed to scan credited author: %w", err)
+			return nil, fmt.Errorf("failed to scan publishing admin: %w", err)
 		}
 		authors = append(authors, u)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating credited authors: %w", err)
+		return nil, fmt.Errorf("error iterating publishing admins: %w", err)
 	}
 	return authors, nil
-}
-
-// tableMissing reports whether a table cannot be read at all, which is how an
-// optional table's absence is told apart from a query that failed for some
-// other reason.
-//
-// Probing rather than matching a driver error code keeps two properties worth
-// having: the reader tests stand SQLite in for MySQL, and a real failure of the
-// caller's query — a locked table, a subquery against `stories` — still
-// propagates, because the probe succeeds and the caller reports the original
-// error rather than quietly returning nothing.
-func (r *Reader) tableMissing(ctx context.Context, quotedTable string) bool {
-	var probe int
-	err := r.db.QueryRowContext(ctx, "SELECT 1 FROM "+quotedTable+" LIMIT 1").Scan(&probe)
-	return err != nil && !errors.Is(err, sql.ErrNoRows)
 }

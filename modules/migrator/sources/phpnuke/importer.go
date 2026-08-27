@@ -221,6 +221,7 @@ type sourceReader interface {
 	GetEncyclopediaEntries(ctx context.Context) ([]EncyclopediaEntry, error)
 	GetEncyclopediaTerms(ctx context.Context) (map[int64][]EncyclopediaTerm, error)
 	GetStoryAuthors(ctx context.Context) ([]User, error)
+	GetPublishingAdmins(ctx context.Context) ([]User, error)
 	// Prefix lets a stage name the exact table it could not read, which is the
 	// difference between an actionable message and "table doesn't exist".
 	Prefix() string
@@ -317,7 +318,12 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 	var mediaMap map[string]string
 	if opts.ImportMedia {
 		switch filesPath := strings.TrimSpace(cfg["files_path"]); {
-		case !content.hasBodies():
+		case !opts.ImportPosts && !opts.ImportPages:
+			// The test is on the options, not on the rows they returned. Asking
+			// whether any content was *read* conflated "you did not select the
+			// content media is discovered from" with "the tables you selected are
+			// empty" — and reported the second, a perfectly valid import, as an
+			// operator error that finished the job as Partial.
 			result.AddError("Media import was requested but neither posts nor pages were " +
 				"selected; media is discovered from imported bodies, so nothing was imported.")
 		case filesPath != "":
@@ -342,14 +348,12 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 		// than inside either one. importStaticPages used to announce only its
 		// own count, and the encyclopedia pages that followed then pushed
 		// progress past the stated total.
-		types.Report(ctx, tracker, types.Progress{
-			Source: s.Name(), Phase: types.EntityPage,
-			Total: len(content.staticPages) + len(content.encEntries),
-		})
+		pageProgress := newPhaseProgress(ctx, tracker, s.Name(), types.EntityPage,
+			len(content.staticPages)+len(content.encEntries))
 		s.importStaticPages(ctx, queries, content.staticPages, fallbackAuthorID, langCode,
-			pageCategoryMap, mediaMap, skips, opts, result, tracker, &bodiesAltered)
+			pageCategoryMap, mediaMap, skips, pageProgress, opts, result, tracker, &bodiesAltered)
 		s.importEncyclopedia(ctx, queries, content, fallbackAuthorID, langCode, mediaMap,
-			skips, opts, result, tracker, &bodiesAltered)
+			skips, pageProgress, opts, result, tracker, &bodiesAltered)
 	}
 	if bodiesAltered > 0 {
 		result.AddSummary("%d imported bodies contained markup the oCMS page HTML policy does "+
@@ -402,15 +406,6 @@ func (s *Source) readContent(ctx context.Context, reader sourceReader, opts type
 		content.encTerms = terms
 	}
 	return content, nil
-}
-
-// hasBodies reports whether any selected option produced content to scan.
-//
-// Media is discovered from imported bodies, so requesting media without posts
-// or pages imports nothing at all — silently, before importMedia even reports a
-// progress phase.
-func (c *importContent) hasBodies() bool {
-	return len(c.stories)+len(c.staticPages)+len(c.encEntries) > 0
 }
 
 // bodies returns every HTML body this import will write, for media discovery.

@@ -294,8 +294,17 @@ func TestNormalizeAssetPath(t *testing.T) {
 		{"a/../b.jpg", "", false},
 		{"a//b.jpg", "", false},
 		{"./a.jpg", "", false},
-		{"a.jpg?v=2", "", false},
-		{"a.jpg#frag", "", false},
+		// A query or fragment is URL syntax, not part of the filename. These
+		// used to be rejected outright, which left cache-busted images
+		// unimported and their links dangling at the dead site.
+		{"a.jpg?v=2", "a.jpg", true},
+		{"images/a.jpg?v=2&w=300", "images/a.jpg", true},
+		{"a.jpg#frag", "a.jpg", true},
+		// Cutting the query does not let script references through: what
+		// remains has no importable MIME type.
+		{"modules.php?name=News&file=article&sid=12", "", false},
+		{"?v=2", "", false},
+		{"#frag", "", false},
 		{"script.php", "", false},
 		{"noextension", "", false},
 	} {

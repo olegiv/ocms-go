@@ -41,6 +41,7 @@ type fakeReader struct {
 	encEntries  []EncyclopediaEntry
 	encTerms    map[int64][]EncyclopediaTerm
 	authors     []User
+	admins      []User
 
 	// errs fails one named read, so every "failed to read X" branch is
 	// reachable without a database.
@@ -73,6 +74,9 @@ func (f *fakeReader) GetEncyclopediaTerms(context.Context) (map[int64][]Encyclop
 }
 func (f *fakeReader) GetStoryAuthors(context.Context) ([]User, error) {
 	return f.authors, f.err("GetStoryAuthors")
+}
+func (f *fakeReader) GetPublishingAdmins(context.Context) ([]User, error) {
+	return f.admins, f.err("GetPublishingAdmins")
 }
 func (f *fakeReader) Prefix() string { return "tr_" }
 
@@ -568,7 +572,7 @@ func TestImportStaticPagesHonorsActiveFlag(t *testing.T) {
 		{ID: 2, Title: ns("Hidden Page"), Text: ns("<p>hidden</p>"), Active: ni(0)},
 	}
 	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
-		map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, nil, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PagesImported != 2 {
 		t.Fatalf("PagesImported = %d, want 2; errors: %v", result.PagesImported, result.Errors)
@@ -609,7 +613,7 @@ func TestImportStaticPagesStripsMarkupFromMetaDescription(t *testing.T) {
 		Active:   ni(1),
 	}}
 	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
-		map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, nil, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	page, err := queries.GetPageBySlug(ctx, "subtitle-test")
 	if err != nil {
@@ -640,7 +644,7 @@ func TestImportEncyclopediaCreatesOnePagePerEntry(t *testing.T) {
 		},
 	}
 	NewSource().importEncyclopedia(ctx, queries, content, adminID, defaultLang(t, queries),
-		nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		nil, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PagesImported != 1 {
 		t.Fatalf("PagesImported = %d, want 1; errors: %v", result.PagesImported, result.Errors)
@@ -835,53 +839,122 @@ func TestResolveLanguageCode(t *testing.T) {
 	})
 }
 
-func TestUniqueTaxonomySlugProbesUntilFree(t *testing.T) {
-	ctx := context.Background()
-	taken := map[string]bool{"news": true, "news-2": true}
-
-	got, err := uniqueTaxonomySlug(ctx, "news", func(candidate string) (bool, error) {
-		return taken[candidate], nil
-	})
-	if err != nil {
-		t.Fatalf("uniqueTaxonomySlug() error = %v", err)
-	}
-	if got != "news-3" {
-		t.Errorf("uniqueTaxonomySlug() = %q, want %q", got, "news-3")
+// takenTerms builds a lookup over a fixed set of existing taxonomy rows.
+func takenTerms(rows map[string]taxonomyTerm) func(string) (taxonomyTerm, bool, error) {
+	return func(slug string) (taxonomyTerm, bool, error) {
+		term, ok := rows[slug]
+		return term, ok, nil
 	}
 }
 
-// TestUniqueTaxonomySlugTreatsErrorsAsTaken guards the fail-safe direction: a
-// transient database error must never be read as "the slug is free".
-// TestUniqueTaxonomySlugSurfacesProbeErrors guards both halves of the contract.
-// A probe error must never be read as "free", and it must abort the search
-// rather than issuing a hundred more doomed probes and reporting a database
-// outage as a slug collision.
-func TestUniqueTaxonomySlugSurfacesProbeErrors(t *testing.T) {
+func TestResolveTaxonomySlugProbesUntilFree(t *testing.T) {
+	ctx := context.Background()
+	rows := map[string]taxonomyTerm{
+		"news":   {ID: 1, Name: "Different", Language: "en"},
+		"news-2": {ID: 2, Name: "Also different", Language: "en"},
+	}
+
+	id, slug, err := resolveTaxonomySlug(ctx, "news", "News", "en", takenTerms(rows))
+	if err != nil {
+		t.Fatalf("resolveTaxonomySlug() error = %v", err)
+	}
+	if id != 0 {
+		t.Errorf("reused row %d; no existing row names this term", id)
+	}
+	if slug != "news-3" {
+		t.Errorf("slug = %q, want %q", slug, "news-3")
+	}
+}
+
+// TestResolveTaxonomySlugSurfacesProbeErrors guards both halves of the
+// contract. A probe error must never be read as "free", and it must abort the
+// search rather than issuing a hundred more doomed probes and reporting a
+// database outage as a slug collision.
+func TestResolveTaxonomySlugSurfacesProbeErrors(t *testing.T) {
 	probes := 0
-	got, err := uniqueTaxonomySlug(context.Background(), "news", func(string) (bool, error) {
-		probes++
-		return false, errors.New("database is locked")
-	})
+	id, slug, err := resolveTaxonomySlug(context.Background(), "news", "News", "en",
+		func(string) (taxonomyTerm, bool, error) {
+			probes++
+			return taxonomyTerm{}, false, errors.New("database is locked")
+		})
 	if err == nil {
 		t.Fatal("expected the probe error to surface, not be swallowed")
 	}
-	if got != "" {
-		t.Errorf("uniqueTaxonomySlug() = %q, want \"\" when the check cannot be trusted", got)
+	if id != 0 || slug != "" {
+		t.Errorf("resolveTaxonomySlug() = %d, %q; want zero values when the check cannot be trusted", id, slug)
 	}
 	if probes != 1 {
 		t.Errorf("probed %d times after an error; the search must stop at the first failure", probes)
 	}
 }
 
-func TestUniqueTaxonomySlugStopsOnCanceledContext(t *testing.T) {
+func TestResolveTaxonomySlugStopsOnCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	got, err := uniqueTaxonomySlug(ctx, "news", func(string) (bool, error) { return false, nil })
+	id, slug, err := resolveTaxonomySlug(ctx, "news", "News", "en",
+		func(string) (taxonomyTerm, bool, error) { return taxonomyTerm{}, false, nil })
 	if err == nil {
 		t.Fatal("expected the cancellation to surface as an error")
 	}
-	if got != "" {
-		t.Errorf("uniqueTaxonomySlug() = %q, want \"\" once the context is canceled", got)
+	if id != 0 || slug != "" {
+		t.Errorf("resolveTaxonomySlug() = %d, %q; want zero values once the context is canceled", id, slug)
+	}
+}
+
+// TestResolveTaxonomySlugRecoversItsOwnSuffixedRow covers a Codex review
+// finding. Reuse used to turn on the slug alone, so two distinct source labels
+// that slugify the same way — "Hello World" and "Hello, World!" — silently
+// became one term and the posts of the second were refiled under the first.
+//
+// Distinguishing them is only half the fix. The second term is stored under a
+// suffixed slug, so a probe that gives up after the base slug would allocate a
+// fresh suffix on every re-run; the walk has to recognise its own earlier row.
+func TestResolveTaxonomySlugRecoversItsOwnSuffixedRow(t *testing.T) {
+	rows := map[string]taxonomyTerm{
+		"hello-world":   {ID: 1, Name: "Hello World", Language: "en"},
+		"hello-world-2": {ID: 2, Name: "Hello, World!", Language: "en"},
+	}
+
+	for _, tc := range []struct {
+		name, term string
+		wantID     int64
+		wantSlug   string
+	}{
+		{"base row is the same term", "Hello World", 1, ""},
+		{"suffixed row is the same term", "Hello, World!", 2, ""},
+		{"case and padding are ignored", "  hello world  ", 1, ""},
+		{"a third distinct term allocates", "Hello - World", 0, "hello-world-3"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id, slug, err := resolveTaxonomySlug(context.Background(), "hello-world",
+				tc.term, "en", takenTerms(rows))
+			if err != nil {
+				t.Fatalf("resolveTaxonomySlug() error = %v", err)
+			}
+			if id != tc.wantID || slug != tc.wantSlug {
+				t.Errorf("resolveTaxonomySlug() = %d, %q; want %d, %q",
+					id, slug, tc.wantID, tc.wantSlug)
+			}
+		})
+	}
+}
+
+// TestResolveTaxonomySlugKeepsLanguagesApart pins the other half of "same
+// term": two languages legitimately hold the same label, and merging them would
+// file translated content under one term.
+func TestResolveTaxonomySlugKeepsLanguagesApart(t *testing.T) {
+	rows := map[string]taxonomyTerm{"hotels": {ID: 1, Name: "Hotels", Language: "en"}}
+
+	id, slug, err := resolveTaxonomySlug(context.Background(), "hotels", "Hotels", "ru",
+		takenTerms(rows))
+	if err != nil {
+		t.Fatalf("resolveTaxonomySlug() error = %v", err)
+	}
+	if id != 0 {
+		t.Errorf("reused the English row %d for a Russian term", id)
+	}
+	if slug != "hotels-2" {
+		t.Errorf("slug = %q, want %q", slug, "hotels-2")
 	}
 }
 
@@ -2017,6 +2090,235 @@ func TestPageExistsIsCalledOnlyWhilePlanning(t *testing.T) {
 			t.Errorf("%s calls pageExists at %v; skip decisions made outside %s "+
 				"run after media has already been imported, which is the bug this "+
 				"guards", caller, sites, allowed)
+		}
+	}
+}
+
+// TestEveryPhaseReportsItsProgressToCompletion covers a Codex review finding.
+//
+// Each stage announced its total once and then never published another sample,
+// so `Processed` stayed at zero for the whole phase and the admin job view read
+// "0 / 669" from the first row to the last — indistinguishable from a stalled
+// import, on a detached job where that view is all an operator has.
+//
+// The assertion is per phase rather than per stage so it keeps holding for the
+// page phase, whose total is shared by two stages that each fill part of it.
+func TestEveryPhaseReportsItsProgressToCompletion(t *testing.T) {
+	db, _ := setupImportDB(t)
+	root := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, root)
+	t.Setenv("OCMS_UPLOADS_DIR", t.TempDir())
+	writeTestPNG(t, root, "photo.png")
+
+	reader := &fakeReader{
+		authors: []User{
+			{ID: 1, Username: ns("sveta"), Email: ns("sveta@example.com")},
+			{ID: 2, Username: ns("oleg"), Email: ns("oleg@example.com")},
+		},
+		admins:    []User{{Username: ns("God"), Name: ns("Admin"), Email: ns("god@example.com")}},
+		topics:    []Topic{{ID: 1, Text: ns("News")}, {ID: 2, Text: ns("Hotels")}},
+		storyCats: []Category{{ID: 1, Title: ns("Travel")}},
+		pageCats:  []Category{{ID: 1, Title: ns("Info")}},
+		stories: []Story{
+			{ID: 1, Title: ns("One"), BodyText: ns(`<img src="photo.png">`)},
+			{ID: 2, Title: ns("Two"), BodyText: ns("<p>two</p>")},
+			{ID: 3, Title: ns("Three"), BodyText: ns("<p>three</p>")},
+		},
+		staticPages: []StaticPage{{ID: 1, Title: ns("About"), Text: ns("<p>about</p>"), Active: ni(1)}},
+		encEntries:  []EncyclopediaEntry{{ID: 1, Title: ns("Phrasebook"), Active: ni(1)}},
+		encTerms:    map[int64][]EncyclopediaTerm{1: {{ID: 1, EntryID: ni(1), Title: ns("Hi")}}},
+	}
+
+	tracker := &mockTracker{}
+	if _, err := NewSource().importWithReader(context.Background(), db, reader,
+		map[string]string{"files_path": root}, fullOptions(), tracker); err != nil {
+		t.Fatalf("importWithReader() error = %v", err)
+	}
+
+	// Last sample wins: the tracker keeps every one, but the job view only ever
+	// shows the most recent for a phase.
+	final := make(map[types.EntityType]types.Progress)
+	samples := make(map[types.EntityType]int)
+	for _, p := range tracker.progress {
+		final[p.Phase] = p
+		samples[p.Phase]++
+	}
+	if len(final) == 0 {
+		t.Fatal("no progress was reported at all")
+	}
+
+	for _, phase := range []types.EntityType{
+		types.EntityUser, types.EntityCategory, types.EntityTag,
+		types.EntityMedia, types.EntityPost, types.EntityPage,
+	} {
+		last, ok := final[phase]
+		if !ok {
+			t.Errorf("phase %q published no progress", phase)
+			continue
+		}
+		if last.Total == 0 {
+			t.Errorf("phase %q announced a total of 0; this test proves nothing for it", phase)
+			continue
+		}
+		if last.Processed != last.Total {
+			t.Errorf("phase %q finished at %d / %d; the job view would show it "+
+				"permanently short of done", phase, last.Processed, last.Total)
+		}
+		if samples[phase] < 2 {
+			t.Errorf("phase %q published %d sample(s); a phase that reports only its "+
+				"total leaves the progress bar pinned at zero", phase, samples[phase])
+		}
+	}
+}
+
+// TestEmptySelectedTablesAreNotAnOperatorError covers a Codex review finding.
+// The media stage asked whether any content had been *read*, which conflated
+// "you did not select the content media is discovered from" with "the tables
+// you selected are empty" — reporting the second, a perfectly valid import of a
+// site with no stories yet, as an error that finished the job as Partial.
+func TestEmptySelectedTablesAreNotAnOperatorError(t *testing.T) {
+	db, _ := setupImportDB(t)
+	root := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, root)
+	t.Setenv("OCMS_UPLOADS_DIR", t.TempDir())
+
+	reader := &fakeReader{encTerms: map[int64][]EncyclopediaTerm{}}
+	result, err := NewSource().importWithReader(context.Background(), db, reader,
+		map[string]string{"files_path": root},
+		types.ImportOptions{ImportPosts: true, ImportPages: true, ImportMedia: true},
+		&mockTracker{})
+	if err != nil {
+		t.Fatalf("importWithReader() error = %v", err)
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("an empty but correctly configured import reported errors: %v", result.Errors)
+	}
+	if result.MediaImported != 0 {
+		t.Errorf("MediaImported = %d, want 0", result.MediaImported)
+	}
+}
+
+// TestMediaWithoutContentOptionsIsStillAnError keeps the other half of that
+// check alive: selecting media without posts or pages really is a mistake,
+// because media is only ever discovered from imported bodies.
+func TestMediaWithoutContentOptionsIsStillAnError(t *testing.T) {
+	db, _ := setupImportDB(t)
+	root := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, root)
+
+	reader := &fakeReader{encTerms: map[int64][]EncyclopediaTerm{}}
+	result, err := NewSource().importWithReader(context.Background(), db, reader,
+		map[string]string{"files_path": root},
+		types.ImportOptions{ImportMedia: true}, &mockTracker{})
+	if err != nil {
+		t.Fatalf("importWithReader() error = %v", err)
+	}
+	if len(result.Errors) == 0 {
+		t.Error("selecting media with neither posts nor pages passed without comment")
+	}
+}
+
+// TestPublishingAdminReadFailuresAreClassified covers a Codex review finding.
+//
+// The reader used to decide for itself whether an unreadable `authors` table
+// was absent, by probing it — and a probe that fails for a missing SELECT grant
+// or a canceled context is indistinguishable from one that fails because the
+// table is gone. Only ER_NO_SUCH_TABLE is routine; everything else has to
+// surface, or the import silently attributes an administrator's whole archive
+// to the fallback account.
+func TestPublishingAdminReadFailuresAreClassified(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		err       error
+		wantError bool
+	}{
+		{
+			name: "absent table is a notice",
+			err:  &mysql.MySQLError{Number: mysqlErrNoSuchTable, Message: "Table 'tr_authors' doesn't exist"},
+		},
+		{
+			name:      "permission denied is an error",
+			err:       &mysql.MySQLError{Number: 1142, Message: "SELECT command denied"},
+			wantError: true,
+		},
+		{
+			name:      "transport failure is an error",
+			err:       errors.New("invalid connection"),
+			wantError: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			queries, _ := setupDB(t)
+			result := &types.ImportResult{}
+			reader := &fakeReader{
+				authors: []User{{ID: 1, Username: ns("sveta"), Email: ns("sveta@example.com")}},
+				errs:    map[string]error{"GetPublishingAdmins": tc.err},
+			}
+
+			if err := NewSource().importUsers(context.Background(), queries, reader,
+				map[string]int64{}, types.ImportOptions{}, result, &mockTracker{}); err != nil {
+				t.Fatalf("importUsers() error = %v", err)
+			}
+
+			if got := len(result.Errors) > 0; got != tc.wantError {
+				t.Errorf("reported error = %v, want %v (errors %v, notices %v)",
+					got, tc.wantError, result.Errors, result.Notices)
+			}
+			if !tc.wantError && len(result.Notices) == 0 {
+				t.Error("an absent authors table passed with no notice at all")
+			}
+			// Either way the registered half must still import: losing bylines
+			// must not cost the accounts that were readable.
+			if result.UsersImported != 1 {
+				t.Errorf("UsersImported = %d, want 1", result.UsersImported)
+			}
+		})
+	}
+}
+
+// TestCollidingTopicLabelsStayDistinct is the stage-level companion to
+// TestResolveTaxonomySlugRecoversItsOwnSuffixedRow: two topics whose labels
+// slugify identically must become two categories, and a re-run must recover
+// both rather than allocate a third.
+func TestCollidingTopicLabelsStayDistinct(t *testing.T) {
+	queries, _ := setupDB(t)
+	ctx := context.Background()
+	lang := defaultLang(t, queries)
+	reader := &fakeReader{topics: []Topic{
+		{ID: 1, Text: ns("Hello World")},
+		{ID: 2, Text: ns("Hello, World!")},
+	}}
+	opts := types.ImportOptions{ImportCategories: true}
+
+	first := &types.ImportResult{}
+	topicMap := map[int64]int64{}
+	if err := NewSource().importCategories(ctx, queries, reader, lang, topicMap,
+		map[int64]int64{}, opts, first, &mockTracker{}); err != nil {
+		t.Fatalf("importCategories() error = %v", err)
+	}
+	if first.CategoriesImported != 2 {
+		t.Fatalf("imported %d of 2 topics; distinct terms were merged (skipped %d)",
+			first.CategoriesImported, first.CategoriesSkipped)
+	}
+	if topicMap[1] == topicMap[2] {
+		t.Fatalf("both topics map to category %d, so every post from the second "+
+			"would be refiled under the first", topicMap[1])
+	}
+
+	second := &types.ImportResult{}
+	rerunMap := map[int64]int64{}
+	if err := NewSource().importCategories(ctx, queries, reader, lang, rerunMap,
+		map[int64]int64{}, opts, second, &mockTracker{}); err != nil {
+		t.Fatalf("importCategories() error = %v", err)
+	}
+	if second.CategoriesImported != 0 {
+		t.Errorf("re-run created %d more categories; the suffixed row was not recovered",
+			second.CategoriesImported)
+	}
+	for id := range topicMap {
+		if rerunMap[id] != topicMap[id] {
+			t.Errorf("topic %d mapped to category %d on the first run and %d on the second",
+				id, topicMap[id], rerunMap[id])
 		}
 	}
 }

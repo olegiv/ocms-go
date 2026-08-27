@@ -371,10 +371,20 @@ func normalizeAssetPath(raw string) (string, bool) {
 	if value == "" {
 		return "", false
 	}
-	// Off-site, protocol-relative, script-generated, and in-page references are
-	// not files this importer can resolve beneath the source root.
-	if strings.HasPrefix(value, "//") || strings.ContainsAny(value, "?#") {
+	// Off-site and protocol-relative references are not files this importer can
+	// resolve beneath the source root.
+	if strings.HasPrefix(value, "//") {
 		return "", false
+	}
+	// A query string or fragment is URL syntax, not part of a filename. Legacy
+	// bodies routinely cache-bust with src="photo.jpg?v=2", and rejecting those
+	// outright left the file unimported and its link dangling at the dead site.
+	// Cutting rather than rejecting still turns away script-generated references
+	// such as "modules.php?name=News": what remains has no importable MIME type.
+	// The cut happens before percent-decoding, so a literal "?" in a filename —
+	// which a URL must spell "%3F" — survives it.
+	if cut := strings.IndexAny(value, "?#"); cut >= 0 {
+		value = value[:cut]
 	}
 	// A colon before the first slash is a URL scheme ("http:", "data:",
 	// "mailto:"), not a directory name.
