@@ -64,6 +64,7 @@ Source-build prerequisites — see [Prerequisites](#prerequisites) below.
 - **[ocms.tech](https://ocms.tech)** — ocms-go official site
 - **[it-digest.info](https://it-digest.info)** — IT/dev news aggregation
 - **[opossum.su](https://opossum.su)** — feature testbed
+- **[tunisie.ru](https://tunisie.ru)** — Tunisia travel portal, migrated from PHP-Nuke
 - **[ocms-demo.fly.dev](https://ocms-demo.fly.dev/)** — public demo, deployed on Fly.io with daily auto-reset
 
 Running `ocms-go` in production? [Tell us about it.](https://github.com/olegiv/ocms-go/issues)
