@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
 func TestRedirectHandlerSkipsOnlyAdminAndAPISegments(t *testing.T) {
@@ -366,5 +367,46 @@ func TestBuildTargetURL(t *testing.T) {
 					rd, tt.captures, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestWildcardMatcherAgreesWithMigratorCopy is a drift guard.
+//
+// modules/migrator/sources/shared.WildcardRedirectMatchesPath reimplements this
+// middleware's wildcard semantics so the importer can refuse a slug that a
+// redirect already answers. They are two independent copies of one rule: if
+// this matcher changes and that one does not, the importer hands out slugs the
+// middleware then shadows, and the imported pages are unreachable with every
+// test in the repo still green.
+func TestWildcardMatcherAgreesWithMigratorCopy(t *testing.T) {
+	rm := &RedirectsMiddleware{}
+	patterns := []string{
+		"/blog/*", "/blog/**", "/news*", "/news/*", "/a/**/z", "/a/*/z",
+		"/**", "/*", "/exact", "/deep/**/nested/*", "/trailing/**",
+	}
+	paths := []string{
+		"/blog", "/blog/", "/blog/x", "/blog/x/y", "/blog/x/y/z",
+		"/news", "/news/", "/newsletter", "/archive/news",
+		"/a/z", "/a/b/z", "/a/b/c/z", "/a/b/c",
+		"/exact", "/other", "/", "/deep/nested/x", "/deep/1/2/nested/x",
+		"/trailing", "/trailing/x/y",
+	}
+
+	mismatches := 0
+	for _, pattern := range patterns {
+		for _, path := range paths {
+			mine, _ := rm.matchPathWithCaptures(path, pattern, true)
+			theirs := shared.WildcardRedirectMatchesPath(pattern, path)
+			if mine != theirs {
+				mismatches++
+				if mismatches <= 10 {
+					t.Errorf("pattern %q path %q: middleware=%v migrator=%v",
+						pattern, path, mine, theirs)
+				}
+			}
+		}
+	}
+	if mismatches > 10 {
+		t.Errorf("%d total mismatches (first 10 shown)", mismatches)
 	}
 }
