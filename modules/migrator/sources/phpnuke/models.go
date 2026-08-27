@@ -142,11 +142,16 @@ func (u *User) Address() string { return shared.NullString(u.Email) }
 
 // DisplayName returns the best available human-readable name, falling back to
 // the username when the profile name is blank.
+//
+// Trimmed before the comparison, for the same reason Topic.Label is: a
+// whitespace-only name is not a name. Treating it as one writes padding into
+// users.name, and every theme rendering .Author.Name then shows an imported
+// story with a blank byline while a perfectly good username sits unused.
 func (u *User) DisplayName() string {
-	if name := shared.NullString(u.Name); name != "" {
+	if name := strings.TrimSpace(shared.NullString(u.Name)); name != "" {
 		return name
 	}
-	return u.Login()
+	return strings.TrimSpace(u.Login())
 }
 
 // storyTimestamp returns the story's publication time, or now when the source

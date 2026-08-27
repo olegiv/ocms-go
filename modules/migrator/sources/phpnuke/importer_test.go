@@ -17,6 +17,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1018,7 +1019,7 @@ func TestReadContentHonorsOptions(t *testing.T) {
 	source := NewSource()
 	ctx := context.Background()
 
-	postsOnly, err := source.readContent(ctx, reader, types.ImportOptions{ImportPosts: true})
+	postsOnly, err := source.readContent(ctx, reader, types.ImportOptions{ImportPosts: true}, &types.ImportResult{})
 	if err != nil {
 		t.Fatalf("readContent() error = %v", err)
 	}
@@ -1026,7 +1027,7 @@ func TestReadContentHonorsOptions(t *testing.T) {
 		t.Errorf("posts-only read pulled page content: %+v", postsOnly)
 	}
 
-	pagesOnly, err := source.readContent(ctx, reader, types.ImportOptions{ImportPages: true})
+	pagesOnly, err := source.readContent(ctx, reader, types.ImportOptions{ImportPages: true}, &types.ImportResult{})
 	if err != nil {
 		t.Fatalf("readContent() error = %v", err)
 	}
@@ -2648,5 +2649,177 @@ func TestPlanSkipsStillProbesOnALiveContext(t *testing.T) {
 	skips := NewSource().planSkips(ctx, queries, content, opts, second)
 	if !skips.skipped(types.EntityPost, 1) {
 		t.Error("the existing page was not detected, so SkipExisting would duplicate it")
+	}
+}
+
+// TestTaxonomyOverflowSlugIsReproducible covers a Codex review finding. The
+// last-resort slug used a timestamp, so once a base slug's whole suffix family
+// was occupied the term could never be found again: the next run probed the
+// same hundred candidates, missed, minted a different timestamp and duplicated
+// the term on every import.
+func TestTaxonomyOverflowSlugIsReproducible(t *testing.T) {
+	ctx := context.Background()
+	rows := map[string]taxonomyTerm{"news": {ID: 1, Name: "Other 1", Language: "en"}}
+	for i := 2; i <= maxTaxonomySlugSuffix; i++ {
+		rows["news-"+strconv.Itoa(i)] = taxonomyTerm{
+			ID: int64(i), Name: "Other " + strconv.Itoa(i), Language: "en"}
+	}
+	lookup := func(slug string) (taxonomyTerm, bool, error) {
+		term, ok := rows[slug]
+		return term, ok, nil
+	}
+
+	_, first, err := resolveTaxonomySlug(ctx, "news", "Mine", "en", lookup)
+	if err != nil {
+		t.Fatalf("resolveTaxonomySlug() error = %v", err)
+	}
+	if first == "" {
+		t.Fatal("no overflow slug was allocated")
+	}
+	_, again, err := resolveTaxonomySlug(ctx, "news", "Mine", "en", lookup)
+	if err != nil {
+		t.Fatalf("resolveTaxonomySlug() error = %v", err)
+	}
+	if again != first {
+		t.Errorf("overflow slug was %q then %q; a re-run cannot find its own row",
+			first, again)
+	}
+
+	// With that row now present, a re-run must recover it rather than allocate.
+	rows[first] = taxonomyTerm{ID: 999, Name: "Mine", Language: "en"}
+	id, slug, err := resolveTaxonomySlug(ctx, "news", "Mine", "en", lookup)
+	if err != nil {
+		t.Fatalf("resolveTaxonomySlug() error = %v", err)
+	}
+	if id != 999 || slug != "" {
+		t.Errorf("re-run returned (%d, %q), want the existing row 999", id, slug)
+	}
+
+	// Distinct terms must still land on distinct overflow slugs.
+	_, mine, _ := resolveTaxonomySlug(ctx, "news", "Mine", "en", lookup)
+	_, other, _ := resolveTaxonomySlug(ctx, "news", "Theirs", "en", lookup)
+	_, russian, _ := resolveTaxonomySlug(ctx, "news", "Mine", "ru", lookup)
+	if other == "" || russian == "" || other == russian {
+		t.Errorf("distinct terms shared an overflow slug: %q %q", other, russian)
+	}
+	_ = mine
+}
+
+// TestAbsentOptionalContentTablesDoNotAbortTheImport covers a Codex review
+// finding.
+//
+// Static pages and the encyclopedia were optional PHP-Nuke modules and plenty
+// of installs never enabled either. Failing the read was the worst possible
+// response: users and taxonomy are already committed by then, so a site that
+// simply lacks the table got a half-finished migration out of a configuration
+// TestConnection had reported as good.
+func TestAbsentOptionalContentTablesDoNotAbortTheImport(t *testing.T) {
+	absent := func(table string) error {
+		return &mysql.MySQLError{Number: mysqlErrNoSuchTable,
+			Message: "Table 'tr_" + table + "' doesn't exist"}
+	}
+
+	for _, tc := range []struct {
+		name string
+		errs map[string]error
+	}{
+		{"no pages table", map[string]error{"GetStaticPages": absent("pages")}},
+		{"no encyclopedia table", map[string]error{"GetEncyclopediaEntries": absent("encyclopedia")}},
+		{"no encyclopedia_text table", map[string]error{"GetEncyclopediaTerms": absent("encyclopedia_text")}},
+		{"neither module was ever enabled", map[string]error{
+			"GetStaticPages":         absent("pages"),
+			"GetEncyclopediaEntries": absent("encyclopedia"),
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := setupImportDB(t)
+			reader := &fakeReader{
+				authors:  []User{{ID: 1, Username: ns("a"), Email: ns("a@example.com")}},
+				topics:   []Topic{{ID: 1, Text: ns("News")}},
+				stories:  []Story{{ID: 1, Title: ns("A story"), BodyText: ns("<p>x</p>")}},
+				encTerms: map[int64][]EncyclopediaTerm{},
+				errs:     tc.errs,
+			}
+
+			result, err := NewSource().importWithReader(context.Background(), db, reader,
+				map[string]string{}, types.ImportOptions{
+					ImportUsers: true, ImportCategories: true,
+					ImportPosts: true, ImportPages: true,
+				}, &mockTracker{})
+			if err != nil {
+				t.Fatalf("an absent optional table aborted the import: %v", err)
+			}
+			if result.PostsImported != 1 {
+				t.Errorf("PostsImported = %d, want 1; the content that does exist "+
+					"must still arrive", result.PostsImported)
+			}
+			if len(result.Errors) != 0 {
+				t.Errorf("an absent optional table was reported as an error: %v", result.Errors)
+			}
+			if len(result.Notices) == 0 {
+				t.Error("the absent table was passed over with no notice at all")
+			}
+		})
+	}
+}
+
+// TestUnreadableContentTablesStillAbort is the other half: only absence is
+// survivable. A dropped connection or a missing SELECT grant produces the same
+// empty read as a missing module, so treating every failure as absence would
+// silently migrate a fraction of the site.
+func TestUnreadableContentTablesStillAbort(t *testing.T) {
+	for _, method := range []string{"GetStaticPages", "GetEncyclopediaEntries", "GetEncyclopediaTerms"} {
+		t.Run(method, func(t *testing.T) {
+			db, _ := setupImportDB(t)
+			reader := &fakeReader{
+				topics:   []Topic{{ID: 1, Text: ns("News")}},
+				stories:  []Story{{ID: 1, Title: ns("A story")}},
+				encTerms: map[int64][]EncyclopediaTerm{},
+				errs: map[string]error{method: &mysql.MySQLError{
+					Number: 1142, Message: "SELECT command denied"}},
+			}
+			result, err := NewSource().importWithReader(context.Background(), db, reader,
+				map[string]string{}, types.ImportOptions{
+					ImportCategories: true, ImportPosts: true, ImportPages: true,
+				}, &mockTracker{})
+			if err == nil {
+				t.Error("a permission failure passed as an absent module")
+			}
+			if result == nil {
+				t.Error("the partial result was discarded, losing the record of what was written")
+			}
+		})
+	}
+}
+
+// TestPrepareBodyRewritesOnlyAttributes guards the call site, not just the
+// helper.
+//
+// The first version of this test exercised rewriteAssetRefs directly and passed
+// happily with prepareBody still calling the global string replacement — which
+// is the bug. What has to hold is the property of the body an import actually
+// stores, so this goes through the production path.
+func TestPrepareBodyRewritesOnlyAttributes(t *testing.T) {
+	mediaMap := map[string]string{"images/a.jpg": "/uploads/originals/uuid.jpg"}
+	body := `<p><img src="images/a.jpg"> download images/a.jpg.bak from ` +
+		`<a href="http://old.example/images/a.jpg">the mirror</a></p>`
+
+	altered := 0
+	got := NewSource().prepareBody(body, mediaMap, &altered)
+
+	if !strings.Contains(got, `src="/uploads/originals/uuid.jpg"`) {
+		t.Errorf("the imported image was not rewritten: %s", got)
+	}
+	for _, survivor := range []string{
+		"images/a.jpg.bak",                // prose that merely contains the path
+		"http://old.example/images/a.jpg", // an off-site URL that contains it too
+	} {
+		if !strings.Contains(got, survivor) {
+			t.Errorf("%q was rewritten; only attribute values naming an imported "+
+				"file may change:\n%s", survivor, got)
+		}
+	}
+	if strings.Contains(got, "old.example//uploads") {
+		t.Errorf("an external URL was mangled into a double-slash path: %s", got)
 	}
 }

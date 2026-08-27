@@ -644,3 +644,175 @@ func TestExtractAssetRefsKeepsDotSegmentSpelling(t *testing.T) {
 		})
 	}
 }
+
+// TestRewriteAssetRefsTouchesOnlyTheAttribute covers a Codex review finding.
+//
+// Rewriting used to be a global string replacement, and a file path is an
+// ordinary substring: importing src="images/a.jpg" also rewrote the words
+// "images/a.jpg.bak" in a sentence and mangled the external link
+// http://old.example/images/a.jpg into a broken double-slash URL. Sanitizing
+// does not undo either, and neither shows up in the import summary.
+func TestRewriteAssetRefsTouchesOnlyTheAttribute(t *testing.T) {
+	mediaMap := map[string]string{
+		"images/a.jpg":   "/uploads/originals/uuid.jpg",
+		"./images/b.jpg": "/uploads/originals/other.jpg",
+	}
+
+	for _, tc := range []struct{ name, body, want string }{
+		{
+			"plain text is left alone",
+			`<img src="images/a.jpg"> see images/a.jpg.bak`,
+			`<img src="/uploads/originals/uuid.jpg"> see images/a.jpg.bak`,
+		},
+		{
+			"an external URL containing the path is left alone",
+			`<a href="http://old.example/images/a.jpg">x</a>`,
+			`<a href="http://old.example/images/a.jpg">x</a>`,
+		},
+		{
+			"only the mapped attribute changes",
+			`<img alt="images/a.jpg" src="images/a.jpg" title="images/a.jpg">`,
+			`<img alt="images/a.jpg" src="/uploads/originals/uuid.jpg" title="images/a.jpg">`,
+		},
+		{
+			"the source spelling is the key",
+			`<img src="./images/b.jpg">`,
+			`<img src="/uploads/originals/other.jpg">`,
+		},
+		{
+			"quoting style is preserved",
+			`<img src='images/a.jpg'>`,
+			`<img src='/uploads/originals/uuid.jpg'>`,
+		},
+		{
+			"unquoted values are rewritten in place",
+			`<img src=images/a.jpg width=10>`,
+			`<img src=/uploads/originals/uuid.jpg width=10>`,
+		},
+		{
+			"unmapped references survive untouched",
+			`<img src="images/never-imported.jpg">`,
+			`<img src="images/never-imported.jpg">`,
+		},
+		{
+			"text that merely looks like markup is not touched",
+			`<p>write &lt;img src="images/a.jpg"&gt; to embed it</p>`,
+			`<p>write &lt;img src="images/a.jpg"&gt; to embed it</p>`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := rewriteAssetRefs(tc.body, mediaMap); got != tc.want {
+				t.Errorf("rewriteAssetRefs()\n got  %s\n want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRewriteAssetRefsIsIdentityWithoutAMatch is the invariant underneath the
+// table above: a rewrite that has nothing to substitute must hand the body back
+// byte for byte, because every token it does not edit is copied from the
+// tokenizer's own source bytes.
+func TestRewriteAssetRefsIsIdentityWithoutAMatch(t *testing.T) {
+	bodies := []string{
+		`<p>Plain <b>text</b> with &amp; entities and 5 &lt; 10.</p>`,
+		`<img src="images/a.jpg" alt='single'><br/><hr>`,
+		`<!-- a comment --><p>after</p>`,
+		`<table border=1><tr><td nowrap>cell</td></tr></table>`,
+		`<p>Отель <font color="red">Royal</font> Azur</p>`,
+		`<a href="http://x/images/a.jpg">link</a> images/a.jpg in prose`,
+		`<img src=images/a.jpg>`,
+		`<script>var x = "images/a.jpg";</script>`,
+	}
+	for _, body := range bodies {
+		if got := rewriteAssetRefs(body, nil); got != body {
+			t.Errorf("an empty map altered the body\n got  %s\n want %s", got, body)
+		}
+		unrelated := map[string]string{"nothing/here.png": "/uploads/x.png"}
+		if got := rewriteAssetRefs(body, unrelated); got != body {
+			t.Errorf("a non-matching map altered the body\n got  %s\n want %s", got, body)
+		}
+	}
+}
+
+// TestRewriteAssetRefsRoundTripsWithExtraction ties the two halves together:
+// whatever spelling extraction registers is exactly what rewriting can find.
+// They read the same source text through the same scanner, and this fails if
+// either side starts deriving it differently.
+func TestRewriteAssetRefsRoundTripsWithExtraction(t *testing.T) {
+	for _, body := range []string{
+		`<img src="images/a&#38;b.jpg">`,
+		`<img src="images/a&amp;b.jpg">`,
+		`<img src='./images/photo.jpg'>`,
+		`<img src="images/My%20Photo.jpg">`,
+		`<img src="images/photo.jpg?v=2">`,
+		`<img alt="x" src=images/plain.jpg width=10>`,
+		`<a href="files/doc&#38;more.pdf">doc</a>`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			refs := extractAssetRefs(body)
+			if len(refs) != 1 {
+				t.Fatalf("got %d refs, want 1", len(refs))
+			}
+			mediaMap := map[string]string{refs[0].Raw: "/uploads/originals/uuid.jpg"}
+			got := rewriteAssetRefs(body, mediaMap)
+			if got == body {
+				t.Errorf("extraction registered %q but rewriting found nothing to change in %s",
+					refs[0].Raw, body)
+			}
+			if strings.Contains(got, refs[0].Raw) {
+				t.Errorf("the legacy path survived the rewrite: %s", got)
+			}
+		})
+	}
+}
+
+// TestModelDisplayHelpersTrim covers a Codex review finding, and generalizes an
+// earlier one.
+//
+// Every "best available name" helper picks between two candidates, and a
+// whitespace-only first candidate is not a name. Topic.Label was fixed for this
+// in an earlier round and User.DisplayName was not, which is exactly the sort of
+// half-applied fix a table like this is meant to stop returning.
+func TestModelDisplayHelpersTrim(t *testing.T) {
+	blank := ns("   \t\n ")
+
+	for _, tc := range []struct{ name, got, want string }{
+		{"Topic.Label prefers text", (&Topic{Name: ns("news"), Text: ns("News")}).Label(), "News"},
+		{"Topic.Label trims text", (&Topic{Text: ns("  News  ")}).Label(), "News"},
+		{"Topic.Label falls back past blank text",
+			(&Topic{Name: ns("news"), Text: blank}).Label(), "news"},
+		{"Topic.Label trims the fallback", (&Topic{Name: ns(" news ")}).Label(), "news"},
+		{"User.DisplayName prefers the name",
+			(&User{Username: ns("olegiv"), Name: ns("Oleg")}).DisplayName(), "Oleg"},
+		{"User.DisplayName trims the name",
+			(&User{Name: ns("  Oleg  ")}).DisplayName(), "Oleg"},
+		{"User.DisplayName falls back past a blank name",
+			(&User{Username: ns("olegiv"), Name: blank}).DisplayName(), "olegiv"},
+		{"User.DisplayName trims the fallback",
+			(&User{Username: ns(" olegiv ")}).DisplayName(), "olegiv"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("got %q, want %q", tc.got, tc.want)
+			}
+			if tc.got != strings.TrimSpace(tc.got) {
+				t.Errorf("got %q, which carries padding into the destination row", tc.got)
+			}
+		})
+	}
+
+	// The property the table above samples: no candidate arrangement may yield
+	// a value that is blank-but-not-empty.
+	for _, name := range []sql.NullString{blank, ns(""), {Valid: false}, ns(" x ")} {
+		for _, login := range []sql.NullString{blank, ns(""), {Valid: false}, ns(" y ")} {
+			user := &User{Username: login, Name: name}
+			if got := user.DisplayName(); got != strings.TrimSpace(got) {
+				t.Errorf("DisplayName() = %q for name=%q login=%q", got, name.String, login.String)
+			}
+			topic := &Topic{Name: login, Text: name}
+			if got := topic.Label(); got != strings.TrimSpace(got) {
+				t.Errorf("Label() = %q for text=%q name=%q", got, name.String, login.String)
+			}
+		}
+	}
+}

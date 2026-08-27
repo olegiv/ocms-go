@@ -282,76 +282,178 @@ func attributeForTag(name string) string {
 	}
 }
 
-// rawAttrValues returns the verbatim source text of each value the named
-// attribute carries in a raw start tag, in document order.
+// attrSpan locates one attribute value inside the raw source of a start tag:
+// the text exactly as written, and where it sits so it can be replaced in place.
+type attrSpan struct {
+	Value string
+	Start int // byte offset of the value within the raw tag
+	End   int
+}
+
+// rawAttrSpans finds every value the named attribute carries in a raw start
+// tag, in document order.
 //
-// This exists because the tokenizer cannot answer the question rewriting asks.
-// TagAttr decodes entities, so it reports what a reference *means*, and that is
-// the right answer for locating the file on disk. Substituting a new URL for an
-// old one is a different question — it needs what the body *says* — and there
-// the decoded value is a dead end, because several spellings decode to it and
-// none can be recovered from the result.
+// This exists because the tokenizer cannot answer the questions the importer
+// asks of an attribute. TagAttr decodes entities, so it reports what a
+// reference *means*, which is the right answer for locating a file on disk.
+// Rewriting is a different question — it needs what the body *says*, and where
+// — and there the decoded value is a dead end, because several spellings decode
+// to it and none can be recovered from the result.
 //
 // The scan is deliberately more permissive than the HTML grammar: unquoted and
 // single-quoted values are accepted, and a valueless attribute is stepped over.
-// Anything it cannot follow simply yields fewer values than the tokenizer found
-// attributes, which the caller detects by position and handles.
-func rawAttrValues(rawTag []byte, attrName string) []string {
-	tag := strings.TrimPrefix(string(rawTag), "<")
-	tag = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSpace(tag), ">"), "/")
+// Anything it cannot follow simply yields fewer spans than the tokenizer found
+// attributes, which callers detect by position and handle.
+func rawAttrSpans(rawTag []byte, attrName string) []attrSpan {
+	tag := string(rawTag)
 
-	index := 0
-	for index < len(tag) && !isHTMLSpace(tag[index]) {
+	begin := 0
+	if strings.HasPrefix(tag, "<") {
+		begin = 1
+	}
+	end := len(tag)
+	for end > begin && isHTMLSpace(tag[end-1]) {
+		end--
+	}
+	if end > begin && tag[end-1] == '>' {
+		end--
+	}
+	if end > begin && tag[end-1] == '/' {
+		end--
+	}
+
+	index := begin
+	for index < end && !isHTMLSpace(tag[index]) {
 		index++ // the tag name, which is not an attribute
 	}
 
-	var values []string
-	for index < len(tag) {
-		for index < len(tag) && isHTMLSpace(tag[index]) {
+	var spans []attrSpan
+	for index < end {
+		for index < end && isHTMLSpace(tag[index]) {
 			index++
 		}
-		start := index
-		for index < len(tag) && !isHTMLSpace(tag[index]) && tag[index] != '=' {
+		nameStart := index
+		for index < end && !isHTMLSpace(tag[index]) && tag[index] != '=' {
 			index++
 		}
-		name := strings.ToLower(tag[start:index])
-		for index < len(tag) && isHTMLSpace(tag[index]) {
+		name := strings.ToLower(tag[nameStart:index])
+		for index < end && isHTMLSpace(tag[index]) {
 			index++
 		}
-		if index >= len(tag) || tag[index] != '=' {
+		if index >= end || tag[index] != '=' {
 			continue // valueless attribute; the name loop already advanced
 		}
 		index++
-		for index < len(tag) && isHTMLSpace(tag[index]) {
+		for index < end && isHTMLSpace(tag[index]) {
 			index++
 		}
-		if index >= len(tag) {
+		if index >= end {
 			break
 		}
-		var value string
+		var valueStart, valueEnd int
 		switch quote := tag[index]; quote {
 		case '"', '\'':
 			index++
-			start = index
-			for index < len(tag) && tag[index] != quote {
+			valueStart = index
+			for index < end && tag[index] != quote {
 				index++
 			}
-			value = tag[start:index]
-			if index < len(tag) {
+			valueEnd = index
+			if index < end {
 				index++
 			}
 		default:
-			start = index
-			for index < len(tag) && !isHTMLSpace(tag[index]) {
+			valueStart = index
+			for index < end && !isHTMLSpace(tag[index]) {
 				index++
 			}
-			value = tag[start:index]
+			valueEnd = index
 		}
 		if name == attrName {
-			values = append(values, value)
+			spans = append(spans, attrSpan{Value: tag[valueStart:valueEnd], Start: valueStart, End: valueEnd})
 		}
 	}
+	return spans
+}
+
+// rawAttrValues returns just the source text of each value, for callers that do
+// not need to write back.
+func rawAttrValues(rawTag []byte, attrName string) []string {
+	spans := rawAttrSpans(rawTag, attrName)
+	values := make([]string, 0, len(spans))
+	for _, span := range spans {
+		values = append(values, span.Value)
+	}
 	return values
+}
+
+// rewriteAssetRefs substitutes imported media URLs into the attributes they
+// came from, and touches nothing else.
+//
+// The obvious implementation — replace every occurrence of the old path with
+// the new URL — corrupts the document. A path is an ordinary substring, so
+// importing src="images/a.jpg" also rewrote the words "images/a.jpg.bak" in a
+// sentence, and turned the external link http://old.example/images/a.jpg into
+// http://old.example//uploads/originals/<uuid>.jpg. Sanitizing afterwards does
+// not undo either, and neither is visible in the import summary.
+//
+// Rebuilding from the tokenizer's own Raw() bytes is what makes this safe:
+// every token that is not a rewritten attribute is copied through byte for
+// byte, so the only edits are the ones asked for.
+func rewriteAssetRefs(fragment string, mediaMap map[string]string) string {
+	if len(mediaMap) == 0 {
+		return fragment
+	}
+	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
+	var out strings.Builder
+	out.Grow(len(fragment))
+	for {
+		tokenType := tokenizer.Next()
+		if tokenType == html.ErrorToken {
+			return out.String()
+		}
+		// Copied before TagName runs: it is documented to invalidate Raw.
+		rawTag := append([]byte(nil), tokenizer.Raw()...)
+		if tokenType != html.StartTagToken && tokenType != html.SelfClosingTagToken {
+			out.Write(rawTag)
+			continue
+		}
+		name, hasAttr := tokenizer.TagName()
+		attrName := attributeForTag(string(name))
+		if attrName == "" || !hasAttr {
+			out.Write(rawTag)
+			continue
+		}
+		out.WriteString(rewriteTagAttrs(rawTag, attrName, mediaMap))
+	}
+}
+
+// rewriteTagAttrs replaces the mapped values of one attribute within a single
+// raw start tag, leaving the rest of the tag untouched.
+func rewriteTagAttrs(rawTag []byte, attrName string, mediaMap map[string]string) string {
+	tag := string(rawTag)
+	spans := rawAttrSpans(rawTag, attrName)
+	var out strings.Builder
+	cursor := 0
+	for _, span := range spans {
+		replacement, mapped := mediaMap[span.Value]
+		if !mapped {
+			continue
+		}
+		if cursor == 0 {
+			out.Grow(len(tag))
+		}
+		out.WriteString(tag[cursor:span.Start])
+		// The value is being written back into an attribute, so it is escaped
+		// as one even though an uploads URL has nothing to escape today.
+		out.WriteString(html.EscapeString(replacement))
+		cursor = span.End
+	}
+	if cursor == 0 {
+		return tag
+	}
+	out.WriteString(tag[cursor:])
+	return out.String()
 }
 
 // isHTMLSpace reports whether a byte separates tokens inside a tag.

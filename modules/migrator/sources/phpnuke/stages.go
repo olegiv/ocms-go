@@ -694,7 +694,12 @@ func resolveTaxonomySlug(ctx context.Context, base, name, langCode string,
 	for i := 2; i <= maxTaxonomySlugSuffix; i++ {
 		candidates = append(candidates, base+"-"+strconv.Itoa(i))
 	}
-	candidates = append(candidates, base+"-"+strconv.FormatInt(time.Now().UnixNano(), 36))
+	// Derived from the term, not from the clock. A timestamped overflow slug
+	// cannot be found again: the next run probes the same hundred candidates,
+	// misses, mints a different timestamp and duplicates the term. Hashing the
+	// identity the matches() test already uses makes the overflow slug the same
+	// on every run, so the walk recovers the row it created last time.
+	candidates = append(candidates, base+"-"+taxonomyOverflowSuffix(name, langCode))
 
 	for _, candidate := range candidates {
 		id, free, err := probe(candidate)
@@ -708,6 +713,14 @@ func resolveTaxonomySlug(ctx context.Context, base, name, langCode string,
 		}
 	}
 	return 0, "", fmt.Errorf("no free slug after %d attempts", maxTaxonomySlugSuffix)
+}
+
+// taxonomyOverflowSuffix is the stable last resort when a base slug's whole
+// suffix family is occupied, hashing exactly what taxonomyTerm.matches compares
+// so the suffix and the reuse test agree on what "the same term" means.
+func taxonomyOverflowSuffix(name, langCode string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(name)) + "\x00" + langCode))
+	return hex.EncodeToString(sum[:4])
 }
 
 // categoryTermLookup and tagTermLookup adapt the two taxonomy tables to the
@@ -1274,9 +1287,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 // OCMS_SANITIZE_PAGE_HTML, so an install running with it off would store
 // PHP-Nuke's decade of hand-written markup verbatim.
 func (s *Source) prepareBody(body string, mediaMap map[string]string, altered *int) string {
-	if mediaMap != nil {
-		body = shared.ReplaceURLs(body, mediaMap)
-	}
+	body = rewriteAssetRefs(body, mediaMap)
 	clean := security.SanitizePageHTML(body)
 	// A decade of hand-written markup meets a modern UGC policy, so <font>,
 	// inline styles and presentational table attributes are dropped from a lot

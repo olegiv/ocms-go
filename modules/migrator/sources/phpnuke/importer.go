@@ -299,7 +299,7 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 		}
 	}
 
-	content, err := s.readContent(ctx, reader, opts)
+	content, err := s.readContent(ctx, reader, opts, result)
 	if err != nil {
 		// Users, categories and tags have already written rows by this point.
 		// Returning a nil result would discard every error and notice they
@@ -376,10 +376,13 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 // Reading happens up front, before any write, because media discovery works
 // from the bodies: only files a body actually references are imported, rather
 // than every image in the PHP-Nuke document root.
-func (s *Source) readContent(ctx context.Context, reader sourceReader, opts types.ImportOptions) (*importContent, error) {
+func (s *Source) readContent(ctx context.Context, reader sourceReader, opts types.ImportOptions,
+	result *types.ImportResult) (*importContent, error) {
 	content := &importContent{encTerms: make(map[int64][]EncyclopediaTerm)}
 
 	if opts.ImportPosts {
+		// `stories` is not optional: it is the table this source exists to read,
+		// and TestConnection probes it so a wrong prefix fails before any write.
 		stories, err := reader.GetStories(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read stories: %w", err)
@@ -387,25 +390,52 @@ func (s *Source) readContent(ctx context.Context, reader sourceReader, opts type
 		content.stories = stories
 	}
 	if opts.ImportPages {
+		// The static pages and encyclopedia modules were both optional add-ons,
+		// and plenty of installs never enabled either. Aborting here was the
+		// worst possible response: users and taxonomy are already committed by
+		// this point, so a site that simply lacks the table got a half-finished
+		// migration out of a configuration TestConnection had called good.
 		pages, err := reader.GetStaticPages(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read pages: %w", err)
+			if !optionalTableMissing(err) {
+				return nil, fmt.Errorf("failed to read pages: %w", err)
+			}
+			result.AddNotice("Static pages were not imported: the %spages table does not "+
+				"exist; this site never enabled the static pages module.", reader.Prefix())
+			pages = nil
 		}
 		content.staticPages = pages
 
-		entries, err := reader.GetEncyclopediaEntries(ctx)
+		entries, terms, err := readEncyclopedia(ctx, reader)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read encyclopedia: %w", err)
+			if !optionalTableMissing(err) {
+				return nil, err
+			}
+			result.AddNotice("The encyclopedia was not imported: the %sencyclopedia tables "+
+				"do not exist; this site never enabled the encyclopedia module.", reader.Prefix())
+			entries, terms = nil, nil
 		}
 		content.encEntries = entries
-
-		terms, err := reader.GetEncyclopediaTerms(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read encyclopedia terms: %w", err)
+		if terms != nil {
+			content.encTerms = terms
 		}
-		content.encTerms = terms
 	}
 	return content, nil
+}
+
+// readEncyclopedia reads both halves of the encyclopedia together, so a missing
+// module is one decision for the caller rather than two.
+func readEncyclopedia(ctx context.Context, reader sourceReader) ([]EncyclopediaEntry,
+	map[int64][]EncyclopediaTerm, error) {
+	entries, err := reader.GetEncyclopediaEntries(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read encyclopedia: %w", err)
+	}
+	terms, err := reader.GetEncyclopediaTerms(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read encyclopedia terms: %w", err)
+	}
+	return entries, terms, nil
 }
 
 // bodies returns every HTML body this import will write, for media discovery.
