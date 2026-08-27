@@ -477,22 +477,42 @@ func (s *Source) planSkips(ctx context.Context, queries *store.Queries, content 
 		return nil
 	}
 	skips := &plannedSkips{byEntity: make(map[types.EntityType]map[int64]bool)}
+
+	// Collected first so the probing runs in one loop with one cancellation
+	// check. Without it a canceled job kept probing to the end of the archive,
+	// and because pageExists fails closed it recorded a "failed to check"
+	// error for every remaining row — handing the operator a cancellation
+	// dressed up as a hundred import failures.
+	type candidate struct {
+		entity   types.EntityType
+		id       int64
+		title    string
+		fallback string
+	}
+	candidates := make([]candidate, 0,
+		len(content.stories)+len(content.staticPages)+len(content.encEntries))
 	for i := range content.stories {
 		title, fallback := storyIdentity(&content.stories[i])
-		if s.pageExists(ctx, queries, baseSlug(title, fallback), title, result) {
-			skips.mark(types.EntityPost, content.stories[i].ID)
-		}
+		candidates = append(candidates,
+			candidate{types.EntityPost, content.stories[i].ID, title, fallback})
 	}
 	for i := range content.staticPages {
 		title, fallback := staticPageIdentity(&content.staticPages[i])
-		if s.pageExists(ctx, queries, baseSlug(title, fallback), title, result) {
-			skips.mark(entityStaticPage, content.staticPages[i].ID)
-		}
+		candidates = append(candidates,
+			candidate{entityStaticPage, content.staticPages[i].ID, title, fallback})
 	}
 	for i := range content.encEntries {
 		title, fallback := encyclopediaIdentity(&content.encEntries[i])
-		if s.pageExists(ctx, queries, baseSlug(title, fallback), title, result) {
-			skips.mark(entityEncyclopedia, content.encEntries[i].ID)
+		candidates = append(candidates,
+			candidate{entityEncyclopedia, content.encEntries[i].ID, title, fallback})
+	}
+
+	for _, c := range candidates {
+		if ctx.Err() != nil {
+			return skips
+		}
+		if s.pageExists(ctx, queries, baseSlug(c.title, c.fallback), c.title, result) {
+			skips.mark(c.entity, c.id)
 		}
 	}
 	return skips

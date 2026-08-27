@@ -293,7 +293,19 @@ func TestNormalizeAssetPath(t *testing.T) {
 		{"data:image/png;base64,AAAA", "", false},
 		{"a/../b.jpg", "", false},
 		{"a//b.jpg", "", false},
-		{"./a.jpg", "", false},
+		// A "." segment cannot leave the root, and legacy markup spells
+		// ordinary relative references this way constantly. Rejecting them left
+		// those images unimported with their links pointing at the dead site.
+		{"./a.jpg", "a.jpg", true},
+		{"./images/a.jpg", "images/a.jpg", true},
+		{"images/./a.jpg", "images/a.jpg", true},
+		{"././a.jpg", "a.jpg", true},
+		{".", "", false},
+		{"./", "", false},
+		// ".." still goes, however it is spelled.
+		{"./../a.jpg", "", false},
+		{"%2e%2e/a.jpg", "", false},
+		{"images/%2e%2e%2f%2e%2e%2fetc/passwd.jpg", "", false},
 		// A query or fragment is URL syntax, not part of the filename. These
 		// used to be rejected outright, which left cache-busted images
 		// unimported and their links dangling at the dead site.
@@ -600,5 +612,35 @@ func TestTopicLabelIgnoresWhitespaceOnlyText(t *testing.T) {
 		if got := topic.Label(); got != tc.want {
 			t.Errorf("Label() with name=%q text=%q = %q, want %q", tc.name, tc.text, got, tc.want)
 		}
+	}
+}
+
+// TestExtractAssetRefsKeepsDotSegmentSpelling is the rewriting half of the
+// dot-segment fix. Path has to be the normalized filename so the file opens,
+// while Raw has to stay exactly as the body spells it or the substitution finds
+// nothing and the legacy URL survives the migration.
+func TestExtractAssetRefsKeepsDotSegmentSpelling(t *testing.T) {
+	for _, tc := range []struct{ body, wantRaw, wantPath string }{
+		{`<img src="./images/photo.jpg">`, "./images/photo.jpg", "images/photo.jpg"},
+		{`<img src="images/./photo.jpg">`, "images/./photo.jpg", "images/photo.jpg"},
+		{`<img src="./photo.jpg">`, "./photo.jpg", "photo.jpg"},
+	} {
+		t.Run(tc.wantRaw, func(t *testing.T) {
+			refs := extractAssetRefs(tc.body)
+			if len(refs) != 1 {
+				t.Fatalf("got %d refs from %s, want 1", len(refs), tc.body)
+			}
+			if refs[0].Raw != tc.wantRaw {
+				t.Errorf("Raw = %q, want %q; rewriting searches the body for this",
+					refs[0].Raw, tc.wantRaw)
+			}
+			if refs[0].Path != tc.wantPath {
+				t.Errorf("Path = %q, want %q; the file is opened at this",
+					refs[0].Path, tc.wantPath)
+			}
+			if !strings.Contains(tc.body, refs[0].Raw) {
+				t.Errorf("Raw %q does not occur in the body", refs[0].Raw)
+			}
+		})
 	}
 }

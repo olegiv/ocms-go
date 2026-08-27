@@ -34,6 +34,10 @@ const (
 	// maxTaxonomySlugSuffix bounds the probe for a free taxonomy slug.
 	maxTaxonomySlugSuffix = 100
 
+	// maxInertEmailSlugLen keeps the readable half of a substitute address
+	// short enough that the whole local part stays inside RFC 5321's 64 octets.
+	maxInertEmailSlugLen = 40
+
 	// mysqlErrNoSuchTable is MySQL's ER_NO_SUCH_TABLE, the one read failure
 	// that is genuinely routine against an old PHP-Nuke install.
 	mysqlErrNoSuchTable = 1146
@@ -291,13 +295,25 @@ func (s *Source) creditedAuthors(ctx context.Context, reader sourceReader,
 // The domain is suffixed with ".invalid", which RFC 2606 reserves precisely so
 // that it can never resolve, and the local part is derived from the source
 // username so a re-run finds this account again instead of creating another.
+//
+// Every address carries a hash of the username, not only the ones whose slug
+// comes out empty. Slugify is lossy — "john.doe" and "john_doe" both give
+// "johndoe" — so building the local part from the slug alone let two
+// administrators land on one substitute address and collapse back into the
+// single shared account this function exists to prevent. The slug stays in
+// front of the hash only so the address remains readable.
 func distinctInertEmail(username, sourceEmail string) string {
-	local := util.Slugify(username)
-	if local == "" {
-		// A username that transliterates to nothing still needs a stable,
-		// collision-free local part.
-		sum := sha256.Sum256([]byte(authorKey(username)))
-		local = "author-" + hex.EncodeToString(sum[:8])
+	sum := sha256.Sum256([]byte(authorKey(username)))
+	local := hex.EncodeToString(sum[:4])
+	if slug := util.Slugify(username); slug != "" {
+		// Bounded so the local part cannot outgrow the 64 octets RFC 5321
+		// allows, however long the source username is.
+		if len(slug) > maxInertEmailSlugLen {
+			slug = strings.Trim(slug[:maxInertEmailSlugLen], "-")
+		}
+		if slug != "" {
+			local = slug + "-" + local
+		}
 	}
 	domain := "phpnuke"
 	if _, host, found := strings.Cut(sourceEmail, "@"); found {

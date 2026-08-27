@@ -2398,38 +2398,75 @@ func TestAdminsSharingAnEmailKeepDistinctBylines(t *testing.T) {
 }
 
 // TestDistinctInertEmailIsStableAndUndeliverable pins the properties the fix
-// above rests on. Determinism is what makes a re-run idempotent, and the
-// reserved .invalid domain (RFC 2606) is what guarantees the substitute address
-// can never reach a real mailbox.
+// above rests on. Determinism is what makes a re-run idempotent, distinctness
+// is the whole point, and the reserved .invalid domain (RFC 2606) is what
+// guarantees the substitute address can never reach a real mailbox.
 func TestDistinctInertEmailIsStableAndUndeliverable(t *testing.T) {
-	for _, tc := range []struct {
-		name, username, email, want string
-	}{
-		{"ordinary", "Sveta", "webmaster@site.ru", "sveta@site.ru.invalid"},
-		{"case folds", "SVETA", "webmaster@SITE.RU", "sveta@site.ru.invalid"},
-		{"no domain to borrow", "Sveta", "not-an-address", "sveta@phpnuke.invalid"},
-		// The illegal characters go, and so does the empty label they leave
-		// behind: "evil..site" would not name a host.
-		{"hostile domain", "Sveta", "x@ev'il/../site", "sveta@evil.site.invalid"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := distinctInertEmail(tc.username, tc.email); got != tc.want {
-				t.Errorf("distinctInertEmail() = %q, want %q", got, tc.want)
-			}
-		})
-	}
+	t.Run("shape", func(t *testing.T) {
+		for _, tc := range []struct{ name, username, email, wantPrefix, wantDomain string }{
+			{"ordinary", "Sveta", "webmaster@site.ru", "sveta-", "@site.ru.invalid"},
+			{"case folds", "SVETA", "webmaster@SITE.RU", "sveta-", "@site.ru.invalid"},
+			{"no domain to borrow", "Sveta", "not-an-address", "sveta-", "@phpnuke.invalid"},
+			// The illegal characters go, and so does the empty label they leave
+			// behind: "evil..site" would not name a host.
+			{"hostile domain", "Sveta", "x@ev'il/../site", "sveta-", "@evil.site.invalid"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				got := distinctInertEmail(tc.username, tc.email)
+				if !strings.HasPrefix(got, tc.wantPrefix) {
+					t.Errorf("distinctInertEmail() = %q, want it to start %q so an "+
+						"operator can still tell whose account it is", got, tc.wantPrefix)
+				}
+				if !strings.HasSuffix(got, tc.wantDomain) {
+					t.Errorf("distinctInertEmail() = %q, want it to end %q", got, tc.wantDomain)
+				}
+				local, _, _ := strings.Cut(got, "@")
+				if len(local) > 64 {
+					t.Errorf("local part is %d octets, over the 64 RFC 5321 allows", len(local))
+				}
+			})
+		}
+	})
 
-	// A username that transliterates to nothing still needs a stable address.
-	cyrillic := distinctInertEmail("Олег", "a@b.ru")
-	if !strings.HasSuffix(cyrillic, ".invalid") || strings.HasPrefix(cyrillic, "@") {
-		t.Errorf("unsluggable username produced %q", cyrillic)
-	}
-	if again := distinctInertEmail("Олег", "a@b.ru"); again != cyrillic {
-		t.Errorf("address is not deterministic: %q then %q", cyrillic, again)
-	}
-	if other := distinctInertEmail("Света", "a@b.ru"); other == cyrillic {
-		t.Error("two unsluggable usernames collapsed onto one address")
-	}
+	// Every address must end up somewhere no mail can follow.
+	t.Run("undeliverable", func(t *testing.T) {
+		for _, username := range []string{"Sveta", "Олег", "", "  ", "x@y"} {
+			if got := distinctInertEmail(username, "a@b.ru"); !strings.HasSuffix(got, ".invalid") {
+				t.Errorf("distinctInertEmail(%q) = %q, which is deliverable", username, got)
+			}
+		}
+	})
+
+	t.Run("deterministic", func(t *testing.T) {
+		for _, username := range []string{"Sveta", "Олег", "john.doe"} {
+			first := distinctInertEmail(username, "a@b.ru")
+			if again := distinctInertEmail(username, "a@b.ru"); again != first {
+				t.Errorf("%q produced %q then %q; a re-run would create a second account",
+					username, first, again)
+			}
+		}
+	})
+
+	// The collision that motivated the second round of this fix. util.Slugify
+	// is lossy, so a local part built from the slug alone maps several distinct
+	// administrators onto one address — collapsing them back into the single
+	// shared account the whole mechanism exists to avoid.
+	t.Run("distinct usernames never collide", func(t *testing.T) {
+		usernames := []string{
+			"john.doe", "john-doe", "john_doe", "John Doe", "JOHN.DOE",
+			"jóhn.doe", "Олег", "Олёг", "olegiv", "oleg.iv", "oleg-iv",
+			strings.Repeat("a", 60) + "-one", strings.Repeat("a", 60) + "-two",
+		}
+		seen := make(map[string]string, len(usernames))
+		for _, username := range usernames {
+			address := distinctInertEmail(username, "webmaster@site.ru")
+			if owner, clash := seen[address]; clash && authorKey(owner) != authorKey(username) {
+				t.Errorf("%q and %q both map to %s, so one loses every byline",
+					owner, username, address)
+			}
+			seen[address] = username
+		}
+	})
 }
 
 // TestSlugGuardChecksTheLanguagePrefixedPath covers a Codex review finding.
@@ -2516,5 +2553,100 @@ func TestImportedPagePathPrefixFollowsTheDefaultLanguage(t *testing.T) {
 		if got := importedPagePathPrefix(ctx, queries, tc.langCode); got != tc.want {
 			t.Errorf("importedPagePathPrefix(%q) = %q, want %q", tc.langCode, got, tc.want)
 		}
+	}
+}
+
+// TestThreeAdminsSharingAnEmailStayDistinct covers a Codex review finding, and
+// is the case the two-administrator test above cannot reach: the first claimant
+// keeps the real address, so a substitute only ever collides with another
+// substitute. util.Slugify is lossy, and "john.doe" and "john_doe" both reduce
+// to "johndoe" — so the fix for the shared address reintroduced the very merge
+// it was written to prevent, one level down.
+func TestThreeAdminsSharingAnEmailStayDistinct(t *testing.T) {
+	queries, _ := setupDB(t)
+	ctx := context.Background()
+	names := []string{"alice", "john.doe", "john_doe"}
+	admins := make([]User, len(names))
+	for i, name := range names {
+		admins[i] = User{Username: ns(name), Name: ns(name), Email: ns("webmaster@site.ru")}
+	}
+	reader := &fakeReader{admins: admins}
+
+	userMap := map[string]int64{}
+	result := &types.ImportResult{}
+	if err := NewSource().importUsers(ctx, queries, reader, userMap,
+		types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		t.Fatalf("importUsers() error = %v", err)
+	}
+
+	seen := make(map[int64]string, len(names))
+	for _, name := range names {
+		id := userMap[authorKey(name)]
+		if id == 0 {
+			t.Fatalf("%q was not mapped to an account at all: %v", name, userMap)
+		}
+		if owner, clash := seen[id]; clash {
+			t.Errorf("%q and %q both map to account %d, so one loses every byline",
+				owner, name, id)
+		}
+		seen[id] = name
+	}
+	if result.UsersImported != len(names) {
+		t.Errorf("imported %d accounts, want %d", result.UsersImported, len(names))
+	}
+}
+
+// TestPlanSkipsStopsOnCanceledContext covers a Codex review finding.
+//
+// pageExists fails closed — an unreadable destination counts as occupied — so
+// a canceled preflight kept probing to the end of the archive and recorded a
+// "failed to check" error for every remaining row. The operator got their own
+// cancellation back as a hundred import failures.
+func TestPlanSkipsStopsOnCanceledContext(t *testing.T) {
+	queries, _ := setupDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	stories := make([]Story, 300)
+	for i := range stories {
+		stories[i] = Story{ID: int64(i + 1), Title: ns(fmt.Sprintf("Story %d", i))}
+	}
+	content := &importContent{stories: stories, encTerms: map[int64][]EncyclopediaTerm{}}
+	result := &types.ImportResult{}
+
+	NewSource().planSkips(ctx, queries, content, types.ImportOptions{SkipExisting: true}, result)
+
+	if len(result.Errors) != 0 {
+		t.Errorf("a canceled preflight recorded %d errors (first: %q); cancellation "+
+			"is not a failure to report", len(result.Errors), result.Errors[0])
+	}
+	if result.ErrorsOmitted != 0 {
+		t.Errorf("%d further errors were omitted, so the probe ran on past cancellation",
+			result.ErrorsOmitted)
+	}
+}
+
+// TestPlanSkipsStillProbesOnALiveContext keeps the guard from turning into a
+// blanket early return.
+func TestPlanSkipsStillProbesOnALiveContext(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	lang := defaultLang(t, queries)
+	stories := []Story{{ID: 1, Title: ns("News"), BodyText: ns("<p>x</p>")}}
+	opts := types.ImportOptions{ImportPosts: true, SkipExisting: true}
+	content := &importContent{stories: stories, encTerms: map[int64][]EncyclopediaTerm{}}
+
+	first := &types.ImportResult{}
+	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
+		map[int64]int64{}, map[int64]int64{}, nil,
+		NewSource().planSkips(ctx, queries, content, opts, first), opts, first, &mockTracker{}, nil)
+	if first.PostsImported != 1 {
+		t.Fatalf("first run imported %d, want 1", first.PostsImported)
+	}
+
+	second := &types.ImportResult{}
+	skips := NewSource().planSkips(ctx, queries, content, opts, second)
+	if !skips.skipped(types.EntityPost, 1) {
+		t.Error("the existing page was not detected, so SkipExisting would duplicate it")
 	}
 }

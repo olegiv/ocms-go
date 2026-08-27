@@ -410,12 +410,27 @@ func normalizeAssetPath(raw string) (string, bool) {
 	}
 	// Reject traversal outright rather than cleaning it: a path that needs
 	// normalizing to stay inside the root is not one this importer should
-	// silently accept.
-	for _, segment := range strings.Split(value, "/") {
-		if segment == "" || segment == "." || segment == ".." {
+	// silently accept. A "." segment is different in kind — "./images/a.jpg" is
+	// how a great deal of legacy markup spells an ordinary relative reference,
+	// it cannot leave the root, and rejecting it left those images unimported
+	// with their links still pointing at the dead site. Drop those and keep
+	// refusing everything else.
+	segments := strings.Split(value, "/")
+	kept := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		switch segment {
+		case "", "..":
 			return "", false
+		case ".":
+			continue
 		}
+		kept = append(kept, segment)
 	}
+	if len(kept) == 0 {
+		return "", false
+	}
+	value = strings.Join(kept, "/")
+
 	mimeType := shared.MimeTypeFromExt(value)
 	if mimeType == "" || !shared.IsAllowedMediaMime(mimeType) {
 		return "", false
