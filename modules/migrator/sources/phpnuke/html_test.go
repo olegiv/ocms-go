@@ -11,6 +11,11 @@ import (
 	"unicode/utf8"
 )
 
+// ns and ni build the nullable values the source models use, so tests read as
+// close to plain literals as Go allows.
+func ns(v string) sql.NullString { return sql.NullString{String: v, Valid: true} }
+func ni(v int64) sql.NullInt64   { return sql.NullInt64{Int64: v, Valid: true} }
+
 func TestAssembleStoryBodyJoinsBothHalves(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -27,7 +32,7 @@ func TestAssembleStoryBodyJoinsBothHalves(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			story := &Story{
 				HomeText: sql.NullString{String: tc.home, Valid: tc.home != ""},
-				BodyText: tc.body,
+				BodyText: ns(tc.body),
 			}
 			if got := assembleStoryBody(story); got != tc.want {
 				t.Errorf("assembleStoryBody() = %q, want %q", got, tc.want)
@@ -42,7 +47,7 @@ func TestAssembleStoryBodyJoinsBothHalves(t *testing.T) {
 func TestAssembleStoryBodyKeepsBodytextWhenHometextIsNull(t *testing.T) {
 	story := &Story{
 		HomeText: sql.NullString{Valid: false},
-		BodyText: "<p>The entire article.</p>",
+		BodyText: ns("<p>The entire article.</p>"),
 	}
 	if got := assembleStoryBody(story); !strings.Contains(got, "The entire article.") {
 		t.Errorf("bodytext was dropped: got %q", got)
@@ -51,10 +56,10 @@ func TestAssembleStoryBodyKeepsBodytextWhenHometextIsNull(t *testing.T) {
 
 func TestAssembleStaticPageBodyOrdersSections(t *testing.T) {
 	page := &StaticPage{
-		Header:    "<h1>Head</h1>",
-		Text:      "<p>Main</p>",
-		Footer:    "<p>Foot</p>",
-		Signature: "<em>Sig</em>",
+		Header:    ns("<h1>Head</h1>"),
+		Text:      ns("<p>Main</p>"),
+		Footer:    ns("<p>Foot</p>"),
+		Signature: ns("<em>Sig</em>"),
 	}
 	got := assembleStaticPageBody(page)
 	want := "<h1>Head</h1>\n\n<p>Main</p>\n\n<p>Foot</p>\n\n<em>Sig</em>"
@@ -62,17 +67,17 @@ func TestAssembleStaticPageBodyOrdersSections(t *testing.T) {
 		t.Errorf("assembleStaticPageBody() = %q, want %q", got, want)
 	}
 
-	sparse := &StaticPage{Text: "<p>Only body</p>"}
+	sparse := &StaticPage{Text: ns("<p>Only body</p>")}
 	if got := assembleStaticPageBody(sparse); got != "<p>Only body</p>" {
 		t.Errorf("empty sections leaked separators: %q", got)
 	}
 }
 
 func TestBuildEncyclopediaBodyRendersTerms(t *testing.T) {
-	entry := &EncyclopediaEntry{Title: "Phrasebook", Description: "<p>Intro</p>"}
+	entry := &EncyclopediaEntry{Title: ns("Phrasebook"), Description: ns("<p>Intro</p>")}
 	terms := []EncyclopediaTerm{
-		{Title: "Привет!", Text: "<p>Hello</p>"},
-		{Title: "Как дела?", Text: "<p>How are you</p>"},
+		{Title: ns("Привет!"), Text: ns("<p>Hello</p>")},
+		{Title: ns("Как дела?"), Text: ns("<p>How are you</p>")},
 	}
 	got := buildEncyclopediaBody(entry, terms)
 
@@ -86,8 +91,8 @@ func TestBuildEncyclopediaBodyRendersTerms(t *testing.T) {
 // TestBuildEncyclopediaBodyEscapesTermTitles proves term titles cannot inject
 // markup: only the term body is trusted HTML from the source site.
 func TestBuildEncyclopediaBodyEscapesTermTitles(t *testing.T) {
-	entry := &EncyclopediaEntry{Title: "E"}
-	terms := []EncyclopediaTerm{{Title: `<img src=x onerror=alert(1)>`, Text: "ok"}}
+	entry := &EncyclopediaEntry{Title: ns("E")}
+	terms := []EncyclopediaTerm{{Title: ns(`<img src=x onerror=alert(1)>`), Text: ns("ok")}}
 	got := buildEncyclopediaBody(entry, terms)
 	if strings.Contains(got, "<img src=x") {
 		t.Errorf("term title was not escaped: %s", got)
@@ -98,7 +103,7 @@ func TestBuildEncyclopediaBodyEscapesTermTitles(t *testing.T) {
 }
 
 func TestBuildEncyclopediaBodyWithoutTermsOmitsList(t *testing.T) {
-	entry := &EncyclopediaEntry{Title: "Empty", Description: "<p>Nothing here</p>"}
+	entry := &EncyclopediaEntry{Title: ns("Empty"), Description: ns("<p>Nothing here</p>")}
 	got := buildEncyclopediaBody(entry, nil)
 	if strings.Contains(got, "<dl>") {
 		t.Errorf("empty encyclopedia emitted a definition list: %q", got)

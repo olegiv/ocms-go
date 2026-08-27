@@ -119,9 +119,9 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 		}
 
 		user := &users[i]
-		email := strings.TrimSpace(user.Email)
+		email := strings.TrimSpace(user.Address())
 		if email == "" {
-			result.AddNotice("User %q has no email address and was not imported", user.Username)
+			result.AddNotice("User %q has no email address and was not imported", user.Login())
 			continue
 		}
 
@@ -132,7 +132,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 		existing, lookupErr := queries.GetUserByEmail(ctx, email)
 		switch {
 		case lookupErr == nil:
-			userMap[user.Username] = existing.ID
+			userMap[user.Login()] = existing.ID
 			result.UsersSkipped++
 			continue
 		case errors.Is(lookupErr, sql.ErrNoRows):
@@ -160,7 +160,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 			continue
 		}
 
-		userMap[user.Username] = created.ID
+		userMap[user.Login()] = created.ID
 		result.UsersImported++
 	}
 	return nil
@@ -202,7 +202,7 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 	}
 	for i := range pageCategories {
 		category := &pageCategories[i]
-		title := strings.TrimSpace(category.Title)
+		title := strings.TrimSpace(category.Name())
 		if title == "" {
 			result.AddNotice("Page category %d has no title and was not imported", category.ID)
 			continue
@@ -295,7 +295,7 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 	now := time.Now()
 	for i := range categories {
 		category := &categories[i]
-		name := strings.TrimSpace(category.Title)
+		name := strings.TrimSpace(category.Name())
 		if name == "" {
 			continue
 		}
@@ -663,14 +663,14 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 			continue
 		}
 
-		if categoryID, ok := topicMap[story.TopicID]; ok {
+		if categoryID, ok := topicMap[story.Topic()]; ok {
 			if err := queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
 				PageID: page.ID, CategoryID: categoryID,
 			}); err != nil {
 				result.AddError("Failed to add category to post %q: %v", title, err)
 			}
 		}
-		if tagID, ok := storyCategoryMap[story.CategoryID]; ok {
+		if tagID, ok := storyCategoryMap[story.Category()]; ok {
 			if err := queries.AddTagToPage(ctx, store.AddTagToPageParams{
 				PageID: page.ID, TagID: tagID,
 			}); err != nil {
@@ -698,7 +698,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 		}
 
 		source := &pages[i]
-		title := strings.TrimSpace(source.Title)
+		title := strings.TrimSpace(shared.NullString(source.Title))
 		if title == "" {
 			title = fmt.Sprintf("Page %d", source.ID)
 		}
@@ -734,7 +734,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 			MetaTitle:    title,
 			// The subtitle is source-controlled HTML, and a meta description is
 			// plain text by definition — strip markup rather than storing it raw.
-			MetaDescription: plainText(source.Subtitle),
+			MetaDescription: plainText(shared.NullString(source.Subtitle)),
 			PublishedAt:     publishedAt,
 			CreatedAt:       createdAt,
 			UpdatedAt:       now,
@@ -748,7 +748,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 		}) {
 			continue
 		}
-		if categoryID, ok := pageCategoryMap[source.CategoryID]; ok {
+		if categoryID, ok := pageCategoryMap[source.Category()]; ok {
 			if err := queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
 				PageID: page.ID, CategoryID: categoryID,
 			}); err != nil {
@@ -777,7 +777,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 		}
 
 		entry := &content.encEntries[i]
-		title := strings.TrimSpace(entry.Title)
+		title := strings.TrimSpace(entry.Name())
 		if title == "" {
 			title = fmt.Sprintf("Encyclopedia %d", entry.ID)
 		}
@@ -803,7 +803,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 			Title:        title,
 			Slug:         slug,
 			Body:         s.prepareBody(buildEncyclopediaBody(entry, terms), mediaMap),
-			Summary:      deriveSummary(entry.Description),
+			Summary:      deriveSummary(entry.Body()),
 			Status:       status,
 			AuthorID:     authorID,
 			LanguageCode: langCode,
@@ -867,7 +867,10 @@ func (s *Source) pageExists(ctx context.Context, queries *store.Queries, slug, t
 // `aid` is the administrator who published it. The submitter is the better
 // attribution, so it wins when both are present.
 func resolveAuthorID(story *Story, userMap map[string]int64, fallbackAuthorID int64) int64 {
-	for _, username := range []string{strings.TrimSpace(story.Informant), strings.TrimSpace(story.AuthorID)} {
+	for _, username := range []string{
+		strings.TrimSpace(shared.NullString(story.Informant)),
+		strings.TrimSpace(shared.NullString(story.AuthorID)),
+	} {
 		if username == "" {
 			continue
 		}

@@ -131,7 +131,7 @@ func (r *Reader) GetStories(ctx context.Context) ([]Story, error) {
 	if err != nil {
 		return nil, err
 	}
-	query := "SELECT sid, catid, aid, title, time, hometext, bodytext, topic, informant, notes FROM " +
+	query := "SELECT sid, catid, aid, title, time, hometext, bodytext, topic, informant FROM " +
 		table + " ORDER BY sid"
 
 	rows, err := r.db.QueryContext(ctx, query)
@@ -144,7 +144,7 @@ func (r *Reader) GetStories(ctx context.Context) ([]Story, error) {
 	for rows.Next() {
 		var s Story
 		if err := rows.Scan(&s.ID, &s.CategoryID, &s.AuthorID, &s.Title, &s.Time,
-			&s.HomeText, &s.BodyText, &s.TopicID, &s.Informant, &s.Notes); err != nil {
+			&s.HomeText, &s.BodyText, &s.TopicID, &s.Informant); err != nil {
 			return nil, fmt.Errorf("failed to scan story: %w", err)
 		}
 		stories = append(stories, s)
@@ -191,7 +191,7 @@ func (r *Reader) GetTopics(ctx context.Context) ([]Topic, error) {
 	if err != nil {
 		return nil, err
 	}
-	query := "SELECT topicid, topicname, topictext, topicimage FROM " + table + " ORDER BY topicid"
+	query := "SELECT topicid, topicname, topictext FROM " + table + " ORDER BY topicid"
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -202,7 +202,7 @@ func (r *Reader) GetTopics(ctx context.Context) ([]Topic, error) {
 	var topics []Topic
 	for rows.Next() {
 		var t Topic
-		if err := rows.Scan(&t.ID, &t.Name, &t.Text, &t.Image); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Text); err != nil {
 			return nil, fmt.Errorf("failed to scan topic: %w", err)
 		}
 		topics = append(topics, t)
@@ -304,7 +304,7 @@ func (r *Reader) GetEncyclopediaTerms(ctx context.Context) (map[int64][]Encyclop
 		if err := rows.Scan(&t.ID, &t.EntryID, &t.Title, &t.Text); err != nil {
 			return nil, fmt.Errorf("failed to scan encyclopedia term: %w", err)
 		}
-		terms[t.EntryID] = append(terms[t.EntryID], t)
+		terms[t.Entry()] = append(terms[t.Entry()], t)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating encyclopedia terms: %w", err)

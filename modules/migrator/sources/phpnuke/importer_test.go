@@ -187,11 +187,11 @@ func TestCyrillicSurvivesImport(t *testing.T) {
 
 	stories := []Story{{
 		ID:        1,
-		Title:     sql.NullString{String: "Отель Royal Azur", Valid: true},
-		HomeText:  sql.NullString{String: "<p>Хаммамет, Тунис.</p>", Valid: true},
-		BodyText:  "<p>В отеле 220 номеров.</p>",
+		Title:     ns("Отель Royal Azur"),
+		HomeText:  ns("<p>Хаммамет, Тунис.</p>"),
+		BodyText:  ns("<p>В отеле 220 номеров.</p>"),
 		Time:      sql.NullTime{Time: time.Date(2004, 2, 22, 3, 19, 44, 0, time.UTC), Valid: true},
-		Informant: "Olegiv",
+		Informant: ns("Olegiv"),
 	}}
 
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
@@ -252,12 +252,12 @@ func TestImportStoriesSetsStatusTimestampsAndTaxonomy(t *testing.T) {
 
 	stories := []Story{{
 		ID:         7,
-		Title:      sql.NullString{String: "Hotel Review", Valid: true},
-		HomeText:   sql.NullString{String: "<p>Teaser text</p>", Valid: true},
-		BodyText:   "<p>Full text</p>",
+		Title:      ns("Hotel Review"),
+		HomeText:   ns("<p>Teaser text</p>"),
+		BodyText:   ns("<p>Full text</p>"),
 		Time:       sql.NullTime{Time: published, Valid: true},
-		TopicID:    3,
-		CategoryID: 9,
+		TopicID:    ni(3),
+		CategoryID: ni(9),
 	}}
 
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
@@ -315,9 +315,9 @@ func TestImportStoriesGivesCollidingTitlesDistinctSlugs(t *testing.T) {
 
 	title := sql.NullString{String: "Полезные советы", Valid: true}
 	stories := []Story{
-		{ID: 1, Title: title, BodyText: "<p>one</p>"},
-		{ID: 2, Title: title, BodyText: "<p>two</p>"},
-		{ID: 3, Title: title, BodyText: "<p>three</p>"},
+		{ID: 1, Title: title, BodyText: ns("<p>one</p>")},
+		{ID: 2, Title: title, BodyText: ns("<p>two</p>")},
+		{ID: 3, Title: title, BodyText: ns("<p>three</p>")},
 	}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
 		map[int64]int64{}, map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{})
@@ -346,7 +346,7 @@ func TestImportStoriesFallsBackWhenTitleIsMissing(t *testing.T) {
 	ctx := context.Background()
 	result := &types.ImportResult{}
 
-	stories := []Story{{ID: 42, Title: sql.NullString{Valid: false}, BodyText: "<p>body</p>"}}
+	stories := []Story{{ID: 42, Title: sql.NullString{Valid: false}, BodyText: ns("<p>body</p>")}}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
 		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil,
 		types.ImportOptions{}, result, &mockTracker{})
@@ -368,8 +368,8 @@ func TestImportedUsersCannotSignIn(t *testing.T) {
 	userMap := make(map[string]int64)
 
 	reader := &fakeReader{authors: []User{
-		{ID: 2, Username: "Olegiv", Name: "Oleg", Email: "olegiv@tunisie.ru"},
-		{ID: 5, Username: "sveta", Name: "", Email: "sveta@example.com"},
+		{ID: 2, Username: ns("Olegiv"), Name: ns("Oleg"), Email: ns("olegiv@tunisie.ru")},
+		{ID: 5, Username: ns("sveta"), Name: ns(""), Email: ns("sveta@example.com")},
 	}}
 	if err := NewSource().importUsers(ctx, queries, reader, userMap,
 		types.ImportOptions{}, result, &mockTracker{}); err != nil {
@@ -416,7 +416,7 @@ func TestImportUsersReusesExistingAccountByEmail(t *testing.T) {
 	userMap := make(map[string]int64)
 
 	reader := &fakeReader{authors: []User{
-		{ID: 1, Username: "admin", Name: "Admin", Email: "admin@example.com"},
+		{ID: 1, Username: ns("admin"), Name: ns("Admin"), Email: ns("admin@example.com")},
 	}}
 	if err := NewSource().importUsers(ctx, queries, reader, userMap,
 		types.ImportOptions{}, result, &mockTracker{}); err != nil {
@@ -435,7 +435,7 @@ func TestImportUsersSkipsAccountsWithoutEmail(t *testing.T) {
 	queries, _ := setupDB(t)
 	result := &types.ImportResult{}
 
-	reader := &fakeReader{authors: []User{{ID: 3, Username: "ghost", Email: "  "}}}
+	reader := &fakeReader{authors: []User{{ID: 3, Username: ns("ghost"), Email: ns("  ")}}}
 	if err := NewSource().importUsers(context.Background(), queries, reader,
 		map[string]int64{}, types.ImportOptions{}, result, &mockTracker{}); err != nil {
 		t.Fatalf("importUsers() error = %v", err)
@@ -459,10 +459,10 @@ func TestResolveAuthorIDPrefersInformantThenAid(t *testing.T) {
 		story Story
 		want  int64
 	}{
-		{"informant wins", Story{Informant: "submitter", AuthorID: "publisher"}, 10},
-		{"falls back to aid", Story{Informant: "", AuthorID: "publisher"}, 20},
-		{"unknown informant falls back to aid", Story{Informant: "nobody", AuthorID: "publisher"}, 20},
-		{"neither known", Story{Informant: "nobody", AuthorID: "nobody"}, 99},
+		{"informant wins", Story{Informant: ns("submitter"), AuthorID: ns("publisher")}, 10},
+		{"falls back to aid", Story{Informant: ns(""), AuthorID: ns("publisher")}, 20},
+		{"unknown informant falls back to aid", Story{Informant: ns("nobody"), AuthorID: ns("publisher")}, 20},
+		{"neither known", Story{Informant: ns("nobody"), AuthorID: ns("nobody")}, 99},
 		{"both blank", Story{}, 99},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -480,15 +480,15 @@ func TestImportStoriesAttributesToImportedAuthor(t *testing.T) {
 	result := &types.ImportResult{}
 	userMap := make(map[string]int64)
 
-	reader := &fakeReader{authors: []User{{ID: 2, Username: "sveta", Name: "Sveta", Email: "sveta@example.com"}}}
+	reader := &fakeReader{authors: []User{{ID: 2, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("sveta@example.com")}}}
 	source := NewSource()
 	if err := source.importUsers(ctx, queries, reader, userMap, types.ImportOptions{}, result, &mockTracker{}); err != nil {
 		t.Fatalf("importUsers() error = %v", err)
 	}
 
 	stories := []Story{
-		{ID: 1, Title: sql.NullString{String: "By Sveta", Valid: true}, Informant: "sveta"},
-		{ID: 2, Title: sql.NullString{String: "By Nobody", Valid: true}, Informant: "stranger"},
+		{ID: 1, Title: ns("By Sveta"), Informant: ns("sveta")},
+		{ID: 2, Title: ns("By Nobody"), Informant: ns("stranger")},
 	}
 	source.importStories(ctx, queries, stories, userMap, adminID, lang,
 		map[int64]int64{}, map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{})
@@ -516,8 +516,8 @@ func TestImportStaticPagesHonorsActiveFlag(t *testing.T) {
 	result := &types.ImportResult{}
 
 	pages := []StaticPage{
-		{ID: 1, Title: "Live Page", Text: "<p>live</p>", Active: 1},
-		{ID: 2, Title: "Hidden Page", Text: "<p>hidden</p>", Active: 0},
+		{ID: 1, Title: ns("Live Page"), Text: ns("<p>live</p>"), Active: ni(1)},
+		{ID: 2, Title: ns("Hidden Page"), Text: ns("<p>hidden</p>"), Active: ni(0)},
 	}
 	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
 		map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{})
@@ -555,10 +555,10 @@ func TestImportStaticPagesStripsMarkupFromMetaDescription(t *testing.T) {
 
 	pages := []StaticPage{{
 		ID:       1,
-		Title:    "Subtitle Test",
-		Subtitle: `<img src=x onerror=alert(1)> Гид по Тунису`,
-		Text:     "<p>body</p>",
-		Active:   1,
+		Title:    ns("Subtitle Test"),
+		Subtitle: ns(`<img src=x onerror=alert(1)> Гид по Тунису`),
+		Text:     ns("<p>body</p>"),
+		Active:   ni(1),
 	}}
 	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
 		map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{})
@@ -582,12 +582,12 @@ func TestImportEncyclopediaCreatesOnePagePerEntry(t *testing.T) {
 
 	content := &importContent{
 		encEntries: []EncyclopediaEntry{
-			{ID: 1, Title: "Русско-арабский разговорник", Active: 1},
+			{ID: 1, Title: ns("Русско-арабский разговорник"), Active: ni(1)},
 		},
 		encTerms: map[int64][]EncyclopediaTerm{
 			1: {
-				{ID: 1, EntryID: 1, Title: "Привет!", Text: "<p>marhaba</p>"},
-				{ID: 2, EntryID: 1, Title: "Как дела?", Text: "<p>kayf halak</p>"},
+				{ID: 1, EntryID: ni(1), Title: ns("Привет!"), Text: ns("<p>marhaba</p>")},
+				{ID: 2, EntryID: ni(1), Title: ns("Как дела?"), Text: ns("<p>kayf halak</p>")},
 			},
 		},
 	}
@@ -621,11 +621,11 @@ func TestImportCategoriesMapsTopicsAndReusesExisting(t *testing.T) {
 
 	reader := &fakeReader{
 		topics: []Topic{
-			{ID: 8, Text: sql.NullString{String: "Отели", Valid: true}},
-			{ID: 9, Name: sql.NullString{String: "rTourism", Valid: true}},
+			{ID: 8, Text: ns("Отели")},
+			{ID: 9, Name: ns("rTourism")},
 			{ID: 10},
 		},
-		pageCats: []Category{{ID: 1, Title: "Информация"}},
+		pageCats: []Category{{ID: 1, Title: ns("Информация")}},
 	}
 	if err := NewSource().importCategories(ctx, queries, reader, lang, topicMap, pageCategoryMap,
 		types.ImportOptions{}, result, &mockTracker{}); err != nil {
@@ -662,7 +662,7 @@ func TestImportCategoriesTreatsMissingPageTableAsNotice(t *testing.T) {
 	result := &types.ImportResult{}
 
 	reader := &fakeReader{
-		topics:      []Topic{{ID: 1, Text: sql.NullString{String: "News", Valid: true}}},
+		topics:      []Topic{{ID: 1, Text: ns("News")}},
 		pageCatsErr: errors.New("Table 'nuke_pages_categories' doesn't exist"),
 	}
 	if err := NewSource().importCategories(context.Background(), queries, reader,
@@ -688,9 +688,9 @@ func TestImportStoryCategoryTagsCreatesTags(t *testing.T) {
 	storyCategoryMap := make(map[int64]int64)
 
 	reader := &fakeReader{storyCats: []Category{
-		{ID: 2, Title: "Новости"},
-		{ID: 3, Title: "Information"},
-		{ID: 4, Title: "   "},
+		{ID: 2, Title: ns("Новости")},
+		{ID: 3, Title: ns("Information")},
+		{ID: 4, Title: ns("   ")},
 	}}
 	if err := NewSource().importStoryCategoryTags(ctx, queries, reader, defaultLang(t, queries),
 		storyCategoryMap, types.ImportOptions{}, result, &mockTracker{}); err != nil {
@@ -872,11 +872,11 @@ func TestImportContentBodiesCoverEveryImportedKind(t *testing.T) {
 		stories: []Story{{
 			ID:       1,
 			HomeText: sql.NullString{String: `<img src="story-home.jpg">`, Valid: true},
-			BodyText: `<img src="story-body.jpg">`,
+			BodyText: ns(`<img src="story-body.jpg">`),
 		}},
-		staticPages: []StaticPage{{ID: 1, Text: `<img src="page.jpg">`}},
-		encEntries:  []EncyclopediaEntry{{ID: 1, Description: `<img src="enc.jpg">`}},
-		encTerms:    map[int64][]EncyclopediaTerm{1: {{Text: `<img src="term.jpg">`}}},
+		staticPages: []StaticPage{{ID: 1, Text: ns(`<img src="page.jpg">`)}},
+		encEntries:  []EncyclopediaEntry{{ID: 1, Description: ns(`<img src="enc.jpg">`)}},
+		encTerms:    map[int64][]EncyclopediaTerm{1: {{Text: ns(`<img src="term.jpg">`)}}},
 	}
 
 	joined := strings.Join(content.bodies(), "\n")

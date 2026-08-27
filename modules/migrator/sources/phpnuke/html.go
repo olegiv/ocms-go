@@ -34,7 +34,7 @@ type assetRef struct {
 // whole; importing either alone silently truncates most of the archive.
 func assembleStoryBody(s *Story) string {
 	home := strings.TrimSpace(shared.NullString(s.HomeText))
-	body := strings.TrimSpace(s.BodyText)
+	body := strings.TrimSpace(shared.NullString(s.BodyText))
 	switch {
 	case home == "":
 		return body
@@ -49,7 +49,8 @@ func assembleStoryBody(s *Story) string {
 // PHP-Nuke renders in sequence for a static page.
 func assembleStaticPageBody(p *StaticPage) string {
 	parts := make([]string, 0, 4)
-	for _, part := range []string{p.Header, p.Text, p.Footer, p.Signature} {
+	for _, part := range []string{shared.NullString(p.Header), shared.NullString(p.Text),
+		shared.NullString(p.Footer), shared.NullString(p.Signature)} {
 		if trimmed := strings.TrimSpace(part); trimmed != "" {
 			parts = append(parts, trimmed)
 		}
@@ -65,7 +66,7 @@ func assembleStaticPageBody(p *StaticPage) string {
 // unreachable URLs into one readable page.
 func buildEncyclopediaBody(entry *EncyclopediaEntry, terms []EncyclopediaTerm) string {
 	var b strings.Builder
-	if description := strings.TrimSpace(entry.Description); description != "" {
+	if description := strings.TrimSpace(entry.Body()); description != "" {
 		b.WriteString(description)
 		b.WriteString("\n\n")
 	}
@@ -74,8 +75,8 @@ func buildEncyclopediaBody(entry *EncyclopediaEntry, terms []EncyclopediaTerm) s
 	}
 	b.WriteString("<dl>\n")
 	for i := range terms {
-		title := strings.TrimSpace(terms[i].Title)
-		text := strings.TrimSpace(terms[i].Text)
+		title := strings.TrimSpace(shared.NullString(terms[i].Title))
+		text := strings.TrimSpace(shared.NullString(terms[i].Text))
 		if title == "" && text == "" {
 			continue
 		}

@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
 // newSourceStub builds a Reader over SQLite standing in for MySQL. The reader
@@ -99,17 +101,17 @@ func TestGetStoriesReadsBothBodyColumns(t *testing.T) {
 	if stories[0].Title.Valid {
 		t.Error("a NULL title should scan as invalid, not empty string")
 	}
-	if stories[0].BodyText != "<p>only body</p>" {
-		t.Errorf("bodytext = %q", stories[0].BodyText)
+	if got := shared.NullString(stories[0].BodyText); got != "<p>only body</p>" {
+		t.Errorf("bodytext = %q", got)
 	}
-	if stories[1].HomeText.String != "<p>teaser</p>" || stories[1].BodyText != "<p>rest</p>" {
+	if stories[1].HomeText.String != "<p>teaser</p>" || shared.NullString(stories[1].BodyText) != "<p>rest</p>" {
 		t.Errorf("both body columns should be read: %+v", stories[1])
 	}
-	if stories[1].Informant != "sveta" || stories[1].AuthorID != "Olegiv" {
-		t.Errorf("author columns = %q / %q", stories[1].Informant, stories[1].AuthorID)
+	if shared.NullString(stories[1].Informant) != "sveta" || shared.NullString(stories[1].AuthorID) != "Olegiv" {
+		t.Errorf("author columns = %q / %q", shared.NullString(stories[1].Informant), shared.NullString(stories[1].AuthorID))
 	}
-	if stories[1].TopicID != 8 || stories[1].CategoryID != 5 {
-		t.Errorf("taxonomy columns = topic %d category %d", stories[1].TopicID, stories[1].CategoryID)
+	if stories[1].Topic() != 8 || stories[1].Category() != 5 {
+		t.Errorf("taxonomy columns = topic %d category %d", stories[1].Topic(), stories[1].Category())
 	}
 }
 
@@ -157,8 +159,8 @@ func TestGetEncyclopediaTermsGroupsByEntry(t *testing.T) {
 	if len(terms[2]) != 1 {
 		t.Errorf("entry 2 has %d terms, want 1", len(terms[2]))
 	}
-	if terms[1][0].Title != "Привет!" {
-		t.Errorf("terms are not ordered by tid: %q", terms[1][0].Title)
+	if shared.NullString(terms[1][0].Title) != "Привет!" {
+		t.Errorf("terms are not ordered by tid: %q", shared.NullString(terms[1][0].Title))
 	}
 }
 
@@ -189,7 +191,7 @@ func TestGetStoryAuthorsSelectsOnlyCreditedAccounts(t *testing.T) {
 	}
 	names := map[string]bool{}
 	for _, author := range authors {
-		names[author.Username] = true
+		names[author.Login()] = true
 	}
 	if !names["Olegiv"] || !names["sveta"] {
 		t.Errorf("expected both the publisher and the submitter, got %v", names)
@@ -238,7 +240,7 @@ func TestGetCategoriesReadsBothTaxonomyTables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetStoryCategories() error = %v", err)
 	}
-	if len(storyCats) != 2 || storyCats[0].Title != "Новости" {
+	if len(storyCats) != 2 || storyCats[0].Name() != "Новости" {
 		t.Errorf("story categories = %+v", storyCats)
 	}
 
@@ -246,7 +248,7 @@ func TestGetCategoriesReadsBothTaxonomyTables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPageCategories() error = %v", err)
 	}
-	if len(pageCats) != 1 || pageCats[0].Title != "Информация" {
+	if len(pageCats) != 1 || pageCats[0].Name() != "Информация" {
 		t.Errorf("page categories = %+v", pageCats)
 	}
 }
@@ -271,11 +273,79 @@ func TestGetStaticPagesReadsEverySection(t *testing.T) {
 	if !page.IsActive() {
 		t.Error("active flag was not read")
 	}
-	if page.CategoryID != 2 || page.Subtitle != "Subtitle" {
+	if page.Category() != 2 || shared.NullString(page.Subtitle) != "Subtitle" {
 		t.Errorf("page = %+v", page)
 	}
 	if got := assembleStaticPageBody(&page); !strings.Contains(got, "<h1>h</h1>") ||
 		!strings.Contains(got, "<p>body</p>") || !strings.Contains(got, "sig") {
 		t.Errorf("assembled body dropped a section: %q", got)
+	}
+}
+
+// TestReadsSurviveNullColumns covers a PR review finding (P1). Every non-key
+// column was scanned as a plain string, so a single NULL failed the whole query
+// with "converting NULL to string is unsupported". Because the content reads
+// happen after users and taxonomy are already written, that aborted an import
+// mid-way — on exactly the input this importer exists for: a twenty-year-old
+// database that has been through upgrades and hand-written SQL.
+func TestReadsSurviveNullColumns(t *testing.T) {
+	reader := newSourceStub(t,
+		`CREATE TABLE tr_stories (sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT,
+			time DATETIME, hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT)`,
+		`INSERT INTO tr_stories VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`,
+		`CREATE TABLE tr_pages (pid INTEGER PRIMARY KEY, cid INTEGER, title TEXT, subtitle TEXT,
+			active INTEGER, page_header TEXT, text TEXT, page_footer TEXT, signature TEXT, date DATETIME)`,
+		`INSERT INTO tr_pages VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`,
+		`CREATE TABLE tr_topics (topicid INTEGER PRIMARY KEY, topicname TEXT, topictext TEXT)`,
+		`INSERT INTO tr_topics VALUES (1,NULL,NULL)`,
+		`CREATE TABLE tr_stories_cat (catid INTEGER PRIMARY KEY, title TEXT)`,
+		`INSERT INTO tr_stories_cat VALUES (1,NULL)`,
+		`CREATE TABLE tr_pages_categories (cid INTEGER PRIMARY KEY, title TEXT, description TEXT)`,
+		`INSERT INTO tr_pages_categories VALUES (1,NULL,NULL)`,
+		`CREATE TABLE tr_encyclopedia (eid INTEGER PRIMARY KEY, title TEXT, description TEXT, active INTEGER)`,
+		`INSERT INTO tr_encyclopedia VALUES (1,NULL,NULL,NULL)`,
+		`CREATE TABLE tr_encyclopedia_text (tid INTEGER PRIMARY KEY, eid INTEGER, title TEXT, text TEXT)`,
+		`INSERT INTO tr_encyclopedia_text VALUES (1,NULL,NULL,NULL)`,
+		`CREATE TABLE tr_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
+		`INSERT INTO tr_users VALUES (1,NULL,NULL,NULL)`)
+
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name string
+		read func() error
+	}{
+		{"stories", func() error { _, err := reader.GetStories(ctx); return err }},
+		{"pages", func() error { _, err := reader.GetStaticPages(ctx); return err }},
+		{"topics", func() error { _, err := reader.GetTopics(ctx); return err }},
+		{"story categories", func() error { _, err := reader.GetStoryCategories(ctx); return err }},
+		{"page categories", func() error { _, err := reader.GetPageCategories(ctx); return err }},
+		{"encyclopedia", func() error { _, err := reader.GetEncyclopediaEntries(ctx); return err }},
+		{"encyclopedia terms", func() error { _, err := reader.GetEncyclopediaTerms(ctx); return err }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.read(); err != nil {
+				t.Errorf("a NULL column aborted the read: %v", err)
+			}
+		})
+	}
+}
+
+// TestNullColumnsDegradeToEmptyValues proves the accessors, not just the scan.
+func TestNullColumnsDegradeToEmptyValues(t *testing.T) {
+	reader := newSourceStub(t,
+		`CREATE TABLE tr_stories (sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT,
+			time DATETIME, hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT)`,
+		`INSERT INTO tr_stories VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`)
+
+	stories, err := reader.GetStories(context.Background())
+	if err != nil {
+		t.Fatalf("GetStories() error = %v", err)
+	}
+	story := &stories[0]
+	if got := assembleStoryBody(story); got != "" {
+		t.Errorf("assembleStoryBody() = %q, want empty for an all-NULL row", got)
+	}
+	if story.Topic() != 0 || story.Category() != 0 {
+		t.Errorf("NULL taxonomy ids should read as 0, got %d/%d", story.Topic(), story.Category())
 	}
 }
