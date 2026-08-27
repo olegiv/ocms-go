@@ -5,7 +5,9 @@ package phpnuke
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -47,8 +49,9 @@ const (
 // Every page write in this file goes through here. Slug allocation is kept
 // beside the writes it protects so the route guard below cannot be bypassed by
 // a new stage that reaches CreatePage directly.
-func (s *Source) slugFor(ctx context.Context, queries *store.Queries, title, fallback string) string {
-	return s.makeUniquePageSlug(ctx, queries, baseSlug(title, fallback))
+func (s *Source) slugFor(ctx context.Context, queries *store.Queries, title, fallback,
+	langCode string) string {
+	return s.makeUniquePageSlug(ctx, queries, baseSlug(title, fallback), langCode)
 }
 
 // baseSlug is the slug a title would claim before collision suffixing.
@@ -103,7 +106,9 @@ func rowIdentity(sourceTitle, kind string, id int64) (title, fallback string) {
 // language middleware strips a leading segment matching an active language
 // code before the frontend router runs, so a page slugged "ru" is answered by
 // the Russian homepage and is unreachable forever.
-func (s *Source) makeUniquePageSlug(ctx context.Context, queries *store.Queries, baseSlug string) string {
+func (s *Source) makeUniquePageSlug(ctx context.Context, queries *store.Queries,
+	baseSlug, langCode string) string {
+	prefix := importedPagePathPrefix(ctx, queries, langCode)
 	return shared.MakeUniqueSlugWithGuard(ctx, queries, baseSlug, func(slug string) bool {
 		if corePathReserved(slug) {
 			return false
@@ -111,9 +116,48 @@ func (s *Source) makeUniquePageSlug(ctx context.Context, queries *store.Queries,
 		if s.publicRouteChecker != nil && s.publicRouteChecker.OwnsPublicPath("/"+slug) {
 			return false
 		}
-		occupied, err := shared.RedirectPathOccupied(ctx, queries, "/"+slug)
-		return err == nil && !occupied
+		// Both paths, because two different middlewares answer them. The
+		// redirects middleware is mounted on the root router, ahead of the
+		// language-aware frontend router, so it sees "/ru/news" whole: an
+		// enabled redirect there owns the imported page's only public URL, and
+		// checking the bare "/news" never notices. The unprefixed check still
+		// matters, because page slugs are unique across languages.
+		for _, candidate := range redirectGuardPaths(slug, prefix) {
+			occupied, err := shared.RedirectPathOccupied(ctx, queries, candidate)
+			if err != nil || occupied {
+				return false
+			}
+		}
+		return true
 	})
+}
+
+// redirectGuardPaths lists the public URLs a page at this slug would answer.
+func redirectGuardPaths(slug, langPrefix string) []string {
+	paths := []string{"/" + slug}
+	if langPrefix != "" {
+		paths = append(paths, langPrefix+"/"+slug)
+	}
+	return paths
+}
+
+// importedPagePathPrefix returns the path segment imported pages are served
+// beneath: empty for the default language, "/ru" for any other.
+func importedPagePathPrefix(ctx context.Context, queries *store.Queries, langCode string) string {
+	code := strings.ToLower(strings.TrimSpace(langCode))
+	if code == "" {
+		return ""
+	}
+	defaultLanguage, err := shared.RoutableDefaultLanguage(ctx, queries)
+	if err != nil {
+		// Guard the prefixed path when the default cannot be read. Over-strict
+		// costs a slug suffix; under-strict imports a page nobody can reach.
+		return "/" + code
+	}
+	if strings.EqualFold(defaultLanguage.Code, code) {
+		return ""
+	}
+	return "/" + code
 }
 
 // corePathReserved reports whether a path belongs to a core oCMS route that an
@@ -235,6 +279,58 @@ func (s *Source) creditedAuthors(ctx context.Context, reader sourceReader,
 	return registered, nil
 }
 
+// distinctInertEmail builds a stable, undeliverable address for a source
+// account whose own address is already spoken for.
+//
+// oCMS enforces one account per email, but `authors.email` on a PHP-Nuke site
+// is very often the shared webmaster address. Honouring the source address for
+// everyone therefore merged several administrators into a single oCMS account
+// and handed all of their bylines to whichever was read first — and a merge is
+// not something the operator can undo afterwards, while two accounts they can.
+//
+// The domain is suffixed with ".invalid", which RFC 2606 reserves precisely so
+// that it can never resolve, and the local part is derived from the source
+// username so a re-run finds this account again instead of creating another.
+func distinctInertEmail(username, sourceEmail string) string {
+	local := util.Slugify(username)
+	if local == "" {
+		// A username that transliterates to nothing still needs a stable,
+		// collision-free local part.
+		sum := sha256.Sum256([]byte(authorKey(username)))
+		local = "author-" + hex.EncodeToString(sum[:8])
+	}
+	domain := "phpnuke"
+	if _, host, found := strings.Cut(sourceEmail, "@"); found {
+		if cleaned := sanitizeEmailDomain(host); cleaned != "" {
+			domain = cleaned
+		}
+	}
+	return local + "@" + domain + ".invalid"
+}
+
+// sanitizeEmailDomain rebuilds a source address's domain label by label,
+// keeping only what a hostname may contain, so a malformed source address
+// cannot shape the address this importer writes.
+//
+// Filtering characters in one pass is not enough: dropping the illegal ones out
+// of "ev'il/../site" leaves "evil..site", an empty label that no longer names a
+// host. Discarding empty labels is what keeps the result well-formed.
+func sanitizeEmailDomain(host string) string {
+	var labels []string
+	for _, label := range strings.Split(strings.ToLower(strings.TrimSpace(host)), ".") {
+		var b strings.Builder
+		for _, r := range label {
+			if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' {
+				b.WriteRune(r)
+			}
+		}
+		if cleaned := strings.Trim(b.String(), "-"); cleaned != "" {
+			labels = append(labels, cleaned)
+		}
+	}
+	return strings.Join(labels, ".")
+}
+
 // importUsers imports the accounts credited on a story.
 //
 // Imported accounts are deliberately inert: role "public" grants no admin
@@ -257,6 +353,13 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 	}
 	now := time.Now()
 
+	// Which source account claimed which destination row in this run, keyed by
+	// destination id and holding the username as the source spells it — the
+	// folded form is for comparison, but an operator reading the notice below
+	// needs to recognise the name. Two source accounts sharing one address must
+	// not collapse into one byline.
+	claimedBy := make(map[int64]string, len(users))
+
 	for i := range users {
 		select {
 		case <-ctx.Done():
@@ -271,6 +374,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 			result.AddNotice("User %q has no email address and was not imported", user.Login())
 			continue
 		}
+		key := authorKey(user.Login())
 
 		// The lookup runs regardless of SkipExisting because users.email is
 		// UNIQUE: without it a second run would fail the insert instead of
@@ -279,9 +383,34 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 		existing, lookupErr := queries.GetUserByEmail(ctx, email)
 		switch {
 		case lookupErr == nil:
-			userMap[authorKey(user.Login())] = existing.ID
-			result.UsersSkipped++
-			continue
+			owner, taken := claimedBy[existing.ID]
+			if !taken || authorKey(owner) == key {
+				claimedBy[existing.ID] = user.Login()
+				userMap[key] = existing.ID
+				result.UsersSkipped++
+				continue
+			}
+			// Another source account in this run already holds that row. Give
+			// this one its own inert address rather than merge the two.
+			email = distinctInertEmail(user.Login(), email)
+			result.AddNotice("%q and %q are both credited under %s, which oCMS can grant to "+
+				"only one account; %q was imported as %s so their bylines stay apart. "+
+				"Merge the two accounts if they are the same person.",
+				owner, user.Login(), strings.TrimSpace(user.Address()), user.Login(), email)
+
+			retry, retryErr := queries.GetUserByEmail(ctx, email)
+			switch {
+			case retryErr == nil:
+				claimedBy[retry.ID] = user.Login()
+				userMap[key] = retry.ID
+				result.UsersSkipped++
+				continue
+			case errors.Is(retryErr, sql.ErrNoRows):
+				// Not present: create it below, under the inert address.
+			default:
+				result.AddError("Failed to check for existing user %q: %v", email, retryErr)
+				continue
+			}
 		case errors.Is(lookupErr, sql.ErrNoRows):
 			// Not present: create it below.
 		default:
@@ -307,7 +436,8 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 			continue
 		}
 
-		userMap[authorKey(user.Login())] = created.ID
+		claimedBy[created.ID] = user.Login()
+		userMap[key] = created.ID
 		result.UsersImported++
 	}
 	return nil
@@ -910,7 +1040,7 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 			result.PostsSkipped++
 			continue
 		}
-		slug := s.slugFor(ctx, queries, title, fallback)
+		slug := s.slugFor(ctx, queries, title, fallback, langCode)
 		if slug == "" {
 			result.AddError("Failed to allocate a reachable slug for story %q", title)
 			continue
@@ -999,7 +1129,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 			result.PagesSkipped++
 			continue
 		}
-		slug := s.slugFor(ctx, queries, title, fallback)
+		slug := s.slugFor(ctx, queries, title, fallback, langCode)
 		if slug == "" {
 			result.AddError("Failed to allocate a reachable slug for page %q", title)
 			continue
@@ -1077,7 +1207,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 			result.PagesSkipped++
 			continue
 		}
-		slug := s.slugFor(ctx, queries, title, fallback)
+		slug := s.slugFor(ctx, queries, title, fallback, langCode)
 		if slug == "" {
 			result.AddError("Failed to allocate a reachable slug for encyclopedia %q", title)
 			continue

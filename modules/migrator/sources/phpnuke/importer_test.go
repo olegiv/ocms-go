@@ -2322,3 +2322,199 @@ func TestCollidingTopicLabelsStayDistinct(t *testing.T) {
 		}
 	}
 }
+
+// TestAdminsSharingAnEmailKeepDistinctBylines covers a Codex review finding.
+//
+// oCMS grants one account per email, and `authors.email` on a PHP-Nuke site is
+// very often the shared webmaster address — a fact this importer's own
+// documentation calls out. Reusing an account by email therefore merged several
+// administrators into one and handed all of their stories to whichever was read
+// first. That merge is not something an operator can undo; two accounts they
+// can.
+func TestAdminsSharingAnEmailKeepDistinctBylines(t *testing.T) {
+	queries, _ := setupDB(t)
+	ctx := context.Background()
+	reader := &fakeReader{admins: []User{
+		{Username: ns("God"), Name: ns("Oleg"), Email: ns("webmaster@site.ru")},
+		{Username: ns("Sveta"), Name: ns("Sveta"), Email: ns("webmaster@site.ru")},
+	}}
+
+	var firstRun map[string]int64
+	for run := 1; run <= 2; run++ {
+		userMap := map[string]int64{}
+		result := &types.ImportResult{}
+		if err := NewSource().importUsers(ctx, queries, reader, userMap,
+			types.ImportOptions{}, result, &mockTracker{}); err != nil {
+			t.Fatalf("run %d: importUsers() error = %v", run, err)
+		}
+
+		god, sveta := userMap[authorKey("God")], userMap[authorKey("Sveta")]
+		if god == 0 || sveta == 0 {
+			t.Fatalf("run %d: an admin was not mapped at all: %v", run, userMap)
+		}
+		if god == sveta {
+			t.Fatalf("run %d: both admins map to account %d, so one loses every byline",
+				run, god)
+		}
+		if len(result.Notices) == 0 {
+			t.Errorf("run %d: the address clash was resolved silently", run)
+		}
+		if run == 1 {
+			if result.UsersImported != 2 {
+				t.Errorf("first run imported %d accounts, want 2", result.UsersImported)
+			}
+			firstRun = userMap
+			continue
+		}
+		// A re-run must find both accounts again rather than mint more.
+		if result.UsersImported != 0 {
+			t.Errorf("re-run created %d more accounts; the inert address is not stable",
+				result.UsersImported)
+		}
+		for name, id := range firstRun {
+			if userMap[name] != id {
+				t.Errorf("%q mapped to %d on the first run and %d on the second",
+					name, id, userMap[name])
+			}
+		}
+	}
+
+	users, err := queries.ListUsers(ctx, store.ListUsersParams{Limit: 20, Offset: 0})
+	if err != nil {
+		t.Fatalf("failed to list users: %v", err)
+	}
+	for _, user := range users {
+		if user.Role == model.RoleAdmin {
+			continue // the seeded operator
+		}
+		if user.Email == "webmaster@site.ru" {
+			continue // the first claimant keeps the real address
+		}
+		if !strings.HasSuffix(user.Email, ".invalid") {
+			t.Errorf("substitute address %q is deliverable; it must sit under the "+
+				"reserved .invalid domain so no real mailbox can receive it", user.Email)
+		}
+	}
+}
+
+// TestDistinctInertEmailIsStableAndUndeliverable pins the properties the fix
+// above rests on. Determinism is what makes a re-run idempotent, and the
+// reserved .invalid domain (RFC 2606) is what guarantees the substitute address
+// can never reach a real mailbox.
+func TestDistinctInertEmailIsStableAndUndeliverable(t *testing.T) {
+	for _, tc := range []struct {
+		name, username, email, want string
+	}{
+		{"ordinary", "Sveta", "webmaster@site.ru", "sveta@site.ru.invalid"},
+		{"case folds", "SVETA", "webmaster@SITE.RU", "sveta@site.ru.invalid"},
+		{"no domain to borrow", "Sveta", "not-an-address", "sveta@phpnuke.invalid"},
+		// The illegal characters go, and so does the empty label they leave
+		// behind: "evil..site" would not name a host.
+		{"hostile domain", "Sveta", "x@ev'il/../site", "sveta@evil.site.invalid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := distinctInertEmail(tc.username, tc.email); got != tc.want {
+				t.Errorf("distinctInertEmail() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	// A username that transliterates to nothing still needs a stable address.
+	cyrillic := distinctInertEmail("Олег", "a@b.ru")
+	if !strings.HasSuffix(cyrillic, ".invalid") || strings.HasPrefix(cyrillic, "@") {
+		t.Errorf("unsluggable username produced %q", cyrillic)
+	}
+	if again := distinctInertEmail("Олег", "a@b.ru"); again != cyrillic {
+		t.Errorf("address is not deterministic: %q then %q", cyrillic, again)
+	}
+	if other := distinctInertEmail("Света", "a@b.ru"); other == cyrillic {
+		t.Error("two unsluggable usernames collapsed onto one address")
+	}
+}
+
+// TestSlugGuardChecksTheLanguagePrefixedPath covers a Codex review finding.
+//
+// A page imported into a non-default language is served under that language's
+// prefix, but the guard checked only the bare "/news". The redirects middleware
+// is mounted on the root router, ahead of the language-aware frontend router,
+// so it sees "/ru/news" whole and answers it before the prefix is ever
+// stripped — leaving the imported page at a URL nothing can reach.
+func TestSlugGuardChecksTheLanguagePrefixedPath(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "ru", Name: "Russian", IsDefault: false, IsActive: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("failed to create the Russian language: %v", err)
+	}
+	if _, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: "/ru/news", TargetUrl: "/elsewhere", StatusCode: 301,
+		TargetType: "url", Enabled: true, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("failed to create the redirect: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name, langCode string
+		wantSlug       string
+	}{
+		// "/ru/news" is claimed, so the Russian page has to move.
+		{"non-default language sees the prefixed redirect", "ru", "news-2"},
+		// The default language is served unprefixed, and "/news" is free.
+		{"default language keeps the base slug", "en", "news"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := &types.ImportResult{}
+			NewSource().importStories(ctx, queries,
+				[]Story{{ID: 1, Title: ns("News"), BodyText: ns("<p>x</p>")}},
+				map[string]int64{}, adminID, tc.langCode, map[int64]int64{},
+				map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+			if result.PostsImported != 1 {
+				t.Fatalf("imported %d posts, want 1; errors %v", result.PostsImported, result.Errors)
+			}
+
+			pages, err := queries.ListPages(ctx, store.ListPagesParams{Limit: 20, Offset: 0})
+			if err != nil {
+				t.Fatalf("failed to list pages: %v", err)
+			}
+			var got string
+			for _, page := range pages {
+				if page.LanguageCode == tc.langCode {
+					got = page.Slug
+				}
+			}
+			if got != tc.wantSlug {
+				t.Errorf("slug = %q, want %q; the page would be answered by the "+
+					"redirect rather than served", got, tc.wantSlug)
+			}
+		})
+	}
+}
+
+// TestImportedPagePathPrefixFollowsTheDefaultLanguage pins which URL the guard
+// above has to check. Only a non-default language is prefixed, so guarding the
+// prefixed path for the default one would refuse slugs no redirect can reach.
+func TestImportedPagePathPrefixFollowsTheDefaultLanguage(t *testing.T) {
+	queries, _ := setupDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "ru", Name: "Russian", IsDefault: false, IsActive: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("failed to create the Russian language: %v", err)
+	}
+
+	for _, tc := range []struct{ langCode, want string }{
+		{"en", ""},
+		{"EN", ""},
+		{"ru", "/ru"},
+		{"", ""},
+	} {
+		if got := importedPagePathPrefix(ctx, queries, tc.langCode); got != tc.want {
+			t.Errorf("importedPagePathPrefix(%q) = %q, want %q", tc.langCode, got, tc.want)
+		}
+	}
+}
