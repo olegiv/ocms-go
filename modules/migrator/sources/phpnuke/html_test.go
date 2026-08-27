@@ -1,0 +1,818 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package phpnuke
+
+import (
+	"database/sql"
+	"strings"
+	"testing"
+	"time"
+	"unicode/utf8"
+)
+
+// ns and ni build the nullable values the source models use, so tests read as
+// close to plain literals as Go allows.
+func ns(v string) sql.NullString { return sql.NullString{String: v, Valid: true} }
+func ni(v int64) sql.NullInt64   { return sql.NullInt64{Int64: v, Valid: true} }
+
+func TestAssembleStoryBodyJoinsBothHalves(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		home string
+		body string
+		want string
+	}{
+		{"both halves", "<p>Teaser</p>", "<p>Rest</p>", "<p>Teaser</p>\n\n<p>Rest</p>"},
+		{"teaser only", "<p>Teaser</p>", "", "<p>Teaser</p>"},
+		{"body only", "", "<p>Rest</p>", "<p>Rest</p>"},
+		{"neither", "", "", ""},
+		{"whitespace teaser", "   ", "<p>Rest</p>", "<p>Rest</p>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			story := &Story{
+				HomeText: sql.NullString{String: tc.home, Valid: tc.home != ""},
+				BodyText: ns(tc.body),
+			}
+			if got := assembleStoryBody(story); got != tc.want {
+				t.Errorf("assembleStoryBody() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAssembleStoryBodyKeepsBodytextWhenHometextIsNull guards the split-body
+// rule specifically: PHP-Nuke stores most of an article in bodytext, so
+// dropping it would silently truncate the archive rather than fail.
+func TestAssembleStoryBodyKeepsBodytextWhenHometextIsNull(t *testing.T) {
+	story := &Story{
+		HomeText: sql.NullString{Valid: false},
+		BodyText: ns("<p>The entire article.</p>"),
+	}
+	if got := assembleStoryBody(story); !strings.Contains(got, "The entire article.") {
+		t.Errorf("bodytext was dropped: got %q", got)
+	}
+}
+
+func TestAssembleStaticPageBodyOrdersSections(t *testing.T) {
+	page := &StaticPage{
+		Header:    ns("<h1>Head</h1>"),
+		Text:      ns("<p>Main</p>"),
+		Footer:    ns("<p>Foot</p>"),
+		Signature: ns("<em>Sig</em>"),
+	}
+	got := assembleStaticPageBody(page)
+	want := "<h1>Head</h1>\n\n<p>Main</p>\n\n<p>Foot</p>\n\n<em>Sig</em>"
+	if got != want {
+		t.Errorf("assembleStaticPageBody() = %q, want %q", got, want)
+	}
+
+	sparse := &StaticPage{Text: ns("<p>Only body</p>")}
+	if got := assembleStaticPageBody(sparse); got != "<p>Only body</p>" {
+		t.Errorf("empty sections leaked separators: %q", got)
+	}
+}
+
+func TestBuildEncyclopediaBodyRendersTerms(t *testing.T) {
+	entry := &EncyclopediaEntry{Title: ns("Phrasebook"), Description: ns("<p>Intro</p>")}
+	terms := []EncyclopediaTerm{
+		{Title: ns("Привет!"), Text: ns("<p>Hello</p>")},
+		{Title: ns("Как дела?"), Text: ns("<p>How are you</p>")},
+	}
+	got := buildEncyclopediaBody(entry, terms)
+
+	for _, want := range []string{"<p>Intro</p>", "<dl>", "<dt>Привет!</dt>", "<dd><p>Hello</p></dd>", "</dl>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("body missing %q\ngot: %s", want, got)
+		}
+	}
+}
+
+// TestBuildEncyclopediaBodyEscapesTermTitles proves term titles cannot inject
+// markup: only the term body is trusted HTML from the source site.
+func TestBuildEncyclopediaBodyEscapesTermTitles(t *testing.T) {
+	entry := &EncyclopediaEntry{Title: ns("E")}
+	terms := []EncyclopediaTerm{{Title: ns(`<img src=x onerror=alert(1)>`), Text: ns("ok")}}
+	got := buildEncyclopediaBody(entry, terms)
+	if strings.Contains(got, "<img src=x") {
+		t.Errorf("term title was not escaped: %s", got)
+	}
+	if !strings.Contains(got, "&lt;img") {
+		t.Errorf("expected escaped title, got: %s", got)
+	}
+}
+
+func TestBuildEncyclopediaBodyWithoutTermsOmitsList(t *testing.T) {
+	entry := &EncyclopediaEntry{Title: ns("Empty"), Description: ns("<p>Nothing here</p>")}
+	got := buildEncyclopediaBody(entry, nil)
+	if strings.Contains(got, "<dl>") {
+		t.Errorf("empty encyclopedia emitted a definition list: %q", got)
+	}
+	if got != "<p>Nothing here</p>" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestDeriveSummaryStripsMarkupAndCollapsesWhitespace(t *testing.T) {
+	got := deriveSummary("<p>Hello   <b>there</b>\n\nworld</p><script>evil()</script>")
+	want := "Hello there world"
+	if got != want {
+		t.Errorf("deriveSummary() = %q, want %q", got, want)
+	}
+}
+
+func TestDeriveSummaryTruncatesOnRuneBoundary(t *testing.T) {
+	// Cyrillic is multi-byte, so a naive byte slice would split a rune and
+	// produce invalid UTF-8.
+	long := strings.Repeat("зеленый ", 100)
+	got := deriveSummary(long)
+
+	if !utf8.ValidString(got) {
+		t.Fatalf("summary is not valid UTF-8: %q", got)
+	}
+	if runes := utf8.RuneCountInString(got); runes > summaryLimit+1 {
+		t.Errorf("summary is %d runes, want <= %d", runes, summaryLimit+1)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Errorf("truncated summary should end with an ellipsis: %q", got)
+	}
+}
+
+// TestPlainTextNeutralizesEntityEncodedMarkup covers a real audit finding
+// (F-02): the tokenizer decodes entities in text nodes, so source text that
+// merely *displayed* as "<script>" on the old site came back as a genuine
+// "<script>" substring in the stored summary. Harmless while these fields are
+// auto-escaped, and a live hazard the moment one reaches a raw-HTML sink.
+func TestPlainTextNeutralizesEntityEncodedMarkup(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		fragment string
+		want     string
+	}{
+		{"entity-encoded script", "<p>&lt;script&gt;alert(1)&lt;/script&gt; hello</p>", "hello"},
+		{"entity-encoded tag", "<p>a &lt;b&gt; c</p>", "a c"},
+		{"real markup", "<p>x <b>y</b> z</p>", "x y z"},
+		// Doubly encoded input decodes to "&lt;script&gt;" and stops there,
+		// which is correct: a browser decodes entities once, so that string is
+		// inert text even in a raw sink. Decoding repeatedly would be the bug.
+		{"doubly encoded stops at inert entities", "<p>&amp;lt;script&amp;gt;</p>", "&lt;script&gt;"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := plainText(tc.fragment)
+			if got != tc.want {
+				t.Errorf("plainText() = %q, want %q", got, tc.want)
+			}
+			if strings.ContainsAny(got, "<>") {
+				t.Errorf("result still contains angle brackets: %q", got)
+			}
+		})
+	}
+}
+
+// TestPlainTextKeepsLoneAngleBrackets guards the other direction: a blunt
+// strip-everything-bracketed rule would corrupt ordinary prose. The tokenizer
+// only opens a tag when "<" is followed by a name character.
+func TestPlainTextKeepsLoneAngleBrackets(t *testing.T) {
+	if got := plainText("<p>5 &lt; 10 and 20 &gt; 3</p>"); got != "5 < 10 and 20 > 3" {
+		t.Errorf("plainText() = %q, want the comparison text intact", got)
+	}
+}
+
+func TestPlainTextPreservesCyrillic(t *testing.T) {
+	if got := plainText("<p>Отель &lt;b&gt;Royal&lt;/b&gt; Azur</p>"); got != "Отель Royal Azur" {
+		t.Errorf("plainText() = %q", got)
+	}
+}
+
+// TestPlainTextTerminates proves the re-extraction loop is bounded and cannot
+// spin on adversarial nesting.
+func TestPlainTextTerminates(t *testing.T) {
+	done := make(chan string, 1)
+	go func() { done <- plainText(strings.Repeat("&amp;", 200) + "lt;script&gt;") }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("plainText did not terminate")
+	}
+}
+
+func TestDeriveSummaryStripsEntityEncodedMarkup(t *testing.T) {
+	got := deriveSummary("<p>&lt;img src=x onerror=alert(1)&gt; Отель</p>")
+	if strings.ContainsAny(got, "<>") {
+		t.Errorf("summary retained markup characters: %q", got)
+	}
+	if !strings.Contains(got, "Отель") {
+		t.Errorf("summary lost its real text: %q", got)
+	}
+}
+
+func TestDeriveSummaryLeavesShortTextIntact(t *testing.T) {
+	if got := deriveSummary("<p>Отель Royal Azur</p>"); got != "Отель Royal Azur" {
+		t.Errorf("deriveSummary() = %q", got)
+	}
+}
+
+func TestExtractAssetRefsFindsLocalImages(t *testing.T) {
+	body := `
+		<img src="tourism/hotels/ra_boat_0_prv.jpg" alt="boat">
+		<img src="/tourism/places/eljem/10070007.jpg">
+		<a href="docs/brochure.pdf">Brochure</a>
+	`
+	refs := extractAssetRefs(body)
+
+	paths := make(map[string]string, len(refs))
+	for _, ref := range refs {
+		paths[ref.Raw] = ref.Path
+	}
+	want := map[string]string{
+		"tourism/hotels/ra_boat_0_prv.jpg":   "tourism/hotels/ra_boat_0_prv.jpg",
+		"/tourism/places/eljem/10070007.jpg": "tourism/places/eljem/10070007.jpg",
+		"docs/brochure.pdf":                  "docs/brochure.pdf",
+	}
+	if len(paths) != len(want) {
+		t.Fatalf("got %d refs (%v), want %d", len(paths), paths, len(want))
+	}
+	for raw, wantPath := range want {
+		if paths[raw] != wantPath {
+			t.Errorf("ref %q -> %q, want %q", raw, paths[raw], wantPath)
+		}
+	}
+}
+
+// TestExtractAssetRefsKeepsRawAndNormalizedApart is the reason the two fields
+// exist: the same file is written with and without a leading slash across a
+// PHP-Nuke site, and the body must be rewritten using the exact text it holds.
+func TestExtractAssetRefsKeepsRawAndNormalizedApart(t *testing.T) {
+	refs := extractAssetRefs(`<img src="a/b.jpg"><img src="/a/b.jpg">`)
+	if len(refs) != 2 {
+		t.Fatalf("got %d refs, want 2", len(refs))
+	}
+	for _, ref := range refs {
+		if ref.Path != "a/b.jpg" {
+			t.Errorf("normalized path = %q, want %q", ref.Path, "a/b.jpg")
+		}
+	}
+	if refs[0].Raw == refs[1].Raw {
+		t.Error("raw attribute text was collapsed; body rewriting would miss one form")
+	}
+}
+
+func TestExtractAssetRefsIgnoresNonLocalAndNonMedia(t *testing.T) {
+	body := `
+		<img src="http://example.com/x.jpg">
+		<img src="https://example.com/y.jpg">
+		<img src="//cdn.example.com/z.jpg">
+		<img src="data:image/gif;base64,R0lGOD">
+		<a href="modules.php?name=News&amp;file=article&amp;sid=12">Story</a>
+		<a href="#anchor">Anchor</a>
+		<a href="mailto:someone@example.com">Mail</a>
+		<img src="../secrets/passwd.jpg">
+		<a href="notes.txt">Notes</a>
+		<a href="index.php">Home</a>
+	`
+	if refs := extractAssetRefs(body); len(refs) != 0 {
+		t.Errorf("expected no local media refs, got %v", refs)
+	}
+}
+
+func TestNormalizeAssetPath(t *testing.T) {
+	for _, tc := range []struct {
+		raw      string
+		wantPath string
+		wantOK   bool
+	}{
+		{"images/a.jpg", "images/a.jpg", true},
+		{"/images/a.jpg", "images/a.jpg", true},
+		{"images/a.PNG", "images/a.PNG", true},
+		{"a.pdf", "a.pdf", true},
+		{"", "", false},
+		{"   ", "", false},
+		{"/", "", false},
+		{"http://x/a.jpg", "", false},
+		{"//x/a.jpg", "", false},
+		{"data:image/png;base64,AAAA", "", false},
+		{"a/../b.jpg", "", false},
+		{"a//b.jpg", "", false},
+		// A "." segment cannot leave the root, and legacy markup spells
+		// ordinary relative references this way constantly. Rejecting them left
+		// those images unimported with their links pointing at the dead site.
+		{"./a.jpg", "a.jpg", true},
+		{"./images/a.jpg", "images/a.jpg", true},
+		{"images/./a.jpg", "images/a.jpg", true},
+		{"././a.jpg", "a.jpg", true},
+		{".", "", false},
+		{"./", "", false},
+		// ".." still goes, however it is spelled.
+		{"./../a.jpg", "", false},
+		{"%2e%2e/a.jpg", "", false},
+		{"images/%2e%2e%2f%2e%2e%2fetc/passwd.jpg", "", false},
+		// A query or fragment is URL syntax, not part of the filename. These
+		// used to be rejected outright, which left cache-busted images
+		// unimported and their links dangling at the dead site.
+		{"a.jpg?v=2", "a.jpg", true},
+		{"images/a.jpg?v=2&w=300", "images/a.jpg", true},
+		{"a.jpg#frag", "a.jpg", true},
+		// Cutting the query does not let script references through: what
+		// remains has no importable MIME type.
+		{"modules.php?name=News&file=article&sid=12", "", false},
+		{"?v=2", "", false},
+		{"#frag", "", false},
+		{"script.php", "", false},
+		{"noextension", "", false},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			got, ok := normalizeAssetPath(tc.raw)
+			if ok != tc.wantOK {
+				t.Fatalf("normalizeAssetPath(%q) ok = %v, want %v", tc.raw, ok, tc.wantOK)
+			}
+			if ok && got != tc.wantPath {
+				t.Errorf("normalizeAssetPath(%q) = %q, want %q", tc.raw, got, tc.wantPath)
+			}
+		})
+	}
+}
+
+func TestExtractAssetRefsIsDeterministic(t *testing.T) {
+	body := `<img src="c.jpg"><img src="a.jpg"><img src="b.jpg">`
+	first := extractAssetRefs(body)
+	for i := 0; i < 5; i++ {
+		again := extractAssetRefs(body)
+		if len(again) != len(first) {
+			t.Fatalf("ref count changed between runs")
+		}
+		for j := range first {
+			if again[j] != first[j] {
+				t.Fatalf("ref order changed between runs at %d: %v vs %v", j, again[j], first[j])
+			}
+		}
+	}
+	if first[0].Path != "a.jpg" {
+		t.Errorf("refs are not sorted: %v", first)
+	}
+}
+
+// TestMarkupRemovedIgnoresRewrites covers a second-pass review finding. The
+// sanitizer adds rel="nofollow" to every link and normalizes entities, so a
+// plain "output != input" check counted almost every article body while the
+// summary claimed markup had been *removed* — the opposite of what happened.
+func TestMarkupRemovedIgnoresRewrites(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		before string
+		after  string
+		want   bool
+	}{
+		{"nofollow added", `<a href="/x">l</a>`, `<a href="/x" rel="nofollow">l</a>`, false},
+		{"entity normalized", `<p>caf&eacute;</p>`, `<p>café</p>`, false},
+		{"identical", `<p>hi</p>`, `<p>hi</p>`, false},
+		{"element dropped", `<font color="red">x</font>`, `x`, true},
+		{"attribute dropped", `<p style="color:red">x</p>`, `<p>x</p>`, true},
+		{"one of several dropped", `<p><b>a</b><iframe src="x"></iframe></p>`, `<p><b>a</b></p>`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := markupRemoved(tc.before, tc.after); got != tc.want {
+				t.Errorf("markupRemoved() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPrepareBodyTallyCountsOnlyRemovals runs the real sanitizer, so it pins
+// the behaviour against the policy rather than against a hand-written fixture.
+func TestPrepareBodyTallyCountsOnlyRemovals(t *testing.T) {
+	source := NewSource()
+
+	linkOnly := 0
+	source.prepareBody(`<p><a href="/x.html">a link</a> and caf&eacute;</p>`, nil, &linkOnly)
+	if linkOnly != 0 {
+		t.Errorf("a body the sanitizer only rewrote was counted as losing markup (%d)", linkOnly)
+	}
+
+	legacy := 0
+	source.prepareBody(`<font color="red">legacy</font>`, nil, &legacy)
+	if legacy != 1 {
+		t.Errorf("a body that lost <font> was not counted (%d)", legacy)
+	}
+}
+
+// TestPlainTextResistsEncodingPump covers a review finding. The loop used to
+// key on "contains any angle bracket", so a bare ">" — ordinary punctuation —
+// kept it running while each pass peeled one layer off an encoded payload. The
+// value returned after the final pass then held a live tag, in a function whose
+// entire contract is that it does not.
+func TestPlainTextResistsEncodingPump(t *testing.T) {
+	payload := "&lt;script&gt;alert(1)&lt;/script&gt;"
+	for i := 0; i < maxPlainTextPasses+3; i++ {
+		payload = strings.ReplaceAll(payload, "&", "&amp;")
+	}
+	got := plainText("&gt; " + payload)
+
+	if containsTag(got) {
+		t.Errorf("output holds a live tag: %q", got)
+	}
+	if strings.Contains(got, "<script") {
+		t.Errorf("output holds a script tag: %q", got)
+	}
+}
+
+// TestPlainTextNeverReturnsATag is the general form: whatever the input, the
+// result must not tokenize as markup. The cap is not a safety boundary on its
+// own, so the terminal guard has to hold for input engineered to exceed it.
+func TestPlainTextNeverReturnsATag(t *testing.T) {
+	deep := "<img src=x onerror=alert(1)>"
+	for i := 0; i < 20; i++ {
+		deep = strings.ReplaceAll(strings.ReplaceAll(deep, "&", "&amp;"), "<", "&lt;")
+		deep = strings.ReplaceAll(deep, ">", "&gt;")
+	}
+	for _, in := range []string{
+		"&gt; " + deep,
+		"&lt;&lt;&lt;script&gt;&gt;&gt;",
+		strings.Repeat("&gt;", 50) + "&lt;script&gt;",
+	} {
+		if got := plainText(in); containsTag(got) {
+			t.Errorf("plainText(%.40q…) returned markup: %q", in, got)
+		}
+	}
+}
+
+func TestContainsTagIgnoresLonePunctuation(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{"5 < 10 and 20 > 3", false},
+		{"a > b", false},
+		{"&lt;script&gt;", false},
+		{"<script>", true},
+		{"</p>", true},
+		{"<br/>", true},
+	} {
+		if got := containsTag(tc.in); got != tc.want {
+			t.Errorf("containsTag(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestNormalizeAssetPathDecodesPercentEscapes covers a Codex review finding. A
+// path is written as a URL but opened as a filename, so "My%20Photo.jpg" names
+// a file called "My Photo.jpg". Without decoding, the file was reported missing
+// and the old reference stayed in the imported body.
+func TestNormalizeAssetPathDecodesPercentEscapes(t *testing.T) {
+	for _, tc := range []struct {
+		raw      string
+		wantPath string
+		wantOK   bool
+	}{
+		{"images/My%20Photo.jpg", "images/My Photo.jpg", true},
+		{"images/%D0%9E%D1%82%D0%B5%D0%BB%D1%8C.jpg", "images/Отель.jpg", true},
+		{"images/plain.jpg", "images/plain.jpg", true},
+		// Decoding happens before validation, so encoded traversal is caught.
+		{"images/%2e%2e%2fsecret.jpg", "", false},
+		{"%2fetc%2fpasswd.jpg", "", false},
+		{"images/bad%zz.jpg", "", false},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			got, ok := normalizeAssetPath(tc.raw)
+			if ok != tc.wantOK {
+				t.Fatalf("normalizeAssetPath(%q) ok = %v, want %v (got %q)", tc.raw, ok, tc.wantOK, got)
+			}
+			if ok && got != tc.wantPath {
+				t.Errorf("normalizeAssetPath(%q) = %q, want %q", tc.raw, got, tc.wantPath)
+			}
+		})
+	}
+}
+
+// TestExtractAssetRefsRegisterTheBodysOwnSpelling covers two rounds of Codex
+// review findings on the same defect.
+//
+// An assetRef does two jobs: Path locates the file on disk and Raw is what the
+// rewriter searches for in the body. The tokenizer entity-decodes attribute
+// values, which is right for Path and useless for Raw — src="a&amp;b.jpg"
+// yields "a&b.jpg", a spelling the body does not contain, so rewriting found
+// nothing and left the legacy path pointing at the dead server. The first fix
+// added html.EscapeString(value), which only reproduces the *canonical*
+// spelling and so still missed src="a&#38;b.jpg".
+//
+// The invariant below is what finally settles it, and unlike a list of
+// spellings to reconstruct it cannot be outgrown: for well-formed markup, every
+// Raw an extraction hands back occurs verbatim in the body it came from.
+func TestExtractAssetRefsRegisterTheBodysOwnSpelling(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, wantPath string
+	}{
+		{"canonical entity", `<img src="images/a&amp;b.jpg">`, "images/a&b.jpg"},
+		{"numeric entity", `<img src="images/a&#38;b.jpg">`, "images/a&b.jpg"},
+		{"padded numeric entity", `<img src="images/a&#038;b.jpg">`, "images/a&b.jpg"},
+		// Not a bug: inside an attribute an unterminated entity followed by an
+		// alphanumeric is not a reference, so browsers read this path literally
+		// and so must the importer.
+		{"entity without semicolon", `<img src="images/a&ampb.jpg">`, "images/a&ampb.jpg"},
+		{"single quoted", `<img src='images/a&#38;b.jpg'>`, "images/a&b.jpg"},
+		{"unquoted", `<img src=images/plain.jpg>`, "images/plain.jpg"},
+		{"attribute is not first", `<img alt="x" src="images/a&#38;b.jpg" width=10>`, "images/a&b.jpg"},
+		{"valueless attribute first", `<img hidden src="images/a&#38;b.jpg">`, "images/a&b.jpg"},
+		{"percent escaped", `<img src="images/My%20Photo.jpg">`, "images/My Photo.jpg"},
+		{"self closing", `<img src="images/a&#38;b.jpg"/>`, "images/a&b.jpg"},
+		{"anchor href", `<a href="files/a&#38;b.pdf">x</a>`, "files/a&b.pdf"},
+		{"uppercase tag and attribute", `<IMG SRC="images/a&#38;b.jpg">`, "images/a&b.jpg"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			refs := extractAssetRefs(tc.body)
+			if len(refs) == 0 {
+				t.Fatalf("no asset reference was extracted from %s", tc.body)
+			}
+			for _, ref := range refs {
+				if !strings.Contains(tc.body, ref.Raw) {
+					t.Errorf("Raw %q does not occur in the body %s, so rewriting it "+
+						"can never match", ref.Raw, tc.body)
+				}
+				if ref.Path != tc.wantPath {
+					t.Errorf("Path = %q, want %q; Raw must be rewritable but Path "+
+						"must be openable", ref.Path, tc.wantPath)
+				}
+			}
+		})
+	}
+}
+
+// TestRawAttrValuesReadsTheSourceText pins the scanner the invariant above
+// rests on, including the shapes it is expected to give up on. Yielding fewer
+// values than the tokenizer found attributes is the signal extractAssetRefs
+// uses to fall back, so "returns nothing" has to stay a real outcome rather
+// than turning into a wrong guess.
+func TestRawAttrValuesReadsTheSourceText(t *testing.T) {
+	for _, tc := range []struct {
+		name, tag, attr string
+		want            []string
+	}{
+		{"double quoted", `<img src="a.jpg">`, "src", []string{"a.jpg"}},
+		{"single quoted", `<img src='a.jpg'>`, "src", []string{"a.jpg"}},
+		{"unquoted", `<img src=a.jpg>`, "src", []string{"a.jpg"}},
+		{"entities are left alone", `<img src="a&#38;b.jpg">`, "src", []string{"a&#38;b.jpg"}},
+		{"spaces around equals", `<img src = "a.jpg">`, "src", []string{"a.jpg"}},
+		{"other attributes ignored", `<img alt="src" src="a.jpg">`, "src", []string{"a.jpg"}},
+		{"valueless attribute", `<img hidden src="a.jpg">`, "src", []string{"a.jpg"}},
+		{"repeated attribute", `<img src="a.jpg" src="b.jpg">`, "src", []string{"a.jpg", "b.jpg"}},
+		{"self closing", `<img src="a.jpg"/>`, "src", []string{"a.jpg"}},
+		{"newline separated", "<img\n\tsrc=\"a.jpg\">", "src", []string{"a.jpg"}},
+		{"attribute absent", `<img alt="a">`, "src", nil},
+		{"quote never closed", `<img src="a.jpg`, "src", []string{"a.jpg"}},
+		// The tokenizer reports src="" here, which normalizeAssetPath rejects, so
+		// there is no spelling for the scanner to be wrong about.
+		{"value missing", `<img src=>`, "src", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := rawAttrValues([]byte(tc.tag), tc.attr)
+			if len(got) != len(tc.want) {
+				t.Fatalf("rawAttrValues(%q) = %q, want %q", tc.tag, got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("value %d = %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestRawAttrValuesTerminates guards the hand-written scanner against the one
+// way it could fail catastrophically rather than merely wrongly: a malformed
+// tag that stops advancing the cursor would hang the import.
+func TestRawAttrValuesTerminates(t *testing.T) {
+	for _, tag := range []string{
+		"", "<", "<>", "<img", "<img ", "<img =", "<img ==", "<img src", "<img src=",
+		`<img src="`, "<img src='", "<img /", "<img //", "< img src=a", "<img\x00src=a",
+		strings.Repeat("<img src=", 200), strings.Repeat("= ", 500),
+	} {
+		done := make(chan []string, 1)
+		go func() { done <- rawAttrValues([]byte(tag), "src") }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("rawAttrValues did not terminate on %q", tag)
+		}
+	}
+}
+
+// TestTopicLabelIgnoresWhitespaceOnlyText covers a Codex review finding: a
+// whitespace-only topictext was returned as the label, creating a visually
+// blank category while a usable topicname sat unused.
+func TestTopicLabelIgnoresWhitespaceOnlyText(t *testing.T) {
+	for _, tc := range []struct {
+		name, text, want string
+	}{
+		{"rHotels", "   ", "rHotels"},
+		{"rHotels", "\t\n ", "rHotels"},
+		{"rHotels", "Отели", "Отели"},
+		{"rHotels", "", "rHotels"},
+		{"  ", "  ", ""},
+	} {
+		topic := &Topic{Name: ns(tc.name), Text: ns(tc.text)}
+		if got := topic.Label(); got != tc.want {
+			t.Errorf("Label() with name=%q text=%q = %q, want %q", tc.name, tc.text, got, tc.want)
+		}
+	}
+}
+
+// TestExtractAssetRefsKeepsDotSegmentSpelling is the rewriting half of the
+// dot-segment fix. Path has to be the normalized filename so the file opens,
+// while Raw has to stay exactly as the body spells it or the substitution finds
+// nothing and the legacy URL survives the migration.
+func TestExtractAssetRefsKeepsDotSegmentSpelling(t *testing.T) {
+	for _, tc := range []struct{ body, wantRaw, wantPath string }{
+		{`<img src="./images/photo.jpg">`, "./images/photo.jpg", "images/photo.jpg"},
+		{`<img src="images/./photo.jpg">`, "images/./photo.jpg", "images/photo.jpg"},
+		{`<img src="./photo.jpg">`, "./photo.jpg", "photo.jpg"},
+	} {
+		t.Run(tc.wantRaw, func(t *testing.T) {
+			refs := extractAssetRefs(tc.body)
+			if len(refs) != 1 {
+				t.Fatalf("got %d refs from %s, want 1", len(refs), tc.body)
+			}
+			if refs[0].Raw != tc.wantRaw {
+				t.Errorf("Raw = %q, want %q; rewriting searches the body for this",
+					refs[0].Raw, tc.wantRaw)
+			}
+			if refs[0].Path != tc.wantPath {
+				t.Errorf("Path = %q, want %q; the file is opened at this",
+					refs[0].Path, tc.wantPath)
+			}
+			if !strings.Contains(tc.body, refs[0].Raw) {
+				t.Errorf("Raw %q does not occur in the body", refs[0].Raw)
+			}
+		})
+	}
+}
+
+// TestRewriteAssetRefsTouchesOnlyTheAttribute covers a Codex review finding.
+//
+// Rewriting used to be a global string replacement, and a file path is an
+// ordinary substring: importing src="images/a.jpg" also rewrote the words
+// "images/a.jpg.bak" in a sentence and mangled the external link
+// http://old.example/images/a.jpg into a broken double-slash URL. Sanitizing
+// does not undo either, and neither shows up in the import summary.
+func TestRewriteAssetRefsTouchesOnlyTheAttribute(t *testing.T) {
+	mediaMap := map[string]string{
+		"images/a.jpg":   "/uploads/originals/uuid.jpg",
+		"./images/b.jpg": "/uploads/originals/other.jpg",
+	}
+
+	for _, tc := range []struct{ name, body, want string }{
+		{
+			"plain text is left alone",
+			`<img src="images/a.jpg"> see images/a.jpg.bak`,
+			`<img src="/uploads/originals/uuid.jpg"> see images/a.jpg.bak`,
+		},
+		{
+			"an external URL containing the path is left alone",
+			`<a href="http://old.example/images/a.jpg">x</a>`,
+			`<a href="http://old.example/images/a.jpg">x</a>`,
+		},
+		{
+			"only the mapped attribute changes",
+			`<img alt="images/a.jpg" src="images/a.jpg" title="images/a.jpg">`,
+			`<img alt="images/a.jpg" src="/uploads/originals/uuid.jpg" title="images/a.jpg">`,
+		},
+		{
+			"the source spelling is the key",
+			`<img src="./images/b.jpg">`,
+			`<img src="/uploads/originals/other.jpg">`,
+		},
+		{
+			"quoting style is preserved",
+			`<img src='images/a.jpg'>`,
+			`<img src='/uploads/originals/uuid.jpg'>`,
+		},
+		{
+			"unquoted values are rewritten in place",
+			`<img src=images/a.jpg width=10>`,
+			`<img src=/uploads/originals/uuid.jpg width=10>`,
+		},
+		{
+			"unmapped references survive untouched",
+			`<img src="images/never-imported.jpg">`,
+			`<img src="images/never-imported.jpg">`,
+		},
+		{
+			"text that merely looks like markup is not touched",
+			`<p>write &lt;img src="images/a.jpg"&gt; to embed it</p>`,
+			`<p>write &lt;img src="images/a.jpg"&gt; to embed it</p>`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := rewriteAssetRefs(tc.body, mediaMap); got != tc.want {
+				t.Errorf("rewriteAssetRefs()\n got  %s\n want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRewriteAssetRefsIsIdentityWithoutAMatch is the invariant underneath the
+// table above: a rewrite that has nothing to substitute must hand the body back
+// byte for byte, because every token it does not edit is copied from the
+// tokenizer's own source bytes.
+func TestRewriteAssetRefsIsIdentityWithoutAMatch(t *testing.T) {
+	bodies := []string{
+		`<p>Plain <b>text</b> with &amp; entities and 5 &lt; 10.</p>`,
+		`<img src="images/a.jpg" alt='single'><br/><hr>`,
+		`<!-- a comment --><p>after</p>`,
+		`<table border=1><tr><td nowrap>cell</td></tr></table>`,
+		`<p>Отель <font color="red">Royal</font> Azur</p>`,
+		`<a href="http://x/images/a.jpg">link</a> images/a.jpg in prose`,
+		`<img src=images/a.jpg>`,
+		`<script>var x = "images/a.jpg";</script>`,
+	}
+	for _, body := range bodies {
+		if got := rewriteAssetRefs(body, nil); got != body {
+			t.Errorf("an empty map altered the body\n got  %s\n want %s", got, body)
+		}
+		unrelated := map[string]string{"nothing/here.png": "/uploads/x.png"}
+		if got := rewriteAssetRefs(body, unrelated); got != body {
+			t.Errorf("a non-matching map altered the body\n got  %s\n want %s", got, body)
+		}
+	}
+}
+
+// TestRewriteAssetRefsRoundTripsWithExtraction ties the two halves together:
+// whatever spelling extraction registers is exactly what rewriting can find.
+// They read the same source text through the same scanner, and this fails if
+// either side starts deriving it differently.
+func TestRewriteAssetRefsRoundTripsWithExtraction(t *testing.T) {
+	for _, body := range []string{
+		`<img src="images/a&#38;b.jpg">`,
+		`<img src="images/a&amp;b.jpg">`,
+		`<img src='./images/photo.jpg'>`,
+		`<img src="images/My%20Photo.jpg">`,
+		`<img src="images/photo.jpg?v=2">`,
+		`<img alt="x" src=images/plain.jpg width=10>`,
+		`<a href="files/doc&#38;more.pdf">doc</a>`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			refs := extractAssetRefs(body)
+			if len(refs) != 1 {
+				t.Fatalf("got %d refs, want 1", len(refs))
+			}
+			mediaMap := map[string]string{refs[0].Raw: "/uploads/originals/uuid.jpg"}
+			got := rewriteAssetRefs(body, mediaMap)
+			if got == body {
+				t.Errorf("extraction registered %q but rewriting found nothing to change in %s",
+					refs[0].Raw, body)
+			}
+			if strings.Contains(got, refs[0].Raw) {
+				t.Errorf("the legacy path survived the rewrite: %s", got)
+			}
+		})
+	}
+}
+
+// TestModelDisplayHelpersTrim covers a Codex review finding, and generalizes an
+// earlier one.
+//
+// Every "best available name" helper picks between two candidates, and a
+// whitespace-only first candidate is not a name. Topic.Label was fixed for this
+// in an earlier round and User.DisplayName was not, which is exactly the sort of
+// half-applied fix a table like this is meant to stop returning.
+func TestModelDisplayHelpersTrim(t *testing.T) {
+	blank := ns("   \t\n ")
+
+	for _, tc := range []struct{ name, got, want string }{
+		{"Topic.Label prefers text", (&Topic{Name: ns("news"), Text: ns("News")}).Label(), "News"},
+		{"Topic.Label trims text", (&Topic{Text: ns("  News  ")}).Label(), "News"},
+		{"Topic.Label falls back past blank text",
+			(&Topic{Name: ns("news"), Text: blank}).Label(), "news"},
+		{"Topic.Label trims the fallback", (&Topic{Name: ns(" news ")}).Label(), "news"},
+		{"User.DisplayName prefers the name",
+			(&User{Username: ns("olegiv"), Name: ns("Oleg")}).DisplayName(), "Oleg"},
+		{"User.DisplayName trims the name",
+			(&User{Name: ns("  Oleg  ")}).DisplayName(), "Oleg"},
+		{"User.DisplayName falls back past a blank name",
+			(&User{Username: ns("olegiv"), Name: blank}).DisplayName(), "olegiv"},
+		{"User.DisplayName trims the fallback",
+			(&User{Username: ns(" olegiv ")}).DisplayName(), "olegiv"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("got %q, want %q", tc.got, tc.want)
+			}
+			if tc.got != strings.TrimSpace(tc.got) {
+				t.Errorf("got %q, which carries padding into the destination row", tc.got)
+			}
+		})
+	}
+
+	// The property the table above samples: no candidate arrangement may yield
+	// a value that is blank-but-not-empty.
+	for _, name := range []sql.NullString{blank, ns(""), {Valid: false}, ns(" x ")} {
+		for _, login := range []sql.NullString{blank, ns(""), {Valid: false}, ns(" y ")} {
+			user := &User{Username: login, Name: name}
+			if got := user.DisplayName(); got != strings.TrimSpace(got) {
+				t.Errorf("DisplayName() = %q for name=%q login=%q", got, name.String, login.String)
+			}
+			topic := &Topic{Name: login, Text: name}
+			if got := topic.Label(); got != strings.TrimSpace(got) {
+				t.Errorf("Label() = %q for text=%q name=%q", got, name.String, login.String)
+			}
+		}
+	}
+}

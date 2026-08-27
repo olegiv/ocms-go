@@ -346,26 +346,10 @@ func isElefantBlogPostAlias(alias string) bool {
 	return parts[2] != ""
 }
 
-func redirectPathOccupied(ctx context.Context, queries *store.Queries, sourcePath string) (bool, error) {
-	_, err := queries.GetRedirectBySourcePath(ctx, sourcePath)
-	switch {
-	case err == nil:
-		return true, nil
-	case !errors.Is(err, sql.ErrNoRows):
-		return false, err
-	}
-	redirects, err := queries.ListEnabledRedirects(ctx)
-	if err != nil {
-		return false, err
-	}
-	for _, redirect := range redirects {
-		if redirect.SourcePath == sourcePath ||
-			(redirect.IsWildcard && wildcardRedirectMatchesPath(redirect.SourcePath, sourcePath)) {
-			return true, nil
-		}
-	}
-	return false, nil
-}
+// redirectPathOccupied reports whether a redirect already claims a path. The
+// implementation is shared with the PHP-Nuke source; Drupal still has its own
+// enabled-only variant.
+var redirectPathOccupied = shared.RedirectPathOccupied
 
 func (s *Source) createTrackedRedirect(ctx context.Context, queries *store.Queries,
 	sourcePath, targetURL string, createdAt time.Time, result *types.ImportResult,
@@ -411,50 +395,9 @@ func (s *Source) createTrackedRedirect(ctx context.Context, queries *store.Queri
 	return nil
 }
 
-func wildcardRedirectMatchesPath(pattern, requestPath string) bool {
-	if strings.HasSuffix(pattern, "*") && !strings.HasSuffix(pattern, "**") {
-		prefix := strings.TrimSuffix(pattern, "*")
-		if !strings.HasSuffix(prefix, "/") {
-			requestPath = strings.TrimSuffix(requestPath, "/")
-			prefixWithoutSlash := strings.TrimSuffix(prefix, "/")
-			return requestPath == prefixWithoutSlash || strings.HasPrefix(requestPath, prefix)
-		}
-	}
-	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
-	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
-	return wildcardRedirectPartsMatch(patternParts, requestParts, 0, 0)
-}
-
-func wildcardRedirectPartsMatch(pattern, request []string, patternIndex, requestIndex int) bool {
-	if patternIndex >= len(pattern) {
-		return requestIndex >= len(request)
-	}
-	if requestIndex >= len(request) {
-		for ; patternIndex < len(pattern); patternIndex++ {
-			if pattern[patternIndex] != "**" {
-				return false
-			}
-		}
-		return true
-	}
-	switch pattern[patternIndex] {
-	case "*":
-		return wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
-	case "**":
-		if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex) {
-			return true
-		}
-		for end := requestIndex + 1; end <= len(request); end++ {
-			if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, end) {
-				return true
-			}
-		}
-		return false
-	default:
-		return pattern[patternIndex] == request[requestIndex] &&
-			wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
-	}
-}
+// wildcardRedirectMatchesPath mirrors the redirect middleware's wildcard
+// matching. The implementation is shared with every other migrator source.
+var wildcardRedirectMatchesPath = shared.WildcardRedirectMatchesPath
 
 func (s *Source) cleanupMediaFiles(ctx context.Context, tracker types.ImportTracker,
 	canonicalUploadRoot, mediaUUID string) error {

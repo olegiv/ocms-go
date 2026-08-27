@@ -1,0 +1,600 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package phpnuke
+
+import (
+	"net/url"
+	"sort"
+	"strings"
+	"unicode/utf8"
+
+	"golang.org/x/net/html"
+
+	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
+)
+
+// summaryLimit bounds the plain-text teaser stored in pages.summary.
+const summaryLimit = 300
+
+// assetRef is one local file reference found in imported HTML.
+//
+// Raw and Path are kept apart because the body must be rewritten using the
+// exact attribute text it contains — the same file is written as both
+// "tourism/x.jpg" and "/tourism/x.jpg" across a PHP-Nuke site — while the file
+// is opened, and imported, only once per normalized path.
+type assetRef struct {
+	Raw  string // exactly as it appeared in the source attribute
+	Path string // normalized, root-relative, slash-separated
+}
+
+// assembleStoryBody joins the two halves of a PHP-Nuke article.
+//
+// hometext is the teaser rendered on the front page and bodytext is the
+// remainder behind "read more". Concatenating them is what makes the article
+// whole; importing either alone silently truncates most of the archive.
+func assembleStoryBody(s *Story) string {
+	home := strings.TrimSpace(shared.NullString(s.HomeText))
+	body := strings.TrimSpace(shared.NullString(s.BodyText))
+	switch {
+	case home == "":
+		return body
+	case body == "":
+		return home
+	default:
+		return home + "\n\n" + body
+	}
+}
+
+// assembleStaticPageBody joins the header, text, footer, and signature columns
+// PHP-Nuke renders in sequence for a static page.
+func assembleStaticPageBody(p *StaticPage) string {
+	parts := make([]string, 0, 4)
+	for _, part := range []string{shared.NullString(p.Header), shared.NullString(p.Text),
+		shared.NullString(p.Footer), shared.NullString(p.Signature)} {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// buildEncyclopediaBody renders an encyclopedia and its terms as one page.
+//
+// PHP-Nuke serves each term through its own query-string URL, which has no
+// oCMS equivalent. Rendering the terms as a definition list inside the parent
+// entry keeps the content and its ordering while collapsing hundreds of
+// unreachable URLs into one readable page.
+func buildEncyclopediaBody(entry *EncyclopediaEntry, terms []EncyclopediaTerm) string {
+	var b strings.Builder
+	if description := strings.TrimSpace(entry.Body()); description != "" {
+		b.WriteString(description)
+		b.WriteString("\n\n")
+	}
+	if len(terms) == 0 {
+		return strings.TrimSpace(b.String())
+	}
+	b.WriteString("<dl>\n")
+	for i := range terms {
+		title := strings.TrimSpace(shared.NullString(terms[i].Title))
+		text := strings.TrimSpace(shared.NullString(terms[i].Text))
+		if title == "" && text == "" {
+			continue
+		}
+		b.WriteString("<dt>")
+		b.WriteString(html.EscapeString(title))
+		b.WriteString("</dt>\n<dd>")
+		// Term bodies are stored as HTML on the source site, so they are
+		// emitted unescaped and left for the sanitizer to police.
+		b.WriteString(text)
+		b.WriteString("</dd>\n")
+	}
+	b.WriteString("</dl>")
+	return b.String()
+}
+
+// maxPlainTextPasses bounds the re-extraction loop in plainText.
+const maxPlainTextPasses = 5
+
+// plainText reduces a source fragment to text that cannot be read as markup.
+//
+// One tokenizer pass is not enough. The tokenizer decodes entities in text
+// nodes, so a source that stored "&lt;script&gt;" — which the old site
+// displayed as harmless literal text — comes back as a real "<script>"
+// substring. Re-extracting collapses that.
+//
+// The loop keys on whether a tag is actually present, not on whether any angle
+// bracket is: a lone ">" is ordinary punctuation, and treating it as a reason
+// to keep decoding let a caller pump the loop to its cap with a bare ">" while
+// each pass peeled one layer off an encoded payload, so the value returned
+// after the final pass held a live tag.
+//
+// The cap alone is therefore not a safety boundary — input can always add one
+// more encoding layer — so anything still tag-shaped afterwards has its angle
+// brackets removed outright. That is lossy, and only for input engineered to
+// reach it.
+//
+// Lone angle brackets otherwise survive: the tokenizer only starts a tag when
+// "<" is followed by a name character, so "5 < 10" is left intact rather than
+// mangled by a blunt strip-everything-bracketed rule.
+func plainText(fragment string) string {
+	text := textContent(fragment)
+	for i := 0; i < maxPlainTextPasses && containsTag(text); i++ {
+		next := textContent(text)
+		if next == text {
+			break
+		}
+		text = next
+	}
+	if containsTag(text) {
+		text = strings.NewReplacer("<", "", ">", "").Replace(text)
+		text = strings.Join(strings.Fields(text), " ")
+	}
+	return text
+}
+
+// containsTag reports whether a fragment holds anything the HTML tokenizer
+// reads as a tag.
+func containsTag(fragment string) bool {
+	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
+	for {
+		switch tokenizer.Next() {
+		case html.ErrorToken:
+			return false
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
+			return true
+		}
+	}
+}
+
+// deriveSummary reduces HTML to a short plain-text teaser.
+func deriveSummary(fragment string) string {
+	text := plainText(fragment)
+	if text == "" {
+		return ""
+	}
+	if utf8.RuneCountInString(text) <= summaryLimit {
+		return text
+	}
+	// Cut on a rune boundary, then back off to the last word break so the
+	// teaser does not end mid-word.
+	cut := len(text)
+	runes := 0
+	for index := range text {
+		if runes == summaryLimit {
+			cut = index
+			break
+		}
+		runes++
+	}
+	truncated := text[:cut]
+	if idx := strings.LastIndex(truncated, " "); idx > 0 {
+		truncated = truncated[:idx]
+	}
+	return strings.TrimRight(truncated, " ,;:-") + "…"
+}
+
+// textContent strips markup and collapses whitespace.
+func textContent(fragment string) string {
+	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
+	var b strings.Builder
+	skip := 0
+	for {
+		switch tokenizer.Next() {
+		case html.ErrorToken:
+			return strings.Join(strings.Fields(b.String()), " ")
+		case html.StartTagToken:
+			if name, _ := tokenizer.TagName(); isNonRenderedTag(string(name)) {
+				skip++
+			}
+		case html.EndTagToken:
+			if name, _ := tokenizer.TagName(); isNonRenderedTag(string(name)) && skip > 0 {
+				skip--
+			}
+		case html.TextToken:
+			if skip == 0 {
+				b.Write(tokenizer.Text())
+				b.WriteByte(' ')
+			}
+		}
+	}
+}
+
+// isNonRenderedTag reports whether a tag's text content is invisible to a reader.
+func isNonRenderedTag(name string) bool {
+	switch strings.ToLower(name) {
+	case "script", "style", "head", "title":
+		return true
+	default:
+		return false
+	}
+}
+
+// extractAssetRefs finds every local file reference in imported HTML.
+//
+// Only paths that resolve to an importable MIME type are returned, so the
+// walk yields the handful of images an article actually uses rather than every
+// link on the page. Absolute URLs, protocol-relative URLs, and anything
+// carrying a query string are left untouched: they either point off-site or
+// address a PHP script rather than a file on disk.
+func extractAssetRefs(fragment string) []assetRef {
+	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
+	seen := make(map[string]assetRef)
+	for {
+		switch tokenizer.Next() {
+		case html.ErrorToken:
+			return sortedRefs(seen)
+		case html.StartTagToken, html.SelfClosingTagToken:
+			// Copied before TagName or TagAttr runs: both are documented to
+			// invalidate the slice Raw returns.
+			rawTag := append([]byte(nil), tokenizer.Raw()...)
+			name, hasAttr := tokenizer.TagName()
+			attrName := attributeForTag(string(name))
+			if attrName == "" || !hasAttr {
+				continue
+			}
+			spellings := rawAttrValues(rawTag, attrName)
+			match := 0
+			for hasAttr {
+				var key, value []byte
+				key, value, hasAttr = tokenizer.TagAttr()
+				if string(key) != attrName {
+					continue
+				}
+				decoded := string(value)
+				index := match
+				match++
+				path, ok := normalizeAssetPath(decoded)
+				if !ok {
+					continue
+				}
+				// Rewriting searches the original body, so what gets registered
+				// has to be the text the body actually holds. TagAttr hands back
+				// a decoded value, and src="a&#38;b.jpg", src="a&amp;b.jpg" and
+				// src="a&b.jpg" all decode to the same thing — the decoded form
+				// identifies the file but cannot be found in the body again.
+				if index < len(spellings) {
+					seen[spellings[index]] = assetRef{Raw: spellings[index], Path: path}
+					continue
+				}
+				// Markup malformed enough that the source scan lost track of
+				// this attribute. Fall back to the two spellings that cover
+				// every reference without an exotic entity.
+				seen[decoded] = assetRef{Raw: decoded, Path: path}
+				if escaped := html.EscapeString(decoded); escaped != decoded {
+					seen[escaped] = assetRef{Raw: escaped, Path: path}
+				}
+			}
+		}
+	}
+}
+
+// attributeForTag returns the attribute that carries a file reference for a
+// given tag, or "" when the tag cannot reference one.
+func attributeForTag(name string) string {
+	switch strings.ToLower(name) {
+	case "img":
+		return "src"
+	case "a":
+		return "href"
+	default:
+		return ""
+	}
+}
+
+// attrSpan locates one attribute value inside the raw source of a start tag:
+// the text exactly as written, and where it sits so it can be replaced in place.
+type attrSpan struct {
+	Value string
+	Start int // byte offset of the value within the raw tag
+	End   int
+}
+
+// rawAttrSpans finds every value the named attribute carries in a raw start
+// tag, in document order.
+//
+// This exists because the tokenizer cannot answer the questions the importer
+// asks of an attribute. TagAttr decodes entities, so it reports what a
+// reference *means*, which is the right answer for locating a file on disk.
+// Rewriting is a different question — it needs what the body *says*, and where
+// — and there the decoded value is a dead end, because several spellings decode
+// to it and none can be recovered from the result.
+//
+// The scan is deliberately more permissive than the HTML grammar: unquoted and
+// single-quoted values are accepted, and a valueless attribute is stepped over.
+// Anything it cannot follow simply yields fewer spans than the tokenizer found
+// attributes, which callers detect by position and handle.
+func rawAttrSpans(rawTag []byte, attrName string) []attrSpan {
+	tag := string(rawTag)
+
+	begin := 0
+	if strings.HasPrefix(tag, "<") {
+		begin = 1
+	}
+	end := len(tag)
+	for end > begin && isHTMLSpace(tag[end-1]) {
+		end--
+	}
+	if end > begin && tag[end-1] == '>' {
+		end--
+	}
+	if end > begin && tag[end-1] == '/' {
+		end--
+	}
+
+	index := begin
+	for index < end && !isHTMLSpace(tag[index]) {
+		index++ // the tag name, which is not an attribute
+	}
+
+	var spans []attrSpan
+	for index < end {
+		for index < end && isHTMLSpace(tag[index]) {
+			index++
+		}
+		nameStart := index
+		for index < end && !isHTMLSpace(tag[index]) && tag[index] != '=' {
+			index++
+		}
+		name := strings.ToLower(tag[nameStart:index])
+		for index < end && isHTMLSpace(tag[index]) {
+			index++
+		}
+		if index >= end || tag[index] != '=' {
+			continue // valueless attribute; the name loop already advanced
+		}
+		index++
+		for index < end && isHTMLSpace(tag[index]) {
+			index++
+		}
+		if index >= end {
+			break
+		}
+		var valueStart, valueEnd int
+		switch quote := tag[index]; quote {
+		case '"', '\'':
+			index++
+			valueStart = index
+			for index < end && tag[index] != quote {
+				index++
+			}
+			valueEnd = index
+			if index < end {
+				index++
+			}
+		default:
+			valueStart = index
+			for index < end && !isHTMLSpace(tag[index]) {
+				index++
+			}
+			valueEnd = index
+		}
+		if name == attrName {
+			spans = append(spans, attrSpan{Value: tag[valueStart:valueEnd], Start: valueStart, End: valueEnd})
+		}
+	}
+	return spans
+}
+
+// rawAttrValues returns just the source text of each value, for callers that do
+// not need to write back.
+func rawAttrValues(rawTag []byte, attrName string) []string {
+	spans := rawAttrSpans(rawTag, attrName)
+	values := make([]string, 0, len(spans))
+	for _, span := range spans {
+		values = append(values, span.Value)
+	}
+	return values
+}
+
+// rewriteAssetRefs substitutes imported media URLs into the attributes they
+// came from, and touches nothing else.
+//
+// The obvious implementation — replace every occurrence of the old path with
+// the new URL — corrupts the document. A path is an ordinary substring, so
+// importing src="images/a.jpg" also rewrote the words "images/a.jpg.bak" in a
+// sentence, and turned the external link http://old.example/images/a.jpg into
+// http://old.example//uploads/originals/<uuid>.jpg. Sanitizing afterwards does
+// not undo either, and neither is visible in the import summary.
+//
+// Rebuilding from the tokenizer's own Raw() bytes is what makes this safe:
+// every token that is not a rewritten attribute is copied through byte for
+// byte, so the only edits are the ones asked for.
+func rewriteAssetRefs(fragment string, mediaMap map[string]string) string {
+	if len(mediaMap) == 0 {
+		return fragment
+	}
+	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
+	var out strings.Builder
+	out.Grow(len(fragment))
+	for {
+		tokenType := tokenizer.Next()
+		if tokenType == html.ErrorToken {
+			return out.String()
+		}
+		// Copied before TagName runs: it is documented to invalidate Raw.
+		rawTag := append([]byte(nil), tokenizer.Raw()...)
+		if tokenType != html.StartTagToken && tokenType != html.SelfClosingTagToken {
+			out.Write(rawTag)
+			continue
+		}
+		name, hasAttr := tokenizer.TagName()
+		attrName := attributeForTag(string(name))
+		if attrName == "" || !hasAttr {
+			out.Write(rawTag)
+			continue
+		}
+		out.WriteString(rewriteTagAttrs(rawTag, attrName, mediaMap))
+	}
+}
+
+// rewriteTagAttrs replaces the mapped values of one attribute within a single
+// raw start tag, leaving the rest of the tag untouched.
+func rewriteTagAttrs(rawTag []byte, attrName string, mediaMap map[string]string) string {
+	tag := string(rawTag)
+	spans := rawAttrSpans(rawTag, attrName)
+	var out strings.Builder
+	cursor := 0
+	for _, span := range spans {
+		replacement, mapped := mediaMap[span.Value]
+		if !mapped {
+			continue
+		}
+		if cursor == 0 {
+			out.Grow(len(tag))
+		}
+		out.WriteString(tag[cursor:span.Start])
+		// The value is being written back into an attribute, so it is escaped
+		// as one even though an uploads URL has nothing to escape today.
+		out.WriteString(html.EscapeString(replacement))
+		cursor = span.End
+	}
+	if cursor == 0 {
+		return tag
+	}
+	out.WriteString(tag[cursor:])
+	return out.String()
+}
+
+// isHTMLSpace reports whether a byte separates tokens inside a tag.
+func isHTMLSpace(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\f', '\r':
+		return true
+	default:
+		return false
+	}
+}
+
+// normalizeAssetPath converts a source attribute value into a root-relative
+// path, reporting whether it names an importable local file.
+func normalizeAssetPath(raw string) (string, bool) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", false
+	}
+	// Off-site and protocol-relative references are not files this importer can
+	// resolve beneath the source root.
+	if strings.HasPrefix(value, "//") {
+		return "", false
+	}
+	// A query string or fragment is URL syntax, not part of a filename. Legacy
+	// bodies routinely cache-bust with src="photo.jpg?v=2", and rejecting those
+	// outright left the file unimported and its link dangling at the dead site.
+	// Cutting rather than rejecting still turns away script-generated references
+	// such as "modules.php?name=News": what remains has no importable MIME type.
+	// The cut happens before percent-decoding, so a literal "?" in a filename —
+	// which a URL must spell "%3F" — survives it.
+	if cut := strings.IndexAny(value, "?#"); cut >= 0 {
+		value = value[:cut]
+	}
+	// A colon before the first slash is a URL scheme ("http:", "data:",
+	// "mailto:"), not a directory name.
+	if head, _, _ := strings.Cut(value, "/"); strings.Contains(head, ":") {
+		return "", false
+	}
+	value = strings.TrimPrefix(value, "/")
+	if value == "" {
+		return "", false
+	}
+	// Decode before validating, never after. A path is written as a URL but
+	// opened as a filename, so "images/My%20Photo.jpg" names a file called
+	// "My Photo.jpg"; without this the file is reported missing and the old
+	// reference is left in the imported body. Decoding first also means the
+	// traversal checks below see "%2e%2e%2f" as the "../" it really is.
+	decoded, err := url.PathUnescape(value)
+	if err != nil {
+		return "", false
+	}
+	value = decoded
+	if value == "" || strings.HasPrefix(value, "/") {
+		return "", false
+	}
+	// Reject traversal outright rather than cleaning it: a path that needs
+	// normalizing to stay inside the root is not one this importer should
+	// silently accept. A "." segment is different in kind — "./images/a.jpg" is
+	// how a great deal of legacy markup spells an ordinary relative reference,
+	// it cannot leave the root, and rejecting it left those images unimported
+	// with their links still pointing at the dead site. Drop those and keep
+	// refusing everything else.
+	segments := strings.Split(value, "/")
+	kept := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		switch segment {
+		case "", "..":
+			return "", false
+		case ".":
+			continue
+		}
+		kept = append(kept, segment)
+	}
+	if len(kept) == 0 {
+		return "", false
+	}
+	value = strings.Join(kept, "/")
+
+	mimeType := shared.MimeTypeFromExt(value)
+	if mimeType == "" || !shared.IsAllowedMediaMime(mimeType) {
+		return "", false
+	}
+	return value, true
+}
+
+// sortedRefs returns the collected references in a stable order so that an
+// import processes files deterministically across runs.
+func sortedRefs(seen map[string]assetRef) []assetRef {
+	refs := make([]assetRef, 0, len(seen))
+	for _, ref := range seen {
+		refs = append(refs, ref)
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].Path != refs[j].Path {
+			return refs[i].Path < refs[j].Path
+		}
+		return refs[i].Raw < refs[j].Raw
+	})
+	return refs
+}
+
+// markupRemoved reports whether sanitizing genuinely dropped an element or an
+// attribute, as opposed to rewriting the markup in place.
+//
+// A plain string comparison is not good enough. The sanitizer also *adds*
+// rel="nofollow" to every link and normalizes character entities, so
+// "output != input" is true for essentially every article ever written and
+// says nothing about content loss. Comparing element and element+attribute
+// multisets counts only what actually disappeared — <font>, <iframe>, inline
+// style attributes — which is what an operator needs to review.
+func markupRemoved(before, after string) bool {
+	if before == after {
+		return false
+	}
+	remaining := markupCounts(after)
+	for key, n := range markupCounts(before) {
+		if remaining[key] < n {
+			return true
+		}
+	}
+	return false
+}
+
+// markupCounts tallies every element and element+attribute pair in a fragment.
+func markupCounts(fragment string) map[string]int {
+	counts := make(map[string]int)
+	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
+	for {
+		switch tokenizer.Next() {
+		case html.ErrorToken:
+			return counts
+		case html.StartTagToken, html.SelfClosingTagToken:
+			name, hasAttr := tokenizer.TagName()
+			tag := string(name)
+			counts["<"+tag]++
+			for hasAttr {
+				var key []byte
+				key, _, hasAttr = tokenizer.TagAttr()
+				counts["<"+tag+" "+string(key)]++
+			}
+		}
+	}
+}

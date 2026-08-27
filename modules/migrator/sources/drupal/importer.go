@@ -2047,53 +2047,9 @@ func concreteAliasLanguage(sourcePath, aliasPath, defaultLanguage string) string
 
 // wildcardRedirectMatchesPath mirrors the redirect middleware's wildcard
 // semantics for conflict detection. The importer only needs the match result,
-// not the captured values used to build a redirect target.
-func wildcardRedirectMatchesPath(pattern, requestPath string) bool {
-	if strings.HasSuffix(pattern, "*") && !strings.HasSuffix(pattern, "**") {
-		prefix := strings.TrimSuffix(pattern, "*")
-		if !strings.HasSuffix(prefix, "/") {
-			requestPath = strings.TrimSuffix(requestPath, "/")
-			prefixWithoutSlash := strings.TrimSuffix(prefix, "/")
-			return requestPath == prefixWithoutSlash || strings.HasPrefix(requestPath, prefix)
-		}
-	}
-
-	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
-	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
-	return wildcardRedirectPartsMatch(patternParts, requestParts, 0, 0)
-}
-
-func wildcardRedirectPartsMatch(pattern, request []string, patternIndex, requestIndex int) bool {
-	if patternIndex >= len(pattern) {
-		return requestIndex >= len(request)
-	}
-	if requestIndex >= len(request) {
-		for ; patternIndex < len(pattern); patternIndex++ {
-			if pattern[patternIndex] != "**" {
-				return false
-			}
-		}
-		return true
-	}
-
-	switch pattern[patternIndex] {
-	case "*":
-		return wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
-	case "**":
-		if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex) {
-			return true
-		}
-		for end := requestIndex + 1; end <= len(request); end++ {
-			if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, end) {
-				return true
-			}
-		}
-		return false
-	default:
-		return pattern[patternIndex] == request[requestIndex] &&
-			wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
-	}
-}
+// not the captured values used to build a redirect target. The implementation
+// is shared with every other migrator source.
+var wildcardRedirectMatchesPath = shared.WildcardRedirectMatchesPath
 
 // reservedPublicPath protects fixed routes that are selected before the page
 // catch-all. The set includes every built-in public/admin/API/static prefix;

@@ -120,6 +120,19 @@
         {"id": "drupal.field_public_files_url", "message": "Public Files URL", "translation": "URL публичных файлов"},
         {"id": "drupal.placeholder_public_files_url", "message": "/sites/default/files/", "translation": "/sites/default/files/"},
         {"id": "drupal.placeholder_type_map", "message": "article:post,page:page", "translation": "article:post,page:page"},
-        {"id": "drupal.placeholder_tag_vocabularies", "message": "tags (others become categories)", "translation": "tags (остальные станут категориями)"}
+        {"id": "drupal.placeholder_tag_vocabularies", "message": "tags (others become categories)", "translation": "tags (остальные станут категориями)"},
+
+        {"id": "phpnuke.description", "message": "Import news stories, static pages, encyclopedias, topics, and story authors from a PHP-Nuke MySQL database", "translation": "Импорт новостей, статических страниц, энциклопедий, тем и авторов новостей из базы данных PHP-Nuke MySQL"},
+        {"id": "phpnuke.field_mysql_host", "message": "MySQL Host", "translation": "Хост MySQL"},
+        {"id": "phpnuke.field_mysql_port", "message": "MySQL Port", "translation": "Порт MySQL"},
+        {"id": "phpnuke.field_mysql_user", "message": "MySQL User", "translation": "Пользователь MySQL"},
+        {"id": "phpnuke.field_mysql_password", "message": "MySQL Password", "translation": "Пароль MySQL"},
+        {"id": "phpnuke.field_mysql_database", "message": "Database Name", "translation": "Имя базы данных"},
+        {"id": "phpnuke.field_table_prefix", "message": "Table Prefix", "translation": "Префикс таблиц"},
+        {"id": "phpnuke.field_files_path", "message": "PHP-Nuke Document Root", "translation": "Корневой каталог сайта PHP-Nuke"},
+        {"id": "phpnuke.field_language_code", "message": "Target Language", "translation": "Целевой язык"},
+        {"id": "phpnuke.placeholder_table_prefix", "message": "e.g. nuke_", "translation": "напр. nuke_"},
+        {"id": "phpnuke.placeholder_files_path", "message": "/path/to/phpnuke/htdocs", "translation": "/путь/к/phpnuke/htdocs"},
+        {"id": "phpnuke.placeholder_language_code", "message": "defaults to the site language", "translation": "по умолчанию — язык сайта"}
     ]
 }

@@ -21,6 +21,7 @@ import (
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/drupal"
 	"github.com/olegiv/ocms-go/modules/migrator/sources/elefant"
+	"github.com/olegiv/ocms-go/modules/migrator/sources/phpnuke"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
 
@@ -688,6 +689,7 @@ func TestSourcesDeclareTheOptionsTheyRead(t *testing.T) {
 	declared := map[string]Source{
 		"drupal":  drupal.NewSource(),
 		"elefant": elefant.NewSource(),
+		"phpnuke": phpnuke.NewSource(),
 	}
 
 	optionFields := make(map[string]bool)
@@ -820,6 +822,7 @@ func TestImportFormHidesUnsupportedOptions(t *testing.T) {
 	}{
 		{drupal.NewSource(), "drupal"},
 		{elefant.NewSource(), "elefant"},
+		{phpnuke.NewSource(), "phpnuke"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			supported := types.SupportedImportOptionSet(tc.source)
@@ -873,4 +876,101 @@ func TestSourceFormKeepsPollingWhenJobReadFails(t *testing.T) {
 	if strings.Contains(idle.String(), `hx-trigger="every 2s"`) {
 		t.Error("the idle card polls; only an unknown or running state should")
 	}
+}
+
+// TestConfigFieldNamesMatchTheKeysSourcesRead is a drift guard.
+//
+// A source declares its form fields in ConfigFields() and reads them back as
+// cfg["..."] string literals. Nothing ties the two together, so renaming a
+// field breaks the read silently — and the consequences differ sharply. A
+// table_prefix drift fails loudly at TestConnection; a files_path drift
+// produces a "no files path configured" error; but a language_code drift is
+// invisible, because resolveLanguageCode sees "" and quietly falls back to the
+// site default, which its own doc comment calls out as the outcome an operator
+// then has to unpick by hand.
+//
+// Walking the AST catches it for every source, including the next one.
+func TestConfigFieldNamesMatchTheKeysSourcesRead(t *testing.T) {
+	declared := map[string]Source{
+		"drupal":  drupal.NewSource(),
+		"elefant": elefant.NewSource(),
+		"phpnuke": phpnuke.NewSource(),
+	}
+
+	read := configKeysReadPerSource(t)
+	for pkg, keys := range read {
+		src, ok := declared[pkg]
+		if !ok {
+			t.Errorf("source package %q reads config keys but is not listed in this test", pkg)
+			continue
+		}
+		fields := make(map[string]bool)
+		for _, f := range src.ConfigFields() {
+			fields[f.Name] = true
+		}
+		for key := range keys {
+			if !fields[key] {
+				t.Errorf("%s reads cfg[%q] but ConfigFields() does not declare it; "+
+					"the read silently yields \"\"", pkg, key)
+			}
+		}
+	}
+}
+
+// configKeysReadPerSource collects every cfg["literal"] index expression in
+// each source package.
+func configKeysReadPerSource(t *testing.T) map[string]map[string]bool {
+	t.Helper()
+	read := make(map[string]map[string]bool)
+	fset := token.NewFileSet()
+
+	root := "sources"
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+		pkg := filepath.Dir(rel)
+		if pkg == "." || pkg == "shared" {
+			return nil
+		}
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			return parseErr
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			index, ok := n.(*ast.IndexExpr)
+			if !ok {
+				return true
+			}
+			ident, ok := index.X.(*ast.Ident)
+			if !ok || ident.Name != "cfg" {
+				return true
+			}
+			lit, ok := index.Index.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			key := strings.Trim(lit.Value, `"`)
+			if read[pkg] == nil {
+				read[pkg] = make(map[string]bool)
+			}
+			read[pkg][key] = true
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk sources: %v", err)
+	}
+	if len(read) == 0 {
+		t.Fatal("found no cfg[...] reads; this test is no longer checking anything")
+	}
+	return read
 }

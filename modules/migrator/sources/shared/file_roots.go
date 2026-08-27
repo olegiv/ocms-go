@@ -13,11 +13,25 @@ import (
 
 // EnvAllowedFileRoots names the operator-controlled allowlist of filesystem
 // roots from which migrator sources may read media. Values are comma-separated
-// absolute paths. DRUPAL_FILES and ELEFANT_FILES are also treated as trusted
-// roots for backwards-compatible deployments that already configure them.
+// absolute paths. DRUPAL_FILES, ELEFANT_FILES and PHPNUKE_FILES are also
+// treated as trusted roots for backwards-compatible deployments that already
+// configure them.
 const EnvAllowedFileRoots = "OCMS_MIGRATOR_ALLOWED_FILE_ROOTS"
 
-var legacyFileRootEnvs = []string{"DRUPAL_FILES", "ELEFANT_FILES"}
+var legacyFileRootEnvs = []string{"DRUPAL_FILES", "ELEFANT_FILES", "PHPNUKE_FILES"}
+
+// TrustedFileRootEnvNames returns every environment variable that can supply a
+// trusted media root, the allowlist first.
+//
+// Error messages derive their list from this rather than spelling one out.
+// A hardcoded list silently goes stale the moment a source is added: the
+// message kept naming DRUPAL_FILES and ELEFANT_FILES after PHPNUKE_FILES began
+// working, so a PHP-Nuke operator was told to configure the wrong variables.
+func TrustedFileRootEnvNames() []string {
+	names := make([]string, 0, len(legacyFileRootEnvs)+1)
+	names = append(names, EnvAllowedFileRoots)
+	return append(names, legacyFileRootEnvs...)
+}
 
 // trustedFileRoot keeps both sides of the root policy. policyRoot is the
 // operator-configured lexical path used only to decide whether a submitted
@@ -198,7 +212,8 @@ func trustedMediaLocations(candidate string) ([]trustedMediaLocation, error) {
 		return nil, err
 	}
 	if len(roots) == 0 {
-		return nil, fmt.Errorf("no trusted media roots configured; set %s, DRUPAL_FILES, or ELEFANT_FILES", EnvAllowedFileRoots)
+		return nil, fmt.Errorf("no trusted media roots configured; set one of %s",
+			strings.Join(TrustedFileRootEnvNames(), ", "))
 	}
 
 	cleanCandidate := filepath.Clean(candidate)
