@@ -34,28 +34,39 @@ type fakeReader struct {
 	encTerms    map[int64][]EncyclopediaTerm
 	authors     []User
 
+	// errs fails one named read, so every "failed to read X" branch is
+	// reachable without a database.
+	errs        map[string]error
 	pageCatsErr error
 }
 
-func (f *fakeReader) GetStories(context.Context) ([]Story, error) { return f.stories, nil }
-func (f *fakeReader) GetStaticPages(context.Context) ([]StaticPage, error) {
-	return f.staticPages, nil
+func (f *fakeReader) err(method string) error { return f.errs[method] }
+
+func (f *fakeReader) GetStories(context.Context) ([]Story, error) {
+	return f.stories, f.err("GetStories")
 }
-func (f *fakeReader) GetTopics(context.Context) ([]Topic, error) { return f.topics, nil }
+func (f *fakeReader) GetStaticPages(context.Context) ([]StaticPage, error) {
+	return f.staticPages, f.err("GetStaticPages")
+}
+func (f *fakeReader) GetTopics(context.Context) ([]Topic, error) {
+	return f.topics, f.err("GetTopics")
+}
 func (f *fakeReader) GetStoryCategories(context.Context) ([]Category, error) {
-	return f.storyCats, nil
+	return f.storyCats, f.err("GetStoryCategories")
 }
 func (f *fakeReader) GetPageCategories(context.Context) ([]Category, error) {
 	return f.pageCats, f.pageCatsErr
 }
 func (f *fakeReader) GetEncyclopediaEntries(context.Context) ([]EncyclopediaEntry, error) {
-	return f.encEntries, nil
+	return f.encEntries, f.err("GetEncyclopediaEntries")
 }
 func (f *fakeReader) GetEncyclopediaTerms(context.Context) (map[int64][]EncyclopediaTerm, error) {
-	return f.encTerms, nil
+	return f.encTerms, f.err("GetEncyclopediaTerms")
 }
-func (f *fakeReader) GetStoryAuthors(context.Context) ([]User, error) { return f.authors, nil }
-func (f *fakeReader) Prefix() string                                  { return "tr_" }
+func (f *fakeReader) GetStoryAuthors(context.Context) ([]User, error) {
+	return f.authors, f.err("GetStoryAuthors")
+}
+func (f *fakeReader) Prefix() string { return "tr_" }
 
 // mockTracker records what an import claimed so the undo path can find it.
 type mockTracker struct {
@@ -922,6 +933,11 @@ func TestReadContentHonorsOptions(t *testing.T) {
 	if len(pagesOnly.stories) != 0 || len(pagesOnly.staticPages) != 1 || len(pagesOnly.encEntries) != 1 {
 		t.Errorf("pages-only read pulled stories: %+v", pagesOnly)
 	}
+	// Without this, dropping the GetEncyclopediaTerms call entirely goes
+	// unnoticed and every encyclopedia imports with its terms missing.
+	if len(pagesOnly.encTerms) != 1 {
+		t.Errorf("encyclopedia terms were not read: %+v", pagesOnly.encTerms)
+	}
 }
 
 // TestImportContentBodiesCoverEveryImportedKind matters because media
@@ -992,10 +1008,26 @@ func TestMediaOpenFailuresAreClassified(t *testing.T) {
 	if result.MediaSkipped != 2 {
 		t.Errorf("MediaSkipped = %d, want 2 so the job record shows the loss", result.MediaSkipped)
 	}
-	// The two causes must be summarised separately: one sends the operator to
-	// the old server, the other to their own filesystem.
+	// The two causes must be summarised separately AND correctly: one sends the
+	// operator to the old server, the other to their own filesystem. Checking
+	// only the count let the two messages be swapped.
 	if len(result.Summaries) != 2 {
-		t.Errorf("expected separate summaries for absent vs failed, got %v", result.Summaries)
+		t.Fatalf("expected separate summaries for absent vs failed, got %v", result.Summaries)
+	}
+	var absentMsg, failedMsg string
+	for _, sum := range result.Summaries {
+		switch {
+		case strings.Contains(sum, "missing from the source tree"):
+			absentMsg = sum
+		case strings.Contains(sum, "could not be imported"):
+			failedMsg = sum
+		}
+	}
+	if !strings.HasPrefix(absentMsg, "1 of 2") {
+		t.Errorf("the absent summary should count exactly the missing file: %q", absentMsg)
+	}
+	if !strings.HasPrefix(failedMsg, "1 of 2") {
+		t.Errorf("the failed summary should count exactly the unreadable file: %q", failedMsg)
 	}
 }
 
@@ -1068,5 +1100,346 @@ func TestAuthorTallyIgnoresResolvedFallbackMatches(t *testing.T) {
 	}
 	if !strings.Contains(joined, "1 of 2") {
 		t.Errorf("expected exactly one unattributed post to be reported, got %q", joined)
+	}
+}
+
+// TestSkipExistingIsIdempotentAcrossRuns covers a review finding found by
+// mutation testing. The SkipExisting probe derived its slug differently from
+// the allocator, so a title that transliterates to nothing was never skipped
+// and every re-run created another copy.
+func TestSkipExistingIsIdempotentAcrossRuns(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		title string
+	}{
+		{"ordinary title", "Отель Royal Azur"},
+		{"title that slugifies to nothing", "???"},
+		{"punctuation only", "!!! ... ---"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			queries, adminID := setupDB(t)
+			ctx := context.Background()
+			lang := defaultLang(t, queries)
+			stories := []Story{{ID: 42, Title: ns(tc.title), BodyText: ns("<p>body</p>")}}
+			opts := types.ImportOptions{SkipExisting: true}
+
+			first := &types.ImportResult{}
+			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
+				map[int64]int64{}, map[int64]int64{}, nil, opts, first, &mockTracker{}, nil)
+			if first.PostsImported != 1 {
+				t.Fatalf("first run imported %d, want 1; errors %v", first.PostsImported, first.Errors)
+			}
+
+			second := &types.ImportResult{}
+			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
+				map[int64]int64{}, map[int64]int64{}, nil, opts, second, &mockTracker{}, nil)
+			if second.PostsImported != 0 {
+				t.Errorf("second run imported %d more copies, want 0", second.PostsImported)
+			}
+			if second.PostsSkipped != 1 {
+				t.Errorf("PostsSkipped = %d, want 1", second.PostsSkipped)
+			}
+
+			pages, err := queries.ListPages(ctx, store.ListPagesParams{Limit: 10, Offset: 0})
+			if err != nil {
+				t.Fatalf("failed to list pages: %v", err)
+			}
+			if len(pages) != 1 {
+				slugs := make([]string, len(pages))
+				for i, p := range pages {
+					slugs[i] = p.Slug
+				}
+				t.Errorf("got %d pages after two runs, want 1: %v", len(pages), slugs)
+			}
+		})
+	}
+}
+
+func TestBaseSlugFallsBackWhenTitleTransliteratesToNothing(t *testing.T) {
+	if got := baseSlug("Отель", "story-1"); got != "otel" {
+		t.Errorf("baseSlug() = %q, want the transliterated title", got)
+	}
+	if got := baseSlug("???", "story-42"); got != "story-42" {
+		t.Errorf("baseSlug() = %q, want the fallback", got)
+	}
+}
+
+// setupImportDB gives a migrated database plus a tracker, for orchestration
+// tests that go through importWithReader rather than a single stage.
+func setupImportDB(t *testing.T) (*sql.DB, *store.Queries) {
+	t.Helper()
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	queries := store.New(db)
+	now := time.Now()
+	if _, err := queries.CreateUser(context.Background(), store.CreateUserParams{
+		Email: "admin@example.com", PasswordHash: "x", Role: "admin", Name: "Admin",
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("failed to seed admin: %v", err)
+	}
+	return db, queries
+}
+
+func fullOptions() types.ImportOptions {
+	return types.ImportOptions{
+		ImportTags: true, ImportCategories: true, ImportMedia: true,
+		ImportPosts: true, ImportPages: true, ImportUsers: true,
+	}
+}
+
+// TestImportReportsPartialResultWhenContentReadFails is the drift test commit
+// 9144a8be owes. readContent is the only post-write hard abort: users and
+// taxonomy have already been committed, so returning a nil result would discard
+// every message describing what is now in the operator's database.
+func TestImportReportsPartialResultWhenContentReadFails(t *testing.T) {
+	db, queries := setupImportDB(t)
+	reader := &fakeReader{
+		authors:  []User{{ID: 1, Username: ns("a"), Email: ns("a@example.com")}},
+		topics:   []Topic{{ID: 1, Text: ns("News")}},
+		encTerms: map[int64][]EncyclopediaTerm{},
+		errs:     map[string]error{"GetStories": errors.New("read timeout")},
+	}
+
+	result, err := NewSource().importWithReader(context.Background(), db, reader,
+		map[string]string{}, fullOptions(), &mockTracker{})
+
+	if err == nil {
+		t.Fatal("expected the read failure to be returned")
+	}
+	if result == nil {
+		t.Fatal("result was discarded, losing every message from the stages that already wrote rows")
+	}
+	if result.UsersImported == 0 || result.CategoriesImported == 0 {
+		t.Errorf("rows written before the failure were not reported: users=%d categories=%d",
+			result.UsersImported, result.CategoriesImported)
+	}
+	if len(result.Errors) == 0 {
+		t.Error("the read failure should also be recorded on the result")
+	}
+	// The rows really are in the database, which is why reporting them matters.
+	users, _ := queries.ListUsers(context.Background(), store.ListUsersParams{Limit: 10})
+	if len(users) < 2 {
+		t.Errorf("expected the imported user to be committed, got %d users", len(users))
+	}
+}
+
+// TestImportRejectsMediaWithNothingToScan covers a review finding: media is
+// discovered from imported bodies, so requesting it without posts or pages
+// imported nothing at all and reported Completed with no message.
+func TestImportRejectsMediaWithNothingToScan(t *testing.T) {
+	db, _ := setupImportDB(t)
+	reader := &fakeReader{encTerms: map[int64][]EncyclopediaTerm{}}
+
+	result, err := NewSource().importWithReader(context.Background(), db, reader,
+		map[string]string{"files_path": t.TempDir()},
+		types.ImportOptions{ImportMedia: true}, &mockTracker{})
+	if err != nil {
+		t.Fatalf("importWithReader() error = %v", err)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("a requested option that cannot run must be an error, got errors=%v notices=%v",
+			result.Errors, result.Notices)
+	}
+	if !strings.Contains(result.Errors[0], "neither posts nor pages") {
+		t.Errorf("the error should name the cause: %q", result.Errors[0])
+	}
+}
+
+func TestImportRejectsMediaWithoutFilesPath(t *testing.T) {
+	db, _ := setupImportDB(t)
+	reader := &fakeReader{
+		stories:  []Story{{ID: 1, Title: ns("A"), BodyText: ns("<p>x</p>")}},
+		encTerms: map[int64][]EncyclopediaTerm{},
+	}
+	result, err := NewSource().importWithReader(context.Background(), db, reader,
+		map[string]string{}, types.ImportOptions{ImportMedia: true, ImportPosts: true}, &mockTracker{})
+	if err != nil {
+		t.Fatalf("importWithReader() error = %v", err)
+	}
+	if len(result.Errors) != 1 || !strings.Contains(result.Errors[0], "no files path") {
+		t.Errorf("expected the missing-files-path error, got %v", result.Errors)
+	}
+}
+
+// TestImportHonorsOptionCombinations pins that each option drives the work it
+// claims, and only that work.
+func TestImportHonorsOptionCombinations(t *testing.T) {
+	newReader := func() *fakeReader {
+		return &fakeReader{
+			authors:     []User{{ID: 1, Username: ns("olegiv"), Email: ns("o@example.com")}},
+			topics:      []Topic{{ID: 3, Text: ns("Hotels")}},
+			storyCats:   []Category{{ID: 9, Title: ns("News")}},
+			stories:     []Story{{ID: 1, Title: ns("Story"), BodyText: ns("<p>x</p>"), TopicID: ni(3), CategoryID: ni(9), Informant: ns("olegiv")}},
+			staticPages: []StaticPage{{ID: 1, Title: ns("Page"), Text: ns("<p>y</p>"), Active: ni(1)}},
+			encEntries:  []EncyclopediaEntry{{ID: 1, Title: ns("Enc"), Active: ni(1)}},
+			encTerms:    map[int64][]EncyclopediaTerm{1: {{ID: 1, EntryID: ni(1), Title: ns("t"), Text: ns("d")}}},
+		}
+	}
+	for _, tc := range []struct {
+		name                     string
+		opts                     types.ImportOptions
+		posts, pages, cats, tags int
+		users                    int
+	}{
+		{"posts only", types.ImportOptions{ImportPosts: true}, 1, 0, 0, 0, 0},
+		{"pages only brings encyclopedia", types.ImportOptions{ImportPages: true}, 0, 2, 0, 0, 0},
+		{"users only", types.ImportOptions{ImportUsers: true}, 0, 0, 0, 0, 1},
+		{"taxonomy only", types.ImportOptions{ImportCategories: true, ImportTags: true}, 0, 0, 1, 1, 0},
+		{"everything but media", types.ImportOptions{
+			ImportPosts: true, ImportPages: true, ImportCategories: true,
+			ImportTags: true, ImportUsers: true}, 1, 2, 1, 1, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := setupImportDB(t)
+			result, err := NewSource().importWithReader(context.Background(), db, newReader(),
+				map[string]string{}, tc.opts, &mockTracker{})
+			if err != nil {
+				t.Fatalf("importWithReader() error = %v", err)
+			}
+			if result.PostsImported != tc.posts {
+				t.Errorf("posts = %d, want %d", result.PostsImported, tc.posts)
+			}
+			if result.PagesImported != tc.pages {
+				t.Errorf("pages = %d, want %d", result.PagesImported, tc.pages)
+			}
+			if result.CategoriesImported != tc.cats {
+				t.Errorf("categories = %d, want %d", result.CategoriesImported, tc.cats)
+			}
+			if result.TagsImported != tc.tags {
+				t.Errorf("tags = %d, want %d", result.TagsImported, tc.tags)
+			}
+			if result.UsersImported != tc.users {
+				t.Errorf("users = %d, want %d", result.UsersImported, tc.users)
+			}
+		})
+	}
+}
+
+// failingTracker exercises the compensating-rollback arm of track(), which no
+// test reached: mockTracker always succeeds, so the rollback closure every call
+// site passes had never executed.
+type failingTracker struct{ err error }
+
+func (f failingTracker) TrackImportedItem(context.Context, string, string, int64) error {
+	return f.err
+}
+
+// TestTrackingFailureRollsBackTheCreatedRow pins the mechanism that keeps an
+// untracked row from being left behind as an orphan invisible to
+// "delete imported content".
+func TestTrackingFailureRollsBackTheCreatedRow(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	result := &types.ImportResult{}
+
+	stories := []Story{{ID: 1, Title: ns("Rolled Back"), BodyText: ns("<p>x</p>")}}
+	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
+		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil,
+		types.ImportOptions{}, result, failingTracker{err: errors.New("tracker table is locked")}, nil)
+
+	if result.PostsImported != 0 {
+		t.Errorf("PostsImported = %d; an untracked row must not be counted", result.PostsImported)
+	}
+	if _, err := queries.GetPageBySlug(ctx, "rolled-back"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("the page was not rolled back: err = %v", err)
+	}
+	if len(result.Errors) == 0 {
+		t.Error("a tracking failure must be reported, not silently swallowed")
+	}
+}
+
+// TestSlugAllocationRefusesRoutesOwnedElsewhere covers two guards that mutation
+// testing showed were unexercised: an imported page must not shadow a module
+// route, nor sit under a path an enabled redirect already answers.
+func TestSlugAllocationRefusesRoutesOwnedElsewhere(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	if _, err := queries.CreateRedirect(ctx, store.CreateRedirectParams{
+		SourcePath: "/news", TargetUrl: "/elsewhere", StatusCode: 301,
+		TargetType: model.TargetSelf, Enabled: true, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("failed to seed redirect: %v", err)
+	}
+
+	source := NewSource()
+	source.SetPublicRouteChecker(pathOwner{"/hotels": true})
+	result := &types.ImportResult{}
+	stories := []Story{
+		{ID: 1, Title: ns("News"), BodyText: ns("<p>a</p>")},
+		{ID: 2, Title: ns("Hotels"), BodyText: ns("<p>b</p>")},
+	}
+	source.importStories(ctx, queries, stories, map[string]int64{}, adminID,
+		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil,
+		types.ImportOptions{}, result, &mockTracker{}, nil)
+
+	for _, taken := range []string{"news", "hotels"} {
+		if page, err := queries.GetPageBySlug(ctx, taken); err == nil {
+			t.Errorf("page %d claimed %q, which is already owned elsewhere", page.ID, taken)
+		}
+	}
+	if result.PostsImported+len(result.Errors) != 2 {
+		t.Errorf("each story should be imported under another slug or refused: %+v", result)
+	}
+}
+
+// pathOwner stands in for the module-route checker the module wires in
+// production.
+type pathOwner map[string]bool
+
+func (p pathOwner) OwnsPublicPath(path string) bool { return p[path] }
+
+func TestResolveLanguageCodeRejectsInactiveLanguage(t *testing.T) {
+	queries, _ := setupDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "ru", Name: "Russian", NativeName: "Русский", IsDefault: false,
+		IsActive: false, Direction: "ltr", Position: 1, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("failed to seed language: %v", err)
+	}
+	_, err := NewSource().resolveLanguageCode(ctx, queries, map[string]string{"language_code": "ru"})
+	if err == nil {
+		t.Fatal("an inactive target language must be refused")
+	}
+	if !strings.Contains(err.Error(), "inactive") {
+		t.Errorf("the error should name the cause: %v", err)
+	}
+}
+
+// TestStoryWithoutTimestampIsPublishedNow pins storyTimestamp's fallback: a
+// NULL or zero source date would otherwise store 0001-01-01 and sort the story
+// to the bottom of the archive forever.
+func TestStoryWithoutTimestampIsPublishedNow(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		when sql.NullTime
+	}{
+		{"null time", sql.NullTime{}},
+		{"zero time marked valid", sql.NullTime{Time: time.Time{}, Valid: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			queries, adminID := setupDB(t)
+			ctx := context.Background()
+			result := &types.ImportResult{}
+			stories := []Story{{ID: 7, Title: ns("Undated"), BodyText: ns("<p>x</p>"), Time: tc.when}}
+			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
+				defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil,
+				types.ImportOptions{}, result, &mockTracker{}, nil)
+
+			page, err := queries.GetPageBySlug(ctx, "undated")
+			if err != nil {
+				t.Fatalf("failed to load page: %v", err)
+			}
+			if page.CreatedAt.Year() < 2000 {
+				t.Errorf("created_at = %v; an undated story must fall back to now", page.CreatedAt)
+			}
+			if !page.PublishedAt.Valid || page.PublishedAt.Time.Year() < 2000 {
+				t.Errorf("published_at = %v; want a real timestamp", page.PublishedAt)
+			}
+		})
 	}
 }

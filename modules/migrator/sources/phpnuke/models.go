@@ -19,8 +19,9 @@ import (
 // string is unsupported", and because the content reads happen after users and
 // taxonomy are already written, that aborts an import mid-way. Scanning
 // defensively costs an unwrap per field and removes an entire class of
-// unrecoverable failure. The sibling Drupal and Elefant sources model their
-// source columns the same way.
+// unrecoverable failure. The Drupal source reaches the same goal from the other
+// side, wrapping columns in COALESCE in its SQL; Elefant does neither and has
+// the same latent failure.
 
 // Story is a news article from the PHP-Nuke `stories` table.
 //
@@ -31,7 +32,7 @@ import (
 type Story struct {
 	ID         int64          // sid
 	CategoryID sql.NullInt64  // catid, 0 when uncategorized
-	AuthorID   sql.NullString // aid, joins stories.aid to authors.aid
+	AuthorID   sql.NullString // aid, matched against users.username
 	Title      sql.NullString // title
 	Time       sql.NullTime   // time
 	HomeText   sql.NullString // hometext (teaser)
@@ -40,9 +41,11 @@ type Story struct {
 	Informant  sql.NullString // informant, the submitting username
 }
 
-// Category and topic identifiers as plain values.
+// Category returns the source story category id, 0 when unset.
 func (s *Story) Category() int64 { return shared.NullInt64(s.CategoryID) }
-func (s *Story) Topic() int64    { return shared.NullInt64(s.TopicID) }
+
+// Topic returns the source topic id, 0 when unset.
+func (s *Story) Topic() int64 { return shared.NullInt64(s.TopicID) }
 
 // StaticPage is a page from the PHP-Nuke `pages` table.
 type StaticPage struct {

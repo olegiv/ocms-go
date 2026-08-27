@@ -26,8 +26,8 @@ import (
 	"github.com/olegiv/ocms-go/modules/migrator/types"
 )
 
-// PublicRouteChecker reports whether a concrete URL belongs to a registered
-// module route. Core routes are protected separately below.
+// PublicRouteChecker reports whether a path belongs to a registered module
+// route. Core routes are handled separately by corePathReserved in stages.go.
 type PublicRouteChecker interface {
 	OwnsPublicPath(path string) bool
 }
@@ -241,14 +241,25 @@ type importContent struct {
 // Import imports content from PHP-Nuke into oCMS.
 func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string,
 	opts types.ImportOptions, tracker types.ImportTracker) (*types.ImportResult, error) {
-	result := &types.ImportResult{}
-
 	reader, err := s.openReader(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to PHP-Nuke database: %w", err)
 	}
 	defer closeReader(reader)
 
+	return s.importWithReader(ctx, db, reader, cfg, opts, tracker)
+}
+
+// importWithReader is Import with the source connection already open.
+//
+// Splitting it here is what makes the orchestration testable: every stage
+// already takes sourceReader, and this was the last function reaching for the
+// concrete *Reader. Ordering, option handling and the partial-result contract
+// on a failed read all live in this function and are otherwise reachable only
+// with a live MySQL server.
+func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader sourceReader,
+	cfg map[string]string, opts types.ImportOptions, tracker types.ImportTracker) (*types.ImportResult, error) {
+	result := &types.ImportResult{}
 	queries := store.New(db)
 
 	fallbackAuthorID, err := s.getDefaultAuthorID(ctx, queries)
@@ -301,13 +312,17 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string,
 	// so the files have to exist in oCMS first.
 	var mediaMap map[string]string
 	if opts.ImportMedia {
-		if filesPath := strings.TrimSpace(cfg["files_path"]); filesPath != "" {
+		switch filesPath := strings.TrimSpace(cfg["files_path"]); {
+		case !content.hasBodies():
+			result.AddError("Media import was requested but neither posts nor pages were " +
+				"selected; media is discovered from imported bodies, so nothing was imported.")
+		case filesPath != "":
 			mediaMap, err = s.importMedia(ctx, queries, content, filesPath, getUploadDir(),
 				fallbackAuthorID, langCode, result, tracker)
 			if err != nil {
 				result.AddError("Media import error: %v", err)
 			}
-		} else {
+		default:
 			result.AddError("Media import was requested but no files path was configured; " +
 				"inline image references were left pointing at the old site.")
 		}
@@ -375,6 +390,15 @@ func (s *Source) readContent(ctx context.Context, reader sourceReader, opts type
 		content.encTerms = terms
 	}
 	return content, nil
+}
+
+// hasBodies reports whether any selected option produced content to scan.
+//
+// Media is discovered from imported bodies, so requesting media without posts
+// or pages imports nothing at all — silently, before importMedia even reports a
+// progress phase.
+func (c *importContent) hasBodies() bool {
+	return len(c.stories)+len(c.staticPages)+len(c.encEntries) > 0
 }
 
 // bodies returns every HTML body this import will write, for media discovery.

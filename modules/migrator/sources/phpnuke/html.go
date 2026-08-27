@@ -13,7 +13,7 @@ import (
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
-// summaryLimit bounds the plain-text teaser derived from a story's hometext.
+// summaryLimit bounds the plain-text teaser stored in pages.summary.
 const summaryLimit = 300
 
 // assetRef is one local file reference found in imported HTML.
@@ -95,32 +95,55 @@ func buildEncyclopediaBody(entry *EncyclopediaEntry, terms []EncyclopediaTerm) s
 // maxPlainTextPasses bounds the re-extraction loop in plainText.
 const maxPlainTextPasses = 5
 
-// plainText reduces a source fragment to text that cannot be read as markup by
-// anything downstream.
+// plainText reduces a source fragment to text that cannot be read as markup.
 //
 // One tokenizer pass is not enough. The tokenizer decodes entities in text
 // nodes, so a source that stored "&lt;script&gt;" — which the old site
 // displayed as harmless literal text — comes back as a real "<script>"
-// substring. Re-extracting until the result stops changing collapses that,
-// including the doubly-encoded "&amp;lt;" form.
+// substring. Re-extracting collapses that.
 //
-// Lone angle brackets survive: the HTML tokenizer only starts a tag when "<"
-// is followed by a name character, so "5 < 10" is left intact rather than
+// The loop keys on whether a tag is actually present, not on whether any angle
+// bracket is: a lone ">" is ordinary punctuation, and treating it as a reason
+// to keep decoding let a caller pump the loop to its cap with a bare ">" while
+// each pass peeled one layer off an encoded payload, so the value returned
+// after the final pass held a live tag.
+//
+// The cap alone is therefore not a safety boundary — input can always add one
+// more encoding layer — so anything still tag-shaped afterwards has its angle
+// brackets removed outright. That is lossy, and only for input engineered to
+// reach it.
+//
+// Lone angle brackets otherwise survive: the tokenizer only starts a tag when
+// "<" is followed by a name character, so "5 < 10" is left intact rather than
 // mangled by a blunt strip-everything-bracketed rule.
-//
-// These fields are currently rendered only through auto-escaping bindings, so
-// this is defence in depth: it removes the hazard before someone routes a
-// summary or meta description through a raw-HTML sink.
 func plainText(fragment string) string {
 	text := textContent(fragment)
-	for i := 0; i < maxPlainTextPasses && strings.ContainsAny(text, "<>"); i++ {
+	for i := 0; i < maxPlainTextPasses && containsTag(text); i++ {
 		next := textContent(text)
 		if next == text {
 			break
 		}
 		text = next
 	}
+	if containsTag(text) {
+		text = strings.NewReplacer("<", "", ">", "").Replace(text)
+		text = strings.Join(strings.Fields(text), " ")
+	}
 	return text
+}
+
+// containsTag reports whether a fragment holds anything the HTML tokenizer
+// reads as a tag.
+func containsTag(fragment string) bool {
+	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
+	for {
+		switch tokenizer.Next() {
+		case html.ErrorToken:
+			return false
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
+			return true
+		}
+	}
 }
 
 // deriveSummary reduces HTML to a short plain-text teaser.

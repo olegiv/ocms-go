@@ -373,3 +373,61 @@ func TestPrepareBodyTallyCountsOnlyRemovals(t *testing.T) {
 		t.Errorf("a body that lost <font> was not counted (%d)", legacy)
 	}
 }
+
+// TestPlainTextResistsEncodingPump covers a review finding. The loop used to
+// key on "contains any angle bracket", so a bare ">" — ordinary punctuation —
+// kept it running while each pass peeled one layer off an encoded payload. The
+// value returned after the final pass then held a live tag, in a function whose
+// entire contract is that it does not.
+func TestPlainTextResistsEncodingPump(t *testing.T) {
+	payload := "&lt;script&gt;alert(1)&lt;/script&gt;"
+	for i := 0; i < maxPlainTextPasses+3; i++ {
+		payload = strings.ReplaceAll(payload, "&", "&amp;")
+	}
+	got := plainText("&gt; " + payload)
+
+	if containsTag(got) {
+		t.Errorf("output holds a live tag: %q", got)
+	}
+	if strings.Contains(got, "<script") {
+		t.Errorf("output holds a script tag: %q", got)
+	}
+}
+
+// TestPlainTextNeverReturnsATag is the general form: whatever the input, the
+// result must not tokenize as markup. The cap is not a safety boundary on its
+// own, so the terminal guard has to hold for input engineered to exceed it.
+func TestPlainTextNeverReturnsATag(t *testing.T) {
+	deep := "<img src=x onerror=alert(1)>"
+	for i := 0; i < 20; i++ {
+		deep = strings.ReplaceAll(strings.ReplaceAll(deep, "&", "&amp;"), "<", "&lt;")
+		deep = strings.ReplaceAll(deep, ">", "&gt;")
+	}
+	for _, in := range []string{
+		"&gt; " + deep,
+		"&lt;&lt;&lt;script&gt;&gt;&gt;",
+		strings.Repeat("&gt;", 50) + "&lt;script&gt;",
+	} {
+		if got := plainText(in); containsTag(got) {
+			t.Errorf("plainText(%.40q…) returned markup: %q", in, got)
+		}
+	}
+}
+
+func TestContainsTagIgnoresLonePunctuation(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{"5 < 10 and 20 > 3", false},
+		{"a > b", false},
+		{"&lt;script&gt;", false},
+		{"<script>", true},
+		{"</p>", true},
+		{"<br/>", true},
+	} {
+		if got := containsTag(tc.in); got != tc.want {
+			t.Errorf("containsTag(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

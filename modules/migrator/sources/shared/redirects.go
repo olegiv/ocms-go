@@ -12,11 +12,16 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// RedirectPathOccupied reports whether an enabled redirect already answers a
-// path, either exactly or through a wildcard pattern.
+// RedirectPathOccupied reports whether a redirect already claims a path.
+//
+// The two halves differ deliberately. An exact source_path match counts whether
+// or not the redirect is enabled, because a disabled redirect is one toggle
+// away from stranding the page. The wildcard sweep considers enabled redirects
+// only, since matching every disabled pattern would refuse far more slugs than
+// it protects.
 //
 // An importer consults this before claiming a slug: a page stored beneath a
-// path a redirect already owns is unreachable, because the redirect middleware
+// path an enabled redirect owns is unreachable, because the redirect middleware
 // answers the URL before the frontend router ever matches the page.
 func RedirectPathOccupied(ctx context.Context, queries *store.Queries, sourcePath string) (bool, error) {
 	_, err := queries.GetRedirectBySourcePath(ctx, sourcePath)

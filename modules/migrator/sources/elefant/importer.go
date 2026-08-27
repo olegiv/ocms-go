@@ -346,8 +346,9 @@ func isElefantBlogPostAlias(alias string) bool {
 	return parts[2] != ""
 }
 
-// redirectPathOccupied reports whether an enabled redirect already answers a
-// path. The implementation is shared with every other migrator source.
+// redirectPathOccupied reports whether a redirect already claims a path. The
+// implementation is shared with the PHP-Nuke source; Drupal still has its own
+// enabled-only variant.
 var redirectPathOccupied = shared.RedirectPathOccupied
 
 func (s *Source) createTrackedRedirect(ctx context.Context, queries *store.Queries,

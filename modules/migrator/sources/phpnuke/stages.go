@@ -48,11 +48,22 @@ const (
 // beside the writes it protects so the route guard below cannot be bypassed by
 // a new stage that reaches CreatePage directly.
 func (s *Source) slugFor(ctx context.Context, queries *store.Queries, title, fallback string) string {
-	base := util.Slugify(title)
-	if base == "" {
-		base = fallback
+	return s.makeUniquePageSlug(ctx, queries, baseSlug(title, fallback))
+}
+
+// baseSlug is the slug a title would claim before collision suffixing.
+//
+// The SkipExisting probe and the allocator must derive it the same way. They
+// did not: the probe used util.Slugify(title) directly, which is "" for a title
+// made only of punctuation or of characters that transliterate to nothing —
+// routine on a mis-transcoded twenty-year-old database. pageExists reports a
+// blank slug as free, so those rows were never skipped and every re-run created
+// another copy.
+func baseSlug(title, fallback string) string {
+	if base := util.Slugify(title); base != "" {
+		return base
 	}
-	return s.makeUniquePageSlug(ctx, queries, base)
+	return fallback
 }
 
 // makeUniquePageSlug allocates a slug no other page, alias, redirect, module
@@ -369,13 +380,13 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 	return nil
 }
 
-// uniqueTaxonomySlug probes for a slug the taken predicate rejects, appending
-// -2, -3, … and finally a timestamp suffix. It returns "" when no candidate
-// could be confirmed free, which the caller must treat as a failure.
+// uniqueTaxonomySlug returns a slug the taken predicate reports as free,
+// appending -2, -3, … and finally a timestamp suffix.
 //
-// A predicate error counts as taken, never free: reading a transient database
-// error as "nothing there" is how an import silently collides with a row that
-// already exists.
+// A probe error aborts the search rather than being read as either "free" or
+// "taken". Reading it as free collides with a row that already exists; reading
+// it as taken issues a hundred more doomed probes per row and reports a
+// database outage to the operator as a slug collision.
 func uniqueTaxonomySlug(ctx context.Context, base string, taken func(string) (bool, error)) (string, error) {
 	// A probe error still means "not free" — reading a transient failure as
 	// "nothing there" is how an import collides with a row that already exists.
@@ -477,6 +488,12 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, conten
 
 		newURL, outcome := s.importOneFile(ctx, queries, mediaRoot, processor, canonicalUploadRoot,
 			relPath, userID, langCode, result, tracker)
+		if outcome == mediaImported && newURL == "" {
+			// Guards the one pairing the enum cannot express. Rewriting a body
+			// against an empty URL would blank every matching src attribute.
+			result.AddError("Internal error: %q reported as imported with no URL", relPath)
+			outcome = mediaFailed
+		}
 		if outcome != mediaImported {
 			// Counted separately because the two mean very different things to
 			// an operator: one sends them to the old server, the other to their
@@ -514,12 +531,30 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, conten
 type mediaOutcome int
 
 const (
-	mediaImported mediaOutcome = iota
-	mediaAbsent                // the file is genuinely not in the source tree
-	mediaFailed                // the file is there, but importing it failed
+	// mediaFailed is first so it is the zero value: an unclassified path must
+	// never read as success. A future naked return of the zero value would
+	// otherwise map every reference to an empty URL and rewrite the archive to
+	// src="", counted as imported.
+	mediaFailed   mediaOutcome = iota // the file is there, but importing it failed
+	mediaAbsent                       // the file is genuinely not in the source tree
+	mediaImported                     // the file is now in the media library
 )
 
-// importOneFile ingests a single referenced file and returns its new oCMS URL.
+// String names the outcome so it is legible in a log line.
+func (o mediaOutcome) String() string {
+	switch o {
+	case mediaImported:
+		return "imported"
+	case mediaAbsent:
+		return "absent"
+	default:
+		return "failed"
+	}
+}
+
+// importOneFile ingests a single referenced file, returning its new oCMS URL
+// and an outcome distinguishing a file the source no longer has from one that
+// is there but could not be imported.
 func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, mediaRoot *shared.MediaRoot,
 	processor *imaging.Processor, canonicalUploadRoot, relPath string, userID int64, langCode string,
 	result *types.ImportResult, tracker types.ImportTracker) (string, mediaOutcome) {
@@ -712,7 +747,7 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 			title = fmt.Sprintf("Story %d", story.ID)
 		}
 
-		if opts.SkipExisting && s.pageExists(ctx, queries, util.Slugify(title), title, result) {
+		if opts.SkipExisting && s.pageExists(ctx, queries, baseSlug(title, fmt.Sprintf("story-%d", story.ID)), title, result) {
 			result.PostsSkipped++
 			continue
 		}
@@ -806,7 +841,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 		if title == "" {
 			title = fmt.Sprintf("Page %d", source.ID)
 		}
-		if opts.SkipExisting && s.pageExists(ctx, queries, util.Slugify(title), title, result) {
+		if opts.SkipExisting && s.pageExists(ctx, queries, baseSlug(title, fmt.Sprintf("page-%d", source.ID)), title, result) {
 			result.PagesSkipped++
 			continue
 		}
@@ -885,7 +920,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 		if title == "" {
 			title = fmt.Sprintf("Encyclopedia %d", entry.ID)
 		}
-		if opts.SkipExisting && s.pageExists(ctx, queries, util.Slugify(title), title, result) {
+		if opts.SkipExisting && s.pageExists(ctx, queries, baseSlug(title, fmt.Sprintf("encyclopedia-%d", entry.ID)), title, result) {
 			result.PagesSkipped++
 			continue
 		}
@@ -933,11 +968,12 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 	}
 }
 
-// prepareBody rewrites media references and applies the admin HTML policy.
+// prepareBody rewrites media references, applies the admin HTML policy, and
+// tallies into altered every body that lost markup.
 //
-// Sanitizing is unconditional. OCMS_SANITIZE_PAGE_HTML governs render-time
-// sanitizing only, and PHP-Nuke bodies are a decade of hand-written markup
-// that predates any such policy.
+// Sanitizing is unconditional here. Every other page-write path gates on
+// OCMS_SANITIZE_PAGE_HTML, so an install running with it off would store
+// PHP-Nuke's decade of hand-written markup verbatim.
 func (s *Source) prepareBody(body string, mediaMap map[string]string, altered *int) string {
 	if mediaMap != nil {
 		body = shared.ReplaceURLs(body, mediaMap)
@@ -972,7 +1008,8 @@ func (s *Source) pageExists(ctx context.Context, queries *store.Queries, slug, t
 	}
 }
 
-// resolveAuthorID maps a story onto an imported oCMS account.
+// resolveAuthorID maps a story onto an imported oCMS account, reporting whether
+// the lookup succeeded. On failure it returns fallbackAuthorID.
 //
 // PHP-Nuke records two names per story: `informant` is whoever submitted it and
 // `aid` is the administrator who published it. The submitter is the better
