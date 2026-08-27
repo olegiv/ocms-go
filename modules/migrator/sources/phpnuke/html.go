@@ -4,6 +4,7 @@
 package phpnuke
 
 import (
+	"net/url"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -236,8 +237,17 @@ func extractAssetRefs(fragment string) []assetRef {
 					continue
 				}
 				raw := string(value)
-				if path, ok := normalizeAssetPath(raw); ok {
-					seen[raw] = assetRef{Raw: raw, Path: path}
+				path, ok := normalizeAssetPath(raw)
+				if !ok {
+					continue
+				}
+				seen[raw] = assetRef{Raw: raw, Path: path}
+				// TagAttr returns the entity-decoded value, so a body holding
+				// src="a&amp;b.jpg" yields "a&b.jpg" here. Rewriting searches
+				// the raw body, where only the escaped spelling appears, so
+				// both have to be registered for the same file.
+				if escaped := html.EscapeString(raw); escaped != raw {
+					seen[escaped] = assetRef{Raw: escaped, Path: path}
 				}
 			}
 		}
@@ -276,6 +286,19 @@ func normalizeAssetPath(raw string) (string, bool) {
 	}
 	value = strings.TrimPrefix(value, "/")
 	if value == "" {
+		return "", false
+	}
+	// Decode before validating, never after. A path is written as a URL but
+	// opened as a filename, so "images/My%20Photo.jpg" names a file called
+	// "My Photo.jpg"; without this the file is reported missing and the old
+	// reference is left in the imported body. Decoding first also means the
+	// traversal checks below see "%2e%2e%2f" as the "../" it really is.
+	decoded, err := url.PathUnescape(value)
+	if err != nil {
+		return "", false
+	}
+	value = decoded
+	if value == "" || strings.HasPrefix(value, "/") {
 		return "", false
 	}
 	// Reject traversal outright rather than cleaning it: a path that needs

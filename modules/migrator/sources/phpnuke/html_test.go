@@ -431,3 +431,77 @@ func TestContainsTagIgnoresLonePunctuation(t *testing.T) {
 		}
 	}
 }
+
+// TestNormalizeAssetPathDecodesPercentEscapes covers a Codex review finding. A
+// path is written as a URL but opened as a filename, so "My%20Photo.jpg" names
+// a file called "My Photo.jpg". Without decoding, the file was reported missing
+// and the old reference stayed in the imported body.
+func TestNormalizeAssetPathDecodesPercentEscapes(t *testing.T) {
+	for _, tc := range []struct {
+		raw      string
+		wantPath string
+		wantOK   bool
+	}{
+		{"images/My%20Photo.jpg", "images/My Photo.jpg", true},
+		{"images/%D0%9E%D1%82%D0%B5%D0%BB%D1%8C.jpg", "images/Отель.jpg", true},
+		{"images/plain.jpg", "images/plain.jpg", true},
+		// Decoding happens before validation, so encoded traversal is caught.
+		{"images/%2e%2e%2fsecret.jpg", "", false},
+		{"%2fetc%2fpasswd.jpg", "", false},
+		{"images/bad%zz.jpg", "", false},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			got, ok := normalizeAssetPath(tc.raw)
+			if ok != tc.wantOK {
+				t.Fatalf("normalizeAssetPath(%q) ok = %v, want %v (got %q)", tc.raw, ok, tc.wantOK, got)
+			}
+			if ok && got != tc.wantPath {
+				t.Errorf("normalizeAssetPath(%q) = %q, want %q", tc.raw, got, tc.wantPath)
+			}
+		})
+	}
+}
+
+// TestExtractAssetRefsKeepsEscapedSpelling covers a Codex review finding. The
+// tokenizer entity-decodes attribute values, so a body holding
+// src="a&amp;b.jpg" yields "a&b.jpg" — a spelling that does not appear in the
+// body, so rewriting silently found nothing and left the legacy path in place.
+func TestExtractAssetRefsKeepsEscapedSpelling(t *testing.T) {
+	refs := extractAssetRefs(`<img src="images/a&amp;b.jpg">`)
+
+	spellings := make(map[string]string, len(refs))
+	for _, ref := range refs {
+		spellings[ref.Raw] = ref.Path
+	}
+	if _, ok := spellings["images/a&amp;b.jpg"]; !ok {
+		t.Errorf("the escaped spelling that actually appears in the body is missing: %v", spellings)
+	}
+	if _, ok := spellings["images/a&b.jpg"]; !ok {
+		t.Errorf("the decoded spelling is missing: %v", spellings)
+	}
+	for raw, path := range spellings {
+		if path != "images/a&b.jpg" {
+			t.Errorf("ref %q resolved to %q, want the decoded filesystem path", raw, path)
+		}
+	}
+}
+
+// TestTopicLabelIgnoresWhitespaceOnlyText covers a Codex review finding: a
+// whitespace-only topictext was returned as the label, creating a visually
+// blank category while a usable topicname sat unused.
+func TestTopicLabelIgnoresWhitespaceOnlyText(t *testing.T) {
+	for _, tc := range []struct {
+		name, text, want string
+	}{
+		{"rHotels", "   ", "rHotels"},
+		{"rHotels", "\t\n ", "rHotels"},
+		{"rHotels", "Отели", "Отели"},
+		{"rHotels", "", "rHotels"},
+		{"  ", "  ", ""},
+	} {
+		topic := &Topic{Name: ns(tc.name), Text: ns(tc.text)}
+		if got := topic.Label(); got != tc.want {
+			t.Errorf("Label() with name=%q text=%q = %q, want %q", tc.name, tc.text, got, tc.want)
+		}
+	}
+}

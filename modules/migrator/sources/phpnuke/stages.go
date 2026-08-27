@@ -104,6 +104,18 @@ func corePathReserved(p string) bool {
 	return p == ".well-known" || strings.HasPrefix(p, ".well-known/")
 }
 
+// authorKey folds a PHP-Nuke username for lookup.
+//
+// The source query matches stories.informant and stories.aid against
+// users.username under the MySQL column collation, which on a PHP-Nuke
+// database of this vintage is case-insensitive. A Go map is not, so a story
+// crediting "Olegiv" against a user row stored as "olegiv" imported the user
+// successfully and then attributed every one of their stories to the fallback
+// account. Both sides of the map fold the same way.
+func authorKey(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
 // importUsers imports the accounts credited on a story.
 //
 // Imported accounts are deliberately inert: role "public" grants no admin
@@ -149,7 +161,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 		existing, lookupErr := queries.GetUserByEmail(ctx, email)
 		switch {
 		case lookupErr == nil:
-			userMap[user.Login()] = existing.ID
+			userMap[authorKey(user.Login())] = existing.ID
 			result.UsersSkipped++
 			continue
 		case errors.Is(lookupErr, sql.ErrNoRows):
@@ -177,7 +189,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 			continue
 		}
 
-		userMap[user.Login()] = created.ID
+		userMap[authorKey(user.Login())] = created.ID
 		result.UsersImported++
 	}
 	return nil
@@ -1013,8 +1025,8 @@ func (s *Source) pageExists(ctx context.Context, queries *store.Queries, slug, t
 // attribution, so it wins when both are present.
 func resolveAuthorID(story *Story, userMap map[string]int64, fallbackAuthorID int64) (int64, bool) {
 	for _, username := range []string{
-		strings.TrimSpace(shared.NullString(story.Informant)),
-		strings.TrimSpace(shared.NullString(story.AuthorID)),
+		authorKey(shared.NullString(story.Informant)),
+		authorKey(shared.NullString(story.AuthorID)),
 	} {
 		if username == "" {
 			continue

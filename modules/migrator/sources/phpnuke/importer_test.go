@@ -1106,7 +1106,8 @@ func TestAuthorTallyIgnoresResolvedFallbackMatches(t *testing.T) {
 	result := &types.ImportResult{}
 
 	// The source author resolves to the very account used as the fallback.
-	userMap := map[string]int64{"Olegiv": adminID}
+	// Keyed the way importUsers builds it: case-folded.
+	userMap := map[string]int64{authorKey("Olegiv"): adminID}
 	stories := []Story{
 		{ID: 1, Title: ns("Resolved"), Informant: ns("Olegiv")},
 		{ID: 2, Title: ns("Orphaned"), Informant: ns("stranger")},
@@ -1808,5 +1809,53 @@ func TestPageWriteFailureIsReportedAndNotCounted(t *testing.T) {
 	// Both rows are attempted: one bad row must not abort the remaining work.
 	if len(result.Errors) != 2 {
 		t.Errorf("expected one error per story, got %d: %v", len(result.Errors), result.Errors)
+	}
+}
+
+// TestAuthorLookupIsCaseInsensitive covers a Codex review finding. The source
+// query matches usernames under the MySQL column collation, which is
+// case-insensitive on a PHP-Nuke database, but a Go map is not — so a story
+// crediting "Olegiv" against a user row stored as "olegiv" imported the user
+// and then attributed every one of their stories to the fallback account.
+func TestAuthorLookupIsCaseInsensitive(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	result := &types.ImportResult{}
+	userMap := make(map[string]int64)
+
+	// The destination row is lower-case; the stories credit mixed case.
+	reader := &fakeReader{authors: []User{
+		{ID: 2, Username: ns("olegiv"), Name: ns("Oleg"), Email: ns("o@example.com")},
+	}}
+	if err := NewSource().importUsers(ctx, queries, reader, userMap,
+		types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		t.Fatalf("importUsers() error = %v", err)
+	}
+	imported := userMap[authorKey("olegiv")]
+	if imported == 0 {
+		t.Fatalf("user was not mapped: %v", userMap)
+	}
+
+	for _, spelling := range []string{"Olegiv", "OLEGIV", "olegiv", " Olegiv "} {
+		story := &Story{Informant: ns(spelling)}
+		got, resolved := resolveAuthorID(story, userMap, adminID)
+		if !resolved || got != imported {
+			t.Errorf("informant %q resolved to %d (resolved=%v), want the imported user %d",
+				spelling, got, resolved, imported)
+		}
+	}
+}
+
+func TestAuthorKeyFolds(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"Olegiv", "olegiv"},
+		{" Olegiv ", "olegiv"},
+		{"OLEGIV", "olegiv"},
+		{"", ""},
+		{"   ", ""},
+	} {
+		if got := authorKey(tc.in); got != tc.want {
+			t.Errorf("authorKey(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }

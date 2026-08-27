@@ -5,6 +5,7 @@ package phpnuke
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
@@ -77,10 +78,13 @@ type Topic struct {
 
 // Label returns the best available human-readable topic name.
 func (t *Topic) Label() string {
-	if text := shared.NullString(t.Text); text != "" {
+	// Trimmed before the comparison: a whitespace-only topictext is not a
+	// label, and treating it as one creates a visually blank category while a
+	// perfectly good topicname sits unused.
+	if text := strings.TrimSpace(shared.NullString(t.Text)); text != "" {
 		return text
 	}
-	return shared.NullString(t.Name)
+	return strings.TrimSpace(shared.NullString(t.Name))
 }
 
 // Category is a story category from `stories_cat`, or a page category from
