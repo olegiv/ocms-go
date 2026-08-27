@@ -3050,3 +3050,184 @@ func TestTaxonomyStagesStopOnCancellation(t *testing.T) {
 		})
 	}
 }
+
+// recordingRouteChecker owns a fixed set of module paths and remembers every
+// path it was asked about, so a test can assert on both.
+type recordingRouteChecker struct {
+	owned map[string]bool
+	asked []string
+}
+
+func (c *recordingRouteChecker) OwnsPublicPath(path string) bool {
+	c.asked = append(c.asked, path)
+	return c.owned[path]
+}
+
+// TestSlugGuardChecksModuleRoutesOnBothPaths covers a Codex review finding, and
+// finishes a fix from an earlier round.
+//
+// Redirects and module routes are both mounted on the root router, ahead of the
+// language-aware frontend router, so both see "/ru/news" whole. The redirect
+// check was widened to cover the prefixed path; the module check two lines above
+// it was not, so a module owning the prefixed route still produced an imported
+// page at a URL nothing could reach.
+func TestSlugGuardChecksModuleRoutesOnBothPaths(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+		Code: "ru", Name: "Russian", IsDefault: false, IsActive: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("failed to create the Russian language: %v", err)
+	}
+
+	checker := &recordingRouteChecker{owned: map[string]bool{"/ru/news": true}}
+	source := NewSource()
+	source.SetPublicRouteChecker(checker)
+
+	result := &types.ImportResult{}
+	source.importStories(ctx, queries,
+		[]Story{{ID: 1, Title: ns("News"), BodyText: ns("<p>x</p>")}},
+		map[string]int64{}, adminID, "ru", map[int64]int64{}, map[int64]int64{},
+		nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+	if result.PostsImported != 1 {
+		t.Fatalf("imported %d posts, want 1; errors %v", result.PostsImported, result.Errors)
+	}
+
+	pages, err := queries.ListPages(ctx, store.ListPagesParams{Limit: 10, Offset: 0})
+	if err != nil {
+		t.Fatalf("failed to list pages: %v", err)
+	}
+	for _, page := range pages {
+		if page.Slug == "news" {
+			t.Errorf("the page took %q while a module owns /ru/news, its only public "+
+				"URL; requests would reach the module instead", page.Slug)
+		}
+	}
+
+	askedPrefixed := false
+	for _, path := range checker.asked {
+		if path == "/ru/news" {
+			askedPrefixed = true
+		}
+	}
+	if !askedPrefixed {
+		t.Errorf("the module checker was never asked about the prefixed path; it saw %v",
+			checker.asked)
+	}
+}
+
+// TestDefaultLanguageChecksOnlyTheBarePath keeps the widened guard from turning
+// into a blanket prefix check: the default language is served unprefixed, so
+// asking about "/en/news" would refuse slugs no route can reach.
+func TestDefaultLanguageChecksOnlyTheBarePath(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	lang := defaultLang(t, queries)
+
+	checker := &recordingRouteChecker{owned: map[string]bool{}}
+	source := NewSource()
+	source.SetPublicRouteChecker(checker)
+
+	result := &types.ImportResult{}
+	source.importStories(ctx, queries,
+		[]Story{{ID: 1, Title: ns("News"), BodyText: ns("<p>x</p>")}},
+		map[string]int64{}, adminID, lang, map[int64]int64{}, map[int64]int64{},
+		nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+
+	for _, path := range checker.asked {
+		if strings.HasPrefix(path, "/"+lang+"/") {
+			t.Errorf("the default language was checked at the prefixed path %q; it is "+
+				"served unprefixed, so that only refuses reachable slugs", path)
+		}
+	}
+}
+
+// TestEncyclopediaSummaryIsAggregated covers a Codex review finding. Summaries
+// are deliberately uncapped and are copied into the persisted job and the admin
+// response, so one line per encyclopedia grew both with the size of the source.
+func TestEncyclopediaSummaryIsAggregated(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	lang := defaultLang(t, queries)
+
+	const containers = 250
+	content := &importContent{encTerms: map[int64][]EncyclopediaTerm{}}
+	for i := 1; i <= containers; i++ {
+		content.encEntries = append(content.encEntries, EncyclopediaEntry{
+			ID: int64(i), Title: ns("Book " + strconv.Itoa(i)), Active: ni(1),
+		})
+		content.encTerms[int64(i)] = []EncyclopediaTerm{
+			{ID: int64(i), EntryID: ni(int64(i)), Title: ns("Term"), Text: ns("<p>t</p>")},
+		}
+	}
+
+	result := &types.ImportResult{}
+	NewSource().importEncyclopedia(ctx, queries, content, adminID, lang, nil, nil, nil,
+		types.ImportOptions{}, result, &mockTracker{}, nil)
+
+	if result.PagesImported != containers {
+		t.Fatalf("PagesImported = %d, want %d", result.PagesImported, containers)
+	}
+	if len(result.Summaries) > 2 {
+		t.Errorf("%d summaries for %d encyclopedias; summaries are uncapped and are "+
+			"persisted with the job, so they must not scale with the source",
+			len(result.Summaries), containers)
+	}
+	if len(result.Notices) > types.MaxTrackedMessages {
+		t.Errorf("%d notices retained, above the %d cap", len(result.Notices),
+			types.MaxTrackedMessages)
+	}
+	joined := strings.Join(result.Summaries, " ")
+	if !strings.Contains(joined, strconv.Itoa(containers)) {
+		t.Errorf("the aggregate summary does not report the count: %q", joined)
+	}
+}
+
+// TestNoStageLoopAppendsAnUncappedSummary is the mechanical half.
+//
+// AddError and AddNotice go through appendCapped; AddSummary does not, by
+// design — a summary is an end-of-stage aggregate. That distinction is invisible
+// at the call site, so this walks the package and fails on any AddSummary inside
+// a row loop, which is what turns an aggregate into an unbounded list.
+func TestNoStageLoopAppendsAnUncappedSummary(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("failed to read package directory: %v", err)
+	}
+	fset := token.NewFileSet()
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, name, nil, 0)
+		if parseErr != nil {
+			t.Fatalf("failed to parse %s: %v", name, parseErr)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			loop, ok := n.(*ast.RangeStmt)
+			if !ok {
+				return true
+			}
+			ast.Inspect(loop.Body, func(inner ast.Node) bool {
+				call, ok := inner.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || selector.Sel.Name != "AddSummary" {
+					return true
+				}
+				t.Errorf("%s:%d: AddSummary inside a loop; summaries are uncapped and "+
+					"are persisted with the job, so a per-row one grows without bound. "+
+					"Use AddNotice for per-item detail and one AddSummary after the loop",
+					name, fset.Position(call.Pos()).Line)
+				return true
+			})
+			return true
+		})
+	}
+}

@@ -117,16 +117,18 @@ func (s *Source) makeUniquePageSlug(ctx context.Context, queries *store.Queries,
 		if corePathReserved(slug) {
 			return false
 		}
-		if s.publicRouteChecker != nil && s.publicRouteChecker.OwnsPublicPath("/"+slug) {
-			return false
-		}
-		// Both paths, because two different middlewares answer them. The
-		// redirects middleware is mounted on the root router, ahead of the
-		// language-aware frontend router, so it sees "/ru/news" whole: an
-		// enabled redirect there owns the imported page's only public URL, and
-		// checking the bare "/news" never notices. The unprefixed check still
-		// matters, because page slugs are unique across languages.
+		// Every public path this page would answer, checked against both things
+		// that could already own it. Redirects and module routes are alike in
+		// the way that matters here: both are mounted on the root router, ahead
+		// of the language-aware frontend router, so both see "/ru/news" whole.
+		// Checking only the bare "/news" misses an owner of the prefixed path,
+		// which for a non-default language is the page's only public URL. The
+		// unprefixed check still matters, because slugs are unique across
+		// languages.
 		for _, candidate := range redirectGuardPaths(slug, prefix) {
+			if s.publicRouteChecker != nil && s.publicRouteChecker.OwnsPublicPath(candidate) {
+				return false
+			}
 			occupied, err := shared.RedirectPathOccupied(ctx, queries, candidate)
 			if err != nil || occupied {
 				return false
@@ -1264,6 +1266,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 		return
 	}
 	now := time.Now()
+	collapsed, collapsedTerms := 0, 0
 
 	for i := range content.encEntries {
 		select {
@@ -1318,8 +1321,20 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 		}
 		result.PagesImported++
 		if len(terms) > 0 {
-			result.AddSummary("Encyclopedia %q was imported as one page holding %d terms.", title, len(terms))
+			collapsed++
+			collapsedTerms += len(terms)
+			// A notice, not a summary: summaries are uncapped, so one line per
+			// container grew the persisted job result and the admin response with
+			// the size of the source. The aggregate below is the one line that has
+			// to survive however many there were.
+			result.AddNotice("Encyclopedia %q was imported as one page holding %d terms.",
+				title, len(terms))
 		}
+	}
+	if collapsed > 0 {
+		result.AddSummary("%d encyclopedias were each imported as a single page, holding "+
+			"%d terms between them. PHP-Nuke served every term from its own "+
+			"query-string URL, which has no oCMS equivalent.", collapsed, collapsedTerms)
 	}
 }
 
