@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"path"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 
 	"github.com/olegiv/ocms-go/internal/imaging"
@@ -29,6 +31,10 @@ import (
 const (
 	// maxTaxonomySlugSuffix bounds the probe for a free taxonomy slug.
 	maxTaxonomySlugSuffix = 100
+
+	// mysqlErrNoSuchTable is MySQL's ER_NO_SUCH_TABLE, the one read failure
+	// that is genuinely routine against an old PHP-Nuke install.
+	mysqlErrNoSuchTable = 1146
 
 	// oCMS discriminates posts from pages with pages.page_type.
 	pageTypePost = "post"
@@ -180,8 +186,18 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 	}
 	pageCategories, err := reader.GetPageCategories(ctx)
 	if err != nil {
-		// A site that never enabled the static pages module has no such table.
-		result.AddNotice("Static page categories were not imported: %v", err)
+		// A site that never enabled the static pages module genuinely has no
+		// such table. Anything else — a dropped connection, a missing SELECT
+		// grant, a corrupt row — silently imports every static page with no
+		// category, so it must not be downgraded to a notice.
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == mysqlErrNoSuchTable {
+			result.AddNotice("Static page categories were not imported: the %spages_categories "+
+				"table does not exist; this site never enabled the static pages module.", reader.Prefix())
+		} else {
+			result.AddError("Failed to read static page categories: %v; "+
+				"imported pages will have no category assigned", err)
+		}
 		pageCategories = nil
 	}
 	types.Report(ctx, tracker, types.Progress{
@@ -236,7 +252,7 @@ func (s *Source) createCategory(ctx context.Context, queries *store.Queries, nam
 		return 0, false
 	}
 
-	slug := uniqueTaxonomySlug(ctx, base, func(candidate string) (bool, error) {
+	slug, err := uniqueTaxonomySlug(ctx, base, func(candidate string) (bool, error) {
 		_, err := queries.GetCategoryBySlug(ctx, candidate)
 		switch {
 		case err == nil:
@@ -247,8 +263,8 @@ func (s *Source) createCategory(ctx context.Context, queries *store.Queries, nam
 			return false, err
 		}
 	})
-	if slug == "" {
-		result.AddError("Failed to allocate a free slug for category %q", name)
+	if err != nil {
+		result.AddError("Failed to allocate a free slug for category %q: %v", name, err)
 		return 0, false
 	}
 
@@ -297,6 +313,8 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 		category := &categories[i]
 		name := strings.TrimSpace(category.Name())
 		if name == "" {
+			result.AddNotice("Story category %d has no title and was not imported; "+
+				"posts in that category were left untagged", category.ID)
 			continue
 		}
 		base := util.Slugify(name)
@@ -313,7 +331,7 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 			continue
 		}
 
-		slug := uniqueTaxonomySlug(ctx, base, func(candidate string) (bool, error) {
+		slug, slugErr := uniqueTaxonomySlug(ctx, base, func(candidate string) (bool, error) {
 			_, err := queries.GetTagBySlug(ctx, candidate)
 			switch {
 			case err == nil:
@@ -324,8 +342,8 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 				return false, err
 			}
 		})
-		if slug == "" {
-			result.AddError("Failed to allocate a free slug for tag %q", name)
+		if slugErr != nil {
+			result.AddError("Failed to allocate a free slug for tag %q: %v", name, slugErr)
 			continue
 		}
 
@@ -358,26 +376,47 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 // A predicate error counts as taken, never free: reading a transient database
 // error as "nothing there" is how an import silently collides with a row that
 // already exists.
-func uniqueTaxonomySlug(ctx context.Context, base string, taken func(string) (bool, error)) string {
-	isFree := func(candidate string) bool {
+func uniqueTaxonomySlug(ctx context.Context, base string, taken func(string) (bool, error)) (string, error) {
+	// A probe error still means "not free" — reading a transient failure as
+	// "nothing there" is how an import collides with a row that already exists.
+	// But it also aborts the search: continuing would issue a hundred more
+	// doomed probes per row and report the database outage as a slug collision.
+	isFree := func(candidate string) (bool, error) {
 		if err := ctx.Err(); err != nil {
-			return false
+			return false, err
 		}
 		exists, err := taken(candidate)
-		return err == nil && !exists
+		if err != nil {
+			return false, err
+		}
+		return !exists, nil
 	}
-	if isFree(base) {
-		return base
+	free, err := isFree(base)
+	if err != nil {
+		return "", err
+	}
+	if free {
+		return base, nil
 	}
 	for i := 2; i <= maxTaxonomySlugSuffix; i++ {
-		if candidate := base + "-" + strconv.Itoa(i); isFree(candidate) {
-			return candidate
+		candidate := base + "-" + strconv.Itoa(i)
+		free, err := isFree(candidate)
+		if err != nil {
+			return "", err
+		}
+		if free {
+			return candidate, nil
 		}
 	}
-	if fallback := base + "-" + strconv.FormatInt(time.Now().UnixNano(), 36); isFree(fallback) {
-		return fallback
+	fallback := base + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	free, err = isFree(fallback)
+	if err != nil {
+		return "", err
 	}
-	return ""
+	if free {
+		return fallback, nil
+	}
+	return "", fmt.Errorf("no free slug after %d attempts", maxTaxonomySlugSuffix)
 }
 
 // importMedia copies every file referenced by an imported body into the oCMS
@@ -428,7 +467,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, conten
 		Source: s.Name(), Phase: types.EntityMedia, Total: len(paths),
 	})
 
-	missing := 0
+	var absent, failed int
 	for _, relPath := range paths {
 		select {
 		case <-ctx.Done():
@@ -436,10 +475,18 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, conten
 		default:
 		}
 
-		newURL, ok := s.importOneFile(ctx, queries, mediaRoot, processor, canonicalUploadRoot,
+		newURL, outcome := s.importOneFile(ctx, queries, mediaRoot, processor, canonicalUploadRoot,
 			relPath, userID, langCode, result, tracker)
-		if !ok {
-			missing++
+		if outcome != mediaImported {
+			// Counted separately because the two mean very different things to
+			// an operator: one sends them to the old server, the other to their
+			// own uploads directory.
+			if outcome == mediaAbsent {
+				absent++
+			} else {
+				failed++
+			}
+			result.MediaSkipped++
 			continue
 		}
 		for _, raw := range byPath[relPath] {
@@ -447,23 +494,48 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, conten
 		}
 		result.MediaImported++
 	}
-	if missing > 0 {
+	if absent > 0 {
 		result.AddSummary("%d of %d referenced files were missing from the source tree; "+
-			"those image references were left unchanged in the imported bodies.", missing, len(paths))
+			"those image references were left unchanged in the imported bodies.", absent, len(paths))
+	}
+	if failed > 0 {
+		result.AddSummary("%d of %d referenced files exist in the source tree but could not be "+
+			"imported; see the errors above. Those image references were left unchanged.",
+			failed, len(paths))
 	}
 	return mediaMap, nil
 }
 
+// mediaOutcome distinguishes the reasons importOneFile can decline a file.
+//
+// A single boolean conflated "the old site had already deleted this" with
+// "importing it failed", and the run summary then told the operator that a
+// disk-full or permissions problem was missing source data.
+type mediaOutcome int
+
+const (
+	mediaImported mediaOutcome = iota
+	mediaAbsent                // the file is genuinely not in the source tree
+	mediaFailed                // the file is there, but importing it failed
+)
+
 // importOneFile ingests a single referenced file and returns its new oCMS URL.
 func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, mediaRoot *shared.MediaRoot,
 	processor *imaging.Processor, canonicalUploadRoot, relPath string, userID int64, langCode string,
-	result *types.ImportResult, tracker types.ImportTracker) (string, bool) {
+	result *types.ImportResult, tracker types.ImportTracker) (string, mediaOutcome) {
 	srcFile, err := mediaRoot.Open(relPath)
 	if err != nil {
-		// A decade-old site routinely references files that were deleted long
-		// ago. That is expected, not a failure of the import.
-		result.AddNotice("Referenced file %q was not found under the source files path", relPath)
-		return "", false
+		// Only a genuinely absent file is routine on a decade-old site. Every
+		// other cause — unreadable permissions, a stale mount, an I/O error, a
+		// symlink escaping the trusted root — is a real failure, and reporting
+		// it as a notice let a run that imported no media at all still finish
+		// as "Completed".
+		if errors.Is(err, fs.ErrNotExist) {
+			result.AddNotice("Referenced file %q was not found under the source files path", relPath)
+			return "", mediaAbsent
+		}
+		result.AddError("Failed to open referenced file %q: %v", relPath, err)
+		return "", mediaFailed
 	}
 
 	filename := path.Base(relPath)
@@ -485,7 +557,7 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 				cleanupErr = s.cleanupMediaFiles(ctx, tracker, writtenRoot, fileUUID)
 			}
 			result.AddError("Failed to save %q: %v", relPath, errors.Join(err, cleanupErr))
-			return "", false
+			return "", mediaFailed
 		}
 		media, err := s.createMediaRow(ctx, queries, store.CreateMediaParams{
 			Uuid:         fileUUID,
@@ -500,7 +572,7 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 		if err != nil {
 			cleanupErr := s.cleanupMediaFiles(ctx, tracker, writtenRoot, fileUUID)
 			result.AddError("Failed to create media record for %q: %v", relPath, errors.Join(err, cleanupErr))
-			return "", false
+			return "", mediaFailed
 		}
 		if !s.track(ctx, tracker, result, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
 			if err := queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
@@ -508,9 +580,9 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 			}
 			return s.cleanupMediaFiles(rollbackCtx, tracker, writtenRoot, fileUUID)
 		}) {
-			return "", false
+			return "", mediaFailed
 		}
-		return model.MediaURL(model.VariantOriginal, fileUUID, filename), true
+		return model.MediaURL(model.VariantOriginal, fileUUID, filename), mediaImported
 	}
 
 	// Migration files come from a trusted local directory, so an oversized
@@ -521,7 +593,7 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 	if err := errors.Join(processErr, closeErr); err != nil {
 		cleanupErr := s.cleanupMediaFiles(ctx, tracker, canonicalUploadRoot, fileUUID)
 		result.AddError("Failed to process %q: %v", relPath, errors.Join(err, cleanupErr))
-		return "", false
+		return "", mediaFailed
 	}
 
 	media, err := s.createMediaRow(ctx, queries, store.CreateMediaParams{
@@ -537,7 +609,7 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 	if err != nil {
 		cleanupErr := s.cleanupMediaFiles(ctx, tracker, canonicalUploadRoot, fileUUID)
 		result.AddError("Failed to create media record for %q: %v", relPath, errors.Join(err, cleanupErr))
-		return "", false
+		return "", mediaFailed
 	}
 	if !s.track(ctx, tracker, result, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
 		if err := queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
@@ -545,7 +617,7 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 		}
 		return s.cleanupMediaFiles(rollbackCtx, tracker, canonicalUploadRoot, fileUUID)
 	}) {
-		return "", false
+		return "", mediaFailed
 	}
 
 	// CreateAllVariants errors only when every variant failed — the signal
@@ -555,6 +627,7 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 		result.AddError("%s: no resized variants could be created: %v", filename, varErr)
 	}
 	now := time.Now()
+	var unrecorded []string
 	for _, v := range variants {
 		if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
 			MediaID:   media.ID,
@@ -566,9 +639,16 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 		}); err != nil {
 			slog.Warn("failed to record media variant",
 				"media_id", media.ID, "variant", v.Type, "error", err)
+			unrecorded = append(unrecorded, v.Type)
 		}
 	}
-	return model.MediaURL(model.VariantOriginal, fileUUID, filename), true
+	// One message per file rather than per variant: a systemic failure would
+	// otherwise exhaust the capped message budget and hide its own cause.
+	if len(unrecorded) > 0 {
+		result.AddError("%s: variant records %v could not be written; "+
+			"that image will be served at full size", filename, unrecorded)
+	}
+	return model.MediaURL(model.VariantOriginal, fileUUID, filename), mediaImported
 }
 
 // createMediaRow fills in the fields every imported media row shares and
@@ -609,11 +689,15 @@ func (s *Source) cleanupMediaFiles(ctx context.Context, tracker types.ImportTrac
 func (s *Source) importStories(ctx context.Context, queries *store.Queries, stories []Story,
 	userMap map[string]int64, fallbackAuthorID int64, langCode string,
 	topicMap, storyCategoryMap map[int64]int64, mediaMap map[string]string,
-	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) {
+	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker,
+	bodiesAltered *int) {
 	types.Report(ctx, tracker, types.Progress{
 		Source: s.Name(), Phase: types.EntityPost, Total: len(stories),
 	})
 	now := time.Now()
+	// Tallied rather than reported per story: 669 individual notices would
+	// exhaust the capped budget and bury everything else.
+	unattributed := 0
 
 	for i := range stories {
 		select {
@@ -639,13 +723,21 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 		}
 
 		publishedAt := storyTimestamp(story, now)
+		// Whether the lookup succeeded, not whether the id happens to equal the
+		// fallback: a source author mapped onto an existing oCMS account is
+		// very often that same oldest-admin row, and comparing ids reported
+		// every such story as having lost its author.
+		authorID, resolved := resolveAuthorID(story, userMap, fallbackAuthorID)
+		if !resolved && namesAnAuthor(story) {
+			unattributed++
+		}
 		page, err := queries.CreatePage(ctx, store.CreatePageParams{
 			Title:        title,
 			Slug:         slug,
-			Body:         s.prepareBody(assembleStoryBody(story), mediaMap),
+			Body:         s.prepareBody(assembleStoryBody(story), mediaMap, bodiesAltered),
 			Summary:      deriveSummary(shared.NullString(story.HomeText)),
 			Status:       model.PageStatusPublished,
-			AuthorID:     resolveAuthorID(story, userMap, fallbackAuthorID),
+			AuthorID:     authorID,
 			LanguageCode: langCode,
 			PageType:     pageTypePost,
 			MetaTitle:    title,
@@ -679,12 +771,24 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 		}
 		result.PostsImported++
 	}
+	if unattributed > 0 {
+		result.AddSummary("%d of %d posts named a source author that was not imported and were "+
+			"attributed to the fallback account instead.", unattributed, len(stories))
+	}
+}
+
+// namesAnAuthor reports whether the source row credited anyone at all, so a
+// story that never had an author is not counted as having lost one.
+func namesAnAuthor(story *Story) bool {
+	return strings.TrimSpace(shared.NullString(story.Informant)) != "" ||
+		strings.TrimSpace(shared.NullString(story.AuthorID)) != ""
 }
 
 // importStaticPages imports the PHP-Nuke static pages module.
 func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, pages []StaticPage,
 	authorID int64, langCode string, pageCategoryMap map[int64]int64, mediaMap map[string]string,
-	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) {
+	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker,
+	bodiesAltered *int) {
 	types.Report(ctx, tracker, types.Progress{
 		Source: s.Name(), Phase: types.EntityPage, Total: len(pages),
 	})
@@ -726,7 +830,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 		page, err := queries.CreatePage(ctx, store.CreatePageParams{
 			Title:        title,
 			Slug:         slug,
-			Body:         s.prepareBody(assembleStaticPageBody(source), mediaMap),
+			Body:         s.prepareBody(assembleStaticPageBody(source), mediaMap, bodiesAltered),
 			Status:       status,
 			AuthorID:     authorID,
 			LanguageCode: langCode,
@@ -763,7 +867,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 // its terms.
 func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries, content *importContent,
 	authorID int64, langCode string, mediaMap map[string]string, opts types.ImportOptions,
-	result *types.ImportResult, tracker types.ImportTracker) {
+	result *types.ImportResult, tracker types.ImportTracker, bodiesAltered *int) {
 	if len(content.encEntries) == 0 {
 		return
 	}
@@ -802,7 +906,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 		page, err := queries.CreatePage(ctx, store.CreatePageParams{
 			Title:        title,
 			Slug:         slug,
-			Body:         s.prepareBody(buildEncyclopediaBody(entry, terms), mediaMap),
+			Body:         s.prepareBody(buildEncyclopediaBody(entry, terms), mediaMap, bodiesAltered),
 			Summary:      deriveSummary(entry.Body()),
 			Status:       status,
 			AuthorID:     authorID,
@@ -834,11 +938,18 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 // Sanitizing is unconditional. OCMS_SANITIZE_PAGE_HTML governs render-time
 // sanitizing only, and PHP-Nuke bodies are a decade of hand-written markup
 // that predates any such policy.
-func (s *Source) prepareBody(body string, mediaMap map[string]string) string {
+func (s *Source) prepareBody(body string, mediaMap map[string]string, altered *int) string {
 	if mediaMap != nil {
 		body = shared.ReplaceURLs(body, mediaMap)
 	}
-	return security.SanitizePageHTML(body)
+	clean := security.SanitizePageHTML(body)
+	// A decade of hand-written markup meets a modern UGC policy, so <font>,
+	// inline styles and presentational table attributes are dropped from a lot
+	// of bodies. Sanitizing is right; doing it without telling anyone is not.
+	if altered != nil && markupRemoved(body, clean) {
+		*altered++
+	}
+	return clean
 }
 
 // pageExists reports whether a page already occupies a slug, for SkipExisting.
@@ -866,7 +977,7 @@ func (s *Source) pageExists(ctx context.Context, queries *store.Queries, slug, t
 // PHP-Nuke records two names per story: `informant` is whoever submitted it and
 // `aid` is the administrator who published it. The submitter is the better
 // attribution, so it wins when both are present.
-func resolveAuthorID(story *Story, userMap map[string]int64, fallbackAuthorID int64) int64 {
+func resolveAuthorID(story *Story, userMap map[string]int64, fallbackAuthorID int64) (int64, bool) {
 	for _, username := range []string{
 		strings.TrimSpace(shared.NullString(story.Informant)),
 		strings.TrimSpace(shared.NullString(story.AuthorID)),
@@ -875,8 +986,8 @@ func resolveAuthorID(story *Story, userMap map[string]int64, fallbackAuthorID in
 			continue
 		}
 		if id, ok := userMap[username]; ok {
-			return id
+			return id, true
 		}
 	}
-	return fallbackAuthorID
+	return fallbackAuthorID, false
 }

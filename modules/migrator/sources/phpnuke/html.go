@@ -285,3 +285,46 @@ func sortedRefs(seen map[string]assetRef) []assetRef {
 	})
 	return refs
 }
+
+// markupRemoved reports whether sanitizing genuinely dropped an element or an
+// attribute, as opposed to rewriting the markup in place.
+//
+// A plain string comparison is not good enough. The sanitizer also *adds*
+// rel="nofollow" to every link and normalizes character entities, so
+// "output != input" is true for essentially every article ever written and
+// says nothing about content loss. Comparing element and element+attribute
+// multisets counts only what actually disappeared — <font>, <iframe>, inline
+// style attributes — which is what an operator needs to review.
+func markupRemoved(before, after string) bool {
+	if before == after {
+		return false
+	}
+	remaining := markupCounts(after)
+	for key, n := range markupCounts(before) {
+		if remaining[key] < n {
+			return true
+		}
+	}
+	return false
+}
+
+// markupCounts tallies every element and element+attribute pair in a fragment.
+func markupCounts(fragment string) map[string]int {
+	counts := make(map[string]int)
+	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
+	for {
+		switch tokenizer.Next() {
+		case html.ErrorToken:
+			return counts
+		case html.StartTagToken, html.SelfClosingTagToken:
+			name, hasAttr := tokenizer.TagName()
+			tag := string(name)
+			counts["<"+tag]++
+			for hasAttr {
+				var key []byte
+				key, _, hasAttr = tokenizer.TagAttr()
+				counts["<"+tag+" "+string(key)]++
+			}
+		}
+	}
+}

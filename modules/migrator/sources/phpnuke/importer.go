@@ -221,6 +221,9 @@ type sourceReader interface {
 	GetEncyclopediaEntries(ctx context.Context) ([]EncyclopediaEntry, error)
 	GetEncyclopediaTerms(ctx context.Context) (map[int64][]EncyclopediaTerm, error)
 	GetStoryAuthors(ctx context.Context) ([]User, error)
+	// Prefix lets a stage name the exact table it could not read, which is the
+	// difference between an actionable message and "table doesn't exist".
+	Prefix() string
 }
 
 // Compile-time proof that the live reader satisfies the stage interface.
@@ -286,7 +289,12 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string,
 
 	content, err := s.readContent(ctx, reader, opts)
 	if err != nil {
-		return nil, err
+		// Users, categories and tags have already written rows by this point.
+		// Returning a nil result would discard every error and notice they
+		// recorded, leaving the operator with a bare read failure and no
+		// account of what is already in their database.
+		result.AddError("Failed to read source content: %v", err)
+		return result, err
 	}
 
 	// Media before bodies: every body is rewritten against the resulting map,
@@ -300,20 +308,26 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string,
 				result.AddError("Media import error: %v", err)
 			}
 		} else {
-			result.AddNotice("Media import was requested but no files path was configured; " +
+			result.AddError("Media import was requested but no files path was configured; " +
 				"inline image references were left pointing at the old site.")
 		}
 	}
 
+	bodiesAltered := 0
 	if opts.ImportPosts {
 		s.importStories(ctx, queries, content.stories, userMap, fallbackAuthorID, langCode,
-			topicMap, storyCategoryMap, mediaMap, opts, result, tracker)
+			topicMap, storyCategoryMap, mediaMap, opts, result, tracker, &bodiesAltered)
 	}
 	if opts.ImportPages {
 		s.importStaticPages(ctx, queries, content.staticPages, fallbackAuthorID, langCode,
-			pageCategoryMap, mediaMap, opts, result, tracker)
+			pageCategoryMap, mediaMap, opts, result, tracker, &bodiesAltered)
 		s.importEncyclopedia(ctx, queries, content, fallbackAuthorID, langCode, mediaMap,
-			opts, result, tracker)
+			opts, result, tracker, &bodiesAltered)
+	}
+	if bodiesAltered > 0 {
+		result.AddSummary("%d imported bodies contained markup the oCMS page HTML policy does "+
+			"not allow (inline styles, <font>, <iframe> and similar) and it was removed. "+
+			"Review those pages if the old site relied on it for layout.", bodiesAltered)
 	}
 
 	// Rebuild the FTS index so imported pages are searchable.
@@ -378,10 +392,24 @@ func (c *importContent) bodies() []string {
 	return bodies
 }
 
-// getDefaultAuthorID gets the first oCMS user's ID, used when a story's own
-// author cannot be resolved to an imported account.
+// getDefaultAuthorID returns the oldest oCMS account, used when a story's own
+// author cannot be resolved to an imported one.
+//
+// Oldest, not newest. ListUsers orders by created_at DESC, so taking the first
+// row picked whichever account was created most recently — which, on any run
+// after the first, is one of the inert role-"public" accounts this importer
+// itself created. That made the fallback author change between runs and
+// attributed content to an account nobody can sign into. The oldest account is
+// stable and, on any real install, the original administrator.
 func (s *Source) getDefaultAuthorID(ctx context.Context, queries *store.Queries) (int64, error) {
-	users, err := queries.ListUsers(ctx, store.ListUsersParams{Limit: 1, Offset: 0})
+	total, err := queries.CountUsers(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("count destination users: %w", err)
+	}
+	if total == 0 {
+		return 0, errors.New("no users found in oCMS database")
+	}
+	users, err := queries.ListUsers(ctx, store.ListUsersParams{Limit: 1, Offset: total - 1})
 	if err != nil {
 		return 0, err
 	}

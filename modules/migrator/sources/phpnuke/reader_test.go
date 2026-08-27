@@ -348,4 +348,7 @@ func TestNullColumnsDegradeToEmptyValues(t *testing.T) {
 	if story.Topic() != 0 || story.Category() != 0 {
 		t.Errorf("NULL taxonomy ids should read as 0, got %d/%d", story.Topic(), story.Category())
 	}
+	if namesAnAuthor(story) {
+		t.Error("an all-NULL row credits nobody and must not count as losing an author")
+	}
 }
