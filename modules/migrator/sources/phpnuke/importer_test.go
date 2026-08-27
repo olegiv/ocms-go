@@ -8,6 +8,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"image"
 	"image/color"
 	"image/png"
@@ -235,7 +239,7 @@ func TestCyrillicSurvivesImport(t *testing.T) {
 	}}
 
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-		map[int64]int64{}, map[int64]int64{}, nil, types.ImportOptions{}, result, tracker, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{}, result, tracker, nil)
 
 	if result.PostsImported != 1 {
 		t.Fatalf("PostsImported = %d, want 1; errors: %v", result.PostsImported, result.Errors)
@@ -301,7 +305,7 @@ func TestImportStoriesSetsStatusTimestampsAndTaxonomy(t *testing.T) {
 	}}
 
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-		map[int64]int64{3: category.ID}, map[int64]int64{9: tag.ID}, nil,
+		map[int64]int64{3: category.ID}, map[int64]int64{9: tag.ID}, nil, nil,
 		types.ImportOptions{}, result, tracker, nil)
 
 	if result.PostsImported != 1 {
@@ -360,7 +364,7 @@ func TestImportStoriesGivesCollidingTitlesDistinctSlugs(t *testing.T) {
 		{ID: 3, Title: title, BodyText: ns("<p>three</p>")},
 	}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-		map[int64]int64{}, map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PostsImported != 3 {
 		t.Fatalf("PostsImported = %d, want 3; errors: %v", result.PostsImported, result.Errors)
@@ -388,7 +392,7 @@ func TestImportStoriesFallsBackWhenTitleIsMissing(t *testing.T) {
 
 	stories := []Story{{ID: 42, Title: sql.NullString{Valid: false}, BodyText: ns("<p>body</p>")}}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
-		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil,
+		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil, nil,
 		types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PostsImported != 1 {
@@ -535,7 +539,7 @@ func TestImportStoriesAttributesToImportedAuthor(t *testing.T) {
 		{ID: 2, Title: ns("By Nobody"), Informant: ns("stranger")},
 	}
 	source.importStories(ctx, queries, stories, userMap, adminID, lang,
-		map[int64]int64{}, map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	authored, err := queries.GetPageBySlug(ctx, "by-sveta")
 	if err != nil {
@@ -564,7 +568,7 @@ func TestImportStaticPagesHonorsActiveFlag(t *testing.T) {
 		{ID: 2, Title: ns("Hidden Page"), Text: ns("<p>hidden</p>"), Active: ni(0)},
 	}
 	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
-		map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PagesImported != 2 {
 		t.Fatalf("PagesImported = %d, want 2; errors: %v", result.PagesImported, result.Errors)
@@ -605,7 +609,7 @@ func TestImportStaticPagesStripsMarkupFromMetaDescription(t *testing.T) {
 		Active:   ni(1),
 	}}
 	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
-		map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	page, err := queries.GetPageBySlug(ctx, "subtitle-test")
 	if err != nil {
@@ -636,7 +640,7 @@ func TestImportEncyclopediaCreatesOnePagePerEntry(t *testing.T) {
 		},
 	}
 	NewSource().importEncyclopedia(ctx, queries, content, adminID, defaultLang(t, queries),
-		nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PagesImported != 1 {
 		t.Fatalf("PagesImported = %d, want 1; errors: %v", result.PagesImported, result.Errors)
@@ -978,7 +982,7 @@ func TestImportContentBodiesCoverEveryImportedKind(t *testing.T) {
 		encTerms:    map[int64][]EncyclopediaTerm{1: {{Text: ns(`<img src="term.jpg">`)}}},
 	}
 
-	joined := strings.Join(content.bodies(), "\n")
+	joined := strings.Join(content.bodies(nil), "\n")
 	for _, want := range []string{"story-home.jpg", "story-body.jpg", "page.jpg", "enc.jpg", "term.jpg"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("bodies() omitted %q, so its media would never be imported", want)
@@ -1013,7 +1017,7 @@ func TestMediaOpenFailuresAreClassified(t *testing.T) {
 	}
 
 	result := &types.ImportResult{}
-	if _, err := NewSource().importMedia(ctx, queries, content, root, os.Getenv("OCMS_UPLOADS_DIR"),
+	if _, err := NewSource().importMedia(ctx, queries, content, nil, root, os.Getenv("OCMS_UPLOADS_DIR"),
 		adminID, defaultLang(t, queries), result, &mockTracker{}); err != nil {
 		t.Fatalf("importMedia() error = %v", err)
 	}
@@ -1113,7 +1117,7 @@ func TestAuthorTallyIgnoresResolvedFallbackMatches(t *testing.T) {
 		{ID: 2, Title: ns("Orphaned"), Informant: ns("stranger")},
 	}
 	NewSource().importStories(ctx, queries, stories, userMap, adminID, defaultLang(t, queries),
-		map[int64]int64{}, map[int64]int64{}, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PostsImported != 2 {
 		t.Fatalf("PostsImported = %d; errors %v", result.PostsImported, result.Errors)
@@ -1147,16 +1151,22 @@ func TestSkipExistingIsIdempotentAcrossRuns(t *testing.T) {
 			stories := []Story{{ID: 42, Title: ns(tc.title), BodyText: ns("<p>body</p>")}}
 			opts := types.ImportOptions{SkipExisting: true}
 
+			content := &importContent{stories: stories}
+
 			first := &types.ImportResult{}
 			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-				map[int64]int64{}, map[int64]int64{}, nil, opts, first, &mockTracker{}, nil)
+				map[int64]int64{}, map[int64]int64{},
+				nil, NewSource().planSkips(ctx, queries, content, opts, first),
+				opts, first, &mockTracker{}, nil)
 			if first.PostsImported != 1 {
 				t.Fatalf("first run imported %d, want 1; errors %v", first.PostsImported, first.Errors)
 			}
 
 			second := &types.ImportResult{}
 			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-				map[int64]int64{}, map[int64]int64{}, nil, opts, second, &mockTracker{}, nil)
+				map[int64]int64{}, map[int64]int64{},
+				nil, NewSource().planSkips(ctx, queries, content, opts, second),
+				opts, second, &mockTracker{}, nil)
 			if second.PostsImported != 0 {
 				t.Errorf("second run imported %d more copies, want 0", second.PostsImported)
 			}
@@ -1359,7 +1369,7 @@ func TestTrackingFailureRollsBackTheCreatedRow(t *testing.T) {
 
 	stories := []Story{{ID: 1, Title: ns("Rolled Back"), BodyText: ns("<p>x</p>")}}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
-		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil,
+		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil, nil,
 		types.ImportOptions{}, result, failingTracker{err: errors.New("tracker table is locked")}, nil)
 
 	if result.PostsImported != 0 {
@@ -1396,7 +1406,7 @@ func TestSlugAllocationRefusesRoutesOwnedElsewhere(t *testing.T) {
 		{ID: 2, Title: ns("Hotels"), BodyText: ns("<p>b</p>")},
 	}
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID,
-		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil,
+		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil, nil,
 		types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	for _, taken := range []string{"news", "hotels"} {
@@ -1451,7 +1461,7 @@ func TestStoryWithoutTimestampIsPublishedNow(t *testing.T) {
 			result := &types.ImportResult{}
 			stories := []Story{{ID: 7, Title: ns("Undated"), BodyText: ns("<p>x</p>"), Time: tc.when}}
 			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
-				defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil,
+				defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil, nil,
 				types.ImportOptions{}, result, &mockTracker{}, nil)
 
 			page, err := queries.GetPageBySlug(ctx, "undated")
@@ -1514,7 +1524,7 @@ func TestImportMediaRewritesEveryRawSpelling(t *testing.T) {
 		encTerms: map[int64][]EncyclopediaTerm{},
 	}
 	result := &types.ImportResult{}
-	mediaMap, err := NewSource().importMedia(ctx, queries, content, root, uploads,
+	mediaMap, err := NewSource().importMedia(ctx, queries, content, nil, root, uploads,
 		adminID, defaultLang(t, queries), result, &mockTracker{})
 	if err != nil {
 		t.Fatalf("importMedia() error = %v", err)
@@ -1587,7 +1597,7 @@ func TestImportMediaHandlesNonImageFile(t *testing.T) {
 		encTerms: map[int64][]EncyclopediaTerm{},
 	}
 	result := &types.ImportResult{}
-	mediaMap, err := NewSource().importMedia(ctx, queries, content, root, uploads,
+	mediaMap, err := NewSource().importMedia(ctx, queries, content, nil, root, uploads,
 		adminID, defaultLang(t, queries), result, &mockTracker{})
 	if err != nil {
 		t.Fatalf("importMedia() error = %v", err)
@@ -1628,7 +1638,7 @@ func TestStagesReportTheProgressPhaseTheyWork(t *testing.T) {
 		tracker := &mockTracker{}
 		stories := []Story{{ID: 1, Title: ns("A")}, {ID: 2, Title: ns("B")}}
 		source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-			map[int64]int64{}, map[int64]int64{}, nil, types.ImportOptions{},
+			map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{},
 			&types.ImportResult{}, tracker, nil)
 		total, ok := tracker.totalFor(types.EntityPost)
 		if !ok {
@@ -1755,7 +1765,7 @@ func TestAssociationFailureStillCountsThePage(t *testing.T) {
 	result := &types.ImportResult{}
 	stories := []Story{{ID: 1, Title: ns("Hotel Review"), BodyText: ns("<p>x</p>"), TopicID: ni(3)}}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, admin.ID, lang,
-		map[int64]int64{3: category.ID}, map[int64]int64{}, nil,
+		map[int64]int64{3: category.ID}, map[int64]int64{}, nil, nil,
 		types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PostsImported != 1 {
@@ -1800,7 +1810,7 @@ func TestPageWriteFailureIsReportedAndNotCounted(t *testing.T) {
 		{ID: 2, Title: ns("Second"), BodyText: ns("<p>b</p>")},
 	}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, admin.ID, lang,
-		map[int64]int64{}, map[int64]int64{}, nil,
+		map[int64]int64{}, map[int64]int64{}, nil, nil,
 		types.ImportOptions{}, result, &mockTracker{}, nil)
 
 	if result.PostsImported != 0 {
@@ -1856,6 +1866,157 @@ func TestAuthorKeyFolds(t *testing.T) {
 	} {
 		if got := authorKey(tc.in); got != tc.want {
 			t.Errorf("authorKey(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestSkipExistingRerunImportsNoMedia covers a Codex review finding.
+//
+// Media is discovered from bodies and imported before any page stage runs, so
+// the skip decision used to arrive too late to stop it. A rerun re-imported
+// every referenced file under a fresh UUID, then skipped the page that would
+// have used it — leaving a complete set of unattached duplicates in the media
+// library on every single run.
+func TestSkipExistingRerunImportsNoMedia(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	lang := defaultLang(t, queries)
+	root := t.TempDir()
+	t.Setenv(shared.EnvAllowedFileRoots, root)
+	writeTestPNG(t, root, "photo.png")
+
+	stories := []Story{{ID: 1, Title: ns("Hotel Royal"), BodyText: ns(`<img src="photo.png">`)}}
+	opts := types.ImportOptions{ImportMedia: true, ImportPosts: true, SkipExisting: true}
+	source := NewSource()
+
+	for run := 1; run <= 2; run++ {
+		content := &importContent{stories: stories, encTerms: map[int64][]EncyclopediaTerm{}}
+		result := &types.ImportResult{}
+		skips := source.planSkips(ctx, queries, content, opts, result)
+		mediaMap, err := source.importMedia(ctx, queries, content, skips, root, t.TempDir(),
+			adminID, lang, result, &mockTracker{})
+		if err != nil {
+			t.Fatalf("run %d: importMedia() error = %v", run, err)
+		}
+		source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
+			map[int64]int64{}, map[int64]int64{}, mediaMap, skips, opts, result, &mockTracker{}, nil)
+
+		wantMedia, wantPosts := 1, 1
+		if run == 2 {
+			wantMedia, wantPosts = 0, 0
+		}
+		if result.MediaImported != wantMedia {
+			t.Errorf("run %d imported %d media, want %d", run, result.MediaImported, wantMedia)
+		}
+		if result.PostsImported != wantPosts {
+			t.Errorf("run %d imported %d posts, want %d", run, result.PostsImported, wantPosts)
+		}
+	}
+
+	media, err := queries.ListMedia(ctx, store.ListMediaParams{Limit: 50, Offset: 0})
+	if err != nil {
+		t.Fatalf("failed to list media: %v", err)
+	}
+	if len(media) != 1 {
+		names := make([]string, len(media))
+		for i, m := range media {
+			names[i] = m.Filename
+		}
+		t.Errorf("two runs left %d media rows, want 1: %v", len(media), names)
+	}
+}
+
+// TestPlanSkipsKeepsDistinctRowsSharingATitle covers the second half of the
+// same defect. Deciding skips inside the stages meant a run could skip its own
+// work: the first of two same-titled stories claimed the slug, and the second —
+// a genuinely different article — was then read as "already imported" and
+// dropped. Settling every decision before the first write removes the race.
+func TestPlanSkipsKeepsDistinctRowsSharingATitle(t *testing.T) {
+	queries, adminID := setupDB(t)
+	ctx := context.Background()
+	lang := defaultLang(t, queries)
+
+	stories := []Story{
+		{ID: 1, Title: ns("News"), BodyText: ns("<p>first</p>")},
+		{ID: 2, Title: ns("News"), BodyText: ns("<p>second, a different article</p>")},
+	}
+	opts := types.ImportOptions{ImportPosts: true, SkipExisting: true}
+	source := NewSource()
+	content := &importContent{stories: stories, encTerms: map[int64][]EncyclopediaTerm{}}
+	result := &types.ImportResult{}
+
+	skips := source.planSkips(ctx, queries, content, opts, result)
+	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
+		map[int64]int64{}, map[int64]int64{}, nil, skips, opts, result, &mockTracker{}, nil)
+
+	if result.PostsImported != 2 {
+		t.Errorf("imported %d of 2 stories; a distinct article was dropped as a "+
+			"duplicate of its namesake (skipped %d)", result.PostsImported, result.PostsSkipped)
+	}
+
+	// And a rerun must still skip both, which is what SkipExisting is for.
+	rerun := &types.ImportResult{}
+	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
+		map[int64]int64{}, map[int64]int64{}, nil,
+		source.planSkips(ctx, queries, content, opts, rerun), opts, rerun, &mockTracker{}, nil)
+	if rerun.PostsImported != 0 {
+		t.Errorf("rerun imported %d more copies, want 0", rerun.PostsImported)
+	}
+}
+
+// TestPageExistsIsCalledOnlyWhilePlanning is the mechanical half of the fix.
+//
+// The bug was not a wrong probe, it was a probe in the wrong place: any skip
+// decision made after planSkips runs is a decision media discovery could not
+// see. Rather than trust that nobody reintroduces one, this walks the package
+// and fails if pageExists is called from anywhere else.
+func TestPageExistsIsCalledOnlyWhilePlanning(t *testing.T) {
+	const allowed = "planSkips"
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("failed to read package directory: %v", err)
+	}
+	fset := token.NewFileSet()
+	callers := make(map[string][]string)
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, name, nil, 0)
+		if parseErr != nil {
+			t.Fatalf("failed to parse %s: %v", name, parseErr)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "pageExists" {
+					callers[fn.Name.Name] = append(callers[fn.Name.Name],
+						fmt.Sprintf("%s:%d", name, fset.Position(call.Pos()).Line))
+				}
+				return true
+			})
+		}
+	}
+
+	if len(callers[allowed]) == 0 {
+		t.Errorf("%s no longer calls pageExists; either the probe moved or this "+
+			"test is now guarding nothing", allowed)
+	}
+	for caller, sites := range callers {
+		if caller != allowed {
+			t.Errorf("%s calls pageExists at %v; skip decisions made outside %s "+
+				"run after media has already been imported, which is the bug this "+
+				"guards", caller, sites, allowed)
 		}
 	}
 }

@@ -308,6 +308,10 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 		return result, err
 	}
 
+	// Which rows this run will write has to be settled before media, not inside
+	// the page stages that run after it. See plannedSkips.
+	skips := s.planSkips(ctx, queries, content, opts, result)
+
 	// Media before bodies: every body is rewritten against the resulting map,
 	// so the files have to exist in oCMS first.
 	var mediaMap map[string]string
@@ -317,7 +321,7 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 			result.AddError("Media import was requested but neither posts nor pages were " +
 				"selected; media is discovered from imported bodies, so nothing was imported.")
 		case filesPath != "":
-			mediaMap, err = s.importMedia(ctx, queries, content, filesPath, getUploadDir(),
+			mediaMap, err = s.importMedia(ctx, queries, content, skips, filesPath, getUploadDir(),
 				fallbackAuthorID, langCode, result, tracker)
 			if err != nil {
 				result.AddError("Media import error: %v", err)
@@ -331,7 +335,7 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 	bodiesAltered := 0
 	if opts.ImportPosts {
 		s.importStories(ctx, queries, content.stories, userMap, fallbackAuthorID, langCode,
-			topicMap, storyCategoryMap, mediaMap, opts, result, tracker, &bodiesAltered)
+			topicMap, storyCategoryMap, mediaMap, skips, opts, result, tracker, &bodiesAltered)
 	}
 	if opts.ImportPages {
 		// Both stages write pages, so the phase total is reported here rather
@@ -343,9 +347,9 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 			Total: len(content.staticPages) + len(content.encEntries),
 		})
 		s.importStaticPages(ctx, queries, content.staticPages, fallbackAuthorID, langCode,
-			pageCategoryMap, mediaMap, opts, result, tracker, &bodiesAltered)
+			pageCategoryMap, mediaMap, skips, opts, result, tracker, &bodiesAltered)
 		s.importEncyclopedia(ctx, queries, content, fallbackAuthorID, langCode, mediaMap,
-			opts, result, tracker, &bodiesAltered)
+			skips, opts, result, tracker, &bodiesAltered)
 	}
 	if bodiesAltered > 0 {
 		result.AddSummary("%d imported bodies contained markup the oCMS page HTML policy does "+
@@ -410,18 +414,93 @@ func (c *importContent) hasBodies() bool {
 }
 
 // bodies returns every HTML body this import will write, for media discovery.
-func (c *importContent) bodies() []string {
+func (c *importContent) bodies(skips *plannedSkips) []string {
 	bodies := make([]string, 0, len(c.stories)+len(c.staticPages)+len(c.encEntries))
 	for i := range c.stories {
-		bodies = append(bodies, assembleStoryBody(&c.stories[i]))
+		if !skips.skipped(types.EntityPost, c.stories[i].ID) {
+			bodies = append(bodies, assembleStoryBody(&c.stories[i]))
+		}
 	}
 	for i := range c.staticPages {
-		bodies = append(bodies, assembleStaticPageBody(&c.staticPages[i]))
+		if !skips.skipped(entityStaticPage, c.staticPages[i].ID) {
+			bodies = append(bodies, assembleStaticPageBody(&c.staticPages[i]))
+		}
 	}
 	for i := range c.encEntries {
-		bodies = append(bodies, buildEncyclopediaBody(&c.encEntries[i], c.encTerms[c.encEntries[i].ID]))
+		if !skips.skipped(entityEncyclopedia, c.encEntries[i].ID) {
+			bodies = append(bodies, buildEncyclopediaBody(&c.encEntries[i], c.encTerms[c.encEntries[i].ID]))
+		}
 	}
 	return bodies
+}
+
+// entityStaticPage and entityEncyclopedia separate the two kinds of source row
+// that both become oCMS pages, so their ids cannot collide in a skip set.
+const (
+	entityStaticPage   = types.EntityType("phpnuke-static-page")
+	entityEncyclopedia = types.EntityType("phpnuke-encyclopedia")
+)
+
+// plannedSkips records the source rows a SkipExisting run has already decided
+// not to write. A nil value skips nothing, which is what a run without
+// SkipExisting wants.
+//
+// The decision is made once, up front, rather than inside each page stage,
+// because media is discovered from bodies and imported *before* any page stage
+// runs. Deciding later meant every rerun imported a fresh copy of every
+// referenced file — new UUID, new media row, new derivative — and then skipped
+// the page that would have used it, so each rerun left another complete set of
+// unattached duplicates in the media library.
+//
+// Settling it before the stages also stops one run from skipping its own work:
+// two source rows sharing a title used to have the second one skipped because
+// the first had just claimed the slug, silently dropping a distinct story.
+type plannedSkips struct {
+	byEntity map[types.EntityType]map[int64]bool
+}
+
+// skipped reports whether a source row was ruled out before the import began.
+func (p *plannedSkips) skipped(entity types.EntityType, id int64) bool {
+	if p == nil {
+		return false
+	}
+	return p.byEntity[entity][id]
+}
+
+func (p *plannedSkips) mark(entity types.EntityType, id int64) {
+	if p.byEntity[entity] == nil {
+		p.byEntity[entity] = make(map[int64]bool)
+	}
+	p.byEntity[entity][id] = true
+}
+
+// planSkips probes the destination for every source row a run would write and
+// records the ones whose slug is already taken.
+func (s *Source) planSkips(ctx context.Context, queries *store.Queries, content *importContent,
+	opts types.ImportOptions, result *types.ImportResult) *plannedSkips {
+	if !opts.SkipExisting {
+		return nil
+	}
+	skips := &plannedSkips{byEntity: make(map[types.EntityType]map[int64]bool)}
+	for i := range content.stories {
+		title, fallback := storyIdentity(&content.stories[i])
+		if s.pageExists(ctx, queries, baseSlug(title, fallback), title, result) {
+			skips.mark(types.EntityPost, content.stories[i].ID)
+		}
+	}
+	for i := range content.staticPages {
+		title, fallback := staticPageIdentity(&content.staticPages[i])
+		if s.pageExists(ctx, queries, baseSlug(title, fallback), title, result) {
+			skips.mark(entityStaticPage, content.staticPages[i].ID)
+		}
+	}
+	for i := range content.encEntries {
+		title, fallback := encyclopediaIdentity(&content.encEntries[i])
+		if s.pageExists(ctx, queries, baseSlug(title, fallback), title, result) {
+			skips.mark(entityEncyclopedia, content.encEntries[i].ID)
+		}
+	}
+	return skips
 }
 
 // getDefaultAuthorID returns the oldest oCMS account, used when a story's own

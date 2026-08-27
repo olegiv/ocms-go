@@ -352,3 +352,145 @@ func TestNullColumnsDegradeToEmptyValues(t *testing.T) {
 		t.Error("an all-NULL row credits nobody and must not count as losing an author")
 	}
 }
+
+// authorsSchema is the reference PHP-Nuke shape for the two tables that credit
+// a story, reduced to the columns the reader selects.
+func authorsSchema(rows ...string) []string {
+	return append([]string{
+		`CREATE TABLE tr_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
+		`CREATE TABLE tr_authors (aid TEXT PRIMARY KEY, name TEXT, email TEXT)`,
+		`CREATE TABLE tr_stories (
+			sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT, time DATETIME,
+			hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT, notes TEXT
+		)`,
+	}, rows...)
+}
+
+// TestGetStoryAuthorsReadsBothCreditTables covers a Codex review finding.
+//
+// The two credit columns name rows in different tables: `informant` is a
+// users.username, but `aid` is an authors.aid — PHP-Nuke's separate table for
+// accounts allowed to publish. Searching for both in `users` meant that on any
+// install where an administrator has no users row, every story they published
+// lost its byline and was attributed to the fallback oCMS account instead.
+func TestGetStoryAuthorsReadsBothCreditTables(t *testing.T) {
+	reader := newSourceStub(t, authorsSchema(
+		`INSERT INTO tr_users VALUES
+			(1, 'sveta', 'Sveta', 'sveta@example.com'),
+			(2, 'lurker', 'Lurker', 'lurker@example.com')`,
+		`INSERT INTO tr_authors VALUES ('God', 'Site Admin', 'admin@tunisie.ru')`,
+		`INSERT INTO tr_stories VALUES
+			(1, 0, 'God', 'Published by an admin with no users row', NULL, '', '', 1, '', ''),
+			(2, 0, '', 'Submitted', NULL, '', '', 1, 'sveta', '')`)...)
+
+	authors, err := reader.GetStoryAuthors(context.Background())
+	if err != nil {
+		t.Fatalf("GetStoryAuthors() error = %v", err)
+	}
+	found := make(map[string]User, len(authors))
+	for _, author := range authors {
+		found[author.Login()] = author
+	}
+
+	admin, ok := found["God"]
+	if !ok {
+		t.Fatalf("the publishing admin lost their byline; got %v", keysOf(found))
+	}
+	if admin.DisplayName() != "Site Admin" || admin.Address() != "admin@tunisie.ru" {
+		t.Errorf("admin author = %q <%s>, want the authors-table profile",
+			admin.DisplayName(), admin.Address())
+	}
+	if _, ok := found["sveta"]; !ok {
+		t.Errorf("the submitter was lost; got %v", keysOf(found))
+	}
+	if _, ok := found["lurker"]; ok {
+		t.Error("an account credited on no story was imported")
+	}
+}
+
+// TestGetStoryAuthorsPrefersTheUsersRow pins the merge order. An administrator
+// usually has a users row as well, and that row carries the profile the site
+// displays — authors.email is very often the shared webmaster address, so
+// letting it win would attribute several people's work to one mailbox and
+// collapse them into a single oCMS account.
+func TestGetStoryAuthorsPrefersTheUsersRow(t *testing.T) {
+	reader := newSourceStub(t, authorsSchema(
+		`INSERT INTO tr_users VALUES (1, 'sveta', 'Sveta', 'sveta@example.com')`,
+		`INSERT INTO tr_authors VALUES ('sveta', 'Webmaster', 'webmaster@example.com')`,
+		`INSERT INTO tr_stories VALUES (1, 0, 'sveta', 'A', NULL, '', '', 1, '', '')`)...)
+
+	authors, err := reader.GetStoryAuthors(context.Background())
+	if err != nil {
+		t.Fatalf("GetStoryAuthors() error = %v", err)
+	}
+	if len(authors) != 1 {
+		t.Fatalf("got %d authors, want 1 — the same person was imported twice: %+v",
+			len(authors), authors)
+	}
+	if authors[0].Address() != "sveta@example.com" {
+		t.Errorf("author email = %q, want the users-table address", authors[0].Address())
+	}
+}
+
+// TestGetStoryAuthorsMatchesCreditsCaseInsensitively guards the merge key. MySQL
+// string comparison is case-insensitive under the default collation, so
+// stories.aid = 'God' finds users.username = 'god'; a case-sensitive merge in Go
+// would then import that person twice.
+func TestGetStoryAuthorsMatchesCreditsCaseInsensitively(t *testing.T) {
+	reader := newSourceStub(t, authorsSchema(
+		`INSERT INTO tr_users VALUES (1, 'God', 'Oleg', 'oleg@example.com')`,
+		`INSERT INTO tr_authors VALUES ('god', 'Oleg', 'oleg@example.com')`,
+		`INSERT INTO tr_stories VALUES (1, 0, 'God', 'A', NULL, '', '', 1, '', '')`)...)
+
+	authors, err := reader.GetStoryAuthors(context.Background())
+	if err != nil {
+		t.Fatalf("GetStoryAuthors() error = %v", err)
+	}
+	if len(authors) != 1 {
+		t.Errorf("got %d authors, want 1: %+v", len(authors), authors)
+	}
+}
+
+// TestGetStoryAuthorsToleratesMissingAuthorsTable keeps an optional table
+// optional. Losing admin bylines degrades an import; failing it outright loses
+// the archive.
+func TestGetStoryAuthorsToleratesMissingAuthorsTable(t *testing.T) {
+	reader := newSourceStub(t,
+		`CREATE TABLE tr_users (user_id INTEGER PRIMARY KEY, username TEXT, name TEXT, user_email TEXT)`,
+		`CREATE TABLE tr_stories (
+			sid INTEGER PRIMARY KEY, catid INTEGER, aid TEXT, title TEXT, time DATETIME,
+			hometext TEXT, bodytext TEXT, topic INTEGER, informant TEXT, notes TEXT
+		)`,
+		`INSERT INTO tr_users VALUES (1, 'sveta', 'Sveta', 'sveta@example.com')`,
+		`INSERT INTO tr_stories VALUES (1, 0, '', 'A', NULL, '', '', 1, 'sveta', '')`)
+
+	authors, err := reader.GetStoryAuthors(context.Background())
+	if err != nil {
+		t.Fatalf("an absent authors table failed the whole read: %v", err)
+	}
+	if len(authors) != 1 || authors[0].Login() != "sveta" {
+		t.Errorf("got %+v, want the one submitter", authors)
+	}
+}
+
+// TestCreditedAdminAuthorsReportsRealFailures is the other half of that
+// tolerance: only absence is survivable. A query that fails for any other
+// reason must surface, or a broken read looks exactly like a site that never
+// had administrators.
+func TestCreditedAdminAuthorsReportsRealFailures(t *testing.T) {
+	reader := newSourceStub(t,
+		`CREATE TABLE tr_authors (aid TEXT PRIMARY KEY, name TEXT, email TEXT)`)
+
+	if _, err := reader.creditedAdminAuthors(context.Background()); err == nil {
+		t.Fatal("a readable authors table with an unreadable stories table " +
+			"returned no error, so the failure would pass as 'no admins'")
+	}
+}
+
+func keysOf(m map[string]User) []string {
+	names := make([]string, 0, len(m))
+	for name := range m {
+		names = append(names, name)
+	}
+	return names
+}

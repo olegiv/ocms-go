@@ -6,6 +6,7 @@ package phpnuke
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -317,9 +318,41 @@ func (r *Reader) GetEncyclopediaTerms(ctx context.Context) (map[int64][]Encyclop
 //
 // PHP-Nuke sites accumulate large registration tables — most of which never
 // wrote anything — so importing `users` wholesale would create hundreds of
-// dormant accounts. Both columns hold a username, which is what joins them to
-// the users table; neither is a foreign key.
+// dormant accounts.
+//
+// The two credit columns point at different tables, which is the whole reason
+// this reads twice. `informant` is a `users.username`; `aid` is an
+// `authors.aid`, the separate table PHP-Nuke keeps for the handful of accounts
+// allowed to publish. On many installs an administrator has no `users` row at
+// all, and reading `aid` only from `users` silently dropped their byline —
+// every story they published was attributed to the fallback oCMS account.
 func (r *Reader) GetStoryAuthors(ctx context.Context) ([]User, error) {
+	registered, err := r.registeredStoryAuthors(ctx)
+	if err != nil {
+		return nil, err
+	}
+	credited, err := r.creditedAdminAuthors(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// A `users` row wins over an `authors` row for the same name: it carries the
+	// profile the site actually displays, and `authors.email` is frequently the
+	// shared webmaster address.
+	seen := make(map[string]bool, len(registered))
+	for i := range registered {
+		seen[authorKey(registered[i].Login())] = true
+	}
+	for i := range credited {
+		if !seen[authorKey(credited[i].Login())] {
+			registered = append(registered, credited[i])
+		}
+	}
+	return registered, nil
+}
+
+// registeredStoryAuthors reads the `users` rows credited on any story.
+func (r *Reader) registeredStoryAuthors(ctx context.Context) ([]User, error) {
 	users, err := r.table("users")
 	if err != nil {
 		return nil, err
@@ -352,4 +385,66 @@ func (r *Reader) GetStoryAuthors(ctx context.Context) ([]User, error) {
 		return nil, fmt.Errorf("error iterating story authors: %w", err)
 	}
 	return authors, nil
+}
+
+// creditedAdminAuthors reads the `authors` rows credited as stories.aid.
+//
+// A missing `authors` table is not an error. The table is core PHP-Nuke, but
+// installs stripped down to a content archive are exactly the ones this
+// importer is pointed at, and losing the whole import over an absent optional
+// table would be a poor trade for a byline. The rows carry no numeric id —
+// `aid` is the primary key — so User.ID stays zero, which nothing downstream
+// reads.
+func (r *Reader) creditedAdminAuthors(ctx context.Context) ([]User, error) {
+	authorsTable, err := r.table("authors")
+	if err != nil {
+		return nil, err
+	}
+	stories, err := r.table("stories")
+	if err != nil {
+		return nil, err
+	}
+	query := fmt.Sprintf(`SELECT a.aid, a.name, a.email
+		FROM %s a
+		WHERE a.aid IN (SELECT s.aid FROM %s s WHERE s.aid <> '')
+		ORDER BY a.aid`, authorsTable, stories)
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		if r.tableMissing(ctx, authorsTable) {
+			slog.Info("phpnuke source has no authors table; publishing bylines "+
+				"will come from users only", "table", authorsTable)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to query credited authors: %w", err)
+	}
+	defer closeRows(rows)
+
+	var authors []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.Username, &u.Name, &u.Email); err != nil {
+			return nil, fmt.Errorf("failed to scan credited author: %w", err)
+		}
+		authors = append(authors, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating credited authors: %w", err)
+	}
+	return authors, nil
+}
+
+// tableMissing reports whether a table cannot be read at all, which is how an
+// optional table's absence is told apart from a query that failed for some
+// other reason.
+//
+// Probing rather than matching a driver error code keeps two properties worth
+// having: the reader tests stand SQLite in for MySQL, and a real failure of the
+// caller's query — a locked table, a subquery against `stories` — still
+// propagates, because the probe succeeds and the caller reports the original
+// error rather than quietly returning nothing.
+func (r *Reader) tableMissing(ctx context.Context, quotedTable string) bool {
+	var probe int
+	err := r.db.QueryRowContext(ctx, "SELECT 1 FROM "+quotedTable+" LIMIT 1").Scan(&probe)
+	return err != nil && !errors.Is(err, sql.ErrNoRows)
 }

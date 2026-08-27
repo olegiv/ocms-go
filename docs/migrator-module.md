@@ -238,7 +238,9 @@ Verifying by hand needs the same care. The `mysql` CLI's `--default-character-se
 
 ### Source tables read
 
-`stories`, `stories_cat`, `topics`, `pages`, `pages_categories`, `encyclopedia`, `encyclopedia_text`, `users`.
+`stories`, `stories_cat`, `topics`, `pages`, `pages_categories`, `encyclopedia`, `encyclopedia_text`, `users`, `authors`.
+
+`authors` is optional — an install stripped down to a content archive may not have it, and the import continues without it, logging a line and falling back to `users` for every byline. Every other table in that list is required.
 
 ### What gets imported
 
@@ -247,6 +249,8 @@ Verifying by hand needs the same care. The `mysql` CLI's `--default-character-se
 - **Static pages → pages.** `page_header`, `text`, `page_footer` and `signature` are concatenated in render order. `active = 0` imports as a draft.
 - **Encyclopedias → one page each**, with their terms rendered as a definition list. PHP-Nuke serves each term from its own query-string URL, which has no oCMS equivalent; collapsing them keeps the content and its ordering instead of creating hundreds of unreachable pages.
 - **Story authors → users.** Only accounts credited on a story (`stories.aid` or `stories.informant`) are imported — a long-lived PHP-Nuke `users` table is mostly dormant registrations. Posts are attributed to the submitter when it resolves, then the publishing admin, then the fallback author.
+
+  The two credit columns are read from different tables, which is easy to get wrong: `informant` is a `users.username`, but `aid` is an `authors.aid` — the separate table PHP-Nuke keeps for accounts allowed to publish. On installs where an administrator has no `users` row, looking for `aid` in `users` silently drops their byline and hands every story they published to the fallback account. Where the same name appears in both tables the `users` row wins: it carries the profile the site displayed, and `authors.email` is often a shared webmaster address that would collapse several people into one oCMS account.
 - **Media.** Only files a body actually references are imported, resolved beneath `files_path`. A PHP-Nuke document root also holds theme furniture, banner creatives and smilies; walking it wholesale would fill the library with files no content mentions. Missing files are reported as a job summary and their markup is left untouched.
 
 ### URL preservation

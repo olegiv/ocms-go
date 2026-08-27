@@ -66,6 +66,36 @@ func baseSlug(title, fallback string) string {
 	return fallback
 }
 
+// storyIdentity, staticPageIdentity and encyclopediaIdentity return the display
+// title of a source row and the slug it falls back to when that title yields
+// nothing sluggable.
+//
+// They exist so the skip probe and the slug allocator cannot drift apart: those
+// two now run in different functions, and a probe that derived either half
+// differently from the allocator would look for a slug the import never claims.
+func storyIdentity(s *Story) (title, fallback string) {
+	return rowIdentity(shared.NullString(s.Title), "Story", s.ID)
+}
+
+func staticPageIdentity(p *StaticPage) (title, fallback string) {
+	return rowIdentity(shared.NullString(p.Title), "Page", p.ID)
+}
+
+func encyclopediaIdentity(e *EncyclopediaEntry) (title, fallback string) {
+	return rowIdentity(e.Name(), "Encyclopedia", e.ID)
+}
+
+// rowIdentity names a source row: the title a reader sees, and the slug to fall
+// back on when that title yields nothing sluggable — routine on a
+// mis-transcoded archive, where a title can be entirely punctuation.
+func rowIdentity(sourceTitle, kind string, id int64) (title, fallback string) {
+	title = strings.TrimSpace(sourceTitle)
+	if title == "" {
+		title = fmt.Sprintf("%s %d", kind, id)
+	}
+	return title, fmt.Sprintf("%s-%d", strings.ToLower(kind), id)
+}
+
 // makeUniquePageSlug allocates a slug no other page, alias, redirect, module
 // route, core route, or active language prefix already owns.
 //
@@ -451,10 +481,10 @@ func uniqueTaxonomySlug(ctx context.Context, base string, taken func(string) (bo
 // uploads; walking it wholesale would fill the media library with thousands of
 // files the content never mentions.
 func (s *Source) importMedia(ctx context.Context, queries *store.Queries, content *importContent,
-	filesPath, uploadDir string, userID int64, langCode string, result *types.ImportResult,
-	tracker types.ImportTracker) (map[string]string, error) {
+	skips *plannedSkips, filesPath, uploadDir string, userID int64, langCode string,
+	result *types.ImportResult, tracker types.ImportTracker) (map[string]string, error) {
 	byPath := make(map[string][]string)
-	for _, body := range content.bodies() {
+	for _, body := range content.bodies(skips) {
 		for _, ref := range extractAssetRefs(body) {
 			byPath[ref.Path] = append(byPath[ref.Path], ref.Raw)
 		}
@@ -736,8 +766,8 @@ func (s *Source) cleanupMediaFiles(ctx context.Context, tracker types.ImportTrac
 func (s *Source) importStories(ctx context.Context, queries *store.Queries, stories []Story,
 	userMap map[string]int64, fallbackAuthorID int64, langCode string,
 	topicMap, storyCategoryMap map[int64]int64, mediaMap map[string]string,
-	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker,
-	bodiesAltered *int) {
+	skips *plannedSkips, opts types.ImportOptions, result *types.ImportResult,
+	tracker types.ImportTracker, bodiesAltered *int) {
 	types.Report(ctx, tracker, types.Progress{
 		Source: s.Name(), Phase: types.EntityPost, Total: len(stories),
 	})
@@ -754,16 +784,12 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 		}
 
 		story := &stories[i]
-		title := strings.TrimSpace(shared.NullString(story.Title))
-		if title == "" {
-			title = fmt.Sprintf("Story %d", story.ID)
-		}
-
-		if opts.SkipExisting && s.pageExists(ctx, queries, baseSlug(title, fmt.Sprintf("story-%d", story.ID)), title, result) {
+		title, fallback := storyIdentity(story)
+		if skips.skipped(types.EntityPost, story.ID) {
 			result.PostsSkipped++
 			continue
 		}
-		slug := s.slugFor(ctx, queries, title, fmt.Sprintf("story-%d", story.ID))
+		slug := s.slugFor(ctx, queries, title, fallback)
 		if slug == "" {
 			result.AddError("Failed to allocate a reachable slug for story %q", title)
 			continue
@@ -834,8 +860,8 @@ func namesAnAuthor(story *Story) bool {
 // importStaticPages imports the PHP-Nuke static pages module.
 func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, pages []StaticPage,
 	authorID int64, langCode string, pageCategoryMap map[int64]int64, mediaMap map[string]string,
-	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker,
-	bodiesAltered *int) {
+	skips *plannedSkips, opts types.ImportOptions, result *types.ImportResult,
+	tracker types.ImportTracker, bodiesAltered *int) {
 	now := time.Now()
 
 	for i := range pages {
@@ -846,15 +872,12 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 		}
 
 		source := &pages[i]
-		title := strings.TrimSpace(shared.NullString(source.Title))
-		if title == "" {
-			title = fmt.Sprintf("Page %d", source.ID)
-		}
-		if opts.SkipExisting && s.pageExists(ctx, queries, baseSlug(title, fmt.Sprintf("page-%d", source.ID)), title, result) {
+		title, fallback := staticPageIdentity(source)
+		if skips.skipped(entityStaticPage, source.ID) {
 			result.PagesSkipped++
 			continue
 		}
-		slug := s.slugFor(ctx, queries, title, fmt.Sprintf("page-%d", source.ID))
+		slug := s.slugFor(ctx, queries, title, fallback)
 		if slug == "" {
 			result.AddError("Failed to allocate a reachable slug for page %q", title)
 			continue
@@ -910,8 +933,9 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 // importEncyclopedia imports each encyclopedia as a single page holding all of
 // its terms.
 func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries, content *importContent,
-	authorID int64, langCode string, mediaMap map[string]string, opts types.ImportOptions,
-	result *types.ImportResult, tracker types.ImportTracker, bodiesAltered *int) {
+	authorID int64, langCode string, mediaMap map[string]string, skips *plannedSkips,
+	opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker,
+	bodiesAltered *int) {
 	if len(content.encEntries) == 0 {
 		return
 	}
@@ -925,15 +949,12 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 		}
 
 		entry := &content.encEntries[i]
-		title := strings.TrimSpace(entry.Name())
-		if title == "" {
-			title = fmt.Sprintf("Encyclopedia %d", entry.ID)
-		}
-		if opts.SkipExisting && s.pageExists(ctx, queries, baseSlug(title, fmt.Sprintf("encyclopedia-%d", entry.ID)), title, result) {
+		title, fallback := encyclopediaIdentity(entry)
+		if skips.skipped(entityEncyclopedia, entry.ID) {
 			result.PagesSkipped++
 			continue
 		}
-		slug := s.slugFor(ctx, queries, title, fmt.Sprintf("encyclopedia-%d", entry.ID))
+		slug := s.slugFor(ctx, queries, title, fallback)
 		if slug == "" {
 			result.AddError("Failed to allocate a reachable slug for encyclopedia %q", title)
 			continue

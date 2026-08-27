@@ -462,26 +462,114 @@ func TestNormalizeAssetPathDecodesPercentEscapes(t *testing.T) {
 	}
 }
 
-// TestExtractAssetRefsKeepsEscapedSpelling covers a Codex review finding. The
-// tokenizer entity-decodes attribute values, so a body holding
-// src="a&amp;b.jpg" yields "a&b.jpg" — a spelling that does not appear in the
-// body, so rewriting silently found nothing and left the legacy path in place.
-func TestExtractAssetRefsKeepsEscapedSpelling(t *testing.T) {
-	refs := extractAssetRefs(`<img src="images/a&amp;b.jpg">`)
+// TestExtractAssetRefsRegisterTheBodysOwnSpelling covers two rounds of Codex
+// review findings on the same defect.
+//
+// An assetRef does two jobs: Path locates the file on disk and Raw is what the
+// rewriter searches for in the body. The tokenizer entity-decodes attribute
+// values, which is right for Path and useless for Raw — src="a&amp;b.jpg"
+// yields "a&b.jpg", a spelling the body does not contain, so rewriting found
+// nothing and left the legacy path pointing at the dead server. The first fix
+// added html.EscapeString(value), which only reproduces the *canonical*
+// spelling and so still missed src="a&#38;b.jpg".
+//
+// The invariant below is what finally settles it, and unlike a list of
+// spellings to reconstruct it cannot be outgrown: for well-formed markup, every
+// Raw an extraction hands back occurs verbatim in the body it came from.
+func TestExtractAssetRefsRegisterTheBodysOwnSpelling(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, wantPath string
+	}{
+		{"canonical entity", `<img src="images/a&amp;b.jpg">`, "images/a&b.jpg"},
+		{"numeric entity", `<img src="images/a&#38;b.jpg">`, "images/a&b.jpg"},
+		{"padded numeric entity", `<img src="images/a&#038;b.jpg">`, "images/a&b.jpg"},
+		// Not a bug: inside an attribute an unterminated entity followed by an
+		// alphanumeric is not a reference, so browsers read this path literally
+		// and so must the importer.
+		{"entity without semicolon", `<img src="images/a&ampb.jpg">`, "images/a&ampb.jpg"},
+		{"single quoted", `<img src='images/a&#38;b.jpg'>`, "images/a&b.jpg"},
+		{"unquoted", `<img src=images/plain.jpg>`, "images/plain.jpg"},
+		{"attribute is not first", `<img alt="x" src="images/a&#38;b.jpg" width=10>`, "images/a&b.jpg"},
+		{"valueless attribute first", `<img hidden src="images/a&#38;b.jpg">`, "images/a&b.jpg"},
+		{"percent escaped", `<img src="images/My%20Photo.jpg">`, "images/My Photo.jpg"},
+		{"self closing", `<img src="images/a&#38;b.jpg"/>`, "images/a&b.jpg"},
+		{"anchor href", `<a href="files/a&#38;b.pdf">x</a>`, "files/a&b.pdf"},
+		{"uppercase tag and attribute", `<IMG SRC="images/a&#38;b.jpg">`, "images/a&b.jpg"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			refs := extractAssetRefs(tc.body)
+			if len(refs) == 0 {
+				t.Fatalf("no asset reference was extracted from %s", tc.body)
+			}
+			for _, ref := range refs {
+				if !strings.Contains(tc.body, ref.Raw) {
+					t.Errorf("Raw %q does not occur in the body %s, so rewriting it "+
+						"can never match", ref.Raw, tc.body)
+				}
+				if ref.Path != tc.wantPath {
+					t.Errorf("Path = %q, want %q; Raw must be rewritable but Path "+
+						"must be openable", ref.Path, tc.wantPath)
+				}
+			}
+		})
+	}
+}
 
-	spellings := make(map[string]string, len(refs))
-	for _, ref := range refs {
-		spellings[ref.Raw] = ref.Path
+// TestRawAttrValuesReadsTheSourceText pins the scanner the invariant above
+// rests on, including the shapes it is expected to give up on. Yielding fewer
+// values than the tokenizer found attributes is the signal extractAssetRefs
+// uses to fall back, so "returns nothing" has to stay a real outcome rather
+// than turning into a wrong guess.
+func TestRawAttrValuesReadsTheSourceText(t *testing.T) {
+	for _, tc := range []struct {
+		name, tag, attr string
+		want            []string
+	}{
+		{"double quoted", `<img src="a.jpg">`, "src", []string{"a.jpg"}},
+		{"single quoted", `<img src='a.jpg'>`, "src", []string{"a.jpg"}},
+		{"unquoted", `<img src=a.jpg>`, "src", []string{"a.jpg"}},
+		{"entities are left alone", `<img src="a&#38;b.jpg">`, "src", []string{"a&#38;b.jpg"}},
+		{"spaces around equals", `<img src = "a.jpg">`, "src", []string{"a.jpg"}},
+		{"other attributes ignored", `<img alt="src" src="a.jpg">`, "src", []string{"a.jpg"}},
+		{"valueless attribute", `<img hidden src="a.jpg">`, "src", []string{"a.jpg"}},
+		{"repeated attribute", `<img src="a.jpg" src="b.jpg">`, "src", []string{"a.jpg", "b.jpg"}},
+		{"self closing", `<img src="a.jpg"/>`, "src", []string{"a.jpg"}},
+		{"newline separated", "<img\n\tsrc=\"a.jpg\">", "src", []string{"a.jpg"}},
+		{"attribute absent", `<img alt="a">`, "src", nil},
+		{"quote never closed", `<img src="a.jpg`, "src", []string{"a.jpg"}},
+		// The tokenizer reports src="" here, which normalizeAssetPath rejects, so
+		// there is no spelling for the scanner to be wrong about.
+		{"value missing", `<img src=>`, "src", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := rawAttrValues([]byte(tc.tag), tc.attr)
+			if len(got) != len(tc.want) {
+				t.Fatalf("rawAttrValues(%q) = %q, want %q", tc.tag, got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("value %d = %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
 	}
-	if _, ok := spellings["images/a&amp;b.jpg"]; !ok {
-		t.Errorf("the escaped spelling that actually appears in the body is missing: %v", spellings)
-	}
-	if _, ok := spellings["images/a&b.jpg"]; !ok {
-		t.Errorf("the decoded spelling is missing: %v", spellings)
-	}
-	for raw, path := range spellings {
-		if path != "images/a&b.jpg" {
-			t.Errorf("ref %q resolved to %q, want the decoded filesystem path", raw, path)
+}
+
+// TestRawAttrValuesTerminates guards the hand-written scanner against the one
+// way it could fail catastrophically rather than merely wrongly: a malformed
+// tag that stops advancing the cursor would hang the import.
+func TestRawAttrValuesTerminates(t *testing.T) {
+	for _, tag := range []string{
+		"", "<", "<>", "<img", "<img ", "<img =", "<img ==", "<img src", "<img src=",
+		`<img src="`, "<img src='", "<img /", "<img //", "< img src=a", "<img\x00src=a",
+		strings.Repeat("<img src=", 200), strings.Repeat("= ", 500),
+	} {
+		done := make(chan []string, 1)
+		go func() { done <- rawAttrValues([]byte(tag), "src") }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("rawAttrValues did not terminate on %q", tag)
 		}
 	}
 }

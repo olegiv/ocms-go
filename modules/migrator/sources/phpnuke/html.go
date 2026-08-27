@@ -225,28 +225,43 @@ func extractAssetRefs(fragment string) []assetRef {
 		case html.ErrorToken:
 			return sortedRefs(seen)
 		case html.StartTagToken, html.SelfClosingTagToken:
+			// Copied before TagName or TagAttr runs: both are documented to
+			// invalidate the slice Raw returns.
+			rawTag := append([]byte(nil), tokenizer.Raw()...)
 			name, hasAttr := tokenizer.TagName()
 			attrName := attributeForTag(string(name))
 			if attrName == "" || !hasAttr {
 				continue
 			}
+			spellings := rawAttrValues(rawTag, attrName)
+			match := 0
 			for hasAttr {
 				var key, value []byte
 				key, value, hasAttr = tokenizer.TagAttr()
 				if string(key) != attrName {
 					continue
 				}
-				raw := string(value)
-				path, ok := normalizeAssetPath(raw)
+				decoded := string(value)
+				index := match
+				match++
+				path, ok := normalizeAssetPath(decoded)
 				if !ok {
 					continue
 				}
-				seen[raw] = assetRef{Raw: raw, Path: path}
-				// TagAttr returns the entity-decoded value, so a body holding
-				// src="a&amp;b.jpg" yields "a&b.jpg" here. Rewriting searches
-				// the raw body, where only the escaped spelling appears, so
-				// both have to be registered for the same file.
-				if escaped := html.EscapeString(raw); escaped != raw {
+				// Rewriting searches the original body, so what gets registered
+				// has to be the text the body actually holds. TagAttr hands back
+				// a decoded value, and src="a&#38;b.jpg", src="a&amp;b.jpg" and
+				// src="a&b.jpg" all decode to the same thing — the decoded form
+				// identifies the file but cannot be found in the body again.
+				if index < len(spellings) {
+					seen[spellings[index]] = assetRef{Raw: spellings[index], Path: path}
+					continue
+				}
+				// Markup malformed enough that the source scan lost track of
+				// this attribute. Fall back to the two spellings that cover
+				// every reference without an exotic entity.
+				seen[decoded] = assetRef{Raw: decoded, Path: path}
+				if escaped := html.EscapeString(decoded); escaped != decoded {
 					seen[escaped] = assetRef{Raw: escaped, Path: path}
 				}
 			}
@@ -264,6 +279,88 @@ func attributeForTag(name string) string {
 		return "href"
 	default:
 		return ""
+	}
+}
+
+// rawAttrValues returns the verbatim source text of each value the named
+// attribute carries in a raw start tag, in document order.
+//
+// This exists because the tokenizer cannot answer the question rewriting asks.
+// TagAttr decodes entities, so it reports what a reference *means*, and that is
+// the right answer for locating the file on disk. Substituting a new URL for an
+// old one is a different question — it needs what the body *says* — and there
+// the decoded value is a dead end, because several spellings decode to it and
+// none can be recovered from the result.
+//
+// The scan is deliberately more permissive than the HTML grammar: unquoted and
+// single-quoted values are accepted, and a valueless attribute is stepped over.
+// Anything it cannot follow simply yields fewer values than the tokenizer found
+// attributes, which the caller detects by position and handles.
+func rawAttrValues(rawTag []byte, attrName string) []string {
+	tag := strings.TrimPrefix(string(rawTag), "<")
+	tag = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSpace(tag), ">"), "/")
+
+	index := 0
+	for index < len(tag) && !isHTMLSpace(tag[index]) {
+		index++ // the tag name, which is not an attribute
+	}
+
+	var values []string
+	for index < len(tag) {
+		for index < len(tag) && isHTMLSpace(tag[index]) {
+			index++
+		}
+		start := index
+		for index < len(tag) && !isHTMLSpace(tag[index]) && tag[index] != '=' {
+			index++
+		}
+		name := strings.ToLower(tag[start:index])
+		for index < len(tag) && isHTMLSpace(tag[index]) {
+			index++
+		}
+		if index >= len(tag) || tag[index] != '=' {
+			continue // valueless attribute; the name loop already advanced
+		}
+		index++
+		for index < len(tag) && isHTMLSpace(tag[index]) {
+			index++
+		}
+		if index >= len(tag) {
+			break
+		}
+		var value string
+		switch quote := tag[index]; quote {
+		case '"', '\'':
+			index++
+			start = index
+			for index < len(tag) && tag[index] != quote {
+				index++
+			}
+			value = tag[start:index]
+			if index < len(tag) {
+				index++
+			}
+		default:
+			start = index
+			for index < len(tag) && !isHTMLSpace(tag[index]) {
+				index++
+			}
+			value = tag[start:index]
+		}
+		if name == attrName {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+// isHTMLSpace reports whether a byte separates tokens inside a tag.
+func isHTMLSpace(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\f', '\r':
+		return true
+	default:
+		return false
 	}
 }
 
