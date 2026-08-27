@@ -2823,3 +2823,230 @@ func TestPrepareBodyRewritesOnlyAttributes(t *testing.T) {
 		t.Errorf("an external URL was mangled into a double-slash path: %s", got)
 	}
 }
+
+// TestEveryStageLoopChecksForCancellation is the test that should have existed
+// two rounds ago.
+//
+// A cancellation guard was added to planSkips when a canceled job was found
+// reporting a hundred "failed to check" errors instead of stopping. That fix
+// was applied to the one loop that had been reported and not to the others, so
+// the next review found the same defect in the taxonomy stages: a canceled run
+// there produced an error per remaining row, each one a formatting of the same
+// cancellation.
+//
+// Fixing an instance of a pattern is half the work. This walks the package and
+// fails on any row loop that talks to the database or to the source without a
+// way out, so the class cannot come back through a stage nobody has written yet.
+func TestEveryStageLoopChecksForCancellation(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("failed to read package directory: %v", err)
+	}
+	fset := token.NewFileSet()
+	checked := 0
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, name, nil, 0)
+		if parseErr != nil {
+			t.Fatalf("failed to parse %s: %v", name, parseErr)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil || fn.Recv == nil {
+				continue // only methods on the source drive an import
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				loop, ok := n.(*ast.RangeStmt)
+				if !ok || !loopReachesOutward(loop.Body) {
+					return true
+				}
+				checked++
+				if !checksCancellation(loop.Body) {
+					t.Errorf("%s:%d: %s ranges over rows and calls out to the database "+
+						"or the source without checking for cancellation; a canceled job "+
+						"runs to the end of the archive, reporting one failure per row",
+						name, fset.Position(loop.Pos()).Line, fn.Name.Name)
+				}
+				return true
+			})
+		}
+	}
+
+	if checked == 0 {
+		t.Error("no stage loop was examined; this test is guarding nothing")
+	}
+	t.Logf("%d stage loops examined", checked)
+}
+
+// loopReachesOutward reports whether a loop body calls the destination database
+// or the source reader, which is what makes running past a cancellation costly
+// rather than merely pointless.
+func loopReachesOutward(body *ast.BlockStmt) bool {
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if receiver, ok := selector.X.(*ast.Ident); ok {
+			switch receiver.Name {
+			case "queries", "reader", "s":
+				found = true
+			}
+		}
+		return !found
+	})
+	return found
+}
+
+// checksCancellation reports whether a loop body can observe a canceled
+// context, by either idiom this package uses.
+func checksCancellation(body *ast.BlockStmt) bool {
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		selector, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		receiver, ok := selector.X.(*ast.Ident)
+		if !ok || receiver.Name != "ctx" {
+			return true
+		}
+		if selector.Sel.Name == "Done" || selector.Sel.Name == "Err" {
+			found = true
+		}
+		return !found
+	})
+	return found
+}
+
+// TestAdminProfileFillsGapsInTheRegisteredRow covers a Codex review finding.
+//
+// "The users row wins" was applied wholesale, so a matching admin row was
+// discarded entirely. A users row with a blank user_email then reached
+// importUsers with no address at all, was rejected, and every story that person
+// published fell back to the default author — the byline loss that reading the
+// authors table was added to prevent.
+func TestAdminProfileFillsGapsInTheRegisteredRow(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		registered, admin   User
+		wantEmail, wantName string
+	}{
+		{
+			name:       "the blank email comes from the admin row",
+			registered: User{ID: 1, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("")},
+			admin:      User{Username: ns("sveta"), Name: ns("S. Admin"), Email: ns("sveta@site.ru")},
+			wantEmail:  "sveta@site.ru",
+			wantName:   "Sveta",
+		},
+		{
+			name:       "a whitespace-only email is still blank",
+			registered: User{ID: 1, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("   ")},
+			admin:      User{Username: ns("sveta"), Email: ns("sveta@site.ru")},
+			wantEmail:  "sveta@site.ru",
+			wantName:   "Sveta",
+		},
+		{
+			name:       "the registered row still wins where it has a value",
+			registered: User{ID: 1, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("sveta@personal.ru")},
+			admin:      User{Username: ns("sveta"), Name: ns("Webmaster"), Email: ns("webmaster@site.ru")},
+			wantEmail:  "sveta@personal.ru",
+			wantName:   "Sveta",
+		},
+		{
+			name:       "a blank display name falls back to the admin row",
+			registered: User{ID: 1, Username: ns("sveta"), Name: ns(" "), Email: ns("sveta@personal.ru")},
+			admin:      User{Username: ns("SVETA"), Name: ns("Sveta Admin"), Email: ns("webmaster@site.ru")},
+			wantEmail:  "sveta@personal.ru",
+			wantName:   "Sveta Admin",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			queries, _ := setupDB(t)
+			reader := &fakeReader{
+				authors: []User{tc.registered},
+				admins:  []User{tc.admin},
+			}
+			userMap := map[string]int64{}
+			result := &types.ImportResult{}
+			if err := NewSource().importUsers(context.Background(), queries, reader,
+				userMap, types.ImportOptions{}, result, &mockTracker{}); err != nil {
+				t.Fatalf("importUsers() error = %v", err)
+			}
+
+			id := userMap[authorKey("sveta")]
+			if id == 0 {
+				t.Fatalf("the credited account was not imported at all; its stories "+
+					"would fall back to the default author (notices %v)", result.Notices)
+			}
+			if result.UsersImported != 1 {
+				t.Errorf("UsersImported = %d, want 1", result.UsersImported)
+			}
+			user, err := queries.GetUserByID(context.Background(), id)
+			if err != nil {
+				t.Fatalf("failed to read the imported account: %v", err)
+			}
+			if user.Email != tc.wantEmail {
+				t.Errorf("email = %q, want %q", user.Email, tc.wantEmail)
+			}
+			if user.Name != tc.wantName {
+				t.Errorf("name = %q, want %q", user.Name, tc.wantName)
+			}
+		})
+	}
+}
+
+// TestTaxonomyStagesStopOnCancellation is the behavioural half of the loop
+// guard: a canceled job must report the cancellation once, not once per row.
+func TestTaxonomyStagesStopOnCancellation(t *testing.T) {
+	topics := make([]Topic, 200)
+	storyCats := make([]Category, 200)
+	for i := range topics {
+		topics[i] = Topic{ID: int64(i + 1), Text: ns("Topic")}
+		storyCats[i] = Category{ID: int64(i + 1), Title: ns("Category")}
+	}
+	pageCats := append([]Category(nil), storyCats...)
+
+	for _, tc := range []struct {
+		name string
+		run  func(context.Context, *store.Queries, *types.ImportResult) error
+	}{
+		{"categories", func(ctx context.Context, q *store.Queries, r *types.ImportResult) error {
+			return NewSource().importCategories(ctx, q, &fakeReader{topics: topics, pageCats: pageCats},
+				"en", map[int64]int64{}, map[int64]int64{}, types.ImportOptions{}, r, &mockTracker{})
+		}},
+		{"tags", func(ctx context.Context, q *store.Queries, r *types.ImportResult) error {
+			return NewSource().importStoryCategoryTags(ctx, q, &fakeReader{storyCats: storyCats},
+				"en", map[int64]int64{}, types.ImportOptions{}, r, &mockTracker{})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			queries, _ := setupDB(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			result := &types.ImportResult{}
+			if err := tc.run(ctx, queries, result); !errors.Is(err, context.Canceled) {
+				t.Errorf("error = %v, want context.Canceled returned once by the stage", err)
+			}
+			if len(result.Errors) != 0 {
+				t.Errorf("the canceled stage recorded %d per-row errors (first: %q); "+
+					"cancellation is one event, not one per row",
+					len(result.Errors), result.Errors[0])
+			}
+			if result.ErrorsOmitted != 0 {
+				t.Errorf("%d further errors were omitted, so the loop ran on past cancellation",
+					result.ErrorsOmitted)
+			}
+		})
+	}
+}

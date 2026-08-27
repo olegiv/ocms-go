@@ -271,16 +271,38 @@ func (s *Source) creditedAuthors(ctx context.Context, reader sourceReader,
 		admins = nil
 	}
 
-	seen := make(map[string]bool, len(registered))
+	byKey := make(map[string]int, len(registered))
 	for i := range registered {
-		seen[authorKey(registered[i].Login())] = true
+		byKey[authorKey(registered[i].Login())] = i
 	}
 	for i := range admins {
-		if !seen[authorKey(admins[i].Login())] {
+		index, matched := byKey[authorKey(admins[i].Login())]
+		if !matched {
 			registered = append(registered, admins[i])
+			byKey[authorKey(admins[i].Login())] = len(registered) - 1
+			continue
 		}
+		fillMissingProfile(&registered[index], &admins[i])
 	}
 	return registered, nil
+}
+
+// fillMissingProfile completes a registered account from the admin row that
+// credits the same login.
+//
+// Only where the registered row has nothing. Discarding the admin row outright
+// threw away the only copy of whatever the `users` row happened to be missing,
+// and a blank `user_email` is not unusual on a twenty-year-old table: the
+// account was then rejected as having no address at all, so it was never
+// imported, and every story that person published fell back to the default
+// author -- the exact byline loss that reading `authors` was added to prevent.
+func fillMissingProfile(user, admin *User) {
+	if strings.TrimSpace(shared.NullString(user.Email)) == "" {
+		user.Email = admin.Email
+	}
+	if strings.TrimSpace(shared.NullString(user.Name)) == "" {
+		user.Name = admin.Name
+	}
 }
 
 // distinctInertEmail builds a stable, undeliverable address for a source
@@ -490,6 +512,11 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 		len(topics)+len(pageCategories))
 
 	for i := range topics {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		progress.step(ctx, tracker)
 		topic := &topics[i]
 		label := topic.Label()
@@ -503,6 +530,11 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 		}
 	}
 	for i := range pageCategories {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		progress.step(ctx, tracker)
 		category := &pageCategories[i]
 		title := strings.TrimSpace(category.Name())
@@ -583,6 +615,11 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 
 	now := time.Now()
 	for i := range categories {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		progress.step(ctx, tracker)
 		category := &categories[i]
 		name := strings.TrimSpace(category.Name())
@@ -987,6 +1024,12 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 	now := time.Now()
 	var unrecorded []string
 	for _, v := range variants {
+		// Bounded by the processor's variant list rather than by the archive,
+		// so this is cheap either way -- but every loop that writes checks,
+		// because a rule with exemptions is one nobody can apply on sight.
+		if ctx.Err() != nil {
+			break
+		}
 		if _, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
 			MediaID:   media.ID,
 			Type:      v.Type,
