@@ -7,16 +7,22 @@
 - `custom/`: user-defined modules/themes loaded at runtime.
 - `web/`: shared templates and frontend assets (`static/js`, `static/scss`, `static/dist`).
 - `internal/store/migrations/` and `internal/store/queries/`: DB migrations and SQL source for generated `*.sql.go` files.
+- `scripts/`: asset build, deploy, path-check, and Codex helper entrypoints used by the Make targets.
+- `site.mk`: shared Make targets for per-site repos that include this core checkout via `core/site.mk`.
 - `docs/`: feature, deployment, and security documentation.
 
 ## Build, Test, and Development Commands
 - `make dev`: build assets, generate templ files, and run the app.
 - `make run`: run server only (fast local backend iteration).
 - `make build` or `make build-prod`: build binaries into `bin/`.
+- `make coverage` or `make coverage-html`: generate Go coverage summaries/reports.
 - `make test`: run all Go tests (`go test -v ./...`).
 - `make assets`: install npm deps, copy JS libs, compile SCSS/Tailwind.
+- `make sqlc` / `make templ`: regenerate SQLC and templ generated Go files.
 - `make migrate-up` / `make migrate-down` / `make migrate-status`: manage SQLite migrations.
+- `make code-quality` / `make security-audit`: run repo Codex helper workflows from `scripts/codex-commands`.
 - `make install-hooks`: enable repo hook(s) from `.githooks/`.
+- In site instance repos that `include core/site.mk`, use `make sync-modules` before builds/tests when custom modules changed.
 
 ## Coding Style & Naming Conventions
 - Go only: follow idiomatic Go, `gofmt`, and package-oriented structure.
