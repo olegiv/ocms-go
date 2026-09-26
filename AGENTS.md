@@ -7,22 +7,26 @@
 - `custom/`: user-defined modules/themes loaded at runtime.
 - `web/`: shared templates and frontend assets (`static/js`, `static/scss`, `static/dist`).
 - `internal/store/migrations/` and `internal/store/queries/`: DB migrations and SQL source for generated `*.sql.go` files.
-- `scripts/`: asset build, deploy, path-check, and Codex helper entrypoints used by the Make targets.
-- `site.mk`: shared Make targets for per-site repos that include this core checkout via `core/site.mk`.
 - `docs/`: feature, deployment, and security documentation.
+- `scripts/`: asset builds, deployment helpers, and code-quality/security wrappers.
+- `site.mk`: shared Make targets for site-instance repos using `include core/site.mk`.
 
 ## Build, Test, and Development Commands
 - `make dev`: build assets, generate templ files, and run the app.
 - `make run`: run server only (fast local backend iteration).
 - `make build` or `make build-prod`: build binaries into `bin/`.
-- `make coverage` or `make coverage-html`: generate Go coverage summaries/reports.
+- `make build-all-platforms`: cross-build Linux AMD64/ARM64 and macOS ARM64 binaries with CGO disabled; individual `build-linux-amd64`, `build-linux-arm64`, and `build-darwin-arm64` targets are also available.
 - `make test`: run all Go tests (`go test -v ./...`).
+- `make coverage` / `make coverage-html`: print test coverage or generate `coverage.out` and `coverage.html`.
+- `make sqlc` / `make templ`: regenerate SQL query code (with row-close cleanup) or templ Go files.
+- `make code-quality-local`: check Go toolchain consistency, run installed golangci-lint/nilaway, and run tests with a fallback session secret.
+- `make security-audit-local`: run available govulncheck/npm audit scanners and write reports under `.audit/`.
+- `make code-quality` / `make security-audit`: invoke the corresponding Claude command through the proxy wrapper.
 - `make assets`: install npm deps, copy JS libs, compile SCSS/Tailwind.
-- `make sqlc` / `make templ`: regenerate SQLC and templ generated Go files.
 - `make migrate-up` / `make migrate-down` / `make migrate-status`: manage SQLite migrations.
-- `make code-quality` / `make security-audit`: run repo Codex helper workflows from `scripts/codex-commands`.
+- `make migrate-create`: prompt for a migration name and create a SQL migration using goose.
 - `make install-hooks`: enable repo hook(s) from `.githooks/`.
-- In site instance repos that `include core/site.mk`, use `make sync-modules` before builds/tests when custom modules changed.
+- In site-instance repos, `site.mk` automatically syncs custom modules before run/build/test targets. After a fresh core clone, run `make sync-modules` from every site owning modules before building a shared binary.
 
 ## Coding Style & Naming Conventions
 - Go only: follow idiomatic Go, `gofmt`, and package-oriented structure.
@@ -33,7 +37,7 @@
 
 ## Testing Guidelines
 - Primary framework: Go `testing` package.
-- Run full suite with `OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test ./...` (or just `make test`).
+- Run full suite with `OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test ./...` (or `OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make test`); `make test` does not supply a fallback secret.
 - Add tests for new handlers, middleware, store queries, and module behavior.
 - Prefer deterministic unit tests; cover edge cases and permission/security paths.
 
@@ -43,3 +47,4 @@
 - PRs should include: purpose, key changes, test evidence (`make test`/lint output), and linked issues.
 - For UI/template/theme changes, attach screenshots or short recordings.
 - Ensure no absolute local paths are committed (`make check-no-absolute-paths`).
+- Before tagging a release, run `make assets` and commit any regenerated sources; release CI rejects changes outside `web/static/dist`.
