@@ -72,6 +72,41 @@ class GitGuardTests(unittest.TestCase):
                     output = json.loads(self.run_guard(command))
                     self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "ask")
 
+    def test_repository_commit_wrappers_ask(self):
+        commands = (
+            "make commit-do-local", "make commit-do",
+            "make -C 'a repo' --jobs=2 commit-do-local",
+            "gmake --file=Makefile commit-do-local", "/usr/bin/make commit-do-local",
+            "make test commit-do-local", 'make "$target"',
+            "./scripts/codex-commands commit-do-local",
+            "./scripts/codex-commands commit-do",
+            "bash scripts/codex-commands commit-do-local",
+            "./scripts/codex/commit-do.sh", "bash scripts/codex/commit-do.sh",
+            "'/a repo/scripts/codex/commit-do.sh'",
+            "./scripts/codex/proxy-claude-command.sh /commit-do",
+            "git status && make commit-do-local",
+            "make test\n./scripts/codex/commit-do.sh",
+            "sh -c 'make commit-do-local'",
+            "bash -c './scripts/codex-commands commit-do-local'",
+            'echo "$(make commit-do-local)"',
+            'echo "`./scripts/codex/commit-do.sh`"',
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                output = json.loads(self.run_guard(command))
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_non_commit_repository_wrappers_defer(self):
+        for command in (
+            "make test", "make commit-prepare", "make commit-prepare-local",
+            "make code-quality-local", "./scripts/codex-commands commit-prepare-local",
+            "./scripts/codex/commit-prepare.sh",
+            "./scripts/codex/proxy-claude-command.sh /commit-prepare",
+            "sh -c 'make test'", "make test; echo commit-do-local",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_guard(command), "")
+
     def test_malformed_payloads_fail_closed(self):
         for payload in ("{", "null", "[]", "{}", '{"tool_input":null}',
                         '{"tool_input":{"command":42}}', "[" * 1500 + "]" * 1500):

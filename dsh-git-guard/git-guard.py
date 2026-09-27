@@ -25,6 +25,15 @@ GLOBAL_FLAGS = {
 }
 GLOBAL_VALUES = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
 SEPARATORS = ";&|()`\n"
+# These repository entry points can commit without exposing a literal Git
+# command in the intercepted shell string. None means the script always commits.
+COMMIT_WRAPPERS = {
+    "make": {"commit-do", "commit-do-local"},
+    "gmake": {"commit-do", "commit-do-local"},
+    "codex-commands": {"commit-do", "commit-do-local"},
+    "commit-do.sh": None,
+    "proxy-claude-command.sh": {"/commit-do"},
+}
 
 
 def git_requires_approval(args):
@@ -93,7 +102,8 @@ def requires_approval(command, depth=0):
     except ValueError:
         return True  # Unparseable shell input cannot be classified safely.
     for index, token in enumerate(tokens):
-        if os.path.basename(token).casefold() == "git":
+        program = os.path.basename(token).casefold()
+        if program == "git" or program in COMMIT_WRAPPERS:
             args = []
             for arg in tokens[index + 1:]:
                 if arg and all(char in SEPARATORS for char in arg):
@@ -101,9 +111,18 @@ def requires_approval(command, depth=0):
                         return True  # Substitution may produce a command/flag.
                     break
                 args.append(arg)
-            if git_requires_approval(args):
+            if program == "git":
+                protected = git_requires_approval(args)
+            else:
+                verbs = COMMIT_WRAPPERS[program]
+                # Scan all Make targets, including targets after options. An
+                # expanded argument could select a commit target/subcommand.
+                protected = verbs is None or any(arg in verbs or "$" in arg for arg in args)
+            if protected:
                 return True
-        elif "git" in token and any(char in token for char in " \t\n;|&()`"):
+        elif any(name in token.casefold() for name in ("git", *COMMIT_WRAPPERS)) and any(
+            char in token for char in " \t\n;|&()`"
+        ):
             if requires_approval(token, depth + 1):
                 return True
     return False
@@ -126,7 +145,7 @@ def main():
             "hookEventName": "PreToolUse",
             "permissionDecision": "ask",
             "permissionDecisionReason": (
-                "This Git command may mutate history or repository state; "
+                "This command may mutate Git history or repository state; "
                 "it requires explicit human approval."
             ),
         }}, sys.stdout)

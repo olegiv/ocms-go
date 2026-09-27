@@ -66,6 +66,12 @@ approve or reject per command.
   Unrecognized Git subcommands (including aliases) and ambiguous option
   expansions ask for approval; ordinary read commands defer to the harness's
   normal permissions. This may prompt for harmless aliases or quoted text.
+- **Repository commit wrappers also require approval.** This includes
+  `make commit-do[-local]` (and `gmake`), `scripts/codex-commands commit-do[-local]`,
+  `scripts/codex/commit-do.sh`, and the Claude proxy's `/commit-do` command,
+  including quoted shell invocations. Preparation and ordinary build/test
+  commands continue to defer to normal permissions. Expanded wrapper arguments
+  ask conservatively because they could select a commit operation.
 - **Installation preserves existing files on errors.** Files are staged before
   publication; replacements are rolled back if publication fails. Read-only
   files and symlink destinations are rejected without overwriting them.
