@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Installs the DSH git-approval gate for this machine:
-#   - copies dsh-git-guard/hooks.json and dsh-git-guard/git-guard.py into the
+#   - merges dsh-git-guard/hooks.json and copies dsh-git-guard/git-guard.py into the
 #     harness home (~/.dsh, or $DSH_HOME), where the mounted hook plugin reads
 #     them at startup;
-#   - appends the global git-safety rule to the harness-home AGENTS.md
-#     (marker-guarded, so re-running is safe);
+#   - refreshes the marked global git-safety rule in the harness-home AGENTS.md;
 #   - prints the one remaining manual step (bundle installation).
 set -euo pipefail
 
@@ -13,16 +12,6 @@ DSH_HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
 BUNDLE_DIR="$REPO_ROOT/dsh-git-guard"
 
 mkdir -p "$DSH_HOME_DIR"
-
-echo "→ copying hooks.json -> $DSH_HOME_DIR/hooks.json"
-cp "$BUNDLE_DIR/hooks.json" "$DSH_HOME_DIR/hooks.json"
-
-echo "→ copying git-guard.py -> $DSH_HOME_DIR/git-guard.py"
-cp "$BUNDLE_DIR/git-guard.py" "$DSH_HOME_DIR/git-guard.py"
-chmod +x "$DSH_HOME_DIR/git-guard.py"
-
-GLOBAL_RULES="$DSH_HOME_DIR/AGENTS.md"
-MARKER_BEGIN='<!-- dsh-git-guard: begin -->'
 
 BLOCK=$(cat <<'EOF'
 <!-- dsh-git-guard: begin -->
@@ -46,15 +35,63 @@ action. Approving a larger task (for example "cut the release") is not that
 EOF
 )
 
-if [[ -f "$GLOBAL_RULES" ]] && grep -qF "$MARKER_BEGIN" "$GLOBAL_RULES"; then
-  echo "→ $GLOBAL_RULES already has the git-safety block; leaving it unchanged"
-else
-  if [[ -f "$GLOBAL_RULES" ]]; then
-    printf '\n' >> "$GLOBAL_RULES"
-  fi
-  printf '%s\n' "$BLOCK" >> "$GLOBAL_RULES"
-  echo "→ appended the git-safety rule to $GLOBAL_RULES"
-fi
+python3 - "$BUNDLE_DIR" "$DSH_HOME_DIR" "$BLOCK" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+bundle, home = map(Path, sys.argv[1:3])
+block = sys.argv[3]
+config_path = home / "hooks.json"
+rules_path = home / "AGENTS.md"
+
+try:
+    config = json.loads(config_path.read_text()) if config_path.exists() else {}
+    source = json.loads((bundle / "hooks.json").read_text())
+    guard = source["hooks"]["PreToolUse"][0]
+    guard_hook = guard["hooks"][0]
+    legacy_command = "python3 ${CLAUDE_PLUGIN_ROOT}/git-guard.py"
+    hooks = config.setdefault("hooks", {})
+    entries = hooks.setdefault("PreToolUse", [])
+    if not isinstance(entries, list):
+        raise ValueError("PreToolUse must be an array")
+    found = False
+    for entry in entries:
+        if entry.get("matcher") != guard["matcher"]:
+            continue
+        for hook in entry.get("hooks", []):
+            if hook.get("type") == "command" and hook.get("command") in (
+                legacy_command, guard_hook["command"]
+            ):
+                hook["command"] = guard_hook["command"]
+                found = True
+    if not found:
+        entries.append(guard)
+
+    rules = rules_path.read_text() if rules_path.exists() else ""
+    begin = "<!-- dsh-git-guard: begin -->"
+    end = "<!-- dsh-git-guard: end -->"
+    if begin in rules or end in rules:
+        if rules.count(begin) != 1 or rules.count(end) != 1:
+            raise ValueError("AGENTS.md must have exactly one complete guard block")
+        start, stop = rules.index(begin), rules.index(end)
+        if stop < start:
+            raise ValueError("AGENTS.md guard markers are out of order")
+        rules = rules[:start] + block + rules[stop + len(end):]
+    else:
+        rules += ("\n" if rules else "") + block + "\n"
+except (ValueError, TypeError, AttributeError, OSError) as exc:
+    sys.exit(f"git-guard: cannot update installation: {exc}")
+
+# Validate both documents before replacing either; preserve unrelated content.
+config_path.write_text(json.dumps(config, indent=2) + "\n")
+rules_path.write_text(rules)
+PY
+
+echo "→ merged hooks and refreshed the git-safety rule in $DSH_HOME_DIR"
+echo "→ copying git-guard.py -> $DSH_HOME_DIR/git-guard.py"
+cp "$BUNDLE_DIR/git-guard.py" "$DSH_HOME_DIR/git-guard.py"
+chmod +x "$DSH_HOME_DIR/git-guard.py"
 
 cat <<EOF
 

@@ -4,7 +4,7 @@
       {
         "matcher": "bash",
         "hooks": [
-          { "type": "command", "command": "python3 ${CLAUDE_PLUGIN_ROOT}/git-guard.py" }
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/git-guard.py\"" }
         ]
       }
     ]

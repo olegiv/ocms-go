@@ -47,7 +47,7 @@ approve or reject per command.
 | `dsh-git-guard/cordis.patch.yml` | Mounts the shipped `@deepseek-ai/dsh-hooks-claude-code` plugin; `configPath` and `pluginRoot` resolve per machine via the Loader's `dshHomePath` expression |
 | `dsh-git-guard/hooks.json` | Source of truth for the `PreToolUse` hook config (installed copy: `~/.dsh/hooks.json`) |
 | `dsh-git-guard/git-guard.py` | The guard script (installed copy: `~/.dsh/git-guard.py`) |
-| `scripts/install-git-guard.sh` | Idempotent installer: copies the two files into the harness home and appends the global rule to `~/.dsh/AGENTS.md` |
+| `scripts/install-git-guard.sh` | Idempotent installer: merges the hook into the existing configuration, copies the guard script, and refreshes the marked global rule in `~/.dsh/AGENTS.md`, preserving unrelated hooks and rules |
 
 ## Behavior notes
 

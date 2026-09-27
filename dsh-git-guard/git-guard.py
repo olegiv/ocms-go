@@ -4,7 +4,7 @@
 Reads the harness hook payload from stdin (JSON with tool_input.command) and
 emits a Claude Code hookSpecificOutput decision:
   - "ask"    for git commands that mutate history or the remote
-  - "allow"  otherwise
+  - no decision otherwise, preserving the normal permission flow
 Unexpected input fails CLOSED with exit code 2, which the hook protocol treats
 as a blocking decision with stderr as the reason.
 """
@@ -20,7 +20,8 @@ MUTATING = re.compile(
     r"git\s+"
     r"(?:-c\s+\S+\s+)*"
     r"(commit|tag|push|reset|rebase|revert|merge|cherry-pick|am|"
-    r"fetch|pull|clean\s+-[a-z]*f|checkout\s+--|branch\s+-D|"
+    r"fetch|pull|clean\s+-[a-z]*f|checkout\s+--|"
+    r"branch\s+(?:--delete\b|-[a-z]*d)|"
     r"remote\s+(?:add|set-url|remove|rename)|stash\s+(?:drop|pop|clear)|"
     r"filter-branch|reflog\s+(?:delete|expire)|notes\s+(?:add|remove)|"
     r"submodule\s+(?:add|update|deinit))",
@@ -52,12 +53,7 @@ def main() -> int:
             }
         }
     else:
-        decision = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-            }
-        }
+        return 0
 
     json.dump(decision, sys.stdout)
     return 0
