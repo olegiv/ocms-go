@@ -1,0 +1,15 @@
+# Mount the shipped Claude Code hooks bridge and point it at the harness-home
+# hooks.json that gates git history/remote mutations behind approval.
+# `@deepseek-ai/dsh-hooks-claude-code` resolves from the dsh installation,
+# so this bundle declares no dependencies on it.
+#
+# configPath and pluginRoot resolve per machine through the Loader's
+# dshHomePath expression (the harness home, ~/.dsh). Run
+# scripts/install-git-guard.sh to install the two referenced files there,
+# then install this bundle (Web GUI Plugins page or plugin_manager).
+- insert:
+    - id: hooks-claude-code
+      name: '@deepseek-ai/dsh-hooks-claude-code'
+      config:
+        configPath: !!js dshHomePath('hooks.json')
+        pluginRoot: !!js dshHomePath()

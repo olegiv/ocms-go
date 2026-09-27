@@ -1,5 +1,28 @@
 # Repository Guidelines
 
+## Git Safety (Hard Rule)
+
+Never run any git-history or remote mutation — `commit`, `tag`, `push`,
+`reset`, `rebase`, `revert`, `merge`, `cherry-pick`, `am`, force-push, or
+`remote add/set-url/remove` and branch/tag deletion — without a separate,
+explicit "yes" from the human in the current conversation for that exact
+action. Approving a larger task (for example "cut the release") is not that
+"yes".
+
+- Local edits stay uncommitted working-tree changes until the human asks to
+  commit them.
+- When the human explicitly asks to commit ("commit these changes"), that
+  request approves the commit — and only that commit. Use `--no-verify` only
+  for a commit the human explicitly requested, because the repo pre-commit hook
+  blocks non-interactive commits.
+- Never push, tag, or otherwise touch the remote without a separate explicit
+  go-ahead for that exact push/tag.
+- A `PreToolUse` hook enforces this mechanically in new sessions; this section
+  is the instruction-level statement of the same rule.
+- Per-machine setup: run `make install-git-guard` and install the
+  `dsh-git-guard` bundle (Web GUI Plugins page, or via an agent) — see
+  `docs/dsh-onboarding.md`.
+
 ## Project Structure & Module Organization
 - `cmd/ocms/`: application entrypoint (`main.go`).
 - `internal/`: core runtime code (handlers, middleware, services, store, views, cache, scheduler).
