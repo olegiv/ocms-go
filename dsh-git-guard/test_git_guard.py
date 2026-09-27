@@ -1,17 +1,22 @@
 """Regression checks; all installations use temporary harness homes."""
 
 import json
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parent.parent
 BUNDLE = ROOT / "dsh-git-guard"
 LEGACY_COMMAND = "python3 ${CLAUDE_PLUGIN_ROOT}/git-guard.py"
+SPEC = importlib.util.spec_from_file_location("guard_installer", ROOT / "scripts/install-git-guard.py")
+INSTALLER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(INSTALLER)
 
 
 class GitGuardTests(unittest.TestCase):
@@ -24,7 +29,10 @@ class GitGuardTests(unittest.TestCase):
 
     def test_unmatched_commands_defer_to_normal_permissions(self):
         for command in ("rm example.txt", "curl https://example.com", "git status",
-                        "git diff", "git branch --list", "git branch develop"):
+                        "git diff", "git branch --list", "git branch develop",
+                        "git remote -v", "git remote get-url origin",
+                        "git -C 'a repo' status", "git --no-pager log -1",
+                        "git branch --list topic-d", "git status\ngit diff"):
             with self.subTest(command=command):
                 self.assertEqual(self.run_guard(command), "")
 
@@ -32,10 +40,129 @@ class GitGuardTests(unittest.TestCase):
         for command in ("git branch --delete topic", "git branch -d topic",
                         "git branch -D topic", "git branch -rd origin/topic",
                         "git branch --delete --force topic", "git commit -m test",
-                        "git push", "git tag v1", "git remote remove origin"):
+                        "git push", "git tag v1", "git remote remove origin",
+                        "git branch -r -d origin/topic", "git branch --force --delete topic",
+                        "git branch --quiet -D topic", "git branch topic --delete",
+                        "git branch -f release HEAD~1", "git branch --force release HEAD~1",
+                        "git branch --del topic", "git branch -r --dele origin/topic",
+                        'git branch "$flags" topic', "git branch $(echo -d) topic",
+                        "git branch `echo -d` topic",
+                        "git remote rm origin", "git remote -v rm origin",
+                        "git -C 'a repo' push", "git -C../repo branch -r -d origin/topic",
+                        "git --git-dir=repo.git --work-tree . reset --hard",
+                        "git -c 'user.name=Some Name' commit -m test",
+                        "git --no-pager remote rm origin", "'/usr/bin/git' push",
+                        "/usr/bin/GIT push",
+                        "git status\ngit push", "git status && git remote rm origin",
+                        "sh -c 'git push'", 'echo "$(git push)"',
+                        "git\\\n push", "git custom-alias", "git --unknown push",
+                        "git -C repo#one push", "git -C $(pwd) push",
+                        "git -C$(pwd) push", "echo `git push`", 'echo "`git push`"'):
             with self.subTest(command=command):
                 output = json.loads(self.run_guard(command))
                 self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_protected_long_option_prefixes_ask(self):
+        # Git's long-option abbreviation rules apply to every protected branch
+        # operation, not just the particular --del spelling from the review.
+        for option in ("--delete", "--move", "--copy", "--force"):
+            for end in range(3, len(option) + 1):
+                command = "git branch --quiet " + option[:end] + " topic"
+                with self.subTest(command=command):
+                    output = json.loads(self.run_guard(command))
+                    self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_malformed_payloads_fail_closed(self):
+        for payload in ("{", "null", "[]", "{}", '{"tool_input":null}',
+                        '{"tool_input":{"command":42}}', "[" * 1500 + "]" * 1500):
+            with self.subTest(payload=payload):
+                result = subprocess.run(
+                    [sys.executable, str(BUNDLE / "git-guard.py")],
+                    input=payload, text=True, capture_output=True,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+
+    def test_install_rolls_back_each_replacement_failure(self):
+        for existing in (False, True):
+            for failure_at in (1, 2, 3):
+                with self.subTest(existing=existing, failure_at=failure_at), \
+                        tempfile.TemporaryDirectory() as directory:
+                    home = Path(directory)
+                    originals = {"hooks.json": b'{"hooks":{}}',
+                                 "AGENTS.md": b"Keep this.\n", "git-guard.py": b"old script\n"}
+                    if existing:
+                        for name, content in originals.items():
+                            (home / name).write_bytes(content)
+                            (home / name).chmod(0o640)
+                    replace = os.replace
+                    calls = 0
+
+                    def fail_once(source, target):
+                        nonlocal calls
+                        calls += 1
+                        if calls == failure_at:
+                            raise OSError("injected publication failure")
+                        return replace(source, target)
+
+                    with mock.patch.object(INSTALLER.os, "replace", side_effect=fail_once):
+                        with self.assertRaisesRegex(OSError, "injected"):
+                            INSTALLER.install(BUNDLE, home, "new rules")
+                    if existing:
+                        for name, content in originals.items():
+                            self.assertEqual((home / name).read_bytes(), content)
+                            self.assertEqual((home / name).stat().st_mode & 0o777, 0o640)
+                    else:
+                        self.assertEqual(list(home.iterdir()), [])
+
+    def test_staging_failure_leaves_installation_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / "hooks.json").write_text("{}")
+            with mock.patch.object(INSTALLER.os, "fsync", side_effect=OSError("disk full")):
+                with self.assertRaisesRegex(OSError, "disk full"):
+                    INSTALLER.install(BUNDLE, home, "rules")
+            self.assertEqual((home / "hooks.json").read_text(), "{}")
+            self.assertEqual(sorted(path.name for path in home.iterdir()), ["hooks.json"])
+
+    def test_failed_rollback_retains_recovery_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / "git-guard.py").write_text("previous guard")
+            replace = os.replace
+            calls = 0
+
+            def persistent_failure(source, target):
+                nonlocal calls
+                calls += 1
+                if calls >= 2:
+                    raise OSError("persistent disk failure")
+                return replace(source, target)
+
+            with mock.patch.object(INSTALLER.os, "replace", side_effect=persistent_failure):
+                with self.assertRaisesRegex(OSError, "recovery files retained"):
+                    INSTALLER.install(BUNDLE, home, "rules")
+            backups = list(home.glob(".git-guard-*/git-guard.py.backup"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_text(), "previous guard")
+            self.assertFalse((home / "hooks.json").exists())
+
+    def test_read_only_rules_and_symlinks_are_preserved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            rules = home / "AGENTS.md"
+            rules.write_text("keep")
+            rules.chmod(0o400)
+            if not os.access(rules, os.W_OK):
+                self.assertNotEqual(self.install(home, check=False).returncode, 0)
+                self.assertEqual(rules.read_text(), "keep")
+                self.assertFalse((home / "hooks.json").exists())
+                self.assertFalse((home / "git-guard.py").exists())
+            rules.chmod(0o600)
+            (home / "hooks.json").symlink_to(rules)
+            self.assertNotEqual(self.install(home, check=False).returncode, 0)
+            self.assertTrue((home / "hooks.json").is_symlink())
+            self.assertEqual(rules.read_text(), "keep")
 
     def install(self, home, check=True):
         return subprocess.run(
@@ -106,9 +233,27 @@ class GitGuardTests(unittest.TestCase):
                     self.assertEqual(entries[0], existing["hooks"]["PreToolUse"][0])
                 self.assertTrue((home / "AGENTS.md").read_text().startswith("Keep this.\n"))
 
+    def test_concurrent_installations_do_not_duplicate_the_guard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            processes = [subprocess.Popen(
+                ["bash", str(ROOT / "scripts/install-git-guard.sh")],
+                env={**os.environ, "DSH_HOME": str(home)},
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ) for _ in range(4)]
+            for process in processes:
+                stdout, stderr = process.communicate(timeout=15)
+                self.assertEqual(process.returncode, 0, stdout + stderr)
+            config = json.loads((home / "hooks.json").read_text())
+            self.assertEqual(len(config["hooks"]["PreToolUse"]), 1)
+            self.assertEqual((home / "AGENTS.md").read_text().count(
+                "<!-- dsh-git-guard: begin -->"), 1)
+
     def test_invalid_existing_documents_are_not_overwritten(self):
         for hooks, rules in (("{bad json", "keep"),
                              ('{"hooks":{"PreToolUse":{}}}', "keep"),
+                             ('{"hooks":{"PreToolUse":[{"matcher":"bash","hooks":{}}]}}', "keep"),
+                             ('{"hooks":{"PreToolUse":[{"matcher":"bash","hooks":[null]}]}}', "keep"),
                              ("{}", "<!-- dsh-git-guard: begin -->\nstale")):
             with self.subTest(hooks=hooks, rules=rules), tempfile.TemporaryDirectory() as directory:
                 home = Path(directory)

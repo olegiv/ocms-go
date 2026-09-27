@@ -48,6 +48,7 @@ approve or reject per command.
 | `dsh-git-guard/hooks.json` | Source of truth for the `PreToolUse` hook config (installed copy: `~/.dsh/hooks.json`) |
 | `dsh-git-guard/git-guard.py` | The guard script (installed copy: `~/.dsh/git-guard.py`) |
 | `scripts/install-git-guard.sh` | Idempotent installer: merges the hook into the existing configuration, copies the guard script, and refreshes the marked global rule in `~/.dsh/AGENTS.md`, preserving unrelated hooks and rules |
+| `scripts/install-git-guard.py` | Stages all files, serializes installations, publishes the script before the hook config, and rolls back replacements on failure |
 
 ## Behavior notes
 
@@ -59,6 +60,17 @@ approve or reject per command.
 - **Fails open if `python3` cannot start.** The hook protocol treats a hook
   that cannot launch as non-blocking. A payload the script cannot parse,
   however, fails closed (exit 2 = deny).
+- **Conservative Git classification.** Quoted commands, global Git options,
+  option ordering, abbreviated branch options, forced branch rewrites, and
+  `remote rm` are handled.
+  Unrecognized Git subcommands (including aliases) and ambiguous option
+  expansions ask for approval; ordinary read commands defer to the harness's
+  normal permissions. This may prompt for harmless aliases or quoted text.
+- **Installation preserves existing files on errors.** Files are staged before
+  publication; replacements are rolled back if publication fails. Read-only
+  files and symlink destinations are rejected without overwriting them.
+  If a persistent filesystem error also prevents rollback, recovery copies
+  are retained in the private directory printed by the error message.
 - **This is a tripwire, not a security boundary.** A deliberately adversarial
   model could evade shell-string matching. The durable boundary remains
   conventional: no push credentials for agents, and GitHub branch protection
