@@ -96,6 +96,45 @@ class GitGuardTests(unittest.TestCase):
                 output = json.loads(self.run_guard(command))
                 self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "ask")
 
+    def test_protected_commands_with_redirections_ask(self):
+        for command in (
+            "bash -s <<< 'git push'", "bash -s<<<'git push'",
+            'bash<<<"git push"', "sh <<EOF\ngit push\nEOF",
+            "bash -s <<< 'make commit-do-local'",
+            "bash -s <<< '/usr/lib/git-core/git-push origin main'",
+            "git>output push", "git 2>errors push",
+            "git -C repo>output push", "git branch>output -D topic",
+            "git branch 2>&1 --delete topic", "git >output branch -D topic",
+            "git push>output", "git push &>output",
+            "bash <(printf '%s' 'git push')",
+        ):
+            with self.subTest(command=command):
+                output = json.loads(self.run_guard(command))
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_dashed_git_executables_ask(self):
+        for command in (
+            "git-commit -m x", "/usr/lib/git-core/git-push origin main",
+            "'/a repo/git-core/git-commit' -m x", "/usr/lib/git-core/GIT-PUSH",
+            "git-branch -r -d origin/topic", "git-branch --del topic",
+            "git-remote rm origin", "git-update-ref refs/heads/topic HEAD",
+            "sh -c 'git-push origin main'", "git-push>output",
+        ):
+            with self.subTest(command=command):
+                output = json.loads(self.run_guard(command))
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_read_only_redirections_and_dashed_git_defer(self):
+        for command in (
+            "git status>output", "git diff 2>errors", "git branch --list>output",
+            "cat<input", "cat <<EOF\nordinary text\nEOF",
+            "bash -s <<< 'git status'", "sh -c 'git-log -1'",
+            "git-status", "/usr/lib/git-core/git-log -1", "git-diff>output",
+            "git-branch --list", "git-remote get-url origin",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_guard(command), "")
+
     def test_non_commit_repository_wrappers_defer(self):
         for command in (
             "make test", "make commit-prepare", "make commit-prepare-local",

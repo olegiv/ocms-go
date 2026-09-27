@@ -62,7 +62,8 @@ approve or reject per command.
   however, fails closed (exit 2 = deny).
 - **Conservative Git classification.** Quoted commands, global Git options,
   option ordering, abbreviated branch options, forced branch rewrites, and
-  `remote rm` are handled.
+  `remote rm` are handled. Shell redirections and here-strings are tokenized,
+  and direct `git-*` executables use the same subcommand classification as `git`.
   Unrecognized Git subcommands (including aliases) and ambiguous option
   expansions ask for approval; ordinary read commands defer to the harness's
   normal permissions. This may prompt for harmless aliases or quoted text.

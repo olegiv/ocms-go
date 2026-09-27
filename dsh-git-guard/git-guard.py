@@ -7,6 +7,7 @@ no decision, preserving the harness permission policy. Invalid payloads exit 2.
 
 import json
 import os
+import re
 import shlex
 import sys
 
@@ -25,6 +26,9 @@ GLOBAL_FLAGS = {
 }
 GLOBAL_VALUES = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
 SEPARATORS = ";&|()`\n"
+# Split redirects from adjacent words (including here-string command payloads),
+# but do not end the argument scan at a redirect: Git options can follow it.
+SHELL_PUNCTUATION = SEPARATORS + "<>"
 # These repository entry points can commit without exposing a literal Git
 # command in the intercepted shell string. None means the script always commits.
 COMMIT_WRAPPERS = {
@@ -91,7 +95,7 @@ def requires_approval(command, depth=0):
     # executing anything. Nested command strings (e.g. sh -c) are checked too.
     if depth > 8:
         return True
-    lexer = shlex.shlex(command.replace("\\\n", ""), posix=True, punctuation_chars=SEPARATORS)
+    lexer = shlex.shlex(command.replace("\\\n", ""), posix=True, punctuation_chars=SHELL_PUNCTUATION)
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
     # shlex treats '#' inside an unquoted word as a comment, unlike the shell
@@ -103,7 +107,8 @@ def requires_approval(command, depth=0):
         return True  # Unparseable shell input cannot be classified safely.
     for index, token in enumerate(tokens):
         program = os.path.basename(token).casefold()
-        if program == "git" or program in COMMIT_WRAPPERS:
+        dashed_git = re.fullmatch(r"git-[a-z0-9-]+", program) is not None
+        if program == "git" or dashed_git or program in COMMIT_WRAPPERS:
             args = []
             for arg in tokens[index + 1:]:
                 if arg and all(char in SEPARATORS for char in arg):
@@ -113,6 +118,9 @@ def requires_approval(command, depth=0):
                 args.append(arg)
             if program == "git":
                 protected = git_requires_approval(args)
+            elif dashed_git:
+                # Git's exec-path programs select the subcommand via argv[0].
+                protected = git_requires_approval([program[4:], *args])
             else:
                 verbs = COMMIT_WRAPPERS[program]
                 # Scan all Make targets, including targets after options. An
