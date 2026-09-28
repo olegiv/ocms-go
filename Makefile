@@ -1,4 +1,4 @@
-.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
+.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks install-git-guard check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
@@ -27,6 +27,10 @@ assets:
 install-hooks:
 	git config core.hooksPath .githooks
 	@echo "Configured git hooks path: .githooks"
+
+# Install the DSH git-approval gate (hooks.json + guard script + global rule)
+install-git-guard:
+	./scripts/install-git-guard.sh
 
 # Scan tracked files for local absolute path leaks
 check-no-absolute-paths:

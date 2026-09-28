@@ -21,6 +21,9 @@ jobs:
     - name: Check for local absolute paths
       run: ./scripts/check-no-absolute-paths.sh --all
 
+    - name: Test Git guard and installer
+      run: python3 -B -m unittest discover -s dsh-git-guard -p 'test_*.py' -v
+
     - name: Set up Go
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
