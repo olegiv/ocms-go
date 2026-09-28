@@ -37,8 +37,8 @@ action. Approving a larger task (for example "cut the release") is not that
 - Components documented as best-effort tripwires (not security boundaries) are reviewed against their
   documented coverage list, not against every possible spelling of an input. Safe path: add the missing
   case to the coverage list and to its test table.
-- Best-effort components (each applies once its PR merges): `dsh-git-guard/`, pending PR #170
-  (contract: `docs/dsh-onboarding.md`, "Behavior notes"). Ordinary Git spellings (`--delete`, option order, `remote rm`, global
+- Best-effort components: `dsh-git-guard/` (contract: `docs/dsh-onboarding.md`, "Behavior
+  notes"). Ordinary Git spellings (`--delete`, option order, `remote rm`, global
   options such as `-C` and `--no-pager`) are in scope; shell-string evasions (wrappers, here-strings,
   command substitutions, dashed `git-*` executables) are documented limitations.
 
