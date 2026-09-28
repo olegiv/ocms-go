@@ -84,6 +84,7 @@ class GitGuardTests(unittest.TestCase):
             "./scripts/codex/commit-do.sh", "bash scripts/codex/commit-do.sh",
             "'/a repo/scripts/codex/commit-do.sh'",
             "./scripts/codex/proxy-claude-command.sh /commit-do",
+            "./scripts/codex/proxy-claude-command.sh commit-do",
             "git status && make commit-do-local",
             "make test\n./scripts/codex/commit-do.sh",
             "sh -c 'make commit-do-local'",

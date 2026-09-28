@@ -36,7 +36,7 @@ COMMIT_WRAPPERS = {
     "gmake": {"commit-do", "commit-do-local"},
     "codex-commands": {"commit-do", "commit-do-local"},
     "commit-do.sh": None,
-    "proxy-claude-command.sh": {"/commit-do"},
+    "proxy-claude-command.sh": {"/commit-do", "commit-do"},  # the proxy normalises the unprefixed spelling
 }
 
 
