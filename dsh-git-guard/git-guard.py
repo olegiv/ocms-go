@@ -95,7 +95,12 @@ def requires_approval(command, depth=0):
     # executing anything. Nested command strings (e.g. sh -c) are checked too.
     if depth > 8:
         return True
-    lexer = shlex.shlex(command.replace("\\\n", ""), posix=True, punctuation_chars=SHELL_PUNCTUATION)
+    command = command.replace("\\\n", "")  # join line continuations first, as Bash does
+    if "$'" in command or '$"' in command:
+        # ANSI-C ($'...') and locale ($"...") quoting are not modelled by shlex, so a
+        # quoted protected executable would be missed. Ask instead of guessing.
+        return True
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=SHELL_PUNCTUATION)
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
     # shlex treats '#' inside an unquoted word as a comment, unlike the shell
