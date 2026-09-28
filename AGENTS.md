@@ -1,5 +1,24 @@
 # Repository Guidelines
 
+## Code Review Rules
+
+### Scope
+- Review only lines changed in this pull request. Report pre-existing problems in unchanged code as a
+  single note at the end, not as inline findings.
+- Report P0 and P1 only when you can name the concrete input, environment or call path that triggers
+  the failure. Do not report style, naming, formatting, speculative hardening or alternative designs.
+- One finding per root cause. If a guard or validator has a class of bypasses, report the class once
+  with two examples. Do not report a root cause that already has a reply on this pull request.
+
+### Best-effort guards
+- Components documented as best-effort tripwires (not security boundaries) are reviewed against their
+  documented coverage list, not against every possible spelling of an input. Safe path: add the missing
+  case to the coverage list and to its test table.
+- Best-effort components (each applies once its PR merges): `dsh-git-guard/`, pending PR #170
+  (contract: `docs/dsh-onboarding.md`, "Behavior notes"). Ordinary Git spellings (`--delete`, option order, `remote rm`, global
+  options such as `-C` and `--no-pager`) are in scope; shell-string evasions (wrappers, here-strings,
+  command substitutions, dashed `git-*` executables) are documented limitations.
+
 ## Project Structure & Module Organization
 - `cmd/ocms/`: application entrypoint (`main.go`).
 - `internal/`: core runtime code (handlers, middleware, services, store, views, cache, scheduler).
