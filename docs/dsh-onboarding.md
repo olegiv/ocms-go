@@ -60,13 +60,14 @@ approve or reject per command.
 - **Fails open if `python3` cannot start.** The hook protocol treats a hook
   that cannot launch as non-blocking. A payload the script cannot parse,
   however, fails closed (exit 2 = deny).
-- **Conservative Git classification.** Quoted commands, global Git options,
+- **Conservative Git classification.** Single- and double-quoted commands, global Git options,
   option ordering, abbreviated branch options, forced branch rewrites, and
   `remote rm` are handled. Shell redirections and here-strings are tokenized,
   and direct `git-*` executables use the same subcommand classification as `git`.
   Unrecognized Git subcommands (including aliases) and ambiguous option
   expansions ask for approval; ordinary read commands defer to the harness's
-  normal permissions. This may prompt for harmless aliases or quoted text.
+  normal permissions. ANSI-C (`$'...'`) and locale (`$\"...\"`) quoting are not
+  parsed and always ask. This may prompt for harmless aliases or quoted text.
 - **Repository commit wrappers also require approval.** This includes
   `make commit-do[-local]` (and `gmake`), `scripts/codex-commands commit-do[-local]`,
   `scripts/codex/commit-do.sh`, and the Claude proxy's `/commit-do` command,

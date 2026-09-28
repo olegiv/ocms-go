@@ -57,7 +57,8 @@ class GitGuardTests(unittest.TestCase):
                         "sh -c 'git push'", 'echo "$(git push)"',
                         "git\\\n push", "git custom-alias", "git --unknown push",
                         "git -C repo#one push", "git -C $(pwd) push",
-                        "git -C$(pwd) push", "echo `git push`", 'echo "`git push`"'):
+                        "git -C$(pwd) push", "echo `git push`", 'echo "`git push`"',
+                        "$'git' push", "bash -c $'git branch -D topic'", '$"git" commit -m x'):
             with self.subTest(command=command):
                 output = json.loads(self.run_guard(command))
                 self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "ask")
