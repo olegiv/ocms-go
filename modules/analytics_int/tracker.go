@@ -71,8 +71,8 @@ func (m *Module) TrackingMiddleware() func(http.Handler) http.Handler {
 			// Track only successful HTML responses
 			if rw.status == http.StatusOK {
 				m.ctx.Logger.Debug("analytics: tracking page view", "path", r.URL.Path)
-				// Track asynchronously to not block response
-				go m.trackPageView(r)
+				// Track asynchronously to not block response; Shutdown waits for it
+				m.bgWG.Go(func() { m.trackPageView(r) })
 			} else {
 				m.ctx.Logger.Debug("analytics: skipping non-200 response", "path", r.URL.Path, "status", rw.status)
 			}

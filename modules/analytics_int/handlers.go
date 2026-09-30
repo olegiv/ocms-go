@@ -154,8 +154,8 @@ func (m *Module) handleRecordRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Record the read asynchronously
-	go m.recordReadWithIdentity(id, &req)
+	// Record the read asynchronously; Shutdown waits for it
+	m.bgWG.Go(func() { m.recordReadWithIdentity(id, &req) })
 
 	w.WriteHeader(http.StatusNoContent)
 }

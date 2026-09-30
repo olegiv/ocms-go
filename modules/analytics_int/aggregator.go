@@ -86,17 +86,25 @@ func (m *Module) StartAggregator() {
 	m.cron.Start()
 	m.ctx.Logger.Info("Page Analytics aggregator started")
 
-	// Run catch-up aggregation on startup in background
-	go m.runStartupCatchUp()
+	// Run catch-up aggregation on startup in background. Shutdown cancels it
+	// and waits, so it never writes to a database that is closing.
+	stopCtx, cancel := context.WithCancel(context.Background())
+	m.bgCancel = cancel
+	m.bgWG.Go(func() { m.runStartupCatchUp(stopCtx) })
 }
 
 // runStartupCatchUp runs aggregation immediately after startup to process
 // any data accumulated while the machine was stopped (e.g., Fly.io auto-stop).
-func (m *Module) runStartupCatchUp() {
+// It returns early once stopCtx is cancelled.
+func (m *Module) runStartupCatchUp(stopCtx context.Context) {
 	// Short delay to let the system finish initialization
-	time.Sleep(startupDelay)
+	select {
+	case <-time.After(startupDelay):
+	case <-stopCtx.Done():
+		return
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(stopCtx, 5*time.Minute)
 	defer cancel()
 
 	m.ctx.Logger.Info("running startup aggregation catch-up")
