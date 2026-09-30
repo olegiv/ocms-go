@@ -386,6 +386,23 @@ pkill -f "go run ./cmd/ocms" || true
 
 Never tell the user to "restart the server and test" - always run the tests yourself first.
 
+### Test Gate
+
+**Test-gate command:** `scripts/test-gate.sh`. It runs the full suite uncached (`go test -count=1 ./...`) and supplies the test session secret when `OCMS_SESSION_SECRET` is unset.
+
+It runs at two points, and a failing test blocks both:
+
+1. **`/commit-prepare`**, before a commit message is drafted
+2. **`git push`**, through the `pre-push` hook (`.githooks/pre-push`), on exactly the commit being pushed. The hook refuses to push a ref that is not `HEAD`, or a tree with uncommitted or untracked files, because it tests the working tree.
+
+Install the hook once per clone:
+
+```bash
+make install-test-gate
+```
+
+This links it into `.git/hooks`, where the global `~/.git-hooks/pre-push` wrapper chains to it after the pr-fix push gate. Do not use `make install-hooks` for this: a local `core.hooksPath` bypasses the global wrapper.
+
 ## Fixes Need Drift Tests
 
 **CRITICAL**: When you resolve an audit finding or review comment that targets a pattern (missing declaration, error wrapping, forbidden import, required format tag, auth/spec mismatch), you MUST add a Go test that mechanically enforces the invariant. Fixing the offending site alone is half the work — the other half is preventing the same class of bug from returning via a different code path.

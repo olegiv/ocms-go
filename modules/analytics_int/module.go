@@ -35,6 +35,12 @@ type Module struct {
 	geoIP    *geoip.Lookup
 	cron     *cron.Cron
 	saltMu   sync.RWMutex
+
+	// bgWG tracks every goroutine the module starts, so Shutdown can wait for
+	// in-flight writes before the database and GeoIP reader close. bgCancel
+	// stops the startup catch-up while it is still waiting to run.
+	bgWG     sync.WaitGroup
+	bgCancel context.CancelFunc
 }
 
 // New creates a new internal analytics module.
@@ -108,9 +114,14 @@ func (m *Module) Init(ctx *module.Context) error {
 
 // Shutdown cleans up resources.
 func (m *Module) Shutdown() error {
+	if m.bgCancel != nil {
+		m.bgCancel()
+	}
 	if m.cron != nil {
 		m.cron.Stop()
 	}
+	// Wait before closing GeoIP: an in-flight page view still looks up its country.
+	m.bgWG.Wait()
 	if m.geoIP != nil {
 		_ = m.geoIP.Close()
 	}

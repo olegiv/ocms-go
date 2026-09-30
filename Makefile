@@ -1,4 +1,4 @@
-.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks install-git-guard check-no-absolute-paths
+.PHONY: run stop restart build build-prod build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks install-git-guard install-test-gate check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
@@ -31,6 +31,15 @@ install-hooks:
 # Install the DSH git-approval gate (hooks.json + guard script + global rule)
 install-git-guard:
 	./scripts/install-git-guard.sh
+
+# Install the pre-push test gate. Links into $GIT_DIR/hooks, where the global
+# ~/.git-hooks/pre-push wrapper chains to it; install-hooks would bypass that
+# wrapper by setting a local core.hooksPath.
+install-test-gate:
+	@hooks_dir="$$(git rev-parse --git-common-dir)/hooks"; \
+	mkdir -p "$$hooks_dir"; \
+	ln -sf "$$(git rev-parse --show-toplevel)/.githooks/pre-push" "$$hooks_dir/pre-push"; \
+	echo "Linked $$hooks_dir/pre-push -> .githooks/pre-push"
 
 # Scan tracked files for local absolute path leaks
 check-no-absolute-paths:
