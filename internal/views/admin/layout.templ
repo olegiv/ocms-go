@@ -53,11 +53,11 @@ templ AdminLayout(pc *PageContext) {
 		     ScriptURL busts the one-year cache so an upgrade actually reaches
 		     browsers holding the previous build. -->
 		<!-- HTMX -->
-		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/htmx.min.js") } integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
+		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/htmx.min.js") } integrity="sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg" crossorigin="anonymous"></script>
 		<!-- Alpine.js Sort Plugin -->
 		<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine-sort.min.js") } integrity="sha384-hqiYD2WaUm+VsLVKEqRzzkJ7HQownCb0Mjq/GQJUDyzwA+vztNBwFqsWkbRGZCv+" crossorigin="anonymous"></script>
 		<!-- Alpine.js -->
-		<script defer nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-75oSay1c6HzSZ8dPUa3pKH8KLR9R2yAq9zTvyhTrR3gy1qI9w3AExggq3/RE57uR" crossorigin="anonymous"></script>
+		<script defer nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-5/joNqFnRyVWzXp99bHot6RHG+EksGp+USSgZwPar7T9SD9PKKER37n/8bXBAZGd" crossorigin="anonymous"></script>
 		<!-- Admin core utilities -->
 		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/admin-core.js") }></script>
 		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/media-dropzone.js") }></script>
