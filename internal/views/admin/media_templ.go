@@ -429,7 +429,7 @@ func MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) templ.Componen
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</ul><!-- New Folder Form --><div class=\"new-folder-form\" x-show=\"showNewFolder\" x-cloak><form hx-post=\"/admin/media/folders\" hx-target=\"#folder-list\" hx-swap=\"beforeend\" @htmx:after-request=\"showNewFolder = false; newFolderName = ''\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</ul><!-- New Folder Form --><div class=\"new-folder-form\" x-show=\"showNewFolder\" x-cloak><form hx-post=\"/admin/media/folders\" hx-target=\"#folder-list\" hx-swap=\"beforeend\" @htmx:after:request=\"showNewFolder = false; newFolderName = ''\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

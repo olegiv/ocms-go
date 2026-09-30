@@ -52,8 +52,9 @@ templ AdminLayout(pc *PageContext) {
 		     refuse the script and silently disables every feature using it.
 		     ScriptURL busts the one-year cache so an upgrade actually reaches
 		     browsers holding the previous build. -->
-		<!-- HTMX -->
-		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/htmx.min.js") } integrity="sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg" crossorigin="anonymous"></script>
+		<!-- HTMX (htmx 2 error semantics: never swap 4xx/5xx response bodies) -->
+		<meta name="htmx-config" content={ `{"noSwap": [204, 304, "4xx", "5xx"]}` }/>
+		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/htmx.min.js") } integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous"></script>
 		<!-- Alpine.js Sort Plugin -->
 		<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine-sort.min.js") } integrity="sha384-hqiYD2WaUm+VsLVKEqRzzkJ7HQownCb0Mjq/GQJUDyzwA+vztNBwFqsWkbRGZCv+" crossorigin="anonymous"></script>
 		<!-- Alpine.js -->
