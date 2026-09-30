@@ -38,7 +38,7 @@ install-git-guard:
 install-test-gate:
 	@hooks_dir="$$(git rev-parse --git-common-dir)/hooks"; \
 	mkdir -p "$$hooks_dir"; \
-	ln -sf ../../.githooks/pre-push "$$hooks_dir/pre-push"; \
+	ln -sf "$$(git rev-parse --show-toplevel)/.githooks/pre-push" "$$hooks_dir/pre-push"; \
 	echo "Linked $$hooks_dir/pre-push -> .githooks/pre-push"
 
 # Scan tracked files for local absolute path leaks

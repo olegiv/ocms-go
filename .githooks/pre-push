@@ -6,9 +6,11 @@
 # $GIT_DIR/hooks, where the global ~/.git-hooks/pre-push wrapper chains to it
 # after the pr-fix push gate.
 #
-# The suite runs on the working tree, so the tree must be exactly the commit
-# being pushed: every pushed ref must point at HEAD, and there must be no
-# uncommitted or untracked files.
+# The suite runs on the working tree, so the tree must match the commit being
+# pushed: every pushed ref must point at HEAD, and there must be no uncommitted
+# or untracked files. Gitignored files are not checked: custom modules placed
+# by `make sync-modules` are compiled and tested too, but CI tests the pushed
+# commit without them.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"

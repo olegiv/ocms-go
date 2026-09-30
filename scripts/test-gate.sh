@@ -10,4 +10,5 @@ if [[ -z "${OCMS_SESSION_SECRET:-}" ]]; then
   export OCMS_SESSION_SECRET="test-secret-key-32-bytes-long!!!"
 fi
 
-exec go test ./...
+# -count=1 disables the test cache: every test runs, no earlier pass is reused.
+exec go test -count=1 ./...

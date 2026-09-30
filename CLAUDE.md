@@ -388,7 +388,7 @@ Never tell the user to "restart the server and test" - always run the tests your
 
 ### Test Gate
 
-**Test-gate command:** `scripts/test-gate.sh`. It runs the full suite (`go test ./...`) and supplies the test session secret when `OCMS_SESSION_SECRET` is unset.
+**Test-gate command:** `scripts/test-gate.sh`. It runs the full suite uncached (`go test -count=1 ./...`) and supplies the test session secret when `OCMS_SESSION_SECRET` is unset.
 
 It runs at two points, and a failing test blocks both:
 
