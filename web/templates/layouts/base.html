@@ -13,8 +13,9 @@
 <body>
     {{block "body" .}}{{end}}
 
-    <!-- HTMX (vendored with SRI) -->
-    <script nonce="{{.CSPNonce}}" src="{{ scriptURL "/static/dist/js/htmx.min.js" }}" integrity="sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg" crossorigin="anonymous"></script>
+    <!-- HTMX (vendored with SRI; htmx 2 error semantics: never swap 4xx/5xx response bodies) -->
+    <meta name="htmx-config" content='{"noSwap": [204, 304, "4xx", "5xx"]}'>
+    <script nonce="{{.CSPNonce}}" src="{{ scriptURL "/static/dist/js/htmx.min.js" }}" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous"></script>
     <!-- Alpine.js Sort Plugin (must load before Alpine) -->
     <script nonce="{{.CSPNonce}}" defer src="{{ scriptURL "/static/dist/js/alpine-sort.min.js" }}" integrity="sha384-hqiYD2WaUm+VsLVKEqRzzkJ7HQownCb0Mjq/GQJUDyzwA+vztNBwFqsWkbRGZCv+" crossorigin="anonymous"></script>
     <!-- Alpine.js -->
