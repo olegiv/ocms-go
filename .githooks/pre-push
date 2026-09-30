@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Pre-push test gate: runs scripts/test-gate.sh on the commit being pushed and
+# blocks the push when any test fails.
+#
+# Install once per clone with `make install-test-gate`. It links this file into
+# $GIT_DIR/hooks, where the global ~/.git-hooks/pre-push wrapper chains to it
+# after the pr-fix push gate.
+#
+# The suite runs on the working tree, so the tree must be exactly the commit
+# being pushed: every pushed ref must point at HEAD, and there must be no
+# uncommitted or untracked files.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+head_sha=$(git rev-parse HEAD)
+pushing=false
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+  if [[ -z $local_sha || $local_sha =~ ^0+$ ]]; then
+    continue # blank line, or deleting a remote ref: nothing to test
+  fi
+  if [[ $(git rev-parse "$local_sha^{commit}") != "$head_sha" ]]; then
+    echo "pre-push: $local_ref is not the checked-out commit." >&2
+    echo "pre-push: check it out and push again, so the test gate runs on what you push." >&2
+    exit 1
+  fi
+  pushing=true
+done
+if ! $pushing; then
+  exit 0
+fi
+
+# Submodules (wiki, .claude/shared) hold no Go code the suite builds.
+if ! git diff --quiet --ignore-submodules HEAD --; then
+  echo "pre-push: tracked files have uncommitted changes; commit or stash them first." >&2
+  exit 1
+fi
+untracked=$(git ls-files --others --exclude-standard)
+if [[ -n $untracked ]]; then
+  echo "pre-push: untracked files would be tested but not pushed; commit, remove or ignore them:" >&2
+  printf '%s\n' "$untracked" | sed 's/^/  /' >&2
+  exit 1
+fi
+
+echo "pre-push: running the test gate (scripts/test-gate.sh)..." >&2
+if ! scripts/test-gate.sh; then
+  echo "pre-push: tests failed; push blocked." >&2
+  exit 1
+fi
