@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-01
+
+### Added
+- **PHP-Nuke migration source** — import stories as posts, content pages,
+  encyclopedias, topics and credited authors. Legacy table character sets are
+  decoded during import, referenced local media is copied and rewritten in
+  HTML attributes, and repeated imports reuse tracked content. Missing media
+  and unsupported content are reported in the import summary. PHP-Nuke's
+  query-string URLs are not preserved as aliases.
+- **Shared-core site builds** — `site.mk` provides site-instance build and
+  deployment targets, per-module registration files, module ownership tracking
+  and a shared build lock. Module synchronization preserves modules owned by
+  other sites, rejects ownership conflicts and unsafe symlinks, and generates
+  site templ sources before copying them into core.
+- **Development Git approval guard** — a best-effort DSH tripwire asks for
+  explicit approval before Git history or remote mutations. Installation and
+  documented coverage are described in `docs/dsh-onboarding.md`.
+- **Pre-push test gate** — `make install-test-gate` installs a hook that runs
+  the full Go suite before a push, with a fallback test session secret.
+
+### Changed
+- **HTMX 4.0.0 in the admin UI** — request lifecycle and error handlers use
+  the new event names and response API. Admin layouts explicitly suppress
+  swapping 4xx/5xx response bodies, preserving the previous error behavior.
+  Public layouts no longer load HTMX automatically.
+- Custom modules use one `imports_<module>.go` registration file per module
+  instead of editing the shared `imports.go`. The bookmarks example exposes
+  its count and favorites through routes instead of template functions.
+- Replace the retired Go Report Card badge with a Go version badge sourced
+  from `go.mod`.
+
+### Fixed
+- **Migrator language and URL handling** — Drupal and Elefant imports preserve
+  language-aware taxonomy redirects and avoid collisions with destination
+  pages, aliases and fixed or registered module routes. Import summaries are
+  bounded, and cancellation stops import loops promptly.
+- **PHP-Nuke imports** — correct nullable source-column handling, author
+  profile merging and byline attribution, taxonomy reuse, slug allocation,
+  progress totals, media reruns and references containing dotted paths,
+  query strings or fragments. Summary and metadata fields strip source markup.
+- **Analytics shutdown** — wait for tracking and aggregation goroutines before
+  closing their resources, preventing shutdown races and flaky tests.
+- Repository-scanning tests follow symlinked core checkouts, and media
+  generator tests keep generated uploads inside their temporary directories.
+
+### Security
+- Add `safeNoteHTML` for stored theme notes, with an allowlist for inline
+  formatting and hardened links. Its policy is isolated from the stricter
+  footer policy so enabling note markup cannot widen footer permissions.
+- Update vulnerable npm dependency resolutions, including js-yaml,
+  baseline-browser-mapping and browserslist, and refresh vendored script
+  integrity hashes for the updated assets.
+
+### Dependencies
+- **Go 1.27.1** is now required for source builds; the Docker builder uses
+  `golang:1.27.1-alpine`. Prebuilt binaries do not require an installed Go
+  toolchain.
+- Update Go modules, including chi v5.3.2, mysql v1.10.1, go-sqlite3 v1.14.52,
+  maxminddb v2.7.0, goose v3.28.0, goldmark v1.8.6, modernc.org/sqlite v1.60.1,
+  x/crypto v0.57.0, x/net v0.59.0, x/image v0.46.0 and x/text v0.42.0.
+- Update frontend assets to HTMX 4.0.0, Alpine.js and its plugins 3.17.4,
+  TinyMCE 8.9.2 and swagger-ui-dist 5.33.0.
+
+### Upgrade notes
+- Install Go 1.27.1 or later before building from source.
+- Move custom-module imports from `custom/modules/imports.go` into individual
+  `custom/modules/imports_<module>.go` files. Keep site-owned modules in their
+  site repositories and run `make sync-modules` from every owning site after
+  a fresh shared-core clone. Custom template functions still require renderer
+  placeholders; prefer routes as demonstrated by the bookmarks module.
+- Review custom HTMX integrations for HTMX 4 event and response API changes.
+  Public themes that use HTMX must load and configure it themselves, since
+  the shared public layouts no longer include it. Custom admin layouts should
+  preserve the shipped error-swap configuration.
+
 ## [0.23.0] - 2026-08-16
 
 ### Added
@@ -1400,7 +1475,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/olegiv/ocms-go/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/olegiv/ocms-go/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/olegiv/ocms-go/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/olegiv/ocms-go/compare/v0.20.0...v0.21.0

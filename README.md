@@ -6,7 +6,7 @@
 [![Go](https://github.com/olegiv/ocms-go/actions/workflows/go.yml/badge.svg)](https://github.com/olegiv/ocms-go/actions/workflows/go.yml)
 [![CodeQL](https://github.com/olegiv/ocms-go/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/olegiv/ocms-go/actions/workflows/github-code-scanning/codeql)
 [![Latest release](https://img.shields.io/github/v/release/olegiv/ocms-go)](https://github.com/olegiv/ocms-go/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/olegiv/ocms-go)](https://goreportcard.com/report/github.com/olegiv/ocms-go)
+[![Go version](https://img.shields.io/github/go-mod/go-version/olegiv/ocms-go?logo=go)](go.mod)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## Try it
@@ -194,7 +194,7 @@ Prebuilt release binaries have no external runtime dependencies beyond the opera
 
 Building from source requires:
 
-- Go 1.26 or later
+- Go 1.27.1 or later
 - [Node.js](https://nodejs.org/) (npm) for frontend dependencies
 - [sqlc](https://sqlc.dev/) for SQL code generation
 - [templ](https://templ.guide/) for type-safe HTML templates
@@ -919,7 +919,7 @@ git commit -m "Update Claude Code shared submodule"
 
 ## Technology Stack
 
-- **Backend**: Go 1.26+
+- **Backend**: Go 1.27.1+
 - **Database**: SQLite with [goose](https://github.com/pressly/goose) migrations
 - **SQL**: Type-safe queries with [sqlc](https://sqlc.dev/)
 - **Templates**: [templ](https://templ.guide/) for type-safe HTML
