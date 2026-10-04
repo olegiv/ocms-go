@@ -2602,3 +2602,88 @@ func TestFrontendHandler_MCPServerCard_FollowsEndpointProvider(t *testing.T) {
 		}
 	}
 }
+
+func TestFrontendHandler_MCPServerCard_RequiresOrigin(t *testing.T) {
+	cases := []struct {
+		name, value, origin string
+	}{
+		{"https", "https://example.com", "https://example.com"},
+		{"http", "http://example.com", "http://example.com"},
+		{"trailing_slash", "https://example.com/", "https://example.com"},
+		{"trailing_slashes", "https://example.com///", "https://example.com"},
+		{"whitespace", "  https://example.com/ ", "https://example.com"},
+		{"port", "https://example.com:8443/", "https://example.com:8443"},
+		{"maximum_port", "http://localhost:65535/", "http://localhost:65535"},
+		{"ipv6", "http://[::1]:8080/", "http://[::1]:8080"},
+		{"path", "https://example.com/blog", ""},
+		{"escaped_path", "https://example.com/%2F", ""},
+		{"fragment", "https://example.com#preview", ""},
+		{"empty_fragment", "https://example.com#", ""},
+		{"query", "https://example.com?preview=1", ""},
+		{"empty_query", "https://example.com?", ""},
+		{"credentials", "https://user:secret@example.com", ""},
+		{"zero_port", "https://example.com:0", ""},
+		{"large_port", "https://example.com:65536", ""},
+		{"nonnumeric_port", "https://example.com:wrong", ""},
+		{"missing_host", "https://:443", ""},
+		{"scheme", "ftp://example.com", ""},
+		{"relative", "example.com", ""},
+		{"malformed", "https://[::1", ""},
+		{"empty", "", ""},
+		{"blank", "   ", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := testHandlerSetup(t)
+			if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', ?, 'string', 'en')`, tc.value); err != nil {
+				t.Fatal(err)
+			}
+			for _, cached := range []bool{false, true} {
+				for _, active := range []bool{false, true} {
+					t.Run("cached="+strconv.FormatBool(cached)+"/active="+strconv.FormatBool(active), func(t *testing.T) {
+						var manager *cache.Manager
+						if cached {
+							manager = cache.NewManager(store.New(db))
+						}
+						h := NewFrontendHandler(db, nil, manager, nil, nil, nil)
+						if active {
+							h.SetMCPEndpointProvider(func() *seo.MCPEndpoint {
+								return &seo.MCPEndpoint{Path: "/api/mcp", Name: "ocms", Version: "1.0.0"}
+							})
+						}
+						req := httptest.NewRequest(http.MethodGet, "/.well-known/mcp/server-card.json", nil)
+						req.Host = "internal-upstream.local"
+						w := httptest.NewRecorder()
+						h.MCPServerCard(w, req)
+						if tc.origin == "" {
+							if w.Code != http.StatusServiceUnavailable || w.Header().Get("Cache-Control") != "no-store" {
+								t.Fatalf("invalid origin: status=%d cache=%q; want 503/no-store", w.Code, w.Header().Get("Cache-Control"))
+							}
+							if strings.Contains(w.Body.String(), "/api/mcp") || strings.Contains(w.Body.String(), "secret") || strings.Contains(w.Body.String(), "internal-upstream") {
+								t.Fatalf("invalid origin published an endpoint, credential, or request host: %s", w.Body.String())
+							}
+							return
+						}
+						if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-cache" || w.Header().Get("Content-Type") != "application/json" {
+							t.Fatalf("valid origin: status=%d cache=%q type=%q", w.Code, w.Header().Get("Cache-Control"), w.Header().Get("Content-Type"))
+						}
+						var card seo.MCPServerCard
+						if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
+							t.Fatal(err)
+						}
+						if card.Capabilities.REST == nil || card.Capabilities.REST.OpenAPI != tc.origin+"/api/v2/openapi.json" {
+							t.Fatalf("incorrect REST fallback: %s", w.Body.String())
+						}
+						if active {
+							if card.Transport == nil || card.Transport.Endpoint != tc.origin+"/api/mcp" {
+								t.Fatalf("incorrect live endpoint: %s", w.Body.String())
+							}
+						} else if card.Transport != nil {
+							t.Fatalf("inactive module advertised transport: %s", w.Body.String())
+						}
+					})
+				}
+			}
+		})
+	}
+}
