@@ -1746,6 +1746,10 @@ func run() error {
 		if !moduleRegistry.IsActive(mcpserver.ModuleName) {
 			return nil
 		}
+		active, err := queries.IsModuleActive(ctx, mcpserver.ModuleName)
+		if err != nil || !active {
+			return nil
+		}
 		return mcpserver.ServerCardEndpoint()
 	})
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager, hookRegistry, themeManager, cacheManager, renderer.GetMenuService(), frontendHandler)

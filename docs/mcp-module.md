@@ -209,15 +209,18 @@ new server in last, one save at a time. A failure therefore never leaves the
 stored settings and the running server out of step. Every change is logged and
 recorded in the event log as `MCP settings updated`.
 
-The page always shows the stored settings. If they differ from the running
-ones, for example because another instance saved them, opening the page applies
-them.
+The page always shows the stored settings. Each authenticated MCP request also
+reloads the settings and checks module activation in the shared database before
+dispatch. Saving settings or disabling MCP on one instance therefore applies to
+subsequent requests on other running instances. Requests already admitted may
+finish with their earlier settings. Enable the module on every instance, or
+restart instances after enabling it, so their routes are registered.
 
 If the stored settings cannot be read, the page says so and disables the form,
-so nothing is saved over values it could not read. The server keeps running
-with the settings it already has: the stored ones if it read them earlier,
-otherwise the safe defaults (drafts hidden, no instructions). Each visit to the
-page tries the read again.
+so nothing is saved over values it could not read. MCP requests return HTTP 503
+if activation or settings cannot be read, or the server cannot apply updated
+settings; they retry on the next request. A stored inactive module returns
+HTTP 404. This prevents a replica from serving drafts under a stale policy.
 
 The page also shows:
 
@@ -231,22 +234,26 @@ The page also shows:
 
 ## Server card
 
-`/.well-known/mcp/server-card.json` follows SEP-1649 and SEP-2127. While the
-module is active, it carries:
+`/.well-known/mcp/server-card.json` follows the [SEP-1649 draft](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1649)
+while the module is active. It carries:
 
 ```json
 {
+  "$schema": "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json",
+  "version": "1.0",
+  "protocolVersion": "2026-07-28",
   "serverInfo": {"name": "ocms", "title": "oCMS", "version": "1.0.0"},
-  "transport": "https://example.com/api/mcp",
-  "capabilities": {"tools": {}, "rest": {"openapi": "https://example.com/api/v2/openapi.json"}},
-  "remotes": [{"type": "streamable-http", "url": "https://example.com/api/mcp"}],
-  "supportedProtocolVersions": ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
+  "transport": {"type": "streamable-http", "endpoint": "https://example.com/api/mcp"},
+  "capabilities": {"tools": {}, "rest": {"openapi": "https://example.com/api/v2/openapi.json"}}
 }
 ```
 
 `serverInfo` is exactly what the endpoint reports at `initialize`;
-`TestServerCardMatchesInitialize` keeps the two in step. While the module is
-inactive, the card falls back to `"transport": null` with only the REST
+`TestServerCardMatchesInitialize` keeps the two in step. `protocolVersion`
+advertises the endpoint's preferred supported revision; `version` is the
+card format version. The card does not claim SEP-2127 compatibility.
+While the module is inactive, the card omits the schema and protocol fields
+and falls back to `"transport": null` with only the REST
 capability, labelled with the `mcp_server_version` config key (`0.0.0` when
 empty). That key does not apply to a live card.
 

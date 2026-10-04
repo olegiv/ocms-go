@@ -141,11 +141,10 @@ type MCPCapabilities struct {
 	REST  *MCPRESTCapability  `json:"rest,omitempty"`
 }
 
-// MCPRemote is one remote endpoint in the SEP-2127 card shape (the successor
-// of SEP-1649, aligned with the MCP registry server.json "remotes").
-type MCPRemote struct {
-	Type string `json:"type"`
-	URL  string `json:"url"`
+// MCPTransport is the transport object required by the SEP-1649 draft.
+type MCPTransport struct {
+	Type     string `json:"type"`
+	Endpoint string `json:"endpoint"`
 }
 
 // MCPEndpoint describes a live MCP transport. Callers pass it only while an
@@ -156,19 +155,19 @@ type MCPEndpoint struct {
 	Name             string   // serverInfo.name the endpoint reports at initialize
 	Title            string   // serverInfo.title the endpoint reports at initialize
 	Version          string   // serverInfo.version the endpoint reports at initialize
-	ProtocolVersions []string // MCP protocol revisions the endpoint negotiates
+	ProtocolVersions []string // non-empty MCP protocol revisions, preferred first
 }
 
-// MCPServerCard follows the draft SEP-1649 shape
-// (github.com/modelcontextprotocol/modelcontextprotocol PR #2127), plus the
-// SEP-2127 "remotes" and "supportedProtocolVersions" fields when a transport
-// is live, so scanners of either draft find the endpoint.
+// MCPServerCard follows the SEP-1649 draft when a transport is live:
+// https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1649.
+// The inactive REST-only fallback omits the MCP schema and protocol fields.
 type MCPServerCard struct {
-	ServerInfo                MCPServerInfo   `json:"serverInfo"`
-	Transport                 *string         `json:"transport"` // nil => null in JSON
-	Capabilities              MCPCapabilities `json:"capabilities"`
-	Remotes                   []MCPRemote     `json:"remotes,omitempty"`
-	SupportedProtocolVersions []string        `json:"supportedProtocolVersions,omitempty"`
+	Schema          string          `json:"$schema,omitempty"`
+	Version         string          `json:"version,omitempty"`
+	ProtocolVersion string          `json:"protocolVersion,omitempty"`
+	ServerInfo      MCPServerInfo   `json:"serverInfo"`
+	Transport       *MCPTransport   `json:"transport"` // nil => null in JSON
+	Capabilities    MCPCapabilities `json:"capabilities"`
 }
 
 // mcpStreamableHTTP is the transport type for MCP's Streamable HTTP transport.
@@ -182,7 +181,7 @@ const mcpStreamableHTTP = "streamable-http"
 // admin-editable mcp_server_version setting, "0.0.0" when empty) labels that
 // REST-bridge card.
 //
-// With an endpoint the card names the Streamable HTTP URL in both draft shapes,
+// With an endpoint the card names the Streamable HTTP URL in SEP-1649's transport,
 // still links the REST API, and reports exactly the serverInfo the endpoint
 // returns at initialize: a client comparing the two must see one server, so
 // the version setting does not apply.
@@ -205,11 +204,14 @@ func BuildMCPServerCard(siteURL, version string, endpoint *MCPEndpoint) []byte {
 	}
 	if endpoint != nil {
 		endpointURL := base + endpoint.Path
+		card.Schema = "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json"
+		card.Version = "1.0"
+		if len(endpoint.ProtocolVersions) > 0 {
+			card.ProtocolVersion = endpoint.ProtocolVersions[0]
+		}
 		card.ServerInfo = MCPServerInfo{Name: endpoint.Name, Title: endpoint.Title, Version: endpoint.Version}
-		card.Transport = &endpointURL
+		card.Transport = &MCPTransport{Type: mcpStreamableHTTP, Endpoint: endpointURL}
 		card.Capabilities.Tools = &MCPToolsCapability{}
-		card.Remotes = []MCPRemote{{Type: mcpStreamableHTTP, URL: endpointURL}}
-		card.SupportedProtocolVersions = endpoint.ProtocolVersions
 	}
 	out, _ := json.MarshalIndent(card, "", "  ")
 	return out

@@ -1800,7 +1800,7 @@ func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Reques
 }
 
 // MCPServerCard serves /.well-known/mcp/server-card.json following the
-// draft SEP-1649 schema (plus SEP-2127 remotes). While the MCP module is
+// draft SEP-1649 schema while the MCP module is active. While the module is
 // inactive no transport is published ("transport": null) and the card points
 // at the REST API via capabilities.rest.openapi; while it is active the card
 // names the Streamable HTTP endpoint.

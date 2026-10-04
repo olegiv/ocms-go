@@ -98,9 +98,8 @@ type endpointHandler struct {
 }
 
 // serverState pairs the active settings with the server built from them, so
-// the two are always replaced together. A tool call reads the current settings
-// when it runs, so it applies the newest drafts policy even if its request was
-// dispatched by the server of an earlier save.
+// the two are always replaced together. HTTP requests refresh the stored
+// policy before dispatch and carry that snapshot through their tool call.
 type serverState struct {
 	settings Settings
 	server   *mcp.Server

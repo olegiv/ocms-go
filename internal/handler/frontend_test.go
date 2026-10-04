@@ -2596,7 +2596,7 @@ func TestFrontendHandler_MCPServerCard_FollowsEndpointProvider(t *testing.T) {
 	if strings.Contains(body, "9.9.9") {
 		t.Errorf("a live card must not report the REST-bridge version override; got: %s", body)
 	}
-	for _, want := range []string{`"transport": "https://example.com/api/mcp"`, `"type": "streamable-http"`, `"2026-07-28"`, `"name": "ocms"`, `"version": "1.0.0"`} {
+	for _, want := range []string{`"transport": {`, `"endpoint": "https://example.com/api/mcp"`, `"type": "streamable-http"`, `"protocolVersion": "2026-07-28"`, `"name": "ocms"`, `"version": "1.0.0"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("active MCP card missing %s; got: %s", want, body)
 		}

@@ -36,6 +36,9 @@ type ListMediaResult struct {
 
 // listMedia implements list_media over media.Service.List.
 func (m *Module) listMedia(ctx context.Context, call *toolCall, in ListMediaInput) (ListMediaResult, error) {
+	if (in.Type != "" && in.FolderID > 0) || (in.Search != "" && (in.Type != "" || in.FolderID > 0)) {
+		return ListMediaResult{}, newValidationError("filters", "Use only one of type, folder_id, or search")
+	}
 	page, perPage := normalizePaging(in.Page, in.PerPage, defaultMediaPerPage)
 	filter := media.ListFilter{
 		Page:    page,

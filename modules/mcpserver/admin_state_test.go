@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -91,6 +92,78 @@ func TestDashboardReloadsStoredSettings(t *testing.T) {
 	session := env.connect(env.createKey(model.PermissionMCPAccess))
 	if init := session.InitializeResult(); init == nil || !strings.Contains(init.Instructions, "From another instance.") {
 		t.Error("reloaded instructions must reach clients")
+	}
+}
+
+// TestEndpointReloadsSharedState keeps one replica's memory stale while a
+// second registry changes the shared database, without visiting its dashboard.
+func TestEndpointReloadsSharedState(t *testing.T) {
+	env := newTestEnv(t)
+	env.setSettings(Settings{AllowDrafts: true})
+	draft := env.createPage(pageSeed{title: "Private draft", slug: "private-draft", status: model.PageStatusDraft})
+	published := env.createPage(pageSeed{title: "Public page", slug: "public-page", status: model.PageStatusPublished})
+	key := env.createKey(model.PermissionMCPAccess, model.PermissionPagesRead)
+	session := env.connect(key)
+	if page := decodeResult[PageDetail](t, call(t, session, "get_page", map[string]any{"id": draft})); page.ID != draft {
+		t.Fatalf("draft = %d, want %d while allowed", page.ID, draft)
+	}
+
+	other := New()
+	registry := module.NewRegistry(slog.New(env.logs))
+	if err := registry.Register(other); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := registry.InitAll(env.module.ctx); err != nil {
+		t.Fatalf("InitAll: %v", err)
+	}
+	t.Run("draft revocation and instructions", func(t *testing.T) {
+		if _, err := other.saveAndApply(context.Background(), Settings{Instructions: "Updated on another replica."}); err != nil {
+			t.Fatalf("saveAndApply: %v", err)
+		}
+		if code, _, _ := toolErrorBody(t, call(t, session, "get_page", map[string]any{"id": draft})); code != "not_found" {
+			t.Errorf("draft after remote revocation: code = %q, want not_found", code)
+		}
+		if page := decodeResult[PageDetail](t, call(t, session, "get_page", map[string]any{"id": published})); page.ID != published {
+			t.Errorf("published page = %d, want %d", page.ID, published)
+		}
+		if init := env.connect(key).InitializeResult(); !strings.Contains(init.Instructions, "Updated on another replica.") {
+			t.Error("new clients must receive instructions saved on another replica")
+		}
+	})
+
+	t.Run("module deactivation and reactivation", func(t *testing.T) {
+		if err := registry.SetActive(ModuleName, false); err != nil {
+			t.Fatalf("SetActive(false): %v", err)
+		}
+		resp := env.rawPost(listToolsBody, map[string]string{"Authorization": "Bearer " + key})
+		if body := readBody(t, resp); resp.StatusCode != http.StatusNotFound {
+			t.Errorf("remote deactivation: status %d body %s, want 404", resp.StatusCode, body)
+		}
+		if err := registry.SetActive(ModuleName, true); err != nil {
+			t.Fatalf("SetActive(true): %v", err)
+		}
+		resp = env.rawPost(listToolsBody, map[string]string{"Authorization": "Bearer " + key})
+		if body := readBody(t, resp); resp.StatusCode != http.StatusOK || !strings.Contains(body, "get_page") {
+			t.Errorf("remote reactivation: status %d body %s, want tool catalog", resp.StatusCode, body)
+		}
+	})
+
+	for _, table := range []string{"mcp_settings", "modules"} {
+		t.Run(table+" read failure and recovery", func(t *testing.T) {
+			if _, err := env.db.Exec("ALTER TABLE " + table + " RENAME TO unavailable_state"); err != nil {
+				t.Fatalf("rename %s: %v", table, err)
+			}
+			resp := env.rawPost(listToolsBody, map[string]string{"Authorization": "Bearer " + key})
+			if body := readBody(t, resp); resp.StatusCode != http.StatusServiceUnavailable || apiErrorCode(t, body) != "service_unavailable" {
+				t.Errorf("unreadable %s: status %d body %s, want 503 service_unavailable", table, resp.StatusCode, body)
+			}
+			if _, err := env.db.Exec("ALTER TABLE unavailable_state RENAME TO " + table); err != nil {
+				t.Fatalf("restore %s: %v", table, err)
+			}
+			if page := decodeResult[PageDetail](t, call(t, session, "get_page", map[string]any{"id": published})); page.ID != published {
+				t.Errorf("recovered published page = %d, want %d", page.ID, published)
+			}
+		})
 	}
 }
 

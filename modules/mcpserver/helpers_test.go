@@ -137,6 +137,11 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	m := New()
 	moduleutil.RunMigrations(t, db, m.Migrations())
+	if _, err := store.New(db).UpsertModule(context.Background(), store.UpsertModuleParams{
+		Name: ModuleName, IsActive: true,
+	}); err != nil {
+		t.Fatalf("UpsertModule: %v", err)
+	}
 
 	logs := &logCapture{}
 	ctx := &module.Context{

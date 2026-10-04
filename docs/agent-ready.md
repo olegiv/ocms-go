@@ -16,7 +16,7 @@ request to the homepage. The checks are those exercised by
 | Markdown for Agents | `Accept: text/markdown` on `GET /` and `GET /{slug}` | [Cloudflare Markdown for Agents](https://developers.cloudflare.com/fundamentals/reference/markdown-for-agents/) |
 | API Catalog | `/.well-known/api-catalog` | RFC 9727 (linkset format RFC 9264) |
 | Agent Skills index | `/.well-known/agent-skills/index.json` | [Cloudflare Agent Skills Discovery RFC v0.2.0](https://github.com/cloudflare/agent-skills-discovery-rfc) |
-| MCP Server Card | `/.well-known/mcp/server-card.json` | draft SEP-1649, plus SEP-2127 `remotes` while the MCP module is active |
+| MCP Server Card | `/.well-known/mcp/server-card.json` | draft SEP-1649 while the MCP module is active |
 | Security contact | `/.well-known/security.txt` | RFC 9116 (unrelated, included for completeness) |
 
 The Link header advertises three relations:
@@ -41,14 +41,16 @@ oCMS ships an MCP transport as the opt-in **MCP Server** module: Streamable
 HTTP at `POST /api/mcp` with read-only tools (see
 [mcp-module.md](mcp-module.md)). The server card follows the module's state:
 
-- **Module active:** the card names the endpoint in `transport` and in the
-  SEP-2127 `remotes` list (`"type": "streamable-http"`). It also declares
-  `capabilities.tools`, lists `supportedProtocolVersions`, and still links the
+- **Module active:** the card names the endpoint in the SEP-1649 `transport`
+  object (`"type": "streamable-http"`, `"endpoint": "https://…/api/mcp"`). It
+  declares the draft's `$schema`, card format `version`, preferred supported
+  `protocolVersion`, and `capabilities.tools`, and still links the
   REST API under `capabilities.rest.openapi`. Its `serverInfo` (`ocms`,
   title `oCMS`, the module version) is exactly what the endpoint reports at
   `initialize`.
-- **Module inactive** (the default): the card keeps `"transport": null` and
-  declares only the REST fallback, so it never advertises an endpoint that
+- **Module inactive** (the default): the card omits the schema and protocol
+  fields, keeps `"transport": null`, and declares only the REST fallback,
+  so it never advertises an endpoint that
   would answer 404.
 
 `seo.BuildMCPServerCard` receives the endpoint from
@@ -119,7 +121,7 @@ curl -sS -D - http://localhost:8080/.well-known/api-catalog
 # Agent Skills v0.2.0 index
 curl -s http://localhost:8080/.well-known/agent-skills/index.json | jq .
 
-# MCP Server Card (SEP-1649); shows "remotes" once the MCP module is active
+# MCP Server Card (SEP-1649); shows a transport object once the MCP module is active
 curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq .
 
 # MCP endpoint (module active): 405 for GET, 401 with a Bearer challenge for POST

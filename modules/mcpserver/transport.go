@@ -31,7 +31,7 @@ const bearerRealm = `Bearer realm="oCMS MCP"`
 //
 //	no-store → POST only → per-IP limit → in-flight cap → cross-origin check
 //	→ API key auth (+ WWW-Authenticate on 401) → mcp:access → TokenInfo
-//	→ per-key limit → no batches → request context
+//	→ per-key limit → no batches → stored activation/settings → request context
 //	→ SDK Streamable HTTP handler (stateless, JSON responses)
 //
 // Cheap rejections run before API key verification (Argon2), so probing the
@@ -69,6 +69,7 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 
 	var h http.Handler = sdkHandler
 	h = withRequestContext(h)
+	h = m.withStoredState(h)
 	h = rejectBatches(maxRequestBodyBytes, h)
 	h = middleware.APIRateLimit(keyRateLimitRPS, keyRateLimitBurst)(h)
 	h = auth.RequireBearerToken(verifyValidatedKey, &auth.RequireBearerTokenOptions{
@@ -84,6 +85,31 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 	h = middleware.NewGlobalRateLimiter(ipRateLimitRPS, ipRateLimitBurst).Middleware()(h)
 	h = requirePOST(h)
 	return noStore(h)
+}
+
+// withStoredState refreshes security-sensitive state for every admitted
+// request, including requests routed to a replica other than the admin save.
+// The registry's activation gate is process-local, so check the stored flag
+// here as well. A failed read must not authorize a request using stale state.
+func (m *Module) withStoredState(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		active, err := m.svc.queries.IsModuleActive(r.Context(), ModuleName)
+		if err == nil && !active {
+			http.NotFound(w, r)
+			return
+		}
+		var settings Settings
+		if err == nil {
+			settings, err = m.reloadSettings(r.Context())
+		}
+		if err != nil {
+			m.logger.Error("failed to refresh MCP request state", "error", err)
+			middleware.WriteAPIError(w, http.StatusServiceUnavailable, "service_unavailable", "MCP server state is unavailable", nil)
+			return
+		}
+		ctx := context.WithValue(r.Context(), requestSettingsKey{}, settings)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // noStore marks every response uncacheable: each is produced for one API

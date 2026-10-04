@@ -156,14 +156,11 @@ func TestBuildMCPServerCardWithEndpoint(t *testing.T) {
 		t.Fatalf("invalid JSON: %v\n%s", err, raw)
 	}
 	const wantURL = "https://example.com/api/mcp"
-	if got.Transport == nil || *got.Transport != wantURL {
+	if got.Transport == nil || got.Transport.Endpoint != wantURL || got.Transport.Type != "streamable-http" {
 		t.Errorf("transport = %v, want %q", got.Transport, wantURL)
 	}
-	if len(got.Remotes) != 1 || got.Remotes[0].Type != "streamable-http" || got.Remotes[0].URL != wantURL {
-		t.Errorf("remotes = %+v, want one streamable-http remote at %s", got.Remotes, wantURL)
-	}
-	if strings.Join(got.SupportedProtocolVersions, ",") != "2026-07-28,2025-11-25" {
-		t.Errorf("supportedProtocolVersions = %v", got.SupportedProtocolVersions)
+	if got.ProtocolVersion != "2026-07-28" {
+		t.Errorf("protocolVersion = %q, want the preferred supported revision", got.ProtocolVersion)
 	}
 	if got.Capabilities.Tools == nil {
 		t.Error("capabilities.tools must be declared when a transport is live")
@@ -173,6 +170,47 @@ func TestBuildMCPServerCardWithEndpoint(t *testing.T) {
 	}
 	if got.ServerInfo != (MCPServerInfo{Name: "ocms", Title: "oCMS", Version: "1.0.0"}) {
 		t.Errorf("serverInfo = %+v, want the identity the endpoint reports at initialize", got.ServerInfo)
+	}
+}
+
+// Decode the public wire contract independently of MCPServerCard so a valid
+// JSON document with the wrong transport shape cannot pass by round-tripping.
+func TestBuildMCPServerCardSEP1649(t *testing.T) {
+	for _, site := range []string{"https://example.com", "https://example.com/"} {
+		t.Run(site, func(t *testing.T) {
+			raw := BuildMCPServerCard(site, "9.9.9", &MCPEndpoint{
+				Path: "/api/mcp", Name: "ocms", Title: "oCMS", Version: "1.0.0",
+				ProtocolVersions: []string{"2026-07-28", "2025-11-25"},
+			})
+			// Required fields and transport names come from SEP-1649:
+			// https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1649
+			var card struct {
+				Schema          string                                `json:"$schema"`
+				Version         string                                `json:"version"`
+				ProtocolVersion string                                `json:"protocolVersion"`
+				ServerInfo      struct{ Name, Title, Version string } `json:"serverInfo"`
+				Transport       struct{ Type, Endpoint string }       `json:"transport"`
+				Capabilities    map[string]json.RawMessage            `json:"capabilities"`
+			}
+			if err := json.Unmarshal(raw, &card); err != nil {
+				t.Fatalf("card does not match the SEP-1649 wire types: %v\n%s", err, raw)
+			}
+			if card.Schema != "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json" || card.Version != "1.0" || card.ProtocolVersion != "2026-07-28" {
+				t.Errorf("missing SEP-1649 schema or protocol identity: %+v", card)
+			}
+			if card.ServerInfo.Name != "ocms" || card.ServerInfo.Title != "oCMS" || card.ServerInfo.Version != "1.0.0" {
+				t.Errorf("serverInfo does not match the live endpoint: %+v", card.ServerInfo)
+			}
+			if card.Transport.Type != "streamable-http" || card.Transport.Endpoint != "https://example.com/api/mcp" {
+				t.Errorf("cannot discover the live transport: %+v", card.Transport)
+			}
+			if string(card.Capabilities["tools"]) != "{}" {
+				t.Errorf("tools capability = %s, want {}", card.Capabilities["tools"])
+			}
+			if strings.Contains(string(raw), `"remotes"`) || strings.Contains(string(raw), `"supportedProtocolVersions"`) {
+				t.Errorf("card mixes in fields from a different proposal: %s", raw)
+			}
+		})
 	}
 }
 

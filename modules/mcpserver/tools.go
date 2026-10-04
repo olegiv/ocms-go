@@ -59,6 +59,9 @@ type callRecordKey struct{}
 // the HTTP request's context.
 type requestContextKey struct{}
 
+// requestSettingsKey carries the stored policy refreshed for this request.
+type requestSettingsKey struct{}
+
 // callRecordFrom returns the record requestGuard attached to ctx. When there
 // is none (a handler invoked directly, as in unit tests), it returns a fresh
 // record and true: the caller then owns logging the call.
@@ -183,7 +186,11 @@ func wrapTool[In, Out any](m *Module, spec toolSpec, fn toolFunc[In, Out]) mcp.T
 			return nil, out, &toolError{Code: codeUnauthorized, Message: msgUnauthenticated}
 		}
 
-		settings := m.currentSettings()
+		settings, refreshed := callCtx.Value(requestSettingsKey{}).(Settings)
+		if !refreshed {
+			// Standalone in-process calls have no HTTP request snapshot.
+			settings = m.currentSettings()
+		}
 		call := &toolCall{actor: actorFor(id, settings), identity: id, settings: settings}
 		result, callErr := fn(m, callCtx, call, in)
 		if callErr == nil {
