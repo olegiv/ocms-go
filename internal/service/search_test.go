@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -481,6 +482,65 @@ func TestSearchAllPages(t *testing.T) {
 			t.Error("expected non-empty excerpt")
 		}
 	})
+}
+
+func TestSearchAllPagesLiteralWildcards(t *testing.T) {
+	db := searchTestDB(t)
+	service := NewSearchService(db)
+	seeds := []struct{ title, slug, body, status string }{
+		{"Rate 50% alpha", "percent", "ordinary", "draft"},
+		{"Rate 50x alpha", "percent-decoy", "ordinary", "published"},
+		{"file_name alpha", "underscore", "plain", "draft"},
+		{"filename alpha", "underscore-decoy", "plain", "draft"},
+		{"Wow! alpha", "escape", `C:\tmp`, "draft"},
+		{"Mixed alpha", "mixed", "literal !_!% and 50% file_name", "draft"},
+		{"Body match alpha", "body", "50%", "draft"},
+		{"plain alpha", "plain", "untouched", "published"},
+	}
+	for i, seed := range seeds {
+		_, err := db.Exec(`INSERT INTO pages (id, title, slug, body, status, updated_at)
+			VALUES (?, ?, ?, ?, ?, datetime('2026-01-01', '+' || ? || ' seconds'))`,
+			i+1, seed.title, seed.slug, seed.body, seed.status, i+1)
+		if err != nil {
+			t.Fatalf("insert %s: %v", seed.slug, err)
+		}
+	}
+	tests := []struct {
+		name, query   string
+		limit, offset int
+		ids           []int64
+		total         int64
+	}{
+		{"percent", "%", 10, 0, []int64{7, 6, 1}, 3},
+		{"underscore", "_", 10, 0, []int64{6, 3}, 2},
+		{"escape character", "!", 10, 0, []int64{6, 5}, 2},
+		{"backslash", `\`, 10, 0, []int64{5}, 1},
+		{"mixed literals", "!_!%", 10, 0, []int64{6}, 1},
+		{"title and body", "50%", 10, 0, []int64{7, 6, 1}, 3},
+		{"underscore substring", "_name", 10, 0, []int64{6, 3}, 2},
+		{"ordinary word", "alpha", 10, 0, []int64{8, 7, 6, 5, 4, 3, 2, 1}, 8},
+		{"no match", "absent%", 10, 0, nil, 0},
+		{"first page", "50%", 2, 0, []int64{7, 6}, 3},
+		{"second page", "50%", 2, 2, []int64{1}, 3},
+		{"beyond last page", "50%", 2, 4, nil, 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results, total, err := service.SearchAllPages(context.Background(), SearchParams{
+				Query: tt.query, Limit: tt.limit, Offset: tt.offset,
+			})
+			if err != nil {
+				t.Fatalf("SearchAllPages: %v", err)
+			}
+			var ids []int64
+			for _, result := range results {
+				ids = append(ids, result.ID)
+			}
+			if total != tt.total || !slices.Equal(ids, tt.ids) {
+				t.Errorf("query %q: ids=%v total=%d, want ids=%v total=%d", tt.query, ids, total, tt.ids, tt.total)
+			}
+		})
+	}
 }
 
 // Helper function

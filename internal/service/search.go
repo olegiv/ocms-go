@@ -314,7 +314,7 @@ func (s *SearchService) SearchAllPages(ctx context.Context, params SearchParams)
 		return []SearchResult{}, 0, nil
 	}
 
-	likePattern := "%" + params.Query + "%"
+	likePattern := "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(params.Query) + "%"
 
 	// Count total results using SQLC
 	total, err := s.queries.CountAdminSearchPages(ctx, store.CountAdminSearchPagesParams{

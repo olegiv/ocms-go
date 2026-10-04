@@ -439,10 +439,8 @@ for REST and MCP together:
   `get_tag`, `list_categories` and `get_category` (and REST v2) counts
   unpublished pages too, which reveals that drafts exist. Their content is not
   revealed.
-- **Media search paging.** With `search`, `list_media` returns only the first
-  page of matches, and `total` counts only the returned items.
-- **Status with category or tag.** When drafts are visible, `list_pages`
-  ignores `status` if `category_id` or `tag_id` is also given.
+- **Draft status with category or tag.** `list_pages` rejects `status: "draft"`
+  combined with `category_id` or `tag_id`; these combinations are unsupported.
 
 ## Follow-ups
 

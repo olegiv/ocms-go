@@ -5,6 +5,7 @@
 package cache
 
 import (
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -213,12 +214,12 @@ func TestStartCleanup(t *testing.T) {
 	c.StartCleanup(30 * time.Millisecond)
 	t.Cleanup(c.Stop)
 
-	time.Sleep(100 * time.Millisecond)
-
-	for _, k := range c.Keys() {
-		if k == "expiring" {
-			t.Error("expected cleanup to remove expired key")
+	deadline := time.Now().Add(2 * time.Second)
+	for slices.Contains(c.Keys(), "expiring") {
+		if time.Now().After(deadline) {
+			t.Fatal("expected cleanup to remove expired key")
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
