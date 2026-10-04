@@ -99,6 +99,7 @@ func TestDashboardReloadsStoredSettings(t *testing.T) {
 // second registry changes the shared database, without visiting its dashboard.
 func TestEndpointReloadsSharedState(t *testing.T) {
 	env := newTestEnv(t)
+	env.db.SetMaxOpenConns(1) // Keep table rename/recovery on one SQLite schema state.
 	env.setSettings(Settings{AllowDrafts: true})
 	draft := env.createPage(pageSeed{title: "Private draft", slug: "private-draft", status: model.PageStatusDraft})
 	published := env.createPage(pageSeed{title: "Public page", slug: "public-page", status: model.PageStatusPublished})

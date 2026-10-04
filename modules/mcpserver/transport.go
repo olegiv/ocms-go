@@ -30,8 +30,8 @@ const bearerRealm = `Bearer realm="oCMS MCP"`
 // first:
 //
 //	no-store → POST only → per-IP limit → in-flight cap → cross-origin check
-//	→ API key auth (+ WWW-Authenticate on 401) → mcp:access → TokenInfo
-//	→ per-key limit → no batches → stored activation/settings → request context
+//	→ stored activation/settings → API key auth (+ WWW-Authenticate on 401)
+//	→ mcp:access → TokenInfo → per-key limit → no batches → request context
 //	→ SDK Streamable HTTP handler (stateless, JSON responses)
 //
 // Cheap rejections run before API key verification (Argon2), so probing the
@@ -69,7 +69,6 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 
 	var h http.Handler = sdkHandler
 	h = withRequestContext(h)
-	h = m.withStoredState(h)
 	h = rejectBatches(maxRequestBodyBytes, h)
 	h = middleware.APIRateLimit(keyRateLimitRPS, keyRateLimitBurst)(h)
 	h = auth.RequireBearerToken(verifyValidatedKey, &auth.RequireBearerTokenOptions{
@@ -80,6 +79,7 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 	h = requireMCPAccess(m.logger, h)
 	h = middleware.APIKeyAuth(db)(h)
 	h = withBearerChallenge(h)
+	h = m.withStoredState(h)
 	h = crossOriginGuard(m.logger, h)
 	h = limitInFlight(m.logger, maxInFlightRequests, h)
 	h = middleware.NewGlobalRateLimiter(ipRateLimitRPS, ipRateLimitBurst).Middleware()(h)
