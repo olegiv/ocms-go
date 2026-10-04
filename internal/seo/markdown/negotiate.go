@@ -149,6 +149,23 @@ func AddVaryAccept(w http.ResponseWriter) {
 	appendVary(w.Header(), "Accept")
 }
 
+// HTMLToMarkdown converts a stored page body (TinyMCE HTML) to Markdown.
+//
+// It is the single conversion path shared by the public Markdown-for-Agents
+// representation and the MCP get_page tool, so both drop <script> and
+// <iframe> the same way and both refuse bodies over MaxHTMLBytes, which
+// bounds the CPU a single oversized page can cost.
+func HTMLToMarkdown(bodyHTML string) (string, error) {
+	if len(bodyHTML) > MaxHTMLBytes {
+		return "", fmt.Errorf("page body exceeds %d bytes (got %d)", MaxHTMLBytes, len(bodyHTML))
+	}
+	mdBody, err := htmltomarkdown.ConvertString(bodyHTML)
+	if err != nil {
+		return "", fmt.Errorf("convert html to markdown: %w", err)
+	}
+	return mdBody, nil
+}
+
 // PageToMarkdown renders a single page's HTML body as a Markdown document
 // with an H1 title, optional excerpt blockquote, optional "Published" line,
 // the converted body, and a trailing canonical Source link.
@@ -157,13 +174,9 @@ func AddVaryAccept(w http.ResponseWriter) {
 // HTML parser fails. Callers should fall back to the HTML representation on
 // error to avoid blanking the page.
 func PageToMarkdown(title, excerpt, bodyHTML, canonical string, publishedAt *time.Time, labels Labels) (string, error) {
-	if len(bodyHTML) > MaxHTMLBytes {
-		return "", fmt.Errorf("page body exceeds %d bytes (got %d)", MaxHTMLBytes, len(bodyHTML))
-	}
-
-	mdBody, err := htmltomarkdown.ConvertString(bodyHTML)
+	mdBody, err := HTMLToMarkdown(bodyHTML)
 	if err != nil {
-		return "", fmt.Errorf("convert html to markdown: %w", err)
+		return "", err
 	}
 
 	var b strings.Builder

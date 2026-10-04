@@ -1,0 +1,319 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package mcpserver
+
+import (
+	"fmt"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/checkbox"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
+)
+
+// DashboardData holds everything the MCP admin page renders.
+type DashboardData struct {
+	EndpointURL       string
+	SiteURLMissing    bool
+	ProtocolVersions  string
+	Version           string
+	AllowDrafts       bool
+	Instructions      string
+	MaxInstructions   int
+	ClaudeCodeCommand string
+	ClientConfigJSON  string
+	Tools             []ToolRow
+	Keys              []KeyRow
+	KeysError         bool
+}
+
+// ToolRow is one tool in the catalog table.
+type ToolRow struct {
+	Name        string
+	Title       string
+	Description string
+}
+
+// KeyRow is one API key holding the mcp:access permission.
+type KeyRow struct {
+	ID          int64
+	Name        string
+	Prefix      string
+	Permissions []string
+	Active      bool
+	Expired     bool
+	LastUsed    string
+	Expires     string
+}
+
+// DashboardPage renders /admin/mcp.
+templ DashboardPage(pc *adminviews.PageContext, data DashboardData) {
+	@adminviews.AdminLayout(pc) {
+		@adminviews.PageHeader(pc.T("mcp.title"), pc.T("mcp.description")) {
+			@button.Button(button.Props{Href: "/admin/api-keys/new", Variant: button.VariantOutline}) {
+				{ pc.T("mcp.create_key") }
+			}
+		}
+		<div class="space-y-6">
+			if data.SiteURLMissing {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					@alert.Description() {
+						{ pc.T("mcp.site_url_missing") }
+					}
+				}
+			}
+			@endpointCard(pc, data)
+			@connectCard(pc, data)
+			@settingsCard(pc, data)
+			@toolsCard(pc, data)
+			@keysCard(pc, data)
+		</div>
+	}
+}
+
+templ endpointCard(pc *adminviews.PageContext, data DashboardData) {
+	@card.Card(card.Props{ID: "mcp-endpoint"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mcp.endpoint_title") }
+			}
+			@card.Description() {
+				{ pc.T("mcp.endpoint_help") }
+			}
+		}
+		@card.Content() {
+			<dl class="grid gap-3 text-sm sm:grid-cols-[14rem_1fr]">
+				<dt class="text-muted-foreground">{ pc.T("mcp.endpoint_label") }</dt>
+				<dd><code class="break-all font-mono">{ data.EndpointURL }</code></dd>
+				<dt class="text-muted-foreground">{ pc.T("mcp.mode_label") }</dt>
+				<dd>
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ pc.T("mcp.read_only") }
+					}
+				</dd>
+				<dt class="text-muted-foreground">{ pc.T("mcp.protocol_versions") }</dt>
+				<dd><code class="break-all font-mono">{ data.ProtocolVersions }</code></dd>
+				<dt class="text-muted-foreground">{ pc.T("mcp.server_version") }</dt>
+				<dd>{ data.Version }</dd>
+			</dl>
+		}
+	}
+}
+
+templ connectCard(pc *adminviews.PageContext, data DashboardData) {
+	@card.Card(card.Props{ID: "mcp-connect"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mcp.connect_title") }
+			}
+			@card.Description() {
+				{ pc.T("mcp.connect_description") }
+			}
+		}
+		@card.Content() {
+			<div class="space-y-4">
+				<div class="space-y-2">
+					<h3 class="text-sm font-medium">{ pc.T("mcp.connect_claude_code") }</h3>
+					<pre class="overflow-x-auto rounded-md bg-muted p-3 text-xs"><code>{ data.ClaudeCodeCommand }</code></pre>
+				</div>
+				<div class="space-y-2">
+					<h3 class="text-sm font-medium">{ pc.T("mcp.connect_json") }</h3>
+					<pre class="overflow-x-auto rounded-md bg-muted p-3 text-xs"><code>{ data.ClientConfigJSON }</code></pre>
+				</div>
+				<p class="text-sm text-muted-foreground">{ pc.T("mcp.connect_key_warning") }</p>
+			</div>
+		}
+	}
+}
+
+templ settingsCard(pc *adminviews.PageContext, data DashboardData) {
+	@card.Card(card.Props{ID: "mcp-settings"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mcp.settings_title") }
+			}
+		}
+		@card.Content() {
+			<form method="POST" action="/admin/mcp" class="space-y-6">
+				<div class="flex items-start gap-3">
+					@checkbox.Checkbox(checkbox.Props{ID: "allow_drafts", Name: "allow_drafts", Value: "1", Checked: data.AllowDrafts})
+					<div class="grid gap-1">
+						@label.Label(label.Props{For: "allow_drafts"}) {
+							{ pc.T("mcp.allow_drafts") }
+						}
+						<p class="text-sm text-muted-foreground">{ pc.T("mcp.allow_drafts_help") }</p>
+					</div>
+				</div>
+				<div class="grid gap-2">
+					@label.Label(label.Props{For: "instructions"}) {
+						{ pc.T("mcp.instructions") }
+					}
+					@textarea.Textarea(textarea.Props{
+						ID:          "instructions",
+						Name:        "instructions",
+						Value:       data.Instructions,
+						Rows:        6,
+						Placeholder: pc.T("mcp.instructions_placeholder"),
+						Attributes:  templ.Attributes{"maxlength": fmt.Sprint(data.MaxInstructions)},
+					})
+					<p class="text-sm text-muted-foreground">{ pc.T("mcp.instructions_help", data.MaxInstructions) }</p>
+				</div>
+				@button.Button(button.Props{Type: button.TypeSubmit}) {
+					{ pc.T("mcp.save_button") }
+				}
+			</form>
+		}
+	}
+}
+
+templ toolsCard(pc *adminviews.PageContext, data DashboardData) {
+	@card.Card(card.Props{ID: "mcp-tools"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mcp.tools_title") }
+			}
+			@card.Description() {
+				{ pc.T("mcp.tools_description") }
+			}
+		}
+		@card.Content() {
+			<div class="overflow-x-auto">
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() {
+								{ pc.T("mcp.tool_name") }
+							}
+							@table.Head() {
+								{ pc.T("mcp.tool_description") }
+							}
+						}
+					}
+					@table.Body() {
+						for _, tool := range data.Tools {
+							@table.Row() {
+								@table.Cell() {
+									<code class="font-mono text-xs">{ tool.Name }</code>
+									<div class="text-xs text-muted-foreground">{ tool.Title }</div>
+								}
+								@table.Cell() {
+									<span class="text-sm">{ tool.Description }</span>
+								}
+							}
+						}
+					}
+				}
+			</div>
+		}
+	}
+}
+
+templ keysCard(pc *adminviews.PageContext, data DashboardData) {
+	@card.Card(card.Props{ID: "mcp-keys"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mcp.keys_title") }
+			}
+			@card.Description() {
+				{ pc.T("mcp.keys_description") }
+			}
+		}
+		@card.Content() {
+			if data.KeysError {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					@alert.Description() {
+						{ pc.T("mcp.keys_error") }
+					}
+				}
+			} else if len(data.Keys) == 0 {
+				<p class="text-sm text-muted-foreground">{ pc.T("mcp.keys_empty") }</p>
+			} else {
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() {
+									{ pc.T("label.name") }
+								}
+								@table.Head() {
+									{ pc.T("api_keys.key_prefix") }
+								}
+								@table.Head() {
+									{ pc.T("api_keys.permissions") }
+								}
+								@table.Head() {
+									{ pc.T("label.status") }
+								}
+								@table.Head() {
+									{ pc.T("api_keys.last_used") }
+								}
+								@table.Head() {
+									{ pc.T("api_keys.expires") }
+								}
+							}
+						}
+						@table.Body() {
+							for _, key := range data.Keys {
+								@table.Row() {
+									@table.Cell() {
+										<a href={ templ.SafeURL(fmt.Sprintf("/admin/api-keys/%d", key.ID)) } class="font-medium hover:underline">{ key.Name }</a>
+									}
+									@table.Cell() {
+										<code class="font-mono text-xs">{ key.Prefix }…</code>
+									}
+									@table.Cell() {
+										<div class="flex flex-wrap gap-1">
+											for _, perm := range key.Permissions {
+												@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+													{ perm }
+												}
+											}
+										</div>
+									}
+									@table.Cell() {
+										@keyStatusBadge(pc, key)
+									}
+									@table.Cell() {
+										if key.LastUsed != "" {
+											{ key.LastUsed }
+										} else {
+											<span class="text-muted-foreground">{ pc.T("mcp.never") }</span>
+										}
+									}
+									@table.Cell() {
+										if key.Expires != "" {
+											{ key.Expires }
+										} else {
+											<span class="text-muted-foreground">{ pc.T("mcp.never") }</span>
+										}
+									}
+								}
+							}
+						}
+					}
+				</div>
+			}
+		}
+	}
+}
+
+templ keyStatusBadge(pc *adminviews.PageContext, key KeyRow) {
+	if !key.Active {
+		@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+			{ pc.T("label.inactive") }
+		}
+	} else if key.Expired {
+		@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+			{ pc.T("api_keys.expired") }
+		}
+	} else {
+		@badge.Badge() {
+			{ pc.T("label.active") }
+		}
+	}
+}

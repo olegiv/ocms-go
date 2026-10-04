@@ -77,7 +77,7 @@ func TestBuildAgentSkillsIndex(t *testing.T) {
 }
 
 func TestBuildMCPServerCard(t *testing.T) {
-	raw := BuildMCPServerCard("https://example.com", "1.2.3")
+	raw := BuildMCPServerCard("https://example.com", "1.2.3", nil)
 
 	var got MCPServerCard
 	if err := json.Unmarshal(raw, &got); err != nil {
@@ -102,7 +102,7 @@ func TestBuildMCPServerCard(t *testing.T) {
 }
 
 func TestBuildMCPServerCardDefaultsVersion(t *testing.T) {
-	raw := BuildMCPServerCard("https://example.com", "")
+	raw := BuildMCPServerCard("https://example.com", "", nil)
 	var got MCPServerCard
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
@@ -138,5 +138,49 @@ func TestLinkHeaderHomepage(t *testing.T) {
 		if !strings.Contains(h, want) {
 			t.Errorf("LinkHeaderHomepage missing %q\nfull value: %s", want, h)
 		}
+	}
+}
+
+func TestBuildMCPServerCardWithEndpoint(t *testing.T) {
+	endpoint := &MCPEndpoint{
+		Path:             "/api/mcp",
+		Version:          "1.0.0",
+		ProtocolVersions: []string{"2026-07-28", "2025-11-25"},
+	}
+	raw := BuildMCPServerCard("https://example.com/", "", endpoint)
+
+	var got MCPServerCard
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, raw)
+	}
+	const wantURL = "https://example.com/api/mcp"
+	if got.Transport == nil || *got.Transport != wantURL {
+		t.Errorf("transport = %v, want %q", got.Transport, wantURL)
+	}
+	if len(got.Remotes) != 1 || got.Remotes[0].Type != "streamable-http" || got.Remotes[0].URL != wantURL {
+		t.Errorf("remotes = %+v, want one streamable-http remote at %s", got.Remotes, wantURL)
+	}
+	if strings.Join(got.SupportedProtocolVersions, ",") != "2026-07-28,2025-11-25" {
+		t.Errorf("supportedProtocolVersions = %v", got.SupportedProtocolVersions)
+	}
+	if got.Capabilities.Tools == nil {
+		t.Error("capabilities.tools must be declared when a transport is live")
+	}
+	if got.Capabilities.REST == nil {
+		t.Error("capabilities.rest must still point at the REST API")
+	}
+	if got.ServerInfo.Version != "1.0.0" {
+		t.Errorf("version = %q, want the endpoint version when no override is set", got.ServerInfo.Version)
+	}
+}
+
+func TestBuildMCPServerCardVersionOverrideWins(t *testing.T) {
+	raw := BuildMCPServerCard("https://example.com", "2.5.0", &MCPEndpoint{Path: "/api/mcp", Version: "1.0.0"})
+	var got MCPServerCard
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if got.ServerInfo.Version != "2.5.0" {
+		t.Errorf("version = %q, want the configured override 2.5.0", got.ServerInfo.Version)
 	}
 }

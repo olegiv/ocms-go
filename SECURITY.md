@@ -61,6 +61,20 @@ oCMS implements defense-in-depth security measures:
 - **Global API CIDR Policy**: Restrict all API access to trusted networks
 - **Fail-Closed Forwarding**: Reject requests with malformed X-Forwarded-For chains
 
+### MCP Server Security
+- **Opt-in Endpoint**: The MCP Server module starts inactive; `/api/mcp` returns 404 until an admin enables it
+- **Explicit Permission**: API keys need `mcp:access`; REST integration keys never become usable by AI agents implicitly
+- **Shared API Key Policies**: The same authentication middleware as REST v2 (CIDR allowlists, expiry, maximum lifetime, IP-change revocation, Argon2 verification)
+- **Read-Only Tools**: No tool writes data; a drift test fails if a tool without the read-only annotation is registered
+- **Draft Confidentiality**: Drafts are exposed only when an admin enables it and the key holds `pages:read`; hidden drafts answer "not found"
+- **No Personal Data**: Author email addresses, users, form submissions, settings and keys are never returned
+- **Origin Validation**: Cross-origin browser requests are rejected (`Sec-Fetch-Site` / `Origin`), countering DNS rebinding
+- **Resource Limits**: 256 KiB request body, 32 concurrent requests, per-IP and per-key rate limits, 30 s timeout with cancellation
+- **Panic Isolation**: Tool and protocol panics become internal errors instead of crashing the process
+- **Prompt-Injection Guidance**: Server instructions tell agents that returned content is website data, not instructions
+- **Private Responses**: `Cache-Control: no-store` and MCP `cacheScope: private`; internal error details are never sent to agents
+- **Audit Logging**: One structured log line per tool call (key id and prefix, client, outcome; never keys, arguments or content); settings changes go to the event log
+
 ### Request Security
 - **CSRF Protection**: Fetch Metadata headers with Origin/Referer fallback
 - **SQL Injection Prevention**: 100% SQLC-generated parameterized queries
@@ -119,6 +133,7 @@ For detailed information, see:
 - [Login Security](docs/login-security.md) - Rate limiting and account lockout
 - [CSRF Protection](docs/csrf.md) - CSRF configuration and trusted origins
 - [hCaptcha Integration](docs/hcaptcha.md) - Bot protection setup
+- [MCP Server](docs/mcp-module.md) - AI agent access, visibility rules, limits and threat model
 
 ## Security Updates
 

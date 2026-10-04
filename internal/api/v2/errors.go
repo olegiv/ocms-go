@@ -41,6 +41,15 @@ func (e *Error) Error() string { return e.Msg }
 // Unwrap exposes an underlying error for errors.Is / errors.As.
 func (e *Error) Unwrap() error { return e.Wrap }
 
+// Code returns the stable machine-readable code ("validation_error",
+// "not_found", …) that REST responses carry in error.code. Non-HTTP
+// transports such as MCP report it too, so a failure has the same code
+// whichever transport surfaced it.
+func (e *Error) Code() string {
+	_, code := statusAndCodeForKind(e.Kind)
+	return code
+}
+
 // NewError constructs a domain error with the given kind and message.
 func NewError(kind ErrorKind, msg string) *Error {
 	return &Error{Kind: kind, Msg: msg}

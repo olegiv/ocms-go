@@ -2553,3 +2553,39 @@ func TestPublishedPageForRouteServesFromCacheWithinItsLanguage(t *testing.T) {
 		t.Fatalf("publishedPageForRoute() error = %v, want sql.ErrNoRows for another language's slug", err)
 	}
 }
+
+// TestFrontendHandler_MCPServerCard_FollowsEndpointProvider verifies the card
+// names the MCP endpoint only while the provider reports one, so toggling the
+// MCP module in Admin > Modules is reflected without a restart.
+func TestFrontendHandler_MCPServerCard_FollowsEndpointProvider(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', 'https://example.com', 'string', 'en')`); err != nil {
+		t.Fatalf("seed site_url: %v", err)
+	}
+	h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+
+	var live *seo.MCPEndpoint
+	h.SetMCPEndpointProvider(func() *seo.MCPEndpoint { return live })
+
+	serve := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/mcp/server-card.json", nil)
+		w := httptest.NewRecorder()
+		h.MCPServerCard(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d; want %d", w.Code, http.StatusOK)
+		}
+		return w.Body.String()
+	}
+
+	if body := serve(); !strings.Contains(body, `"transport": null`) || strings.Contains(body, "remotes") {
+		t.Errorf("inactive MCP must publish a null transport and no remotes; got: %s", body)
+	}
+
+	live = &seo.MCPEndpoint{Path: "/api/mcp", Version: "1.0.0", ProtocolVersions: []string{"2026-07-28"}}
+	body := serve()
+	for _, want := range []string{`"transport": "https://example.com/api/mcp"`, `"type": "streamable-http"`, `"2026-07-28"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("active MCP card missing %s; got: %s", want, body)
+		}
+	}
+}

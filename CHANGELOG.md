@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **MCP server for AI agents** — a new opt-in `mcp` module serves the Model
+  Context Protocol over stateless Streamable HTTP at `POST /api/mcp`, built on
+  the official Go SDK (`modelcontextprotocol/go-sdk` v1.8.0, protocol versions
+  2024-11-05 through 2026-07-28). Ten read-only tools search, list and read
+  pages (HTML or Markdown), media, tags and categories through the REST v2
+  services, with the same visibility rules and validation; tool schemas come
+  from the same struct tags. Access requires an API key with the new
+  `mcp:access` permission, and every API key policy applies. Drafts are
+  hidden unless an admin exposes them and the key holds `pages:read`. Calls are
+  limited per IP and per key, and each one is logged without keys, arguments
+  or content. The admin page at `/admin/mcp` shows client snippets, the drafts
+  policy, instructions for agents, the tool catalog and the keys with MCP
+  access. See `docs/mcp-module.md`.
+- **MCP server card advertises the live endpoint** — while the MCP module is
+  active, `/.well-known/mcp/server-card.json` names the endpoint in
+  `transport` and in SEP-2127 `remotes`, and lists the supported protocol
+  versions. While the module is inactive, it keeps the REST-only card.
+- **Opt-in modules** — modules can implement `module.ActivationDefaulter` to
+  register inactive until an administrator enables them.
+
 ## [0.24.0] - 2026-10-01
 
 ### Added

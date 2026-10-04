@@ -2333,6 +2333,16 @@
             "translation": "Create, update, delete tags/categories"
         },
         {
+            "id": "api_keys.perm_mcp",
+            "message": "MCP",
+            "translation": "MCP"
+        },
+        {
+            "id": "api_keys.perm_mcp_access",
+            "message": "Connect AI agents over MCP (/api/mcp); data access still follows the permissions above",
+            "translation": "Connect AI agents over MCP (/api/mcp); data access still follows the permissions above"
+        },
+        {
             "id": "api_keys.expiration",
             "message": "Expiration Date",
             "translation": "Expiration Date"

@@ -334,8 +334,13 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 	for _, name := range r.order {
 		mod, err := queries.GetModule(ctx, name)
 		if errors.Is(err, sql.ErrNoRows) {
-			// Module not in database — check if it restricts environments
+			// Module not in database — check if it is opt-in or restricts
+			// environments.
 			defaultActive := true
+			if defaulter, ok := r.modules[name].(ActivationDefaulter); ok && !defaulter.ActiveByDefault() {
+				defaultActive = false
+				r.logger.Info("opt-in module registered inactive", "module", name)
+			}
 			if checker, ok := r.modules[name].(EnvironmentChecker); ok && r.ctx != nil {
 				allowed := false
 				for _, env := range checker.AllowedEnvs() {

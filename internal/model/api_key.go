@@ -22,6 +22,13 @@ const (
 	PermissionMediaWrite    = "media:write"
 	PermissionTaxonomyRead  = "taxonomy:read"
 	PermissionTaxonomyWrite = "taxonomy:write"
+
+	// PermissionMCPAccess lets a key connect to the MCP server (/api/mcp).
+	// It grants no data access by itself: tools still apply the pages,
+	// media and taxonomy permissions above. Keeping it separate means an
+	// existing integration key never becomes usable by AI agents unless an
+	// administrator opts it in.
+	PermissionMCPAccess = "mcp:access"
 )
 
 // AllPermissions returns all available API permissions.
@@ -33,6 +40,7 @@ func AllPermissions() []string {
 		PermissionMediaWrite,
 		PermissionTaxonomyRead,
 		PermissionTaxonomyWrite,
+		PermissionMCPAccess,
 	}
 }
 

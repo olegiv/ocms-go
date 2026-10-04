@@ -131,6 +131,18 @@ type EnvironmentChecker interface {
 	AllowedEnvs() []string
 }
 
+// ActivationDefaulter is an optional interface for modules that must be
+// switched on deliberately. When such a module is first registered in the
+// database and ActiveByDefault returns false, it is inserted as inactive
+// (is_active=0), the same way a module outside its allowed environments is.
+//
+// It exists for modules that open a new remote surface, such as the MCP
+// server: upgrading oCMS must not expose an endpoint nobody asked for. Later
+// starts keep whatever an administrator chose in Admin > Modules.
+type ActivationDefaulter interface {
+	ActiveByDefault() bool
+}
+
 // Migration represents a database migration for a module.
 type Migration struct {
 	Version     int64

@@ -373,6 +373,7 @@ func TestAllPermissions(t *testing.T) {
 		PermissionMediaWrite,
 		PermissionTaxonomyRead,
 		PermissionTaxonomyWrite,
+		PermissionMCPAccess,
 	}
 
 	if len(perms) != len(expected) {

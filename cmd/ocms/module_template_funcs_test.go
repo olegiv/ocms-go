@@ -17,6 +17,7 @@ import (
 	"github.com/olegiv/ocms-go/modules/example"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 	"github.com/olegiv/ocms-go/modules/informer"
+	"github.com/olegiv/ocms-go/modules/mcpserver"
 	"github.com/olegiv/ocms-go/modules/migrator"
 	"github.com/olegiv/ocms-go/modules/privacy"
 	"github.com/olegiv/ocms-go/modules/sentinel"
@@ -43,6 +44,7 @@ func allModules() []module.Module {
 		hcaptcha.New(),
 		privacy.New(),
 		informer.New(),
+		mcpserver.New(),
 		sentinel.New(),
 		migrator.New(),
 		dbmanager.New(),

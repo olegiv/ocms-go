@@ -130,6 +130,14 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 - **Rate Limiting**: Per-key and global rate limiting
 - **API Documentation**: Built-in API documentation page
 
+### MCP Server (AI Agents)
+- **Model Context Protocol endpoint**: AI agents (Claude Code, Cursor, VS Code, Codex) read site content over Streamable HTTP at `/api/mcp`
+- **Official Go SDK**: Built on `modelcontextprotocol/go-sdk`, protocol versions 2024-11-05 through 2026-07-28
+- **Read-only tools**: Search, list and read pages (HTML or Markdown), media, tags and categories, with the same visibility rules as REST v2
+- **Opt-in and key-gated**: Inactive until enabled; API keys need the `mcp:access` permission and every API key policy applies
+- **Drafts hidden by default**: Exposed only when the admin allows it and the key holds `pages:read`
+- **Discoverable**: Advertised in `/.well-known/mcp/server-card.json` while active
+
 ### SEO
 - **Meta Tags**: Custom title, description, and keywords per page
 - **Open Graph**: Full Open Graph and Twitter Card support
@@ -619,6 +627,26 @@ The REST surface is `/api/v2`. The OpenAPI 3.1 spec is generated from Go types v
   }
 }
 ```
+
+## MCP Server
+
+The opt-in **MCP Server** module lets AI agents read site content over the [Model Context Protocol](https://modelcontextprotocol.io). Enable it in **Admin > Modules**, then create an API key with the **MCP** permission (`mcp:access`) in **Admin > API Keys**. The admin page at `/admin/mcp` shows the endpoint, client configuration snippets, the tool catalog, and the drafts and instructions settings.
+
+```bash
+claude mcp add --transport http ocms https://example.com/api/mcp \
+  --header "Authorization: Bearer <YOUR_API_KEY>"
+```
+
+| Tool | Purpose |
+|------|---------|
+| `get_site_info` | Site name, URL, languages, and what the key may access |
+| `search_pages` | Full-text search with excerpts |
+| `list_pages` / `get_page` | Browse pages; read one by id or slug as HTML or Markdown |
+| `list_media` / `get_media` | Media library items; `get_media` adds image variants, folder, and translations |
+| `list_tags` / `get_tag` | Tags with usage counts |
+| `list_categories` / `get_category` | Category tree or flat list |
+
+All tools are read-only. See [docs/mcp-module.md](docs/mcp-module.md) for authentication, visibility rules, limits, logging, and security notes.
 
 ## Theme Development
 

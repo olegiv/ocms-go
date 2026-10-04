@@ -428,6 +428,11 @@ type FrontendHandler struct {
 	openAPISpecProvider func() ([]byte, error)
 	openAPISHA256Mu     sync.Mutex
 	openAPISHA256Val    string
+
+	// mcpEndpointProvider reports the live MCP endpoint for the server card,
+	// or nil while the MCP module is inactive. Consulted per request because
+	// the module can be toggled at runtime from Admin > Modules.
+	mcpEndpointProvider func() *seo.MCPEndpoint
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
@@ -471,6 +476,13 @@ func (h *FrontendHandler) SetModuleTemplateFuncsProvider(p ModuleTemplateFuncsPr
 // Called from main.go once the v2 docs server is ready.
 func (h *FrontendHandler) SetOpenAPISpecProvider(fn func() ([]byte, error)) {
 	h.openAPISpecProvider = fn
+}
+
+// SetMCPEndpointProvider wires the source of the live MCP endpoint advertised
+// in /.well-known/mcp/server-card.json. The provider must return nil while no
+// MCP transport is reachable, so the card keeps declaring "transport": null.
+func (h *FrontendHandler) SetMCPEndpointProvider(fn func() *seo.MCPEndpoint) {
+	h.mcpEndpointProvider = fn
 }
 
 // openAPISHA256 returns the cached SHA-256 of the OpenAPI JSON document, or
@@ -1788,9 +1800,10 @@ func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Reques
 }
 
 // MCPServerCard serves /.well-known/mcp/server-card.json following the
-// draft SEP-1649 schema. No MCP transport is published ("transport": null)
-// — oCMS exposes a REST fallback via capabilities.rest.openapi. When a
-// real MCP transport ships, update seo.BuildMCPServerCard accordingly.
+// draft SEP-1649 schema (plus SEP-2127 remotes). While the MCP module is
+// inactive no transport is published ("transport": null) and the card points
+// at the REST API via capabilities.rest.openapi; while it is active the card
+// names the Streamable HTTP endpoint.
 func (h *FrontendHandler) MCPServerCard(w http.ResponseWriter, r *http.Request) {
 	siteURL, ok := h.requireConfiguredSiteURL(w, r, "MCP server card")
 	if !ok {
@@ -1802,7 +1815,11 @@ func (h *FrontendHandler) MCPServerCard(w http.ResponseWriter, r *http.Request) 
 	} else if cfg, err := h.queries.GetConfigByKey(r.Context(), model.ConfigKeyMCPServerVersion); err == nil {
 		version = cfg.Value
 	}
-	body := seo.BuildMCPServerCard(siteURL, version)
+	var endpoint *seo.MCPEndpoint
+	if h.mcpEndpointProvider != nil {
+		endpoint = h.mcpEndpointProvider()
+	}
+	body := seo.BuildMCPServerCard(siteURL, version, endpoint)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")

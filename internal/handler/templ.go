@@ -731,6 +731,12 @@ func buildPermissionGroups(existingPerms string) []adminviews.PermissionGroup {
 				{Value: "taxonomy:write", DescKey: "api_keys.perm_taxonomy_write", Checked: strings.Contains(existingPerms, "taxonomy:write")},
 			},
 		},
+		{
+			TitleKey: "api_keys.perm_mcp",
+			Permissions: []adminviews.PermissionOption{
+				{Value: model.PermissionMCPAccess, DescKey: "api_keys.perm_mcp_access", Checked: strings.Contains(existingPerms, model.PermissionMCPAccess)},
+			},
+		},
 	}
 }
 

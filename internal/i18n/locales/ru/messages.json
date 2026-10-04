@@ -2333,6 +2333,16 @@
             "translation": "Создание, обновление, удаление тегов/категорий"
         },
         {
+            "id": "api_keys.perm_mcp",
+            "message": "MCP",
+            "translation": "MCP"
+        },
+        {
+            "id": "api_keys.perm_mcp_access",
+            "message": "Connect AI agents over MCP (/api/mcp); data access still follows the permissions above",
+            "translation": "Подключение ИИ-агентов по MCP (/api/mcp); доступ к данным по-прежнему определяется разрешениями выше"
+        },
+        {
             "id": "api_keys.expiration",
             "message": "Expiration Date",
             "translation": "Срок действия"

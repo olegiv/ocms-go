@@ -122,34 +122,67 @@ type MCPServerInfo struct {
 	Version string `json:"version"`
 }
 
-// MCPRESTCapability advertises a REST fallback when no MCP transport is
-// live. It is not part of the formal SEP-1649 spec but is accepted in
-// the "capabilities" free-form object.
+// MCPRESTCapability advertises the REST API alongside (or, when no MCP
+// transport is live, instead of) the MCP endpoint. It is not part of the
+// formal SEP-1649 spec but is accepted in the "capabilities" free-form object.
 type MCPRESTCapability struct {
 	OpenAPI string `json:"openapi"`
 }
 
+// MCPToolsCapability declares that the live MCP endpoint serves tools. It
+// marshals as an empty object, matching the MCP capabilities shape.
+type MCPToolsCapability struct{}
+
 // MCPCapabilities is the capabilities object declared by the server.
 type MCPCapabilities struct {
-	REST *MCPRESTCapability `json:"rest,omitempty"`
+	Tools *MCPToolsCapability `json:"tools,omitempty"`
+	REST  *MCPRESTCapability  `json:"rest,omitempty"`
+}
+
+// MCPRemote is one remote endpoint in the SEP-2127 card shape (the successor
+// of SEP-1649, aligned with the MCP registry server.json "remotes").
+type MCPRemote struct {
+	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+// MCPEndpoint describes a live MCP transport. Callers pass it only while an
+// MCP server is actually reachable, so the card never advertises an endpoint
+// that would answer 404.
+type MCPEndpoint struct {
+	Path             string   // site-relative endpoint path, e.g. "/api/mcp"
+	Version          string   // server implementation version
+	ProtocolVersions []string // MCP protocol revisions the endpoint negotiates
 }
 
 // MCPServerCard follows the draft SEP-1649 shape
-// (github.com/modelcontextprotocol/modelcontextprotocol PR #2127).
+// (github.com/modelcontextprotocol/modelcontextprotocol PR #2127), plus the
+// SEP-2127 "remotes" and "supportedProtocolVersions" fields when a transport
+// is live, so scanners of either draft find the endpoint.
 type MCPServerCard struct {
-	ServerInfo   MCPServerInfo   `json:"serverInfo"`
-	Transport    *string         `json:"transport"` // nil => null in JSON
-	Capabilities MCPCapabilities `json:"capabilities"`
+	ServerInfo                MCPServerInfo   `json:"serverInfo"`
+	Transport                 *string         `json:"transport"` // nil => null in JSON
+	Capabilities              MCPCapabilities `json:"capabilities"`
+	Remotes                   []MCPRemote     `json:"remotes,omitempty"`
+	SupportedProtocolVersions []string        `json:"supportedProtocolVersions,omitempty"`
 }
 
-// BuildMCPServerCard returns a minimal MCP Server Card pointing at the
-// REST fallback. transport is null because oCMS does not yet run an MCP
-// transport — this is intentionally honest: publishing a card describing
-// a non-existent stdio/http transport would be worse than declaring the
-// absence. Agents that accept REST fallbacks (Claude, Cursor) can still
-// discover the API surface via capabilities.rest.openapi.
-func BuildMCPServerCard(siteURL, version string) []byte {
+// mcpStreamableHTTP is the transport type for MCP's Streamable HTTP transport.
+const mcpStreamableHTTP = "streamable-http"
+
+// BuildMCPServerCard returns the MCP Server Card.
+//
+// Without an endpoint the card is intentionally honest: transport is null and
+// only the REST fallback is declared, because publishing a transport that is
+// not running would be worse than declaring its absence. With an endpoint it
+// names the Streamable HTTP URL in both draft shapes and still links the REST
+// API. version (the admin-editable mcp_server_version setting) wins over the
+// endpoint's own version; both empty falls back to "0.0.0".
+func BuildMCPServerCard(siteURL, version string, endpoint *MCPEndpoint) []byte {
 	base := normalizeSiteURL(siteURL)
+	if version == "" && endpoint != nil {
+		version = endpoint.Version
+	}
 	if version == "" {
 		version = "0.0.0"
 	}
@@ -164,6 +197,14 @@ func BuildMCPServerCard(siteURL, version string) []byte {
 				OpenAPI: base + "/api/v2/openapi.json",
 			},
 		},
+	}
+	if endpoint != nil {
+		endpointURL := base + endpoint.Path
+		card.ServerInfo.Name = "oCMS"
+		card.Transport = &endpointURL
+		card.Capabilities.Tools = &MCPToolsCapability{}
+		card.Remotes = []MCPRemote{{Type: mcpStreamableHTTP, URL: endpointURL}}
+		card.SupportedProtocolVersions = endpoint.ProtocolVersions
 	}
 	out, _ := json.MarshalIndent(card, "", "  ")
 	return out
