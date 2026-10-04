@@ -98,7 +98,9 @@ type endpointHandler struct {
 }
 
 // serverState pairs the active settings with the server built from them, so
-// a request never sees the settings of one save with the server of another.
+// the two are always replaced together. A tool call reads the current settings
+// when it runs, so it applies the newest drafts policy even if its request was
+// dispatched by the server of an earlier save.
 type serverState struct {
 	settings Settings
 	server   *mcp.Server

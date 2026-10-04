@@ -10,6 +10,7 @@ import (
 	"math"
 	"runtime/debug"
 	"time"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -205,12 +206,17 @@ func wrapTool[In, Out any](m *Module, spec toolSpec, fn toolFunc[In, Out]) mcp.T
 	}
 }
 
+// maxLoggedClientValue caps client-supplied strings (an unknown tool's name,
+// the client's name and version) in the call log, so one key cannot write
+// request-sized log lines.
+const maxLoggedClientValue = 128
+
 // logToolCall writes the one log line of a tools/call. Arguments and results
 // are never logged: they can carry unpublished content. The cause of an
 // internal error is logged as-is.
 func (m *Module) logToolCall(req *mcp.CallToolRequest, rec *callRecord, elapsed time.Duration) {
 	attrs := []any{
-		"tool", toolName(req),
+		"tool", clip(toolName(req)),
 		"outcome", rec.outcome,
 		"duration_ms", elapsed.Milliseconds(),
 	}
@@ -223,7 +229,7 @@ func (m *Module) logToolCall(req *mcp.CallToolRequest, rec *callRecord, elapsed 
 	}
 	if req != nil {
 		if client := req.ClientInfo(); client != nil {
-			attrs = append(attrs, "client_name", client.Name, "client_version", client.Version)
+			attrs = append(attrs, "client_name", clip(client.Name), "client_version", clip(client.Version))
 		}
 		if version := req.ProtocolVersion(); version != "" {
 			attrs = append(attrs, "protocol_version", version)
@@ -243,6 +249,18 @@ func (m *Module) logToolCall(req *mcp.CallToolRequest, rec *callRecord, elapsed 
 		level = slog.LevelWarn
 	}
 	m.logger.Log(context.Background(), level, "MCP tool call", attrs...)
+}
+
+// clip shortens a client-supplied string for the log, marking the cut.
+func clip(s string) string {
+	if len(s) <= maxLoggedClientValue {
+		return s
+	}
+	cut := maxLoggedClientValue
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
 }
 
 // toolName returns the tool a call names, or "" when the request carries none.

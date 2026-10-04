@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -193,5 +194,31 @@ func TestSDKLoggerKeepsWarningsOnly(t *testing.T) {
 	}
 	if v, ok := recordAttr(logs.find("worth knowing")[0], "component"); !ok || v.String() != "mcp-server" {
 		t.Error("SDK log lines must carry their component")
+	}
+}
+
+// TestCallLogClipsClientValues verifies client-supplied strings are capped in
+// the call log, so a request-sized unknown tool name cannot become a
+// request-sized log line.
+func TestCallLogClipsClientValues(t *testing.T) {
+	if got := clip("list_pages"); got != "list_pages" {
+		t.Errorf("clip changed a short value: %q", got)
+	}
+	long := clip(strings.Repeat("é", 200))
+	if !strings.HasSuffix(long, "…") || len(long) > maxLoggedClientValue+len("…") || !utf8.ValidString(long) {
+		t.Errorf("clip(long) = %d bytes, valid UTF-8 %v", len(long), utf8.ValidString(long))
+	}
+
+	env := newTestEnv(t)
+	session := env.connect(env.createKey(model.PermissionMCPAccess))
+	if _, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: strings.Repeat("x", 4096)}); err == nil {
+		t.Fatal("an unknown tool must be a JSON-RPC error")
+	}
+	lines := env.logs.find("MCP tool call")
+	if len(lines) != 1 {
+		t.Fatalf("call log lines = %d, want 1", len(lines))
+	}
+	if tool, _ := recordAttr(lines[0], "tool"); len(tool.String()) > maxLoggedClientValue+len("…") {
+		t.Errorf("logged tool name is %d bytes, want it clipped", len(tool.String()))
 	}
 }

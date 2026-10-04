@@ -74,7 +74,7 @@ oCMS implements defense-in-depth security measures:
 - **Panic Isolation**: Panics in the endpoint, the protocol layer and tools become internal errors instead of crashing the process
 - **Prompt-Injection Guidance**: Server instructions tell agents that returned content is website data, not instructions
 - **Private Responses**: `Cache-Control: no-store` and MCP `cacheScope: private`; internal error details are never sent to agents
-- **Audit Logging**: One structured log line per tool call (key id and prefix, client, outcome; never keys, arguments or content); settings changes go to the event log
+- **Audit Logging**: One structured log line per dispatched tool call (key id and prefix, client, outcome; never keys or arguments; the cause of an internal failure is logged as-is and can quote returned data); settings changes go to the event log
 
 ### Request Security
 - **CSRF Protection**: Fetch Metadata headers with Origin/Referer fallback

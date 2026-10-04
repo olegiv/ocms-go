@@ -85,6 +85,9 @@ func TestGetSiteInfo(t *testing.T) {
 	if info.Access.DraftsVisible {
 		t.Error("drafts must not be visible while the site policy hides them")
 	}
+	if info.Server.Name != serverName || info.Server.Title != serverTitle {
+		t.Errorf("server = %+v, want the identity reported at initialize", info.Server)
+	}
 	if !info.Server.ReadOnly || info.Server.MaxPerPage != maxPerPage {
 		t.Errorf("server = %+v", info.Server)
 	}

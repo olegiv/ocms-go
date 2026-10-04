@@ -60,7 +60,8 @@ type AccessDetails struct {
 
 // ServerDetails describes this MCP server.
 type ServerDetails struct {
-	Name       string `json:"name"`
+	Name       string `json:"name" doc:"Server name, as reported at initialize."`
+	Title      string `json:"title" doc:"Display name of the server."`
 	Version    string `json:"version"`
 	ReadOnly   bool   `json:"read_only" doc:"True when the server exposes read-only tools only."`
 	MaxPerPage int    `json:"max_per_page" doc:"Largest per_page value list tools accept."`
@@ -102,7 +103,8 @@ func (m *Module) getSiteInfo(ctx context.Context, call *toolCall, _ SiteInfoInpu
 			DraftsVisible: draftsVisible(call.actor),
 		},
 		Server: ServerDetails{
-			Name:       "oCMS",
+			Name:       serverName,
+			Title:      serverTitle,
 			Version:    moduleVersion,
 			ReadOnly:   true,
 			MaxPerPage: maxPerPage,
@@ -177,6 +179,7 @@ func (m *Module) resolveSiteURL(ctx context.Context) (string, siteURLStatus, err
 	}
 	value := strings.TrimRight(strings.TrimSpace(raw), "/")
 	if value == "" {
+		m.invalidSiteURL.Store(nil)
 		return "", siteURLUnset, nil
 	}
 	u, err := url.Parse(value)
@@ -187,6 +190,7 @@ func (m *Module) resolveSiteURL(ctx context.Context) (string, siteURLStatus, err
 		}
 		return "", siteURLInvalid, nil
 	}
+	m.invalidSiteURL.Store(nil)
 	return value, siteURLValid, nil
 }
 

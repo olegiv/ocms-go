@@ -514,6 +514,8 @@ func TestSiteURLValidation(t *testing.T) {
 		{"example.com", "", siteURLInvalid},
 		{"example.com", "", siteURLInvalid}, // unchanged: not logged again
 		{"ftp://example.com/pub", "", siteURLInvalid},
+		{"https://example.com", "https://example.com", siteURLValid},
+		{"ftp://example.com/pub", "", siteURLInvalid}, // broken again after a fix: logged again
 	} {
 		env.setConfig(model.ConfigKeySiteURL, tc.value)
 		got, status, err := env.module.resolveSiteURL(context.Background())
@@ -521,8 +523,8 @@ func TestSiteURLValidation(t *testing.T) {
 			t.Errorf("resolveSiteURL(%q) = %q, %v, %v; want %q, %v", tc.value, got, status, err, tc.want, tc.status)
 		}
 	}
-	if warned := env.logs.find("configured site URL is not an absolute http(s) URL; MCP results omit page URLs"); len(warned) != 3 {
-		t.Errorf("invalid site URL warnings = %d, want one per change of value (3)", len(warned))
+	if warned := env.logs.find("configured site URL is not an absolute http(s) URL; MCP results omit page URLs"); len(warned) != 4 {
+		t.Errorf("invalid site URL warnings = %d, want one per change of value (4)", len(warned))
 	}
 }
 

@@ -442,6 +442,11 @@ func (r *Registry) SetActive(name string, active bool) error {
 		if err := m.Init(ctx); err != nil {
 			return fmt.Errorf("initializing module %q on activation: %w", name, err)
 		}
+		// Record the Init now, not after the status update below: if that
+		// update fails, a retry must not initialize the module a second time.
+		r.mu.Lock()
+		r.initStatus[name] = true
+		r.mu.Unlock()
 
 		if err := r.loadModuleTranslations(m); err != nil {
 			r.logger.Warn("failed to load module translations", "module", name, "error", err)
@@ -460,9 +465,6 @@ func (r *Registry) SetActive(name string, active bool) error {
 	}
 
 	r.activeStatus[name] = active
-	if needsInit {
-		r.initStatus[name] = true
-	}
 	r.logger.Info("module status changed", "module", name, "active", active)
 	return nil
 }

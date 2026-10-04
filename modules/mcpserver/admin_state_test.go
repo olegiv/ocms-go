@@ -170,8 +170,10 @@ func TestMCPKeysPagesThroughAllKeys(t *testing.T) {
 	}
 }
 
-// TestConcurrentSettingsSavesStayConsistent verifies simultaneous saves leave
-// the database and the running server with the same settings.
+// TestConcurrentSettingsSavesStayConsistent checks that simultaneous saves
+// leave the database and the running server with the same settings. It is a
+// consistency check under the race detector rather than a deterministic
+// reproduction: without settingsMu a mismatch needs an unlucky interleaving.
 func TestConcurrentSettingsSavesStayConsistent(t *testing.T) {
 	env := newTestEnv(t)
 	var wg sync.WaitGroup

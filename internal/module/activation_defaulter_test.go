@@ -151,3 +151,47 @@ func TestSetActiveInitializesOnce(t *testing.T) {
 		t.Error("module must be active after activation")
 	}
 }
+
+// failingUpdateModule renames the modules table during its first Init, so the
+// status update that follows a successful Init fails.
+type failingUpdateModule struct {
+	*optInModule
+	inits atomic.Int32
+}
+
+func (m *failingUpdateModule) Init(ctx *Context) error {
+	if m.inits.Add(1) == 1 {
+		if _, err := ctx.DB.Exec(`ALTER TABLE modules RENAME TO modules_gone`); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TestSetActiveRetryDoesNotReinitialize verifies a module whose Init succeeded
+// is not initialized again when the status update after it failed and the
+// administrator retries.
+func TestSetActiveRetryDoesNotReinitialize(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	r := NewRegistry(logger)
+	m := &failingUpdateModule{optInModule: &optInModule{mockModule: newMockModule("flaky", "1.0.0")}}
+	if err := r.Register(m); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := r.InitAll(&Context{DB: db, Logger: logger}); err != nil {
+		t.Fatalf("InitAll: %v", err)
+	}
+
+	if err := r.SetActive("flaky", true); err == nil {
+		t.Fatal("the status update must fail once the modules table is gone")
+	}
+	if err := r.SetActive("flaky", true); err == nil {
+		t.Fatal("the retry must fail on the status update too")
+	}
+	if got := m.inits.Load(); got != 1 {
+		t.Errorf("Init ran %d times, want 1", got)
+	}
+}

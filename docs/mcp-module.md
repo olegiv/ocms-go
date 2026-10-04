@@ -30,8 +30,9 @@ drift test fails if a tool without that mark is registered.
   catalog and the keys that have MCP access.
 - **Server card.** `/.well-known/mcp/server-card.json` advertises the endpoint
   while the module is active.
-- **Structured logs:** one line per tool call, including calls the SDK rejects.
-  Keys and arguments are never logged.
+- **Structured logs:** one line per dispatched tool call, including calls the
+  SDK rejects after dispatch: invalid arguments, unknown tools and invalid
+  output. Keys and arguments are never logged.
 
 ## Enabling the module
 
@@ -210,10 +211,13 @@ recorded in the event log as `MCP settings updated`.
 
 The page always shows the stored settings. If they differ from the running
 ones, for example because another instance saved them, opening the page applies
-them. If the stored settings cannot be read, the page says so and disables the
-form. The server keeps the safe defaults (drafts hidden, no instructions) until
-they can be read; the form is disabled so those defaults cannot be saved over
-the stored values.
+them.
+
+If the stored settings cannot be read, the page says so and disables the form,
+so nothing is saved over values it could not read. The server keeps running
+with the settings it already has: the stored ones if it read them earlier,
+otherwise the safe defaults (drafts hidden, no instructions). Each visit to the
+page tries the read again.
 
 The page also shows:
 
@@ -320,7 +324,7 @@ The module logs through `slog` with `module=mcp`:
 
 | Event | Level | Fields |
 |---|---|---|
-| Tool call, one line per `tools/call` | Info; Warn for `cancelled`; Error for `internal_error` | `tool`, `outcome`, `duration_ms`, `api_key_id`, `api_key_prefix`, `client_name`, `client_version`, `protocol_version`, `error_code`, plus `error` (the cause) for internal and cancelled calls |
+| Tool call, one line per dispatched `tools/call` | Info; Warn for `cancelled`; Error for `internal_error` | `tool`, `outcome`, `duration_ms`, `api_key_id`, `api_key_prefix`, `client_name`, `client_version`, `protocol_version`, `error_code`, plus `error` (the cause) for internal and cancelled calls |
 | Panic in the endpoint, an MCP method or a tool | Error | `panic`, `stack`, plus `tool`/`method`/`ip` |
 | Key without `mcp:access`, cross-origin request, in-flight cap reached | Warn | `api_key_id`/`api_key_prefix` or `ip`, `origin` |
 | Unusable site URL (once until the value changes) | Warn | `site_url` |
@@ -341,6 +345,15 @@ Tool call outcomes:
 | `cancelled` | The client disconnected, the request timed out, or the call hit the 25-second cap. |
 | `internal_error` | A server-side failure. |
 | `unauthenticated` | The call had no authenticated key. |
+
+Some requests never reach the tool-call log:
+
+- requests the SDK rejects before dispatching them, such as undecodable
+  parameters or a mismatched protocol version or header;
+- JSON-RPC batches, which are answered with a 400.
+
+Client-supplied values (an unknown tool's name, the client's name and version)
+are cut to 128 bytes.
 
 API keys and tool arguments are never logged, and neither is returned content,
 with one exception: an internal failure's cause is logged as-is. When the SDK
