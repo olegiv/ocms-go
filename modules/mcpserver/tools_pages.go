@@ -188,6 +188,9 @@ func (m *Module) listPages(ctx context.Context, call *toolCall, in ListPagesInpu
 	if in.CategoryID > 0 && in.TagID > 0 {
 		return ListPagesResult{}, newValidationError("filters", "Use only one of category_id or tag_id")
 	}
+	if in.Status == model.PageStatusDraft && (in.CategoryID > 0 || in.TagID > 0) {
+		return ListPagesResult{}, newValidationError("filters", "Draft status cannot be combined with category_id or tag_id")
+	}
 	page, perPage := normalizePaging(in.Page, in.PerPage, defaultPagesPerPage)
 	result, err := m.svc.pages.List(ctx, call.actor, pages.ListFilter{
 		Page:              page,
