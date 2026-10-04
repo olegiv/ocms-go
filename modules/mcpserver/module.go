@@ -256,6 +256,11 @@ func (m *Module) serveEndpoint(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteAPIError(w, http.StatusServiceUnavailable, "service_unavailable", "MCP server is not initialized", nil)
 		return
 	}
+	if active, err := m.svc.queries.IsModuleActive(r.Context(), ModuleName); err == nil && !active {
+		w.Header().Set("Cache-Control", "no-store")
+		http.NotFound(w, r)
+		return
+	}
 	h.ServeHTTP(w, r)
 }
 

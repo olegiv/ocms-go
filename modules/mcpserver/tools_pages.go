@@ -185,6 +185,9 @@ func (m *Module) listPages(ctx context.Context, call *toolCall, in ListPagesInpu
 	if in.Status == model.PageStatusDraft && !draftsVisible(call.actor) {
 		return ListPagesResult{}, errDraftsHidden
 	}
+	if in.CategoryID > 0 && in.TagID > 0 {
+		return ListPagesResult{}, newValidationError("filters", "Use only one of category_id or tag_id")
+	}
 	page, perPage := normalizePaging(in.Page, in.PerPage, defaultPagesPerPage)
 	result, err := m.svc.pages.List(ctx, call.actor, pages.ListFilter{
 		Page:              page,

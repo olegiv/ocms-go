@@ -25,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   access. See `docs/mcp-module.md`.
 - **MCP server card advertises the live endpoint** — while the MCP module is
   active, `/.well-known/mcp/server-card.json` names the endpoint in
-  `transport` and in SEP-2127 `remotes`, and lists the supported protocol
-  versions. While the module is inactive, it keeps the REST-only card.
+  the SEP-1649 `transport` object and reports the preferred `protocolVersion`.
+  While the module is inactive, it keeps the REST-only card.
 - **Opt-in modules** — modules can implement `module.ActivationDefaulter` to
   register inactive until an administrator enables them.
 
