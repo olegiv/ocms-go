@@ -36,6 +36,11 @@ type Registry struct {
 	ctx           *Context
 	logger        *slog.Logger
 	mu            sync.RWMutex
+	// activationMu serializes SetActive. A late Init runs outside mu, so two
+	// concurrent activations of a never-initialized module (a double-click,
+	// two admins) would otherwise both run Init. Opt-in modules
+	// (ActivationDefaulter) always take that late-Init path.
+	activationMu sync.Mutex
 	// publicRoutes records route shapes as modules register them on the real
 	// application router. RegisterRoutes is not replayed: implementations may
 	// allocate middleware or have other side effects. All registered modules,
@@ -400,6 +405,9 @@ func (r *Registry) IsActive(name string) bool {
 // When activating a module that was never initialized (e.g., it was inactive
 // at server startup), Init() and translation loading are performed first.
 func (r *Registry) SetActive(name string, active bool) error {
+	r.activationMu.Lock()
+	defer r.activationMu.Unlock()
+
 	r.mu.Lock()
 
 	m, exists := r.modules[name]

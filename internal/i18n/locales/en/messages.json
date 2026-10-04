@@ -2294,8 +2294,8 @@
         },
         {
             "id": "api_keys.perm_pages_read",
-            "message": "Read published pages",
-            "translation": "Read published pages"
+            "message": "Read pages, including unpublished drafts",
+            "translation": "Read pages, including unpublished drafts"
         },
         {
             "id": "api_keys.perm_pages_write",
@@ -2339,8 +2339,8 @@
         },
         {
             "id": "api_keys.perm_mcp_access",
-            "message": "Connect AI agents over MCP (/api/mcp); data access still follows the permissions above",
-            "translation": "Connect AI agents over MCP (/api/mcp); data access still follows the permissions above"
+            "message": "Connect AI agents over MCP (/api/mcp) with read access to published content. Add Pages: read only if agents may also see drafts (and the MCP drafts setting is on)",
+            "translation": "Connect AI agents over MCP (/api/mcp) with read access to published content. Add Pages: read only if agents may also see drafts (and the MCP drafts setting is on)"
         },
         {
             "id": "api_keys.expiration",
@@ -4016,6 +4016,11 @@
             "id": "config.site_url_hint",
             "message": "The full URL of your website",
             "translation": "The full URL of your website"
+        },
+        {
+            "id": "config.mcp_server_version_hint",
+            "message": "Version shown in /.well-known/mcp/server-card.json while the MCP Server module is off (empty means 0.0.0). While the module is on, the card reports the running server's own version.",
+            "translation": "Version shown in /.well-known/mcp/server-card.json while the MCP Server module is off (empty means 0.0.0). While the module is on, the card reports the running server's own version."
         },
         {
             "id": "config.default_og_image",

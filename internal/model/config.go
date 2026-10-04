@@ -61,7 +61,7 @@ var StandardConfigFields = []ConfigFieldDefinition{
 	{Key: ConfigKeyAdminEmail, DefaultValue: "admin@example.com", Type: ConfigTypeString, Description: "Administrator email address"},
 	{Key: ConfigKeyExcludedIPs, DefaultValue: "", Type: ConfigTypeText, Description: "IPs or CIDRs to exclude from analytics and event logging (one per line)"},
 	{Key: ConfigKeyRobotsContentSignal, DefaultValue: "", Type: ConfigTypeString, Description: "robots.txt Content-Signal directive (contentsignals.org). Leave empty for the default 'search=yes, ai-train=no, ai-input=yes', or set to 'off' / 'none' / 'disabled' to suppress."},
-	{Key: ConfigKeyMCPServerVersion, DefaultValue: "", Type: ConfigTypeString, Description: "Version string advertised in /.well-known/mcp/server-card.json (leave empty to omit)"},
+	{Key: ConfigKeyMCPServerVersion, DefaultValue: "", Type: ConfigTypeString, Description: "Version shown in /.well-known/mcp/server-card.json while the MCP Server module is off (empty means 0.0.0); while it is on, the card reports the running server's own version"},
 }
 
 // IsTranslatableConfigKey checks if a config key supports translations.

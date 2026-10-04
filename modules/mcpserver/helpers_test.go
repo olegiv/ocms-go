@@ -260,8 +260,7 @@ func (e *testEnv) setSettings(s Settings) {
 	if err := saveSettings(context.Background(), e.db, s); err != nil {
 		e.t.Fatalf("saveSettings: %v", err)
 	}
-	e.module.settings.Store(&s)
-	e.module.server.Store(srv)
+	e.module.state.Store(&serverState{settings: s, server: srv})
 }
 
 // bearerTransport adds the Authorization header to every request.
@@ -379,4 +378,33 @@ func readBody(t *testing.T, resp *http.Response) string {
 		t.Fatalf("read body: %v", err)
 	}
 	return string(b)
+}
+
+// addTool registers an extra tool on the running server, wrapped like every
+// catalog tool, for tests that need a tool with controlled behaviour.
+func (e *testEnv) addTool(spec toolSpec, fn toolFunc[SiteInfoInput, SiteInfo]) {
+	e.t.Helper()
+	registerTool(fn)(e.module, e.module.currentServer(), spec)
+}
+
+// toolCallOutcomes returns the outcome of every tools/call log line, in order.
+func (c *logCapture) toolCallOutcomes() []string {
+	var out []string
+	for _, r := range c.find("MCP tool call") {
+		v, _ := recordAttr(r, "outcome")
+		out = append(out, v.String())
+	}
+	return out
+}
+
+// eventually polls cond until it holds or two seconds pass.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

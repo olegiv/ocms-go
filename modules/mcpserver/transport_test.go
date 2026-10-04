@@ -330,3 +330,66 @@ func TestLateActivationEnforcesFullChain(t *testing.T) {
 		t.Error("after activation the response must come through the full chain")
 	}
 }
+
+// TestRejectsBatchRequests verifies JSON-RPC batches are refused before the
+// SDK sees them. go-sdk runs every call of a batch concurrently for requests
+// declaring protocol 2025-03-26 or older (or none), so one HTTP request could
+// otherwise carry thousands of tool calls past the per-key rate limit and the
+// in-flight cap, which both count requests.
+func TestRejectsBatchRequests(t *testing.T) {
+	env := newTestEnv(t)
+	key := env.createKey(model.PermissionMCPAccess)
+	auth := "Bearer " + key
+	batch := "[" + listToolsBody + "," + listToolsBody + "]"
+	for _, tc := range []struct {
+		name    string
+		body    string
+		headers map[string]string
+	}{
+		{"no protocol header", batch, map[string]string{"Authorization": auth}},
+		{"protocol 2025-03-26", batch, map[string]string{"Authorization": auth, "MCP-Protocol-Version": "2025-03-26"}},
+		{"leading whitespace", " \n\t" + batch, map[string]string{"Authorization": auth}},
+	} {
+		resp := env.rawPost(tc.body, tc.headers)
+		body := readBody(t, resp)
+		if resp.StatusCode != http.StatusBadRequest || apiErrorCode(t, body) != "batch_not_supported" {
+			t.Errorf("%s: status %d body %s, want 400 batch_not_supported", tc.name, resp.StatusCode, body)
+		}
+	}
+
+	resp := env.rawPost(listToolsBody, map[string]string{"Authorization": auth, "MCP-Protocol-Version": "2025-11-25"})
+	if body := readBody(t, resp); resp.StatusCode != http.StatusOK || !strings.Contains(body, "get_site_info") {
+		t.Errorf("a single request must still be served: status %d body %s", resp.StatusCode, body)
+	}
+}
+
+// TestEndpointRecoversPanics verifies a panic in the endpoint chain becomes a
+// JSON 500 instead of ending the process: the global timeout middleware runs
+// handlers on a goroutine chi's recoverer cannot reach.
+func TestEndpointRecoversPanics(t *testing.T) {
+	env := newTestEnv(t)
+	env.module.handler.Store(&endpointHandler{Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	})})
+	resp := env.rawPost(listToolsBody, nil)
+	body := readBody(t, resp)
+	if resp.StatusCode != http.StatusInternalServerError || apiErrorCode(t, body) != codeInternal || strings.Contains(body, "boom") {
+		t.Errorf("status %d body %s, want a scrubbed JSON 500", resp.StatusCode, body)
+	}
+	panics := env.logs.find("MCP endpoint panicked")
+	if len(panics) != 1 {
+		t.Fatalf("panic log lines = %d, want 1", len(panics))
+	}
+	if stack, ok := recordAttr(panics[0], "stack"); !ok || stack.String() == "" {
+		t.Error("the panic log must carry a stack trace")
+	}
+
+	// A deliberate abort is not an error worth logging.
+	env.module.handler.Store(&endpointHandler{Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic(http.ErrAbortHandler)
+	})})
+	env.rawPost(listToolsBody, nil)
+	if got := len(env.logs.find("MCP endpoint panicked")); got != 1 {
+		t.Errorf("an aborted request was logged as a panic (%d lines)", got)
+	}
+}

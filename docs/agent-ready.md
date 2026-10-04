@@ -30,7 +30,7 @@ The Link header advertises three relations:
 | Config key | Default | Purpose |
 |---|---|---|
 | `robots_content_signal` | `search=yes, ai-train=no, ai-input=yes` | Value emitted as `Content-Signal: ...` line in `robots.txt`. Set to `off`, `none`, or `disabled` to suppress the directive. |
-| `mcp_server_version` | empty | Overrides `serverInfo.version` in the MCP Server Card. When empty, the card shows the MCP module version while that module is active, and `0.0.0` otherwise. |
+| `mcp_server_version` | empty | `serverInfo.version` of the REST-bridge MCP Server Card served while the MCP module is off (empty → `0.0.0`). While the module is on, the card reports the running MCP server's own version. |
 
 Both keys live in the admin `Config` table and can be edited via
 `/admin/config`.
@@ -43,15 +43,18 @@ HTTP at `POST /api/mcp` with read-only tools (see
 
 - **Module active:** the card names the endpoint in `transport` and in the
   SEP-2127 `remotes` list (`"type": "streamable-http"`). It also declares
-  `capabilities.tools` and lists `supportedProtocolVersions`, and still links
-  the REST API under `capabilities.rest.openapi`.
+  `capabilities.tools`, lists `supportedProtocolVersions`, and still links the
+  REST API under `capabilities.rest.openapi`. Its `serverInfo` (`ocms`,
+  title `oCMS`, the module version) is exactly what the endpoint reports at
+  `initialize`.
 - **Module inactive** (the default): the card keeps `"transport": null` and
   declares only the REST fallback, so it never advertises an endpoint that
   would answer 404.
 
 `seo.BuildMCPServerCard` receives the endpoint from
 `FrontendHandler.SetMCPEndpointProvider`, which `cmd/ocms/main.go` wires to
-the module registry's active status.
+the module registry's active status. Because toggling the module changes the
+card, it is served with `Cache-Control: no-cache`.
 
 ## Markdown negotiation
 

@@ -116,9 +116,11 @@ func BuildAgentSkillsIndex(siteURL, openapiSHA256 string) []byte {
 	return out
 }
 
-// MCPServerInfo is the serverInfo object for SEP-1649.
+// MCPServerInfo is the serverInfo object for SEP-1649. Title is the human
+// display name MCP's Implementation carries alongside the programmatic name.
 type MCPServerInfo struct {
 	Name    string `json:"name"`
+	Title   string `json:"title,omitempty"`
 	Version string `json:"version"`
 }
 
@@ -151,7 +153,9 @@ type MCPRemote struct {
 // that would answer 404.
 type MCPEndpoint struct {
 	Path             string   // site-relative endpoint path, e.g. "/api/mcp"
-	Version          string   // server implementation version
+	Name             string   // serverInfo.name the endpoint reports at initialize
+	Title            string   // serverInfo.title the endpoint reports at initialize
+	Version          string   // serverInfo.version the endpoint reports at initialize
 	ProtocolVersions []string // MCP protocol revisions the endpoint negotiates
 }
 
@@ -174,15 +178,16 @@ const mcpStreamableHTTP = "streamable-http"
 //
 // Without an endpoint the card is intentionally honest: transport is null and
 // only the REST fallback is declared, because publishing a transport that is
-// not running would be worse than declaring its absence. With an endpoint it
-// names the Streamable HTTP URL in both draft shapes and still links the REST
-// API. version (the admin-editable mcp_server_version setting) wins over the
-// endpoint's own version; both empty falls back to "0.0.0".
+// not running would be worse than declaring its absence. version (the
+// admin-editable mcp_server_version setting, "0.0.0" when empty) labels that
+// REST-bridge card.
+//
+// With an endpoint the card names the Streamable HTTP URL in both draft shapes,
+// still links the REST API, and reports exactly the serverInfo the endpoint
+// returns at initialize: a client comparing the two must see one server, so
+// the version setting does not apply.
 func BuildMCPServerCard(siteURL, version string, endpoint *MCPEndpoint) []byte {
 	base := normalizeSiteURL(siteURL)
-	if version == "" && endpoint != nil {
-		version = endpoint.Version
-	}
 	if version == "" {
 		version = "0.0.0"
 	}
@@ -200,7 +205,7 @@ func BuildMCPServerCard(siteURL, version string, endpoint *MCPEndpoint) []byte {
 	}
 	if endpoint != nil {
 		endpointURL := base + endpoint.Path
-		card.ServerInfo.Name = "oCMS"
+		card.ServerInfo = MCPServerInfo{Name: endpoint.Name, Title: endpoint.Title, Version: endpoint.Version}
 		card.Transport = &endpointURL
 		card.Capabilities.Tools = &MCPToolsCapability{}
 		card.Remotes = []MCPRemote{{Type: mcpStreamableHTTP, URL: endpointURL}}

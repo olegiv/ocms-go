@@ -63,7 +63,7 @@ func TestHandleSaveSettingsRejectsLongInstructions(t *testing.T) {
 
 func TestHandleSaveSettingsAppliesAndAudits(t *testing.T) {
 	env := newTestEnv(t)
-	before := env.module.server.Load()
+	before := env.module.currentServer()
 	admin := &store.User{ID: env.userID, Email: "author@example.com", Role: "admin"}
 
 	rec := postSettings(env, url.Values{
@@ -82,7 +82,7 @@ func TestHandleSaveSettingsAppliesAndAudits(t *testing.T) {
 	if err != nil || stored != want {
 		t.Errorf("stored settings = %+v, %v; want %+v", stored, err, want)
 	}
-	if env.module.server.Load() == before {
+	if env.module.currentServer() == before {
 		t.Error("saving must swap in a server built from the new settings")
 	}
 

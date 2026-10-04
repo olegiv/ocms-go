@@ -5,6 +5,8 @@ package mcpserver
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"slices"
@@ -35,7 +37,7 @@ type SiteInfo struct {
 type SiteDetails struct {
 	Name            string `json:"name" doc:"Site name."`
 	Description     string `json:"description,omitempty" doc:"Site description."`
-	URL             string `json:"url,omitempty" doc:"Public site URL; empty until the administrator configures it."`
+	URL             string `json:"url,omitempty" doc:"Public site URL; empty unless the administrator configured a valid absolute http(s) URL."`
 	DefaultLanguage string `json:"default_language,omitempty" doc:"Code of the default language."`
 }
 
@@ -74,11 +76,23 @@ func (m *Module) getSiteInfo(ctx context.Context, call *toolCall, _ SiteInfoInpu
 	if permissions == nil {
 		permissions = []string{}
 	}
+	name, err := m.configValue(ctx, model.ConfigKeySiteName)
+	if err != nil {
+		return SiteInfo{}, err
+	}
+	description, err := m.configValue(ctx, model.ConfigKeySiteDescription)
+	if err != nil {
+		return SiteInfo{}, err
+	}
+	siteURL, _, err := m.resolveSiteURL(ctx)
+	if err != nil {
+		return SiteInfo{}, err
+	}
 	out := SiteInfo{
 		Site: SiteDetails{
-			Name:        m.configValue(ctx, model.ConfigKeySiteName),
-			Description: m.configValue(ctx, model.ConfigKeySiteDescription),
-			URL:         m.siteURL(ctx),
+			Name:        name,
+			Description: description,
+			URL:         siteURL,
 		},
 		Languages: make([]LanguageInfo, 0, len(languages)),
 		Access: AccessDetails{
@@ -121,33 +135,59 @@ func routableLanguages(languages []store.Language) []store.Language {
 }
 
 // configValue reads a site config value, preferring the shared config cache.
-func (m *Module) configValue(ctx context.Context, key string) string {
+// An unset key reads as "". Database failures are returned, not hidden: an
+// empty value would look like a deliberate configuration.
+func (m *Module) configValue(ctx context.Context, key string) (string, error) {
 	if m.svc.cache != nil {
+		// The cache reports a missing key as "" and fails only when it
+		// cannot load; then the database is asked directly.
 		if value, err := m.svc.cache.GetConfig(ctx, key); err == nil {
-			return value
+			return value, nil
 		}
 	}
 	cfg, err := m.svc.queries.GetConfigByKey(ctx, key)
-	if err != nil {
-		return ""
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
 	}
-	return cfg.Value
+	if err != nil {
+		return "", fmt.Errorf("reading config %s: %w", key, err)
+	}
+	return cfg.Value, nil
 }
 
-// siteURL returns the configured public site URL without a trailing slash,
-// or "" when it is unset or not an absolute http(s) URL. Like the discovery
-// documents, tool output never falls back to the request Host, which a
-// reverse proxy may have rewritten to an internal upstream.
-func (m *Module) siteURL(ctx context.Context) string {
-	raw := strings.TrimRight(strings.TrimSpace(m.configValue(ctx, model.ConfigKeySiteURL)), "/")
-	if raw == "" {
-		return ""
+// siteURLStatus says whether the configured site URL can be used.
+type siteURLStatus int
+
+const (
+	siteURLUnset siteURLStatus = iota
+	siteURLValid
+	siteURLInvalid
+)
+
+// resolveSiteURL returns the configured public site URL without a trailing
+// slash, and whether it is set and usable; the URL is "" unless it is valid. Only an absolute http(s) URL is
+// used; like the discovery documents, tool output never falls back to the
+// request Host, which a reverse proxy may have rewritten to an internal
+// upstream. The site configuration page does not validate the value, so an
+// unusable one is logged once, until the value changes.
+func (m *Module) resolveSiteURL(ctx context.Context) (string, siteURLStatus, error) {
+	raw, err := m.configValue(ctx, model.ConfigKeySiteURL)
+	if err != nil {
+		return "", siteURLUnset, err
 	}
-	u, err := url.Parse(raw)
+	value := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if value == "" {
+		return "", siteURLUnset, nil
+	}
+	u, err := url.Parse(value)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return ""
+		if prev := m.invalidSiteURL.Swap(&value); prev == nil || *prev != value {
+			m.logger.Warn("configured site URL is not an absolute http(s) URL; MCP results omit page URLs",
+				"site_url", value)
+		}
+		return "", siteURLInvalid, nil
 	}
-	return raw
+	return value, siteURLValid, nil
 }
 
 // pageURLs builds public page URLs for one tool call.
@@ -158,24 +198,25 @@ type pageURLs struct {
 	isDefault map[string]bool
 }
 
-// newPageURLs loads what page URL construction needs. Without a configured
-// site URL it builds nothing and skips the language query.
-func (m *Module) newPageURLs(ctx context.Context) pageURLs {
-	urls := pageURLs{base: m.siteURL(ctx)}
-	if urls.base == "" {
-		return urls
+// newPageURLs loads what page URL construction needs. Without a usable site
+// URL it builds nothing and skips the language query.
+func (m *Module) newPageURLs(ctx context.Context) (pageURLs, error) {
+	base, status, err := m.resolveSiteURL(ctx)
+	if err != nil {
+		return pageURLs{}, err
+	}
+	if status != siteURLValid {
+		return pageURLs{}, nil
 	}
 	languages, err := m.svc.queries.ListActiveLanguages(ctx)
 	if err != nil {
-		m.logger.Warn("failed to load languages for page URLs", "error", err)
-		urls.base = ""
-		return urls
+		return pageURLs{}, fmt.Errorf("listing languages for page URLs: %w", err)
 	}
-	urls.isDefault = make(map[string]bool, len(languages))
+	urls := pageURLs{base: base, isDefault: make(map[string]bool, len(languages))}
 	for _, lang := range routableLanguages(languages) {
 		urls.isDefault[lang.Code] = lang.IsDefault
 	}
-	return urls
+	return urls, nil
 }
 
 // forPage returns the public URL of a published page in an active language,

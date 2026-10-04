@@ -6,6 +6,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"runtime/debug"
 	"time"
@@ -21,7 +22,73 @@ const (
 	outcomeToolError       = "tool_error"
 	outcomeInternalError   = "internal_error"
 	outcomeUnauthenticated = "unauthenticated"
+	// outcomeCancelled: the client went away, the request timed out, or the
+	// call hit maxToolDuration.
+	outcomeCancelled = "cancelled"
+	// outcomeInvalidArguments: the SDK rejected the arguments against the
+	// input schema before the tool ran.
+	outcomeInvalidArguments = "invalid_arguments"
+	// outcomeRejected: the SDK answered with a JSON-RPC error, e.g. for an
+	// unknown tool.
+	outcomeRejected = "rejected"
 )
+
+// maxToolDuration bounds one tool call. It stays below the global 30 s
+// request timeout so an over-long call ends as a tool error the agent can
+// read, rather than as the timeout middleware's bare 503.
+const maxToolDuration = 25 * time.Second
+
+// callRecord collects what one tools/call did, for the single log line
+// requestGuard writes once the SDK has produced the final result. wrapTool
+// fills it in; the SDK hands the tool handler the context requestGuard
+// passed on, which is how the record travels.
+type callRecord struct {
+	identity  *identity
+	outcome   string
+	errorCode string
+	// cause is the internal error behind an internal_error or cancelled
+	// outcome. It is logged, never sent to the client.
+	cause error
+}
+
+// callRecordKey is the context key of the callRecord for the current call.
+type callRecordKey struct{}
+
+// requestContextKey is the context key under which withRequestContext stores
+// the HTTP request's context.
+type requestContextKey struct{}
+
+// callRecordFrom returns the record requestGuard attached to ctx. When there
+// is none (a handler invoked directly, as in unit tests), it returns a fresh
+// record and true: the caller then owns logging the call.
+func callRecordFrom(ctx context.Context) (*callRecord, bool) {
+	if rec, ok := ctx.Value(callRecordKey{}).(*callRecord); ok && rec != nil {
+		return rec, false
+	}
+	return &callRecord{}, true
+}
+
+// callContext returns the context a tool runs under: bounded by
+// maxToolDuration and cancelled with the HTTP request.
+//
+// The SDK gives handlers of pre-2026-07-28 requests a context whose Done
+// channel never fires (PropagateRequestCancellation applies only to the new
+// protocol), so a client disconnect or the global timeout would not stop the
+// database work behind a call. That context still forwards Value lookups to
+// the HTTP request context, so withRequestContext stores it as a value and
+// the cancellation is re-attached here.
+func callContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(ctx, maxToolDuration)
+	reqCtx, ok := ctx.Value(requestContextKey{}).(context.Context)
+	if !ok || reqCtx == nil {
+		return ctx, cancel
+	}
+	stop := context.AfterFunc(reqCtx, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
+}
 
 // toolCall is what a tool handler knows about the call beyond its arguments.
 type toolCall struct {
@@ -76,64 +143,80 @@ func readOnlyAnnotations(title string) *mcp.ToolAnnotations {
 }
 
 // wrapTool adapts a toolFunc to the SDK handler type. It
-//   - recovers panics: the SDK runs handlers on its own goroutines, outside
-//     chi's Recoverer, and has no recovery of its own, so an unrecovered
-//     panic would take the whole process down;
+//   - recovers panics: the SDK runs handlers on its own goroutines and has no
+//     recovery of its own, so an unrecovered panic would take the whole
+//     process down;
 //   - resolves the caller from TokenInfo and applies the drafts policy;
 //   - turns errors into REST-shaped tool errors, scrubbing internal ones;
-//   - logs one structured line per call.
+//   - runs the tool under callContext, so cancellation reaches its queries;
+//   - records the outcome for the call's log line (see requestGuard).
 func wrapTool[In, Out any](m *Module, spec toolSpec, fn toolFunc[In, Out]) mcp.ToolHandlerFor[In, Out] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in In) (res *mcp.CallToolResult, out Out, err error) {
-		start := time.Now()
+		rec, standalone := callRecordFrom(ctx)
+		if standalone {
+			start := time.Now()
+			defer func() { m.logToolCall(req, rec, time.Since(start)) }()
+		}
 		id, authenticated := identityFromRequest(req)
-		outcome, errorCode := outcomeOK, ""
+		rec.identity, rec.outcome = id, outcomeOK
+
+		callCtx, cancel := callContext(ctx)
+		defer cancel()
 		defer func() {
 			if p := recover(); p != nil {
-				m.logger.Error("MCP tool panicked",
-					"tool", spec.Name,
-					"panic", fmt.Sprint(p),
-					"stack", string(debug.Stack()))
+				attrs := []any{"tool", spec.Name, "panic", fmt.Sprint(p), "stack", string(debug.Stack())}
+				if id != nil {
+					attrs = append(attrs, "api_key_id", id.key.ID)
+				}
+				m.logger.Error("MCP tool panicked", attrs...)
 				var zero Out
 				res, out, err = nil, zero, internalToolError()
-				outcome, errorCode = outcomeInternalError, codeInternal
+				rec.outcome, rec.errorCode = outcomeInternalError, codeInternal
 			}
-			m.logToolCall(req, spec.Name, id, outcome, errorCode, time.Since(start))
 		}()
 
 		if !authenticated {
 			// The HTTP chain guarantees an identity; refuse rather than run
 			// as nobody if that ever stops being true.
-			outcome, errorCode = outcomeUnauthenticated, codeUnauthorized
+			rec.outcome, rec.errorCode = outcomeUnauthenticated, codeUnauthorized
 			return nil, out, &toolError{Code: codeUnauthorized, Message: msgUnauthenticated}
 		}
 
 		settings := m.currentSettings()
 		call := &toolCall{actor: actorFor(id, settings), identity: id, settings: settings}
-		result, callErr := fn(m, ctx, call, in)
-		if callErr != nil {
-			te, internal := toToolError(callErr)
-			outcome, errorCode = outcomeToolError, te.Code
-			if internal {
-				outcome = outcomeInternalError
-				if isCancellation(callErr) {
-					m.logger.Warn("MCP tool cancelled", "tool", spec.Name, "error", callErr)
-				} else {
-					m.logger.Error("MCP tool failed", "tool", spec.Name, "error", callErr)
-				}
-			}
-			return nil, out, te
+		result, callErr := fn(m, callCtx, call, in)
+		if callErr == nil {
+			return nil, result, nil
 		}
-		return nil, result, nil
+		// A done context explains the failure even when the error does not
+		// wrap it: the v2 services and the SQLite driver do not always
+		// preserve context.Canceled.
+		if callCtx.Err() != nil || isCancellation(callErr) {
+			rec.outcome, rec.errorCode, rec.cause = outcomeCancelled, codeTimeout, callErr
+			return nil, out, timeoutToolError()
+		}
+		te, internal := toToolError(callErr)
+		if internal {
+			rec.outcome, rec.errorCode, rec.cause = outcomeInternalError, te.Code, callErr
+		} else {
+			rec.outcome, rec.errorCode = outcomeToolError, te.Code
+		}
+		return nil, out, te
 	}
 }
 
-// logToolCall records one tools/call. Arguments and results are never
-// logged: they can carry unpublished content.
-func (m *Module) logToolCall(req *mcp.CallToolRequest, tool string, id *identity, outcome, errorCode string, elapsed time.Duration) {
+// logToolCall writes the one log line of a tools/call. Arguments and results
+// are never logged: they can carry unpublished content. The cause of an
+// internal error is logged as-is.
+func (m *Module) logToolCall(req *mcp.CallToolRequest, rec *callRecord, elapsed time.Duration) {
 	attrs := []any{
-		"tool", tool,
-		"outcome", outcome,
+		"tool", toolName(req),
+		"outcome", rec.outcome,
 		"duration_ms", elapsed.Milliseconds(),
+	}
+	id := rec.identity
+	if id == nil {
+		id, _ = identityFromRequest(req)
 	}
 	if id != nil {
 		attrs = append(attrs, "api_key_id", id.key.ID, "api_key_prefix", id.key.KeyPrefix)
@@ -146,10 +229,28 @@ func (m *Module) logToolCall(req *mcp.CallToolRequest, tool string, id *identity
 			attrs = append(attrs, "protocol_version", version)
 		}
 	}
-	if errorCode != "" {
-		attrs = append(attrs, "error_code", errorCode)
+	if rec.errorCode != "" {
+		attrs = append(attrs, "error_code", rec.errorCode)
 	}
-	m.logger.Info("MCP tool call", attrs...)
+	if rec.cause != nil {
+		attrs = append(attrs, "error", errorDetail(rec.cause))
+	}
+	level := slog.LevelInfo
+	switch rec.outcome {
+	case outcomeInternalError:
+		level = slog.LevelError
+	case outcomeCancelled:
+		level = slog.LevelWarn
+	}
+	m.logger.Log(context.Background(), level, "MCP tool call", attrs...)
+}
+
+// toolName returns the tool a call names, or "" when the request carries none.
+func toolName(req *mcp.CallToolRequest) string {
+	if req == nil || req.Params == nil {
+		return ""
+	}
+	return req.Params.Name
 }
 
 // Pagination is the paging metadata shared by list results.

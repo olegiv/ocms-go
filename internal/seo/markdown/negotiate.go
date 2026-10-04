@@ -12,6 +12,7 @@
 package markdown
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -27,6 +28,11 @@ import (
 // MaxHTMLBytes caps the size of HTML we are willing to convert to Markdown
 // per request. Protects against CPU DoS from a single huge page body.
 const MaxHTMLBytes = 2 * 1024 * 1024 // 2 MB
+
+// ErrBodyTooLarge reports a page body over MaxHTMLBytes. Callers tell it
+// apart from a converter failure: an oversized body is a property of the
+// content, while a conversion error is a fault worth alerting on.
+var ErrBodyTooLarge = errors.New("page body is too large to convert to Markdown")
 
 // ContentTypeMarkdown is the RFC 9842 media type for Markdown responses.
 const ContentTypeMarkdown = "text/markdown; charset=utf-8"
@@ -157,7 +163,7 @@ func AddVaryAccept(w http.ResponseWriter) {
 // bounds the CPU a single oversized page can cost.
 func HTMLToMarkdown(bodyHTML string) (string, error) {
 	if len(bodyHTML) > MaxHTMLBytes {
-		return "", fmt.Errorf("page body exceeds %d bytes (got %d)", MaxHTMLBytes, len(bodyHTML))
+		return "", fmt.Errorf("%w: %d bytes exceeds the %d-byte limit", ErrBodyTooLarge, len(bodyHTML), MaxHTMLBytes)
 	}
 	mdBody, err := htmltomarkdown.ConvertString(bodyHTML)
 	if err != nil {

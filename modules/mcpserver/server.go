@@ -7,9 +7,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -42,12 +44,12 @@ func (m *Module) buildServer(settings Settings) (srv *mcp.Server, err error) {
 		}
 	}()
 	srv = mcp.NewServer(&mcp.Implementation{
-		Name:    "ocms",
-		Title:   "oCMS",
+		Name:    serverName,
+		Title:   serverTitle,
 		Version: moduleVersion,
 	}, &mcp.ServerOptions{
 		Instructions: serverInstructions(settings),
-		Logger:       m.logger.With("component", "mcp-server"),
+		Logger:       sdkLogger(m.logger, "mcp-server"),
 		// Tools only. The deprecated logging capability is not advertised and
 		// the tool list never changes at runtime, so no list_changed.
 		Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}},
@@ -66,28 +68,92 @@ func (m *Module) buildServer(settings Settings) (srv *mcp.Server, err error) {
 
 // requestGuard is receiving middleware around every MCP method.
 //
-// It rewrites a tools/call "arguments": null to absent arguments. go-sdk
-// v1.8.0 unmarshals null into a nil map and then panics writing schema
-// defaults into it; JSON clients can send null explicitly and the SDK's own
-// Go client does for a typed-nil argument map. It also recovers panics raised
-// anywhere in the SDK's request pipeline: wrapTool only guards tool code, and
-// an unrecovered panic on the SDK's handler goroutine ends the whole process,
-// so either case would let any MCP key take the site down with one request.
+// It recovers panics raised anywhere in the SDK's request pipeline: wrapTool
+// only guards tool code, and an unrecovered panic on the SDK's handler
+// goroutine ends the whole process.
+//
+// For tools/call it also
+//   - rewrites "arguments": null to absent arguments: go-sdk v1.8.0 unmarshals
+//     null into a nil map and then panics writing schema defaults into it, and
+//     the SDK's own Go client sends null for a typed-nil argument map;
+//   - writes the call's single log line once the SDK has produced the final
+//     result, so calls the SDK rejects before or after the tool ran (invalid
+//     arguments, an unknown tool, output that fails its schema) are logged
+//     with their real outcome;
+//   - scrubs plain errors, such as the SDK's output validation message, which
+//     quotes the offending server data, into a generic internal error;
+//   - wraps SDK argument-validation failures in the REST error envelope.
 func (m *Module) requestGuard(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (result mcp.Result, err error) {
+		callReq, isCall := req.(*mcp.CallToolRequest)
+		var (
+			rec   *callRecord
+			start time.Time
+		)
+		if isCall {
+			rec, start = &callRecord{}, time.Now()
+			ctx = context.WithValue(ctx, callRecordKey{}, rec)
+			if callReq.Params != nil && isJSONNull(callReq.Params.Arguments) {
+				callReq.Params.Arguments = nil
+			}
+		}
 		defer func() {
 			if p := recover(); p != nil {
 				m.logger.Error("MCP request panicked",
 					"method", method,
 					"panic", fmt.Sprint(p),
 					"stack", string(debug.Stack()))
-				result, err = nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "internal error"}
+				result, err = nil, internalRPCError()
+				if rec != nil {
+					rec.outcome, rec.errorCode = outcomeInternalError, codeInternal
+				}
+			}
+			if isCall {
+				result, err = m.finishToolCall(callReq, rec, result, err, time.Since(start))
 			}
 		}()
-		if params, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok && isJSONNull(params.Arguments) {
-			params.Arguments = nil
-		}
 		return next(ctx, method, req)
+	}
+}
+
+// finishToolCall settles the outcome of a tools/call from what the SDK
+// returned, logs it, and returns the response to send.
+func (m *Module) finishToolCall(req *mcp.CallToolRequest, rec *callRecord, result mcp.Result, err error, elapsed time.Duration) (mcp.Result, error) {
+	var wireErr *jsonrpc.Error
+	switch {
+	case err != nil && errors.As(err, &wireErr):
+		if rec.outcome != outcomeInternalError {
+			rec.outcome, rec.errorCode = outcomeRejected, rpcErrorCode(wireErr.Code)
+		}
+	case err != nil:
+		rec.outcome, rec.errorCode, rec.cause = outcomeInternalError, codeInternal, err
+		err = internalRPCError()
+	case rec.outcome == "":
+		// The SDK answered without running the tool: it could not decode or
+		// validate the arguments.
+		rec.outcome, rec.errorCode = outcomeInvalidArguments, codeValidation
+		if res, ok := result.(*mcp.CallToolResult); ok && res.IsError {
+			result = argumentsErrorResult(res)
+		}
+	}
+	m.logToolCall(req, rec, elapsed)
+	return result, err
+}
+
+// argumentsErrorResult rewrites the SDK's plain-text argument validation
+// failure as the REST error envelope every other tool error uses, keeping the
+// SDK's message (which names the offending argument) as the detail.
+func argumentsErrorResult(res *mcp.CallToolResult) *mcp.CallToolResult {
+	var detail strings.Builder
+	for _, c := range res.Content {
+		if text, ok := c.(*mcp.TextContent); ok {
+			detail.WriteString(text.Text)
+		}
+	}
+	te := newValidationError("arguments", detail.String())
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: te.Error()}},
+		IsError: true,
 	}
 }
 
@@ -103,9 +169,9 @@ func serverInstructions(s Settings) string {
 	b.WriteString(baseInstructions)
 	b.WriteString("\n\n")
 	if s.AllowDrafts {
-		b.WriteString("Unpublished drafts are visible to API keys that hold the pages:read permission.")
+		b.WriteString("Unpublished drafts are returned to API keys that hold the pages:read permission.")
 	} else {
-		b.WriteString("Only published content is available; unpublished drafts are not exposed over MCP.")
+		b.WriteString("Only published pages are returned; unpublished drafts are not returned over MCP.")
 	}
 	if s.Instructions != "" {
 		b.WriteString("\n\nGuidance from the site administrator:\n")

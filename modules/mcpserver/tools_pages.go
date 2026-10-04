@@ -5,6 +5,7 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -197,7 +198,10 @@ func (m *Module) listPages(ctx context.Context, call *toolCall, in ListPagesInpu
 	if err != nil {
 		return ListPagesResult{}, err
 	}
-	urls := m.newPageURLs(ctx)
+	urls, err := m.newPageURLs(ctx)
+	if err != nil {
+		return ListPagesResult{}, err
+	}
 	out := ListPagesResult{
 		Pages:      make([]PageSummary, 0, len(result.Pages)),
 		Pagination: newPagination(result.Total, result.Page, result.PerPage),
@@ -232,16 +236,24 @@ func (m *Module) getPage(ctx context.Context, call *toolCall, in GetPageInput) (
 	body, format := page.Body, bodyFormatHTML
 	if in.BodyFormat == bodyFormatMarkdown {
 		converted, convErr := markdown.HTMLToMarkdown(page.Body)
-		if convErr != nil {
-			m.logger.Warn("MCP get_page markdown conversion failed", "page_id", page.ID, "error", convErr)
+		switch {
+		case errors.Is(convErr, markdown.ErrBodyTooLarge):
+			// A property of the content, not a fault: the agent can ask for
+			// the HTML instead.
 			return PageDetail{}, newValidationError("body_format",
-				`This page body cannot be converted to Markdown; request body_format "html"`)
+				`This page body is too large to convert to Markdown; request body_format "html"`)
+		case convErr != nil:
+			return PageDetail{}, fmt.Errorf("converting page %d body to Markdown: %w", page.ID, convErr)
 		}
 		body, format = converted, bodyFormatMarkdown
 	}
+	urls, err := m.newPageURLs(ctx)
+	if err != nil {
+		return PageDetail{}, err
+	}
 
 	detail := PageDetail{
-		PageSummary:       summarizePage(*page, m.newPageURLs(ctx)),
+		PageSummary:       summarizePage(*page, urls),
 		Body:              body,
 		BodyFormat:        format,
 		MetaTitle:         page.MetaTitle,

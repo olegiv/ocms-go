@@ -19,9 +19,10 @@ import (
 )
 
 // identityKey is the auth.TokenInfo.Extra key that carries the caller from
-// the HTTP layer to tool handlers. The SDK runs handlers on its own
-// goroutines without the HTTP request's context values; TokenInfo, exposed
-// as CallToolRequest.Extra.TokenInfo, is the channel it provides for this.
+// the HTTP layer to tool handlers. TokenInfo, exposed as
+// CallToolRequest.Extra.TokenInfo, is the channel the SDK documents for the
+// authenticated caller, so the identity travels there rather than as a raw
+// context value.
 const identityKey = "ocms.identity"
 
 // identity is the authenticated caller of one MCP request.

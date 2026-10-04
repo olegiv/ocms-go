@@ -144,6 +144,8 @@ func TestLinkHeaderHomepage(t *testing.T) {
 func TestBuildMCPServerCardWithEndpoint(t *testing.T) {
 	endpoint := &MCPEndpoint{
 		Path:             "/api/mcp",
+		Name:             "ocms",
+		Title:            "oCMS",
 		Version:          "1.0.0",
 		ProtocolVersions: []string{"2026-07-28", "2025-11-25"},
 	}
@@ -169,18 +171,42 @@ func TestBuildMCPServerCardWithEndpoint(t *testing.T) {
 	if got.Capabilities.REST == nil {
 		t.Error("capabilities.rest must still point at the REST API")
 	}
-	if got.ServerInfo.Version != "1.0.0" {
-		t.Errorf("version = %q, want the endpoint version when no override is set", got.ServerInfo.Version)
+	if got.ServerInfo != (MCPServerInfo{Name: "ocms", Title: "oCMS", Version: "1.0.0"}) {
+		t.Errorf("serverInfo = %+v, want the identity the endpoint reports at initialize", got.ServerInfo)
 	}
 }
 
-func TestBuildMCPServerCardVersionOverrideWins(t *testing.T) {
-	raw := BuildMCPServerCard("https://example.com", "2.5.0", &MCPEndpoint{Path: "/api/mcp", Version: "1.0.0"})
+// TestBuildMCPServerCardLiveIdentityIgnoresOverride fails when the card of a
+// live endpoint reports a different server than initialize does: the
+// mcp_server_version setting labels only the REST-bridge card.
+func TestBuildMCPServerCardLiveIdentityIgnoresOverride(t *testing.T) {
+	raw := BuildMCPServerCard("https://example.com", "2.5.0", &MCPEndpoint{Path: "/api/mcp", Name: "ocms", Title: "oCMS", Version: "1.0.0"})
 	var got MCPServerCard
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
-	if got.ServerInfo.Version != "2.5.0" {
-		t.Errorf("version = %q, want the configured override 2.5.0", got.ServerInfo.Version)
+	if got.ServerInfo.Version != "1.0.0" || got.ServerInfo.Name != "ocms" {
+		t.Errorf("serverInfo = %+v, want the live server's name and version", got.ServerInfo)
+	}
+}
+
+// TestBuildMCPServerCardRESTBridgeUnchanged pins the card served while no
+// transport is live, byte for byte: adding the live-endpoint fields must not
+// change what the REST-bridge card looks like.
+func TestBuildMCPServerCardRESTBridgeUnchanged(t *testing.T) {
+	const want = `{
+  "serverInfo": {
+    "name": "oCMS REST bridge",
+    "version": "2.5.0"
+  },
+  "transport": null,
+  "capabilities": {
+    "rest": {
+      "openapi": "https://example.com/api/v2/openapi.json"
+    }
+  }
+}`
+	if got := string(BuildMCPServerCard("https://example.com", "2.5.0", nil)); got != want {
+		t.Errorf("REST-bridge card changed:\n%s\nwant:\n%s", got, want)
 	}
 }

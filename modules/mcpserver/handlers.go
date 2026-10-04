@@ -22,8 +22,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// maxListedKeys bounds the API keys scanned for the admin overview.
-const maxListedKeys = 500
+// keysPageSize is how many API keys the admin overview reads per query. It
+// pages through all of them: a key with MCP access must never drop off the
+// list just because many newer keys exist.
+const keysPageSize = 500
 
 // keyPlaceholder stands in for a real key in the client snippets: the admin
 // page never displays key material.
@@ -42,23 +44,46 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 // dashboardData collects everything the admin page shows.
 func (m *Module) dashboardData(ctx context.Context) DashboardData {
-	settings := m.currentSettings()
-	siteURL := m.siteURL(ctx)
-	endpoint := EndpointPath
-	if siteURL != "" {
-		endpoint = siteURL + EndpointPath
-	}
 	data := DashboardData{
-		EndpointURL:       endpoint,
-		SiteURLMissing:    siteURL == "",
-		ProtocolVersions:  strings.Join(mcp.SupportedProtocolVersions(), ", "),
-		Version:           moduleVersion,
-		AllowDrafts:       settings.AllowDrafts,
-		Instructions:      settings.Instructions,
-		MaxInstructions:   maxInstructionsRunes,
-		ClaudeCodeCommand: claudeCodeCommand(endpoint),
-		ClientConfigJSON:  clientConfigJSON(endpoint),
+		ProtocolVersions: strings.Join(mcp.SupportedProtocolVersions(), ", "),
+		Version:          moduleVersion,
+		MaxInstructions:  maxInstructionsRunes,
 	}
+
+	// The form shows what is stored, which also brings the running server
+	// in line with it. If the settings cannot be read, the page says so and
+	// disables the form rather than offering defaults to save over them.
+	settings, err := m.reloadSettings(ctx)
+	if err != nil {
+		m.logger.Error("failed to load MCP settings for the admin page", "error", err)
+		data.SettingsError = true
+		settings = m.currentSettings()
+	}
+	data.AllowDrafts, data.Instructions = settings.AllowDrafts, settings.Instructions
+
+	endpoint := EndpointPath
+	siteURL, status, err := m.resolveSiteURL(ctx)
+	switch {
+	case err != nil:
+		m.logger.Error("failed to read the site URL for the MCP page", "error", err)
+		data.ConfigError = true
+	case status == siteURLValid:
+		endpoint = siteURL + EndpointPath
+	case status == siteURLInvalid:
+		raw, rawErr := m.configValue(ctx, model.ConfigKeySiteURL)
+		if rawErr != nil {
+			m.logger.Error("failed to read the site URL for the MCP page", "error", rawErr)
+			data.ConfigError = true
+		} else {
+			data.SiteURLInvalid = strings.TrimSpace(raw)
+		}
+	default:
+		data.SiteURLMissing = true
+	}
+	data.EndpointURL = endpoint
+	data.ClaudeCodeCommand = claudeCodeCommand(endpoint)
+	data.ClientConfigJSON = clientConfigJSON(endpoint)
+
 	for _, spec := range toolCatalog() {
 		data.Tools = append(data.Tools, ToolRow{Name: spec.Name, Title: spec.Title, Description: spec.Description})
 	}
@@ -74,35 +99,45 @@ func (m *Module) dashboardData(ctx context.Context) DashboardData {
 // mcpKeys lists the API keys holding mcp:access. Only display metadata is
 // returned; key hashes never leave the store layer.
 func (m *Module) mcpKeys(ctx context.Context) ([]KeyRow, error) {
-	keys, err := m.svc.queries.ListAPIKeys(ctx, store.ListAPIKeysParams{Limit: maxListedKeys})
-	if err != nil {
-		return nil, fmt.Errorf("listing API keys: %w", err)
-	}
 	now := time.Now()
 	var rows []KeyRow
-	for i := range keys {
-		key := &keys[i]
-		permissions := middleware.ParseAPIKeyPermissions(key)
-		if !slices.Contains(permissions, model.PermissionMCPAccess) {
-			continue
+	for offset := int64(0); ; offset += keysPageSize {
+		keys, err := m.svc.queries.ListAPIKeys(ctx, store.ListAPIKeysParams{Limit: keysPageSize, Offset: offset})
+		if err != nil {
+			return nil, fmt.Errorf("listing API keys: %w", err)
 		}
-		row := KeyRow{
-			ID:          key.ID,
-			Name:        key.Name,
-			Prefix:      key.KeyPrefix,
-			Permissions: permissions,
-			Active:      key.IsActive,
+		for i := range keys {
+			if row, ok := mcpKeyRow(&keys[i], now); ok {
+				rows = append(rows, row)
+			}
 		}
-		if key.LastUsedAt.Valid {
-			row.LastUsed = key.LastUsedAt.Time.Format("2006-01-02 15:04")
+		if len(keys) < keysPageSize {
+			return rows, nil
 		}
-		if key.ExpiresAt.Valid {
-			row.Expires = key.ExpiresAt.Time.Format("2006-01-02")
-			row.Expired = key.ExpiresAt.Time.Before(now)
-		}
-		rows = append(rows, row)
 	}
-	return rows, nil
+}
+
+// mcpKeyRow returns the overview row of a key holding mcp:access.
+func mcpKeyRow(key *store.ApiKey, now time.Time) (KeyRow, bool) {
+	permissions := middleware.ParseAPIKeyPermissions(key)
+	if !slices.Contains(permissions, model.PermissionMCPAccess) {
+		return KeyRow{}, false
+	}
+	row := KeyRow{
+		ID:          key.ID,
+		Name:        key.Name,
+		Prefix:      key.KeyPrefix,
+		Permissions: permissions,
+		Active:      key.IsActive,
+	}
+	if key.LastUsedAt.Valid {
+		row.LastUsed = key.LastUsedAt.Time.Format("2006-01-02 15:04")
+	}
+	if key.ExpiresAt.Valid {
+		row.Expires = key.ExpiresAt.Time.Format("2006-01-02")
+		row.Expired = key.ExpiresAt.Time.Before(now)
+	}
+	return row, true
 }
 
 // claudeCodeCommand renders the Claude Code CLI command for the endpoint.
@@ -175,23 +210,12 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		AllowDrafts:  r.FormValue("allow_drafts") == "1",
 		Instructions: instructions,
 	}
-	prev := m.currentSettings()
-
-	// Build first, persist second, swap last: a failure never leaves the
-	// stored settings and the running server disagreeing.
-	srv, err := m.buildServer(next)
+	prev, err := m.saveAndApply(r.Context(), next)
 	if err != nil {
-		m.logger.Error("failed to rebuild MCP server with new settings", "error", err)
-		fail(i18n.T(lang, "mcp.error_save"))
-		return
-	}
-	if err := saveSettings(r.Context(), m.ctx.DB, next); err != nil {
 		m.logger.Error("failed to save MCP settings", "error", err)
 		fail(i18n.T(lang, "mcp.error_save"))
 		return
 	}
-	m.settings.Store(&next)
-	m.server.Store(srv)
 
 	meta := map[string]any{
 		"allow_drafts":          next.AllowDrafts,

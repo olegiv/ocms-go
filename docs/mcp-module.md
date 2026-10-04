@@ -30,8 +30,8 @@ drift test fails if a tool without that mark is registered.
   catalog and the keys that have MCP access.
 - **Server card.** `/.well-known/mcp/server-card.json` advertises the endpoint
   while the module is active.
-- **Structured logs:** one line per tool call. Keys, arguments and content are
-  never logged.
+- **Structured logs:** one line per tool call, including calls the SDK rejects.
+  Keys and arguments are never logged.
 
 ## Enabling the module
 
@@ -40,16 +40,18 @@ upgrade never opens a new remote endpoint on its own.
 
 1. Go to **Admin → Modules** and turn on **MCP Server**. Until you do,
    `/api/mcp` returns 404.
-2. Go to **Admin → API Keys** and create a key with the **MCP: Connect AI
-   agents over MCP** permission (`mcp:access`). Add **Pages: Read**
-   (`pages:read`) only if agents should see drafts (see below).
+2. Go to **Admin → API Keys** and create a key with the **MCP** permission
+   (`mcp:access`). That alone lets agents read published content. Add
+   **Pages → Read pages, including unpublished drafts** (`pages:read`) only if
+   agents should see drafts (see below).
 3. Configure the client (see [Connecting clients](#connecting-clients)). The
    admin page at **Admin → Modules → MCP Server** (`/admin/mcp`) shows ready-made
    snippets for the endpoint.
 
-Set the **Site URL** (`OCMS_SITE_URL` or **Admin → Config**). Without it the
-admin page shows the endpoint as a bare path, and tool results leave out page
-URLs.
+Set the **Site URL** (`OCMS_SITE_URL` or **Admin → Config**) to an absolute
+`http(s)` URL. Without a usable one, the admin page shows the endpoint as a bare
+path and tool results leave out page URLs. The admin page tells a missing value
+apart from an unusable one, such as `example.com` without a scheme.
 
 ### Production API key policies apply
 
@@ -155,14 +157,23 @@ the REST v2 error envelope, so an agent can correct its own call:
 ```
 
 Codes match REST v2: `not_found`, `validation_error`, `forbidden`, `conflict`,
-`unauthorized` and `internal_error`. Internal failures never expose details;
-the cause is logged on the server.
+`unauthorized` and `internal_error`. One code is MCP-only: `timeout`, for a
+call cut short because the client went away or the call hit the 25-second
+limit. Internal failures never expose details; the cause is logged on the
+server.
 
 Arguments that break the input schema, such as an unknown property or a value
-out of range, are rejected before the tool runs. Those results also have
-`isError: true`, but their text is the SDK's validation message (for example
-`validating /properties/per_page: maximum: 500/1 is greater than 100`), not the
-envelope.
+out of range, are rejected before the tool runs. They use the same envelope,
+with the SDK's validation message as the `arguments` detail:
+
+```json
+{"error":{"code":"validation_error","message":"Validation failed","details":{"arguments":"validating \"arguments\": validating root: validating /properties/per_page: maximum: 500/1 is greater than 100.000000"}}}
+```
+
+Protocol-level failures are JSON-RPC errors instead. An unknown tool is one.
+So is a tool result that fails its own output schema, which is a server bug:
+that one returns a generic `internal error`, never the SDK's message, because
+the message can quote server data.
 
 ## Visibility and permissions
 
@@ -175,9 +186,10 @@ envelope.
 
 When drafts are not visible, the server removes `pages:read` from the key's
 effective permissions before calling the page services. The services then apply
-their published-only rule, so a draft is reported as "not found" and its
-existence is not leaked. A `list_pages` request with `status: "draft"` is
-refused with `forbidden`.
+their published-only rule, so a draft is reported as "not found", and search
+and listings skip it. A `list_pages` request with `status: "draft"` is refused
+with `forbidden`. Tag and category page counts still include drafts (see
+[Known limitations](#known-limitations)).
 
 `get_site_info` reports `drafts_visible`, so agents know which rule applies.
 
@@ -192,9 +204,16 @@ it is blocked in demo mode.
 | Instructions for AI agents | Empty | Up to 4000 characters of guidance sent to every client in the `initialize` / `server/discover` response, after the built-in orientation |
 
 Saving rebuilds the MCP server first, stores the settings second and swaps the
-new server in last. A failure therefore never leaves the stored settings and
-the running server out of step. Every change is logged and recorded in the
-event log as `MCP settings updated`.
+new server in last, one save at a time. A failure therefore never leaves the
+stored settings and the running server out of step. Every change is logged and
+recorded in the event log as `MCP settings updated`.
+
+The page always shows the stored settings. If they differ from the running
+ones, for example because another instance saved them, opening the page applies
+them. If the stored settings cannot be read, the page says so and disables the
+form. The server keeps the safe defaults (drafts hidden, no instructions) until
+they can be read; the form is disabled so those defaults cannot be saved over
+the stored values.
 
 The page also shows:
 
@@ -213,7 +232,7 @@ module is active, it carries:
 
 ```json
 {
-  "serverInfo": {"name": "oCMS", "version": "1.0.0"},
+  "serverInfo": {"name": "ocms", "title": "oCMS", "version": "1.0.0"},
   "transport": "https://example.com/api/mcp",
   "capabilities": {"tools": {}, "rest": {"openapi": "https://example.com/api/v2/openapi.json"}},
   "remotes": [{"type": "streamable-http", "url": "https://example.com/api/mcp"}],
@@ -221,15 +240,20 @@ module is active, it carries:
 }
 ```
 
-While the module is inactive, the card falls back to `"transport": null` with
-only the REST capability. The `mcp_server_version` config key overrides the
-advertised version when set.
+`serverInfo` is exactly what the endpoint reports at `initialize`;
+`TestServerCardMatchesInitialize` keeps the two in step. While the module is
+inactive, the card falls back to `"transport": null` with only the REST
+capability, labelled with the `mcp_server_version` config key (`0.0.0` when
+empty). That key does not apply to a live card.
+
+The card is served with `Cache-Control: no-cache`, because toggling the module
+changes it.
 
 ## Security
 
 The endpoint runs this chain, outermost first. The global middleware chain
-(trusted-proxy client IP, Sentinel bans, request logging, panic recovery,
-30-second timeout, security headers) runs before all of it.
+(trusted-proxy client IP, Sentinel bans, request logging, 30-second timeout,
+security headers) runs before all of it.
 
 | Step | Rejects with |
 |---|---|
@@ -242,6 +266,7 @@ The endpoint runs this chain, outermost first. The global middleware chain
 | `mcp:access` permission | 403 |
 | Per-key rate limit | 429 |
 | Request body cap | 413 |
+| JSON-RPC batch | 400 `batch_not_supported` |
 
 | Limit | Value |
 |---|---|
@@ -249,7 +274,7 @@ The endpoint runs this chain, outermost first. The global middleware chain
 | Concurrent requests | 32 |
 | Per-IP rate | 20 requests/s, burst 40 |
 | Per-key rate | 10 requests/s, burst 30 |
-| Request time | 30 s (global timeout; cancellation reaches database work) |
+| Tool call time | 25 s per call. A client disconnect or the 30 s global timeout also cancels the call, and cancellation reaches its database queries on every protocol version. |
 
 Other controls:
 
@@ -260,10 +285,23 @@ Other controls:
   `http.CrossOriginProtection`, and mandatory authentication on every request.
   Non-browser clients send neither `Origin` nor `Sec-Fetch-Site` and pass; a
   web page cannot reach the endpoint.
-- **Panics:** the SDK runs handlers on its own goroutines, outside chi's
-  recoverer, and has no panic recovery. Every tool and every MCP method is
-  wrapped, so a panic becomes an `internal_error` result and is logged with its
-  stack; it does not crash the process.
+- **JSON-RPC batches:** rejected. For requests that declare protocol
+  `2025-03-26` or older, or no protocol, go-sdk runs every call of a batch
+  concurrently. One request could then carry thousands of tool calls past the
+  per-key rate limit and the in-flight cap, which both count requests.
+  Protocol `2025-06-18` and later forbid batches, and mainstream clients do not
+  send them. This deliberately deviates from `2025-03-26`, which says servers
+  must accept batches.
+- **Cancellation:** go-sdk gives handlers of pre-`2026-07-28` requests a
+  context that never reports cancellation. The module re-attaches the HTTP
+  request's cancellation and adds the 25-second cap, so abandoned calls stop
+  their database work.
+- **Panics:** the SDK has no panic recovery and runs handlers on its own
+  goroutines. The global timeout middleware runs every handler on another
+  goroutine of its own, out of reach of chi's recoverer. The module therefore
+  recovers panics itself at three levels: the endpoint, every MCP method and
+  every tool. A panic becomes an internal error and is logged with its stack; it
+  does not crash the process.
 - **`"arguments": null`:** in go-sdk v1.8.0, a `tools/call` whose arguments
   are JSON `null` panics while applying schema defaults. The module turns that
   into absent arguments before validation. A regression test covers it.
@@ -282,15 +320,32 @@ The module logs through `slog` with `module=mcp`:
 
 | Event | Level | Fields |
 |---|---|---|
-| Tool call | Info | `tool`, `outcome` (`ok`, `tool_error`, `internal_error`, `unauthenticated`), `duration_ms`, `api_key_id`, `api_key_prefix`, `client_name`, `client_version`, `protocol_version`, `error_code` |
-| Internal tool failure | Error | `tool`, `error` |
-| Cancelled or timed-out call | Warn | `tool`, `error` |
-| Panic in a tool or MCP method | Error | `tool` or `method`, `panic`, `stack` |
+| Tool call, one line per `tools/call` | Info; Warn for `cancelled`; Error for `internal_error` | `tool`, `outcome`, `duration_ms`, `api_key_id`, `api_key_prefix`, `client_name`, `client_version`, `protocol_version`, `error_code`, plus `error` (the cause) for internal and cancelled calls |
+| Panic in the endpoint, an MCP method or a tool | Error | `panic`, `stack`, plus `tool`/`method`/`ip` |
 | Key without `mcp:access`, cross-origin request, in-flight cap reached | Warn | `api_key_id`/`api_key_prefix` or `ip`, `origin` |
+| Unusable site URL (once until the value changes) | Warn | `site_url` |
 | Settings saved | Info | `user_id`, `allow_drafts`, `previous_allow_drafts`, `instructions_length` (also recorded in the event log) |
+| Settings reloaded from the database | Info | `allow_drafts`, `instructions_length` |
+| Settings unreadable at startup | Error | `error` |
 | Module initialized | Info | endpoint, tool count, drafts policy, protocol versions, limits |
+| go-sdk messages | Warn and above only | `component` (`mcp-server`, `mcp-transport`) |
 
-API keys, tool arguments and returned content are never logged.
+Tool call outcomes:
+
+| Outcome | Meaning |
+|---|---|
+| `ok` | The call succeeded. |
+| `tool_error` | A domain error, such as not found or forbidden. |
+| `invalid_arguments` | The arguments failed the input schema, so the tool never ran. |
+| `rejected` | A JSON-RPC error, such as an unknown tool. |
+| `cancelled` | The client disconnected, the request timed out, or the call hit the 25-second cap. |
+| `internal_error` | A server-side failure. |
+| `unauthenticated` | The call had no authenticated key. |
+
+API keys and tool arguments are never logged, and neither is returned content,
+with one exception: an internal failure's cause is logged as-is. When the SDK
+rejects a tool's own output (a server bug), that message can quote the
+offending value.
 
 ## Testing with curl
 
@@ -348,6 +403,26 @@ Drift tests in `modules/mcpserver/drift_test.go`:
 | `TestEveryRegisteredToolIsReadOnly` | A registered tool lacks the read-only annotations |
 | `TestCatalogSpecsWellFormed` | A catalog entry has an invalid or duplicate name, lacks a title or description, or declares both or neither of a REST mapping and an MCP-only reason |
 | `TestTranslationsCompleteAndUsedKeysExist` | en/ru keys diverge, or code uses an `mcp.*` key that does not exist |
+| `TestServerCardMatchesInitialize` | The server card's `serverInfo` differs from what `initialize` reports |
+
+`internal/api/v2/drift_test.go` adds `TestInternalErrorsKeepTheirCause`, which
+fails when a v2 service builds an internal error without its cause. Without the
+cause, the MCP log could not explain internal failures or recognize
+cancellations.
+
+## Known limitations
+
+These come from the REST v2 services the tools share and will be fixed there,
+for REST and MCP together:
+
+- **Tag and category page counts include drafts.** `page_count` in `list_tags`,
+  `get_tag`, `list_categories` and `get_category` (and REST v2) counts
+  unpublished pages too, which reveals that drafts exist. Their content is not
+  revealed.
+- **Media search paging.** With `search`, `list_media` returns only the first
+  page of matches, and `total` counts only the returned items.
+- **Status with category or tag.** When drafts are visible, `list_pages`
+  ignores `status` if `category_id` or `tag_id` is also given.
 
 ## Follow-ups
 

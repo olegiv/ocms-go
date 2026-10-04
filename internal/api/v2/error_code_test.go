@@ -4,7 +4,11 @@
 package v2_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
@@ -38,5 +42,29 @@ func TestErrorCodeMatchesRESTEnvelope(t *testing.T) {
 		if body.Error.Code == "" {
 			t.Errorf("kind %d: empty error code", kind)
 		}
+	}
+}
+
+// TestNewInternalErrorKeepsCauseOutOfResponses fails when an internal error
+// loses its cause or leaks it: errors.Is must reach the cause (MCP relies on
+// it to recognise cancellation), while the REST envelope carries only the
+// curated message.
+func TestNewInternalErrorKeepsCauseOutOfResponses(t *testing.T) {
+	cause := fmt.Errorf("querying pages: %w", context.Canceled)
+	domainErr := apiv2.NewInternalError("Failed to list pages", cause)
+
+	if !errors.Is(domainErr, context.Canceled) {
+		t.Error("errors.Is must see the cause through NewInternalError")
+	}
+	if domainErr.Code() != "internal_error" || domainErr.Error() != "Failed to list pages" {
+		t.Errorf("code %q message %q, want internal_error and the curated message", domainErr.Code(), domainErr.Error())
+	}
+
+	raw, err := json.Marshal(apiv2.ToHuma(domainErr))
+	if err != nil {
+		t.Fatalf("marshal REST error: %v", err)
+	}
+	if strings.Contains(string(raw), "querying pages") || strings.Contains(string(raw), "canceled") {
+		t.Errorf("REST response leaks the cause: %s", raw)
 	}
 }

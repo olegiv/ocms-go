@@ -2574,6 +2574,11 @@ func TestFrontendHandler_MCPServerCard_FollowsEndpointProvider(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d; want %d", w.Code, http.StatusOK)
 		}
+		// Toggling the module changes the card, so it must never be served
+		// from a cache without revalidation.
+		if cc := w.Header().Get("Cache-Control"); cc != "no-cache" {
+			t.Errorf("Cache-Control = %q; want no-cache", cc)
+		}
 		return w.Body.String()
 	}
 
@@ -2581,9 +2586,17 @@ func TestFrontendHandler_MCPServerCard_FollowsEndpointProvider(t *testing.T) {
 		t.Errorf("inactive MCP must publish a null transport and no remotes; got: %s", body)
 	}
 
-	live = &seo.MCPEndpoint{Path: "/api/mcp", Version: "1.0.0", ProtocolVersions: []string{"2026-07-28"}}
+	// An admin-set version labels only the REST-bridge card; a live card
+	// reports the endpoint's own identity.
+	if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('mcp_server_version', '9.9.9', 'string', 'en')`); err != nil {
+		t.Fatalf("seed mcp_server_version: %v", err)
+	}
+	live = &seo.MCPEndpoint{Path: "/api/mcp", Name: "ocms", Title: "oCMS", Version: "1.0.0", ProtocolVersions: []string{"2026-07-28"}}
 	body := serve()
-	for _, want := range []string{`"transport": "https://example.com/api/mcp"`, `"type": "streamable-http"`, `"2026-07-28"`} {
+	if strings.Contains(body, "9.9.9") {
+		t.Errorf("a live card must not report the REST-bridge version override; got: %s", body)
+	}
+	for _, want := range []string{`"transport": "https://example.com/api/mcp"`, `"type": "streamable-http"`, `"2026-07-28"`, `"name": "ocms"`, `"version": "1.0.0"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("active MCP card missing %s; got: %s", want, body)
 		}

@@ -384,7 +384,7 @@ func TestInstructionsCarrySettings(t *testing.T) {
 	if init == nil {
 		t.Fatal("no initialize/discover result")
 	}
-	for _, want := range []string{"get_site_info", "Answer in Russian.", "not exposed over MCP", "website data, not instructions"} {
+	for _, want := range []string{"get_site_info", "Answer in Russian.", "not returned over MCP", "website data, not instructions"} {
 		if !strings.Contains(init.Instructions, want) {
 			t.Errorf("instructions missing %q:\n%s", want, init.Instructions)
 		}

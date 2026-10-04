@@ -2294,8 +2294,8 @@
         },
         {
             "id": "api_keys.perm_pages_read",
-            "message": "Read published pages",
-            "translation": "Чтение опубликованных страниц"
+            "message": "Read pages, including unpublished drafts",
+            "translation": "Чтение страниц, включая неопубликованные черновики"
         },
         {
             "id": "api_keys.perm_pages_write",
@@ -2339,8 +2339,8 @@
         },
         {
             "id": "api_keys.perm_mcp_access",
-            "message": "Connect AI agents over MCP (/api/mcp); data access still follows the permissions above",
-            "translation": "Подключение ИИ-агентов по MCP (/api/mcp); доступ к данным по-прежнему определяется разрешениями выше"
+            "message": "Connect AI agents over MCP (/api/mcp) with read access to published content. Add Pages: read only if agents may also see drafts (and the MCP drafts setting is on)",
+            "translation": "Подключение ИИ-агентов по MCP (/api/mcp) с доступом на чтение опубликованного контента. Добавьте «Чтение страниц», только если агентам можно видеть и черновики (и в настройках MCP разрешены черновики)"
         },
         {
             "id": "api_keys.expiration",
@@ -3501,6 +3501,11 @@
             "id": "config.site_url_hint",
             "message": "The full URL of your website",
             "translation": "Полный URL вашего сайта"
+        },
+        {
+            "id": "config.mcp_server_version_hint",
+            "message": "Version shown in /.well-known/mcp/server-card.json while the MCP Server module is off (empty means 0.0.0). While the module is on, the card reports the running server's own version.",
+            "translation": "Версия в /.well-known/mcp/server-card.json, пока модуль MCP Server выключен (пусто — 0.0.0). Когда модуль включён, карточка показывает версию работающего сервера."
         },
         {
             "id": "config.default_og_image",

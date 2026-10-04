@@ -66,11 +66,12 @@ oCMS implements defense-in-depth security measures:
 - **Explicit Permission**: API keys need `mcp:access`; REST integration keys never become usable by AI agents implicitly
 - **Shared API Key Policies**: The same authentication middleware as REST v2 (CIDR allowlists, expiry, maximum lifetime, IP-change revocation, Argon2 verification)
 - **Read-Only Tools**: No tool writes data; a drift test fails if a tool without the read-only annotation is registered
-- **Draft Confidentiality**: Drafts are exposed only when an admin enables it and the key holds `pages:read`; hidden drafts answer "not found"
+- **Draft Confidentiality**: Drafts are exposed only when an admin enables it and the key holds `pages:read`; hidden drafts answer "not found" (tag and category page counts still include them, as in REST v2)
 - **No Personal Data**: Author email addresses, users, form submissions, settings and keys are never returned
 - **Origin Validation**: Cross-origin browser requests are rejected (`Sec-Fetch-Site` / `Origin`), countering DNS rebinding
-- **Resource Limits**: 256 KiB request body, 32 concurrent requests, per-IP and per-key rate limits, 30 s timeout with cancellation
-- **Panic Isolation**: Tool and protocol panics become internal errors instead of crashing the process
+- **Resource Limits**: 256 KiB request body, 32 concurrent requests, per-IP and per-key rate limits, JSON-RPC batches rejected (one call per request), 25 s per tool call
+- **Cancellation**: Client disconnects and timeouts cancel a tool's database work on every protocol version
+- **Panic Isolation**: Panics in the endpoint, the protocol layer and tools become internal errors instead of crashing the process
 - **Prompt-Injection Guidance**: Server instructions tell agents that returned content is website data, not instructions
 - **Private Responses**: `Cache-Control: no-store` and MCP `cacheScope: private`; internal error details are never sent to agents
 - **Audit Logging**: One structured log line per tool call (key id and prefix, client, outcome; never keys, arguments or content); settings changes go to the event log

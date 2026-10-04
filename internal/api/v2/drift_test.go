@@ -424,8 +424,9 @@ func statementCallsResolveLanguageCode(stmt ast.Stmt) bool {
 	return false
 }
 
-// returnsErrInternal reports whether the given block returns a
-// `v2.NewError(v2.ErrInternal, ...)` expression (in any return position).
+// returnsErrInternal reports whether the given block returns an internal
+// error (`v2.NewError(v2.ErrInternal, ...)` or `v2.NewInternalError(...)`) in
+// any return position.
 func returnsErrInternal(block *ast.BlockStmt) bool {
 	found := false
 	ast.Inspect(block, func(n ast.Node) bool {
@@ -434,22 +435,7 @@ func returnsErrInternal(block *ast.BlockStmt) bool {
 			return true
 		}
 		for _, res := range ret.Results {
-			call, ok := res.(*ast.CallExpr)
-			if !ok {
-				continue
-			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				continue
-			}
-			if sel.Sel.Name != "NewError" {
-				continue
-			}
-			// Check first arg is *.ErrInternal
-			if len(call.Args) == 0 {
-				continue
-			}
-			if argSel, ok := call.Args[0].(*ast.SelectorExpr); ok && argSel.Sel.Name == "ErrInternal" {
+			if call, ok := res.(*ast.CallExpr); ok && isInternalErrorConstructor(call) {
 				found = true
 				return false
 			}
@@ -457,6 +443,57 @@ func returnsErrInternal(block *ast.BlockStmt) bool {
 		return true
 	})
 	return found
+}
+
+// isInternalErrorConstructor reports whether call builds an internal domain
+// error, in either the package-qualified or the in-package form.
+func isInternalErrorConstructor(call *ast.CallExpr) bool {
+	switch exprName(call.Fun) {
+	case "NewInternalError":
+		return true
+	case "NewError":
+		return len(call.Args) > 0 && exprName(call.Args[0]) == "ErrInternal"
+	}
+	return false
+}
+
+// exprName returns the final identifier of an identifier or selector
+// expression ("v2.ErrInternal" → "ErrInternal"), or "" for anything else.
+func exprName(e ast.Expr) string {
+	switch v := e.(type) {
+	case *ast.Ident:
+		return v.Name
+	case *ast.SelectorExpr:
+		return v.Sel.Name
+	}
+	return ""
+}
+
+// TestInternalErrorsKeepTheirCause asserts that internal errors are built with
+// NewInternalError and a real cause. NewError(ErrInternal, …) drops the cause,
+// so logs can show only the curated message and errors.Is cannot see a
+// cancelled or timed-out request underneath (the MCP server classifies
+// cancellations that way). Prevents the class of bug the MCP review caught:
+// every v2 read path discarded its database error.
+func TestInternalErrorsKeepTheirCause(t *testing.T) {
+	walkV2Files(t, func(fset *token.FileSet, path string, f *ast.File) {
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || !isInternalErrorConstructor(call) {
+				return true
+			}
+			line := fset.Position(call.Pos()).Line
+			switch exprName(call.Fun) {
+			case "NewError":
+				t.Errorf("%s:%d: NewError(ErrInternal, …) drops the cause; use NewInternalError(msg, err)", path, line)
+			case "NewInternalError":
+				if len(call.Args) == 2 && exprName(call.Args[1]) == "nil" {
+					t.Errorf("%s:%d: NewInternalError needs the underlying error as its cause, not nil", path, line)
+				}
+			}
+			return true
+		})
+	})
 }
 
 // TestSecurityDeclarationEnforcedAtRuntime asserts that for every registered

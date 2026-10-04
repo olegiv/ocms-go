@@ -5,7 +5,10 @@ package module
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -92,5 +95,59 @@ func TestActivationDefaulterActiveByDefaultTrue(t *testing.T) {
 	}
 	if !r.IsActive("default-on") || !m.initCalled {
 		t.Error("a module returning ActiveByDefault()=true must be active and initialized")
+	}
+}
+
+// slowInitModule is an opt-in mock whose Init takes long enough for
+// concurrent activations to overlap, and counts how often it runs.
+type slowInitModule struct {
+	*optInModule
+	inits atomic.Int32
+}
+
+func (m *slowInitModule) Init(*Context) error {
+	m.inits.Add(1)
+	time.Sleep(20 * time.Millisecond)
+	return nil
+}
+
+// TestSetActiveInitializesOnce verifies concurrent activations of a module
+// that was never initialized run Init exactly once. Opt-in modules are always
+// initialized this way, so a double-click or two admins toggling at once must
+// not initialize them twice.
+func TestSetActiveInitializesOnce(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	r := NewRegistry(logger)
+	m := &slowInitModule{optInModule: &optInModule{mockModule: newMockModule("slow", "1.0.0")}}
+	if err := r.Register(m); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := r.InitAll(&Context{DB: db, Logger: logger}); err != nil {
+		t.Fatalf("InitAll: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if err := r.SetActive("slow", true); err != nil {
+				t.Errorf("SetActive: %v", err)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if got := m.inits.Load(); got != 1 {
+		t.Errorf("Init ran %d times, want exactly 1", got)
+	}
+	if !r.IsActive("slow") {
+		t.Error("module must be active after activation")
 	}
 }

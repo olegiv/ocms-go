@@ -55,6 +55,14 @@ func NewError(kind ErrorKind, msg string) *Error {
 	return &Error{Kind: kind, Msg: msg}
 }
 
+// NewInternalError constructs an internal error that keeps its cause. Only
+// msg reaches clients (ToHuma and the MCP server render Msg alone); the cause
+// stays available to logs and to errors.Is, which is how callers recognise a
+// cancelled or timed-out request underneath a failed query.
+func NewInternalError(msg string, cause error) *Error {
+	return &Error{Kind: ErrInternal, Msg: msg, Wrap: cause}
+}
+
 // NewValidationError constructs a validation error carrying per-field messages.
 func NewValidationError(fields map[string]string, msg string) *Error {
 	return &Error{Kind: ErrValidation, Fields: fields, Msg: msg}

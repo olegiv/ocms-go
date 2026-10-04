@@ -16,9 +16,12 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
+	"sync"
 	"sync/atomic"
 
 	"github.com/go-chi/chi/v5"
@@ -42,6 +45,12 @@ const (
 	// ModuleName is the registry name of the MCP module.
 	ModuleName    = "mcp"
 	moduleVersion = "1.0.0"
+
+	// serverName and serverTitle are the serverInfo the endpoint reports at
+	// initialize. The server card reports the same values (ServerCardEndpoint),
+	// so a client comparing the two sees one server.
+	serverName  = "ocms"
+	serverTitle = "oCMS"
 
 	// EndpointPath is the public MCP endpoint. It sits under the reserved
 	// "api" prefix (util.IsReservedLanguageCode), so it can never shadow a
@@ -88,6 +97,13 @@ type endpointHandler struct {
 	http.Handler
 }
 
+// serverState pairs the active settings with the server built from them, so
+// a request never sees the settings of one save with the server of another.
+type serverState struct {
+	settings Settings
+	server   *mcp.Server
+}
+
 // Module implements module.Module for the MCP server.
 type Module struct {
 	module.BaseModule
@@ -95,13 +111,19 @@ type Module struct {
 	logger *slog.Logger
 	svc    *services
 
-	settings atomic.Pointer[Settings]
-	server   atomic.Pointer[mcp.Server]
+	state atomic.Pointer[serverState]
+	// settingsMu serializes settings changes (build, save, swap), so two
+	// concurrent saves cannot leave the database and the running server
+	// with different settings.
+	settingsMu sync.Mutex
 	// handler is the full HTTP chain, built in Init. Routes are registered for
 	// inactive modules too, while Init runs only on activation, so the route
 	// dispatches through this pointer instead of capturing middleware at
 	// registration time.
 	handler atomic.Pointer[endpointHandler]
+	// invalidSiteURL is the last unusable site URL logged, so a bad value is
+	// reported once rather than on every tool call.
+	invalidSiteURL atomic.Pointer[string]
 
 	schemaCache *mcp.SchemaCache
 }
@@ -134,16 +156,17 @@ func (m *Module) Init(ctx *module.Context) error {
 
 	settings, err := loadSettings(context.Background(), ctx.DB)
 	if err != nil {
-		m.logger.Warn("failed to load MCP settings, using defaults", "error", err)
+		// The defaults are the safe choice (drafts hidden, no administrator
+		// instructions); the admin page reports the failure and refuses to
+		// save over settings it could not read.
+		m.logger.Error("failed to load MCP settings; serving defaults (drafts hidden, no instructions)", "error", err)
 		settings = Settings{}
 	}
-	m.settings.Store(&settings)
-
 	srv, err := m.buildServer(settings)
 	if err != nil {
 		return fmt.Errorf("building MCP server: %w", err)
 	}
-	m.server.Store(srv)
+	m.state.Store(&serverState{settings: settings, server: srv})
 	m.handler.Store(&endpointHandler{Handler: m.buildHTTPHandler(ctx.DB)})
 
 	m.logger.Info("MCP module initialized",
@@ -205,7 +228,27 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 }
 
 // serveEndpoint dispatches to the chain built by Init.
+//
+// It recovers panics itself. The global middleware.Timeout runs handlers on a
+// goroutine of its own, out of reach of chi's Recoverer, so without this a
+// panic anywhere in the chain or in the SDK's request handling would end the
+// process.
 func (m *Module) serveEndpoint(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+		if err, ok := p.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+			// A deliberate abort; re-panicking here would crash the process.
+			return
+		}
+		m.logger.Error("MCP endpoint panicked",
+			"panic", fmt.Sprint(p),
+			"stack", string(debug.Stack()),
+			"ip", middleware.GetClientIP(r))
+		middleware.WriteAPIError(w, http.StatusInternalServerError, codeInternal, msgInternal, nil)
+	}()
 	h := m.handler.Load()
 	if h == nil {
 		// Registered but never initialized; the registry normally 404s first.
@@ -239,6 +282,8 @@ func (m *Module) TranslationsFS() embed.FS { return localesFS }
 func ServerCardEndpoint() *seo.MCPEndpoint {
 	return &seo.MCPEndpoint{
 		Path:             EndpointPath,
+		Name:             serverName,
+		Title:            serverTitle,
 		Version:          moduleVersion,
 		ProtocolVersions: mcp.SupportedProtocolVersions(),
 	}
@@ -246,10 +291,18 @@ func ServerCardEndpoint() *seo.MCPEndpoint {
 
 // currentSettings returns the active settings snapshot.
 func (m *Module) currentSettings() Settings {
-	if s := m.settings.Load(); s != nil {
-		return *s
+	if st := m.state.Load(); st != nil {
+		return st.settings
 	}
 	return Settings{}
+}
+
+// currentServer returns the active MCP server, or nil before Init.
+func (m *Module) currentServer() *mcp.Server {
+	if st := m.state.Load(); st != nil {
+		return st.server
+	}
+	return nil
 }
 
 // Migrations returns database migrations for the module.

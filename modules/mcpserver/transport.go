@@ -4,7 +4,11 @@
 package mcpserver
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -27,20 +31,23 @@ const bearerRealm = `Bearer realm="oCMS MCP"`
 //
 //	no-store → POST only → per-IP limit → in-flight cap → cross-origin check
 //	→ API key auth (+ WWW-Authenticate on 401) → mcp:access → TokenInfo
-//	→ per-key limit → SDK Streamable HTTP handler (stateless, JSON responses)
+//	→ per-key limit → no batches → request context
+//	→ SDK Streamable HTTP handler (stateless, JSON responses)
 //
 // Cheap rejections run before API key verification (Argon2), so probing the
 // endpoint costs little, and the per-IP limit runs before the in-flight cap so
 // a flood from one address cannot occupy the slots other callers need. The
 // global chain (request ID, trusted-proxy RealIP, sentinel bans, logging,
-// panic recovery, 30 s timeout, security headers) already wraps every module
-// route.
+// 30 s timeout, security headers) wraps every module route; panics are
+// recovered by serveEndpoint, because the timeout middleware runs handlers
+// out of reach of the global recoverer.
 //
-// Init runs once per process, so the two rate limiters (each with a cleanup
-// goroutine) are created once, like those of the REST routes.
+// Init runs once per process (the registry serializes activation), so the two
+// rate limiters, each with a cleanup goroutine, are created once, like those
+// of the REST routes.
 func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 	sdkHandler := mcp.NewStreamableHTTPHandler(
-		func(*http.Request) *mcp.Server { return m.server.Load() },
+		func(*http.Request) *mcp.Server { return m.currentServer() },
 		&mcp.StreamableHTTPOptions{
 			// Protocol 2026-07-28 is served only by stateless handlers, and
 			// statelessness keeps every request self-contained: no session
@@ -56,11 +63,13 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 			DisableLocalhostProtection:   true,
 			MaxRequestBodyBytes:          maxRequestBodyBytes,
 			PropagateRequestCancellation: true,
-			Logger:                       m.logger.With("component", "mcp-transport"),
+			Logger:                       sdkLogger(m.logger, "mcp-transport"),
 		},
 	)
 
 	var h http.Handler = sdkHandler
+	h = withRequestContext(h)
+	h = rejectBatches(maxRequestBodyBytes, h)
 	h = middleware.APIRateLimit(keyRateLimitRPS, keyRateLimitBurst)(h)
 	h = auth.RequireBearerToken(verifyValidatedKey, &auth.RequireBearerTokenOptions{
 		// Keys without an expiry are valid unless OCMS_REQUIRE_API_KEY_EXPIRY
@@ -85,6 +94,56 @@ func noStore(next http.Handler) http.Handler {
 		next.ServeHTTP(&headerWriter{ResponseWriter: w, before: func(h http.Header, _ int) {
 			h.Set("Cache-Control", "no-store")
 		}}, r)
+	})
+}
+
+// rejectBatches refuses JSON-RPC batch requests. go-sdk accepts a batch from
+// any request that declares protocol 2025-03-26 or older (or none), and runs
+// every call in it concurrently, so one HTTP request could carry thousands of
+// tool calls past the per-key rate limit and the in-flight cap, which count
+// requests. Protocol 2025-06-18 and later forbid batches and mainstream
+// clients do not send them, so the endpoint takes one message per request.
+//
+// It buffers the body to inspect it, within the same cap the SDK applies. It
+// runs after authentication and rate limiting, so only accepted callers'
+// bodies are read, and the in-flight cap bounds how many are held at once.
+func rejectBatches(maxBytes int64, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBytes))
+		if err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				middleware.WriteAPIError(w, http.StatusRequestEntityTooLarge, "request_too_large",
+					"Request body too large", nil)
+				return
+			}
+			middleware.WriteAPIError(w, http.StatusBadRequest, "invalid_request",
+				"Failed to read request body", nil)
+			return
+		}
+		if isJSONArray(body) {
+			middleware.WriteAPIError(w, http.StatusBadRequest, "batch_not_supported",
+				"JSON-RPC batch requests are not supported; send one request per HTTP call", nil)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isJSONArray reports whether a JSON document is an array.
+func isJSONArray(body []byte) bool {
+	trimmed := bytes.TrimLeft(body, " \t\r\n")
+	return len(trimmed) > 0 && trimmed[0] == '['
+}
+
+// withRequestContext stores the HTTP request's context as a value of itself.
+// The SDK hides its cancellation from handlers of pre-2026-07-28 requests but
+// forwards value lookups, which lets callContext re-attach it.
+func withRequestContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, requestContextKey{}, ctx)))
 	})
 }
 

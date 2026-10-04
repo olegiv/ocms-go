@@ -18,8 +18,16 @@ import (
 
 // DashboardData holds everything the MCP admin page renders.
 type DashboardData struct {
-	EndpointURL       string
-	SiteURLMissing    bool
+	EndpointURL    string
+	SiteURLMissing bool
+	// SiteURLInvalid is the configured site URL when it is not an absolute
+	// http(s) URL.
+	SiteURLInvalid string
+	// ConfigError reports that the site configuration could not be read.
+	ConfigError bool
+	// SettingsError reports that the stored MCP settings could not be read;
+	// the form is then disabled.
+	SettingsError     bool
 	ProtocolVersions  string
 	Version           string
 	AllowDrafts       bool
@@ -60,7 +68,19 @@ templ DashboardPage(pc *adminviews.PageContext, data DashboardData) {
 			}
 		}
 		<div class="space-y-6">
-			if data.SiteURLMissing {
+			if data.ConfigError {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					@alert.Description() {
+						{ pc.T("mcp.config_error") }
+					}
+				}
+			} else if data.SiteURLInvalid != "" {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					@alert.Description() {
+						{ pc.T("mcp.site_url_invalid", data.SiteURLInvalid) }
+					}
+				}
+			} else if data.SiteURLMissing {
 				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
 					@alert.Description() {
 						{ pc.T("mcp.site_url_missing") }
@@ -139,9 +159,18 @@ templ settingsCard(pc *adminviews.PageContext, data DashboardData) {
 			}
 		}
 		@card.Content() {
+			if data.SettingsError {
+				<div class="mb-6">
+					@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+						@alert.Description() {
+							{ pc.T("mcp.settings_load_error") }
+						}
+					}
+				</div>
+			}
 			<form method="POST" action="/admin/mcp" class="space-y-6">
 				<div class="flex items-start gap-3">
-					@checkbox.Checkbox(checkbox.Props{ID: "allow_drafts", Name: "allow_drafts", Value: "1", Checked: data.AllowDrafts})
+					@checkbox.Checkbox(checkbox.Props{ID: "allow_drafts", Name: "allow_drafts", Value: "1", Checked: data.AllowDrafts, Disabled: data.SettingsError})
 					<div class="grid gap-1">
 						@label.Label(label.Props{For: "allow_drafts"}) {
 							{ pc.T("mcp.allow_drafts") }
@@ -159,11 +188,12 @@ templ settingsCard(pc *adminviews.PageContext, data DashboardData) {
 						Value:       data.Instructions,
 						Rows:        6,
 						Placeholder: pc.T("mcp.instructions_placeholder"),
+						Disabled:    data.SettingsError,
 						Attributes:  templ.Attributes{"maxlength": fmt.Sprint(data.MaxInstructions)},
 					})
 					<p class="text-sm text-muted-foreground">{ pc.T("mcp.instructions_help", data.MaxInstructions) }</p>
 				</div>
-				@button.Button(button.Props{Type: button.TypeSubmit}) {
+				@button.Button(button.Props{Type: button.TypeSubmit, Disabled: data.SettingsError}) {
 					{ pc.T("mcp.save_button") }
 				}
 			</form>

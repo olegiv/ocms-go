@@ -99,3 +99,47 @@ func normalizeInstructions(raw string) (string, string) {
 	}
 	return s, ""
 }
+
+// saveAndApply stores new settings and makes them active: it builds the
+// server first, persists second and swaps last, so a failure never leaves the
+// database and the running server disagreeing. It returns the settings that
+// were active before.
+func (m *Module) saveAndApply(ctx context.Context, next Settings) (Settings, error) {
+	m.settingsMu.Lock()
+	defer m.settingsMu.Unlock()
+	prev := m.currentSettings()
+	srv, err := m.buildServer(next)
+	if err != nil {
+		return prev, fmt.Errorf("rebuilding MCP server: %w", err)
+	}
+	if err := saveSettings(ctx, m.ctx.DB, next); err != nil {
+		return prev, err
+	}
+	m.state.Store(&serverState{settings: next, server: srv})
+	return prev, nil
+}
+
+// reloadSettings reads the stored settings and, when they differ from the
+// active ones (loading failed at startup, or another instance saved them),
+// makes them active. Reading under settingsMu keeps a concurrent save from
+// being overwritten by the older stored values.
+func (m *Module) reloadSettings(ctx context.Context) (Settings, error) {
+	m.settingsMu.Lock()
+	defer m.settingsMu.Unlock()
+	stored, err := loadSettings(ctx, m.ctx.DB)
+	if err != nil {
+		return Settings{}, err
+	}
+	if stored == m.currentSettings() {
+		return stored, nil
+	}
+	srv, err := m.buildServer(stored)
+	if err != nil {
+		return Settings{}, fmt.Errorf("rebuilding MCP server: %w", err)
+	}
+	m.state.Store(&serverState{settings: stored, server: srv})
+	m.logger.Info("MCP settings reloaded from the database",
+		"allow_drafts", stored.AllowDrafts,
+		"instructions_length", utf8.RuneCountInString(stored.Instructions))
+	return stored, nil
+}

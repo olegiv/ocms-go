@@ -23,11 +23,12 @@ const (
 	PermissionTaxonomyRead  = "taxonomy:read"
 	PermissionTaxonomyWrite = "taxonomy:write"
 
-	// PermissionMCPAccess lets a key connect to the MCP server (/api/mcp).
-	// It grants no data access by itself: tools still apply the pages,
-	// media and taxonomy permissions above. Keeping it separate means an
-	// existing integration key never becomes usable by AI agents unless an
-	// administrator opts it in.
+	// PermissionMCPAccess lets a key connect to the MCP server (/api/mcp),
+	// where it reads what anonymous REST v2 callers read: published pages,
+	// media, tags and categories. PermissionPagesRead additionally exposes
+	// unpublished pages, over MCP only when the MCP drafts setting allows it.
+	// Keeping it separate means an existing integration key never becomes
+	// usable by AI agents unless an administrator opts it in.
 	PermissionMCPAccess = "mcp:access"
 )
 

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http/httptest"
 	"slices"
 	"strings"
@@ -429,11 +430,17 @@ func TestWrapToolLogsInternalErrors(t *testing.T) {
 	if strings.Contains(err.Error(), "/var/lib") {
 		t.Errorf("internal detail leaked: %v", err)
 	}
-	failures := env.logs.find("MCP tool failed")
-	if len(failures) != 1 {
-		t.Fatalf("failure log lines = %d, want 1", len(failures))
+	calls := env.logs.find("MCP tool call")
+	if len(calls) != 1 {
+		t.Fatalf("call log lines = %d, want 1", len(calls))
 	}
-	if v, _ := recordAttr(failures[0], "error"); !strings.Contains(v.String(), "database exploded") {
+	if calls[0].Level != slog.LevelError {
+		t.Errorf("level = %v, want Error for an internal failure", calls[0].Level)
+	}
+	if v, _ := recordAttr(calls[0], "outcome"); v.String() != outcomeInternalError {
+		t.Errorf("outcome = %q, want %q", v.String(), outcomeInternalError)
+	}
+	if v, _ := recordAttr(calls[0], "error"); !strings.Contains(v.String(), "database exploded") {
 		t.Error("the server log must keep the original error")
 	}
 }
@@ -465,7 +472,7 @@ func TestNormalizePaging(t *testing.T) {
 
 func TestServerInstructions(t *testing.T) {
 	hidden := serverInstructions(Settings{})
-	if !strings.Contains(hidden, "not exposed over MCP") || strings.Contains(hidden, "Guidance from the site administrator") {
+	if !strings.Contains(hidden, "not returned over MCP") || strings.Contains(hidden, "Guidance from the site administrator") {
 		t.Errorf("default instructions:\n%s", hidden)
 	}
 	shown := serverInstructions(Settings{AllowDrafts: true, Instructions: "Prefer recent posts."})
@@ -496,17 +503,26 @@ func TestPageURLs(t *testing.T) {
 
 func TestSiteURLValidation(t *testing.T) {
 	env := newTestEnv(t)
-	for _, tc := range []struct{ value, want string }{
-		{"https://example.com/", "https://example.com"},
-		{" http://example.com ", "http://example.com"},
-		{"javascript:alert(1)", ""},
-		{"example.com", ""},
-		{"ftp://example.com/pub", ""},
+	for _, tc := range []struct {
+		value, want string
+		status      siteURLStatus
+	}{
+		{"https://example.com/", "https://example.com", siteURLValid},
+		{" http://example.com ", "http://example.com", siteURLValid},
+		{"", "", siteURLUnset},
+		{"javascript:alert(1)", "", siteURLInvalid},
+		{"example.com", "", siteURLInvalid},
+		{"example.com", "", siteURLInvalid}, // unchanged: not logged again
+		{"ftp://example.com/pub", "", siteURLInvalid},
 	} {
 		env.setConfig(model.ConfigKeySiteURL, tc.value)
-		if got := env.module.siteURL(context.Background()); got != tc.want {
-			t.Errorf("siteURL(%q) = %q, want %q", tc.value, got, tc.want)
+		got, status, err := env.module.resolveSiteURL(context.Background())
+		if err != nil || got != tc.want || status != tc.status {
+			t.Errorf("resolveSiteURL(%q) = %q, %v, %v; want %q, %v", tc.value, got, status, err, tc.want, tc.status)
 		}
+	}
+	if warned := env.logs.find("configured site URL is not an absolute http(s) URL; MCP results omit page URLs"); len(warned) != 3 {
+		t.Errorf("invalid site URL warnings = %d, want one per change of value (3)", len(warned))
 	}
 }
 
@@ -568,7 +584,7 @@ func TestInitDefaultsWithoutOptionalContext(t *testing.T) {
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	if m.server.Load() == nil || m.handler.Load() == nil {
+	if m.currentServer() == nil || m.handler.Load() == nil {
 		t.Error("Init must build the server and the HTTP chain")
 	}
 }

@@ -4,6 +4,7 @@
 package markdown
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -36,8 +37,8 @@ func TestHTMLToMarkdownStripsActiveContent(t *testing.T) {
 }
 
 func TestHTMLToMarkdownSizeCap(t *testing.T) {
-	if _, err := HTMLToMarkdown(strings.Repeat("x", MaxHTMLBytes+1)); err == nil {
-		t.Fatal("expected error on oversized input")
+	if _, err := HTMLToMarkdown(strings.Repeat("x", MaxHTMLBytes+1)); !errors.Is(err, ErrBodyTooLarge) {
+		t.Fatalf("oversized input: err = %v, want ErrBodyTooLarge", err)
 	}
 	if _, err := HTMLToMarkdown(strings.Repeat("x", MaxHTMLBytes)); err != nil {
 		t.Fatalf("input at the cap must convert: %v", err)

@@ -518,7 +518,7 @@ func (m *Module) ActiveByDefault() bool {
 }
 ```
 
-Use it for modules that open a new remote surface, such as the built-in MCP server (`modules/mcpserver`), so an upgrade never exposes one without being asked. Like `AllowedEnvs`, it only sets the status at first registration; after that the `modules` table wins. `Init` runs when the module is activated, so build anything that depends on it (routes' handlers, rate limiters) in `Init` and read it per request rather than capturing it in `RegisterRoutes`.
+Use it for modules that open a new remote surface, such as the built-in MCP server (`modules/mcpserver`), so an upgrade never exposes one without being asked. Like `AllowedEnvs`, it only sets the status at first registration; after that the `modules` table wins. `Init` runs when the module is activated, and the registry serializes activation, so it runs once even when two admins switch the module on at the same time. Build anything that depends on it (routes' handlers, rate limiters) in `Init` and read it per request rather than capturing it in `RegisterRoutes`.
 
 ## Reference Implementation
 

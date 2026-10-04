@@ -1822,7 +1822,10 @@ func (h *FrontendHandler) MCPServerCard(w http.ResponseWriter, r *http.Request) 
 	body := seo.BuildMCPServerCard(siteURL, version, endpoint)
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	// The card changes when the MCP module is toggled at runtime, so caches
+	// must revalidate: a stale card would advertise an endpoint that answers
+	// 404, or hide one that is live.
+	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(body)
 }
 

@@ -324,3 +324,21 @@ func usedMessageKeys(t *testing.T) []string {
 	}
 	return keys
 }
+
+// TestServerCardMatchesInitialize fails when the server card and the live
+// server disagree about who they are: clients that read the card and then
+// connect compare the two.
+func TestServerCardMatchesInitialize(t *testing.T) {
+	env := newTestEnv(t)
+	session := env.connect(env.createKey(model.PermissionMCPAccess))
+	init := session.InitializeResult()
+	if init == nil || init.ServerInfo == nil {
+		t.Fatal("no initialize result")
+	}
+	card := ServerCardEndpoint()
+	live := init.ServerInfo
+	if live.Name != card.Name || live.Title != card.Title || live.Version != card.Version {
+		t.Errorf("server card says %s/%s/%s, initialize says %s/%s/%s",
+			card.Name, card.Title, card.Version, live.Name, live.Title, live.Version)
+	}
+}
