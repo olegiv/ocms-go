@@ -646,6 +646,7 @@ func (r *Registry) moduleActiveMiddleware(moduleName string, isAdmin bool) func(
 					http.Redirect(w, req, "/admin/modules", http.StatusSeeOther)
 					return
 				}
+				w.Header().Set("Cache-Control", "no-store")
 				http.NotFound(w, req)
 				return
 			}
