@@ -144,6 +144,22 @@ func (q *Queries) CountPagesUsingMedia(ctx context.Context, arg CountPagesUsingM
 	return count, err
 }
 
+const countSearchMedia = `-- name: CountSearchMedia :one
+SELECT COUNT(*) FROM media WHERE filename LIKE ? OR alt LIKE ?
+`
+
+type CountSearchMediaParams struct {
+	Filename string         `json:"filename"`
+	Alt      sql.NullString `json:"alt"`
+}
+
+func (q *Queries) CountSearchMedia(ctx context.Context, arg CountSearchMediaParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchMedia, arg.Filename, arg.Alt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMedia = `-- name: CreateMedia :one
 INSERT INTO media (uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -911,17 +927,23 @@ func (q *Queries) MoveMediaToFolder(ctx context.Context, arg MoveMediaToFolderPa
 }
 
 const searchMedia = `-- name: SearchMedia :many
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media WHERE filename LIKE ? OR alt LIKE ? ORDER BY created_at DESC LIMIT ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media WHERE filename LIKE ? OR alt LIKE ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
 `
 
 type SearchMediaParams struct {
 	Filename string         `json:"filename"`
 	Alt      sql.NullString `json:"alt"`
 	Limit    int64          `json:"limit"`
+	Offset   int64          `json:"offset"`
 }
 
 func (q *Queries) SearchMedia(ctx context.Context, arg SearchMediaParams) ([]Medium, error) {
-	rows, err := q.db.QueryContext(ctx, searchMedia, arg.Filename, arg.Alt, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, searchMedia,
+		arg.Filename,
+		arg.Alt,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

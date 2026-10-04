@@ -164,8 +164,14 @@ func (s *Service) List(ctx context.Context, a v2.Actor, f ListFilter) (*ListResu
 			Filename: pattern,
 			Alt:      util.NullStringFromValue(pattern),
 			Limit:    limit,
+			Offset:   offset,
 		})
-		total = int64(len(rows))
+		if err == nil {
+			total, err = s.queries.CountSearchMedia(ctx, store.CountSearchMediaParams{
+				Filename: pattern,
+				Alt:      util.NullStringFromValue(pattern),
+			})
+		}
 	case f.FolderID != nil:
 		rows, err = s.queries.ListMediaInFolder(ctx, store.ListMediaInFolderParams{
 			FolderID: util.NullInt64FromPtr(f.FolderID),
