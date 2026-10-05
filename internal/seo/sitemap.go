@@ -117,11 +117,12 @@ func (b *SitemapBuilder) addURL(path string, priority string, updatedAt time.Tim
 	b.urls = append(b.urls, url)
 }
 
-// canonicalLanguagePath returns the public canonical path for content in a
-// language that was already verified as active by the sitemap store queries.
+// CanonicalLanguagePath returns the public canonical path for content in a
+// language that was already verified as active by the caller (the sitemap
+// store queries, or the MCP server's active-language lookup).
 // Invalid and reserved codes never receive public URLs, including a legacy
 // misconfigured default. A safe default language does not need a prefix.
-func canonicalLanguagePath(path, languageCode string, isDefault bool) (string, bool) {
+func CanonicalLanguagePath(path, languageCode string, isDefault bool) (string, bool) {
 	if !util.IsValidLangCode(languageCode) || util.IsReservedLanguageCode(languageCode) {
 		return "", false
 	}
@@ -133,7 +134,7 @@ func canonicalLanguagePath(path, languageCode string, isDefault bool) (string, b
 
 // AddPage adds a page to the sitemap.
 func (b *SitemapBuilder) AddPage(page SitemapPage) {
-	path, ok := canonicalLanguagePath("/"+page.Slug, page.LanguageCode, page.IsDefault)
+	path, ok := CanonicalLanguagePath("/"+page.Slug, page.LanguageCode, page.IsDefault)
 	if !ok {
 		return
 	}
@@ -149,7 +150,7 @@ func (b *SitemapBuilder) AddPages(pages []SitemapPage) {
 
 // AddCategory adds a category archive page to the sitemap.
 func (b *SitemapBuilder) AddCategory(cat SitemapCategory) {
-	path, ok := canonicalLanguagePath("/category/"+cat.Slug, cat.LanguageCode, cat.IsDefault)
+	path, ok := CanonicalLanguagePath("/category/"+cat.Slug, cat.LanguageCode, cat.IsDefault)
 	if !ok {
 		return
 	}
@@ -165,7 +166,7 @@ func (b *SitemapBuilder) AddCategories(categories []SitemapCategory) {
 
 // AddTag adds a tag archive page to the sitemap.
 func (b *SitemapBuilder) AddTag(tag SitemapTag) {
-	path, ok := canonicalLanguagePath("/tag/"+tag.Slug, tag.LanguageCode, tag.IsDefault)
+	path, ok := CanonicalLanguagePath("/tag/"+tag.Slug, tag.LanguageCode, tag.IsDefault)
 	if !ok {
 		return
 	}

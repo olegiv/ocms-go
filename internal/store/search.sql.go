@@ -14,7 +14,7 @@ import (
 const countAdminSearchPages = `-- name: CountAdminSearchPages :one
 
 SELECT COUNT(*) FROM pages
-WHERE title LIKE ? OR body LIKE ?
+WHERE (title LIKE ? ESCAPE '!') OR (body LIKE ? ESCAPE '!')
 `
 
 type CountAdminSearchPagesParams struct {
@@ -33,7 +33,7 @@ func (q *Queries) CountAdminSearchPages(ctx context.Context, arg CountAdminSearc
 const searchAdminPages = `-- name: SearchAdminPages :many
 SELECT id, title, slug, body, status, published_at, created_at, updated_at, featured_image_id
 FROM pages
-WHERE title LIKE ? OR body LIKE ?
+WHERE (title LIKE ? ESCAPE '!') OR (body LIKE ? ESCAPE '!')
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
 `

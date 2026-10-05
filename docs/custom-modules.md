@@ -508,6 +508,18 @@ func (m *Module) AllowedEnvs() []string {
 
 When first registered, the module will start as inactive if the current environment is not in the allowed list.
 
+## Opt-in Modules
+
+Implement `ActivationDefaulter` to make a module start inactive in every environment until an administrator enables it in **Admin > Modules**:
+
+```go
+func (m *Module) ActiveByDefault() bool {
+    return false
+}
+```
+
+Use it for modules that open a new remote surface, such as the built-in MCP server (`modules/mcpserver`), so an upgrade never exposes one without being asked. Like `AllowedEnvs`, it only sets the status at first registration; after that the `modules` table wins. `Init` runs when the module is activated, and the registry serializes activation, so it runs once even when two admins switch the module on at the same time. Build anything that depends on it (routes' handlers, rate limiters) in `Init` and read it per request rather than capturing it in `RegisterRoutes`.
+
 ## Reference Implementation
 
 See the bookmarks module at `custom/modules/bookmarks/` for a complete working example with:

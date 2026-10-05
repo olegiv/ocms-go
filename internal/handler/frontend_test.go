@@ -2553,3 +2553,244 @@ func TestPublishedPageForRouteServesFromCacheWithinItsLanguage(t *testing.T) {
 		t.Fatalf("publishedPageForRoute() error = %v, want sql.ErrNoRows for another language's slug", err)
 	}
 }
+
+// TestFrontendHandler_MCPServerCard_FollowsEndpointProvider verifies the card
+// names the MCP endpoint only while the provider reports one, so toggling the
+// MCP module in Admin > Modules is reflected without a restart.
+func TestFrontendHandler_MCPServerCard_FollowsEndpointProvider(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', 'https://example.com', 'string', 'en')`); err != nil {
+		t.Fatalf("seed site_url: %v", err)
+	}
+	h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+
+	var live *seo.MCPEndpoint
+	h.SetMCPEndpointProvider(func(context.Context) *seo.MCPEndpoint { return live })
+
+	serve := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/mcp/server-card.json", nil)
+		w := httptest.NewRecorder()
+		h.MCPServerCard(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d; want %d", w.Code, http.StatusOK)
+		}
+		// Toggling the module changes the card, so it must never be served
+		// from a cache without revalidation.
+		if cc := w.Header().Get("Cache-Control"); cc != "no-cache" {
+			t.Errorf("Cache-Control = %q; want no-cache", cc)
+		}
+		return w.Body.String()
+	}
+
+	if body := serve(); !strings.Contains(body, `"transport": null`) || strings.Contains(body, "remotes") {
+		t.Errorf("inactive MCP must publish a null transport and no remotes; got: %s", body)
+	}
+
+	// An admin-set version labels only the REST-bridge card; a live card
+	// reports the endpoint's own identity.
+	if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('mcp_server_version', '9.9.9', 'string', 'en')`); err != nil {
+		t.Fatalf("seed mcp_server_version: %v", err)
+	}
+	live = &seo.MCPEndpoint{Path: "/api/mcp", Name: "ocms", Title: "oCMS", Version: "1.0.0", ProtocolVersions: []string{"2026-07-28"}}
+	body := serve()
+	if strings.Contains(body, "9.9.9") {
+		t.Errorf("a live card must not report the REST-bridge version override; got: %s", body)
+	}
+	for _, want := range []string{`"transport": {`, `"endpoint": "https://example.com/api/mcp"`, `"type": "streamable-http"`, `"protocolVersion": "2026-07-28"`, `"name": "ocms"`, `"version": "1.0.0"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("active MCP card missing %s; got: %s", want, body)
+		}
+	}
+}
+
+func TestFrontendHandler_MCPServerCard_RequiresOrigin(t *testing.T) {
+	cases := []struct {
+		name, value, origin string
+	}{
+		{"https", "https://example.com", "https://example.com"},
+		{"http", "http://example.com", "http://example.com"},
+		{"trailing_slash", "https://example.com/", "https://example.com"},
+		{"trailing_slashes", "https://example.com///", "https://example.com"},
+		{"whitespace", "  https://example.com/ ", "https://example.com"},
+		{"port", "https://example.com:8443/", "https://example.com:8443"},
+		{"maximum_port", "http://localhost:65535/", "http://localhost:65535"},
+		{"ipv6", "http://[::1]:8080/", "http://[::1]:8080"},
+		{"path", "https://example.com/blog", ""},
+		{"escaped_path", "https://example.com/%2F", ""},
+		{"fragment", "https://example.com#preview", ""},
+		{"empty_fragment", "https://example.com#", ""},
+		{"query", "https://example.com?preview=1", ""},
+		{"empty_query", "https://example.com?", ""},
+		{"credentials", "https://user:secret@example.com", ""},
+		{"zero_port", "https://example.com:0", ""},
+		{"large_port", "https://example.com:65536", ""},
+		{"nonnumeric_port", "https://example.com:wrong", ""},
+		{"missing_host", "https://:443", ""},
+		{"scheme", "ftp://example.com", ""},
+		{"relative", "example.com", ""},
+		{"malformed", "https://[::1", ""},
+		{"empty", "", ""},
+		{"blank", "   ", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := testHandlerSetup(t)
+			if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', ?, 'string', 'en')`, tc.value); err != nil {
+				t.Fatal(err)
+			}
+			for _, cached := range []bool{false, true} {
+				for _, active := range []bool{false, true} {
+					t.Run("cached="+strconv.FormatBool(cached)+"/active="+strconv.FormatBool(active), func(t *testing.T) {
+						var manager *cache.Manager
+						if cached {
+							manager = cache.NewManager(store.New(db))
+						}
+						h := NewFrontendHandler(db, nil, manager, nil, nil, nil)
+						if active {
+							h.SetMCPEndpointProvider(func(context.Context) *seo.MCPEndpoint {
+								return &seo.MCPEndpoint{Path: "/api/mcp", Name: "ocms", Version: "1.0.0"}
+							})
+						}
+						req := httptest.NewRequest(http.MethodGet, "/.well-known/mcp/server-card.json", nil)
+						req.Host = "internal-upstream.local"
+						w := httptest.NewRecorder()
+						h.MCPServerCard(w, req)
+						if tc.origin == "" {
+							if w.Code != http.StatusServiceUnavailable || w.Header().Get("Cache-Control") != "no-store" {
+								t.Fatalf("invalid origin: status=%d cache=%q; want 503/no-store", w.Code, w.Header().Get("Cache-Control"))
+							}
+							if strings.Contains(w.Body.String(), "/api/mcp") || strings.Contains(w.Body.String(), "secret") || strings.Contains(w.Body.String(), "internal-upstream") {
+								t.Fatalf("invalid origin published an endpoint, credential, or request host: %s", w.Body.String())
+							}
+							return
+						}
+						if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-cache" || w.Header().Get("Content-Type") != "application/json" {
+							t.Fatalf("valid origin: status=%d cache=%q type=%q", w.Code, w.Header().Get("Cache-Control"), w.Header().Get("Content-Type"))
+						}
+						var card seo.MCPServerCard
+						if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
+							t.Fatal(err)
+						}
+						if card.Capabilities.REST == nil || card.Capabilities.REST.OpenAPI != tc.origin+"/api/v2/openapi.json" {
+							t.Fatalf("incorrect REST fallback: %s", w.Body.String())
+						}
+						if active {
+							if card.Transport == nil || card.Transport.Endpoint != tc.origin+"/api/mcp" {
+								t.Fatalf("incorrect live endpoint: %s", w.Body.String())
+							}
+						} else if card.Transport != nil {
+							t.Fatalf("inactive module advertised transport: %s", w.Body.String())
+						}
+					})
+				}
+			}
+		})
+	}
+}
+
+// TestFrontendHandler_MCPServerCard_RequestContext exercises the actual module
+// query, including cancellation while it is waiting for a database connection.
+func TestFrontendHandler_MCPServerCard_RequestContext(t *testing.T) {
+	for _, mode := range []string{"active", "inactive", "cancelled", "deadline"} {
+		t.Run(mode, func(t *testing.T) {
+			db, _ := testHandlerSetup(t)
+			db.SetMaxOpenConns(1)
+			if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', 'https://example.com', 'string', 'en'); CREATE TABLE modules (name TEXT PRIMARY KEY, is_active BOOLEAN NOT NULL)`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`INSERT INTO modules VALUES ('mcpserver', ?)`, mode != "inactive"); err != nil {
+				t.Fatal(err)
+			}
+			type requestKey struct{}
+			base := context.WithValue(context.Background(), requestKey{}, "card request")
+			reqCtx, cancel := context.WithCancel(base)
+			if mode == "deadline" {
+				cancel()
+				reqCtx, cancel = context.WithTimeout(base, 2*time.Second)
+			}
+			defer cancel()
+			blocked := mode == "cancelled" || mode == "deadline"
+			started := make(chan context.Context, 1)
+			beginQuery := make(chan struct{})
+			queryResult := make(chan error, 1)
+			finished := make(chan struct{})
+			h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+			h.SetMCPEndpointProvider(func(providerCtx context.Context) *seo.MCPEndpoint {
+				started <- providerCtx
+				if blocked {
+					<-beginQuery
+				}
+				active, err := store.New(db).IsModuleActive(providerCtx, "mcpserver")
+				queryResult <- err
+				if err != nil || !active {
+					return nil
+				}
+				return &seo.MCPEndpoint{Path: "/api/mcp", Name: "ocms", Version: "1.0.0"}
+			})
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/mcp/server-card.json", nil).WithContext(reqCtx)
+			w := httptest.NewRecorder()
+			go func() {
+				h.MCPServerCard(w, req)
+				close(finished)
+			}()
+			var received context.Context
+			select {
+			case received = <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("endpoint provider was not called")
+			}
+			if received != req.Context() || received.Value(requestKey{}) != "card request" {
+				t.Error("endpoint provider did not receive the HTTP request context")
+			}
+			if blocked {
+				held, err := db.Conn(context.Background())
+				if err != nil {
+					close(beginQuery)
+					t.Fatal(err)
+				}
+				close(beginQuery)
+				waitUntil := time.Now().Add(time.Second)
+				for db.Stats().WaitCount == 0 && time.Now().Before(waitUntil) {
+					time.Sleep(time.Millisecond)
+				}
+				if db.Stats().WaitCount == 0 {
+					t.Error("module lookup did not wait for the held connection")
+				}
+				if mode == "cancelled" {
+					cancel()
+				}
+				select {
+				case err := <-queryResult:
+					want := context.Canceled
+					if mode == "deadline" {
+						want = context.DeadlineExceeded
+					}
+					if !errors.Is(err, want) {
+						t.Errorf("blocked lookup error = %v; want %v", err, want)
+					}
+				case <-time.After(4 * time.Second):
+					t.Error("request cancellation did not stop the blocked module query")
+				}
+				_ = held.Close()
+			} else if err := <-queryResult; err != nil {
+				t.Errorf("normal module lookup failed: %v", err)
+			}
+			select {
+			case <-finished:
+			case <-time.After(5 * time.Second):
+				t.Fatal("server-card handler did not finish")
+			}
+			var card seo.MCPServerCard
+			if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "active" {
+				if card.Transport == nil || card.Transport.Endpoint != "https://example.com/api/mcp" {
+					t.Errorf("incorrect active card: %s", w.Body.String())
+				}
+			} else if card.Transport != nil {
+				t.Errorf("inactive or cancelled lookup advertised transport: %s", w.Body.String())
+			}
+		})
+	}
+}

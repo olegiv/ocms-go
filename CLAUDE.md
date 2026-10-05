@@ -322,6 +322,12 @@ Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 
 The spec is derived from Go types via [huma v2](https://huma.rocks/); domain services live under `internal/api/v2/{pages,media,taxonomy}` and MUST NOT import anything from the legacy v1 package (which no longer exists).
 
+### MCP Server (opt-in module `mcp`, `modules/mcpserver`)
+- `POST /api/mcp` - Streamable HTTP MCP endpoint (stateless, JSON responses); API key with `mcp:access` required; read-only tools
+- `/admin/mcp` - Endpoint, client snippets, drafts policy, agent instructions, tool catalog (admin only)
+
+Tools are thin adapters over the v2 domain services; their input/output schemas come from the same huma struct tags. `modules/mcpserver/catalog.go` is the single source of truth: every REST v2 operation needs a tool or an entry in `restOperationsNotExposed` (`TestEveryRESTOperationHasMCPDecision`), and every tool must stay read-only (`TestEveryRegisteredToolIsReadOnly`).
+
 ### Health Check Routes
 - `GET /health` - Overall health status (200 OK / 503 Service Unavailable)
 - `GET /health/live` - Liveness probe (always returns `{"status":"alive"}`)
@@ -670,6 +676,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/custom-modules.md` - Custom module creation, self-registration pattern, and module interface
 - `docs/custom-themes.md` - Custom theme creation, template structure, settings, translations, and testing
 - `docs/agent-ready.md` - Agent-Ready discovery (Link header, Markdown-for-Agents, `/.well-known/*` surfaces)
+- `docs/mcp-module.md` - MCP Server module: `/api/mcp` endpoint for AI agents, read-only tools, `mcp:access`, drafts policy, limits
 
 Security audit documents are available in the `.audit/` directory (gitignored).
 

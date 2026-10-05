@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **MCP server for AI agents** — a new opt-in `mcp` module serves the Model
+  Context Protocol over stateless Streamable HTTP at `POST /api/mcp`, built on
+  the official Go SDK (`modelcontextprotocol/go-sdk` v1.8.0, protocol versions
+  2024-11-05 through 2026-07-28). Ten read-only tools search, list and read
+  pages (HTML or Markdown), media, tags and categories through the REST v2
+  services, with the same visibility rules and validation; tool schemas come
+  from the same struct tags. Access requires an API key with the new
+  `mcp:access` permission, and every API key policy applies. Drafts are
+  hidden unless an admin exposes them and the key holds `pages:read`. Calls are
+  limited per IP and per key, JSON-RPC batches are rejected, each tool call is
+  capped at 25 s, and a client disconnect or timeout cancels its database work
+  on every protocol version. Each call is logged once with its outcome, without
+  keys or arguments. The admin page at `/admin/mcp` shows client snippets, the
+  drafts policy, instructions for agents, the tool catalog and the keys with MCP
+  access. See `docs/mcp-module.md`.
+- **MCP server card advertises the live endpoint** — while the MCP module is
+  active, `/.well-known/mcp/server-card.json` names the endpoint in
+  the SEP-1649 `transport` object and reports the preferred `protocolVersion`.
+  While the module is inactive, it keeps the REST-only card.
+- **Opt-in modules** — modules can implement `module.ActivationDefaulter` to
+  register inactive until an administrator enables them.
+
+### Changed
+- REST v2 services keep the cause of internal errors
+  (`v2.NewInternalError`), so logs can explain them and cancellations are
+  recognized. Responses are unchanged.
+- Module activation is serialized: concurrent activations of a module run its
+  `Init` once.
+- The API key form describes **Pages: read** as including unpublished drafts,
+  which is what it grants in REST v2 and MCP.
+- The MCP server card is served with `Cache-Control: no-cache` and, while the
+  MCP module is active, reports the live server's identity. The
+  `mcp_server_version` key now labels only the REST-bridge card.
+
 ## [0.24.0] - 2026-10-01
 
 ### Added

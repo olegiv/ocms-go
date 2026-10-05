@@ -164,8 +164,14 @@ func (s *Service) List(ctx context.Context, a v2.Actor, f ListFilter) (*ListResu
 			Filename: pattern,
 			Alt:      util.NullStringFromValue(pattern),
 			Limit:    limit,
+			Offset:   offset,
 		})
-		total = int64(len(rows))
+		if err == nil {
+			total, err = s.queries.CountSearchMedia(ctx, store.CountSearchMediaParams{
+				Filename: pattern,
+				Alt:      util.NullStringFromValue(pattern),
+			})
+		}
 	case f.FolderID != nil:
 		rows, err = s.queries.ListMediaInFolder(ctx, store.ListMediaInFolderParams{
 			FolderID: util.NullInt64FromPtr(f.FolderID),
@@ -191,7 +197,7 @@ func (s *Service) List(ctx context.Context, a v2.Actor, f ListFilter) (*ListResu
 		}
 	}
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to list media")
+		return nil, v2.NewInternalError("Failed to list media", err)
 	}
 
 	dtos := make([]Media, 0, len(rows))
@@ -211,7 +217,7 @@ func (s *Service) Get(ctx context.Context, a v2.Actor, id int64, f ListFilter) (
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, v2.NewError(v2.ErrNotFound, fmt.Sprintf("media %d not found", id))
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load media")
+		return nil, v2.NewInternalError("Failed to load media", err)
 	}
 	dto := dtoFromStore(m)
 	s.populateIncludes(ctx, &dto, m.ID, f)
@@ -248,7 +254,7 @@ func (s *Service) Upload(ctx context.Context, a v2.Actor, in UploadMediaMetadata
 	}
 	defaultLang, err := s.queries.GetDefaultLanguage(ctx)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to resolve default language")
+		return nil, v2.NewInternalError("Failed to resolve default language", err)
 	}
 	header := &multipart.FileHeader{
 		Filename: file.Filename,
@@ -264,7 +270,7 @@ func (s *Service) Upload(ctx context.Context, a v2.Actor, in UploadMediaMetadata
 		if errors.As(err, &clientErr) {
 			return nil, v2.NewValidationError(map[string]string{"file": clientErr.Message}, "Upload failed")
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Upload failed")
+		return nil, v2.NewInternalError("Upload failed", err)
 	}
 
 	if in.Alt != "" || in.Caption != "" {
@@ -342,7 +348,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateMed
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, v2.NewError(v2.ErrNotFound, fmt.Sprintf("media %d not found", id))
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load media")
+		return nil, v2.NewInternalError("Failed to load media", err)
 	}
 	params := store.UpdateMediaParams{
 		ID:           existing.ID,
@@ -375,7 +381,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateMed
 	}
 	updated, err := s.queries.UpdateMedia(ctx, params)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to update media")
+		return nil, v2.NewInternalError("Failed to update media", err)
 	}
 	dto := dtoFromStore(updated)
 	if variants, err := s.queries.GetMediaVariants(ctx, updated.ID); err == nil {
@@ -397,10 +403,10 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return v2.NewError(v2.ErrNotFound, fmt.Sprintf("media %d not found", id))
 		}
-		return v2.NewError(v2.ErrInternal, "Failed to load media")
+		return v2.NewInternalError("Failed to load media", err)
 	}
 	if err := s.uploader.Delete(ctx, id); err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to delete media")
+		return v2.NewInternalError("Failed to delete media", err)
 	}
 	s.logMediaAudit(ctx, a, "API: Media deleted", map[string]any{
 		"media_id": id,

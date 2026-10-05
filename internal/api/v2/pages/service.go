@@ -139,7 +139,7 @@ func (s *Service) resolveLanguageCode(ctx context.Context, langCode *string) (st
 					"Validation failed",
 				)
 			}
-			return "", v2.NewError(v2.ErrInternal, "Failed to look up language")
+			return "", v2.NewInternalError("Failed to look up language", err)
 		}
 		if err := validateRoutableLanguage(language); err != nil {
 			return "", err
@@ -388,7 +388,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 					"Validation failed",
 				)
 			}
-			return nil, v2.NewError(v2.ErrInternal, "Failed to validate category")
+			return nil, v2.NewInternalError("Failed to validate category", err)
 		}
 	}
 
@@ -424,7 +424,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to start transaction")
+		return nil, v2.NewInternalError("Failed to start transaction", err)
 	}
 	defer tx.Rollback() //nolint:errcheck
 	txq := s.queries.WithTx(tx)
@@ -437,7 +437,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 
 	page, err := txq.CreatePage(ctx, params)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to create page")
+		return nil, v2.NewInternalError("Failed to create page", err)
 	}
 	if err := linkCategories(ctx, txq, page.ID, in.CategoryIDs); err != nil {
 		return nil, err
@@ -446,7 +446,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to commit page")
+		return nil, v2.NewInternalError("Failed to commit page", err)
 	}
 	s.invalidatePageCache(page.ID)
 	s.logPageAudit(ctx, a, "API: Page created", map[string]any{
@@ -471,7 +471,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, pageNotFound(id)
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load page")
+		return nil, v2.NewInternalError("Failed to load page", err)
 	}
 
 	params := store.UpdatePageParams{
@@ -511,14 +511,14 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 						"Validation failed",
 					)
 				}
-				return nil, v2.NewError(v2.ErrInternal, "Failed to validate category")
+				return nil, v2.NewInternalError("Failed to validate category", err)
 			}
 		}
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to start transaction")
+		return nil, v2.NewInternalError("Failed to start transaction", err)
 	}
 	defer tx.Rollback() //nolint:errcheck
 	txq := s.queries.WithTx(tx)
@@ -543,11 +543,11 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 
 	page, err := txq.UpdatePage(ctx, params)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to update page")
+		return nil, v2.NewInternalError("Failed to update page", err)
 	}
 	if in.CategoryIDs != nil {
 		if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
-			return nil, v2.NewError(v2.ErrInternal, "Failed to clear categories")
+			return nil, v2.NewInternalError("Failed to clear categories", err)
 		}
 		if err := linkCategories(ctx, txq, page.ID, *in.CategoryIDs); err != nil {
 			return nil, err
@@ -555,14 +555,14 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 	}
 	if hasTagChange {
 		if err := txq.ClearPageTags(ctx, page.ID); err != nil {
-			return nil, v2.NewError(v2.ErrInternal, "Failed to clear tags")
+			return nil, v2.NewInternalError("Failed to clear tags", err)
 		}
 		if err := linkTags(ctx, txq, page.ID, newTagIDs); err != nil {
 			return nil, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to commit page update")
+		return nil, v2.NewInternalError("Failed to commit page update", err)
 	}
 	s.invalidatePageCache(page.ID)
 	s.logPageAudit(ctx, a, "API: Page updated", map[string]any{
@@ -690,28 +690,28 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return pageNotFound(id)
 		}
-		return v2.NewError(v2.ErrInternal, "Failed to load page")
+		return v2.NewInternalError("Failed to load page", err)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to start transaction")
+		return v2.NewInternalError("Failed to start transaction", err)
 	}
 	defer tx.Rollback() //nolint:errcheck
 	txq := s.queries.WithTx(tx)
 	if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to clear categories")
+		return v2.NewInternalError("Failed to clear categories", err)
 	}
 	if err := txq.ClearPageTags(ctx, page.ID); err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to clear tags")
+		return v2.NewInternalError("Failed to clear tags", err)
 	}
 	if err := txq.DeletePageVersions(ctx, page.ID); err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to delete page versions")
+		return v2.NewInternalError("Failed to delete page versions", err)
 	}
 	if err := txq.DeletePage(ctx, page.ID); err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to delete page")
+		return v2.NewInternalError("Failed to delete page", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to commit delete")
+		return v2.NewInternalError("Failed to commit delete", err)
 	}
 	s.invalidatePageCache(page.ID)
 	s.logPageAudit(ctx, a, "API: Page deleted", map[string]any{
@@ -730,7 +730,7 @@ func (s *Service) Get(ctx context.Context, a v2.Actor, id int64, includes ListFi
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, pageNotFound(id)
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load page")
+		return nil, v2.NewInternalError("Failed to load page", err)
 	}
 	if page.Status != model.PageStatusPublished && !canReadNonPublished(a) {
 		return nil, pageNotFound(id)
@@ -747,7 +747,7 @@ func (s *Service) GetBySlug(ctx context.Context, a v2.Actor, slug string, includ
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, pageNotFound(slug)
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load page")
+		return nil, v2.NewInternalError("Failed to load page", err)
 	}
 	if page.Status != model.PageStatusPublished && !canReadNonPublished(a) {
 		return nil, pageNotFound(slug)
@@ -798,7 +798,7 @@ func (s *Service) List(ctx context.Context, a v2.Actor, f ListFilter) (*ListResu
 		}
 	}
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to list pages")
+		return nil, v2.NewInternalError("Failed to list pages", err)
 	}
 
 	dtos := make([]Page, 0, len(rows))

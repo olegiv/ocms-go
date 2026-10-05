@@ -36,6 +36,11 @@ type Registry struct {
 	ctx           *Context
 	logger        *slog.Logger
 	mu            sync.RWMutex
+	// activationMu serializes SetActive. A late Init runs outside mu, so two
+	// concurrent activations of a never-initialized module (a double-click,
+	// two admins) would otherwise both run Init. Opt-in modules
+	// (ActivationDefaulter) always take that late-Init path.
+	activationMu sync.Mutex
 	// publicRoutes records route shapes as modules register them on the real
 	// application router. RegisterRoutes is not replayed: implementations may
 	// allocate middleware or have other side effects. All registered modules,
@@ -334,8 +339,13 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 	for _, name := range r.order {
 		mod, err := queries.GetModule(ctx, name)
 		if errors.Is(err, sql.ErrNoRows) {
-			// Module not in database — check if it restricts environments
+			// Module not in database — check if it is opt-in or restricts
+			// environments.
 			defaultActive := true
+			if defaulter, ok := r.modules[name].(ActivationDefaulter); ok && !defaulter.ActiveByDefault() {
+				defaultActive = false
+				r.logger.Info("opt-in module registered inactive", "module", name)
+			}
 			if checker, ok := r.modules[name].(EnvironmentChecker); ok && r.ctx != nil {
 				allowed := false
 				for _, env := range checker.AllowedEnvs() {
@@ -395,6 +405,9 @@ func (r *Registry) IsActive(name string) bool {
 // When activating a module that was never initialized (e.g., it was inactive
 // at server startup), Init() and translation loading are performed first.
 func (r *Registry) SetActive(name string, active bool) error {
+	r.activationMu.Lock()
+	defer r.activationMu.Unlock()
+
 	r.mu.Lock()
 
 	m, exists := r.modules[name]
@@ -429,6 +442,11 @@ func (r *Registry) SetActive(name string, active bool) error {
 		if err := m.Init(ctx); err != nil {
 			return fmt.Errorf("initializing module %q on activation: %w", name, err)
 		}
+		// Record the Init now, not after the status update below: if that
+		// update fails, a retry must not initialize the module a second time.
+		r.mu.Lock()
+		r.initStatus[name] = true
+		r.mu.Unlock()
 
 		if err := r.loadModuleTranslations(m); err != nil {
 			r.logger.Warn("failed to load module translations", "module", name, "error", err)
@@ -447,9 +465,6 @@ func (r *Registry) SetActive(name string, active bool) error {
 	}
 
 	r.activeStatus[name] = active
-	if needsInit {
-		r.initStatus[name] = true
-	}
 	r.logger.Info("module status changed", "module", name, "active", active)
 	return nil
 }
@@ -631,6 +646,7 @@ func (r *Registry) moduleActiveMiddleware(moduleName string, isAdmin bool) func(
 					http.Redirect(w, req, "/admin/modules", http.StatusSeeOther)
 					return
 				}
+				w.Header().Set("Cache-Control", "no-store")
 				http.NotFound(w, req)
 				return
 			}

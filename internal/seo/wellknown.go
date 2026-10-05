@@ -116,39 +116,76 @@ func BuildAgentSkillsIndex(siteURL, openapiSHA256 string) []byte {
 	return out
 }
 
-// MCPServerInfo is the serverInfo object for SEP-1649.
+// MCPServerInfo is the serverInfo object for SEP-1649. Title is the human
+// display name MCP's Implementation carries alongside the programmatic name.
 type MCPServerInfo struct {
 	Name    string `json:"name"`
+	Title   string `json:"title,omitempty"`
 	Version string `json:"version"`
 }
 
-// MCPRESTCapability advertises a REST fallback when no MCP transport is
-// live. It is not part of the formal SEP-1649 spec but is accepted in
-// the "capabilities" free-form object.
+// MCPRESTCapability advertises the REST API alongside (or, when no MCP
+// transport is live, instead of) the MCP endpoint. It is not part of the
+// formal SEP-1649 spec but is accepted in the "capabilities" free-form object.
 type MCPRESTCapability struct {
 	OpenAPI string `json:"openapi"`
 }
 
+// MCPToolsCapability declares that the live MCP endpoint serves tools. It
+// marshals as an empty object, matching the MCP capabilities shape.
+type MCPToolsCapability struct{}
+
 // MCPCapabilities is the capabilities object declared by the server.
 type MCPCapabilities struct {
-	REST *MCPRESTCapability `json:"rest,omitempty"`
+	Tools *MCPToolsCapability `json:"tools,omitempty"`
+	REST  *MCPRESTCapability  `json:"rest,omitempty"`
 }
 
-// MCPServerCard follows the draft SEP-1649 shape
-// (github.com/modelcontextprotocol/modelcontextprotocol PR #2127).
+// MCPTransport is the transport object required by the SEP-1649 draft.
+type MCPTransport struct {
+	Type     string `json:"type"`
+	Endpoint string `json:"endpoint"`
+}
+
+// MCPEndpoint describes a live MCP transport. Callers pass it only while an
+// MCP server is actually reachable, so the card never advertises an endpoint
+// that would answer 404.
+type MCPEndpoint struct {
+	Path             string   // site-relative endpoint path, e.g. "/api/mcp"
+	Name             string   // serverInfo.name the endpoint reports at initialize
+	Title            string   // serverInfo.title the endpoint reports at initialize
+	Version          string   // serverInfo.version the endpoint reports at initialize
+	ProtocolVersions []string // non-empty MCP protocol revisions, preferred first
+}
+
+// MCPServerCard follows the SEP-1649 draft when a transport is live:
+// https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1649.
+// The inactive REST-only fallback omits the MCP schema and protocol fields.
 type MCPServerCard struct {
-	ServerInfo   MCPServerInfo   `json:"serverInfo"`
-	Transport    *string         `json:"transport"` // nil => null in JSON
-	Capabilities MCPCapabilities `json:"capabilities"`
+	Schema          string          `json:"$schema,omitempty"`
+	Version         string          `json:"version,omitempty"`
+	ProtocolVersion string          `json:"protocolVersion,omitempty"`
+	ServerInfo      MCPServerInfo   `json:"serverInfo"`
+	Transport       *MCPTransport   `json:"transport"` // nil => null in JSON
+	Capabilities    MCPCapabilities `json:"capabilities"`
 }
 
-// BuildMCPServerCard returns a minimal MCP Server Card pointing at the
-// REST fallback. transport is null because oCMS does not yet run an MCP
-// transport — this is intentionally honest: publishing a card describing
-// a non-existent stdio/http transport would be worse than declaring the
-// absence. Agents that accept REST fallbacks (Claude, Cursor) can still
-// discover the API surface via capabilities.rest.openapi.
-func BuildMCPServerCard(siteURL, version string) []byte {
+// mcpStreamableHTTP is the transport type for MCP's Streamable HTTP transport.
+const mcpStreamableHTTP = "streamable-http"
+
+// BuildMCPServerCard returns the MCP Server Card.
+//
+// Without an endpoint the card is intentionally honest: transport is null and
+// only the REST fallback is declared, because publishing a transport that is
+// not running would be worse than declaring its absence. version (the
+// admin-editable mcp_server_version setting, "0.0.0" when empty) labels that
+// REST-bridge card.
+//
+// With an endpoint the card names the Streamable HTTP URL in SEP-1649's transport,
+// still links the REST API, and reports exactly the serverInfo the endpoint
+// returns at initialize: a client comparing the two must see one server, so
+// the version setting does not apply.
+func BuildMCPServerCard(siteURL, version string, endpoint *MCPEndpoint) []byte {
 	base := normalizeSiteURL(siteURL)
 	if version == "" {
 		version = "0.0.0"
@@ -164,6 +201,17 @@ func BuildMCPServerCard(siteURL, version string) []byte {
 				OpenAPI: base + "/api/v2/openapi.json",
 			},
 		},
+	}
+	if endpoint != nil {
+		endpointURL := base + endpoint.Path
+		card.Schema = "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json"
+		card.Version = "1.0"
+		if len(endpoint.ProtocolVersions) > 0 {
+			card.ProtocolVersion = endpoint.ProtocolVersions[0]
+		}
+		card.ServerInfo = MCPServerInfo{Name: endpoint.Name, Title: endpoint.Title, Version: endpoint.Version}
+		card.Transport = &MCPTransport{Type: mcpStreamableHTTP, Endpoint: endpointURL}
+		card.Capabilities.Tools = &MCPToolsCapability{}
 	}
 	out, _ := json.MarshalIndent(card, "", "  ")
 	return out

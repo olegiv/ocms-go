@@ -56,7 +56,7 @@ func resolveTagIDs(ctx context.Context, q *store.Queries, ids []int64, names []s
 				continue
 			}
 			if !errors.Is(err, sql.ErrNoRows) {
-				return nil, v2.NewError(v2.ErrInternal, "Failed to look up tag")
+				return nil, v2.NewInternalError("Failed to look up tag", err)
 			}
 			if !canCreateTags {
 				return nil, v2.NewError(v2.ErrForbidden, "taxonomy:write permission required to create new tags")
@@ -69,7 +69,7 @@ func resolveTagIDs(ctx context.Context, q *store.Queries, ids []int64, names []s
 				UpdatedAt:    now,
 			})
 			if err != nil {
-				return nil, v2.NewError(v2.ErrInternal, "Failed to create tag")
+				return nil, v2.NewInternalError("Failed to create tag", err)
 			}
 			combined = append(combined, created.ID)
 		}
@@ -93,7 +93,7 @@ func resolveTagIDs(ctx context.Context, q *store.Queries, ids []int64, names []s
 					"Validation failed",
 				)
 			}
-			return nil, v2.NewError(v2.ErrInternal, "Failed to validate tag")
+			return nil, v2.NewInternalError("Failed to validate tag", err)
 		}
 	}
 	return unique, nil
@@ -103,7 +103,7 @@ func resolveTagIDs(ctx context.Context, q *store.Queries, ids []int64, names []s
 func linkCategories(ctx context.Context, q *store.Queries, pageID int64, categoryIDs []int64) error {
 	for _, catID := range categoryIDs {
 		if err := q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: pageID, CategoryID: catID}); err != nil {
-			return v2.NewError(v2.ErrInternal, "Failed to attach category")
+			return v2.NewInternalError("Failed to attach category", err)
 		}
 	}
 	return nil
@@ -113,7 +113,7 @@ func linkCategories(ctx context.Context, q *store.Queries, pageID int64, categor
 func linkTags(ctx context.Context, q *store.Queries, pageID int64, tagIDs []int64) error {
 	for _, tagID := range tagIDs {
 		if err := q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pageID, TagID: tagID}); err != nil {
-			return v2.NewError(v2.ErrInternal, "Failed to attach tag")
+			return v2.NewInternalError("Failed to attach tag", err)
 		}
 	}
 	return nil

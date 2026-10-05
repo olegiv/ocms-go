@@ -59,7 +59,7 @@ func (s *Service) resolveLanguageCode(ctx context.Context, langCode *string) (st
 					"Validation failed",
 				)
 			}
-			return "", v2.NewError(v2.ErrInternal, "Failed to look up language")
+			return "", v2.NewInternalError("Failed to look up language", err)
 		}
 		return *langCode, nil
 	}
@@ -85,11 +85,11 @@ func (s *Service) ListTags(ctx context.Context, page, perPage int) (*TagListResu
 	offset := int64((page - 1) * perPage)
 	rows, err := s.queries.GetTagUsageCounts(ctx, store.GetTagUsageCountsParams{Limit: int64(perPage), Offset: offset})
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to list tags")
+		return nil, v2.NewInternalError("Failed to list tags", err)
 	}
 	total, err := s.queries.CountTags(ctx)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to count tags")
+		return nil, v2.NewInternalError("Failed to count tags", err)
 	}
 	out := make([]TaxonomyTag, 0, len(rows))
 	for _, t := range rows {
@@ -113,7 +113,7 @@ func (s *Service) GetTag(ctx context.Context, id int64) (*TaxonomyTag, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, v2.NewError(v2.ErrNotFound, fmt.Sprintf("tag %d not found", id))
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load tag")
+		return nil, v2.NewInternalError("Failed to load tag", err)
 	}
 	count, _ := s.queries.CountPagesForTag(ctx, t.ID)
 	return &TaxonomyTag{
@@ -144,7 +144,7 @@ func (s *Service) CreateTag(ctx context.Context, a v2.Actor, in CreateTagBody) (
 		Name: in.Name, Slug: in.Slug, LanguageCode: langCode, CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to create tag")
+		return nil, v2.NewInternalError("Failed to create tag", err)
 	}
 	s.logTagAudit(ctx, a, "API: Tag created", map[string]any{
 		"tag_id": tag.ID,
@@ -172,7 +172,7 @@ func (s *Service) UpdateTag(ctx context.Context, a v2.Actor, id int64, in Update
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, v2.NewError(v2.ErrNotFound, fmt.Sprintf("tag %d not found", id))
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load tag")
+		return nil, v2.NewInternalError("Failed to load tag", err)
 	}
 	params := store.UpdateTagParams{
 		ID:           existing.ID,
@@ -199,7 +199,7 @@ func (s *Service) UpdateTag(ctx context.Context, a v2.Actor, id int64, in Update
 	}
 	tag, err := s.queries.UpdateTag(ctx, params)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to update tag")
+		return nil, v2.NewInternalError("Failed to update tag", err)
 	}
 	count, _ := s.queries.CountPagesForTag(ctx, tag.ID)
 	s.logTagAudit(ctx, a, "API: Tag updated", map[string]any{
@@ -227,10 +227,10 @@ func (s *Service) DeleteTag(ctx context.Context, a v2.Actor, id int64) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return v2.NewError(v2.ErrNotFound, fmt.Sprintf("tag %d not found", id))
 		}
-		return v2.NewError(v2.ErrInternal, "Failed to load tag")
+		return v2.NewInternalError("Failed to load tag", err)
 	}
 	if err := s.queries.DeleteTag(ctx, id); err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to delete tag")
+		return v2.NewInternalError("Failed to delete tag", err)
 	}
 	s.logTagAudit(ctx, a, "API: Tag deleted", map[string]any{"tag_id": id})
 	return nil
@@ -245,7 +245,7 @@ func (s *Service) ensureTagSlugUnique(ctx context.Context, slug string, excludeI
 		exists, err = s.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{Slug: slug, ID: excludeID})
 	}
 	if err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to check slug uniqueness")
+		return v2.NewInternalError("Failed to check slug uniqueness", err)
 	}
 	if exists > 0 {
 		return v2.NewValidationError(map[string]string{"slug": "Slug already exists"}, "Validation failed")
@@ -261,7 +261,7 @@ func (s *Service) ensureTagSlugUnique(ctx context.Context, slug string, excludeI
 func (s *Service) ListCategories(ctx context.Context, tree bool) ([]*TaxonomyCategory, error) {
 	rows, err := s.queries.GetCategoryUsageCounts(ctx)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to list categories")
+		return nil, v2.NewInternalError("Failed to list categories", err)
 	}
 	if tree {
 		return buildCategoryTree(rows), nil
@@ -281,7 +281,7 @@ func (s *Service) GetCategory(ctx context.Context, id int64) (*TaxonomyCategory,
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, v2.NewError(v2.ErrNotFound, fmt.Sprintf("category %d not found", id))
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load category")
+		return nil, v2.NewInternalError("Failed to load category", err)
 	}
 	count, _ := s.queries.CountPagesByCategory(ctx, c.ID)
 	dto := categoryToDTO(c, count)
@@ -309,7 +309,7 @@ func (s *Service) CreateCategory(ctx context.Context, a v2.Actor, in CreateCateg
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, v2.NewValidationError(map[string]string{"parent_id": "Parent category not found"}, "Validation failed")
 			}
-			return nil, v2.NewError(v2.ErrInternal, "Failed to validate parent category")
+			return nil, v2.NewInternalError("Failed to validate parent category", err)
 		}
 	}
 	langCode, err := s.resolveLanguageCode(ctx, in.LanguageCode)
@@ -331,7 +331,7 @@ func (s *Service) CreateCategory(ctx context.Context, a v2.Actor, in CreateCateg
 	}
 	cat, err := s.queries.CreateCategory(ctx, params)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to create category")
+		return nil, v2.NewInternalError("Failed to create category", err)
 	}
 	s.logCategoryAudit(ctx, a, "API: Category created", map[string]any{
 		"category_id": cat.ID,
@@ -353,7 +353,7 @@ func (s *Service) UpdateCategory(ctx context.Context, a v2.Actor, id int64, in U
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, v2.NewError(v2.ErrNotFound, fmt.Sprintf("category %d not found", id))
 		}
-		return nil, v2.NewError(v2.ErrInternal, "Failed to load category")
+		return nil, v2.NewInternalError("Failed to load category", err)
 	}
 	params := store.UpdateCategoryParams{
 		ID:           existing.ID,
@@ -388,7 +388,7 @@ func (s *Service) UpdateCategory(ctx context.Context, a v2.Actor, id int64, in U
 				if errors.Is(err, sql.ErrNoRows) {
 					return nil, v2.NewValidationError(map[string]string{"parent_id": "Parent category not found"}, "Validation failed")
 				}
-				return nil, v2.NewError(v2.ErrInternal, "Failed to validate parent category")
+				return nil, v2.NewInternalError("Failed to validate parent category", err)
 			}
 			descendants, _ := s.queries.GetDescendantIDs(ctx, util.NullInt64FromValue(existing.ID))
 			for _, did := range descendants {
@@ -411,7 +411,7 @@ func (s *Service) UpdateCategory(ctx context.Context, a v2.Actor, id int64, in U
 	}
 	cat, err := s.queries.UpdateCategory(ctx, params)
 	if err != nil {
-		return nil, v2.NewError(v2.ErrInternal, "Failed to update category")
+		return nil, v2.NewInternalError("Failed to update category", err)
 	}
 	count, _ := s.queries.CountPagesByCategory(ctx, cat.ID)
 	s.logCategoryAudit(ctx, a, "API: Category updated", map[string]any{
@@ -434,13 +434,13 @@ func (s *Service) DeleteCategory(ctx context.Context, a v2.Actor, id int64) erro
 		if errors.Is(err, sql.ErrNoRows) {
 			return v2.NewError(v2.ErrNotFound, fmt.Sprintf("category %d not found", id))
 		}
-		return v2.NewError(v2.ErrInternal, "Failed to load category")
+		return v2.NewInternalError("Failed to load category", err)
 	}
 	if children, err := s.queries.ListChildCategories(ctx, util.NullInt64FromValue(cat.ID)); err == nil && len(children) > 0 {
 		return v2.NewError(v2.ErrConflict, "Cannot delete category with child categories. Delete or reassign children first.")
 	}
 	if err := s.queries.DeleteCategory(ctx, cat.ID); err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to delete category")
+		return v2.NewInternalError("Failed to delete category", err)
 	}
 	s.logCategoryAudit(ctx, a, "API: Category deleted", map[string]any{"category_id": cat.ID})
 	return nil
@@ -475,7 +475,7 @@ func (s *Service) ensureCategorySlugUnique(ctx context.Context, slug string, exc
 		exists, err = s.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{Slug: slug, ID: excludeID})
 	}
 	if err != nil {
-		return v2.NewError(v2.ErrInternal, "Failed to check slug uniqueness")
+		return v2.NewInternalError("Failed to check slug uniqueness", err)
 	}
 	if exists > 0 {
 		return v2.NewValidationError(map[string]string{"slug": "Slug already exists"}, "Validation failed")

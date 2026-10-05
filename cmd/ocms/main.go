@@ -45,6 +45,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
 	"github.com/olegiv/ocms-go/internal/security"
+	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/session"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -61,6 +62,7 @@ import (
 	"github.com/olegiv/ocms-go/modules/example"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 	"github.com/olegiv/ocms-go/modules/informer"
+	"github.com/olegiv/ocms-go/modules/mcpserver"
 	"github.com/olegiv/ocms-go/modules/migrator"
 	"github.com/olegiv/ocms-go/modules/privacy"
 	"github.com/olegiv/ocms-go/modules/sentinel"
@@ -827,6 +829,7 @@ func registerModules(registry *module.Registry, sentinelModule *sentinel.Module,
 		hcaptcha.New(),
 		privacy.New(),
 		informer.New(),
+		mcpserver.New(),
 	}
 
 	for _, mod := range modules {
@@ -1737,6 +1740,18 @@ func run() error {
 		slog.Info("frontend page HTML sanitization enabled")
 	}
 	frontendHandler.SetModuleTemplateFuncsProvider(moduleRegistry)
+	// The MCP server card names the endpoint only while the module is active;
+	// it can be toggled at runtime from Admin > Modules.
+	frontendHandler.SetMCPEndpointProvider(func(requestCtx context.Context) *seo.MCPEndpoint {
+		if !moduleRegistry.IsActive(mcpserver.ModuleName) {
+			return nil
+		}
+		active, err := queries.IsModuleActive(requestCtx, mcpserver.ModuleName)
+		if err != nil || !active {
+			return nil
+		}
+		return mcpserver.ServerCardEndpoint()
+	})
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager, hookRegistry, themeManager, cacheManager, renderer.GetMenuService(), frontendHandler)
 	formsHandler.SetRequireCaptcha(cfg.RequireFormCaptcha)
 	if cfg.RequireFormCaptcha {

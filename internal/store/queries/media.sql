@@ -22,7 +22,10 @@ SELECT * FROM media WHERE folder_id IS NULL ORDER BY created_at DESC LIMIT ? OFF
 SELECT * FROM media WHERE mime_type LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
 
 -- name: SearchMedia :many
-SELECT * FROM media WHERE filename LIKE ? OR alt LIKE ? ORDER BY created_at DESC LIMIT ?;
+SELECT * FROM media WHERE filename LIKE ? OR alt LIKE ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?;
+
+-- name: CountSearchMedia :one
+SELECT COUNT(*) FROM media WHERE filename LIKE ? OR alt LIKE ?;
 
 -- name: UpdateMedia :one
 UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, language_code = ?, updated_at = ?
