@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -457,5 +458,197 @@ func TestOutputsValidateOnEmptySite(t *testing.T) {
 		if res.IsError {
 			t.Errorf("%s: tool error: %s", tc.tool, resultText(res))
 		}
+	}
+}
+
+func TestListToolsRequirePositiveFilterIDs(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	now := time.Now()
+	category, err := env.q.CreateCategory(ctx, store.CreateCategoryParams{Name: "Selected", Slug: "selected", LanguageCode: "en", CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag, err := env.q.CreateTag(ctx, store.CreateTagParams{Name: "Selected", Slug: "selected", LanguageCode: "en", CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := env.q.CreateMediaFolder(ctx, store.CreateMediaFolderParams{Name: "Selected", CreatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for n := 1; n <= 3; n++ {
+		page := env.createPage(pageSeed{title: "Page " + strconv.Itoa(n), slug: "page-" + strconv.Itoa(n), status: model.PageStatusPublished})
+		params := store.CreateMediaParams{
+			Uuid: "00000000-0000-4000-8000-00000000000" + strconv.Itoa(n), Filename: "photo" + strconv.Itoa(n) + ".jpg",
+			MimeType: "image/jpeg", Size: 100, UploadedBy: env.userID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+		}
+		if n == 1 {
+			if err := env.q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: page, CategoryID: category.ID}); err != nil {
+				t.Fatal(err)
+			}
+			if err := env.q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: page, TagID: tag.ID}); err != nil {
+				t.Fatal(err)
+			}
+			params.FolderID = sql.NullInt64{Int64: folder.ID, Valid: true}
+		}
+		if _, err := env.q.CreateMedia(ctx, params); err != nil {
+			t.Fatal(err)
+		}
+	}
+	session := env.connect(env.createKey(model.PermissionMCPAccess))
+	for _, filter := range []struct {
+		tool, field string
+		id          int64
+	}{
+		{"list_pages", "category_id", category.ID},
+		{"list_pages", "tag_id", tag.ID},
+		{"list_media", "folder_id", folder.ID},
+	} {
+		t.Run(filter.field, func(t *testing.T) {
+			for _, tc := range []struct {
+				name  string
+				value int64
+				total int64
+			}{
+				{"negative", -1, -1}, {"zero", 0, -1},
+				{"absent", 0, 3}, {"matching", filter.id, 1}, {"missing", filter.id + 1000, 0},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					args := map[string]any{}
+					if tc.name != "absent" {
+						args[filter.field] = tc.value
+					}
+					res := call(t, session, filter.tool, args)
+					if tc.total < 0 {
+						code, _, details := toolErrorBody(t, res)
+						if code != codeValidation || details["arguments"] == "" {
+							t.Errorf("invalid filter: code=%q details=%v", code, details)
+						}
+						return
+					}
+					if filter.tool == "list_pages" {
+						out := decodeResult[ListPagesResult](t, res)
+						if out.Total != tc.total || int64(len(out.Pages)) != tc.total {
+							t.Errorf("filtered pages = %+v; want total %d", out, tc.total)
+						}
+					} else {
+						out := decodeResult[ListMediaResult](t, res)
+						if out.Total != tc.total || int64(len(out.Media)) != tc.total {
+							t.Errorf("filtered media = %+v; want total %d", out, tc.total)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestPagedToolsBoundOffsets(t *testing.T) {
+	const maxPage = 21474836
+	for _, spec := range []struct {
+		name, tool string
+		drafts     bool
+		perPage    int
+		args       map[string]any
+	}{
+		{"search_published", "search_pages", false, 50, map[string]any{"query": "pagingmarker"}},
+		{"search_drafts", "search_pages", true, 50, map[string]any{"query": "pagingmarker"}},
+		{"pages", "list_pages", false, 100, nil},
+		{"media", "list_media", false, 100, nil},
+		{"media_search", "list_media", false, 100, map[string]any{"search": "pagingmarker"}},
+		{"tags", "list_tags", false, 100, nil},
+	} {
+		t.Run(spec.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			if spec.drafts {
+				env.setSettings(Settings{AllowDrafts: true})
+			}
+			ctx := context.Background()
+			for n := 1; n <= 3; n++ {
+				name := "pagingmarker" + strconv.Itoa(n)
+				status := model.PageStatusPublished
+				if spec.drafts && n == 3 {
+					status = model.PageStatusDraft
+				}
+				env.createPage(pageSeed{title: name, slug: name, body: "pagingmarker", status: status})
+				now := time.Now().Add(time.Duration(n) * time.Second)
+				if _, err := env.q.CreateMedia(ctx, store.CreateMediaParams{
+					Uuid: "00000000-0000-4000-8000-00000000000" + strconv.Itoa(n), Filename: name + ".jpg",
+					MimeType: "image/jpeg", Size: 100, UploadedBy: env.userID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := env.q.CreateTag(ctx, store.CreateTagParams{Name: name, Slug: name, LanguageCode: "en", CreatedAt: now, UpdatedAt: now}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			session := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionPagesRead))
+			var firstIDs []int64
+			for _, tc := range []struct {
+				name    string
+				page    int64
+				perPage int
+				length  int
+				invalid bool
+			}{
+				{"overflow", int64(1<<63 - 1), 10, 0, true},
+				{"overflow_exact", int64(1 << 60), 10, 0, true},
+				{"above_bound", maxPage + 1, spec.perPage, 0, true},
+				{"zero", 0, 2, 0, true},
+				{"first", 1, 2, 2, false}, {"second", 2, 2, 1, false},
+				{"beyond_results", 3, 2, 0, false}, {"maximum", maxPage, spec.perPage, 0, false},
+				{"default", 1, 2, 2, false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					args := map[string]any{"per_page": tc.perPage}
+					for key, value := range spec.args {
+						args[key] = value
+					}
+					if tc.name != "default" {
+						args["page"] = tc.page
+					}
+					res := call(t, session, spec.tool, args)
+					if tc.invalid {
+						code, _, details := toolErrorBody(t, res)
+						if code != codeValidation || details["arguments"] == "" {
+							t.Errorf("invalid page: code=%q details=%v", code, details)
+						}
+						return
+					}
+					type item struct{ ID int64 }
+					out := decodeResult[struct {
+						Pagination
+						Pages   []item `json:"pages"`
+						Results []item `json:"results"`
+						Media   []item `json:"media"`
+						Tags    []item `json:"tags"`
+					}](t, res)
+					items := out.Pages
+					switch spec.tool {
+					case "search_pages":
+						items = out.Results
+					case "list_media":
+						items = out.Media
+					case "list_tags":
+						items = out.Tags
+					}
+					pages := 2
+					if tc.perPage >= 3 {
+						pages = 1
+					}
+					if len(items) != tc.length || out.Total != 3 || out.Page != int(tc.page) || out.PerPage != tc.perPage || out.TotalPages != pages {
+						t.Fatalf("incorrect page: pagination=%+v items=%v", out.Pagination, items)
+					}
+					if tc.name == "first" {
+						for _, row := range items {
+							firstIDs = append(firstIDs, row.ID)
+						}
+					} else if tc.name == "second" && slices.Contains(firstIDs, items[0].ID) {
+						t.Error("second page repeated a first-page item")
+					}
+				})
+			}
+		})
 	}
 }

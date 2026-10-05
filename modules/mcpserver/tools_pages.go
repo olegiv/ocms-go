@@ -38,7 +38,7 @@ var errDraftsHidden = &toolError{
 // SearchPagesInput is the input of search_pages.
 type SearchPagesInput struct {
 	Query   string `json:"query" minLength:"1" maxLength:"200" doc:"Words to look for in page titles and bodies."`
-	Page    int    `json:"page,omitempty" default:"1" minimum:"1" doc:"1-indexed page number."`
+	Page    int    `json:"page,omitempty" default:"1" minimum:"1" maximum:"21474836" doc:"1-indexed page number (max 21474836)."`
 	PerPage int    `json:"per_page,omitempty" default:"10" minimum:"1" maximum:"50" doc:"Results per page (max 50)."`
 }
 
@@ -64,9 +64,9 @@ type SearchHit struct {
 // query parameters of GET /api/v2/pages (drift-tested).
 type ListPagesInput struct {
 	Status          string `json:"status,omitempty" enum:"draft,published" doc:"Only pages with this status. Drafts require draft visibility (see get_site_info)."`
-	CategoryID      int64  `json:"category_id,omitempty" doc:"Only pages in this category id."`
-	TagID           int64  `json:"tag_id,omitempty" doc:"Only pages with this tag id."`
-	Page            int    `json:"page,omitempty" default:"1" minimum:"1" doc:"1-indexed page number."`
+	CategoryID      int64  `json:"category_id,omitempty" minimum:"1" doc:"Only pages in this category id."`
+	TagID           int64  `json:"tag_id,omitempty" minimum:"1" doc:"Only pages with this tag id."`
+	Page            int    `json:"page,omitempty" default:"1" minimum:"1" maximum:"21474836" doc:"1-indexed page number (max 21474836)."`
 	PerPage         int    `json:"per_page,omitempty" default:"20" minimum:"1" maximum:"100" doc:"Items per page (max 100)."`
 	IncludeTaxonomy bool   `json:"include_taxonomy,omitempty" doc:"Also return each page's categories and tags."`
 }

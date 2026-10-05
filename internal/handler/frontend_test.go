@@ -2565,7 +2565,7 @@ func TestFrontendHandler_MCPServerCard_FollowsEndpointProvider(t *testing.T) {
 	h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
 
 	var live *seo.MCPEndpoint
-	h.SetMCPEndpointProvider(func() *seo.MCPEndpoint { return live })
+	h.SetMCPEndpointProvider(func(context.Context) *seo.MCPEndpoint { return live })
 
 	serve := func() string {
 		req := httptest.NewRequest(http.MethodGet, "/.well-known/mcp/server-card.json", nil)
@@ -2647,7 +2647,7 @@ func TestFrontendHandler_MCPServerCard_RequiresOrigin(t *testing.T) {
 						}
 						h := NewFrontendHandler(db, nil, manager, nil, nil, nil)
 						if active {
-							h.SetMCPEndpointProvider(func() *seo.MCPEndpoint {
+							h.SetMCPEndpointProvider(func(context.Context) *seo.MCPEndpoint {
 								return &seo.MCPEndpoint{Path: "/api/mcp", Name: "ocms", Version: "1.0.0"}
 							})
 						}
@@ -2683,6 +2683,113 @@ func TestFrontendHandler_MCPServerCard_RequiresOrigin(t *testing.T) {
 						}
 					})
 				}
+			}
+		})
+	}
+}
+
+// TestFrontendHandler_MCPServerCard_RequestContext exercises the actual module
+// query, including cancellation while it is waiting for a database connection.
+func TestFrontendHandler_MCPServerCard_RequestContext(t *testing.T) {
+	for _, mode := range []string{"active", "inactive", "cancelled", "deadline"} {
+		t.Run(mode, func(t *testing.T) {
+			db, _ := testHandlerSetup(t)
+			db.SetMaxOpenConns(1)
+			if _, err := db.Exec(`INSERT INTO config (key, value, type, language_code) VALUES ('site_url', 'https://example.com', 'string', 'en'); CREATE TABLE modules (name TEXT PRIMARY KEY, is_active BOOLEAN NOT NULL)`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`INSERT INTO modules VALUES ('mcpserver', ?)`, mode != "inactive"); err != nil {
+				t.Fatal(err)
+			}
+			type requestKey struct{}
+			base := context.WithValue(context.Background(), requestKey{}, "card request")
+			reqCtx, cancel := context.WithCancel(base)
+			if mode == "deadline" {
+				cancel()
+				reqCtx, cancel = context.WithTimeout(base, 2*time.Second)
+			}
+			defer cancel()
+			blocked := mode == "cancelled" || mode == "deadline"
+			started := make(chan context.Context, 1)
+			beginQuery := make(chan struct{})
+			queryResult := make(chan error, 1)
+			finished := make(chan struct{})
+			h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
+			h.SetMCPEndpointProvider(func(providerCtx context.Context) *seo.MCPEndpoint {
+				started <- providerCtx
+				if blocked {
+					<-beginQuery
+				}
+				active, err := store.New(db).IsModuleActive(providerCtx, "mcpserver")
+				queryResult <- err
+				if err != nil || !active {
+					return nil
+				}
+				return &seo.MCPEndpoint{Path: "/api/mcp", Name: "ocms", Version: "1.0.0"}
+			})
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/mcp/server-card.json", nil).WithContext(reqCtx)
+			w := httptest.NewRecorder()
+			go func() {
+				h.MCPServerCard(w, req)
+				close(finished)
+			}()
+			var received context.Context
+			select {
+			case received = <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("endpoint provider was not called")
+			}
+			if received != req.Context() || received.Value(requestKey{}) != "card request" {
+				t.Error("endpoint provider did not receive the HTTP request context")
+			}
+			if blocked {
+				held, err := db.Conn(context.Background())
+				if err != nil {
+					close(beginQuery)
+					t.Fatal(err)
+				}
+				close(beginQuery)
+				waitUntil := time.Now().Add(time.Second)
+				for db.Stats().WaitCount == 0 && time.Now().Before(waitUntil) {
+					time.Sleep(time.Millisecond)
+				}
+				if db.Stats().WaitCount == 0 {
+					t.Error("module lookup did not wait for the held connection")
+				}
+				if mode == "cancelled" {
+					cancel()
+				}
+				select {
+				case err := <-queryResult:
+					want := context.Canceled
+					if mode == "deadline" {
+						want = context.DeadlineExceeded
+					}
+					if !errors.Is(err, want) {
+						t.Errorf("blocked lookup error = %v; want %v", err, want)
+					}
+				case <-time.After(4 * time.Second):
+					t.Error("request cancellation did not stop the blocked module query")
+				}
+				_ = held.Close()
+			} else if err := <-queryResult; err != nil {
+				t.Errorf("normal module lookup failed: %v", err)
+			}
+			select {
+			case <-finished:
+			case <-time.After(5 * time.Second):
+				t.Fatal("server-card handler did not finish")
+			}
+			var card seo.MCPServerCard
+			if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "active" {
+				if card.Transport == nil || card.Transport.Endpoint != "https://example.com/api/mcp" {
+					t.Errorf("incorrect active card: %s", w.Body.String())
+				}
+			} else if card.Transport != nil {
+				t.Errorf("inactive or cancelled lookup advertised transport: %s", w.Body.String())
 			}
 		})
 	}

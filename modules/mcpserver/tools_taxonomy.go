@@ -14,7 +14,7 @@ const defaultTagsPerPage = 50
 
 // ListTagsInput is the input of list_tags, mirroring GET /api/v2/tags.
 type ListTagsInput struct {
-	Page    int `json:"page,omitempty" default:"1" minimum:"1" doc:"1-indexed page number."`
+	Page    int `json:"page,omitempty" default:"1" minimum:"1" maximum:"21474836" doc:"1-indexed page number (max 21474836)."`
 	PerPage int `json:"per_page,omitempty" default:"50" minimum:"1" maximum:"100" doc:"Items per page (max 100)."`
 }
 

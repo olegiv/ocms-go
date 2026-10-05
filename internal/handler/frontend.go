@@ -432,7 +432,7 @@ type FrontendHandler struct {
 	// mcpEndpointProvider reports the live MCP endpoint for the server card,
 	// or nil while the MCP module is inactive. Consulted per request because
 	// the module can be toggled at runtime from Admin > Modules.
-	mcpEndpointProvider func() *seo.MCPEndpoint
+	mcpEndpointProvider func(context.Context) *seo.MCPEndpoint
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
@@ -481,7 +481,7 @@ func (h *FrontendHandler) SetOpenAPISpecProvider(fn func() ([]byte, error)) {
 // SetMCPEndpointProvider wires the source of the live MCP endpoint advertised
 // in /.well-known/mcp/server-card.json. The provider must return nil while no
 // MCP transport is reachable, so the card keeps declaring "transport": null.
-func (h *FrontendHandler) SetMCPEndpointProvider(fn func() *seo.MCPEndpoint) {
+func (h *FrontendHandler) SetMCPEndpointProvider(fn func(context.Context) *seo.MCPEndpoint) {
 	h.mcpEndpointProvider = fn
 }
 
@@ -1830,7 +1830,7 @@ func (h *FrontendHandler) MCPServerCard(w http.ResponseWriter, r *http.Request) 
 	}
 	var endpoint *seo.MCPEndpoint
 	if h.mcpEndpointProvider != nil {
-		endpoint = h.mcpEndpointProvider()
+		endpoint = h.mcpEndpointProvider(r.Context())
 	}
 	body := seo.BuildMCPServerCard(siteURL, version, endpoint)
 

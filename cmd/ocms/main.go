@@ -1742,11 +1742,11 @@ func run() error {
 	frontendHandler.SetModuleTemplateFuncsProvider(moduleRegistry)
 	// The MCP server card names the endpoint only while the module is active;
 	// it can be toggled at runtime from Admin > Modules.
-	frontendHandler.SetMCPEndpointProvider(func() *seo.MCPEndpoint {
+	frontendHandler.SetMCPEndpointProvider(func(requestCtx context.Context) *seo.MCPEndpoint {
 		if !moduleRegistry.IsActive(mcpserver.ModuleName) {
 			return nil
 		}
-		active, err := queries.IsModuleActive(ctx, mcpserver.ModuleName)
+		active, err := queries.IsModuleActive(requestCtx, mcpserver.ModuleName)
 		if err != nil || !active {
 			return nil
 		}

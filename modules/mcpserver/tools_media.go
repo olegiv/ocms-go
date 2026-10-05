@@ -22,9 +22,9 @@ type IDInput struct {
 // query parameters of GET /api/v2/media (drift-tested).
 type ListMediaInput struct {
 	Type     string `json:"type,omitempty" enum:"image,document,video" doc:"Only media of this kind."`
-	FolderID int64  `json:"folder_id,omitempty" doc:"Only media in this folder id."`
+	FolderID int64  `json:"folder_id,omitempty" minimum:"1" doc:"Only media in this folder id."`
 	Search   string `json:"search,omitempty" doc:"Match against filename and alt text."`
-	Page     int    `json:"page,omitempty" default:"1" minimum:"1" doc:"1-indexed page number."`
+	Page     int    `json:"page,omitempty" default:"1" minimum:"1" maximum:"21474836" doc:"1-indexed page number (max 21474836)."`
 	PerPage  int    `json:"per_page,omitempty" default:"20" minimum:"1" maximum:"100" doc:"Items per page (max 100)."`
 }
 

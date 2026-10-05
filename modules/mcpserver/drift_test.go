@@ -112,10 +112,20 @@ var restParamsNotMirrored = map[string]string{
 var constraintKeywords = []string{"type", "enum", "default", "minimum", "maximum", "minLength", "maxLength", "pattern"}
 
 // TestToolInputConstraintsMatchREST fails when an MCP argument and the REST
-// parameter it mirrors disagree on any validation keyword, so tightening or
-// loosening REST validation cannot leave the MCP surface behind (or the
-// other way round).
+// parameter it mirrors disagree on any validation keyword, except the named
+// MCP-only safety bounds. Those bounds and the REST absence are checked
+// explicitly; every other validation keyword must remain equal.
 func TestToolInputConstraintsMatchREST(t *testing.T) {
+	// MCP rejects malformed IDs and caps offsets before calling shared services.
+	mcpBounds := map[string]map[string]float64{
+		"list_pages.category_id": {"minimum": 1},
+		"list_pages.tag_id":      {"minimum": 1},
+		"list_media.folder_id":   {"minimum": 1},
+		"list_pages.page":        {"maximum": 21474836},
+		"list_media.page":        {"maximum": 21474836},
+		"list_tags.page":         {"maximum": 21474836},
+	}
+	bounded := 0
 	ops := restOperations(t)
 	env := newTestEnv(t)
 	session := env.connect(env.createKey(model.PermissionMCPAccess))
@@ -150,6 +160,14 @@ func TestToolInputConstraintsMatchREST(t *testing.T) {
 				}
 				restProp := schemaAsMap(t, param.Schema)
 				for _, keyword := range constraintKeywords {
+					if want, ok := mcpBounds[spec.Name+"."+argName][keyword]; ok {
+						bounded++
+						if !reflect.DeepEqual(mcpProp[keyword], want) || restProp[keyword] != nil {
+							t.Errorf("%s.%s %s must be %v with REST unconstrained; MCP=%v REST=%v",
+								spec.Name, argName, keyword, want, mcpProp[keyword], restProp[keyword])
+						}
+						continue
+					}
 					if !reflect.DeepEqual(restProp[keyword], mcpProp[keyword]) {
 						t.Errorf("%s.%s %s = %v, but REST %s.%s has %v",
 							spec.Name, argName, keyword, mcpProp[keyword], opID, param.Name, restProp[keyword])
@@ -161,6 +179,9 @@ func TestToolInputConstraintsMatchREST(t *testing.T) {
 	}
 	if compared == 0 {
 		t.Fatal("no parameters were compared; the test is vacuous")
+	}
+	if bounded != len(mcpBounds) {
+		t.Errorf("checked %d MCP-only bounds; want %d", bounded, len(mcpBounds))
 	}
 }
 
