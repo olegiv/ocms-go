@@ -445,26 +445,56 @@ async function doSend(){
     var full='',msgId=null;
     var reader=r.body.getReader();
     var dec=new TextDecoder();
-    while(true){
-      var chunk=await reader.read();
-      if(chunk.done)break;
-      var lines=dec.decode(chunk.value).split('\n');
-      for(var i=0;i<lines.length;i++){
-        var ln=lines[i];
-        if(ln.indexOf('data: ')===0){
-          try{
-            var d=JSON.parse(ln.slice(6));
-            if(d.event==='message'||d.event==='agent_message'){
-              full+=(d.answer||'');
-              botMsg.textContent=full;
-              msgs.scrollTop=msgs.scrollHeight;
-              if(d.message_id)msgId=d.message_id;
-            }
-            if(d.event==='message_end'&&d.message_id)msgId=d.message_id;
-            if(d.conversation_id)convId=d.conversation_id;
-          }catch(e){}
-        }
+    var buffer='',dataLines=[];
+    function dispatchEvent(){
+      if(!dataLines.length)return;
+      var payload=dataLines.join('\n');
+      dataLines=[];
+      if(payload==='[DONE]')return;
+      var d=JSON.parse(payload);
+      if(d.event==='error'||(d.event==='workflow_finished'&&d.data&&d.data.status==='failed')){
+        throw new Error('Assistant workflow failed');
       }
+      if(d.conversation_id)convId=d.conversation_id;
+      if(d.event==='message'||d.event==='agent_message'){
+        full+=(d.answer||'');
+        botMsg.textContent=full;
+        msgs.scrollTop=msgs.scrollHeight;
+        if(d.message_id)msgId=d.message_id;
+      }
+      if(d.event==='message_replace'){
+        full=d.answer||'';
+        botMsg.textContent=full;
+      }
+      if(d.event==='message_end'&&d.message_id)msgId=d.message_id;
+    }
+    function consumeLines(final){
+      var match;
+      while((match=/\r\n|\r|\n/.exec(buffer))){
+        // A CRLF delimiter can itself be split across network chunks.
+        if(!final&&match[0]==='\r'&&match.index===buffer.length-1)break;
+        var line=buffer.slice(0,match.index);
+        buffer=buffer.slice(match.index+match[0].length);
+        if(line==='')dispatchEvent();
+        else if(line.indexOf('data:')===0)dataLines.push(line.slice(5).replace(/^ /,''));
+      }
+      if(final){
+        if(buffer.indexOf('data:')===0)dataLines.push(buffer.slice(5).replace(/^ /,''));
+        buffer='';
+        dispatchEvent();
+      }
+    }
+    try{
+      while(true){
+        var chunk=await reader.read();
+        buffer+=dec.decode(chunk.value||new Uint8Array(),{stream:!chunk.done});
+        consumeLines(chunk.done);
+        if(chunk.done)break;
+      }
+      if(!full.trim())throw new Error('Assistant returned an empty response');
+    }finally{
+      try{await reader.cancel();}catch(e){}
+      reader.releaseLock();
     }
     if(SHOW_SUGGESTED&&msgId){
       try{
@@ -474,10 +504,12 @@ async function doSend(){
     }
   }catch(e){
     hideTyp();
+    if(botMsg&&!botMsg.textContent)botMsg.remove();
     var err=document.createElement('div');
     err.className='dify-err';
     err.textContent='Failed to send message. Please try again.';
     msgs.appendChild(err);
+    msgs.scrollTop=msgs.scrollHeight;
     console.error('Dify error:',e);
   }finally{busy=false;send.disabled=false;}
 }
