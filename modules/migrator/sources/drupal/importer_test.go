@@ -863,17 +863,19 @@ func TestTaxonomyRedirectRefusesPagesAliasesAndReservedRoutes(t *testing.T) {
 	}
 
 	s := &Source{}
-	for _, source := range []string{
+	paths := []string{
 		"/owned", "/legacy", "/admin/config", "/en", "/en/tag/go", "/en/existing-page",
 		"/sitemap.xml", "/robots.txt", "/.well-known/security.txt",
-	} {
+		"/rss.xml", "/atom.xml", "/ru/rss.xml", "/ru/category/tech/atom.xml", "/tag/go/rss.xml",
+	}
+	for _, source := range paths {
 		s.createTaxonomyRedirect(ctx, st, source, "/tag/go", now)
 		if _, err := queries.GetRedirectBySourcePath(ctx, source); !errors.Is(err, sql.ErrNoRows) {
 			t.Errorf("conflicting redirect %q was created: %v", source, err)
 		}
 	}
-	if st.result.RedirectsImported != 0 || len(st.result.Notices) != 9 {
-		t.Errorf("redirect result = %+v, want nine conflict notices and no imports", st.result)
+	if st.result.RedirectsImported != 0 || len(st.result.Notices) != len(paths) {
+		t.Errorf("redirect result = %+v, want %d conflict notices and no imports", st.result, len(paths))
 	}
 }
 

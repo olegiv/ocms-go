@@ -110,6 +110,18 @@ func registerSettingsRoutes(r chi.Router, route string, get, update http.Handler
 
 // registerFrontendRoutes registers common frontend public routes on the given router.
 func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
+	for _, feed := range []struct {
+		filename string
+		handler  http.HandlerFunc
+	}{
+		{"rss.xml", h.RSSFeed},
+		{"atom.xml", h.AtomFeed},
+	} {
+		for _, feedRoute := range []string{"/" + feed.filename, "/{taxonomy:category|tag}/{slug}/" + feed.filename} {
+			r.Get(feedRoute, feed.handler)
+			r.Head(feedRoute, feed.handler)
+		}
+	}
 	r.Get(handler.RouteRoot, h.Home)
 	r.Get(handler.RouteSuffixSearch, h.Search)
 	r.Get(handler.RouteBlog, h.Blog)

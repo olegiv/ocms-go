@@ -73,7 +73,7 @@ Running `ocms-go` in production? [Tell us about it.](https://github.com/olegiv/o
 
 The path to v1.0 is tracked in the [Roadmap to v1.0 issue](https://github.com/olegiv/ocms-go/issues). Headlines:
 
-- RSS / Atom feeds for pages and categories
+- ✅ RSS / Atom feeds for published posts, categories and tags, with language-prefixed URLs
 - JSON-LD structured data in the theme layer
 - PostgreSQL adapter alongside SQLite
 - ✅ Public demo — live at [ocms-demo.fly.dev](https://ocms-demo.fly.dev/), 24h auto-reset
@@ -97,6 +97,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
   - Link to pages or external URLs
   - Multiple menu locations
 - **Full-Text Search**: Built-in SQLite FTS5 search for fast content discovery
+- **RSS / Atom Feeds**: Subscribe to published posts site-wide or by category/tag in each active language; summaries, stable entry IDs and HTTP revalidation. See [Feeds](docs/feeds.md).
 
 ### Taxonomy
 - **Categories**: Organize content with hierarchical categories

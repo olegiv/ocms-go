@@ -6493,6 +6493,26 @@
             "translation": "Конфигурация robots.txt"
         },
         {
+            "id": "docs.ep_feed_rss",
+            "message": "RSS feed of published posts; supports language prefixes",
+            "translation": "RSS-лента опубликованных записей; поддерживает языковые префиксы"
+        },
+        {
+            "id": "docs.ep_feed_atom",
+            "message": "Atom feed of published posts; supports language prefixes",
+            "translation": "Atom-лента опубликованных записей; поддерживает языковые префиксы"
+        },
+        {
+            "id": "docs.ep_feed_category",
+            "message": "Category post feeds; supports language prefixes",
+            "translation": "Ленты записей категории; поддерживают языковые префиксы"
+        },
+        {
+            "id": "docs.ep_feed_tag",
+            "message": "Tag post feeds; supports language prefixes",
+            "translation": "Ленты записей тега; поддерживают языковые префиксы"
+        },
+        {
             "id": "docs.ep_api_pages_list",
             "message": "List pages",
             "translation": "Список страниц"

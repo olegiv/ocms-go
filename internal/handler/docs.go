@@ -278,6 +278,12 @@ func (h *DocsHandler) getEndpoints(lang string) []DocsEndpointGroup {
 			Endpoints: []DocsEndpoint{
 				{Method: "GET", Path: "/", Description: i18n.T(lang, "docs.ep_homepage"), Auth: i18n.T(lang, "docs.auth_none")},
 				{Method: "GET", Path: "/blog", Description: i18n.T(lang, "docs.ep_blog"), Auth: i18n.T(lang, "docs.auth_none")},
+				{Method: "GET/HEAD", Path: "/rss.xml", Description: i18n.T(lang, "docs.ep_feed_rss"), Auth: i18n.T(lang, "docs.auth_none")},
+				{Method: "GET/HEAD", Path: "/atom.xml", Description: i18n.T(lang, "docs.ep_feed_atom"), Auth: i18n.T(lang, "docs.auth_none")},
+				{Method: "GET/HEAD", Path: "/category/{slug}/rss.xml", Description: i18n.T(lang, "docs.ep_feed_category"), Auth: i18n.T(lang, "docs.auth_none")},
+				{Method: "GET/HEAD", Path: "/category/{slug}/atom.xml", Description: i18n.T(lang, "docs.ep_feed_category"), Auth: i18n.T(lang, "docs.auth_none")},
+				{Method: "GET/HEAD", Path: "/tag/{slug}/rss.xml", Description: i18n.T(lang, "docs.ep_feed_tag"), Auth: i18n.T(lang, "docs.auth_none")},
+				{Method: "GET/HEAD", Path: "/tag/{slug}/atom.xml", Description: i18n.T(lang, "docs.ep_feed_tag"), Auth: i18n.T(lang, "docs.auth_none")},
 				{Method: "GET", Path: "/sitemap.xml", Description: i18n.T(lang, "docs.ep_sitemap"), Auth: i18n.T(lang, "docs.auth_none")},
 				{Method: "GET", Path: "/robots.txt", Description: i18n.T(lang, "docs.ep_robots"), Auth: i18n.T(lang, "docs.auth_none")},
 			},

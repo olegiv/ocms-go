@@ -6493,6 +6493,26 @@
             "translation": "Robots configuration"
         },
         {
+            "id": "docs.ep_feed_rss",
+            "message": "RSS feed of published posts; supports language prefixes",
+            "translation": "RSS feed of published posts; supports language prefixes"
+        },
+        {
+            "id": "docs.ep_feed_atom",
+            "message": "Atom feed of published posts; supports language prefixes",
+            "translation": "Atom feed of published posts; supports language prefixes"
+        },
+        {
+            "id": "docs.ep_feed_category",
+            "message": "Category post feeds; supports language prefixes",
+            "translation": "Category post feeds; supports language prefixes"
+        },
+        {
+            "id": "docs.ep_feed_tag",
+            "message": "Tag post feeds; supports language prefixes",
+            "translation": "Tag post feeds; supports language prefixes"
+        },
+        {
             "id": "docs.ep_api_pages_list",
             "message": "List pages",
             "translation": "List pages"

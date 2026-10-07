@@ -170,7 +170,7 @@ func importedPagePathPrefix(ctx context.Context, queries *store.Queries, langCod
 // imported page must not shadow.
 func corePathReserved(p string) bool {
 	p = strings.Trim(p, "/")
-	if p == "" {
+	if p == "" || util.IsFeedPath(p) {
 		return true
 	}
 	first, _, _ := strings.Cut(p, "/")

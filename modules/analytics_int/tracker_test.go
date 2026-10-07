@@ -220,6 +220,11 @@ func TestShouldTrack(t *testing.T) {
 		{name: "favicon", method: "GET", path: "/favicon.ico", expected: false},
 		{name: "robots.txt", method: "GET", path: "/robots.txt", expected: false},
 		{name: "sitemap", method: "GET", path: "/sitemap.xml", expected: false},
+		{name: "RSS feed", method: "GET", path: "/rss.xml", expected: false},
+		{name: "Atom feed", method: "GET", path: "/atom.xml", expected: false},
+		{name: "language RSS feed", method: "GET", path: "/ru/rss.xml", expected: false},
+		{name: "category feed", method: "GET", path: "/ru/category/tech/rss.xml", expected: false},
+		{name: "tag feed", method: "GET", path: "/tag/go/atom.xml", expected: false},
 
 		// Should NOT track - admin/API
 		{name: "admin dashboard", method: "GET", path: "/admin", expected: false},

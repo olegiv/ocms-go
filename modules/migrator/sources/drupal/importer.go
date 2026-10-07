@@ -2057,7 +2057,7 @@ var wildcardRedirectMatchesPath = shared.WildcardRedirectMatchesPath
 // they are represented in storage.
 func reservedPublicPath(st *importState, path string) bool {
 	path = strings.Trim(path, "/")
-	if path == "" {
+	if path == "" || util.IsFeedPath(path) {
 		return true
 	}
 	first, _, _ := strings.Cut(path, "/")
@@ -2079,6 +2079,9 @@ func reservedPublicPath(st *importState, path string) bool {
 // alias /admin conflicts with the admin router, while /fr/admin is a valid page
 // path because only the child router sees "admin" after stripping "fr".
 func concreteAliasRouteReserved(st *importState, sourcePath, aliasPath string) bool {
+	if util.IsFeedPath(aliasPath) {
+		return true
+	}
 	if sourcePath == aliasPath {
 		return reservedPublicPath(st, aliasPath)
 	}
