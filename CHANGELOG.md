@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-07
+
 ### Added
 - **MCP server for AI agents** — a new opt-in `mcp` module serves the Model
   Context Protocol over stateless Streamable HTTP at `POST /api/mcp`, built on
@@ -41,6 +43,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The MCP server card is served with `Cache-Control: no-cache` and, while the
   MCP module is active, reports the live server's identity. The
   `mcp_server_version` key now labels only the REST-bridge card.
+
+### Fixed
+- **Dify streamed replies** — retain SSE events and UTF-8 text across split
+  network chunks, including split CRLF delimiters and the final event. Handle
+  replacement messages, preserve conversation and message IDs, and show an
+  error for failed workflows, malformed events or empty replies instead of
+  leaving an empty assistant bubble.
+
+### Upgrade notes
+- The MCP module starts inactive. Enable **MCP Server** in **Admin → Modules**
+  and create an API key with `mcp:access` before connecting an agent.
+- Drafts remain hidden unless **Expose drafts to AI agents** is enabled at
+  `/admin/mcp` and the key also has `pages:read`. That permission independently
+  grants access to unpublished drafts through REST v2.
+- Configure each key's source CIDRs for the networks its clients use, and
+  include those networks in the global API allowlist when required. Claude's
+  remote connectors use Anthropic's outbound range; local clients use their
+  own public IP. Save source CIDRs before reactivating a key revoked after an
+  IP change. See [MCP client setup](docs/mcp-module.md#connecting-clients).
 
 ## [0.24.0] - 2026-10-01
 
@@ -1510,7 +1531,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/olegiv/ocms-go/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/olegiv/ocms-go/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/olegiv/ocms-go/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/olegiv/ocms-go/compare/v0.21.0...v0.22.0

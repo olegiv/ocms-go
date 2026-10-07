@@ -72,6 +72,34 @@ CIDRs cover every network it uses. Behind a reverse proxy, also set
 `OCMS_TRUSTED_PROXIES` so the client IP is resolved correctly (see
 [reverse-proxy.md](reverse-proxy.md)).
 
+For Claude's remote connectors, requests originate from Anthropic's cloud
+rather than the desktop computer. Anthropic currently publishes
+`160.79.104.0/21` as its outbound IPv4 range; check the
+[official IP addresses](https://platform.claude.com/docs/en/api/ip-addresses)
+before configuring it. Add this range to the key's **Source CIDR allowlist**
+and to `OCMS_API_ALLOWED_CIDRS` when the global policy requires it.
+
+For local clients, such as Claude Code or a desktop HTTP bridge, add the
+client's public IP as a `/32` entry. A key used by both kinds of client can
+have one CIDR per line, for example:
+
+```text
+160.79.104.0/21
+203.0.113.42/32
+```
+
+Replace the documentation address `203.0.113.42` with your current public
+IPv4 address, and update it if your ISP or VPN changes that address. For an
+individual IPv6 address, use `/128`.
+
+If an IP change has already revoked the key, edit it in **Admin → API Keys**:
+save the source CIDRs while **Active** remains unchecked, then edit it again
+and check **Active**. This order prevents a retry from revoking the key between
+activation and saving its CIDRs. The token stays the same and no server
+restart is needed. Once source CIDRs are configured, changes between allowed
+IPs may still log an `observed` warning, but they do not revoke the key.
+Requests from outside the allowlist are rejected.
+
 ## Connecting clients
 
 The endpoint takes a static bearer token, which is the API key. Every client
@@ -103,8 +131,26 @@ claude mcp add --transport http ocms https://example.com/api/mcp \
 Keep keys out of configuration files that are shared or committed. Most clients
 can read headers from environment variables.
 
-The custom connectors of claude.ai and Claude Desktop need OAuth 2.1, and this
-release does not support it (see [Follow-ups](#follow-ups)).
+**Claude Desktop and claude.ai remote connectors:**
+
+Request header authentication is a **limited beta**. If **Request headers**
+does not appear in the connector dialog, your organization does not yet have
+access. See Anthropic's
+[custom connector instructions](https://claude.com/docs/connectors/custom/add-unlisted).
+
+1. Open **Customize → Connectors → Add custom connector**. For an organization
+   connector, an owner uses **Organization settings → Connectors**.
+2. Enter the public HTTPS endpoint, such as `https://example.com/api/mcp`.
+3. Choose **No sign-in** for authentication.
+4. Under **Request headers**, add a required `Authorization` header with the
+   complete value `Bearer <YOUR_API_KEY>`, including the `Bearer ` prefix.
+5. Save the connector and enable it through **+ → Connectors** in the chat.
+
+Configure the source CIDRs described above before connecting. OAuth is not
+implemented by this release; accounts without request header access need a
+local stdio-to-HTTP bridge in Claude Desktop or another client that supports
+bearer headers. OAuth connections reserve the `Authorization` header, so use
+**No sign-in** for this API key setup.
 
 ## Tools
 
@@ -447,7 +493,8 @@ for REST and MCP together:
 - Write tools for pages, taxonomy and media upload, with an editorial policy
   layer (drafts-only and no-deletes defaults) and `transport=mcp` audit
   metadata.
-- OAuth 2.1 authorization, for the custom connectors of claude.ai and Claude
-  Desktop. The bearer-token verifier is the seam it plugs into.
+- OAuth 2.1 authorization for individual user sign-in and remote connectors
+  without request header access. The bearer-token verifier is the seam it
+  plugs into.
 - MCP resources and prompts.
 - A language filter for list and search tools (needs v2 service support).
