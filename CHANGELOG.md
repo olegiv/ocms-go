@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-08
+
 ### Added
 - **RSS and Atom feeds** — core subscriptions for the latest 20 published
   posts site-wide, by category and by tag, with language-prefixed URLs.
@@ -19,7 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Ordering handles mixed time zones and fractional seconds. RSS summaries
   preserve literal markup as visible text.
   HEAD preserves negotiated compression headers. Endpoint and theme integration
-  documentation is available in `docs/feeds.md` and the wiki's Feeds page.
+  documentation is available in `docs/feeds.md` and the
+  [wiki's Feeds page](https://github.com/olegiv/ocms-go/wiki/Feeds).
+
+### Upgrade notes
+- Configure a valid HTTP(S) `site_url` (or `OCMS_SITE_URL` at startup) to
+  enable feed URLs and discovery links. Feeds return 503 when it is missing
+  or invalid.
+- No schema migration, dependencies or admin settings are added. Custom
+  themes can render `BaseTemplateData.FeedLinks` to advertise subscriptions.
 
 ## [0.25.0] - 2026-10-07
 
