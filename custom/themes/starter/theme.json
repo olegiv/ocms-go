@@ -1,7 +1,7 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "name": "Starter",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "author": "oCMS",
     "description": "A clean, magazine-style starter theme with card-based layouts and warm typography",
     "screenshot": "screenshot.svg",

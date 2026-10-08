@@ -1,0 +1,16 @@
+{{if .Breadcrumbs}}
+<nav class="frontend-breadcrumbs" aria-label="{{.BreadcrumbLabel}}">
+    <ol>
+        {{range $i, $crumb := .Breadcrumbs}}
+        <li>
+            {{if $i}}<span class="frontend-breadcrumb-separator" aria-hidden="true">/</span>{{end}}
+            {{if $crumb.Active}}
+            <span aria-current="page">{{$crumb.Label}}</span>
+            {{else}}
+            <a href="{{$crumb.URL}}">{{$crumb.Label}}</a>
+            {{end}}
+        </li>
+        {{end}}
+    </ol>
+</nav>
+{{end}}

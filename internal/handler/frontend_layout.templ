@@ -15,6 +15,28 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 )
 
+// frontendBreadcrumbs renders an accessible trail shared with JSON-LD.
+templ frontendBreadcrumbs(base BaseTemplateData) {
+	if len(base.Breadcrumbs) > 0 {
+		<nav class="fe-breadcrumbs" aria-label={ base.BreadcrumbLabel }>
+			<ol>
+				for i, crumb := range base.Breadcrumbs {
+					<li>
+						if i > 0 {
+							<span class="fe-breadcrumb-separator" aria-hidden="true">/</span>
+						}
+						if crumb.Active {
+							<span aria-current="page">{ crumb.Label }</span>
+						} else {
+							<a href={ templ.SafeURL(crumb.URL) }>{ crumb.Label }</a>
+						}
+					</li>
+				}
+			</ol>
+		</nav>
+	}
+}
+
 // frontendBaseLayout renders the full HTML shell with <head>, meta, CSS/JS includes.
 templ frontendBaseLayout(base BaseTemplateData) {
 	<!DOCTYPE html>
@@ -84,7 +106,7 @@ templ frontendBaseLayout(base BaseTemplateData) {
 				@templ.JSONScript("", json.RawMessage(base.JSONLD)).WithType("application/ld+json")
 			}
 			<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
-			<link rel="stylesheet" href="/static/dist/main.css"/>
+			<link rel="stylesheet" href={ utils.ScriptURL("/static/dist/main.css") }/>
 			<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
 			<link rel="stylesheet" href="/static/dist/css/prism.css"/>
 			if base.CustomCSS != "" {

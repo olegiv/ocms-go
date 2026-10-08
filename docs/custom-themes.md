@@ -288,6 +288,49 @@ Themes must include these function calls for oCMS features to work:
 | `{{embedBody .CSPNonce .PageOrigin}}` | Before `</body>` | Embedded body content |
 | `{{informerBar}}` | In `<body>` | Informer bar widget |
 
+### Structured data and breadcrumbs
+
+`.JSONLD` contains complete, HTML-safe JSON-LD for the existing script block:
+
+```html
+{{if .JSONLD}}
+<script nonce="{{.CSPNonce}}" type="application/ld+json">{{.JSONLD}}</script>
+{{end}}
+```
+
+It may be one schema object or an array of schema objects. Do not marshal it
+again or assume every response is an Article. Existing themes using this block
+receive the new schemas automatically.
+
+Language homepages emit WebSite with the localized site name and description,
+and the configured root site URL (without a language prefix). No SearchAction
+is advertised. Published pages retain their Article markup and add
+BreadcrumbList. Blog, category and tag archives emit BreadcrumbList alone.
+The new schemas require `site_url` to be an HTTP(S) origin with no credentials,
+query, fragment or subdirectory. They never use the request Host as a fallback.
+Draft previews retain their existing Article markup only; search, form and
+error pages do not receive new schemas.
+
+`.Breadcrumbs` is a slice of `{Label, URL, Active}` navigation steps.
+`.BreadcrumbLabel` is the localized accessible label for the navigation landmark.
+Home and Blog labels follow the content language; the final label is the actual
+content or taxonomy name. Posts use Home → Blog → Post; static pages and
+category/tag archives use Home → Current page. Category parents are not added.
+Pagination preserves the trail and the current item's canonical URL; a manual
+page canonical override is also used for that item's structured destination.
+
+To show the trail, copy the starter theme's `partials/breadcrumbs.html` and place
+`{{template "breadcrumbs.html" .}}` inside your main content container. Render
+the active label as text with `aria-current="page"`, link preceding items, and
+hide separators from assistive technology. The shared handler data supplies
+both visible navigation and structured markup. New structured data is omitted
+when the site origin is invalid, while visible navigation remains available.
+
+Validate representative posts and archives with Google's
+[Rich Results Test](https://search.google.com/test/rich-results), and homepage
+WebSite data with the [Schema Markup Validator](https://validator.schema.org/).
+WebSite site-name markup does not promise a rich result or a ranking change.
+
 ### Template Data
 
 Common data available in all templates:
@@ -301,6 +344,9 @@ Common data available in all templates:
 | `.HomeURL` | string | Canonical home path (`/` for default, `/fr` for non-default); use this for logo and home links instead of appending `/` to `.LangPrefix` |
 | `.MetaDescription` | string | Page meta description |
 | `.Canonical` | string | Canonical URL |
+| `.JSONLD` | template.JS | Serialized schema object or array; render in one nonce-bearing application/ld+json script |
+| `.Breadcrumbs` | array of `FrontendBreadcrumb` | Shared visible/structured trail with `Label`, `URL`, `Active` |
+| `.BreadcrumbLabel` | string | Localized accessible label for the breadcrumb navigation |
 | `.FeedLinks` | array of `FeedLink` | Current-language site subscriptions, plus contextual category/tag subscriptions; each link has `Title`, `MIMEType` and absolute `URL` |
 | `.Page` | object | Current page data |
 | `.Pages` | array | List of pages (for list/archive views) |
@@ -421,6 +467,12 @@ Version the URLs from `theme.json` and bump `version` whenever an asset changes:
 <link rel="stylesheet" href="/themes/mytheme/static/css/theme.css{{$v}}">
 <script defer src="/themes/mytheme/static/js/theme.js{{$v}}"></script>
 ```
+
+The shipped HTML themes include this version suffix on their theme stylesheet
+URLs. The templ and fallback layouts use the existing startup cache-busting
+helper for `/static/dist/main.css`, so its `?v=` token changes on process restart.
+Keep these suffixes when customizing a layout; bump the HTML theme's version
+and restart the instance whenever its stylesheet changes.
 
 Two traps:
 

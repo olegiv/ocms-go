@@ -48,7 +48,7 @@
     {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
 
     <!-- Theme CSS -->
-    <link rel="stylesheet" href="/themes/developer/static/css/theme.css">
+    <link rel="stylesheet" href="/themes/developer/static/css/theme.css?v={{with .Site.Theme}}{{.Version}}{{end}}">
 
     <!-- Prism.js syntax highlighting -->
     <link rel="stylesheet" href="/static/dist/css/prism.css">
@@ -94,6 +94,7 @@
 
         <main class="dev-main">
             <div class="dev-container">
+                {{template "breadcrumbs.html" .}}
                 {{template "content" .}}
             </div>
         </main>

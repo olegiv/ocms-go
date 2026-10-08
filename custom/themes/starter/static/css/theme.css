@@ -6,6 +6,29 @@
 /* --------------------------------------------------------------------------
    CSS Custom Properties
    -------------------------------------------------------------------------- */
+/* Breadcrumb navigation */
+.frontend-breadcrumbs {
+    margin-bottom: 1.5rem;
+    color: var(--st-text-light);
+    font-size: 0.875rem;
+}
+.frontend-breadcrumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.frontend-breadcrumbs li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.frontend-breadcrumb-separator { opacity: 0.6; }
+
 :root {
     /* Colors */
     --st-accent: #2d6a4f;

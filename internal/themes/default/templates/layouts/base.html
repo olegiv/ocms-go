@@ -50,7 +50,7 @@
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
     {{/* Theme Styles */}}
-    <link rel="stylesheet" href="/themes/default/static/css/theme.css">
+    <link rel="stylesheet" href="/themes/default/static/css/theme.css?v={{with .Site.Theme}}{{.Version}}{{end}}">
 
     {{/* Prism.js syntax highlighting */}}
     <link rel="stylesheet" href="/static/dist/css/prism.css">
@@ -93,6 +93,7 @@
 
     <main class="site-main">
         <div class="container">
+            {{template "breadcrumbs.html" .}}
             {{if .ShowSidebar}}
             <div class="content-wrapper with-sidebar">
                 <div class="content-main">
