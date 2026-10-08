@@ -73,7 +73,7 @@ Running `ocms-go` in production? [Tell us about it.](https://github.com/olegiv/o
 
 The path to v1.0 is tracked in the [Roadmap to v1.0 issue](https://github.com/olegiv/ocms-go/issues). Headlines:
 
-- RSS / Atom feeds for pages and categories
+- ✅ RSS / Atom feeds for published posts, categories and tags, with language-prefixed URLs
 - JSON-LD structured data in the theme layer
 - PostgreSQL adapter alongside SQLite
 - ✅ Public demo — live at [ocms-demo.fly.dev](https://ocms-demo.fly.dev/), 24h auto-reset
@@ -97,6 +97,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
   - Link to pages or external URLs
   - Multiple menu locations
 - **Full-Text Search**: Built-in SQLite FTS5 search for fast content discovery
+- **RSS / Atom Feeds**: Subscribe to published posts site-wide or by category/tag in each active language; summaries, stable entry IDs and HTTP revalidation. See [Feeds](docs/feeds.md).
 
 ### Taxonomy
 - **Categories**: Organize content with hierarchical categories
@@ -300,7 +301,7 @@ Available release archives:
 | `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes and modules | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
-| `OCMS_SITE_URL` | Full site URL written into site config on startup (overrides DB/admin setting). Required for the sitemap and agent-discovery documents, which answer 503 while it is unset. Must be scheme and host only, e.g. `https://example.com` — a path, query, fragment, credentials or an out-of-range port fails startup, because routes are served from the root | - | No |
+| `OCMS_SITE_URL` | Full site URL written into site config on startup (overrides DB/admin setting). Required for RSS/Atom feeds, the sitemap and agent-discovery documents, which answer 503 while it is unset. Must be scheme and host only, e.g. `https://example.com` — a path, query, fragment, credentials or an out-of-range port fails startup, because routes are served from the root | - | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
 | `OCMS_CACHE_TTL` | Default cache TTL in seconds | `3600` | No |
 | `OCMS_REDIS_URL` | Redis URL for distributed caching | - | No |

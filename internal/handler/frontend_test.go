@@ -1062,7 +1062,7 @@ func TestFrontendHandler_NonDefaultHomepageMatchesTrailingSlashMiddlewareCanonic
 			t.Errorf("GET /fr missing %q: %s", want, body)
 		}
 	}
-	if strings.Contains(body, `https://example.com/fr/`) || strings.Contains(body, `href="/fr/"`) {
+	if strings.Contains(body, `href="https://example.com/fr/"`) || strings.Contains(body, `href="/fr/"`) {
 		t.Errorf("GET /fr advertises redirecting language homepage: %s", body)
 	}
 

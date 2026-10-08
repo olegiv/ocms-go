@@ -13,6 +13,9 @@
     {{if .Robots}}<meta name="robots" content="{{.Robots}}">{{end}}
 
     <!-- hreflang links for multi-language SEO -->
+    {{range .FeedLinks}}
+    <link rel="alternate" type="{{.MIMEType}}" title="{{.Title}}" href="{{.URL}}">
+    {{end}}
     {{range .HrefLangs}}
     <link rel="alternate" hreflang="{{.Lang}}" href="{{.Href}}">
     {{end}}

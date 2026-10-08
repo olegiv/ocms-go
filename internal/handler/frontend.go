@@ -181,6 +181,7 @@ type BaseTemplateData struct {
 	ArticleSection       string      // article:section (primary category)
 	ArticleTags          []string    // article:tag
 	JSONLD               template.JS // JSON-LD structured data
+	FeedLinks            []FeedLink  // Site and contextual taxonomy subscriptions.
 
 	// Site info
 	SiteName    string
@@ -1220,6 +1221,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	// Get base template data first to access LangPrefix
 	title := "Category: " + category.Name
 	base := h.getBaseTemplateData(r, title, category.Description.String)
+	base.addFeedLinks("/category/"+category.Slug, base.SiteName+" — "+category.Name)
 
 	// Fetch pages for this category (with optional language filter)
 	pages, total, err := h.fetchPagesForEntity(ctx, category.ID, languageCode, limit, int64(offset), false)
@@ -1312,6 +1314,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	// Get base template data first to access LangPrefix
 	title := "Tag: " + tag.Name
 	base := h.getBaseTemplateData(r, title, "")
+	base.addFeedLinks("/tag/"+tag.Slug, base.SiteName+" — "+tag.Name)
 
 	// Fetch pages for this tag (with optional language filter)
 	pages, total, err := h.fetchPagesForEntity(ctx, tag.ID, languageCode, limit, int64(offset), true)
@@ -2534,6 +2537,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		data.OGURL = canonicalURL
 	}
 
+	data.addFeedLinks("", data.SiteName)
 	return data
 }
 

@@ -319,7 +319,7 @@ func (s *Source) makeUniquePageSlug(ctx context.Context, queries *store.Queries,
 
 func elefantCorePathReserved(path string) bool {
 	path = strings.Trim(path, "/")
-	if path == "" {
+	if path == "" || util.IsFeedPath(path) {
 		return true
 	}
 	first, _, _ := strings.Cut(path, "/")

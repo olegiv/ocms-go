@@ -40,6 +40,9 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			if base.Canonical != "" {
 				<link rel="canonical" href={ base.Canonical }/>
 			}
+			for _, feed := range base.FeedLinks {
+				<link rel="alternate" type={ feed.MIMEType } title={ feed.Title } href={ feed.URL }/>
+			}
 			<!-- Open Graph -->
 			<meta property="og:site_name" content={ base.SiteName }/>
 			if base.Title != "" {

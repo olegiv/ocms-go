@@ -780,7 +780,10 @@ func TestPageSlugsAndAliasesRefuseCoreModuleAndRedirectOwnership(t *testing.T) {
 
 	result := &types.ImportResult{}
 	tracker := &mockTracker{}
-	for _, alias := range []string{"page/123", "bookmarks", "fr/team", "claimed", "wild/path"} {
+	for _, alias := range []string{
+		"page/123", "bookmarks", "fr/team", "claimed", "wild/path",
+		"rss.xml", "atom.xml", "ru/rss.xml", "ru/category/tech/atom.xml", "tag/go/rss.xml",
+	} {
 		if err := source.createTrackedPageAlias(ctx, queries, page.ID, alias, now, result, tracker); err == nil {
 			t.Errorf("createTrackedPageAlias(%q) succeeded; want route ownership error", alias)
 		}

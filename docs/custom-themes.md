@@ -301,6 +301,7 @@ Common data available in all templates:
 | `.HomeURL` | string | Canonical home path (`/` for default, `/fr` for non-default); use this for logo and home links instead of appending `/` to `.LangPrefix` |
 | `.MetaDescription` | string | Page meta description |
 | `.Canonical` | string | Canonical URL |
+| `.FeedLinks` | array of `FeedLink` | Current-language site subscriptions, plus contextual category/tag subscriptions; each link has `Title`, `MIMEType` and absolute `URL` |
 | `.Page` | object | Current page data |
 | `.Pages` | array | List of pages (for list/archive views) |
 | `.Categories` | array | Available categories |
@@ -312,6 +313,20 @@ Common data available in all templates:
 | `.Pagination` | object | Pagination state |
 | `.SearchQuery` | string | Current search term |
 | `.Year` | int | Current year |
+
+### Feed Discovery
+
+Render the feed links in the base layout's `<head>`:
+
+```html
+{{range .FeedLinks}}
+<link rel="alternate" type="{{.MIMEType}}" title="{{.Title}}" href="{{.URL}}">
+{{end}}
+```
+
+Core themes, the starter and fallback layout already include this loop. The list
+is empty when the configured site origin is missing or invalid. See
+[RSS and Atom feeds](feeds.md) for endpoints, visibility and HTTP behavior.
 
 ## Translations
 

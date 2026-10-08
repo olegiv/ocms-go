@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **RSS and Atom feeds** — core subscriptions for the latest 20 published
+  posts site-wide, by category and by tag, with language-prefixed URLs.
+  Entries use saved summaries or Unicode-safe plain-text excerpts and retain
+  their identity across slug changes. Feeds respect **Exclude from lists**,
+  require a configured HTTP(S) site origin, and support GET, HEAD and ETag
+  revalidation. Shipped themes, the starter and the fallback layout advertise
+  site and contextual subscriptions. Invalid legacy slugs are filtered before
+  the 20-post limit; missing publication dates use creation dates for ordering.
+  Ordering handles mixed time zones and fractional seconds. RSS summaries
+  preserve literal markup as visible text.
+  HEAD preserves negotiated compression headers. Endpoint and theme integration
+  documentation is available in `docs/feeds.md` and the wiki's Feeds page.
+
 ## [0.25.0] - 2026-10-07
 
 ### Added

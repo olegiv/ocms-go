@@ -2,6 +2,15 @@
 
 oCMS uses a multi-layer caching system to improve performance while ensuring data freshness.
 
+## RSS and Atom feeds
+
+[Feeds](feeds.md) are generated from current database data on every request.
+They use `Cache-Control: public, no-cache` and deterministic weak ETags;
+matching `If-None-Match` validators return a bodyless 304. Content changes are
+visible on the next request without clearing the page cache. HEAD retains GET's
+representation headers, including negotiated compression, and omits the body.
+Error responses use `no-store`.
+
 ## Cache Types
 
 | Cache | Purpose | Invalidation |
