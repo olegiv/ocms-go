@@ -79,6 +79,8 @@ func (h *FrontendHandler) serveFeed(w http.ResponseWriter, r *http.Request, file
 		return
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.WriteHeader(http.StatusOK)
+	_ = http.NewResponseController(w).Flush()
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(body)
 	}
@@ -87,10 +89,12 @@ func (h *FrontendHandler) serveFeed(w http.ResponseWriter, r *http.Request, file
 func writeFeedError(w http.ResponseWriter, r *http.Request, status int, message string) {
 	if r.Method == http.MethodHead {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.WriteHeader(status)
-		return
+	} else {
+		http.Error(w, message, status)
 	}
-	http.Error(w, message, status)
+	_ = http.NewResponseController(w).Flush()
 }
 
 func feedETagMatches(values []string, etag string) bool {

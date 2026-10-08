@@ -57,6 +57,13 @@ type timeoutWriter struct {
 	wroteHeader bool
 }
 
+func (tw *timeoutWriter) FlushError() error {
+	tw.WriteHeader(http.StatusOK)
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+	return http.NewResponseController(tw.ResponseWriter).Flush()
+}
+
 func (tw *timeoutWriter) WriteHeader(code int) {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()

@@ -4,6 +4,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -105,6 +106,31 @@ func TestTimeoutWriterWriteHeader(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("Status = %d, want %d (second WriteHeader should be ignored)", rr.Code, http.StatusOK)
 	}
+}
+
+func TestTimeoutWriterFlush(t *testing.T) {
+	for _, status := range []int{0, http.StatusCreated} {
+		tw, rr := newTestTimeoutWriter()
+		want := status
+		if status != 0 {
+			tw.WriteHeader(status)
+		} else {
+			want = http.StatusOK
+		}
+		if err := http.NewResponseController(tw).Flush(); err != nil {
+			t.Fatal(err)
+		}
+		if !tw.wroteHeader || !rr.Flushed || rr.Code != want || rr.Body.Len() != 0 {
+			t.Errorf("flush tracking=%t flushed=%t status=%d bytes=%d", tw.wroteHeader, rr.Flushed, rr.Code, rr.Body.Len())
+		}
+	}
+	t.Run("unsupported writer", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		tw := &timeoutWriter{ResponseWriter: struct{ http.ResponseWriter }{rr}}
+		if err := http.NewResponseController(tw).Flush(); !errors.Is(err, http.ErrNotSupported) {
+			t.Fatalf("Flush error=%v, want unsupported", err)
+		}
+	})
 }
 
 func TestTimeoutWriterWrite(t *testing.T) {

@@ -18,15 +18,20 @@ missing terms and unknown or inactive language prefixes return 404.
 ## Included content
 
 Each feed contains at most 20 published posts, newest publication first, with
-the page ID as the descending tie-breaker. Language and taxonomy filters apply
-before the limit. Static pages, drafts, scheduled-but-unpublished posts and
-posts marked **Exclude from lists** are omitted. **No index** controls search
+the page ID as the descending tie-breaker. If a published post has no publication
+timestamp, its creation timestamp supplies both the displayed date and ordering.
+Ordering compares actual instants across time zones and retains fractional seconds.
+Language, taxonomy and valid article-slug filters apply before the limit, so
+unroutable legacy posts do not consume subscription slots. Static pages, drafts,
+scheduled-but-unpublished posts and posts marked **Exclude from lists** are
+omitted. **No index** controls search
 engine indexing and does not remove a public post from feeds.
 
 Entries contain the title, absolute article link, public author name, publication
 and modification dates, and a plain-text summary. The saved summary takes
 precedence; otherwise the body becomes an excerpt of at most 300 Unicode
 characters, including the ellipsis. Markup and script/style contents are removed.
+RSS escapes literal markup for display as text; Atom summaries use `type="text"`.
 Full article HTML and media enclosures are not included.
 
 Entry identifiers use the configured site origin and page ID (`/page/{id}`),
@@ -39,7 +44,8 @@ metadata supplying the feed update date.
 ## HTTP behavior
 
 GET returns UTF-8 XML with `application/rss+xml` or `application/atom+xml`.
-HEAD returns the same headers without a body. Feeds are generated from current
+HEAD returns the same representation headers without a body, including when
+gzip or deflate compression is negotiated. Feeds are generated from current
 database data on every request, with `Cache-Control: public, no-cache` and a
 deterministic weak ETag that remains valid under compression. A matching
 `If-None-Match` returns 304 without a body; publishing, editing, unpublishing,

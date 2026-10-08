@@ -104,7 +104,7 @@ func TestFeedXML(t *testing.T) {
 			t.Fatalf("RSS metadata or items missing: %s", body)
 		}
 		item := doc.Channel.Items[0]
-		if item.Title != feed.Entries[0].Title || item.Description != feed.Entries[0].Summary ||
+		if item.Title != feed.Entries[0].Title || feedPlainText(item.Description) != feed.Entries[0].Summary ||
 			item.GUID.Value != feed.Entries[0].ID || item.GUID.IsPermaLink || item.Creator != "Олег" {
 			t.Errorf("RSS entry does not preserve public text and ID: %+v", item)
 		}

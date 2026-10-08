@@ -99,6 +99,15 @@ Core route names cannot be activated as language codes: `admin`, `api`,
 Legacy active rows using a reserved code are ignored by routing and logged,
 but administrators can still deactivate or rename them.
 
+### Feed Language
+
+RSS and Atom subscriptions use the language in their URL. `/rss.xml` and
+`/atom.xml` always select the active default language; `/ru/rss.xml` and
+`/ru/atom.xml` select Russian. Query preferences, cookies and `Accept-Language`
+do not override feed URLs. Category/tag slugs must belong to that language;
+missing terms and unknown or inactive language prefixes return 404. See
+[RSS and Atom feeds](feeds.md) for all subscription paths.
+
 ### Language Switcher
 
 The frontend language switcher (if enabled in your theme) shows:

@@ -180,7 +180,7 @@ func BuildRSSFeed(feed Feed) ([]byte, error) {
 	}
 	for _, entry := range feed.Entries {
 		channel.Items = append(channel.Items, rssItem{
-			Title: entry.Title, Link: entry.URL, Description: entry.Summary,
+			Title: entry.Title, Link: entry.URL, Description: html.EscapeString(entry.Summary),
 			GUID: rssGUID{Value: entry.ID}, Published: entry.PublishedAt.UTC().Format(time.RFC1123Z),
 			Updated: entry.UpdatedAt.UTC().Format(time.RFC3339), Creator: entry.Author,
 		})

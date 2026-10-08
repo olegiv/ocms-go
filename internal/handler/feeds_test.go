@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/net/html"
@@ -245,6 +246,55 @@ func TestFeedsVisibilityAndLimit(t *testing.T) {
 				t.Errorf("%s%s: publication date must precede the ID tie-breaker", scope, format)
 			}
 		}
+	}
+}
+
+func TestFeedsTimestampOrdering(t *testing.T) {
+	f := newFeedFixture(t)
+	utc := time.Date(2026, 10, 7, 12, 30, 0, 2, time.UTC)
+	cest := time.FixedZone("CEST", 2*60*60)
+	for i := range 25 {
+		id := f.post(t, fmt.Sprintf("older-%02d", i), "en")
+		f.exec(t, `UPDATE pages SET published_at = ? WHERE id = ?`, utc.Add(-30*time.Minute).In(cest), id)
+	}
+	for _, tc := range []struct {
+		slug string
+		date any
+	}{
+		{"newest-utc", utc},
+		{"fraction-earlier", utc.Add(-time.Nanosecond)},
+		{"same-instant-offset", utc.In(cest)},
+		{"negative-offset", "2026-10-07T06:01:00-06:30"},
+		{"legacy-iso", "2026-10-07T13:00:00+00:00"},
+		{"second-boundary", "2026-10-07T12:30:00.999999999Z"},
+		{"next-second", "2026-10-07 12:30:01"},
+		{"naive", "2026-10-07 12:32:00"},
+		{"positive-half-hour", utc.Add(-14 * time.Minute).In(time.FixedZone("NPT", 5*60*60+45*60))},
+		{"negative-go-offset", utc.Add(time.Minute - 2*time.Nanosecond).In(time.FixedZone("NST", -6*60*60-30*60))},
+		{"monotonic-suffix", "2026-10-07 13:15:00.123456789 +0000 UTC m=+1.000000000"},
+	} {
+		id := f.post(t, tc.slug, "en")
+		f.exec(t, `UPDATE pages SET published_at = ? WHERE id = ?`, tc.date, id)
+	}
+	id := f.post(t, "creation-fallback", "en")
+	f.exec(t, `UPDATE pages SET published_at = NULL, created_at = ? WHERE id = ?`, utc.Add(90*time.Minute), id)
+	want := []string{"creation-fallback", "monotonic-suffix", "legacy-iso", "naive", "negative-go-offset", "negative-offset", "next-second", "second-boundary",
+		"same-instant-offset", "newest-utc", "fraction-earlier", "positive-half-hour"}
+	for i := 24; len(want) < 20; i-- {
+		want = append(want, fmt.Sprintf("older-%02d", i))
+	}
+	for _, format := range []string{"rss.xml", "atom.xml"} {
+		t.Run(format, func(t *testing.T) {
+			entries := decodeFeedEntries(t, f.request(http.MethodGet, "/"+format, ""))
+			if len(entries) != len(want) {
+				t.Fatalf("entries=%d, want %d", len(entries), len(want))
+			}
+			for i, entry := range entries {
+				if entry.Title != want[i] {
+					t.Errorf("entry %d=%q, want %q", i, entry.Title, want[i])
+				}
+			}
+		})
 	}
 }
 

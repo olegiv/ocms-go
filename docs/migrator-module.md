@@ -6,6 +6,12 @@ For the bulk-import/export of *oCMS-to-oCMS* content (Markdown + YAML front-matt
 
 ## Overview
 
+### Reserved feed routes
+
+Imports reserve the core RSS/Atom paths (`/rss.xml`, `/atom.xml`, category and
+tag subscriptions, and language-prefixed equivalents). Legacy aliases and
+redirects cannot shadow these routes. See [Feeds](feeds.md) for the endpoint list.
+
 ### Currently Supported Sources
 
 | Source | DisplayName | Notes |
