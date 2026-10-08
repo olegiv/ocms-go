@@ -106,7 +106,7 @@ templ frontendBaseLayout(base BaseTemplateData) {
 				@templ.JSONScript("", json.RawMessage(base.JSONLD)).WithType("application/ld+json")
 			}
 			<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
-			<link rel="stylesheet" href="/static/dist/main.css"/>
+			<link rel="stylesheet" href={ utils.ScriptURL("/static/dist/main.css") }/>
 			<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
 			<link rel="stylesheet" href="/static/dist/css/prism.css"/>
 			if base.CustomCSS != "" {

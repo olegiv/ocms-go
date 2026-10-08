@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   HTTP(S) origin and are omitted on draft previews, search and error pages.
 
 ### Fixed
+- **Frontend stylesheet caching** — HTML theme stylesheet URLs now include the
+  theme version; templ and fallback layouts use a startup version for main CSS.
+  Returning visitors fetch the updated breadcrumb styles after deployment.
 - **Asset dependency audit** — override the shared Parcel watcher to 2.6.0,
   removing the vulnerable `braces` dependency from the locked Tailwind and Sass
   dependency trees.

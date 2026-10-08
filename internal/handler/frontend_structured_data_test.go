@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/views/utils"
 )
 
 func newStructuredDataFixture(t *testing.T, renderer string) *feedFixture {
@@ -259,6 +261,66 @@ func TestFrontendStructuredDataLayouts(t *testing.T) {
 						t.Errorf("%s with origin %q emits new schemas", path, origin)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestFrontendStylesheetCacheInvalidation(t *testing.T) {
+	originalVersion := utils.ScriptVersion
+	t.Cleanup(func() { utils.ScriptVersion = originalVersion })
+	for _, renderer := range []string{"default", "default-html", "developer", "starter", "fallback"} {
+		t.Run(renderer, func(t *testing.T) {
+			f := newStructuredDataFixture(t, renderer)
+			activeTheme := f.handler.themeManager.GetActiveTheme()
+			stylesheet := "/static/dist/main.css"
+			isHTML := activeTheme != nil && activeTheme.RenderEngine() == theme.EngineHTML
+			if isHTML {
+				stylesheet = "/themes/" + activeTheme.Name + "/static/css/theme.css"
+			}
+			previousURL := ""
+			for _, release := range []struct{ themeVersion, startVersion string }{
+				{"1.0.0", "1700000000"}, {"1.0.1", "1700000001"},
+			} {
+				utils.ScriptVersion = release.startVersion
+				if activeTheme != nil {
+					activeTheme.Config.Version = release.themeVersion
+				}
+				wantVersion := release.startVersion
+				if isHTML {
+					wantVersion = release.themeVersion
+				}
+				currentURL := ""
+				for range 2 {
+					w := f.request(http.MethodGet, "/en/blog", "")
+					_, doc := decodeStructuredResponse(t, w)
+					foundURL := ""
+					walkHTML(doc, func(n *html.Node) {
+						if n.Type != html.ElementNode || n.Data != "link" || htmlAttribute(n, "rel") != "stylesheet" {
+							return
+						}
+						href := htmlAttribute(n, "href")
+						u, err := url.Parse(href)
+						if err == nil && u.Path == stylesheet {
+							foundURL = href
+							if u.Query().Get("v") != wantVersion {
+								t.Errorf("stylesheet %q has version %q, want %q", href, u.Query().Get("v"), wantVersion)
+							}
+						}
+					})
+					if foundURL == "" || !strings.HasPrefix(foundURL, stylesheet+"?v=") {
+						t.Fatalf("missing versioned stylesheet %q", stylesheet)
+					}
+					if currentURL != "" && currentURL != foundURL {
+						t.Errorf("same deployment changed stylesheet URL: %q -> %q", currentURL, foundURL)
+					}
+					currentURL = foundURL
+				}
+				if previousURL != "" && currentURL == previousURL {
+					t.Errorf("new deployment reused the cached stylesheet URL %q", currentURL)
+				}
+				t.Logf("theme=%s start=%s stylesheet=%s", release.themeVersion, release.startVersion, currentURL)
+				previousURL = currentURL
 			}
 		})
 	}

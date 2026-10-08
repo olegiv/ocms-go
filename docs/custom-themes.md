@@ -468,6 +468,12 @@ Version the URLs from `theme.json` and bump `version` whenever an asset changes:
 <script defer src="/themes/mytheme/static/js/theme.js{{$v}}"></script>
 ```
 
+The shipped HTML themes include this version suffix on their theme stylesheet
+URLs. The templ and fallback layouts use the existing startup cache-busting
+helper for `/static/dist/main.css`, so its `?v=` token changes on process restart.
+Keep these suffixes when customizing a layout; bump the HTML theme's version
+and restart the instance whenever its stylesheet changes.
+
 Two traps:
 
 - **`theme.json` is read once, at startup** (`LoadThemes`), so a bumped version
