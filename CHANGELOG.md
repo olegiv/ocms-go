@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Homepage and breadcrumb structured data** — language homepages emit
+  WebSite JSON-LD at the configured root site URL. Published content, blog,
+  category and tag archives show accessible, localized breadcrumbs with matching
+  BreadcrumbList JSON-LD. Posts use Home → Blog → Post; static pages and taxonomy
+  archives use Home → Current page. Pagination retains the same trail and uses
+  the current canonical destination. Article markup and breadcrumbs share the
+  existing nonce-bearing theme script; custom themes can adopt the new
+  `Breadcrumbs` and `BreadcrumbLabel` fields. New schemas require a configured
+  HTTP(S) origin and are omitted on draft previews, search and error pages.
+
+### Fixed
+- **Asset dependency audit** — override the shared Parcel watcher to 2.6.0,
+  removing the vulnerable `braces` dependency from the locked Tailwind and Sass
+  dependency trees.
+
 ## [0.26.0] - 2026-10-08
 
 ### Added

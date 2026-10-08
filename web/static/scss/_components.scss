@@ -2,6 +2,33 @@
 @use 'sass:color';
 @use 'variables' as *;
 
+// Frontend breadcrumb navigation (templ renderer).
+.fe-breadcrumbs {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem 0;
+  font-size: 0.875rem;
+
+  ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.fe-breadcrumb-separator { opacity: 0.6; }
+
 // Buttons
 .btn {
   display: inline-flex;

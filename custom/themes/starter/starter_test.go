@@ -73,8 +73,8 @@ func TestThemeJsonValid(t *testing.T) {
 	if config.Name != "Starter" {
 		t.Errorf("Name = %q, want %q", config.Name, "Starter")
 	}
-	if config.Version != "1.0.0" {
-		t.Errorf("Version = %q, want %q", config.Version, "1.0.0")
+	if config.Version != "1.0.1" {
+		t.Errorf("Version = %q, want %q", config.Version, "1.0.1")
 	}
 	if config.Author != "oCMS" {
 		t.Errorf("Author = %q, want %q", config.Author, "oCMS")
@@ -680,8 +680,8 @@ func TestStarterThemeConfig(t *testing.T) {
 	if th.Config.Name != "Starter" {
 		t.Errorf("Config.Name = %q, want %q", th.Config.Name, "Starter")
 	}
-	if th.Config.Version != "1.0.0" {
-		t.Errorf("Config.Version = %q, want %q", th.Config.Version, "1.0.0")
+	if th.Config.Version != "1.0.1" {
+		t.Errorf("Config.Version = %q, want %q", th.Config.Version, "1.0.1")
 	}
 	if th.Config.Author != "oCMS" {
 		t.Errorf("Config.Author = %q, want %q", th.Config.Author, "oCMS")

@@ -714,13 +714,30 @@ func renderedArticleMainEntity(t *testing.T, body string) string {
 	if jsonLDEnd < 0 {
 		t.Fatalf("rendered JSON-LD closing tag missing: %s", body)
 	}
-	var article struct {
+	type articleSchema struct {
+		Type             string `json:"@type"`
 		MainEntityOfPage string `json:"mainEntityOfPage"`
 	}
-	if err := json.Unmarshal([]byte(body[jsonLDStart:jsonLDStart+jsonLDEnd]), &article); err != nil {
-		t.Fatalf("rendered JSON-LD is invalid: %v\n%s", err, body)
+	raw := []byte(strings.TrimSpace(body[jsonLDStart : jsonLDStart+jsonLDEnd]))
+	var articles []articleSchema
+	if len(raw) > 0 && raw[0] == '[' {
+		if err := json.Unmarshal(raw, &articles); err != nil {
+			t.Fatalf("rendered JSON-LD array is invalid: %v", err)
+		}
+	} else {
+		var article articleSchema
+		if err := json.Unmarshal(raw, &article); err != nil {
+			t.Fatalf("rendered JSON-LD is invalid: %v\n%s", err, body)
+		}
+		articles = append(articles, article)
 	}
-	return article.MainEntityOfPage
+	for _, article := range articles {
+		if article.Type == "Article" {
+			return article.MainEntityOfPage
+		}
+	}
+	t.Fatal("rendered JSON-LD has no Article")
+	return ""
 }
 
 func languageAwareAliasTestRouter(db *sql.DB, h *FrontendHandler) http.Handler {

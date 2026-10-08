@@ -5838,6 +5838,11 @@
             "translation": "Get your keys at hcaptcha.com"
         },
         {
+            "id": "frontend.blog",
+            "message": "Blog",
+            "translation": "Blog"
+        },
+        {
             "id": "frontend.home",
             "message": "Home",
             "translation": "Home"

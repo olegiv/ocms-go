@@ -3,6 +3,29 @@
 /* ========================================
    CSS Variables
 ======================================== */
+/* Breadcrumb navigation */
+.frontend-breadcrumbs {
+    margin-bottom: 1.5rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+.frontend-breadcrumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.frontend-breadcrumbs li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.frontend-breadcrumb-separator { opacity: 0.6; }
+
 :root {
     /* Colors */
     --primary-color: #3b82f6;

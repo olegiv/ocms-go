@@ -74,7 +74,7 @@ Running `ocms-go` in production? [Tell us about it.](https://github.com/olegiv/o
 The path to v1.0 is tracked in the [Roadmap to v1.0 issue](https://github.com/olegiv/ocms-go/issues). Headlines:
 
 - ✅ RSS / Atom feeds for published posts, categories and tags, with language-prefixed URLs
-- JSON-LD structured data in the theme layer
+- ✅ JSON-LD structured data: Article, homepage WebSite and visible/structured breadcrumbs
 - PostgreSQL adapter alongside SQLite
 - ✅ Public demo — live at [ocms-demo.fly.dev](https://ocms-demo.fly.dev/), 24h auto-reset
 
@@ -146,6 +146,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 - **Robots.txt**: Configurable robots.txt generation
 - **Canonical URLs**: Set canonical URLs to avoid duplicate content
 - **NoIndex/NoFollow**: Control search engine indexing per page
+- **Structured Data**: Article JSON-LD, homepage WebSite markup, and accessible breadcrumbs with matching BreadcrumbList data in shipped themes
 
 ### Administration
 - **User Management**: Role-based access control (admin/editor)

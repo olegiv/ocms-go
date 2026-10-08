@@ -71,6 +71,7 @@ templ FrontendPageDetail(data PageData) {
 	@frontendBaseLayout(data.BaseTemplateData) {
 		@frontendNav(data.BaseTemplateData)
 		<main class="fe-main min-h-[60vh]">
+			@frontendBreadcrumbs(data.BaseTemplateData)
 			<div class="fe-container fe-content-grid mx-auto max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1fr_280px] lg:px-8">
 				<article class="fe-content-main fe-article min-w-0">
 					if data.Page != nil {
@@ -160,6 +161,7 @@ templ FrontendListPage(data ListData) {
 	@frontendBaseLayout(data.BaseTemplateData) {
 		@frontendNav(data.BaseTemplateData)
 		<main class="fe-main min-h-[60vh]">
+			@frontendBreadcrumbs(data.BaseTemplateData)
 			<div class="fe-container mx-auto max-w-6xl border-b px-4 py-10 sm:px-6 lg:px-8">
 				<h1 class="fe-page-title text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{ data.BaseTemplateData.Title }</h1>
 				if data.Description != "" {
@@ -191,6 +193,7 @@ templ FrontendCategoryPage(data CategoryPageData) {
 	@frontendBaseLayout(data.BaseTemplateData) {
 		@frontendNav(data.BaseTemplateData)
 		<main class="fe-main min-h-[60vh]">
+			@frontendBreadcrumbs(data.BaseTemplateData)
 			<div class="fe-container mx-auto max-w-6xl border-b px-4 py-10 sm:px-6 lg:px-8">
 				<h1 class="fe-page-title text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{ data.Category.Name }</h1>
 				if data.Category.Description != "" {
@@ -237,6 +240,7 @@ templ FrontendTagPage(data TagPageData) {
 	@frontendBaseLayout(data.BaseTemplateData) {
 		@frontendNav(data.BaseTemplateData)
 		<main class="fe-main min-h-[60vh]">
+			@frontendBreadcrumbs(data.BaseTemplateData)
 			<div class="fe-container mx-auto max-w-6xl border-b px-4 py-10 sm:px-6 lg:px-8">
 				<h1 class="fe-page-title text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{ data.Tag.Name }</h1>
 				<p class="fe-page-count mt-2 text-sm text-muted-foreground">{ fmt.Sprintf("%d posts", data.PageCount) }</p>

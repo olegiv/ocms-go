@@ -1,7 +1,7 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "name": "Developer",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "author": "oCMS",
     "description": "Dark theme for developers and technical blogs",
     "screenshot": "screenshot.svg",

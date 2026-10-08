@@ -168,20 +168,22 @@ type BaseTemplateData struct {
 	MetaKeywords         string
 	Canonical            string
 	FeaturedImage        string
-	Robots               string      // Robots directive (index,follow / noindex,nofollow)
-	OGImage              string      // Open Graph image (absolute URL)
-	OGImageWidth         int         // Open Graph image width
-	OGImageHeight        int         // Open Graph image height
-	OGImageType          string      // Open Graph image MIME type (e.g. image/jpeg)
-	OGType               string      // Open Graph type (website, article)
-	OGURL                string      // Open Graph canonical URL
-	ArticlePublishedTime string      // article:published_time (ISO 8601)
-	ArticleModifiedTime  string      // article:modified_time (ISO 8601)
-	ArticleAuthor        string      // article:author
-	ArticleSection       string      // article:section (primary category)
-	ArticleTags          []string    // article:tag
-	JSONLD               template.JS // JSON-LD structured data
-	FeedLinks            []FeedLink  // Site and contextual taxonomy subscriptions.
+	Robots               string               // Robots directive (index,follow / noindex,nofollow)
+	OGImage              string               // Open Graph image (absolute URL)
+	OGImageWidth         int                  // Open Graph image width
+	OGImageHeight        int                  // Open Graph image height
+	OGImageType          string               // Open Graph image MIME type (e.g. image/jpeg)
+	OGType               string               // Open Graph type (website, article)
+	OGURL                string               // Open Graph canonical URL
+	ArticlePublishedTime string               // article:published_time (ISO 8601)
+	ArticleModifiedTime  string               // article:modified_time (ISO 8601)
+	ArticleAuthor        string               // article:author
+	ArticleSection       string               // article:section (primary category)
+	ArticleTags          []string             // article:tag
+	JSONLD               template.JS          // JSON-LD structured data
+	FeedLinks            []FeedLink           // Site and contextual taxonomy subscriptions.
+	Breadcrumbs          []FrontendBreadcrumb // Visible trail, also used for JSON-LD.
+	BreadcrumbLabel      string               // Localized navigation landmark label.
 
 	// Site info
 	SiteName    string
@@ -663,6 +665,9 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	base.Canonical = strings.TrimRight(h.getSiteURL(ctx, r), "/") + base.HomeURL
 	base.OGURL = base.Canonical
 	base.BodyClass = "home"
+	base.JSONLD = seo.BuildWebSiteSchema(&seo.SiteConfig{
+		SiteName: base.SiteName, SiteURL: base.SiteURL, SiteDescription: base.Site.Description,
+	})
 
 	// Get recent published posts (not pages) filtered by language
 	var recentPages []store.Page
@@ -1099,6 +1104,10 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	// Build JSON-LD structured data
 	base.JSONLD = seo.BuildArticleSchema(pageData, siteConfig, page.UpdatedAt)
+	base.setBreadcrumbs(pageView.Title, pageView.URL, pageView.Type == "post")
+	if page.Status == PageStatusPublished {
+		base.JSONLD = seo.CombineJSONLD(base.JSONLD, base.breadcrumbSchema())
+	}
 
 	// Get translations for language switcher and hreflang
 	if base.ShowLanguagePicker {
@@ -1245,6 +1254,8 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		URL:         base.LangPrefix + redirectCategory + category.Slug,
 	}
 	base.BodyClass = "archive category"
+	base.setBreadcrumbs(categoryView.Name, categoryView.URL, false)
+	base.JSONLD = base.breadcrumbSchema()
 	if base.ShowLanguagePicker {
 		base.Translations, base.HrefLangs = h.getCategoryTranslations(ctx, category.ID, base.LangCode, base.SiteURL)
 	}
@@ -1337,6 +1348,8 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		URL:  base.LangPrefix + redirectTag + tag.Slug,
 	}
 	base.BodyClass = "archive tag"
+	base.setBreadcrumbs(tagView.Name, tagView.URL, false)
+	base.JSONLD = base.breadcrumbSchema()
 	if base.ShowLanguagePicker {
 		base.Translations, base.HrefLangs = h.getTagTranslations(ctx, tag.ID, base.LangCode, base.SiteURL)
 	}
@@ -1427,6 +1440,8 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 		pageViews = append(pageViews, h.pageToView(ctx, p, base.LangCode, base.LangPrefix))
 	}
 	base.BodyClass = "archive blog"
+	base.setBreadcrumbs(breadcrumbTranslation(base.LangCode, "frontend.blog", "Blog"), base.LangPrefix+"/blog", false)
+	base.JSONLD = base.breadcrumbSchema()
 
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), base.LangPrefix+"/blog")
