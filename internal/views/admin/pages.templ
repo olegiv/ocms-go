@@ -1830,7 +1830,7 @@ templ editorImageModal(pc *PageContext) {
 templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	<!-- TinyMCE Editor Scripts -->
 	<div id="tinymce-config" data-cache-suffix={ "?v=" + utils.ScriptVersion } style="display:none"></div>
-	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js") } integrity="sha384-/+P5eCiaVs6wqu2N4bxY4wr3EcwkGXVR10gcquJQjT+jnT14CE9qXWDF2VGe7XgZ" crossorigin="anonymous"></script>
+	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js") } integrity="sha384-eoezFjUR6JziC0Lb/IuzSbkX9cjdWXs60Dc8lnQlSSAcylmabJkPDgfETPrIEp2L" crossorigin="anonymous"></script>
 	<script nonce={ templ.GetNonce(ctx) }>
 	// Store TinyMCE editor instance
 	let tinymceEditor = null;

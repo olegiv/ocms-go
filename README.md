@@ -204,7 +204,7 @@ Prebuilt release binaries have no external runtime dependencies beyond the opera
 
 Building from source requires:
 
-- Go 1.27.1 or later
+- Go 1.27.2 or later
 - [Node.js](https://nodejs.org/) (npm) for frontend dependencies
 - [sqlc](https://sqlc.dev/) for SQL code generation
 - [templ](https://templ.guide/) for type-safe HTML templates
@@ -269,7 +269,7 @@ Available release archives:
 3. Install required tools:
    ```bash
    go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-   go install github.com/a-h/templ/cmd/templ@latest
+   go install github.com/a-h/templ/cmd/templ@v0.3.1070
    go install github.com/pressly/goose/v3/cmd/goose@latest
    ```
 
@@ -949,7 +949,7 @@ git commit -m "Update Claude Code shared submodule"
 
 ## Technology Stack
 
-- **Backend**: Go 1.27.1+
+- **Backend**: Go 1.27.2+
 - **Database**: SQLite with [goose](https://github.com/pressly/goose) migrations
 - **SQL**: Type-safe queries with [sqlc](https://sqlc.dev/)
 - **Templates**: [templ](https://templ.guide/) for type-safe HTML

@@ -277,7 +277,7 @@ func (m *Module) renderHeadScripts(nonce string) template.HTML {
 	// would fetch the old bytes from cache against the new integrity hash, fail
 	// the check, and silently lose the consent manager.
 	_, _ = fmt.Fprintf(&scripts,
-		`<script defer src="%s" integrity="sha384-Ic9lh4j2DStMyU7efUMc+JhotSEr4FuO24wWW401qG38mAPzx46ZGO464HmCsOmg" crossorigin="anonymous"></script>
+		`<script defer src="%s" integrity="sha384-gbHapy+he0c0UfGLjIFH6bcO03Ojfs8HQvJqZCNK46p7rnEq+9yFVv/KwSI7GCsy" crossorigin="anonymous"></script>
 `, html.EscapeString(utils.ScriptURL("/static/dist/js/klaro.min.js")))
 
 	// 7. Footer link behavior (avoids inline onclick handlers)
