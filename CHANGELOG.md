@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Go 1.27.2** is now required for source builds; the Docker builder uses
+  `golang:1.27.2-alpine`. This patch includes security fixes to Go tooling,
+  TLS, HTML templates and HTTP handling. Prebuilt binaries must be rebuilt
+  to incorporate the updated standard library.
+- **Go dependencies** — update templ to 0.3.1070, Redis to 9.23.0,
+  `golang.org/x/net` to 0.60.0, OAuth2 to 0.37.0 and go-retry to 0.5.0.
+  Regenerate templ sources and align the release generator with the new version.
+- **Frontend dependencies** — update Klaro to 0.7.22, Swagger UI to 5.33.1
+  and TinyMCE to 8.9.3, refresh the npm lockfile and editor, consent manager and Swagger
+  script integrity hashes. HTMX remains pinned to the published 4.0.0 release.
+
 ### Added
 - **Homepage and breadcrumb structured data** — language homepages emit
   WebSite JSON-LD at the configured root site URL. Published content, blog,
