@@ -42,3 +42,7 @@ custom/modules/*
 # Test coverage artifacts
 coverage.out
 coverage.html
+
+# Local content and browser artifacts
+/Claude outputs/
+/output/
