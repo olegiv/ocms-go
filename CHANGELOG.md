@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-09
+
 ### Changed
 - **Go 1.27.2** is now required for source builds; the Docker builder uses
   `golang:1.27.2-alpine`. This patch includes security fixes to Go tooling,
@@ -16,8 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `golang.org/x/net` to 0.60.0, OAuth2 to 0.37.0 and go-retry to 0.5.0.
   Regenerate templ sources and align the release generator with the new version.
 - **Frontend dependencies** — update Klaro to 0.7.22, Swagger UI to 5.33.1
-  and TinyMCE to 8.9.3, refresh the npm lockfile and editor, consent manager and Swagger
-  script integrity hashes. HTMX remains pinned to the published 4.0.0 release.
+  and TinyMCE to 8.9.3, refresh the npm lockfile and editor, consent manager
+  and Swagger script integrity hashes. HTMX remains pinned to the published
+  4.0.0 release.
 
 ### Added
 - **Homepage and breadcrumb structured data** — language homepages emit
@@ -1586,7 +1589,9 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/olegiv/ocms-go/compare/v0.26.0...v0.27.0
+[0.26.0]: https://github.com/olegiv/ocms-go/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/olegiv/ocms-go/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/olegiv/ocms-go/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/olegiv/ocms-go/compare/v0.22.0...v0.23.0
