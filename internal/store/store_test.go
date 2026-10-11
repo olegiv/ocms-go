@@ -343,6 +343,31 @@ func TestSeedKeepsDefaultAdminAbsentWhileAnotherAdminExists(t *testing.T) {
 	}
 }
 
+// TestSeedToleratesDemotedDefaultAdmin fails when a database whose only
+// account is admin@example.com demoted to editor can no longer start: the
+// seed must skip rather than hit the unique email constraint.
+func TestSeedToleratesDemotedDefaultAdmin(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+
+	now := time.Now()
+	if _, err := q.CreateUser(ctx, CreateUserParams{
+		Email: DefaultAdminEmail, PasswordHash: "x", Role: model.RoleEditor, Name: "Demoted", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed must skip a demoted default admin, got: %v", err)
+	}
+	user, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil || user.Role != model.RoleEditor {
+		t.Fatalf("default-email account changed: role %q, err %v", user.Role, err)
+	}
+	if n, err := q.CountUsers(ctx); err != nil || n != 1 {
+		t.Fatalf("users = %d, %v; want 1", n, err)
+	}
+}
+
 func TestSeed(t *testing.T) {
 	db, cleanup, ctx, q := testSetup(t)
 	defer cleanup()

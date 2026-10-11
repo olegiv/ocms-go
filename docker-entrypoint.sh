@@ -7,15 +7,16 @@
 
 set -e
 
-# Data directories that need write access
-DATA_DIRS="/app/data /app/uploads /app/custom"
+# Data directories that need write access. The rest of /app/custom is a
+# read-only mount of compiled-in modules and is left alone.
+DATA_DIRS="/app/data /app/uploads /app/custom/themes"
 
 # If running as root, fix permissions and switch to ocms user
 if [ "$(id -u)" = "0" ]; then
     echo "Fixing volume permissions..."
     for dir in $DATA_DIRS; do
         if [ -d "$dir" ]; then
-            chown -R ocms:ocms "$dir"
+            chown -R ocms:ocms "$dir" 2>/dev/null || echo "warning: could not change ownership of $dir (read-only mount?)"
         fi
     done
     echo "Starting as ocms user..."

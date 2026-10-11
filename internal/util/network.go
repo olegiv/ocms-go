@@ -40,9 +40,6 @@ func init() {
 		"::1/128",         // IPv6 loopback
 		"fe80::/10",       // IPv6 link-local
 		"fc00::/7",        // RFC 4193 - IPv6 unique local
-		"64:ff9b::/96",    // RFC 6052 - NAT64 well-known prefix (embeds IPv4)
-		"64:ff9b:1::/48",  // RFC 8215 - local-use NAT64
-		"2002::/16",       // RFC 3056 - 6to4 (embeds IPv4)
 		"100::/64",        // RFC 6666 - discard-only
 		"2001:db8::/32",   // RFC 3849 - IPv6 documentation
 		"ff00::/8",        // RFC 4291 - IPv6 multicast
@@ -66,10 +63,52 @@ func isHTTPSOutboundRequired() bool {
 	return requireHTTPSOutbound.Load()
 }
 
+// IPv6 prefixes that carry an IPv4 address inside them. The embedded
+// address decides whether the destination is private: blocking the whole
+// prefix would cut IPv6-only hosts behind DNS64/NAT64 off from every IPv4
+// destination, while letting it through would reach 127.0.0.1 or 10.0.0.1
+// through a translator.
+var (
+	nat64WellKnownPrefix = mustParseCIDR("64:ff9b::/96")   // RFC 6052, IPv4 in the last 32 bits
+	nat64LocalUsePrefix  = mustParseCIDR("64:ff9b:1::/48") // RFC 8215, IPv4 in the last 32 bits
+	sixToFourPrefix      = mustParseCIDR("2002::/16")      // RFC 3056, IPv4 in bits 16-47
+)
+
+func mustParseCIDR(cidr string) *net.IPNet {
+	_, block, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic(err)
+	}
+	return block
+}
+
+// embeddedIPv4 returns the IPv4 address carried by a NAT64 or 6to4 address,
+// or nil when ip is not one of those.
+func embeddedIPv4(ip net.IP) net.IP {
+	if ip.To4() != nil {
+		return nil
+	}
+	ip16 := ip.To16()
+	if ip16 == nil {
+		return nil
+	}
+	switch {
+	case nat64WellKnownPrefix.Contains(ip16), nat64LocalUsePrefix.Contains(ip16):
+		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15])
+	case sixToFourPrefix.Contains(ip16):
+		return net.IPv4(ip16[2], ip16[3], ip16[4], ip16[5])
+	}
+	return nil
+}
+
 // IsPrivateIP checks if an IP address falls within a private or reserved range.
+// NAT64 and 6to4 addresses are judged by the IPv4 address they embed.
 func IsPrivateIP(ip net.IP) bool {
 	if ip == nil {
 		return true // Treat nil IP as private (deny by default)
+	}
+	if inner := embeddedIPv4(ip); inner != nil {
+		return IsPrivateIP(inner)
 	}
 	for _, block := range privateIPBlocks {
 		if block.Contains(ip) {

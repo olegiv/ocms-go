@@ -54,8 +54,10 @@ services:
     volumes:
       - ocms_data:/app/data
       - ocms_uploads:/app/uploads
-      # Read-write: Admin > Themes installs imported themes under custom/themes.
-      - ./custom:/app/custom
+      # Modules are compiled in and must stay read-only; only custom/themes is
+      # writable, because Admin > Themes installs imported themes there.
+      - ./custom:/app/custom:ro
+      - ./custom/themes:/app/custom/themes
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health/live"]
       interval: 30s

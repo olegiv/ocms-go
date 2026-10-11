@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mounts every module's admin routes behind an admin gate; a module that
   wants editor access opts in with `EditorAdminRoutes()` (only Internal
   Analytics does). Previously Privacy, External Analytics, Informer, Example,
-  Sentinel and the Bookmarks sample were reachable by editors. A startup test
+  Sentinel and the Bookmarks sample were reachable by editors. A drift test
   keeps the opt-in list explicit.
 - **External Analytics validates tracker identifiers.** GA4, GTM and Matomo
   values must match their documented formats on save, are escaped for the
@@ -49,23 +49,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **API key lookup no longer depends on the four-character prefix.** Keys
   store a SHA-256 lookup value next to the Argon2 hash, so a request that
   does not hold the key never reaches the verifier; keys created earlier are
-  backfilled on first use. A hand-maintained `api_keys` test schema must add
-  the `key_lookup` column.
+  backfilled on first use. The health endpoint uses the same verifier.
 - **Login lockout is scoped to email + client address** (5 failures) with an
   account-wide lock after 25 failures across addresses, so knowing an email
-  no longer lets an attacker lock its owner out. Admin sessions now expire
-  after 2 idle hours as well as 24 absolute hours.
+  no longer lets an attacker lock its owner out, and the theme-import
+  password confirmation shares that lockout. Sessions now expire after
+  2 idle hours as well as 24 absolute hours.
 - **Content import stages uploads on disk** instead of base64 in the session
   table, reports unreadable archives generically and logs the detail.
-- **Outbound URL checks block NAT64, 6to4, discard-only, documentation and
-  multicast IPv6 ranges** in addition to the existing private ranges.
-- **Dify API key is a password field** that is never echoed back; a blank
-  submission keeps the stored key.
+- **Outbound URL checks judge NAT64 and 6to4 addresses by the IPv4 address
+  they embed** and block the discard-only, documentation and multicast IPv6
+  ranges in addition to the existing private ranges.
+- **Dify API key is a password field** that never reaches the form data; a
+  blank submission keeps the stored key, and a save is refused if the stored
+  settings cannot be read.
 - **Build and CI hardening:** `go.yml` runs govulncheck and `npm audit`,
   govulncheck and Dart Sass are pinned, the Docker builder uses `npm ci`
-  and digest-pinned base images, `docker-compose.yml` mounts `custom/`
-  read-write so theme import works, and `.dockerignore` excludes local
-  scanner and verification output.
+  and digest-pinned base images, `docker-compose.yml` mounts
+  `custom/themes` read-write so theme import works while the rest of
+  `custom/` stays read-only, and `.dockerignore` excludes local scanner and
+  verification output.
 
 ## [0.27.0] - 2026-10-09
 

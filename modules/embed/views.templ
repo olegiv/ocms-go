@@ -25,9 +25,10 @@ func inputType(fieldType string) string {
 }
 
 // secretPlaceholder tells the administrator a secret is stored without
-// revealing it; an empty submission keeps that value.
+// revealing it; an empty submission keeps that value. The handler never puts
+// the secret into Default, so the view has nothing to leak.
 func secretPlaceholder(field providers.SettingField) string {
-	if field.Default != "" {
+	if field.HasStoredValue {
 		return "•••••••• (saved; leave blank to keep)"
 	}
 	return field.Placeholder
@@ -224,7 +225,7 @@ templ EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) 
 									Attributes: templ.Attributes{
 										"maxlength":    maxLenForType(field.Type),
 										"autocomplete": "new-password",
-										"required":     field.Required && field.Default == "",
+										"required":     field.Required && !field.HasStoredValue,
 									},
 								})
 							} else if field.Type != "checkbox" {

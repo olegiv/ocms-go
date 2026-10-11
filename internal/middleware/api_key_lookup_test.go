@@ -5,7 +5,12 @@ package middleware
 
 import (
 	"database/sql"
+	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
@@ -96,5 +101,86 @@ func TestAPIKeyAuth_BackfillsLookupForLegacyKey(t *testing.T) {
 	}
 	if got := apiKeyHashChecks.Load(); got != before {
 		t.Fatalf("prefix guess after backfill ran %d verification(s); want 0", got-before)
+	}
+}
+
+// TestAPIKeyAuth_TwoLegacyKeysSharingAPrefix fails when backfilling one
+// legacy key hides a sibling that still has no lookup.
+func TestAPIKeyAuth_TwoLegacyKeysSharingAPrefix(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	first := insertTestAPIKey(t, db, "legacy-1", []string{"pages:read"}, true, nil)
+	second := samePrefixWrongKey(first)
+	hash, err := model.HashAPIKey(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO api_keys (name, key_hash, key_prefix, permissions, is_active, created_by)
+		VALUES ('legacy-2', ?, ?, '[]', 1, 1)`, hash, model.ExtractAPIKeyPrefix(second)); err != nil {
+		t.Fatal(err)
+	}
+
+	w, key := executeAuthAndCaptureKey(APIKeyAuth, db, second)
+	if w.Code != http.StatusOK || key == nil || key.Name != "legacy-2" {
+		t.Fatalf("second legacy key: status %d, key %v", w.Code, key)
+	}
+	var lookups int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM api_keys WHERE key_lookup IS NOT NULL`).Scan(&lookups); err != nil {
+		t.Fatal(err)
+	}
+	if lookups != 1 {
+		t.Fatalf("backfilled rows = %d, want only the key that authenticated", lookups)
+	}
+	w, key = executeAuthAndCaptureKey(APIKeyAuth, db, first)
+	if w.Code != http.StatusOK || key == nil || key.Name != "legacy-1" {
+		t.Fatalf("remaining legacy key: status %d, key %v", w.Code, key)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM api_keys WHERE key_lookup IS NOT NULL`).Scan(&lookups); err != nil || lookups != 2 {
+		t.Fatalf("backfilled rows after both = %d, %v; want 2", lookups, err)
+	}
+}
+
+// TestPrefixLookupOnlyInsideVerifier fails when any non-test Go file other
+// than this package's verifier queries API keys by prefix: every bearer-token
+// check must go through VerifyAPIKey so the lookup-first rule and the
+// verification slots apply everywhere.
+func TestPrefixLookupOnlyInsideVerifier(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve source path")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	skip := map[string]bool{".git": true, "node_modules": true, ".audit": true, "output": true, "vendor": true, "wiki": true, ".claude": true, "bin": true}
+	var offenders []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if skip[d.Name()] && path != root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || strings.HasSuffix(path, ".sql.go") {
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(content), "GetAPIKeysByPrefix(") {
+			rel, _ := filepath.Rel(root, path)
+			if rel != filepath.Join("internal", "middleware", "api.go") {
+				offenders = append(offenders, rel)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("API keys are looked up by prefix outside VerifyAPIKey in: %v", offenders)
 	}
 }

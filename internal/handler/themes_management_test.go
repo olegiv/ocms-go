@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"embed"
+	"encoding/json"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
@@ -51,7 +52,7 @@ func themeManagementHandlerInDir(t *testing.T, customDir string) *ThemesHandler 
 	if err := i18n.Init(nil); err != nil {
 		t.Fatal(err)
 	}
-	return NewThemesHandler(db, renderer, sm, m, cache.NewManager(store.New(db)), service.NewEventService(db))
+	return NewThemesHandler(db, renderer, sm, m, cache.NewManager(store.New(db)), service.NewEventService(db), nil)
 }
 
 func starterThemeArchive(t *testing.T) []byte {
@@ -168,24 +169,27 @@ func themeUploadRequestAs(t *testing.T, h *ThemesHandler, filename string, conte
 func TestThemeImportRequiresPasswordConfirmation(t *testing.T) {
 	archive := starterThemeArchive(t)
 	for _, tt := range []struct {
-		name     string
-		user     *store.User
-		password string
+		name         string
+		user         *store.User
+		password     string
+		wantFlash    string
+		wantLocation string
 	}{
-		{"missing password", themeImportUser(t), ""},
-		{"wrong password", themeImportUser(t), "not-" + themeImportPassword},
-		{"no user in context", nil, themeImportPassword},
+		{"missing password", themeImportUser(t), "", i18n.T("en", "themes.import_password_invalid"), "/admin/themes"},
+		{"wrong password", themeImportUser(t), "not-" + themeImportPassword, i18n.T("en", "themes.import_password_invalid"), "/admin/themes"},
+		{"no user in context", nil, themeImportPassword, "", "/login"},
+		{"unverifiable stored hash", &store.User{ID: 1, Email: "admin@example.com", Role: "admin", PasswordHash: "not-a-hash"}, themeImportPassword, i18n.T("en", "themes.import_password_unverified"), "/admin/themes"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := themeManagementHandler(t)
 			r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, tt.user, tt.password)
 			w := httptest.NewRecorder()
 			h.Import(w, r)
-			if w.Code != http.StatusSeeOther || h.themeManager.ThemeCount() != 0 {
-				t.Fatalf("import without confirmation: status %d, themes %d", w.Code, h.themeManager.ThemeCount())
+			if w.Code != http.StatusSeeOther || w.Header().Get("Location") != tt.wantLocation || h.themeManager.ThemeCount() != 0 {
+				t.Fatalf("import without confirmation: status %d -> %s, themes %d", w.Code, w.Header().Get("Location"), h.themeManager.ThemeCount())
 			}
-			if got := h.sessionManager.GetString(r.Context(), "flash"); got != i18n.T("en", "themes.import_password_invalid") {
-				t.Fatalf("flash = %q", got)
+			if got := h.sessionManager.GetString(r.Context(), "flash"); got != tt.wantFlash {
+				t.Fatalf("flash = %q, want %q", got, tt.wantFlash)
 			}
 		})
 	}
@@ -416,5 +420,46 @@ func TestThemeManagementWritesEventLog(t *testing.T) {
 		if !e.UserID.Valid || e.UserID.Int64 != themeImportUser(t).ID {
 			t.Errorf("event %q has no user id", e.Message)
 		}
+	}
+}
+
+// TestThemeImportPasswordConfirmationIsThrottled fails when a stolen session
+// can guess the administrator's password through the import form faster than
+// at the login form: the confirmation shares the login lockout.
+func TestThemeImportPasswordConfirmationIsThrottled(t *testing.T) {
+	h := themeManagementHandler(t)
+	lockoutDB, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	h.loginProtection = middleware.NewLoginProtection(lockoutDB, middleware.LoginProtectionConfig{MaxFailedAttempts: 2, LockoutDuration: time.Minute, AttemptWindow: time.Minute})
+	archive := starterThemeArchive(t)
+
+	for range 2 {
+		h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword))
+	}
+	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), themeImportPassword)
+	h.Import(httptest.NewRecorder(), r)
+	if h.themeManager.ThemeCount() != 0 {
+		t.Fatal("import succeeded while the account is locked")
+	}
+	if got := h.sessionManager.GetString(r.Context(), "flash"); got != i18n.T("en", "themes.import_locked") {
+		t.Fatalf("flash = %q, want the lockout message", got)
+	}
+}
+
+// TestThemeEventLogCarriesMetadata fails when the import event loses the
+// archive details or the request context.
+func TestThemeEventLogCarriesMetadata(t *testing.T) {
+	h := themeManagementHandler(t)
+	h.Import(httptest.NewRecorder(), themeUploadRequest(t, h, "starter.tar.gz", starterThemeArchive(t)))
+	events, err := h.queries.ListEventsByCategory(t.Context(), store.ListEventsByCategoryParams{Category: model.EventCategorySecurity, Limit: 10})
+	if err != nil || len(events) != 1 {
+		t.Fatalf("events = %d, %v", len(events), err)
+	}
+	var meta map[string]any
+	if err := json.Unmarshal([]byte(events[0].Metadata), &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta["theme"] != "starter" || meta["archive"] != "starter.tar.gz" || meta["size"].(float64) <= 0 || events[0].RequestUrl == "" || events[0].IpAddress == "" {
+		t.Fatalf("event metadata = %v, url %q, ip %q", meta, events[0].RequestUrl, events[0].IpAddress)
 	}
 }

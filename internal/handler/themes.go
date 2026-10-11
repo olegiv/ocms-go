@@ -29,24 +29,27 @@ import (
 
 // ThemesHandler handles theme management routes.
 type ThemesHandler struct {
-	queries        *store.Queries
-	renderer       *render.Renderer
-	sessionManager *scs.SessionManager
-	themeManager   *theme.Manager
-	cacheManager   *cache.Manager
-	eventService   *service.EventService
+	queries         *store.Queries
+	renderer        *render.Renderer
+	sessionManager  *scs.SessionManager
+	themeManager    *theme.Manager
+	cacheManager    *cache.Manager
+	eventService    *service.EventService
+	loginProtection *middleware.LoginProtection
 }
 
 // NewThemesHandler creates a new ThemesHandler. es may be nil, in which case
-// theme management is logged only through slog.
-func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, tm *theme.Manager, cm *cache.Manager, es *service.EventService) *ThemesHandler {
+// theme management is logged only through slog; lp may be nil, in which case
+// password confirmations are not throttled (tests only).
+func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, tm *theme.Manager, cm *cache.Manager, es *service.EventService, lp *middleware.LoginProtection) *ThemesHandler {
 	return &ThemesHandler{
-		queries:        store.New(db),
-		renderer:       renderer,
-		sessionManager: sm,
-		themeManager:   tm,
-		cacheManager:   cm,
-		eventService:   es,
+		queries:         store.New(db),
+		renderer:        renderer,
+		sessionManager:  sm,
+		themeManager:    tm,
+		cacheManager:    cm,
+		eventService:    es,
+		loginProtection: lp,
 	}
 }
 
@@ -59,7 +62,7 @@ func (h *ThemesHandler) logSecurityEvent(r *http.Request, level, message string,
 	}
 	if err := h.eventService.LogEvent(r.Context(), level, model.EventCategorySecurity, message,
 		middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), metadata); err != nil {
-		slog.Error("failed to log theme event", "error", err, "message", message)
+		slog.Error("failed to log theme event", "error", err, "message", message, "user_id", middleware.GetUserID(r))
 	}
 }
 
@@ -107,10 +110,35 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	// An imported theme runs with the site's full privileges (templates with
 	// safeHTML/safeURL, same-origin scripts), so every import re-authenticates
-	// the administrator rather than relying on the session alone.
+	// the administrator rather than relying on the session alone. The check
+	// shares the login lockout, so a stolen session cannot guess the password
+	// here any faster than at the login form.
 	user := middleware.GetUser(r)
-	if !passwordConfirmed(r.FormValue("confirm_password"), user) {
-		slog.Warn("theme import refused: password confirmation failed", "user_id", middleware.GetUserID(r))
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	clientIP := middleware.GetClientIP(r)
+	if h.loginProtection != nil {
+		if locked, _ := h.loginProtection.IsAccountLocked(user.Email, clientIP); locked {
+			slog.Warn("theme import refused: account locked", "user_id", user.ID)
+			h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: too many failed password confirmations", nil)
+			flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_locked"))
+			return
+		}
+	}
+	confirmed, err := passwordConfirmed(r.FormValue("confirm_password"), user)
+	if err != nil {
+		slog.Error("theme import: password could not be verified", "error", err, "user_id", user.ID)
+		h.logSecurityEvent(r, model.EventLevelError, "Theme import refused: password could not be verified", nil)
+		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_unverified"))
+		return
+	}
+	if !confirmed {
+		if h.loginProtection != nil {
+			h.loginProtection.RecordFailedAttempt(user.Email, clientIP)
+		}
+		slog.Warn("theme import refused: password confirmation failed", "user_id", user.ID)
 		h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: password confirmation failed", nil)
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
 		return
@@ -155,18 +183,14 @@ func (h *ThemesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	flashSuccess(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.delete_success"))
 }
 
-// passwordConfirmed reports whether password is the current password of user.
-// A missing user or an empty submission never confirms.
-func passwordConfirmed(password string, user *store.User) bool {
-	if user == nil || password == "" {
-		return false
+// passwordConfirmed reports whether password is the current password of
+// user. An empty submission never confirms; an error means the stored hash
+// could not be checked, which is distinct from a wrong password.
+func passwordConfirmed(password string, user *store.User) (bool, error) {
+	if password == "" {
+		return false, nil
 	}
-	ok, err := auth.CheckPassword(password, user.PasswordHash)
-	if err != nil {
-		slog.Error("failed to verify password confirmation", "error", err, "user_id", user.ID)
-		return false
-	}
-	return ok
+	return auth.CheckPassword(password, user.PasswordHash)
 }
 
 // themeErrorMessage returns the flash text for a failed theme operation.

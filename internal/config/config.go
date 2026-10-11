@@ -13,8 +13,10 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-// knownWeakSecrets contains default/example secrets that are rejected in every
-// environment: each one appears verbatim in a file this repository ships.
+// knownWeakSecrets contains default/example secrets rejected verbatim in
+// every environment. Today each entry is also caught by
+// placeholderSecretPrefixes; the list stays as the exact-match hook for a
+// future value that does not share one of those prefixes.
 var knownWeakSecrets = []string{
 	"change-me-to-32-byte-secret-key!",
 	"REPLACE_WITH_YOUR_OWN_SECRET_KEY!",
@@ -41,7 +43,8 @@ var publicTestSecretPrefixes = []string{
 }
 
 // knownPlaceholderEmbedProxyTokens are example tokens shipped in this
-// repository that must never reach a running server.
+// repository that must never reach a running server (also caught by the
+// placeholder prefixes; kept as the exact-match hook).
 var knownPlaceholderEmbedProxyTokens = []string{
 	"replace-with-embed-proxy-token", // .env.example.prod
 }

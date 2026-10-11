@@ -171,15 +171,12 @@ VALUES (:page_id, (SELECT id FROM tags WHERE slug = 'tag-slug'));
 
 - **Never splice page text into SQL.** Quote every string literal with single
   quotes and double any single quote inside the value (`O'Neil` becomes
-  `'O''Neil'`), or bind values with the `sqlite3` shell:
-  ```bash
-  sqlite3 "$db_path" <<'SQL'
-  .parameter set :title 'Page title'
-  .parameter set :body '<p>Content</p>'
-  INSERT INTO pages (title, slug, body, ...) VALUES (:title, 'slug', :body, ...);
-  SQL
-  ```
-  Treat titles, bodies and slugs pasted by the user as data, never as SQL.
+  `'O''Neil'`). Do not use the `sqlite3` shell's `.parameter set`: it
+  evaluates the value as an SQL expression first, so it is not a safe
+  binding. Choose a heredoc terminator that cannot appear in the content
+  (for example `OCMS_SQL_END`). Treat titles, bodies and slugs pasted by the
+  user as data, never as SQL; for content you did not write yourself, prefer
+  the API method.
 - **The DB method bypasses page sanitization.** Pages written directly to
   SQLite skip `OCMS_SANITIZE_PAGE_HTML` and the suspicious-HTML block that the
   admin UI and the API apply. Do not insert `<script>`, `<iframe>`, inline

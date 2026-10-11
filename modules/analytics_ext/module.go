@@ -47,6 +47,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		settings = &Settings{}
 	}
 	m.settings = settings
+	m.warnMalformedSettings()
 
 	m.ctx.Logger.Info("External Analytics module initialized",
 		"ga4_enabled", settings.GA4Enabled,
@@ -150,5 +151,15 @@ func (m *Module) ReloadSettings() error {
 		return err
 	}
 	m.settings = settings
+	m.warnMalformedSettings()
 	return nil
+}
+
+// warnMalformedSettings logs each stored tracker value that no longer passes
+// the format check, since such a value is skipped at render time and tracking
+// would otherwise stop without a trace.
+func (m *Module) warnMalformedSettings() {
+	for _, key := range validateTrackerFormats(m.settings) {
+		m.ctx.Logger.Warn("analytics_ext: stored tracker value is malformed and will not be rendered", "field", key)
+	}
 }

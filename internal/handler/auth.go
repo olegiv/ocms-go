@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/alexedwards/scs/v2"
 
@@ -109,8 +111,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 
-	// Validate input
-	if email == "" || password == "" {
+	// Validate input. Control characters never appear in a real email and
+	// would otherwise reach the lockout keys and the event log.
+	if email == "" || password == "" || strings.ContainsFunc(email, unicode.IsControl) {
 		flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.email_password_required"))
 		return
 	}

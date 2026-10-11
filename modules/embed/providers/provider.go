@@ -42,8 +42,13 @@ type SettingField struct {
 	// Required indicates if the field must have a value when enabled
 	Required bool
 
-	// Default is the default value for the field
+	// Default is the default value for the field. For a "password" field it
+	// is always empty when rendered; the stored secret never reaches the view.
 	Default string
+
+	// HasStoredValue tells a "password" field that a secret is already saved,
+	// so the form can show a placeholder and relax the required attribute.
+	HasStoredValue bool
 
 	// Placeholder is the placeholder text for input fields
 	Placeholder string

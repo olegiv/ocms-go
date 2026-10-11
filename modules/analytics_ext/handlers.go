@@ -20,6 +20,15 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "analytics_ext.title"), URL: "/admin/external-analytics", Active: true},
 	})
+	// A stored value that fails the format check is not rendered on the site;
+	// tell the administrator on the page they would use to fix it.
+	var warnings []string
+	for _, key := range validateTrackerFormats(m.settings) {
+		warnings = append(warnings, i18n.T(lang, key))
+	}
+	if len(warnings) > 0 {
+		m.ctx.Render.SetFlash(r, strings.Join(warnings, " "), "error")
+	}
 	viewData := AnalyticsExtViewData{
 		GA4Enabled:       m.settings.GA4Enabled,
 		GA4MeasurementID: m.settings.GA4MeasurementID,

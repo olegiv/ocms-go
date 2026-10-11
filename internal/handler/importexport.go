@@ -374,7 +374,12 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	// uploads keep the parsed data.
 	payload := content
 	if !isZipFile {
-		payload, _ = json.Marshal(exportData)
+		payload, err = json.Marshal(exportData)
+		if err != nil {
+			h.logger.Error("failed to encode import payload", "error", err)
+			h.renderImportError(w, r, user, "Failed to store the uploaded file for import")
+			return
+		}
 	}
 	if err := h.stageImportPayload(r.Context(), payload); err != nil {
 		h.logger.Error("failed to stage import payload", "error", err)
@@ -679,15 +684,19 @@ func (h *ImportExportHandler) renderImportError(w http.ResponseWriter, r *http.R
 	})
 }
 
+// importZipUnreadableMessage is shown instead of the raw archive error, which
+// can name server paths; the detail goes to the log.
+const importZipUnreadableMessage = "The archive could not be read as an oCMS export. Check the server log for details."
+
 // Staged import payloads live on disk between the upload step and the
-// confirmation step. Keeping them in the session row stored up to 100 MiB,
-// base64-encoded, in the sessions table for every upload (finding L-6,
-// 2026-10-11).
+// confirmation step. Keeping them in the session row used to store up to
+// 100 MiB of upload, inflated by base64, in the sessions table. Staging is
+// per host: a multi-instance deployment with shared sessions would see
+// "no import data" on the other instance.
 const (
 	sessionKeyImportPayloadPath = "import_payload_path"
 	importStagePrefix           = "ocms-import-"
 	importStageMaxAge           = time.Hour
-	importZipUnreadableMessage  = "The archive could not be read as an oCMS export. Check the server log for details."
 )
 
 // stageImportPayload writes payload to a private temporary file and records
@@ -716,7 +725,12 @@ func (h *ImportExportHandler) stageImportPayload(ctx context.Context, payload []
 // false when nothing was uploaded or the file has already been swept.
 func (h *ImportExportHandler) loadStagedImport(ctx context.Context) (payload []byte, staged bool, err error) {
 	path := h.sessionManager.GetString(ctx, sessionKeyImportPayloadPath)
-	if path == "" || !isStagedImportPath(path) {
+	if path == "" {
+		return nil, false, nil
+	}
+	if !isStagedImportPath(path) {
+		h.logger.Warn("staged import path rejected", "dir", filepath.Dir(path))
+		h.sessionManager.Remove(ctx, sessionKeyImportPayloadPath)
 		return nil, false, nil
 	}
 	payload, err = os.ReadFile(path)
@@ -733,8 +747,15 @@ func (h *ImportExportHandler) loadStagedImport(ctx context.Context) (payload []b
 // discardStagedImport removes the staged file, if any, and forgets its path.
 func (h *ImportExportHandler) discardStagedImport(ctx context.Context) {
 	path := h.sessionManager.PopString(ctx, sessionKeyImportPayloadPath)
-	if path != "" && isStagedImportPath(path) {
-		_ = os.Remove(path)
+	if path == "" {
+		return
+	}
+	if !isStagedImportPath(path) {
+		h.logger.Warn("staged import path rejected", "dir", filepath.Dir(path))
+		return
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		h.logger.Warn("failed to remove staged import payload", "error", err)
 	}
 }
 
@@ -746,7 +767,9 @@ func isStagedImportPath(path string) bool {
 	return filepath.Clean(dir) == filepath.Clean(os.TempDir()) && strings.HasPrefix(base, importStagePrefix) && strings.HasSuffix(base, ".bin")
 }
 
-// sweepStaleImportPayloads deletes staged uploads that were never confirmed.
+// sweepStaleImportPayloads removes staged files older than importStageMaxAge,
+// whether or not a session still points at them; loadStagedImport then treats
+// the missing file as "nothing uploaded" and asks for a new upload.
 func sweepStaleImportPayloads() {
 	matches, err := filepath.Glob(filepath.Join(os.TempDir(), importStagePrefix+"*.bin"))
 	if err != nil {
@@ -754,8 +777,12 @@ func sweepStaleImportPayloads() {
 	}
 	cutoff := time.Now().Add(-importStageMaxAge)
 	for _, match := range matches {
-		if info, err := os.Stat(match); err == nil && info.ModTime().Before(cutoff) {
-			_ = os.Remove(match)
+		info, err := os.Stat(match)
+		if err != nil || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		if err := os.Remove(match); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Warn("failed to remove stale import payload", "error", err)
 		}
 	}
 }

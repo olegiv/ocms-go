@@ -49,19 +49,28 @@ if [ "$EXPECTED" != "$ACTUAL" ]; then
   exit 2
 fi
 
-# Extract next to the target and swap only after a successful extraction, so
-# a failed download never leaves the machine without a Go toolchain.
-mkdir -p "$WORK/extract"
-tar -C "$WORK/extract" -xzf "$WORK/$TARBALL"
-INSTALLED=$("$WORK/extract/go/bin/go" version 2>/dev/null | sed -n 's/^go version go\([0-9.][0-9.]*\).*/\1/p' || echo "")
+# Extract into the target's own filesystem so the final step is a rename,
+# not a copy that can fail half-way, and put the previous toolchain back if
+# anything goes wrong after it was moved aside.
+STAGE="/usr/local/.go.new.$$"
+PREVIOUS="/usr/local/.go.previous.$$"
+restore() {
+  if [ -d "$PREVIOUS" ] && [ ! -d /usr/local/go ]; then
+    mv "$PREVIOUS" /usr/local/go
+  fi
+  rm -rf "$STAGE" "$WORK"
+}
+trap restore EXIT
+mkdir -p "$STAGE"
+tar -C "$STAGE" -xzf "$WORK/$TARBALL"
+INSTALLED=$("$STAGE/go/bin/go" version 2>/dev/null | sed -n 's/^go version go\([0-9.][0-9.]*\).*/\1/p' || echo "")
 if [ "$INSTALLED" != "$REQUIRED_VERSION" ]; then
   echo "Go installation verification failed: got ${INSTALLED:-nothing}" >&2
   exit 2
 fi
-rm -rf /usr/local/go.previous
 if [ -d /usr/local/go ]; then
-  mv /usr/local/go /usr/local/go.previous
+  mv /usr/local/go "$PREVIOUS"
 fi
-mv "$WORK/extract/go" /usr/local/go
-rm -rf /usr/local/go.previous
+mv "$STAGE/go" /usr/local/go
+rm -rf "$PREVIOUS"
 echo "Go ${REQUIRED_VERSION} installed successfully." >&2

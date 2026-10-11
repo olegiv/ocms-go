@@ -113,25 +113,79 @@ const apiKeyVerifyMaxConcurrent = 8
 // request without the key never reaches the verifier.
 var apiKeyHashChecks atomic.Int64
 
+// APIKeyHashCheckCount returns how many Argon2 verifications have run in this
+// process. It exists for tests in other packages.
+func APIKeyHashCheckCount() int64 { return apiKeyHashChecks.Load() }
+
+// APIKeyVerification is the outcome of VerifyAPIKey.
+type APIKeyVerification int
+
+const (
+	// APIKeyVerified means the key matched a stored, hash-verified row.
+	APIKeyVerified APIKeyVerification = iota
+	// APIKeyRejected means no stored key matched.
+	APIKeyRejected
+	// APIKeyThrottled means the shared verification slots were exhausted.
+	APIKeyThrottled
+)
+
+// VerifyAPIKey resolves rawKey to its stored row and verifies the Argon2 hash.
+// Every bearer-token check in the application must go through it, so the
+// lookup-first rule, the verification slots and the lookup backfill apply to
+// each of them and not only to the API middleware. The caller still has to
+// check IsActive and expiry on the returned key.
+func VerifyAPIKey(ctx context.Context, queries *store.Queries, rawKey string) (*store.ApiKey, APIKeyVerification, error) {
+	candidates, err := lookupAPIKeyCandidates(ctx, queries, rawKey)
+	if err != nil {
+		return nil, APIKeyRejected, err
+	}
+	var matched *store.ApiKey
+	for i := range candidates {
+		if !tryAcquireAPIKeyVerifySlot() {
+			return nil, APIKeyThrottled, nil
+		}
+		apiKeyHashChecks.Add(1)
+		ok := model.CheckAPIKeyHash(rawKey, candidates[i].KeyHash)
+		releaseAPIKeyVerifySlot()
+		if ok {
+			matched = &candidates[i]
+			break
+		}
+	}
+	if matched == nil {
+		return nil, APIKeyRejected, nil
+	}
+	if !matched.KeyLookup.Valid {
+		if err := queries.SetAPIKeyLookup(ctx, store.SetAPIKeyLookupParams{
+			KeyLookup: sql.NullString{String: model.APIKeyLookup(rawKey), Valid: true},
+			ID:        matched.ID,
+		}); err != nil {
+			slog.Warn("failed to backfill API key lookup", "error", err, "key_id", matched.ID)
+		}
+	}
+	return matched, APIKeyVerified, nil
+}
+
 // lookupAPIKeyCandidates returns the stored keys that may match rawKey.
 //
 // A key created since the key_lookup column exists is found by the SHA-256
 // of the full key, so only a request that holds the key reaches the Argon2
-// verifier; a holder of a four-character prefix can no longer burn the
-// shared verification slots (finding L-5, 2026-10-11). Keys created before
-// then have no lookup yet and are still found by prefix; their lookup is
-// backfilled on first successful use.
+// verifier, and a holder of a four-character prefix can no longer burn the
+// shared verification slots for such keys. Keys created before the column
+// existed have no lookup yet: they are still found by prefix, and remain
+// exposed to prefix guesses, until their first successful use backfills the
+// lookup.
 func lookupAPIKeyCandidates(ctx context.Context, queries *store.Queries, rawKey string) ([]store.ApiKey, error) {
 	key, err := queries.GetAPIKeyByLookup(ctx, sql.NullString{String: model.APIKeyLookup(rawKey), Valid: true})
 	if err == nil {
 		return []store.ApiKey{key}, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
+		return nil, fmt.Errorf("by lookup: %w", err)
 	}
 	byPrefix, err := queries.GetAPIKeysByPrefix(ctx, model.ExtractAPIKeyPrefix(rawKey))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("by prefix: %w", err)
 	}
 	var legacy []store.ApiKey
 	for _, candidate := range byPrefix {
@@ -554,8 +608,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 
-	// Exact lookup first; legacy keys without a lookup fall back to the prefix.
-	apiKeys, err := lookupAPIKeyCandidates(r.Context(), queries, rawKey)
+	matchedKey, outcome, err := VerifyAPIKey(r.Context(), queries, rawKey)
 	if err != nil {
 		if required {
 			slog.Error("failed to query API keys", "error", err)
@@ -564,45 +617,15 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		}
 		return nil, false
 	}
-
-	if len(apiKeys) == 0 {
+	if outcome == APIKeyThrottled {
+		slog.Warn("API key verification throttled due to concurrency limit",
+			"ip", clientIP,
+			"path", r.URL.Path)
 		if required {
-			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid API key", nil)
+			WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many authentication attempts. Please slow down.", nil)
 			return nil, true
 		}
 		return nil, false
-	}
-
-	// Find matching key by verifying hash
-	var matchedKey *store.ApiKey
-	for i := range apiKeys {
-		if !tryAcquireAPIKeyVerifySlot() {
-			slog.Warn("API key verification throttled due to concurrency limit",
-				"ip", clientIP,
-				"path", r.URL.Path)
-			if required {
-				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many authentication attempts. Please slow down.", nil)
-				return nil, true
-			}
-			return nil, false
-		}
-
-		apiKeyHashChecks.Add(1)
-		if model.CheckAPIKeyHash(rawKey, apiKeys[i].KeyHash) {
-			releaseAPIKeyVerifySlot()
-			matchedKey = &apiKeys[i]
-			break
-		}
-		releaseAPIKeyVerifySlot()
-	}
-
-	if matchedKey != nil && !matchedKey.KeyLookup.Valid {
-		if err := queries.SetAPIKeyLookup(r.Context(), store.SetAPIKeyLookupParams{
-			KeyLookup: sql.NullString{String: model.APIKeyLookup(rawKey), Valid: true},
-			ID:        matchedKey.ID,
-		}); err != nil {
-			slog.Warn("failed to backfill API key lookup", "error", err, "key_id", matchedKey.ID)
-		}
 	}
 
 	if matchedKey == nil {

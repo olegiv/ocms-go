@@ -49,15 +49,23 @@ func Seed(ctx context.Context, db *sql.DB, doSeed bool) error {
 	queries := New(db)
 
 	// Never recreate the default admin while any administrator account
-	// exists. An operator who renamed or deleted admin@example.com must not
+	// exists: an operator who renamed or deleted admin@example.com must not
 	// get it back, with its public password, on the next restart that still
-	// has OCMS_DO_SEED=true (finding M-4, 2026-10-11).
+	// has OCMS_DO_SEED=true. An account that still uses the default email,
+	// whatever its role, also blocks the seed, so demoting admin@example.com
+	// to editor does not make startup fail on the unique email.
 	admins, err := queries.CountUsersByRole(ctx, model.RoleAdmin)
 	if err != nil {
 		return fmt.Errorf("counting admin users: %w", err)
 	}
-	if admins > 0 {
-		slog.Info("administrator account already exists, skipping default admin seed", "admins", admins)
+	defaultEmailTaken := false
+	if _, err := queries.GetUserByEmail(ctx, DefaultAdminEmail); err == nil {
+		defaultEmailTaken = true
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("checking for default admin email: %w", err)
+	}
+	if admins > 0 || defaultEmailTaken {
+		slog.Info("administrator account already exists, skipping default admin seed", "admins", admins, "default_email_taken", defaultEmailTaken)
 		// Still seed config and menus if needed
 		if err := seedConfig(ctx, queries); err != nil {
 			return err

@@ -51,7 +51,8 @@ When saving:
   tracker is enabled: `G-` plus 4–20 uppercase letters or digits, `GTM-` plus
   4–12 uppercase letters or digits, an absolute `http(s)` URL without
   credentials, query string or fragment, and a numeric Site ID. Values are
-  checked again at render time and skipped if malformed.
+  checked again at render time and skipped if malformed; a malformed stored
+  value is logged at startup and shown on the settings page.
 - Trailing slashes on Matomo URLs are normalized before storage.
 
 Errors appear as flash messages.

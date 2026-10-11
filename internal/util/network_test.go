@@ -26,11 +26,16 @@ func TestIsPrivateIP(t *testing.T) {
 		// Private IPv4 ranges
 		{"loopback", "127.0.0.1", true},
 		{"loopback high", "127.255.255.255", true},
-		// IPv6 ranges that embed or translate to IPv4 (finding L-6, 2026-10-11)
+		// NAT64 and 6to4 are judged by the embedded IPv4 address, so an
+		// IPv6-only host behind DNS64 can still reach public IPv4 destinations.
 		{"NAT64 loopback", "64:ff9b::7f00:1", true},
 		{"NAT64 private", "64:ff9b::a00:1", true},
-		{"local-use NAT64", "64:ff9b:1::1", true},
-		{"6to4", "2002:7f00:1::1", true},
+		{"NAT64 public", "64:ff9b::808:808", false},
+		{"local-use NAT64 link-local", "64:ff9b:1::a9fe:1", true},
+		{"local-use NAT64 public", "64:ff9b:1::101:101", false},
+		{"6to4 loopback", "2002:7f00:1::1", true},
+		{"6to4 private", "2002:c0a8:101::1", true},
+		{"6to4 public", "2002:808:808::1", false},
 		{"discard-only", "100::1", true},
 		{"IPv6 documentation", "2001:db8::1", true},
 		{"IPv6 multicast", "ff02::1", true},

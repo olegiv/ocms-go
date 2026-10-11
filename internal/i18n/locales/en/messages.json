@@ -1983,6 +1983,16 @@
             "translation": "Theme not imported: enter your current password to confirm the installation."
         },
         {
+            "id": "themes.import_locked",
+            "message": "Theme not imported: too many failed password confirmations. Try again later.",
+            "translation": "Theme not imported: too many failed password confirmations. Try again later."
+        },
+        {
+            "id": "themes.import_password_unverified",
+            "message": "Theme not imported: your password could not be verified. Check the server log.",
+            "translation": "Theme not imported: your password could not be verified. Check the server log."
+        },
+        {
             "id": "themes.import_button",
             "message": "Import theme",
             "translation": "Import theme"

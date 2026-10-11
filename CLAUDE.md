@@ -96,15 +96,15 @@ templ generate           # Regenerate template Go code (if using templ)
 
 ## Git Pre-Commit Hook
 
-This repository has a pre-commit hook at `.git/hooks/pre-commit` that blocks automated commits in non-interactive mode. It prevents Claude Code from committing on its own initiative.
+The shared git guard installs a pre-commit hook that blocks commits made in non-interactive mode and asks for a typed "YES" in a terminal. Its only job is to make sure a human approved the commit; it does not inspect the tree.
 
-**When the user explicitly requests a commit** (e.g., `/commit-do`, "commit these changes"), Claude Code must use `--no-verify` to bypass the hook. The user's explicit request IS the approval.
+**When the user has explicitly approved the commit in the conversation** (e.g., after `/commit-prepare` presented the message, or "commit these changes"), that approval replaces the hook's prompt, and `--no-verify` may be passed **for that one commit only**. It must never be used for a push, and never to skip a hook that checks the tree (the test gate or an index-integrity guard): a refused push or a tree mismatch is reported to the user, not bypassed.
 
 ```bash
-# User-requested commits: use --no-verify
+# Commit the user approved in the conversation: the approval hook may be skipped
 git commit --no-verify -m "message"
 
-# Manual commits in terminal: hook prompts for "YES"
+# Manual commits in a terminal: the hook prompts for "YES"
 git commit -m "message"
 ```
 

@@ -74,11 +74,11 @@ Account lockout prevents password guessing attacks by temporarily blocking login
 
 - **Non-existent email protection**: Failed attempts are tracked even for non-existent email addresses to prevent user enumeration attacks
 - **Successful login reset**: A successful login clears the failed attempt counters in both scopes
+- **Automatic cleanup**: Stale tracking entries are automatically removed
 
 ## Session Lifetime
 
-Admin sessions are stored server-side. A session ends after **24 hours** regardless of activity, and after **2 hours** without any request; each request renews the idle window.
-- **Automatic cleanup**: Stale tracking entries are automatically removed
+Sessions are stored server-side; the session row holds the data and the cookie only carries its token. A session ends after **24 hours** regardless of activity, and after **2 hours** without any request; each request renews the idle window. This applies to every session, admin and public alike.
 
 ## Event Logging
 
@@ -152,7 +152,7 @@ The Argon2 parameter-upgrade rehash that runs on a successful login uses a separ
 Before exposing an oCMS instance to the public internet, work through this list:
 
 1. **Rotate the seed admin password.** When `OCMS_DO_SEED=true` is used (typically on first boot), oCMS provisions `admin@example.com` with the well-known password `changeme1234`. Log in and change both the email and password on `/admin/users` before anything else. The seed password is public knowledge — anyone who reaches the login page can try it. Production startup blocks `OCMS_DO_SEED=true` unless demo mode is also enabled, so the exposure window is limited to initial-setup runs, but the first admin session still has to replace these credentials. Once any administrator account exists, seeding no longer recreates `admin@example.com`, so renaming or replacing it is permanent even if the flag stays on.
-2. Set `OCMS_SESSION_SECRET` to a freshly generated 32-byte value (e.g. `openssl rand -base64 32`). Startup already rejects the known weak defaults, but rotate on each environment.
+2. Set `OCMS_SESSION_SECRET` to a freshly generated 32-byte value (e.g. `openssl rand -base64 32`). Startup rejects known defaults, placeholder values copied from the example files or docs, and (in production) the public test-suite secret, but rotate on each environment.
 3. Set `OCMS_ENV=production` so security defaults apply (stricter CSRF, HSTS, seed-disabled, etc.).
 4. Configure `OCMS_TRUSTED_PROXIES` if running behind a reverse proxy — otherwise client IPs used by rate limiting and account lockout will be the proxy's address, collapsing every attacker into one bucket. See `docs/reverse-proxy.md`.
 5. Enable HSTS preload (`OCMS_HSTS_PRELOAD=true`) once you're certain every subdomain has a valid TLS certificate; submit the domain at <https://hstspreload.org>. Details in `docs/reverse-proxy.md`.

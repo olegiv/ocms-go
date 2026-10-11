@@ -28,8 +28,10 @@ Create a git commit with the commit message prepared by `/commit-prepare`:
    EOF
    )"
    ```
-   Do not pass `--no-verify`; a hook that refuses the commit is reported to
-   the user, not bypassed.
+   The user's approval of the prepared message replaces the interactive
+   pre-commit approval hook, so `--no-verify` may be passed for this one
+   commit. It must never be used to skip a hook that checks the tree (test
+   gate, index-integrity guard); such a refusal is reported, not bypassed.
 6. After a successful commit, run `git status --short` and `git log --oneline -1`
    to confirm.
 7. Do NOT ask the user if they want to push the changes.

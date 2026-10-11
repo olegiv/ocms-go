@@ -306,7 +306,7 @@ Admin routes are prefixed with `/admin/` automatically by the registry.
 func (m *Module) EditorAdminRoutes() bool { return true }
 ```
 
-A startup test (`TestModuleAdminRoutesDenyEditorsUnlessAllowlisted`) keeps an explicit list of the modules that opt in; adding a module to it is a deliberate access-control decision.
+A drift test in `cmd/ocms` (`TestModuleAdminRoutesDenyEditorsUnlessAllowlisted`) keeps an explicit list of the modules that opt in; adding a module to it is a deliberate access-control decision.
 
 ### Route Middleware
 

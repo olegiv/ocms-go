@@ -86,6 +86,9 @@ func TestNew_SessionSettings(t *testing.T) {
 	if sm.Lifetime != 24*time.Hour {
 		t.Errorf("Lifetime = %v, want 24h", sm.Lifetime)
 	}
+	if sm.IdleTimeout != 2*time.Hour {
+		t.Errorf("IdleTimeout = %v, want 2h", sm.IdleTimeout)
+	}
 
 	// Check cookie settings
 	if !sm.Cookie.HttpOnly {

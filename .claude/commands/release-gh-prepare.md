@@ -143,9 +143,11 @@ workflow.
 
 Ask: "Should I proceed with this commit?" Wait for explicit approval.
 
-Commit with a plain `git commit`. The approval in this step is the
-authorization; never pass `--no-verify`, and report a hook that refuses the
-commit instead of bypassing it.
+The approval in this step replaces the interactive pre-commit approval
+hook, so `git commit --no-verify` is acceptable for this one commit. Never
+use it to skip a hook that checks the tree (test gate, index-integrity
+guard); report such a refusal instead of bypassing it, and never pass
+`--no-verify` to `git push`.
 
 ## Step 8 - push master gate
 
