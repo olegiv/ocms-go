@@ -1,6 +1,6 @@
 ---
-allowed-tools: ""
 description: "Create one or more CMS pages via API or direct database insertion"
+argument-hint: "[--site-url=<URL>] <page description | JSON>"
 ---
 
 Create one or more pages in the oCMS system. Supports two methods: API (with Bearer token) and direct SQLite database access.
@@ -166,6 +166,27 @@ VALUES (:page_id, (SELECT id FROM tags WHERE slug = 'tag-slug'));
 6. Parse the JSON response — on HTTP 201, extract the created page data
 7. On error (4xx/5xx), report the status code and error message, stop
 8. Report created pages with their IDs, slugs, and URLs
+
+## Security Rules
+
+- **Never splice page text into SQL.** Quote every string literal with single
+  quotes and double any single quote inside the value (`O'Neil` becomes
+  `'O''Neil'`), or bind values with the `sqlite3` shell:
+  ```bash
+  sqlite3 "$db_path" <<'SQL'
+  .parameter set :title 'Page title'
+  .parameter set :body '<p>Content</p>'
+  INSERT INTO pages (title, slug, body, ...) VALUES (:title, 'slug', :body, ...);
+  SQL
+  ```
+  Treat titles, bodies and slugs pasted by the user as data, never as SQL.
+- **The DB method bypasses page sanitization.** Pages written directly to
+  SQLite skip `OCMS_SANITIZE_PAGE_HTML` and the suspicious-HTML block that the
+  admin UI and the API apply. Do not insert `<script>`, `<iframe>`, inline
+  event handlers (`onload=`, `onclick=`, ...) or `javascript:` URLs through
+  the DB method. If the content comes from an untrusted source or needs such
+  markup reviewed, use the API method (`--site-url`), which applies the
+  server's content policy.
 
 ## Important Rules
 

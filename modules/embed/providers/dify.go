@@ -50,8 +50,8 @@ func (p *DifyProvider) SettingsSchema() []SettingField {
 		{
 			ID:          "api_key",
 			Name:        "API Key",
-			Description: "Your Dify application API key (starts with 'app-')",
-			Type:        "text",
+			Description: "Your Dify application API key (starts with 'app-'); leave blank to keep the saved key",
+			Type:        "password",
 			Required:    true,
 			Placeholder: "app-xxxxxxxxxxxxxxxx",
 		},

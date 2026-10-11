@@ -46,8 +46,12 @@ docs/
 !README.md
 LICENSE
 
-# Audit files
+# Audit files and local scanner/verification output
 .audit/
+.zap/
+.local-oiv/
+output/
+Claude outputs/
 
 # Test files
 *_test.go

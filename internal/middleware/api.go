@@ -16,6 +16,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -107,6 +108,39 @@ var (
 )
 
 const apiKeyVerifyMaxConcurrent = 8
+
+// apiKeyHashChecks counts Argon2 verifications. Tests use it to prove that a
+// request without the key never reaches the verifier.
+var apiKeyHashChecks atomic.Int64
+
+// lookupAPIKeyCandidates returns the stored keys that may match rawKey.
+//
+// A key created since the key_lookup column exists is found by the SHA-256
+// of the full key, so only a request that holds the key reaches the Argon2
+// verifier; a holder of a four-character prefix can no longer burn the
+// shared verification slots (finding L-5, 2026-10-11). Keys created before
+// then have no lookup yet and are still found by prefix; their lookup is
+// backfilled on first successful use.
+func lookupAPIKeyCandidates(ctx context.Context, queries *store.Queries, rawKey string) ([]store.ApiKey, error) {
+	key, err := queries.GetAPIKeyByLookup(ctx, sql.NullString{String: model.APIKeyLookup(rawKey), Valid: true})
+	if err == nil {
+		return []store.ApiKey{key}, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	byPrefix, err := queries.GetAPIKeysByPrefix(ctx, model.ExtractAPIKeyPrefix(rawKey))
+	if err != nil {
+		return nil, err
+	}
+	var legacy []store.ApiKey
+	for _, candidate := range byPrefix {
+		if !candidate.KeyLookup.Valid {
+			legacy = append(legacy, candidate)
+		}
+	}
+	return legacy, nil
+}
 
 func tryAcquireAPIKeyVerifySlot() bool {
 	select {
@@ -520,12 +554,11 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 
-	// Look up API keys by prefix (since Argon2 hashes are salted, we can't query by hash)
-	prefix := model.ExtractAPIKeyPrefix(rawKey)
-	apiKeys, err := queries.GetAPIKeysByPrefix(r.Context(), prefix)
+	// Exact lookup first; legacy keys without a lookup fall back to the prefix.
+	apiKeys, err := lookupAPIKeyCandidates(r.Context(), queries, rawKey)
 	if err != nil {
 		if required {
-			slog.Error("failed to query API keys by prefix", "error", err)
+			slog.Error("failed to query API keys", "error", err)
 			WriteAPIError(w, http.StatusInternalServerError, "internal_error", "Failed to validate API key", nil)
 			return nil, true
 		}
@@ -554,12 +587,22 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 			return nil, false
 		}
 
+		apiKeyHashChecks.Add(1)
 		if model.CheckAPIKeyHash(rawKey, apiKeys[i].KeyHash) {
 			releaseAPIKeyVerifySlot()
 			matchedKey = &apiKeys[i]
 			break
 		}
 		releaseAPIKeyVerifySlot()
+	}
+
+	if matchedKey != nil && !matchedKey.KeyLookup.Valid {
+		if err := queries.SetAPIKeyLookup(r.Context(), store.SetAPIKeyLookupParams{
+			KeyLookup: sql.NullString{String: model.APIKeyLookup(rawKey), Valid: true},
+			ID:        matchedKey.ID,
+		}); err != nil {
+			slog.Warn("failed to backfill API key lookup", "error", err, "key_id", matchedKey.ID)
+		}
 	}
 
 	if matchedKey == nil {

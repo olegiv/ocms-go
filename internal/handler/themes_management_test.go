@@ -26,7 +26,9 @@ import (
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/theme"
@@ -49,7 +51,7 @@ func themeManagementHandlerInDir(t *testing.T, customDir string) *ThemesHandler 
 	if err := i18n.Init(nil); err != nil {
 		t.Fatal(err)
 	}
-	return NewThemesHandler(db, renderer, sm, m, cache.NewManager(store.New(db)))
+	return NewThemesHandler(db, renderer, sm, m, cache.NewManager(store.New(db)), service.NewEventService(db))
 }
 
 func starterThemeArchive(t *testing.T) []byte {
@@ -379,4 +381,40 @@ func TestThemeManagementDemoMode(t *testing.T) {
 		t.Fatal("demo page exposed theme mutation forms")
 	}
 	t.Log(demoChildMarker)
+}
+
+// TestThemeManagementWritesEventLog fails when a theme import, a refused
+// import or a theme deletion stops appearing in the admin event log
+// (finding L-1, 2026-10-11).
+func TestThemeManagementWritesEventLog(t *testing.T) {
+	h := themeManagementHandler(t)
+	archive := starterThemeArchive(t)
+
+	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword))
+	h.Import(httptest.NewRecorder(), themeUploadRequest(t, h, "starter.tar.gz", archive))
+	r := requestWithURLParams(httptest.NewRequest(http.MethodPost, "/admin/themes/starter/delete", nil), map[string]string{"name": "starter"})
+	h.Delete(httptest.NewRecorder(), addUserToContext(requestWithSession(h.sessionManager, r), themeImportUser(t)))
+
+	events, err := h.queries.ListEventsByCategory(t.Context(), store.ListEventsByCategoryParams{Category: model.EventCategorySecurity, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, e := range events {
+		got[e.Message] = e.Level
+	}
+	for message, level := range map[string]string{
+		"Theme import refused: password confirmation failed": model.EventLevelWarning,
+		"Theme imported: starter":                            model.EventLevelInfo,
+		"Theme deleted: starter":                             model.EventLevelInfo,
+	} {
+		if got[message] != level {
+			t.Errorf("event %q: level = %q, want %q (events: %v)", message, got[message], level, got)
+		}
+	}
+	for _, e := range events {
+		if !e.UserID.Valid || e.UserID.Int64 != themeImportUser(t).ID {
+			t.Errorf("event %q has no user id", e.Message)
+		}
+	}
 }

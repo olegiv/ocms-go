@@ -19,7 +19,9 @@ import (
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
@@ -32,16 +34,32 @@ type ThemesHandler struct {
 	sessionManager *scs.SessionManager
 	themeManager   *theme.Manager
 	cacheManager   *cache.Manager
+	eventService   *service.EventService
 }
 
-// NewThemesHandler creates a new ThemesHandler.
-func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, tm *theme.Manager, cm *cache.Manager) *ThemesHandler {
+// NewThemesHandler creates a new ThemesHandler. es may be nil, in which case
+// theme management is logged only through slog.
+func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, tm *theme.Manager, cm *cache.Manager, es *service.EventService) *ThemesHandler {
 	return &ThemesHandler{
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
 		themeManager:   tm,
 		cacheManager:   cm,
+		eventService:   es,
+	}
+}
+
+// logSecurityEvent records a theme-management action in the admin event log.
+// Installing a theme installs code that runs with the site's privileges, so
+// these entries use the security category, which excluded IPs cannot mute.
+func (h *ThemesHandler) logSecurityEvent(r *http.Request, level, message string, metadata map[string]any) {
+	if h.eventService == nil {
+		return
+	}
+	if err := h.eventService.LogEvent(r.Context(), level, model.EventCategorySecurity, message,
+		middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), metadata); err != nil {
+		slog.Error("failed to log theme event", "error", err, "message", message)
 	}
 }
 
@@ -93,6 +111,7 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	if !passwordConfirmed(r.FormValue("confirm_password"), user) {
 		slog.Warn("theme import refused: password confirmation failed", "user_id", middleware.GetUserID(r))
+		h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: password confirmation failed", nil)
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
 		return
 	}
@@ -114,6 +133,7 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	h.invalidateThemeCaches()
 	slog.Info("admin imported theme", "theme", name, "user_id", middleware.GetUserID(r))
+	h.logSecurityEvent(r, model.EventLevelInfo, "Theme imported: "+name, map[string]any{"theme": name, "archive": header.Filename, "size": header.Size})
 	flashSuccess(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_success"))
 }
 
@@ -131,6 +151,7 @@ func (h *ThemesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	h.invalidateThemeCaches()
 	slog.Info("admin deleted theme", "theme", name, "user_id", middleware.GetUserID(r))
+	h.logSecurityEvent(r, model.EventLevelInfo, "Theme deleted: "+name, map[string]any{"theme": name})
 	flashSuccess(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.delete_success"))
 }
 

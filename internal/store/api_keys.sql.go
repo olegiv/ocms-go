@@ -34,21 +34,22 @@ func (q *Queries) CountActiveAPIKeys(ctx context.Context) (int64, error) {
 }
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO api_keys (name, key_hash, key_prefix, permissions, expires_at, is_active, created_by, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at
+INSERT INTO api_keys (name, key_hash, key_prefix, key_lookup, permissions, expires_at, is_active, created_by, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup
 `
 
 type CreateAPIKeyParams struct {
-	Name        string       `json:"name"`
-	KeyHash     string       `json:"key_hash"`
-	KeyPrefix   string       `json:"key_prefix"`
-	Permissions string       `json:"permissions"`
-	ExpiresAt   sql.NullTime `json:"expires_at"`
-	IsActive    bool         `json:"is_active"`
-	CreatedBy   int64        `json:"created_by"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	Name        string         `json:"name"`
+	KeyHash     string         `json:"key_hash"`
+	KeyPrefix   string         `json:"key_prefix"`
+	KeyLookup   sql.NullString `json:"key_lookup"`
+	Permissions string         `json:"permissions"`
+	ExpiresAt   sql.NullTime   `json:"expires_at"`
+	IsActive    bool           `json:"is_active"`
+	CreatedBy   int64          `json:"created_by"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
@@ -56,6 +57,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		arg.Name,
 		arg.KeyHash,
 		arg.KeyPrefix,
+		arg.KeyLookup,
 		arg.Permissions,
 		arg.ExpiresAt,
 		arg.IsActive,
@@ -76,6 +78,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeyLookup,
 	)
 	return i, err
 }
@@ -104,7 +107,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, id int64) error {
 }
 
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at FROM api_keys WHERE key_hash = ? AND is_active = 1
+SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup FROM api_keys WHERE key_hash = ? AND is_active = 1
 `
 
 func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error) {
@@ -122,12 +125,13 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeyLookup,
 	)
 	return i, err
 }
 
 const getAPIKeyByID = `-- name: GetAPIKeyByID :one
-SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at FROM api_keys WHERE id = ?
+SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup FROM api_keys WHERE id = ?
 `
 
 func (q *Queries) GetAPIKeyByID(ctx context.Context, id int64) (ApiKey, error) {
@@ -145,12 +149,37 @@ func (q *Queries) GetAPIKeyByID(ctx context.Context, id int64) (ApiKey, error) {
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeyLookup,
+	)
+	return i, err
+}
+
+const getAPIKeyByLookup = `-- name: GetAPIKeyByLookup :one
+SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup FROM api_keys WHERE key_lookup = ? AND is_active = 1
+`
+
+func (q *Queries) GetAPIKeyByLookup(ctx context.Context, keyLookup sql.NullString) (ApiKey, error) {
+	row := q.db.QueryRowContext(ctx, getAPIKeyByLookup, keyLookup)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.KeyHash,
+		&i.KeyPrefix,
+		&i.Permissions,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+		&i.IsActive,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.KeyLookup,
 	)
 	return i, err
 }
 
 const getAPIKeyByPrefix = `-- name: GetAPIKeyByPrefix :one
-SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at FROM api_keys WHERE key_prefix = ? AND is_active = 1
+SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup FROM api_keys WHERE key_prefix = ? AND is_active = 1
 `
 
 func (q *Queries) GetAPIKeyByPrefix(ctx context.Context, keyPrefix string) (ApiKey, error) {
@@ -168,12 +197,13 @@ func (q *Queries) GetAPIKeyByPrefix(ctx context.Context, keyPrefix string) (ApiK
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeyLookup,
 	)
 	return i, err
 }
 
 const getAPIKeysByPrefix = `-- name: GetAPIKeysByPrefix :many
-SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at FROM api_keys WHERE key_prefix = ? AND is_active = 1
+SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup FROM api_keys WHERE key_prefix = ? AND is_active = 1
 `
 
 func (q *Queries) GetAPIKeysByPrefix(ctx context.Context, keyPrefix string) ([]ApiKey, error) {
@@ -197,6 +227,7 @@ func (q *Queries) GetAPIKeysByPrefix(ctx context.Context, keyPrefix string) ([]A
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.KeyLookup,
 		); err != nil {
 			return nil, err
 		}
@@ -212,7 +243,7 @@ func (q *Queries) GetAPIKeysByPrefix(ctx context.Context, keyPrefix string) ([]A
 }
 
 const listAPIKeys = `-- name: ListAPIKeys :many
-SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at FROM api_keys ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup FROM api_keys ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListAPIKeysParams struct {
@@ -241,6 +272,7 @@ func (q *Queries) ListAPIKeys(ctx context.Context, arg ListAPIKeysParams) ([]Api
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.KeyLookup,
 		); err != nil {
 			return nil, err
 		}
@@ -256,7 +288,7 @@ func (q *Queries) ListAPIKeys(ctx context.Context, arg ListAPIKeysParams) ([]Api
 }
 
 const listAPIKeysByUser = `-- name: ListAPIKeysByUser :many
-SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at FROM api_keys WHERE created_by = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup FROM api_keys WHERE created_by = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListAPIKeysByUserParams struct {
@@ -286,6 +318,7 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, arg ListAPIKeysByUserPa
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.KeyLookup,
 		); err != nil {
 			return nil, err
 		}
@@ -300,10 +333,24 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, arg ListAPIKeysByUserPa
 	return items, nil
 }
 
+const setAPIKeyLookup = `-- name: SetAPIKeyLookup :exec
+UPDATE api_keys SET key_lookup = ? WHERE id = ?
+`
+
+type SetAPIKeyLookupParams struct {
+	KeyLookup sql.NullString `json:"key_lookup"`
+	ID        int64          `json:"id"`
+}
+
+func (q *Queries) SetAPIKeyLookup(ctx context.Context, arg SetAPIKeyLookupParams) error {
+	_, err := q.db.ExecContext(ctx, setAPIKeyLookup, arg.KeyLookup, arg.ID)
+	return err
+}
+
 const updateAPIKey = `-- name: UpdateAPIKey :one
 UPDATE api_keys SET name = ?, permissions = ?, expires_at = ?, is_active = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at
+RETURNING id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at, key_lookup
 `
 
 type UpdateAPIKeyParams struct {
@@ -337,6 +384,7 @@ func (q *Queries) UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (Api
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeyLookup,
 	)
 	return i, err
 }

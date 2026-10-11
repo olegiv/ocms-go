@@ -26,6 +26,14 @@ func TestIsPrivateIP(t *testing.T) {
 		// Private IPv4 ranges
 		{"loopback", "127.0.0.1", true},
 		{"loopback high", "127.255.255.255", true},
+		// IPv6 ranges that embed or translate to IPv4 (finding L-6, 2026-10-11)
+		{"NAT64 loopback", "64:ff9b::7f00:1", true},
+		{"NAT64 private", "64:ff9b::a00:1", true},
+		{"local-use NAT64", "64:ff9b:1::1", true},
+		{"6to4", "2002:7f00:1::1", true},
+		{"discard-only", "100::1", true},
+		{"IPv6 documentation", "2001:db8::1", true},
+		{"IPv6 multicast", "ff02::1", true},
 		{"10.x.x.x", "10.0.0.1", true},
 		{"10.x.x.x high", "10.255.255.255", true},
 		{"172.16.x.x", "172.16.0.1", true},
@@ -52,7 +60,7 @@ func TestIsPrivateIP(t *testing.T) {
 		{"ipv6 loopback", "::1", true},
 		{"ipv6 link-local", "fe80::1", true},
 		{"ipv6 unique-local", "fd00::1", true},
-		{"ipv6 public", "2001:db8::1", false},
+		{"ipv6 public", "2606:4700:4700::1111", false},
 	}
 
 	for _, tt := range tests {

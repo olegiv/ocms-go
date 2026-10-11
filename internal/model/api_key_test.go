@@ -386,3 +386,17 @@ func TestAllPermissions(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIKeyLookup(t *testing.T) {
+	rawKey, _, err := GenerateAPIKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookup := APIKeyLookup(rawKey)
+	if len(lookup) != 64 || lookup != APIKeyLookup(rawKey) {
+		t.Fatalf("lookup = %q, want a stable 64-character hex digest", lookup)
+	}
+	if APIKeyLookup(rawKey+"x") == lookup {
+		t.Fatal("different keys must not share a lookup")
+	}
+}

@@ -44,6 +44,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a restart that still has `OCMS_DO_SEED=true`.
 - **Theme import requires password confirmation** and the form warns that an
   imported theme runs with the site's full privileges.
+- **Theme import and deletion are recorded in the event log** (security
+  category), including refused imports.
+- **API key lookup no longer depends on the four-character prefix.** Keys
+  store a SHA-256 lookup value next to the Argon2 hash, so a request that
+  does not hold the key never reaches the verifier; keys created earlier are
+  backfilled on first use. A hand-maintained `api_keys` test schema must add
+  the `key_lookup` column.
+- **Login lockout is scoped to email + client address** (5 failures) with an
+  account-wide lock after 25 failures across addresses, so knowing an email
+  no longer lets an attacker lock its owner out. Admin sessions now expire
+  after 2 idle hours as well as 24 absolute hours.
+- **Content import stages uploads on disk** instead of base64 in the session
+  table, reports unreadable archives generically and logs the detail.
+- **Outbound URL checks block NAT64, 6to4, discard-only, documentation and
+  multicast IPv6 ranges** in addition to the existing private ranges.
+- **Dify API key is a password field** that is never echoed back; a blank
+  submission keeps the stored key.
+- **Build and CI hardening:** `go.yml` runs govulncheck and `npm audit`,
+  govulncheck and Dart Sass are pinned, the Docker builder uses `npm ci`
+  and digest-pinned base images, `docker-compose.yml` mounts `custom/`
+  read-write so theme import works, and `.dockerignore` excludes local
+  scanner and verification output.
 
 ## [0.27.0] - 2026-10-09
 

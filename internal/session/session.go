@@ -39,6 +39,9 @@ func New(db *sql.DB, isDev bool) *scs.SessionManager {
 	// All mutating admin actions use POST (verified in main.go route
 	// registrations), so idempotent GETs see no functional change.
 	sm.Lifetime = 24 * time.Hour
+	// An abandoned admin session expires after two idle hours even though the
+	// absolute lifetime is a day; activity renews the idle window.
+	sm.IdleTimeout = 2 * time.Hour
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteStrictMode
 	sm.Cookie.Secure = !isDev // Secure cookies in production only

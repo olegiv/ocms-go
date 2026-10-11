@@ -145,10 +145,18 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Build settings from form
+	// Load existing settings to preserve position and stored secrets
+	existingPS, _ := loadProviderSettings(m.ctx.DB, ctx.ProviderID)
+
+	// Build settings from form. A password field is never echoed back into
+	// the form, so an empty submission keeps the stored value.
 	settings := make(map[string]string)
 	for _, field := range ctx.Provider.SettingsSchema() {
-		settings[field.ID] = strings.TrimSpace(r.FormValue(field.ID))
+		value := strings.TrimSpace(r.FormValue(field.ID))
+		if value == "" && field.Type == "password" && existingPS != nil {
+			value = existingPS.Settings[field.ID]
+		}
+		settings[field.ID] = value
 	}
 
 	isEnabled := r.FormValue("is_enabled") == "1"
@@ -162,8 +170,6 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	// Load existing settings to preserve position
-	existingPS, _ := loadProviderSettings(m.ctx.DB, ctx.ProviderID)
 	position := 0
 	oldEndpoint := ""
 	if existingPS != nil {

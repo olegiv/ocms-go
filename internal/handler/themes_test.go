@@ -12,7 +12,7 @@ import (
 func TestNewThemesHandler(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 
-	h := NewThemesHandler(db, nil, sm, nil, nil)
+	h := NewThemesHandler(db, nil, sm, nil, nil, nil)
 	if h == nil {
 		t.Fatal("NewThemesHandler returned nil")
 	}

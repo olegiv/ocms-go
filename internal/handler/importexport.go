@@ -8,13 +8,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -342,7 +343,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		// Extract export data from zip for display (re-read since validation closes readers)
 		exportData, err = h.extractExportDataFromZip(content)
 		if err != nil {
-			h.renderImportError(w, r, user, "Failed to extract data from zip: "+err.Error())
+			h.logger.Warn("import archive could not be read", "error", err)
+			h.renderImportError(w, r, user, importZipUnreadableMessage)
 			return
 		}
 	} else {
@@ -367,16 +369,19 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Store validated data in session for the actual import
-	// For zip files, we store base64 encoded bytes; for JSON, we store the parsed data
-	if isZipFile {
-		h.sessionManager.Put(r.Context(), "import_zip_data", base64.StdEncoding.EncodeToString(content))
-		h.sessionManager.Put(r.Context(), "import_is_zip", true)
-	} else {
-		jsonData, _ := json.Marshal(exportData)
-		h.sessionManager.Put(r.Context(), "import_data", string(jsonData))
-		h.sessionManager.Put(r.Context(), "import_is_zip", false)
+	// Stage the validated payload on disk for the actual import; the session
+	// row only carries the file path. ZIP uploads keep their raw bytes, JSON
+	// uploads keep the parsed data.
+	payload := content
+	if !isZipFile {
+		payload, _ = json.Marshal(exportData)
 	}
+	if err := h.stageImportPayload(r.Context(), payload); err != nil {
+		h.logger.Error("failed to stage import payload", "error", err)
+		h.renderImportError(w, r, user, "Failed to store the uploaded file for import")
+		return
+	}
+	h.sessionManager.Put(r.Context(), "import_is_zip", isZipFile)
 
 	h.renderImportPage(w, r, user, ImportFormData{
 		ConflictStrategies: defaultConflictStrategies(),
@@ -560,25 +565,25 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	var result *transfer.ImportResult
 	var err error
 
-	if isZip {
-		// Get stored zip data from session (base64 encoded)
-		zipDataB64 := h.sessionManager.GetString(r.Context(), "import_zip_data")
-		if zipDataB64 == "" {
-			h.renderImportError(w, r, user, "No import data found. Please upload a file first.")
-			return
-		}
+	payload, staged, err := h.loadStagedImport(r.Context())
+	if err != nil {
+		h.logger.Error("failed to read staged import payload", "error", err)
+		h.renderImportError(w, r, user, "Failed to read the uploaded file. Please upload it again.")
+		return
+	}
+	if !staged {
+		h.renderImportError(w, r, user, "No import data found. Please upload a file first.")
+		return
+	}
 
-		// Decode base64
-		zipData, err := base64.StdEncoding.DecodeString(zipDataB64)
-		if err != nil {
-			h.renderImportError(w, r, user, "Failed to decode stored data")
-			return
-		}
+	if isZip {
+		zipData := payload
 
 		// Enforce page content policy before importer writes pages.
 		exportData, err := h.extractExportDataFromZip(zipData)
 		if err != nil {
-			h.renderImportError(w, r, user, "Failed to extract data from zip: "+err.Error())
+			h.logger.Warn("staged import archive could not be read", "error", err)
+			h.renderImportError(w, r, user, importZipUnreadableMessage)
 			return
 		}
 		if err := h.applyImportPageSecurityPolicy(r, &exportData, "import", opts.ImportPages); err != nil {
@@ -603,19 +608,11 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Clear session data
-		h.sessionManager.Remove(r.Context(), "import_zip_data")
+		h.discardStagedImport(r.Context())
 	} else {
-		// Get stored JSON data from session
-		jsonData := h.sessionManager.GetString(r.Context(), "import_data")
-		if jsonData == "" {
-			h.renderImportError(w, r, user, "No import data found. Please upload a file first.")
-			return
-		}
-
 		// Parse the stored data
 		var exportData transfer.ExportData
-		if err := json.Unmarshal([]byte(jsonData), &exportData); err != nil {
+		if err := json.Unmarshal(payload, &exportData); err != nil {
 			h.renderImportError(w, r, user, "Failed to parse stored data")
 			return
 		}
@@ -634,8 +631,7 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Clear session data
-		h.sessionManager.Remove(r.Context(), "import_data")
+		h.discardStagedImport(r.Context())
 	}
 
 	// Clear common session data
@@ -681,4 +677,85 @@ func (h *ImportExportHandler) renderImportError(w http.ResponseWriter, r *http.R
 	h.renderImportPage(w, r, user, ImportFormData{
 		ConflictStrategies: defaultConflictStrategies(),
 	})
+}
+
+// Staged import payloads live on disk between the upload step and the
+// confirmation step. Keeping them in the session row stored up to 100 MiB,
+// base64-encoded, in the sessions table for every upload (finding L-6,
+// 2026-10-11).
+const (
+	sessionKeyImportPayloadPath = "import_payload_path"
+	importStagePrefix           = "ocms-import-"
+	importStageMaxAge           = time.Hour
+	importZipUnreadableMessage  = "The archive could not be read as an oCMS export. Check the server log for details."
+)
+
+// stageImportPayload writes payload to a private temporary file and records
+// its path in the session, replacing any earlier staged upload.
+func (h *ImportExportHandler) stageImportPayload(ctx context.Context, payload []byte) error {
+	h.discardStagedImport(ctx)
+	sweepStaleImportPayloads()
+	f, err := os.CreateTemp("", importStagePrefix+"*.bin")
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(payload); err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(f.Name())
+		return err
+	}
+	h.sessionManager.Put(ctx, sessionKeyImportPayloadPath, f.Name())
+	return nil
+}
+
+// loadStagedImport returns the staged payload for this session. staged is
+// false when nothing was uploaded or the file has already been swept.
+func (h *ImportExportHandler) loadStagedImport(ctx context.Context) (payload []byte, staged bool, err error) {
+	path := h.sessionManager.GetString(ctx, sessionKeyImportPayloadPath)
+	if path == "" || !isStagedImportPath(path) {
+		return nil, false, nil
+	}
+	payload, err = os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		h.sessionManager.Remove(ctx, sessionKeyImportPayloadPath)
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return payload, true, nil
+}
+
+// discardStagedImport removes the staged file, if any, and forgets its path.
+func (h *ImportExportHandler) discardStagedImport(ctx context.Context) {
+	path := h.sessionManager.PopString(ctx, sessionKeyImportPayloadPath)
+	if path != "" && isStagedImportPath(path) {
+		_ = os.Remove(path)
+	}
+}
+
+// isStagedImportPath accepts only files this handler created in the
+// temporary directory, so a corrupted session value cannot read or delete
+// anything else.
+func isStagedImportPath(path string) bool {
+	dir, base := filepath.Split(filepath.Clean(path))
+	return filepath.Clean(dir) == filepath.Clean(os.TempDir()) && strings.HasPrefix(base, importStagePrefix) && strings.HasSuffix(base, ".bin")
+}
+
+// sweepStaleImportPayloads deletes staged uploads that were never confirmed.
+func sweepStaleImportPayloads() {
+	matches, err := filepath.Glob(filepath.Join(os.TempDir(), importStagePrefix+"*.bin"))
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-importStageMaxAge)
+	for _, match := range matches {
+		if info, err := os.Stat(match); err == nil && info.ModTime().Before(cutoff) {
+			_ = os.Remove(match)
+		}
+	}
 }

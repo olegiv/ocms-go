@@ -15,10 +15,22 @@ import (
 )
 
 func inputType(fieldType string) string {
-	if fieldType == "url" {
+	switch fieldType {
+	case "url":
 		return "url"
+	case "password":
+		return "password"
 	}
 	return "text"
+}
+
+// secretPlaceholder tells the administrator a secret is stored without
+// revealing it; an empty submission keeps that value.
+func secretPlaceholder(field providers.SettingField) string {
+	if field.Default != "" {
+		return "•••••••• (saved; leave blank to keep)"
+	}
+	return field.Placeholder
 }
 
 func maxLenForType(fieldType string) string {
@@ -201,6 +213,18 @@ templ EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) 
 									Rows:        4,
 									Attributes: templ.Attributes{
 										"maxlength": maxLenForType(field.Type),
+									},
+								})
+							} else if field.Type == "password" {
+								@input.Input(input.Props{
+									ID:          field.ID,
+									Name:        field.ID,
+									Type:        input.TypePassword,
+									Placeholder: secretPlaceholder(field),
+									Attributes: templ.Attributes{
+										"maxlength":    maxLenForType(field.Type),
+										"autocomplete": "new-password",
+										"required":     field.Required && field.Default == "",
 									},
 								})
 							} else if field.Type != "checkbox" {

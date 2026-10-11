@@ -1,6 +1,6 @@
 -- name: CreateAPIKey :one
-INSERT INTO api_keys (name, key_hash, key_prefix, permissions, expires_at, is_active, created_by, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO api_keys (name, key_hash, key_prefix, key_lookup, permissions, expires_at, is_active, created_by, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetAPIKeyByID :one
@@ -11,6 +11,12 @@ SELECT * FROM api_keys WHERE key_prefix = ? AND is_active = 1;
 
 -- name: GetAPIKeysByPrefix :many
 SELECT * FROM api_keys WHERE key_prefix = ? AND is_active = 1;
+
+-- name: GetAPIKeyByLookup :one
+SELECT * FROM api_keys WHERE key_lookup = ? AND is_active = 1;
+
+-- name: SetAPIKeyLookup :exec
+UPDATE api_keys SET key_lookup = ? WHERE id = ?;
 
 -- name: GetAPIKeyByHash :one
 SELECT * FROM api_keys WHERE key_hash = ? AND is_active = 1;

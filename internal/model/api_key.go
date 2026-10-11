@@ -6,8 +6,10 @@ package model
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"time"
 
@@ -93,6 +95,16 @@ func HashAPIKey(key string) (string, error) {
 func CheckAPIKeyHash(key, encodedHash string) bool {
 	ok, _ := auth.VerifyArgon2(key, encodedHash)
 	return ok
+}
+
+// APIKeyLookup returns the exact-match lookup value stored next to the
+// Argon2 hash: the hex SHA-256 of the raw key. Keys carry 256 bits of
+// entropy, so the digest cannot be reversed or guessed, and it lets
+// authentication find the single candidate row without touching the Argon2
+// verifier for requests that do not hold the key.
+func APIKeyLookup(rawKey string) string {
+	sum := sha256.Sum256([]byte(rawKey))
+	return hex.EncodeToString(sum[:])
 }
 
 // ExtractAPIKeyPrefix extracts the prefix from a raw API key.

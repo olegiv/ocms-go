@@ -44,15 +44,16 @@ Account lockout prevents password guessing attacks by temporarily blocking login
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| Max Failed Attempts | 5 | Number of failures before lockout |
+| Max Failed Attempts | 5 | Failures from one address before that email + address pair is locked |
+| Account-wide Threshold | 25 | Failures across all addresses before the account is locked for everyone |
 | Attempt Window | 15 minutes | Time window for counting failures |
 | Base Lockout Duration | 15 minutes | Initial lockout period |
 | Max Lockout Duration | 24 hours | Maximum lockout after repeated lockouts |
 
 ### How It Works
 
-1. Failed login attempts are tracked per email address
-2. After 5 failed attempts within 15 minutes, the account is locked
+1. Failed login attempts are tracked per email address **and** client address, and separately per email address alone
+2. After 5 failed attempts within 15 minutes from one address, that email + address pair is locked; the account owner can still sign in from another address. After 25 failed attempts within the window across all addresses, the account is locked for everyone, which stops a distributed guessing campaign. Knowing a victim's email is therefore not enough to lock them out from their own connection.
 3. Lockout duration doubles with each subsequent lockout (exponential backoff):
    - 1st lockout: 15 minutes
    - 2nd lockout: 30 minutes
@@ -72,7 +73,11 @@ Account lockout prevents password guessing attacks by temporarily blocking login
 ### Security Features
 
 - **Non-existent email protection**: Failed attempts are tracked even for non-existent email addresses to prevent user enumeration attacks
-- **Successful login reset**: A successful login clears the failed attempt counter
+- **Successful login reset**: A successful login clears the failed attempt counters in both scopes
+
+## Session Lifetime
+
+Admin sessions are stored server-side. A session ends after **24 hours** regardless of activity, and after **2 hours** without any request; each request renews the idle window.
 - **Automatic cleanup**: Stale tracking entries are automatically removed
 
 ## Event Logging

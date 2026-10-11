@@ -73,7 +73,7 @@ jobs:
           cache: npm
 
       - name: Install Dart Sass
-        run: npm install -g sass
+        run: npm install -g sass@1.105.1
 
       - name: Install templ
         run: go install github.com/a-h/templ/cmd/templ@v0.3.1070
@@ -100,7 +100,7 @@ jobs:
           OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
 
       - name: Vulnerability scan
         run: govulncheck ./...

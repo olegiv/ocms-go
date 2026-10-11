@@ -209,6 +209,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name:        input.Name,
 		KeyHash:     keyHash,
 		KeyPrefix:   prefix,
+		KeyLookup:   sql.NullString{String: model.APIKeyLookup(rawKey), Valid: true},
 		Permissions: permissionsJSON,
 		ExpiresAt:   expiresAt,
 		IsActive:    true,

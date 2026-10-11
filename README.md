@@ -295,7 +295,7 @@ Available release archives:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `OCMS_SESSION_SECRET` | Secret key for session encryption (min 32 bytes; placeholder values from example files are refused, and the public test-suite secret is refused in production) | - | Yes |
+| `OCMS_SESSION_SECRET` | Server secret that keys CSRF protection; sessions are stored server-side (min 32 bytes; placeholder values from example files are refused, and the public test-suite secret is refused in production) | - | Yes |
 | `OCMS_DB_PATH` | Path to SQLite database file | `./data/ocms.db` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |

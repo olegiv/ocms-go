@@ -40,6 +40,12 @@ func init() {
 		"::1/128",         // IPv6 loopback
 		"fe80::/10",       // IPv6 link-local
 		"fc00::/7",        // RFC 4193 - IPv6 unique local
+		"64:ff9b::/96",    // RFC 6052 - NAT64 well-known prefix (embeds IPv4)
+		"64:ff9b:1::/48",  // RFC 8215 - local-use NAT64
+		"2002::/16",       // RFC 3056 - 6to4 (embeds IPv4)
+		"100::/64",        // RFC 6666 - discard-only
+		"2001:db8::/32",   // RFC 3849 - IPv6 documentation
+		"ff00::/8",        // RFC 4291 - IPv6 multicast
 		"::/128",          // IPv6 unspecified
 	}
 	for _, cidr := range cidrs {

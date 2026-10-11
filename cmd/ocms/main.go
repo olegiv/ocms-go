@@ -1771,7 +1771,7 @@ func run() error {
 	}
 	formsHandler.SetWebhookFormDataMode(cfg.WebhookFormDataMode)
 	slog.Info("form webhook payload mode configured", "mode", cfg.WebhookFormDataMode)
-	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager)
+	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager, eventService)
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)

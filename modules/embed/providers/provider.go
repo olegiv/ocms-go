@@ -30,7 +30,10 @@ type SettingField struct {
 	// Description provides additional context for the field
 	Description string
 
-	// Type is the field type: "text", "textarea", "url", "color", "select", "checkbox"
+	// Type is the field type: "text", "password", "textarea", "url", "color",
+	// "select", "checkbox". A "password" field is rendered masked, its stored
+	// value is never written back into the form, and an empty submission
+	// keeps the stored value.
 	Type string
 
 	// Options are the available choices for "select" type fields

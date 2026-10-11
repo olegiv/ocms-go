@@ -1,5 +1,4 @@
 ---
-allowed-tools: ""
 description: "Run a fresh code review on the branch diff before opening a PR"
 ---
 

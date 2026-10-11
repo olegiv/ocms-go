@@ -98,6 +98,9 @@ func TestNewLoginProtection(t *testing.T) {
 	}
 }
 
+// testIP is the client address used for the pair scope in these tests.
+const testIP = "203.0.113.9"
+
 func TestNewLoginProtectionDefaultValues(t *testing.T) {
 	// Test with zero config values - should use defaults
 	cfg := LoginProtectionConfig{}
@@ -117,18 +120,18 @@ func TestLoginProtectionIsAccountLocked(t *testing.T) {
 	email := "test@example.com"
 
 	// Initially not locked
-	locked, _ := lp.IsAccountLocked(email)
+	locked, _ := lp.IsAccountLocked(email, testIP)
 	if locked {
 		t.Error("Account should not be locked initially")
 	}
 
 	// Record failed attempts until locked
 	for i := 0; i < cfg.MaxFailedAttempts; i++ {
-		lp.RecordFailedAttempt(email)
+		lp.RecordFailedAttempt(email, testIP)
 	}
 
 	// Now should be locked
-	locked, remaining := lp.IsAccountLocked(email)
+	locked, remaining := lp.IsAccountLocked(email, testIP)
 	if !locked {
 		t.Error("Account should be locked after max failed attempts")
 	}
@@ -140,7 +143,7 @@ func TestLoginProtectionIsAccountLocked(t *testing.T) {
 	time.Sleep(cfg.LockoutDuration + 100*time.Millisecond)
 
 	// Should be unlocked now
-	locked, _ = lp.IsAccountLocked(email)
+	locked, _ = lp.IsAccountLocked(email, testIP)
 	if locked {
 		t.Error("Account should be unlocked after lockout expires")
 	}
@@ -152,19 +155,19 @@ func TestLoginProtectionRecordFailedAttempt(t *testing.T) {
 	email := "test@example.com"
 
 	// First attempt should not lock
-	locked, _ := lp.RecordFailedAttempt(email)
+	locked, _ := lp.RecordFailedAttempt(email, testIP)
 	if locked {
 		t.Error("First attempt should not lock account")
 	}
 
 	// Second attempt should not lock
-	locked, _ = lp.RecordFailedAttempt(email)
+	locked, _ = lp.RecordFailedAttempt(email, testIP)
 	if locked {
 		t.Error("Second attempt should not lock account")
 	}
 
 	// Third attempt should lock
-	locked, duration := lp.RecordFailedAttempt(email)
+	locked, duration := lp.RecordFailedAttempt(email, testIP)
 	if !locked {
 		t.Error("Third attempt should lock account")
 	}
@@ -179,14 +182,14 @@ func TestLoginProtectionRecordSuccessfulLogin(t *testing.T) {
 	email := "test@example.com"
 
 	// Record some failed attempts
-	lp.RecordFailedAttempt(email)
-	lp.RecordFailedAttempt(email)
+	lp.RecordFailedAttempt(email, testIP)
+	lp.RecordFailedAttempt(email, testIP)
 
 	// Record successful login
-	lp.RecordSuccessfulLogin(email)
+	lp.RecordSuccessfulLogin(email, testIP)
 
 	// Should have full attempts again
-	remaining := lp.GetRemainingAttempts(email)
+	remaining := lp.GetRemainingAttempts(email, testIP)
 	if remaining != cfg.MaxFailedAttempts {
 		t.Errorf("GetRemainingAttempts() = %d, want %d", remaining, cfg.MaxFailedAttempts)
 	}
@@ -198,22 +201,22 @@ func TestLoginProtectionGetRemainingAttempts(t *testing.T) {
 	email := "test@example.com"
 
 	// Initial remaining should be max
-	remaining := lp.GetRemainingAttempts(email)
+	remaining := lp.GetRemainingAttempts(email, testIP)
 	if remaining != 5 {
 		t.Errorf("GetRemainingAttempts() = %d, want 5", remaining)
 	}
 
 	// After one failed attempt
-	lp.RecordFailedAttempt(email)
-	remaining = lp.GetRemainingAttempts(email)
+	lp.RecordFailedAttempt(email, testIP)
+	remaining = lp.GetRemainingAttempts(email, testIP)
 	if remaining != 4 {
 		t.Errorf("GetRemainingAttempts() = %d, want 4", remaining)
 	}
 
 	// After two more failed attempts
-	lp.RecordFailedAttempt(email)
-	lp.RecordFailedAttempt(email)
-	remaining = lp.GetRemainingAttempts(email)
+	lp.RecordFailedAttempt(email, testIP)
+	lp.RecordFailedAttempt(email, testIP)
+	remaining = lp.GetRemainingAttempts(email, testIP)
 	if remaining != 2 {
 		t.Errorf("GetRemainingAttempts() = %d, want 2", remaining)
 	}
@@ -225,15 +228,15 @@ func TestLoginProtectionExponentialBackoff(t *testing.T) {
 	email := "test@example.com"
 
 	// First lockout
-	lp.RecordFailedAttempt(email)
-	_, duration1 := lp.RecordFailedAttempt(email)
+	lp.RecordFailedAttempt(email, testIP)
+	_, duration1 := lp.RecordFailedAttempt(email, testIP)
 
 	// Wait for lockout to expire
 	time.Sleep(duration1 + 10*time.Millisecond)
 
 	// Second lockout should be longer (exponential backoff)
-	lp.RecordFailedAttempt(email)
-	_, duration2 := lp.RecordFailedAttempt(email)
+	lp.RecordFailedAttempt(email, testIP)
+	_, duration2 := lp.RecordFailedAttempt(email, testIP)
 
 	if duration2 <= duration1 {
 		t.Errorf("Second lockout duration (%v) should be longer than first (%v)", duration2, duration1)
@@ -246,8 +249,8 @@ func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 	email := "test@example.com"
 
 	// Record a failed attempt
-	lp.RecordFailedAttempt(email)
-	remaining := lp.GetRemainingAttempts(email)
+	lp.RecordFailedAttempt(email, testIP)
+	remaining := lp.GetRemainingAttempts(email, testIP)
 	if remaining != 4 {
 		t.Errorf("GetRemainingAttempts() = %d, want 4", remaining)
 	}
@@ -256,7 +259,7 @@ func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 	time.Sleep(cfg.AttemptWindow + 50*time.Millisecond)
 
 	// After window expires, should reset to max
-	remaining = lp.GetRemainingAttempts(email)
+	remaining = lp.GetRemainingAttempts(email, testIP)
 	if remaining != cfg.MaxFailedAttempts {
 		t.Errorf("GetRemainingAttempts() after window = %d, want %d", remaining, cfg.MaxFailedAttempts)
 	}
@@ -283,7 +286,7 @@ func TestRecordSuccessfulLoginAcquiresAttemptsMu(t *testing.T) {
 	done := make(chan time.Duration, 1)
 	go func() {
 		start := time.Now()
-		lp.RecordSuccessfulLogin(email)
+		lp.RecordSuccessfulLogin(email, testIP)
 		done <- time.Since(start)
 	}()
 
@@ -322,12 +325,12 @@ func TestRecordFailedAttemptIsSerialized(t *testing.T) {
 	for range parallelism {
 		go func() {
 			defer wg.Done()
-			lp.RecordFailedAttempt(email)
+			lp.RecordFailedAttempt(email, testIP)
 		}()
 	}
 	wg.Wait()
 
-	remaining := lp.GetRemainingAttempts(email)
+	remaining := lp.GetRemainingAttempts(email, testIP)
 	got := cfg.MaxFailedAttempts - remaining
 	if got != parallelism {
 		t.Errorf("attempt_count after %d concurrent failures = %d, want %d (racy read-modify-write lost increments)", parallelism, got, parallelism)
@@ -348,9 +351,9 @@ func TestLoginProtectionSurvivesProcessRestart(t *testing.T) {
 	// "Before restart" — record failures up to the lockout threshold.
 	before := NewLoginProtection(db, cfg)
 	for range cfg.MaxFailedAttempts {
-		before.RecordFailedAttempt(email)
+		before.RecordFailedAttempt(email, testIP)
 	}
-	locked, remaining := before.IsAccountLocked(email)
+	locked, remaining := before.IsAccountLocked(email, testIP)
 	if !locked {
 		t.Fatalf("pre-restart: account should be locked after %d attempts", cfg.MaxFailedAttempts)
 	}
@@ -361,7 +364,7 @@ func TestLoginProtectionSurvivesProcessRestart(t *testing.T) {
 	// "After restart" — fresh LoginProtection, same DB. The old
 	// implementation would forget everything here; this one must not.
 	after := NewLoginProtection(db, cfg)
-	lockedAfter, remainingAfter := after.IsAccountLocked(email)
+	lockedAfter, remainingAfter := after.IsAccountLocked(email, testIP)
 	if !lockedAfter {
 		t.Errorf("post-restart: account MUST still be locked — lockout state did not persist to DB")
 	}

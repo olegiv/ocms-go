@@ -185,7 +185,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OCMS_SESSION_SECRET` | Yes | - | Min 32 bytes for session encryption |
+| `OCMS_SESSION_SECRET` | Yes | - | Min 32 bytes; keys CSRF protection (sessions are stored server-side) |
 | `OCMS_DB_PATH` | No | `./data/ocms.db` | SQLite database path |
 | `OCMS_SERVER_HOST` | No | `localhost` | Server bind host |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |

@@ -144,7 +144,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Check if account is locked
 	if h.loginProtection != nil {
-		if locked, remaining := h.loginProtection.IsAccountLocked(email); locked {
+		if locked, remaining := h.loginProtection.IsAccountLocked(email, clientIP); locked {
 			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email})
 			flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.account_locked", formatDuration(remaining)))
 			return
@@ -165,11 +165,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		auth.VerifyDummyPassword(password)
 		// Record failed attempt even for non-existent users to prevent enumeration
 		if h.loginProtection != nil {
-			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
+			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email, clientIP); locked {
 				flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
 				return
 			}
-			remaining := h.loginProtection.GetRemainingAttempts(email)
+			remaining := h.loginProtection.GetRemainingAttempts(email, clientIP)
 			if remaining <= 3 && remaining > 0 {
 				flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.attempts_remaining", remaining))
 				return
@@ -192,12 +192,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: invalid password", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email})
 		// Record failed attempt
 		if h.loginProtection != nil {
-			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
+			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email, clientIP); locked {
 				_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email, "duration": lockDuration.String()})
 				flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
 				return
 			}
-			remaining := h.loginProtection.GetRemainingAttempts(email)
+			remaining := h.loginProtection.GetRemainingAttempts(email, clientIP)
 			if remaining <= 3 && remaining > 0 {
 				flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.attempts_remaining", remaining))
 				return
@@ -209,7 +209,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Clear failed attempts on successful login
 	if h.loginProtection != nil {
-		h.loginProtection.RecordSuccessfulLogin(email)
+		h.loginProtection.RecordSuccessfulLogin(email, clientIP)
 	}
 
 	// Re-hash password if it uses old/expensive parameters (e.g., 64MB → 19MB).
