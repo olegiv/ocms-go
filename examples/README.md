@@ -20,15 +20,15 @@ examples/
 
 `themes/tiny-sample.tar.gz` is a minimal HTML theme packaged the way the theme
 importer expects: one named directory, `tiny-sample/`, with `theme.json`, the
-seven required page templates (home, page, list, category, tag, search, 404),
-one CSS file, an SVG preview, and a README. It has no JavaScript and no external
-asset dependencies. Its identifier `tiny-sample` is distinct from the `starter`
-theme installed in `custom/themes/`, so importing it never collides with an
-existing theme.
+eight required page templates (home, page, list, category, tag, search, 404,
+form), one CSS file, an SVG preview, and a README. It has no JavaScript and no
+external asset dependencies. Its identifier `tiny-sample` is distinct from the
+`starter` theme installed in `custom/themes/`, so importing it never collides
+with an existing theme.
 
 The sample is meant for trying the import flow and for small content sites. It
-omits public forms, widgets, custom menus, and theme settings, and its labels are
-English only.
+omits widgets, custom menus, and theme settings, and its labels are English
+only.
 
 #### Try it
 

@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   themes without SSH or a server restart. Uploads are extracted into a
   private staging directory, checked for one named theme directory, a
   `theme.json` name and version, the HTML engine and every required page
-  template, then installed by atomic rename; they are limited to 20 MiB
+  template (the eight pages the public handlers render, the form page
+  included), then installed by atomic rename; they are limited to 20 MiB
   compressed, 100 MiB extracted and 2,000 entries; macOS `._*` metadata
   entries are ignored. Archive problems are reported in the admin, while
   internal failures show a generic message and are logged. Core and active

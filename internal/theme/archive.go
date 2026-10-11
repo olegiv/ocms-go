@@ -339,6 +339,12 @@ func extractionError(action string, err error) error {
 	return fmt.Errorf("%s: %w", action, err)
 }
 
+// requiredPageTemplates are the content templates every imported theme must
+// define: one per page the public handlers render through RenderPage. The
+// list mirrors the default theme's templates/pages directory, which a test
+// enforces, so a theme that imports cleanly cannot answer 500 on a page.
+var requiredPageTemplates = []string{"home", "page", "list", "404", "category", "tag", "search", "form"}
+
 func validateImportedTheme(thm *Theme) error {
 	if strings.TrimSpace(thm.Config.Name) == "" || strings.TrimSpace(thm.Config.Version) == "" {
 		return ValidationError("theme.json must contain a name and version")
@@ -349,7 +355,7 @@ func validateImportedTheme(thm *Theme) error {
 	if thm.Templates.Lookup("layouts/base.html") == nil {
 		return ValidationError("theme is missing templates/layouts/base.html")
 	}
-	for _, page := range []string{"home", "page", "list", "404", "category", "tag", "search"} {
+	for _, page := range requiredPageTemplates {
 		if thm.Templates.Lookup("content_"+page) == nil {
 			return invalidf("theme is missing the content definition in templates/pages/%s.html", page)
 		}

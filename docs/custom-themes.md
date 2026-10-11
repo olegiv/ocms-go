@@ -10,7 +10,7 @@ mytheme/
   theme.json
   templates/
     layouts/base.html
-    pages/{home,page,list,404,category,tag,search}.html
+    pages/{home,page,list,404,category,tag,search,form}.html
     partials/                 (optional)
   static/                     (optional)
   locales/                    (optional)
@@ -75,7 +75,7 @@ Custom themes extend or replace oCMS core themes without modifying core code. Th
 Upload [`examples/themes/tiny-sample.tar.gz`](../examples/themes/tiny-sample.tar.gz)
 at **Admin > Themes**, then activate **Tiny Sample**. The import card links to
 the archive on GitHub, and [`examples/README.md`](../examples/README.md)
-describes it. The archive contains a minimal HTML theme with all seven required
+describes it. The archive contains a minimal HTML theme with all eight required
 page templates, responsive CSS, and an SVG preview. It has no JavaScript or
 external asset dependencies.
 

@@ -11,8 +11,10 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,10 +38,56 @@ func themeArchiveEntries(name string) []themeArchiveEntry {
 		{name: name + "/templates/layouts/base.html", body: `<html>{{template "content" .}}</html>`},
 		{name: name + "/static/style.css", body: `body { color: green; }`},
 	}
-	for _, page := range []string{"home", "page", "list", "404", "category", "tag", "search"} {
+	for _, page := range requiredPageTemplates {
 		entries = append(entries, themeArchiveEntry{name: name + "/templates/pages/" + page + ".html", body: `{{define "content"}}<h1>{{.Title}}</h1>{{end}}`})
 	}
 	return entries
+}
+
+// withoutPage drops one page template from the fixture.
+func withoutPage(entries []themeArchiveEntry, page string) []themeArchiveEntry {
+	var kept []themeArchiveEntry
+	for _, e := range entries {
+		if !strings.HasSuffix(e.name, "/templates/pages/"+page+".html") {
+			kept = append(kept, e)
+		}
+	}
+	return kept
+}
+
+// TestRequiredPageTemplatesMatchDefaultTheme fails when the import validator's
+// required list drifts from the pages the default theme ships, which are the
+// pages the public handlers render: a theme that imports without one of them
+// answers 500 on that page (the form page did, before "form" was required).
+func TestRequiredPageTemplatesMatchDefaultTheme(t *testing.T) {
+	entries, err := fs.ReadDir(themes.FS, "default/templates/pages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shipped []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".html") {
+			shipped = append(shipped, strings.TrimSuffix(e.Name(), ".html"))
+		}
+	}
+	required := append([]string(nil), requiredPageTemplates...)
+	sort.Strings(shipped)
+	sort.Strings(required)
+	if strings.Join(shipped, ",") != strings.Join(required, ",") {
+		t.Fatalf("requiredPageTemplates = %v, default theme ships %v; keep them identical", required, shipped)
+	}
+}
+
+// TestImportRejectsThemeWithoutFormTemplate fails when an archive that lacks
+// templates/pages/form.html is accepted: every public form would then answer
+// 500 once the theme is active.
+func TestImportRejectsThemeWithoutFormTemplate(t *testing.T) {
+	m := NewManager(themes.FS, t.TempDir(), testutil.TestLoggerSilent())
+	_, err := m.ImportArchive(bytes.NewReader(makeThemeArchive(t, withoutPage(themeArchiveEntries("my-theme"), "form"))))
+	var verr ValidationError
+	if !errors.As(err, &verr) || !strings.Contains(err.Error(), "templates/pages/form.html") {
+		t.Fatalf("ImportArchive error = %v, want a validation error naming templates/pages/form.html", err)
+	}
 }
 
 func makeThemeArchive(t *testing.T, entries []themeArchiveEntry) []byte {
