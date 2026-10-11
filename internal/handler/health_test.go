@@ -21,9 +21,9 @@ import (
 func createTestAPIKey(t *testing.T, h *HealthHandler) string {
 	t.Helper()
 
-	rawKey, keyPrefix, err := model.GenerateAPIKey()
+	rawKey, keyPrefix, err := model.GenerateAPIAccessKey()
 	if err != nil {
-		t.Fatalf("GenerateAPIKey failed: %v", err)
+		t.Fatalf("GenerateAPIAccessKey failed: %v", err)
 	}
 
 	keyHash, err := model.HashAPIKey(rawKey)

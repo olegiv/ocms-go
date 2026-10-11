@@ -175,7 +175,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate API key
-	rawKey, prefix, err := model.GenerateAPIKey()
+	rawKey, prefix, err := model.GenerateAPIAccessKey()
 	if err != nil {
 		slog.Error("failed to generate API key", "error", err)
 		flashError(w, r, h.renderer, redirectAdminAPIKeysNew, "Error generating API key")

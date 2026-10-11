@@ -192,9 +192,9 @@ func (e *testEnv) createKey(perms ...string) string {
 // createKeyWith inserts an API key after letting mutate adjust its row.
 func (e *testEnv) createKeyWith(mutate func(*store.CreateAPIKeyParams), perms ...string) string {
 	e.t.Helper()
-	raw, prefix, err := model.GenerateAPIKey()
+	raw, prefix, err := model.GenerateAPIAccessKey()
 	if err != nil {
-		e.t.Fatalf("GenerateAPIKey: %v", err)
+		e.t.Fatalf("GenerateAPIAccessKey: %v", err)
 	}
 	hash, err := model.HashAPIKey(raw)
 	if err != nil {

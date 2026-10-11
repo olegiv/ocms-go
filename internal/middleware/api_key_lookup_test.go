@@ -20,7 +20,7 @@ import (
 // them today: with the SHA-256 lookup next to the Argon2 hash.
 func insertTestAPIKeyWithLookup(t *testing.T, db *sql.DB) string {
 	t.Helper()
-	rawKey, keyPrefix, err := model.GenerateAPIKey()
+	rawKey, keyPrefix, err := model.GenerateAPIAccessKey()
 	if err != nil {
 		t.Fatal(err)
 	}

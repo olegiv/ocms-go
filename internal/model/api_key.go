@@ -66,9 +66,9 @@ type APIKey struct {
 // Reduced from 8 to 4 to preserve more entropy in the key.
 const APIKeyPrefixLength = 4
 
-// GenerateAPIKey generates a new random API key.
+// GenerateAPIAccessKey generates a new random API key.
 // Returns the raw key (to show user once) and the key prefix.
-func GenerateAPIKey() (rawKey string, prefix string, err error) {
+func GenerateAPIAccessKey() (rawKey string, prefix string, err error) {
 	// Generate 32 random bytes (256 bits of entropy)
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {

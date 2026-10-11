@@ -10,34 +10,34 @@ import (
 	"time"
 )
 
-func TestGenerateAPIKey(t *testing.T) {
-	rawKey, prefix, err := GenerateAPIKey()
+func TestGenerateAPIAccessKey(t *testing.T) {
+	rawKey, prefix, err := GenerateAPIAccessKey()
 	if err != nil {
-		t.Fatalf("GenerateAPIKey() error = %v", err)
+		t.Fatalf("GenerateAPIAccessKey() error = %v", err)
 	}
 
 	// Check raw key is not empty and has reasonable length
 	if len(rawKey) < 32 {
-		t.Errorf("GenerateAPIKey() rawKey length = %d, want >= 32", len(rawKey))
+		t.Errorf("GenerateAPIAccessKey() rawKey length = %d, want >= 32", len(rawKey))
 	}
 
 	// Check prefix is APIKeyPrefixLength characters
 	if len(prefix) != APIKeyPrefixLength {
-		t.Errorf("GenerateAPIKey() prefix length = %d, want %d", len(prefix), APIKeyPrefixLength)
+		t.Errorf("GenerateAPIAccessKey() prefix length = %d, want %d", len(prefix), APIKeyPrefixLength)
 	}
 
 	// Check prefix matches start of raw key
 	if !strings.HasPrefix(rawKey, prefix) {
-		t.Errorf("GenerateAPIKey() prefix %q is not prefix of rawKey %q", prefix, rawKey)
+		t.Errorf("GenerateAPIAccessKey() prefix %q is not prefix of rawKey %q", prefix, rawKey)
 	}
 
 	// Generate another key to ensure uniqueness
-	rawKey2, _, err := GenerateAPIKey()
+	rawKey2, _, err := GenerateAPIAccessKey()
 	if err != nil {
-		t.Fatalf("GenerateAPIKey() second call error = %v", err)
+		t.Fatalf("GenerateAPIAccessKey() second call error = %v", err)
 	}
 	if rawKey == rawKey2 {
-		t.Error("GenerateAPIKey() generated identical keys")
+		t.Error("GenerateAPIAccessKey() generated identical keys")
 	}
 }
 
@@ -388,7 +388,7 @@ func TestAllPermissions(t *testing.T) {
 }
 
 func TestAPIKeyLookup(t *testing.T) {
-	rawKey, _, err := GenerateAPIKey()
+	rawKey, _, err := GenerateAPIAccessKey()
 	if err != nil {
 		t.Fatal(err)
 	}

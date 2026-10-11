@@ -202,7 +202,7 @@ func executeAuthAndCaptureKey(middleware func(*sql.DB) func(http.Handler) http.H
 func insertTestAPIKey(t *testing.T, db *sql.DB, name string, permissions []string, isActive bool, expiresAt *time.Time) string {
 	t.Helper()
 
-	rawKey, keyPrefix, err := model.GenerateAPIKey()
+	rawKey, keyPrefix, err := model.GenerateAPIAccessKey()
 	if err != nil {
 		t.Fatalf("failed to generate API key: %v", err)
 	}
