@@ -27,7 +27,10 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		warnings = append(warnings, i18n.T(lang, key))
 	}
 	if len(warnings) > 0 {
-		m.ctx.Render.SetFlash(r, strings.Join(warnings, " "), "error")
+		// BuildPageContext already consumed the session flash, so the warning
+		// goes on this page context rather than into the next request's flash.
+		pc.Flash = strings.TrimSpace(pc.Flash + " " + strings.Join(warnings, " "))
+		pc.FlashType = "error"
 	}
 	viewData := AnalyticsExtViewData{
 		GA4Enabled:       m.settings.GA4Enabled,
