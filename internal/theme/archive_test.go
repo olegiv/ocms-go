@@ -432,6 +432,24 @@ func TestThemeImportAndDeleteProtection(t *testing.T) {
 	}
 }
 
+// TestImportCreatesMissingCustomDirectory fails when the first import on an
+// installation without a custom directory fails on the missing parent
+// instead of creating OCMS_CUSTOM_DIR and its themes directory.
+func TestImportCreatesMissingCustomDirectory(t *testing.T) {
+	custom := filepath.Join(t.TempDir(), "custom")
+	m := NewManager(emptyFS, custom, testutil.TestLoggerSilent())
+	name, err := m.ImportArchive(bytes.NewReader(makeThemeArchive(t, themeArchiveEntries("fresh"))))
+	if err != nil {
+		t.Fatalf("ImportArchive on a missing custom directory: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(custom, "themes", name, "theme.json")); err != nil {
+		t.Fatalf("imported theme not installed under the created directory: %v", err)
+	}
+	if !m.HasTheme(name) {
+		t.Fatal("imported theme not registered")
+	}
+}
+
 func TestThemeFilesystemFailures(t *testing.T) {
 	t.Run("destination exists on disk", func(t *testing.T) {
 		m, custom := testManager(t)
@@ -633,7 +651,13 @@ func TestThemeErrorClassification(t *testing.T) {
 	}
 
 	// Internal failures must not be shown verbatim: they name server paths.
-	broken := NewManager(emptyFS, filepath.Join(custom, "missing"), testutil.TestLoggerSilent())
+	// A missing custom directory is created on import, so a regular file in
+	// its place is what makes the filesystem refuse.
+	notADir := filepath.Join(custom, "not-a-dir")
+	if err := os.WriteFile(notADir, []byte("file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	broken := NewManager(emptyFS, notADir, testutil.TestLoggerSilent())
 	_, err := broken.ImportArchive(bytes.NewReader(makeThemeArchive(t, themeArchiveEntries("internal"))))
 	if err == nil || errors.As(err, &validation) {
 		t.Fatalf("filesystem failure classified as validation: %v", err)

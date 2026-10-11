@@ -40,8 +40,9 @@ only regular files and directories. Links, special files, sparse files, duplicat
 absolute paths, and traversal paths are rejected. File modes are normalized to
 0644 and directory modes to 0755; archive permissions and ownership are ignored.
 
-The process needs write access to `OCMS_CUSTOM_DIR/themes` (and to
-`OCMS_CUSTOM_DIR` if the `themes` directory does not yet exist). Imports are
+The process needs write access to `OCMS_CUSTOM_DIR/themes`; the first import
+creates `OCMS_CUSTOM_DIR` and its `themes` directory when they do not exist
+yet, so it also needs write access to their parent in that case. Imports are
 validated in a private staging directory and installed by atomic rename. They
 appear immediately, remain inactive, and survive restart. Existing directories
 and embedded theme names cannot be replaced through the UI.

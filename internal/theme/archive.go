@@ -195,6 +195,13 @@ func (m *Manager) openCustomThemes(create bool) (*os.Root, error) {
 	if m.customDir == "" {
 		return nil, errors.New("custom theme directory is not configured")
 	}
+	if create {
+		// An installation may never have had a custom directory; the first
+		// import creates it rather than failing on the missing parent.
+		if err := os.MkdirAll(m.customDir, 0755); err != nil {
+			return nil, fmt.Errorf("creating custom directory: %w", err)
+		}
+	}
 	customRoot, err := os.OpenRoot(m.customDir)
 	if err != nil {
 		return nil, fmt.Errorf("opening custom directory: %w", err)

@@ -285,9 +285,14 @@ func TestThemeHandlerFlashHidesInternalErrors(t *testing.T) {
 		t.Fatalf("import: %q", got)
 	}
 
-	// Without its custom directory every operation fails internally with an
-	// error that names the server path; the administrator sees generic text.
+	// With a regular file where the custom directory should be, every
+	// operation fails internally with an error that names the server path
+	// (a missing directory would simply be recreated); the administrator
+	// sees generic text.
 	if err := os.RemoveAll(customDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(customDir, []byte("not a directory"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	r = requestWithURLParams(httptest.NewRequest(http.MethodPost, "/admin/themes/starter/delete", nil), map[string]string{"name": "starter"})
