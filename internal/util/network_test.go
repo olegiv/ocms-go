@@ -26,6 +26,22 @@ func TestIsPrivateIP(t *testing.T) {
 		// Private IPv4 ranges
 		{"loopback", "127.0.0.1", true},
 		{"loopback high", "127.255.255.255", true},
+		// NAT64 and 6to4 are judged by the embedded IPv4 address, so an
+		// IPv6-only host behind DNS64 can still reach public IPv4 destinations.
+		{"NAT64 loopback", "64:ff9b::7f00:1", true},
+		{"NAT64 private", "64:ff9b::a00:1", true},
+		{"NAT64 public", "64:ff9b::808:808", false},
+		// The local-use NAT64 range allows any prefix length from /48 to /96,
+		// so the embedded address cannot be located; the range is refused.
+		{"local-use NAT64 link-local", "64:ff9b:1::a9fe:1", true},
+		{"local-use NAT64 /96 layout public", "64:ff9b:1::101:101", true},
+		{"local-use NAT64 /48 layout hides 10.0.0.1", "64:ff9b:1:a00:0:100:808:808", true},
+		{"6to4 loopback", "2002:7f00:1::1", true},
+		{"6to4 private", "2002:c0a8:101::1", true},
+		{"6to4 public", "2002:808:808::1", false},
+		{"discard-only", "100::1", true},
+		{"IPv6 documentation", "2001:db8::1", true},
+		{"IPv6 multicast", "ff02::1", true},
 		{"10.x.x.x", "10.0.0.1", true},
 		{"10.x.x.x high", "10.255.255.255", true},
 		{"172.16.x.x", "172.16.0.1", true},
@@ -52,7 +68,7 @@ func TestIsPrivateIP(t *testing.T) {
 		{"ipv6 loopback", "::1", true},
 		{"ipv6 link-local", "fe80::1", true},
 		{"ipv6 unique-local", "fd00::1", true},
-		{"ipv6 public", "2001:db8::1", false},
+		{"ipv6 public", "2606:4700:4700::1111", false},
 	}
 
 	for _, tt := range tests {

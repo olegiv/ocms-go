@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Theme import and deletion** — administrators can upload a validated
+  `.tar.gz` HTML theme at **Admin > Themes** and delete inactive custom
+  themes without SSH or a server restart. Uploads are extracted into a
+  private staging directory, checked for one named theme directory, a
+  `theme.json` name and version, the HTML engine and every required page
+  template (the eight pages the public handlers render, the form page
+  included), then installed by atomic rename; they are limited to 20 MiB
+  compressed, 100 MiB extracted and 2,000 entries; macOS `._*` metadata
+  entries are ignored. Archive problems are reported in the admin, while
+  internal failures show a generic message and are logged. Core and active
+  themes are protected, both actions are blocked in demo mode, and a ready-to-upload
+  `examples/themes/tiny-sample.tar.gz` theme is bundled for trying the flow:
+  the import card links to it and `examples/README.md` describes it.
+  See `docs/custom-themes.md` and the wiki's Theme System page.
+
+### Security
+- **Module admin routes are admin-only by default.** The module registry now
+  mounts every module's admin routes behind an admin gate; a module that
+  wants editor access opts in with `EditorAdminRoutes()` (only Internal
+  Analytics does). Previously Privacy, External Analytics, Informer, Example,
+  Sentinel and the Bookmarks sample were reachable by editors. A drift test
+  keeps the opt-in list explicit.
+- **External Analytics validates tracker identifiers.** GA4, GTM and Matomo
+  values must match their documented formats on save, are escaped for the
+  JavaScript context they are rendered in, and are skipped at render time if a
+  stored value is malformed.
+- **DB Manager is inactive by default** on new installs, caps SELECT results at
+  1,000 rows and cancels statements after 10 seconds; a cancelled statement
+  says so, and the query history records truncated results. Existing
+  installs keep their chosen status.
+- **Placeholder secrets are refused.** `OCMS_SESSION_SECRET` values copied
+  from example files or docs (`replace-with…`, `change-me…`, `your-secret…`)
+  fail startup in every environment, the public test-suite secret fails in
+  production, and a placeholder `OCMS_EMBED_PROXY_TOKEN` fails as well.
+- **Seeding never recreates the default admin** while any administrator
+  account exists, so a renamed or deleted `admin@example.com` does not return
+  on a restart that still has `OCMS_DO_SEED=true`.
+- **Theme import requires password confirmation** and the form warns that an
+  imported theme runs with the site's full privileges.
+- **Theme import and deletion are recorded in the event log** (security
+  category), including refused imports.
+- **API key lookup no longer depends on the four-character prefix.** Keys
+  store a SHA-256 lookup value next to the Argon2 hash, so a request that
+  does not hold the key never reaches the verifier; keys created earlier are
+  backfilled on first use. The health endpoint uses the same verifier.
+- **Login lockout is scoped to email + client address** (5 failures) with an
+  account-wide lock after 25 failures across addresses, so knowing an email
+  no longer lets an attacker lock its owner out, and the theme-import
+  password confirmation shares that lockout; IPv6 clients are keyed on their
+  /64. Sessions now expire after 2 idle hours as well as 24 absolute hours.
+- **Content import stages uploads on disk** instead of base64 in the session
+  table (kept for two hours, the session idle timeout), reports unreadable
+  archives generically and logs the detail.
+- **Outbound URL checks judge well-known NAT64 and 6to4 addresses by the IPv4
+  address they embed**, refuse the local-use NAT64 range `64:ff9b:1::/48`
+  (its translator prefix length, and so the position of the embedded
+  address, is not fixed) and block the discard-only, documentation and
+  multicast IPv6 ranges in addition to the existing private ranges.
+- **Dify API key is a password field** that never reaches the form data; a
+  blank submission keeps the stored key, and a save is refused if the stored
+  settings cannot be read.
+- **Build and CI hardening:** `go.yml` runs govulncheck and `npm audit`,
+  govulncheck and Dart Sass are pinned, the Docker builder uses `npm ci`
+  and digest-pinned base images, `docker-compose.yml` mounts
+  `custom/themes` read-write so theme import works while the rest of
+  `custom/` stays read-only, and `.dockerignore` excludes local scanner and
+  verification output.
+
 ## [0.27.0] - 2026-10-09
 
 ### Changed

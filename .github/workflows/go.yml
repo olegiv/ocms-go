@@ -36,7 +36,7 @@ jobs:
         cache: 'npm'
 
     - name: Install Dart Sass
-      run: npm install -g sass
+      run: npm install -g sass@1.105.1
 
     - name: Build assets
       run: make assets
@@ -48,3 +48,11 @@ jobs:
       run: go test -v ./...
       env:
         OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
+
+    - name: Vulnerability scan (Go)
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+        govulncheck ./...
+
+    - name: Vulnerability scan (npm)
+      run: npm audit --audit-level=high

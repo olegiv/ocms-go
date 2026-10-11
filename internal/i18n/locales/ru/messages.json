@@ -1943,6 +1943,131 @@
             "translation": "Отправить"
         },
         {
+            "id": "themes.import_title",
+            "message": "Import a theme",
+            "translation": "Импорт темы"
+        },
+        {
+            "id": "themes.import_hint",
+            "message": "Install a custom HTML theme from a .tar.gz archive.",
+            "translation": "Установите HTML-тему из архива .tar.gz."
+        },
+        {
+            "id": "themes.archive_label",
+            "message": "Theme archive",
+            "translation": "Архив темы"
+        },
+        {
+            "id": "themes.import_note",
+            "message": "Maximum 20 MiB. The archive must contain one named theme directory. Existing themes cannot be replaced.",
+            "translation": "Максимум 20 МиБ. Архив должен содержать одну именованную папку темы. Существующие темы нельзя заменить."
+        },
+        {
+            "id": "themes.import_sample_hint",
+            "message": "New to theme archives? Try the bundled sample first:",
+            "translation": "Впервые устанавливаете тему? Сначала попробуйте образец из репозитория:"
+        },
+        {
+            "id": "themes.import_sample_link",
+            "message": "download the Tiny Sample archive",
+            "translation": "скачать архив Tiny Sample"
+        },
+        {
+            "id": "themes.import_warning",
+            "message": "A theme runs with full site privileges: its templates and scripts can read and change anything on this site. Install archives only from sources you trust and have reviewed.",
+            "translation": "Тема работает с полными правами сайта: её шаблоны и скрипты могут читать и изменять всё на этом сайте. Устанавливайте только архивы из проверенных и доверенных источников."
+        },
+        {
+            "id": "themes.import_password_label",
+            "message": "Confirm with your password",
+            "translation": "Подтвердите паролем"
+        },
+        {
+            "id": "themes.import_password_hint",
+            "message": "Enter your current password to confirm this installation.",
+            "translation": "Введите текущий пароль, чтобы подтвердить установку."
+        },
+        {
+            "id": "themes.import_password_invalid",
+            "message": "Theme not imported: enter your current password to confirm the installation.",
+            "translation": "Тема не импортирована: введите текущий пароль, чтобы подтвердить установку."
+        },
+        {
+            "id": "themes.import_locked",
+            "message": "Theme not imported: too many failed password confirmations. Try again later.",
+            "translation": "Тема не импортирована: слишком много неудачных подтверждений пароля. Повторите попытку позже."
+        },
+        {
+            "id": "themes.import_password_unverified",
+            "message": "Theme not imported: your password could not be verified. Check the server log.",
+            "translation": "Тема не импортирована: не удалось проверить пароль. Подробности в журнале сервера."
+        },
+        {
+            "id": "themes.import_button",
+            "message": "Import theme",
+            "translation": "Импортировать тему"
+        },
+        {
+            "id": "themes.management_demo_readonly",
+            "message": "Importing and deleting themes is disabled in demo mode.",
+            "translation": "Импорт и удаление тем отключены в деморежиме."
+        },
+        {
+            "id": "themes.invalid_upload",
+            "message": "Upload a .tar.gz theme archive no larger than 20 MiB.",
+            "translation": "Загрузите архив темы .tar.gz размером не более 20 МиБ."
+        },
+        {
+            "id": "themes.archive_required",
+            "message": "Select a theme archive to upload.",
+            "translation": "Выберите архив темы для загрузки."
+        },
+        {
+            "id": "themes.import_failed",
+            "message": "Could not import theme: %s",
+            "translation": "Не удалось импортировать тему: %s"
+        },
+        {
+            "id": "themes.import_error",
+            "message": "Could not import the theme. Check the server log for details.",
+            "translation": "Не удалось импортировать тему. Подробности в журнале сервера."
+        },
+        {
+            "id": "themes.import_success",
+            "message": "Theme imported successfully. You can now activate it.",
+            "translation": "Тема импортирована. Теперь её можно активировать."
+        },
+        {
+            "id": "themes.delete_title",
+            "message": "Delete theme",
+            "translation": "Удалить тему"
+        },
+        {
+            "id": "themes.delete_confirm",
+            "message": "Delete the theme \"%s\"?",
+            "translation": "Удалить тему «%s»?"
+        },
+        {
+            "id": "themes.delete_note",
+            "message": "The theme files will be removed. Saved settings and widgets are kept for reinstallation.",
+            "translation": "Файлы темы будут удалены. Настройки и виджеты сохранятся для повторной установки."
+        },
+        {
+            "id": "themes.delete_failed",
+            "message": "Could not delete theme: %s",
+            "translation": "Не удалось удалить тему: %s"
+        },
+        {
+            "id": "themes.delete_error",
+            "message": "Could not delete the theme. Check the server log for details.",
+            "translation": "Не удалось удалить тему. Подробности в журнале сервера."
+        },
+        {
+            "id": "themes.delete_success",
+            "message": "Theme deleted successfully.",
+            "translation": "Тема удалена."
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Темы"

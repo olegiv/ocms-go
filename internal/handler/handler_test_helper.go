@@ -350,6 +350,7 @@ func testDB(t *testing.T) *sql.DB {
 			name TEXT NOT NULL,
 			key_hash TEXT NOT NULL,
 			key_prefix TEXT NOT NULL,
+			key_lookup TEXT,
 			permissions TEXT NOT NULL DEFAULT '[]',
 			last_used_at DATETIME,
 			expires_at DATETIME,

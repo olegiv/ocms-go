@@ -1771,7 +1771,7 @@ func run() error {
 	}
 	formsHandler.SetWebhookFormDataMode(cfg.WebhookFormDataMode)
 	slog.Info("form webhook payload mode configured", "mode", cfg.WebhookFormDataMode)
-	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager)
+	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager, eventService, loginProtection)
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
@@ -1989,7 +1989,9 @@ func run() error {
 			r.Post(handler.RouteWidgetsID+handler.RouteSuffixMove, widgetsHandler.MoveWidget)
 			r.Post(handler.RouteWidgets+handler.RouteSuffixReorder, widgetsHandler.Reorder)
 
-			// Register module admin routes (require editor role)
+			// Register module admin routes. They are mounted in the editor group
+			// so that modules which opt in (EditorAccessible) can serve editors;
+			// every other module is gated admin-only inside AdminRouteAll.
 			moduleRegistry.AdminRouteAll(r)
 		})
 
@@ -2017,6 +2019,8 @@ func run() error {
 			// Theme management routes (activation is admin only)
 			r.Get("/themes", themesHandler.List)
 			r.Post("/themes/activate", themesHandler.Activate)
+			r.Post("/themes/import", themesHandler.Import)
+			r.Post("/themes/{name}/delete", themesHandler.Delete)
 
 			// Module management routes
 			r.Get("/modules", modulesHandler.List)

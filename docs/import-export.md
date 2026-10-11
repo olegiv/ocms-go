@@ -168,7 +168,7 @@ so oCMS does not emit an archive it would refuse to restore.
 ### Import Process
 
 1. **Upload**: Select your export file
-2. **Validate**: Preview what will be imported
+2. **Validate**: Preview what will be imported. The uploaded file is kept on the server for two hours (the session idle timeout) while you review; after that, upload it again. The file is staged on the instance that received the upload, so a load-balanced deployment must route the validate and import steps of one session to the same instance (sticky sessions)
 3. **Configure**: Set conflict resolution strategy
 4. **Import**: Execute the import
 5. **Review**: Check the import summary

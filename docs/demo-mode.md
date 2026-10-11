@@ -18,6 +18,7 @@ When `OCMS_DEMO_MODE=true` is set, the following restrictions apply:
 | API key management | Full access | **Blocked** |
 | Webhook management | Full access | **Blocked** |
 | Module management | Full access | **Blocked** |
+| Theme import/deletion | Admin access | **Blocked** |
 | Cache clearing | Full access | **Blocked** |
 | Data export | Full access | **Blocked** |
 | Data import | Full access | **Blocked** |

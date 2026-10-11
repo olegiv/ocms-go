@@ -129,7 +129,7 @@ Secrets (set via `fly secrets set`):
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OCMS_SESSION_SECRET` | Yes | Min 32 bytes for session encryption |
+| `OCMS_SESSION_SECRET` | Yes | Min 32 bytes; keys CSRF protection (sessions are stored server-side) |
 
 ### Deployment Scripts
 

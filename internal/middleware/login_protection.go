@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -40,7 +41,7 @@ type LoginProtection struct {
 
 	// attemptsMu serializes the read-modify-write sequence in
 	// RecordFailedAttempt so concurrent failed logins for the same
-	// email cannot race and undercount (both reading count=N, both
+	// lockout key cannot race and undercount (both reading count=N, both
 	// writing count=N+1 when the true answer is N+2). oCMS's default
 	// deployment is single-instance; this mutex is sufficient for
 	// that model. A multi-instance deployment with a shared SQLite
@@ -49,7 +50,7 @@ type LoginProtection struct {
 	attemptsMu sync.Mutex
 
 	// Configuration
-	maxFailedAttempts int           // Lock account after this many failures
+	maxFailedAttempts int           // Lock the email+IP pair after this many failures; the account locks at accountLockoutMultiplier times this
 	lockoutDuration   time.Duration // Base lockout duration (doubles with each lockout)
 	attemptWindow     time.Duration // Window to count failed attempts
 }
@@ -126,17 +127,95 @@ func (lp *LoginProtection) CheckIPRateLimit(ip string) bool {
 	return lp.ipLimiters.get(ip).Allow()
 }
 
-// IsAccountLocked checks if an account is currently locked.
+// accountLockoutMultiplier scales the per-(email, IP) threshold up to the
+// account-wide one. A single attacker who knows an email address can no
+// longer lock its owner out with a handful of guesses from one address: the
+// usual threshold locks only that email+IP pair, and the account itself locks
+// for everyone only after this many times as many failures, which still puts
+// a hard stop on a distributed guessing campaign.
+const accountLockoutMultiplier = 5
+
+// lockoutKeySeparator joins the scope name, the email and the client IP in
+// a login_protection key. The email is raw form input, so control characters
+// are stripped from it before the key is built; together with the scope
+// prefix that makes it impossible for a crafted email to produce another
+// scope's key.
+const lockoutKeySeparator = "\x1f"
+
+// lockoutScope is one row of login_protection: the key it is stored under
+// and the failure count that locks it.
+type lockoutScope struct {
+	name      string
+	key       string
+	threshold int
+}
+
+// lockoutScopes returns the pair scope first and the account scope second.
+func (lp *LoginProtection) lockoutScopes(email, ip string) [2]lockoutScope {
+	email = stripControlCharacters(email)
+	ip = lockoutAddress(stripControlCharacters(ip))
+	return [2]lockoutScope{
+		{name: "email+ip", key: "pair" + lockoutKeySeparator + email + lockoutKeySeparator + ip, threshold: lp.maxFailedAttempts},
+		{name: "account", key: "account" + lockoutKeySeparator + email, threshold: lp.maxFailedAttempts * accountLockoutMultiplier},
+	}
+}
+
+// lockoutAddress normalises the client address for the pair scope. An IPv6
+// client typically owns a whole /64, so the pair key uses that prefix;
+// otherwise every address in the block would get its own five attempts.
+func lockoutAddress(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || addr.Is4() || addr.Is4In6() {
+		return ip
+	}
+	prefix, err := addr.Prefix(64)
+	if err != nil {
+		return ip
+	}
+	return prefix.String()
+}
+
+// stripControlCharacters removes every control character, including the
+// key separator, from a value that goes into a lockout key.
+func stripControlCharacters(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// IsAccountLocked reports whether logins for email from ip are currently
+// refused: either the email+IP pair or the whole account is locked.
 // Returns (locked, remainingTime). DB errors fail-open (return not-locked)
 // so a transient database outage does not lock out legitimate users.
-func (lp *LoginProtection) IsAccountLocked(email string) (bool, time.Duration) {
+func (lp *LoginProtection) IsAccountLocked(email, ip string) (bool, time.Duration) {
 	if lp.db == nil {
 		return false, 0
 	}
-	rec, err := store.New(lp.db).GetLoginProtection(context.Background(), email)
+	var remaining time.Duration
+	locked := false
+	scopes := lp.lockoutScopes(email, ip)
+	// Rows written before the keys were scoped are keyed by the raw email;
+	// an in-progress lockout among them is honoured until it expires.
+	legacy := lockoutScope{name: "legacy", key: stripControlCharacters(email)}
+	for _, scope := range []lockoutScope{scopes[0], scopes[1], legacy} {
+		if ok, left := lp.scopeLocked(scope, email); ok {
+			locked = true
+			remaining = max(remaining, left)
+		}
+	}
+	return locked, remaining
+}
+
+// scopeLocked reports whether one lockout key is currently locked and for
+// how much longer.
+func (lp *LoginProtection) scopeLocked(scope lockoutScope, email string) (bool, time.Duration) {
+	rec, err := store.New(lp.db).GetLoginProtection(context.Background(), scope.key)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			slog.Error("login_protection: get", "error", err, "email", email)
+			slog.Error("login_protection: get", "error", err, "email", email, "scope", scope.name)
 		}
 		return false, 0
 	}
@@ -146,46 +225,61 @@ func (lp *LoginProtection) IsAccountLocked(email string) (bool, time.Duration) {
 	return true, time.Until(rec.LockedUntil.Time)
 }
 
-// RecordFailedAttempt records a failed login attempt.
-// Returns (locked, lockDuration) if the account is now locked.
+// RecordFailedAttempt records a failed login attempt for email from ip in
+// both scopes. Returns (locked, lockDuration) if either scope is now locked.
 //
 // DB writes are best-effort: on error we log and return (false, 0) so the
 // handler still surfaces "invalid credentials" rather than a 5xx. A
 // sustained DB outage degrades to Argon2-only defense (~20ms per guess),
 // which is what the pre-persistence code already produced on restart.
-func (lp *LoginProtection) RecordFailedAttempt(email string) (bool, time.Duration) {
+func (lp *LoginProtection) RecordFailedAttempt(email, ip string) (bool, time.Duration) {
 	if lp.db == nil {
 		return false, 0
 	}
 	// Serialize the read-modify-write so two concurrent failed logins
-	// for the same email do not both read count=N and both write count=N+1
+	// for the same key do not both read count=N and both write count=N+1
 	// (losing the second increment). See attemptsMu comment on the struct.
 	lp.attemptsMu.Lock()
 	defer lp.attemptsMu.Unlock()
 
+	var duration time.Duration
+	locked := false
+	for _, scope := range lp.lockoutScopes(email, ip) {
+		if ok, d := lp.recordScopeFailure(scope, email, ip); ok {
+			locked = true
+			duration = max(duration, d)
+		}
+	}
+	return locked, duration
+}
+
+// recordScopeFailure applies one failure to a single lockout key and reports
+// whether that key just locked, and for how long.
+func (lp *LoginProtection) recordScopeFailure(scope lockoutScope, email, ip string) (bool, time.Duration) {
 	ctx := context.Background()
 	q := store.New(lp.db)
 	now := time.Now()
+	logAttrs := []any{"email", email, "ip", ip, "scope", scope.name}
 
-	rec, err := q.GetLoginProtection(ctx, email)
+	rec, err := q.GetLoginProtection(ctx, scope.key)
 	if errors.Is(err, sql.ErrNoRows) {
-		// First recorded failure for this email.
+		// First recorded failure for this key.
 		if err := q.UpsertLoginProtection(ctx, store.UpsertLoginProtectionParams{
-			Email:         email,
+			Email:         scope.key,
 			AttemptCount:  1,
 			FirstFailedAt: now,
 			LockedUntil:   sql.NullTime{},
 			LockoutCount:  0,
 			UpdatedAt:     now,
 		}); err != nil {
-			slog.Error("login_protection: upsert initial", "error", err, "email", email)
+			slog.Error("login_protection: upsert initial", append(logAttrs, "error", err)...)
 		} else {
-			slog.Debug("login attempt recorded", "email", email, "count", 1)
+			slog.Debug("login attempt recorded", append(logAttrs, "count", 1)...)
 		}
 		return false, 0
 	}
 	if err != nil {
-		slog.Error("login_protection: get on record", "error", err, "email", email)
+		slog.Error("login_protection: get on record", append(logAttrs, "error", err)...)
 		return false, 0
 	}
 
@@ -193,25 +287,25 @@ func (lp *LoginProtection) RecordFailedAttempt(email string) (bool, time.Duratio
 	// historical lockout_count so exponential backoff still stiffens.
 	if now.Sub(rec.FirstFailedAt) > lp.attemptWindow {
 		if err := q.UpsertLoginProtection(ctx, store.UpsertLoginProtectionParams{
-			Email:         email,
+			Email:         scope.key,
 			AttemptCount:  1,
 			FirstFailedAt: now,
 			LockedUntil:   sql.NullTime{},
 			LockoutCount:  rec.LockoutCount,
 			UpdatedAt:     now,
 		}); err != nil {
-			slog.Error("login_protection: reset window", "error", err, "email", email)
+			slog.Error("login_protection: reset window", append(logAttrs, "error", err)...)
 		} else {
-			slog.Debug("login attempt window reset", "email", email, "count", 1)
+			slog.Debug("login attempt window reset", append(logAttrs, "count", 1)...)
 		}
 		return false, 0
 	}
 
 	newCount := rec.AttemptCount + 1
-	slog.Debug("login attempt recorded", "email", email, "count", newCount)
+	slog.Debug("login attempt recorded", append(logAttrs, "count", newCount)...)
 
-	// Lock the account if we've crossed the threshold.
-	if int(newCount) >= lp.maxFailedAttempts {
+	// Lock the scope if we've crossed its threshold.
+	if int(newCount) >= scope.threshold {
 		lockDuration := lp.lockoutDuration
 		for range rec.LockoutCount {
 			lockDuration *= 2
@@ -222,74 +316,79 @@ func (lp *LoginProtection) RecordFailedAttempt(email string) (bool, time.Duratio
 		}
 		lockedUntil := now.Add(lockDuration)
 		if err := q.UpsertLoginProtection(ctx, store.UpsertLoginProtectionParams{
-			Email:         email,
+			Email:         scope.key,
 			AttemptCount:  0, // Reset count on lockout; next failure starts over.
 			FirstFailedAt: rec.FirstFailedAt,
 			LockedUntil:   sql.NullTime{Time: lockedUntil, Valid: true},
 			LockoutCount:  rec.LockoutCount + 1,
 			UpdatedAt:     now,
 		}); err != nil {
-			slog.Error("login_protection: lock", "error", err, "email", email)
+			slog.Error("login_protection: lock", append(logAttrs, "error", err)...)
 			return false, 0
 		}
-		slog.Warn("account locked due to failed attempts",
-			"email", email,
-			"lockouts", rec.LockoutCount+1,
-			"duration", lockDuration,
-		)
+		slog.Warn("login locked due to failed attempts",
+			append(logAttrs, "lockouts", rec.LockoutCount+1, "duration", lockDuration)...)
 		return true, lockDuration
 	}
 
 	// Under the threshold: just increment.
 	if err := q.UpsertLoginProtection(ctx, store.UpsertLoginProtectionParams{
-		Email:         email,
+		Email:         scope.key,
 		AttemptCount:  newCount,
 		FirstFailedAt: rec.FirstFailedAt,
 		LockedUntil:   rec.LockedUntil,
 		LockoutCount:  rec.LockoutCount,
 		UpdatedAt:     now,
 	}); err != nil {
-		slog.Error("login_protection: increment", "error", err, "email", email)
+		slog.Error("login_protection: increment", append(logAttrs, "error", err)...)
 	}
 	return false, 0
 }
 
-// RecordSuccessfulLogin clears failed attempt tracking for an account.
+// RecordSuccessfulLogin clears failed attempt tracking for an account in
+// both scopes.
 //
 // Holds the same attemptsMu as RecordFailedAttempt so a concurrent failed
 // attempt cannot read state, have it deleted underneath, and then re-upsert
 // a stale counter — which would cause "successful login clears attempts"
 // to silently regress and potentially re-lock the user. See attemptsMu
 // comment on the struct.
-func (lp *LoginProtection) RecordSuccessfulLogin(email string) {
+func (lp *LoginProtection) RecordSuccessfulLogin(email, ip string) {
 	if lp.db == nil {
 		return
 	}
 	lp.attemptsMu.Lock()
 	defer lp.attemptsMu.Unlock()
 
-	if err := store.New(lp.db).DeleteLoginProtection(context.Background(), email); err != nil {
-		slog.Error("login_protection: delete", "error", err, "email", email)
-		return
+	// The two rows are independent: a failed delete on one must not leave
+	// the other's counter in place, so every scope is attempted.
+	for _, scope := range lp.lockoutScopes(email, ip) {
+		if err := store.New(lp.db).DeleteLoginProtection(context.Background(), scope.key); err != nil {
+			slog.Error("login_protection: delete", "error", err, "email", email, "scope", scope.name)
+		}
 	}
-	slog.Debug("login attempts cleared", "email", email)
+	slog.Debug("login attempts cleared", "email", email, "ip", ip)
 }
 
-// GetRemainingAttempts returns the number of remaining attempts before lockout.
-func (lp *LoginProtection) GetRemainingAttempts(email string) int {
+// GetRemainingAttempts returns the number of remaining attempts before the
+// next lockout in either scope.
+func (lp *LoginProtection) GetRemainingAttempts(email, ip string) int {
 	if lp.db == nil {
 		return lp.maxFailedAttempts
 	}
-	rec, err := store.New(lp.db).GetLoginProtection(context.Background(), email)
-	if err != nil {
-		return lp.maxFailedAttempts
-	}
-	if time.Since(rec.FirstFailedAt) > lp.attemptWindow {
-		return lp.maxFailedAttempts
-	}
-	remaining := lp.maxFailedAttempts - int(rec.AttemptCount)
-	if remaining < 0 {
-		return 0
+	remaining := lp.maxFailedAttempts
+	for _, scope := range lp.lockoutScopes(email, ip) {
+		rec, err := store.New(lp.db).GetLoginProtection(context.Background(), scope.key)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				slog.Error("login_protection: get remaining", "error", err, "email", email, "scope", scope.name)
+			}
+			continue
+		}
+		if time.Since(rec.FirstFailedAt) > lp.attemptWindow {
+			continue
+		}
+		remaining = min(remaining, max(scope.threshold-int(rec.AttemptCount), 0))
 	}
 	return remaining
 }

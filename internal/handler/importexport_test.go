@@ -192,15 +192,17 @@ func TestImportExportHandlerRejectsMediaFilesForJSONSession(t *testing.T) {
 	req = requestWithSession(sm, req)
 	req = addUserToContext(req, &user)
 	sm.Put(req.Context(), "import_is_zip", false)
-	sm.Put(req.Context(), "import_data", string(encoded))
+	if err := h.stageImportPayload(req.Context(), encoded); err != nil {
+		t.Fatal(err)
+	}
 
 	recorder := httptest.NewRecorder()
 	h.Import(recorder, req)
 	if message := sm.GetString(req.Context(), "flash_error"); !strings.Contains(message, "media file import requires a ZIP archive") {
 		t.Fatalf("flash_error = %q", message)
 	}
-	if sm.GetString(req.Context(), "import_data") == "" {
-		t.Fatal("rejected JSON payload was removed from the session")
+	if _, staged, err := h.loadStagedImport(req.Context()); err != nil || !staged {
+		t.Fatalf("rejected JSON payload was removed from the staging area (staged=%v, err=%v)", staged, err)
 	}
 	var pageCount int
 	if err := db.QueryRowContext(req.Context(), `SELECT COUNT(*) FROM pages WHERE slug = ?`, "json-media-files").Scan(&pageCount); err != nil {

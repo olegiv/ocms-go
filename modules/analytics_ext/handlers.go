@@ -20,6 +20,18 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "analytics_ext.title"), URL: "/admin/external-analytics", Active: true},
 	})
+	// A stored value that fails the format check is not rendered on the site;
+	// tell the administrator on the page they would use to fix it.
+	var warnings []string
+	for _, key := range validateTrackerFormats(m.settings) {
+		warnings = append(warnings, i18n.T(lang, key))
+	}
+	if len(warnings) > 0 {
+		// BuildPageContext already consumed the session flash, so the warning
+		// goes on this page context rather than into the next request's flash.
+		pc.Flash = strings.TrimSpace(pc.Flash + " " + strings.Join(warnings, " "))
+		pc.FlashType = "error"
+	}
 	viewData := AnalyticsExtViewData{
 		GA4Enabled:       m.settings.GA4Enabled,
 		GA4MeasurementID: m.settings.GA4MeasurementID,
@@ -85,6 +97,10 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		if newSettings.MatomoSiteID == "" {
 			validationErrors = append(validationErrors, i18n.T(lang, "analytics_ext.error_matomo_site_id_required"))
 		}
+	}
+
+	for _, key := range validateTrackerFormats(newSettings) {
+		validationErrors = append(validationErrors, i18n.T(lang, key))
 	}
 
 	if len(validationErrors) > 0 {

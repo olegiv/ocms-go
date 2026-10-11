@@ -287,7 +287,7 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 
 ### Admin Routes
 
-Registered via `RegisterAdminRoutes(r chi.Router)`. These require authentication and are protected by the admin middleware chain:
+Registered via `RegisterAdminRoutes(r chi.Router)`. These require authentication and are protected by the admin middleware chain. The registry mounts them **admin-only**: an editor who requests a module admin route receives `403 Forbidden` unless the module opts in by implementing `module.EditorAccessible`:
 
 ```go
 func (m *Module) RegisterAdminRoutes(r chi.Router) {
@@ -299,10 +299,19 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 
 Admin routes are prefixed with `/admin/` automatically by the registry.
 
+```go
+// EditorAdminRoutes lets editors use this module's admin routes. Only opt in
+// when every handler is safe for editors; the sidebar still shows module
+// pages to administrators only.
+func (m *Module) EditorAdminRoutes() bool { return true }
+```
+
+A drift test in `cmd/ocms` (`TestModuleAdminRoutesDenyEditorsUnlessAllowlisted`) keeps an explicit list of the modules that opt in; adding a module to it is a deliberate access-control decision.
+
 ### Route Middleware
 
 - Public routes get module active-status checking (returns 404 if module is inactive)
-- Admin routes get authentication + active-status checking (redirects to modules list if inactive)
+- Admin routes get authentication, the admin-only gate (unless the module opts in for editors) and active-status checking (redirects to modules list if inactive)
 
 ## Database Migrations
 

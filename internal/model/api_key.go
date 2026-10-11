@@ -6,8 +6,10 @@ package model
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"time"
 
@@ -64,9 +66,9 @@ type APIKey struct {
 // Reduced from 8 to 4 to preserve more entropy in the key.
 const APIKeyPrefixLength = 4
 
-// GenerateAPIKey generates a new random API key.
+// GenerateAPIAccessKey generates a new random API key.
 // Returns the raw key (to show user once) and the key prefix.
-func GenerateAPIKey() (rawKey string, prefix string, err error) {
+func GenerateAPIAccessKey() (rawKey string, prefix string, err error) {
 	// Generate 32 random bytes (256 bits of entropy)
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
@@ -93,6 +95,16 @@ func HashAPIKey(key string) (string, error) {
 func CheckAPIKeyHash(key, encodedHash string) bool {
 	ok, _ := auth.VerifyArgon2(key, encodedHash)
 	return ok
+}
+
+// APIKeyLookup returns the exact-match lookup value stored next to the
+// Argon2 hash: the hex SHA-256 of the raw key. Keys carry 256 bits of
+// entropy, so the digest cannot be reversed or guessed, and it lets
+// authentication find the single candidate row without touching the Argon2
+// verifier for requests that do not hold the key.
+func APIKeyLookup(rawKey string) string {
+	sum := sha256.Sum256([]byte(rawKey))
+	return hex.EncodeToString(sum[:])
 }
 
 // ExtractAPIKeyPrefix extracts the prefix from a raw API key.

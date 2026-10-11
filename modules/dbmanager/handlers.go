@@ -6,6 +6,8 @@ package dbmanager
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -17,6 +19,11 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
+// maxResultRows caps how many rows of a SELECT are read into memory and
+// rendered. A larger result is cut off and flagged as truncated instead of
+// building an unbounded page from the whole table.
+const maxResultRows = 1000
+
 // QueryResult contains the result of a SQL query execution.
 type QueryResult struct {
 	Columns      []string
@@ -25,6 +32,7 @@ type QueryResult struct {
 	ExecutionMs  int64
 	Error        string
 	IsSelect     bool
+	Truncated    bool // Rows stopped at maxResultRows
 }
 
 // QueryHistoryItem represents a single query execution in history.
@@ -36,6 +44,7 @@ type QueryHistoryItem struct {
 	RowsAffected  int
 	ExecutionTime int
 	Error         sql.NullString
+	Truncated     bool
 }
 
 // DashboardData contains data for the database manager dashboard template.
@@ -131,25 +140,42 @@ func (m *Module) executeQuery(ctx context.Context, query string, userID int64) *
 		IsSelect: isSelectQuery(query),
 	}
 
+	// The statement runs under its own deadline; history logging below uses
+	// the request context so a timed-out query is still recorded.
+	execCtx, cancel := context.WithTimeout(ctx, m.queryTimeout)
+	defer cancel()
+
+	// fail records a failed statement, replacing the driver's wording for a
+	// deadline with one that names the limit.
+	fail := func(err error) *QueryResult {
+		if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
+			err = fmt.Errorf("query cancelled after %s", m.queryTimeout)
+			m.ctx.Logger.Warn("dbmanager query cancelled by timeout", "user_id", userID, "query_length", len(query), "timeout", m.queryTimeout)
+		}
+		result.Error = err.Error()
+		m.logQueryExecution(ctx, query, userID, 0, false, time.Since(start), err)
+		return result
+	}
+
 	if result.IsSelect {
-		rows, err := m.ctx.DB.QueryContext(ctx, query)
+		rows, err := m.ctx.DB.QueryContext(execCtx, query)
 		if err != nil {
-			result.Error = err.Error()
-			m.logQueryExecution(ctx, query, userID, 0, time.Since(start), err)
-			return result
+			return fail(err)
 		}
 		defer func() { _ = rows.Close() }()
 
 		columns, err := rows.Columns()
 		if err != nil {
-			result.Error = err.Error()
-			m.logQueryExecution(ctx, query, userID, 0, time.Since(start), err)
-			return result
+			return fail(err)
 		}
 		result.Columns = columns
 
 		var resultRows [][]string
 		for rows.Next() {
+			if len(resultRows) >= maxResultRows {
+				result.Truncated = true
+				break
+			}
 			values := make([]any, len(columns))
 			valuePtrs := make([]any, len(columns))
 			for i := range values {
@@ -157,9 +183,7 @@ func (m *Module) executeQuery(ctx context.Context, query string, userID int64) *
 			}
 
 			if err := rows.Scan(valuePtrs...); err != nil {
-				result.Error = err.Error()
-				m.logQueryExecution(ctx, query, userID, 0, time.Since(start), err)
-				return result
+				return fail(err)
 			}
 
 			row := make([]string, len(columns))
@@ -170,42 +194,44 @@ func (m *Module) executeQuery(ctx context.Context, query string, userID int64) *
 		}
 
 		if err := rows.Err(); err != nil {
-			result.Error = err.Error()
-			m.logQueryExecution(ctx, query, userID, 0, time.Since(start), err)
-			return result
+			return fail(err)
 		}
+		// A truncated result still holds its connection; release it before
+		// the history insert asks the pool for another one.
+		_ = rows.Close()
 
 		result.Rows = resultRows
 		result.RowsAffected = int64(len(resultRows))
 	} else {
-		res, err := m.ctx.DB.ExecContext(ctx, query)
+		res, err := m.ctx.DB.ExecContext(execCtx, query)
 		if err != nil {
-			result.Error = err.Error()
-			m.logQueryExecution(ctx, query, userID, 0, time.Since(start), err)
-			return result
+			return fail(err)
 		}
 
-		affected, _ := res.RowsAffected()
+		affected, err := res.RowsAffected()
+		if err != nil {
+			m.ctx.Logger.Warn("dbmanager: rows affected unavailable", "error", err)
+		}
 		result.RowsAffected = affected
 	}
 
 	result.ExecutionMs = time.Since(start).Milliseconds()
-	m.logQueryExecution(ctx, query, userID, int(result.RowsAffected), time.Since(start), nil)
+	m.logQueryExecution(ctx, query, userID, int(result.RowsAffected), result.Truncated, time.Since(start), nil)
 
 	return result
 }
 
 // logQueryExecution logs a query execution to the history table.
-func (m *Module) logQueryExecution(ctx context.Context, query string, userID int64, rowsAffected int, duration time.Duration, execErr error) {
+func (m *Module) logQueryExecution(ctx context.Context, query string, userID int64, rowsAffected int, truncated bool, duration time.Duration, execErr error) {
 	var errStr sql.NullString
 	if execErr != nil {
 		errStr = sql.NullString{String: execErr.Error(), Valid: true}
 	}
 
 	_, err := m.ctx.DB.ExecContext(ctx, `
-		INSERT INTO dbmanager_query_history (query, user_id, rows_affected, execution_time_ms, error)
-		VALUES (?, ?, ?, ?, ?)
-	`, query, userID, rowsAffected, duration.Milliseconds(), errStr)
+		INSERT INTO dbmanager_query_history (query, user_id, rows_affected, truncated, execution_time_ms, error)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, query, userID, rowsAffected, truncated, duration.Milliseconds(), errStr)
 	if err != nil {
 		m.ctx.Logger.Error("failed to log query execution", "error", err)
 	}
@@ -214,7 +240,7 @@ func (m *Module) logQueryExecution(ctx context.Context, query string, userID int
 // getQueryHistory retrieves the most recent query executions.
 func (m *Module) getQueryHistory(ctx context.Context, limit int) ([]QueryHistoryItem, error) {
 	rows, err := m.ctx.DB.QueryContext(ctx, `
-		SELECT id, query, user_id, executed_at, rows_affected, execution_time_ms, error
+		SELECT id, query, user_id, executed_at, rows_affected, truncated, execution_time_ms, error
 		FROM dbmanager_query_history
 		ORDER BY executed_at DESC
 		LIMIT ?
@@ -233,6 +259,7 @@ func (m *Module) getQueryHistory(ctx context.Context, limit int) ([]QueryHistory
 			&item.UserID,
 			&item.ExecutedAt,
 			&item.RowsAffected,
+			&item.Truncated,
 			&item.ExecutionTime,
 			&item.Error,
 		); err != nil {

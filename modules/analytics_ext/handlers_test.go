@@ -181,3 +181,26 @@ func TestHandleSaveSettings_Success(t *testing.T) {
 		t.Errorf("GA4MeasurementID = %q, want G-TESTSAVE01", m.settings.GA4MeasurementID)
 	}
 }
+
+// TestHandleDashboard_WarnsOnTheCurrentRequest fails when the warning about
+// a malformed stored tracker value is handed to the session flash, which
+// BuildPageContext has already consumed for this request: the warning must
+// be in the dashboard response itself, not in the next page view.
+func TestHandleDashboard_WarnsOnTheCurrentRequest(t *testing.T) {
+	m, cleanup := testModuleWithRenderer(t)
+	defer cleanup()
+	m.settings.GA4Enabled = true
+	m.settings.GA4MeasurementID = "G-X');alert(1);//"
+
+	req := withUser(httptest.NewRequest(http.MethodGet, "/admin/external-analytics", nil), store.User{ID: 1, Email: "admin@example.com", Role: "admin"})
+	w := httptest.NewRecorder()
+	m.handleDashboard(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	// Translations are not initialised in this harness, so the key renders as itself.
+	if !strings.Contains(w.Body.String(), errGA4IDInvalid) {
+		t.Fatalf("dashboard response does not carry the malformed-setting warning %q", errGA4IDInvalid)
+	}
+}

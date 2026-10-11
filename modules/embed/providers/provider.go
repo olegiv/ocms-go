@@ -19,6 +19,20 @@ type RenderContext struct {
 	IssueProxyToken func() (token string, expiresAt time.Time, err error)
 }
 
+// FieldType names the form control a SettingField renders as.
+type FieldType string
+
+// Field types understood by the provider settings form.
+const (
+	FieldText     FieldType = "text"
+	FieldPassword FieldType = "password"
+	FieldTextarea FieldType = "textarea"
+	FieldURL      FieldType = "url"
+	FieldColor    FieldType = "color"
+	FieldSelect   FieldType = "select"
+	FieldCheckbox FieldType = "checkbox"
+)
+
 // SettingField defines a configuration field for a provider.
 type SettingField struct {
 	// ID is the unique identifier for the field (used in JSON storage)
@@ -30,8 +44,10 @@ type SettingField struct {
 	// Description provides additional context for the field
 	Description string
 
-	// Type is the field type: "text", "textarea", "url", "color", "select", "checkbox"
-	Type string
+	// Type selects the form control. A FieldPassword field is rendered
+	// masked, its stored value is never written back into the form, and an
+	// empty submission keeps the stored value.
+	Type FieldType
 
 	// Options are the available choices for "select" type fields
 	Options []SelectOption
@@ -39,8 +55,13 @@ type SettingField struct {
 	// Required indicates if the field must have a value when enabled
 	Required bool
 
-	// Default is the default value for the field
+	// Default is the default value for the field. For a "password" field it
+	// is always empty when rendered; the stored secret never reaches the view.
 	Default string
+
+	// HasStoredValue tells a "password" field that a secret is already saved,
+	// so the form can show a placeholder and relax the required attribute.
+	HasStoredValue bool
 
 	// Placeholder is the placeholder text for input fields
 	Placeholder string

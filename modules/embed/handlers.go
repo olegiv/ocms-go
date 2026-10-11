@@ -98,13 +98,7 @@ func (m *Module) handleProviderSettings(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// Get schema with current values
-	schema := provider.SettingsSchema()
-	for i := range schema {
-		if val, ok := ps.Settings[schema[i].ID]; ok {
-			schema[i].Default = val
-		}
-	}
+	schema := schemaWithStoredValues(provider.SettingsSchema(), ps.Settings)
 
 	viewData := EmbedProviderViewData{
 		ProviderID:   provider.ID(),
@@ -145,10 +139,26 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Build settings from form
+	// Load existing settings to preserve position and stored secrets. A blank
+	// password field means "keep the saved key", so a load failure must stop
+	// the save instead of silently writing an empty key.
+	existingPS, err := loadProviderSettings(m.ctx.DB, ctx.ProviderID)
+	if err != nil {
+		m.ctx.Logger.Error("failed to load existing provider settings", "error", err, "provider", ctx.ProviderID)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_save"), "error")
+		http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
+		return
+	}
+
+	// Build settings from form. A password field is never echoed back into
+	// the form, so an empty submission keeps the stored value.
 	settings := make(map[string]string)
 	for _, field := range ctx.Provider.SettingsSchema() {
-		settings[field.ID] = strings.TrimSpace(r.FormValue(field.ID))
+		value := strings.TrimSpace(r.FormValue(field.ID))
+		if value == "" && field.Type == providers.FieldPassword && existingPS != nil {
+			value = existingPS.Settings[field.ID]
+		}
+		settings[field.ID] = value
 	}
 
 	isEnabled := r.FormValue("is_enabled") == "1"
@@ -162,8 +172,6 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	// Load existing settings to preserve position
-	existingPS, _ := loadProviderSettings(m.ctx.DB, ctx.ProviderID)
 	position := 0
 	oldEndpoint := ""
 	if existingPS != nil {
@@ -478,4 +486,22 @@ func (m *Module) validateProviderEnableSettings(providerID string, provider prov
 		return err
 	}
 	return m.validateProviderRuntimePolicy(providerID, settings)
+}
+
+// schemaWithStoredValues fills the schema with the saved settings for the
+// form. A password field only learns that a value exists; the secret itself
+// never enters the view data, so no template branch can echo it.
+func schemaWithStoredValues(schema []providers.SettingField, stored map[string]string) []providers.SettingField {
+	for i := range schema {
+		val, ok := stored[schema[i].ID]
+		if !ok {
+			continue
+		}
+		if schema[i].Type == providers.FieldPassword {
+			schema[i].HasStoredValue = val != ""
+			continue
+		}
+		schema[i].Default = val
+	}
+	return schema
 }

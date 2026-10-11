@@ -119,7 +119,7 @@ func (m *Manager) loadExternalThemes() error {
 	}
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), importPrefix) || strings.HasPrefix(entry.Name(), deletePrefix) {
 			continue
 		}
 
@@ -537,6 +537,7 @@ type Info struct {
 	Config     Config
 	IsActive   bool
 	IsEmbedded bool
+	CanDelete  bool
 }
 
 // ListThemesWithActive returns all themes with active status, sorted by name.
@@ -551,6 +552,7 @@ func (m *Manager) ListThemesWithActive() []Info {
 			Config:     theme.Config,
 			IsActive:   m.activeTheme != nil && m.activeTheme.Name == name,
 			IsEmbedded: theme.IsEmbedded,
+			CanDelete:  themeNamePattern.MatchString(name) && !theme.IsEmbedded && !m.hasEmbeddedTheme(name) && (m.activeTheme == nil || m.activeTheme.Name != name),
 		})
 	}
 

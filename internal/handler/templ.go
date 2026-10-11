@@ -933,6 +933,7 @@ func convertThemeViewItems(themes []theme.Info) []adminviews.ThemeViewItem {
 			ConfigScreenshot:  t.Config.Screenshot,
 			IsActive:          t.IsActive,
 			IsEmbedded:        t.IsEmbedded,
+			CanDelete:         t.CanDelete,
 			HasSettings:       len(t.Config.Settings) > 0,
 			SettingsURL:       fmt.Sprintf("/admin/themes/%s/settings", t.Name),
 		}

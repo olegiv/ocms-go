@@ -282,6 +282,11 @@ func (m *Module) AdminURL() string {
 	return "/admin/internal-analytics"
 }
 
+// EditorAdminRoutes opts the module in for editors: it reports first-party
+// statistics that editors use, and every handler re-checks the role through
+// requireEditorAuth.
+func (m *Module) EditorAdminRoutes() bool { return true }
+
 // SidebarLabel returns the display label for the admin sidebar.
 func (m *Module) SidebarLabel() string {
 	return "Analytics"

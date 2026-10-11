@@ -14,15 +14,28 @@ import (
 	"github.com/olegiv/ocms-go/modules/embed/providers"
 )
 
-func inputType(fieldType string) string {
-	if fieldType == "url" {
+func inputType(fieldType providers.FieldType) string {
+	switch fieldType {
+	case providers.FieldURL:
 		return "url"
+	case providers.FieldPassword:
+		return "password"
 	}
 	return "text"
 }
 
-func maxLenForType(fieldType string) string {
-	if fieldType == "url" {
+// secretPlaceholder tells the administrator a secret is stored without
+// revealing it; an empty submission keeps that value. The handler never puts
+// the secret into Default, so the view has nothing to leak.
+func secretPlaceholder(field providers.SettingField) string {
+	if field.HasStoredValue {
+		return "•••••••• (saved; leave blank to keep)"
+	}
+	return field.Placeholder
+}
+
+func maxLenForType(fieldType providers.FieldType) string {
+	if fieldType == providers.FieldURL {
 		return "2048"
 	}
 	return "255"
@@ -201,6 +214,18 @@ templ EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) 
 									Rows:        4,
 									Attributes: templ.Attributes{
 										"maxlength": maxLenForType(field.Type),
+									},
+								})
+							} else if field.Type == "password" {
+								@input.Input(input.Props{
+									ID:          field.ID,
+									Name:        field.ID,
+									Type:        input.TypePassword,
+									Placeholder: secretPlaceholder(field),
+									Attributes: templ.Attributes{
+										"maxlength":    maxLenForType(field.Type),
+										"autocomplete": "new-password",
+										"required":     field.Required && !field.HasStoredValue,
 									},
 								})
 							} else if field.Type != "checkbox" {

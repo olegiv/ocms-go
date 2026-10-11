@@ -44,15 +44,16 @@ Account lockout prevents password guessing attacks by temporarily blocking login
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| Max Failed Attempts | 5 | Number of failures before lockout |
+| Max Failed Attempts | 5 | Failures from one address before that email + address pair is locked |
+| Account-wide Threshold | 25 | Failures across all addresses before the account is locked for everyone |
 | Attempt Window | 15 minutes | Time window for counting failures |
 | Base Lockout Duration | 15 minutes | Initial lockout period |
 | Max Lockout Duration | 24 hours | Maximum lockout after repeated lockouts |
 
 ### How It Works
 
-1. Failed login attempts are tracked per email address
-2. After 5 failed attempts within 15 minutes, the account is locked
+1. Failed login attempts are tracked per email address **and** client address, and separately per email address alone
+2. After 5 failed attempts within 15 minutes from one address, that email + address pair is locked; the account owner can still sign in from another address. For IPv6 clients the "address" is the /64 block. After 25 failed attempts within the window across all addresses, the account is locked for everyone, which stops a distributed guessing campaign; an attacker with many addresses therefore gets at most five times the single-address budget before the account lock, and that lock doubles with each repetition. Knowing a victim's email is not enough to lock them out from their own connection.
 3. Lockout duration doubles with each subsequent lockout (exponential backoff):
    - 1st lockout: 15 minutes
    - 2nd lockout: 30 minutes
@@ -72,8 +73,12 @@ Account lockout prevents password guessing attacks by temporarily blocking login
 ### Security Features
 
 - **Non-existent email protection**: Failed attempts are tracked even for non-existent email addresses to prevent user enumeration attacks
-- **Successful login reset**: A successful login clears the failed attempt counter
+- **Successful login reset**: A successful login clears the failed attempt counters in both scopes
 - **Automatic cleanup**: Stale tracking entries are automatically removed
+
+## Session Lifetime
+
+Sessions are stored server-side; the session row holds the data and the cookie only carries its token. A session ends after **24 hours** regardless of activity, and after **2 hours** without any request; each request renews the idle window. This applies to every session, admin and public alike.
 
 ## Event Logging
 
@@ -146,8 +151,8 @@ The Argon2 parameter-upgrade rehash that runs on a successful login uses a separ
 
 Before exposing an oCMS instance to the public internet, work through this list:
 
-1. **Rotate the seed admin password.** When `OCMS_DO_SEED=true` is used (typically on first boot), oCMS provisions `admin@example.com` with the well-known password `changeme1234`. Log in and change both the email and password on `/admin/users` before anything else. The seed password is public knowledge — anyone who reaches the login page can try it. Production startup blocks `OCMS_DO_SEED=true` unless demo mode is also enabled, so the exposure window is limited to initial-setup runs, but the first admin session still has to replace these credentials.
-2. Set `OCMS_SESSION_SECRET` to a freshly generated 32-byte value (e.g. `openssl rand -base64 32`). Startup already rejects the known weak defaults, but rotate on each environment.
+1. **Rotate the seed admin password.** When `OCMS_DO_SEED=true` is used (typically on first boot), oCMS provisions `admin@example.com` with the well-known password `changeme1234`. Log in and change both the email and password on `/admin/users` before anything else. The seed password is public knowledge — anyone who reaches the login page can try it. Production startup blocks `OCMS_DO_SEED=true` unless demo mode is also enabled, so the exposure window is limited to initial-setup runs, but the first admin session still has to replace these credentials. Once any administrator account exists, seeding no longer recreates `admin@example.com`, so renaming or replacing it is permanent even if the flag stays on.
+2. Set `OCMS_SESSION_SECRET` to a freshly generated 32-byte value (e.g. `openssl rand -base64 32`). Startup rejects known defaults, placeholder values copied from the example files or docs, and (in production) the public test-suite secret, but rotate on each environment.
 3. Set `OCMS_ENV=production` so security defaults apply (stricter CSRF, HSTS, seed-disabled, etc.).
 4. Configure `OCMS_TRUSTED_PROXIES` if running behind a reverse proxy — otherwise client IPs used by rate limiting and account lockout will be the proxy's address, collapsing every attacker into one bucket. See `docs/reverse-proxy.md`.
 5. Enable HSTS preload (`OCMS_HSTS_PRELOAD=true`) once you're certain every subdomain has a valid TLS certificate; submit the domain at <https://hstspreload.org>. Details in `docs/reverse-proxy.md`.

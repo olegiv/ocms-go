@@ -181,7 +181,7 @@ func TestMigratorAllowlistEnvNameMatchesConfig(t *testing.T) {
 // development, on in production unless explicitly disabled.
 func TestRequireMigratorAllowedDBHostsDefaultsOnInProduction(t *testing.T) {
 	t.Setenv("OCMS_ENV", "production")
-	t.Setenv("OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	t.Setenv("OCMS_SESSION_SECRET", "k9Qw2xZt7Lp4Vn8sRb3Yh6Mc1Ud5Ef0Gj2Hx4Nz8Tq=") // the test-suite secret is refused in production
 	// Satisfy the other production gates so Load reaches ours.
 	t.Setenv("OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
 	t.Setenv("OCMS_API_ALLOWED_CIDRS", "127.0.0.1/32")

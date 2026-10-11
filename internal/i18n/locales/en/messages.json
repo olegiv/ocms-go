@@ -1943,6 +1943,131 @@
             "translation": "Submit"
         },
         {
+            "id": "themes.import_title",
+            "message": "Import a theme",
+            "translation": "Import a theme"
+        },
+        {
+            "id": "themes.import_hint",
+            "message": "Install a custom HTML theme from a .tar.gz archive.",
+            "translation": "Install a custom HTML theme from a .tar.gz archive."
+        },
+        {
+            "id": "themes.archive_label",
+            "message": "Theme archive",
+            "translation": "Theme archive"
+        },
+        {
+            "id": "themes.import_note",
+            "message": "Maximum 20 MiB. The archive must contain one named theme directory. Existing themes cannot be replaced.",
+            "translation": "Maximum 20 MiB. The archive must contain one named theme directory. Existing themes cannot be replaced."
+        },
+        {
+            "id": "themes.import_sample_hint",
+            "message": "New to theme archives? Try the bundled sample first:",
+            "translation": "New to theme archives? Try the bundled sample first:"
+        },
+        {
+            "id": "themes.import_sample_link",
+            "message": "download the Tiny Sample archive",
+            "translation": "download the Tiny Sample archive"
+        },
+        {
+            "id": "themes.import_warning",
+            "message": "A theme runs with full site privileges: its templates and scripts can read and change anything on this site. Install archives only from sources you trust and have reviewed.",
+            "translation": "A theme runs with full site privileges: its templates and scripts can read and change anything on this site. Install archives only from sources you trust and have reviewed."
+        },
+        {
+            "id": "themes.import_password_label",
+            "message": "Confirm with your password",
+            "translation": "Confirm with your password"
+        },
+        {
+            "id": "themes.import_password_hint",
+            "message": "Enter your current password to confirm this installation.",
+            "translation": "Enter your current password to confirm this installation."
+        },
+        {
+            "id": "themes.import_password_invalid",
+            "message": "Theme not imported: enter your current password to confirm the installation.",
+            "translation": "Theme not imported: enter your current password to confirm the installation."
+        },
+        {
+            "id": "themes.import_locked",
+            "message": "Theme not imported: too many failed password confirmations. Try again later.",
+            "translation": "Theme not imported: too many failed password confirmations. Try again later."
+        },
+        {
+            "id": "themes.import_password_unverified",
+            "message": "Theme not imported: your password could not be verified. Check the server log.",
+            "translation": "Theme not imported: your password could not be verified. Check the server log."
+        },
+        {
+            "id": "themes.import_button",
+            "message": "Import theme",
+            "translation": "Import theme"
+        },
+        {
+            "id": "themes.management_demo_readonly",
+            "message": "Importing and deleting themes is disabled in demo mode.",
+            "translation": "Importing and deleting themes is disabled in demo mode."
+        },
+        {
+            "id": "themes.invalid_upload",
+            "message": "Upload a .tar.gz theme archive no larger than 20 MiB.",
+            "translation": "Upload a .tar.gz theme archive no larger than 20 MiB."
+        },
+        {
+            "id": "themes.archive_required",
+            "message": "Select a theme archive to upload.",
+            "translation": "Select a theme archive to upload."
+        },
+        {
+            "id": "themes.import_failed",
+            "message": "Could not import theme: %s",
+            "translation": "Could not import theme: %s"
+        },
+        {
+            "id": "themes.import_error",
+            "message": "Could not import the theme. Check the server log for details.",
+            "translation": "Could not import the theme. Check the server log for details."
+        },
+        {
+            "id": "themes.import_success",
+            "message": "Theme imported successfully. You can now activate it.",
+            "translation": "Theme imported successfully. You can now activate it."
+        },
+        {
+            "id": "themes.delete_title",
+            "message": "Delete theme",
+            "translation": "Delete theme"
+        },
+        {
+            "id": "themes.delete_confirm",
+            "message": "Delete the theme \"%s\"?",
+            "translation": "Delete the theme \"%s\"?"
+        },
+        {
+            "id": "themes.delete_note",
+            "message": "The theme files will be removed. Saved settings and widgets are kept for reinstallation.",
+            "translation": "The theme files will be removed. Saved settings and widgets are kept for reinstallation."
+        },
+        {
+            "id": "themes.delete_failed",
+            "message": "Could not delete theme: %s",
+            "translation": "Could not delete theme: %s"
+        },
+        {
+            "id": "themes.delete_error",
+            "message": "Could not delete the theme. Check the server log for details.",
+            "translation": "Could not delete the theme. Check the server log for details."
+        },
+        {
+            "id": "themes.delete_success",
+            "message": "Theme deleted successfully.",
+            "translation": "Theme deleted successfully."
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Themes"

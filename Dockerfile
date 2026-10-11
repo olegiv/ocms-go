@@ -7,7 +7,7 @@
 # =============================================================================
 # Stage 1: Builder
 # =============================================================================
-FROM golang:1.27.2-alpine AS builder
+FROM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS builder
 
 # Build arguments for version info
 ARG VERSION=dev
@@ -23,7 +23,7 @@ RUN apk add --no-cache \
     make \
     nodejs \
     npm \
-    && npm install -g sass
+    && npm install -g sass@1.105.1
 
 WORKDIR /build
 
@@ -38,7 +38,7 @@ COPY package.json package-lock.json* ./
 COPY . .
 
 # Build assets (SCSS compilation and JS dependencies)
-RUN npm install --silent && npm run copy-deps --silent
+RUN npm ci --silent && npm run copy-deps --silent
 
 # Create dist directories and compile SCSS
 RUN mkdir -p web/static/dist/js \
@@ -68,7 +68,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # =============================================================================
 # Stage 2: Runtime
 # =============================================================================
-FROM alpine:3.21
+FROM alpine:3.21@sha256:ce64758a109eb420d874a118f87920e625e12d3634e03b4a5573fd9f6e5d3507
 
 # Install runtime dependencies (su-exec for privilege dropping)
 RUN apk add --no-cache \

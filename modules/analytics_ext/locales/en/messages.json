@@ -27,6 +27,10 @@
         {"id": "analytics_ext.error_gtm_id_required", "message": "GTM Container ID is required when GTM is enabled", "translation": "GTM Container ID is required when GTM is enabled"},
         {"id": "analytics_ext.error_matomo_url_required", "message": "Matomo URL is required when Matomo is enabled", "translation": "Matomo URL is required when Matomo is enabled"},
         {"id": "analytics_ext.error_matomo_site_id_required", "message": "Matomo Site ID is required when Matomo is enabled", "translation": "Matomo Site ID is required when Matomo is enabled"},
+        {"id": "analytics_ext.error_ga4_id_invalid", "message": "GA4 Measurement ID must look like G-XXXXXXXXXX (letters and digits only)", "translation": "GA4 Measurement ID must look like G-XXXXXXXXXX (letters and digits only)"},
+        {"id": "analytics_ext.error_gtm_id_invalid", "message": "GTM Container ID must look like GTM-XXXXXXX (letters and digits only)", "translation": "GTM Container ID must look like GTM-XXXXXXX (letters and digits only)"},
+        {"id": "analytics_ext.error_matomo_url_invalid", "message": "Matomo URL must be an absolute http(s) URL without query string or fragment", "translation": "Matomo URL must be an absolute http(s) URL without query string or fragment"},
+        {"id": "analytics_ext.error_matomo_site_id_invalid", "message": "Matomo Site ID must be a number", "translation": "Matomo Site ID must be a number"},
         {"id": "analytics_ext.ip_filter_hint", "message": "To exclude IPs from external analytics, configure IP filters in your analytics platform (GA4: Admin > Data Streams > Configure Tag Settings; Matomo: Administration > Websites > Excluded IPs).", "translation": "To exclude IPs from external analytics, configure IP filters in your analytics platform (GA4: Admin > Data Streams > Configure Tag Settings; Matomo: Administration > Websites > Excluded IPs)."}
     ]
 }

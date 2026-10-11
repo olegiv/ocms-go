@@ -23,15 +23,28 @@ import (
 	"github.com/olegiv/ocms-go/modules/embed/providers"
 )
 
-func inputType(fieldType string) string {
-	if fieldType == "url" {
+func inputType(fieldType providers.FieldType) string {
+	switch fieldType {
+	case providers.FieldURL:
 		return "url"
+	case providers.FieldPassword:
+		return "password"
 	}
 	return "text"
 }
 
-func maxLenForType(fieldType string) string {
-	if fieldType == "url" {
+// secretPlaceholder tells the administrator a secret is stored without
+// revealing it; an empty submission keeps that value. The handler never puts
+// the secret into Default, so the view has nothing to leak.
+func secretPlaceholder(field providers.SettingField) string {
+	if field.HasStoredValue {
+		return "•••••••• (saved; leave blank to keep)"
+	}
+	return field.Placeholder
+}
+
+func maxLenForType(fieldType providers.FieldType) string {
+	if fieldType == providers.FieldURL {
 		return "2048"
 	}
 	return "255"
@@ -116,7 +129,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.providers_title"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 58, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 71, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -129,7 +142,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.providers_description"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 59, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 72, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -188,7 +201,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 								var templ_7745c5c3_Var9 string
 								templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(p.Name)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 68, Col: 18}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 81, Col: 18}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 								if templ_7745c5c3_Err != nil {
@@ -215,7 +228,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 								var templ_7745c5c3_Var11 string
 								templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(p.Description)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 71, Col: 25}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 84, Col: 25}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 								if templ_7745c5c3_Err != nil {
@@ -247,7 +260,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 									var templ_7745c5c3_Var13 string
 									templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.status_enabled"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 76, Col: 40}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 89, Col: 40}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 									if templ_7745c5c3_Err != nil {
@@ -275,7 +288,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 									var templ_7745c5c3_Var15 string
 									templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.status_configured"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 80, Col: 43}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 93, Col: 43}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 									if templ_7745c5c3_Err != nil {
@@ -303,7 +316,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 									var templ_7745c5c3_Var17 string
 									templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.status_not_configured"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 84, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 97, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 									if templ_7745c5c3_Err != nil {
@@ -353,7 +366,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 								var templ_7745c5c3_Var20 string
 								templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.configure_button"))
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 91, Col: 42}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 104, Col: 42}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 								if templ_7745c5c3_Err != nil {
@@ -373,7 +386,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 								var templ_7745c5c3_Var21 templ.SafeURL
 								templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/admin/embed/" + p.ID + "/toggle"))
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 94, Col: 84}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 107, Col: 84}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 								if templ_7745c5c3_Err != nil {
@@ -403,7 +416,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 										var templ_7745c5c3_Var23 string
 										templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.disable_button"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 98, Col: 43}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 111, Col: 43}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 										if templ_7745c5c3_Err != nil {
@@ -435,7 +448,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 										var templ_7745c5c3_Var25 string
 										templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.enable_button"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 103, Col: 42}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 116, Col: 42}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 										if templ_7745c5c3_Err != nil {
@@ -506,7 +519,7 @@ func EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) templ.Com
 						var templ_7745c5c3_Var28 string
 						templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.no_providers"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 116, Col: 75}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 129, Col: 75}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 						if templ_7745c5c3_Err != nil {
@@ -603,7 +616,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 					var templ_7745c5c3_Var33 string
 					templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.back_button"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 128, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 141, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 					if templ_7745c5c3_Err != nil {
@@ -628,7 +641,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 			var templ_7745c5c3_Var34 templ.SafeURL
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/admin/embed/" + data.ProviderID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 131, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 144, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
@@ -681,7 +694,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 						var templ_7745c5c3_Var38 string
 						templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.settings_title"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 136, Col: 37}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 149, Col: 37}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 						if templ_7745c5c3_Err != nil {
@@ -708,7 +721,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 						var templ_7745c5c3_Var40 string
 						templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.settings_description"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 139, Col: 43}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 152, Col: 43}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 						if templ_7745c5c3_Err != nil {
@@ -737,7 +750,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 					var templ_7745c5c3_Var41 string
 					templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.status_enabled"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 144, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 157, Col: 42}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 					if templ_7745c5c3_Err != nil {
@@ -778,7 +791,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var43 string
 							templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.ID)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 152, Col: 47}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 165, Col: 47}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 							if templ_7745c5c3_Err != nil {
@@ -801,7 +814,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var44 string
 							templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 153, Col: 27}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 166, Col: 27}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 							if templ_7745c5c3_Err != nil {
@@ -827,7 +840,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 								var templ_7745c5c3_Var46 string
 								templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 157, Col: 21}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 170, Col: 21}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 								if templ_7745c5c3_Err != nil {
@@ -858,7 +871,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var47 string
 							templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.ID)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 165, Col: 22}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 178, Col: 22}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 							if templ_7745c5c3_Err != nil {
@@ -871,7 +884,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var48 string
 							templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.ID)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 166, Col: 24}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 179, Col: 24}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 							if templ_7745c5c3_Err != nil {
@@ -889,7 +902,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 								var templ_7745c5c3_Var49 string
 								templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 170, Col: 35}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 183, Col: 35}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 								if templ_7745c5c3_Err != nil {
@@ -912,7 +925,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 								var templ_7745c5c3_Var50 string
 								templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(opt.Label)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 170, Col: 90}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 183, Col: 90}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 								if templ_7745c5c3_Err != nil {
@@ -935,7 +948,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var51 string
 							templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.ID + "_picker")
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 177, Col: 35}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 190, Col: 35}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 							if templ_7745c5c3_Err != nil {
@@ -948,7 +961,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var52 string
 							templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(colorDefault(field.Default))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 178, Col: 45}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 191, Col: 45}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 							if templ_7745c5c3_Err != nil {
@@ -961,7 +974,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var53 string
 							templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.ID)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 180, Col: 37}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 193, Col: 37}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 							if templ_7745c5c3_Err != nil {
@@ -999,6 +1012,21 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 								Rows:        4,
 								Attributes: templ.Attributes{
 									"maxlength": maxLenForType(field.Type),
+								},
+							}).Render(ctx, templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+						} else if field.Type == "password" {
+							templ_7745c5c3_Err = input.Input(input.Props{
+								ID:          field.ID,
+								Name:        field.ID,
+								Type:        input.TypePassword,
+								Placeholder: secretPlaceholder(field),
+								Attributes: templ.Attributes{
+									"maxlength":    maxLenForType(field.Type),
+									"autocomplete": "new-password",
+									"required":     field.Required && !field.HasStoredValue,
 								},
 							}).Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
@@ -1044,7 +1072,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var54 string
 							templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(field.Description)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 233, Col: 68}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 258, Col: 68}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 							if templ_7745c5c3_Err != nil {
@@ -1091,7 +1119,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 				var templ_7745c5c3_Var56 string
 				templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.back_button"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 241, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 266, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 				if templ_7745c5c3_Err != nil {
@@ -1118,7 +1146,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 				var templ_7745c5c3_Var58 string
 				templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.save_button"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 244, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 269, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 				if templ_7745c5c3_Err != nil {
@@ -1174,7 +1202,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var62 string
 							templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.kb_title"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 252, Col: 30}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 277, Col: 30}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 							if templ_7745c5c3_Err != nil {
@@ -1201,7 +1229,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var64 string
 							templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.kb_description"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 255, Col: 36}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 280, Col: 36}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 							if templ_7745c5c3_Err != nil {
@@ -1250,7 +1278,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var67 string
 							templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.kb_download_content"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 261, Col: 42}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 286, Col: 42}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 							if templ_7745c5c3_Err != nil {
@@ -1277,7 +1305,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var69 string
 							templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.kb_download_guide"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 264, Col: 40}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 289, Col: 40}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 							if templ_7745c5c3_Err != nil {
@@ -1296,7 +1324,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 						var templ_7745c5c3_Var70 string
 						templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.kb_tip"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 267, Col: 73}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 292, Col: 73}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 						if templ_7745c5c3_Err != nil {

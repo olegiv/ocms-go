@@ -166,6 +166,8 @@ server {
 export OCMS_REDIS_URL=redis://localhost:6379/0
 ```
 
+Content imports (**Admin > Import**) stage the uploaded file on the instance that received it, so route one administrator session to the same instance (for example `ip_hash` or a cookie-based `sticky` directive) or run imports against a single instance.
+
 ---
 
 ## Apache

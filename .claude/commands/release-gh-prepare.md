@@ -1,5 +1,4 @@
 ---
-allowed-tools: ""
 description: "Cut an ocms-go release: update CHANGELOG, commit, push, and push a v* tag to trigger the release workflow. Mandatory user approval of the version and tag push."
 ---
 
@@ -144,8 +143,11 @@ workflow.
 
 Ask: "Should I proceed with this commit?" Wait for explicit approval.
 
-When committing, use `git commit --no-verify` per the user-explicit-commit
-convention.
+The approval in this step replaces the interactive pre-commit approval
+hook, so `git commit --no-verify` is acceptable for this one commit. Never
+use it to skip a hook that checks the tree (test gate, index-integrity
+guard); report such a refusal instead of bypassing it, and never pass
+`--no-verify` to `git push`.
 
 ## Step 8 - push master gate
 

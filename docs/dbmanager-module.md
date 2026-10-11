@@ -17,6 +17,7 @@ This module allows administrators to:
 - Support for SELECT, INSERT, UPDATE, DELETE, PRAGMA, EXPLAIN, and WITH statements
 - Tabular display of SELECT query results
 - Row count and execution time metrics
+- Results capped at 1,000 rows (larger results are flagged as truncated, in the result and in the history) and a 10-second statement timeout reported as "query cancelled after 10s"
 - Query history with click-to-reload functionality
 - Keyboard shortcut (Ctrl+Enter) for quick execution
 
@@ -149,6 +150,9 @@ All translation keys are prefixed with `dbmanager.`:
 
 ## Security
 
+- Inactive by default; enable it only while it is needed
+- Results are capped at 1,000 rows and each statement is cancelled after 10 seconds
+
 The module is protected by:
 
 - Admin authentication middleware (admin users only)
@@ -165,7 +169,9 @@ The module is protected by:
 
 ## Module Active Status
 
-The DB Manager module can be enabled or disabled from **Admin > Modules**:
+The DB Manager module is **inactive by default**: a fresh install registers it
+switched off, and an administrator enables it from **Admin > Modules** when it
+is needed. Installs that already chose a status keep it across upgrades.
 
 - **Active**: All routes are accessible, module appears in sidebar (if enabled)
 - **Inactive**: Routes return 404 (public) or redirect to modules list (admin)

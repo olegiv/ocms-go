@@ -115,6 +115,8 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 - **Theme Settings**: Configurable theme options (colors, layout, etc.)
 - **Template Override**: Themes can customize page templates
 - **Static Assets**: Theme-specific CSS, JavaScript, and images
+- **Theme Import and Deletion**: Admin upload of validated `.tar.gz` HTML themes and removal of inactive custom themes without a restart; core themes are protected. See [Custom Themes](docs/custom-themes.md).
+- **Sample Theme Archive**: Upload [Tiny Sample](examples/themes/tiny-sample.tar.gz) to try theme import and activation with a minimal HTML theme; the import card links to it, and [examples/README.md](examples/README.md) describes it.
 
 ### Module System
 - **Extensible Architecture**: Add custom functionality via modules
@@ -293,7 +295,7 @@ Available release archives:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `OCMS_SESSION_SECRET` | Secret key for session encryption (min 32 bytes) | - | Yes |
+| `OCMS_SESSION_SECRET` | Server secret that keys CSRF protection; sessions are stored server-side (min 32 bytes; placeholder values from example files are refused, and the public test-suite secret is refused in production) | - | Yes |
 | `OCMS_DB_PATH` | Path to SQLite database file | `./data/ocms.db` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
@@ -349,7 +351,7 @@ Available release archives:
 
 ```bash
 # Set required environment variable
-export OCMS_SESSION_SECRET="your-secret-key-at-least-32-bytes"
+export OCMS_SESSION_SECRET="$(openssl rand -base64 32)"
 
 # Install repository-managed git hooks (run once per clone)
 make install-hooks
@@ -403,7 +405,10 @@ On first run with `OCMS_DO_SEED=true`, the application seeds a default admin use
 - **Email**: admin@example.com
 - **Password**: changeme1234
 
-Change these credentials immediately after first login.
+Change these credentials immediately after first login. Seeding never
+recreates `admin@example.com` while any administrator account exists, so a
+renamed or replaced admin is not brought back by a restart with
+`OCMS_DO_SEED=true`.
 
 ### Demo Mode
 

@@ -513,6 +513,7 @@ func TestLogQueryExecutionWithError(t *testing.T) {
 		"INVALID QUERY",
 		1,
 		0,
+		false,
 		time.Millisecond,
 		&testError{msg: "syntax error"},
 	)

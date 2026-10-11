@@ -1,6 +1,90 @@
 # Custom Themes
 
+## Import and Delete Themes from the Admin
+
+Administrators can install themes at **Admin > Themes** without SSH or a server
+restart. Upload a `.tar.gz` archive containing exactly one theme directory:
+
+```text
+mytheme/
+  theme.json
+  templates/
+    layouts/base.html
+    pages/{home,page,list,404,category,tag,search,form}.html
+    partials/                 (optional)
+  static/                     (optional)
+  locales/                    (optional)
+```
+
+The directory name is the theme identifier: 1–64 characters, starting with a
+lowercase ASCII letter or digit, followed by lowercase letters, digits, hyphens,
+or underscores. `theme.json` must specify a nonempty `name` and `version`; its
+`engine` must be `html` or omitted. Every required page must define a `content`
+block as described below. Templates are parsed using the site's registered
+template functions before installation. Template parsing does not guarantee
+that every template will render correctly with every content item.
+
+Package a theme from the directory containing it:
+
+```bash
+COPYFILE_DISABLE=1 tar -czf mytheme.tar.gz mytheme
+```
+
+`COPYFILE_DISABLE=1` stops macOS `tar` from adding `._*` metadata entries;
+any that are present are ignored during import but still count toward the
+limits below.
+
+Uploads are limited to **20 MiB compressed**, **100 MiB decompressed** (including
+tar headers and padding), and **2,000 file/directory entries**. Archives may contain
+only regular files and directories. Links, special files, sparse files, duplicate paths,
+absolute paths, and traversal paths are rejected. File modes are normalized to
+0644 and directory modes to 0755; archive permissions and ownership are ignored.
+
+The process needs write access to `OCMS_CUSTOM_DIR/themes`; the first import
+creates `OCMS_CUSTOM_DIR` and its `themes` directory when they do not exist
+yet, so it also needs write access to their parent in that case. Imports are
+validated in a private staging directory and installed by atomic rename. They
+appear immediately, remain inactive, and survive restart. Existing directories
+and embedded theme names cannot be replaced through the UI.
+
+To remove an **inactive custom theme**, click **Delete**, then confirm. Active
+themes and custom overrides of embedded themes are protected; activate another
+theme before removing an active custom theme. Saved settings and widgets remain
+in the database for reinstallation. Deletion first hides and unregisters the
+theme, then removes its files. Cleanup failures are logged with the hidden
+directory name; the theme remains unavailable. Problems with an archive or a
+theme name are reported in the admin; other failures show a generic message
+and are written to the server log. Hidden `.theme-import-*` and
+`.theme-delete-*` directories left by a crash are ignored at startup and may be
+removed while the server is stopped.
+
+Import and deletion are disabled in demo mode. These controls assume a single
+running instance with shared access to its custom theme directory.
+
+An imported theme runs with the site's full privileges: its templates use the
+site's template functions (including `safeHTML` and `safeURL`) and its scripts
+run same-origin under the site's Content Security Policy, so a malicious
+archive is equivalent to an administrator account. The import form states this,
+and every import must be confirmed with the administrator's current password;
+install only archives from sources you trust and have reviewed. Editing,
+replacing, creating, and exporting themes in the browser are not included.
+
 Custom themes extend or replace oCMS core themes without modifying core code. They live in `custom/themes/` and are loaded automatically at startup.
+
+## Bundled Sample Archive
+
+Upload [`examples/themes/tiny-sample.tar.gz`](../examples/themes/tiny-sample.tar.gz)
+at **Admin > Themes**, then activate **Tiny Sample**. The import card links to
+the archive on GitHub, and [`examples/README.md`](../examples/README.md)
+describes it. The archive contains a minimal HTML theme with all eight required
+page templates, responsive CSS, and an SVG preview. It has no JavaScript or
+external asset dependencies.
+
+The `tiny-sample` identifier is distinct from `starter`. The archive lives outside
+`custom/themes/`, so it is ready to import rather than already installed. Extract
+it to edit the templates; the included README describes its scope. This sample
+is intended for import testing and small content sites; it omits public forms,
+widgets, and theme settings.
 
 ## Quick Start
 

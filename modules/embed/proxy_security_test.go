@@ -16,7 +16,7 @@ import (
 
 // TestDifyProxyCheckRedirect_ReChecksUpstreamAllowlist asserts the shared Dify
 // proxy HTTP client re-applies the upstream-host allowlist on every redirect
-// hop (finding L-01). The allowlist is module-scoped and reaches the
+// hop. The allowlist is module-scoped and reaches the
 // package-level client via the request context. Raw public IPs are used so
 // ValidateWebhookURL short-circuits without DNS, making the allowlist the sole
 // decider and keeping the test deterministic and network-free.
