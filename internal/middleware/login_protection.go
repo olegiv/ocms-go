@@ -196,7 +196,11 @@ func (lp *LoginProtection) IsAccountLocked(email, ip string) (bool, time.Duratio
 	}
 	var remaining time.Duration
 	locked := false
-	for _, scope := range lp.lockoutScopes(email, ip) {
+	scopes := lp.lockoutScopes(email, ip)
+	// Rows written before the keys were scoped are keyed by the raw email;
+	// an in-progress lockout among them is honoured until it expires.
+	legacy := lockoutScope{name: "legacy", key: stripControlCharacters(email)}
+	for _, scope := range []lockoutScope{scopes[0], scopes[1], legacy} {
 		if ok, left := lp.scopeLocked(scope, email); ok {
 			locked = true
 			remaining = max(remaining, left)

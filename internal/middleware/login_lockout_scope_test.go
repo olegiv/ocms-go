@@ -4,11 +4,52 @@
 package middleware
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/store"
 )
+
+// TestLegacyLockoutRowIsHonouredUntilItExpires fails when a lockout written
+// before the keys were scoped (keyed by the raw email) is ignored after the
+// upgrade: an in-progress lock must keep refusing logins until it expires.
+func TestLegacyLockoutRowIsHonouredUntilItExpires(t *testing.T) {
+	db := testLoginProtectionDB(t)
+	lp := NewLoginProtection(db, testLoginProtectionConfig(3, time.Minute, time.Minute))
+	email, ip := "owner@example.com", "203.0.113.9"
+	now := time.Now()
+	if err := store.New(db).UpsertLoginProtection(context.Background(), store.UpsertLoginProtectionParams{
+		Email:         email,
+		AttemptCount:  3,
+		FirstFailedAt: now.Add(-time.Minute),
+		LockedUntil:   sql.NullTime{Time: now.Add(30 * time.Second), Valid: true},
+		LockoutCount:  1,
+		UpdatedAt:     now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	locked, remaining := lp.IsAccountLocked(email, ip)
+	if !locked || remaining <= 0 {
+		t.Fatalf("legacy lockout ignored: locked=%v remaining=%v", locked, remaining)
+	}
+	if locked, _ := lp.IsAccountLocked("other@example.com", ip); locked {
+		t.Fatal("legacy row must only lock its own email")
+	}
+	if err := store.New(db).UpsertLoginProtection(context.Background(), store.UpsertLoginProtectionParams{
+		Email: email, AttemptCount: 3, FirstFailedAt: now.Add(-time.Minute),
+		LockedUntil: sql.NullTime{Time: now.Add(-time.Second), Valid: true}, LockoutCount: 1, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if locked, _ := lp.IsAccountLocked(email, ip); locked {
+		t.Fatal("expired legacy lockout must not lock")
+	}
+}
 
 // TestLockoutIsScopedToEmailAndIP fails when failures from one address lock
 // an account for every address again: the per-address threshold must lock
