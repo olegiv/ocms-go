@@ -59,12 +59,20 @@ if [ -d "$TEMPLUI_JS_SRC" ] && [ "$(ls -A "$TEMPLUI_JS_SRC" 2>/dev/null)" ]; the
     done
 fi
 
-# Check for outdated packages
+# Report packages whose installed version differs from the npm "latest" tag.
+# This is informational: a package can be ahead of "latest" on purpose (for
+# example a pinned pre-release published under another dist-tag), so the
+# list is not a to-do. Each line names the package so it can be looked up.
 OUTDATED=$(npm outdated --json 2>/dev/null || true)
 if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
     echo ""
-    echo "Outdated npm packages:"
-    echo "$OUTDATED" | grep -E '"(current|wanted|latest)"' | head -20
+    echo "npm packages whose installed version differs from the 'latest' tag (informational):"
+    echo "$OUTDATED" | node -e '
+        const data = JSON.parse(require("fs").readFileSync(0, "utf8"));
+        for (const [name, info] of Object.entries(data)) {
+            console.log("  " + name + ": installed " + info.current + ", wanted " + info.wanted + ", latest " + info.latest);
+        }
+    '
     echo ""
 fi
 
