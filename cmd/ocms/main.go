@@ -2017,6 +2017,8 @@ func run() error {
 			// Theme management routes (activation is admin only)
 			r.Get("/themes", themesHandler.List)
 			r.Post("/themes/activate", themesHandler.Activate)
+			r.Post("/themes/import", themesHandler.Import)
+			r.Post("/themes/{name}/delete", themesHandler.Delete)
 
 			// Module management routes
 			r.Get("/modules", modulesHandler.List)

@@ -55,14 +55,15 @@ const (
 	RestrictionEditLanguages DemoRestriction = "edit_languages"
 
 	// RestrictionAPIKeys blocks security-sensitive operations in demo mode.
-	RestrictionAPIKeys        DemoRestriction = "api_keys"
-	RestrictionWebhooks       DemoRestriction = "webhooks"
-	RestrictionExportData     DemoRestriction = "export_data"
-	RestrictionImportData     DemoRestriction = "import_data"
-	RestrictionModules        DemoRestriction = "modules"
-	RestrictionModuleSettings DemoRestriction = "module_settings"
-	RestrictionThemeSettings  DemoRestriction = "theme_settings"
-	RestrictionClearCache     DemoRestriction = "clear_cache"
+	RestrictionAPIKeys         DemoRestriction = "api_keys"
+	RestrictionWebhooks        DemoRestriction = "webhooks"
+	RestrictionExportData      DemoRestriction = "export_data"
+	RestrictionImportData      DemoRestriction = "import_data"
+	RestrictionModules         DemoRestriction = "modules"
+	RestrictionModuleSettings  DemoRestriction = "module_settings"
+	RestrictionThemeSettings   DemoRestriction = "theme_settings"
+	RestrictionThemeManagement DemoRestriction = "theme_management"
+	RestrictionClearCache      DemoRestriction = "clear_cache"
 
 	// RestrictionSQLExecution blocks direct SQL execution in demo mode.
 	RestrictionSQLExecution DemoRestriction = "sql_execution"
@@ -100,6 +101,7 @@ func DemoModeMessageDetailed(restriction DemoRestriction) string {
 		RestrictionModules:          "Module management is disabled in demo mode",
 		RestrictionModuleSettings:   "Changing module settings is disabled in demo mode",
 		RestrictionThemeSettings:    "Changing theme settings is disabled in demo mode",
+		RestrictionThemeManagement:  "Importing and deleting themes is disabled in demo mode",
 		RestrictionClearCache:       "Clearing cache is disabled in demo mode",
 		RestrictionSQLExecution:     "SQL execution is disabled in demo mode",
 		RestrictionScheduler:        "Scheduler management is disabled in demo mode",

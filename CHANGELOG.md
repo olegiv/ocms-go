@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Theme import and deletion** — administrators can upload a validated
+  `.tar.gz` HTML theme at **Admin > Themes** and delete inactive custom
+  themes without SSH or a server restart. Uploads are extracted into a
+  private staging directory, checked for one named theme directory, a
+  `theme.json` name and version, the HTML engine and every required page
+  template, then installed by atomic rename; they are limited to 20 MiB
+  compressed, 100 MiB extracted and 2,000 entries; macOS `._*` metadata
+  entries are ignored. Archive problems are reported in the admin, while
+  internal failures show a generic message and are logged. Core and active
+  themes are protected, both actions are blocked in demo mode, and a ready-to-upload
+  `examples/themes/tiny-sample.tar.gz` theme is bundled for trying the flow.
+  See `docs/custom-themes.md` and the wiki's Theme System page.
+
 ## [0.27.0] - 2026-10-09
 
 ### Changed

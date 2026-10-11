@@ -6,8 +6,10 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -59,13 +61,86 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 
 	viewData := adminviews.ThemesListData{
-		Themes: convertThemeViewItems(h.themeManager.ListThemesWithActive()),
+		Themes:     convertThemeViewItems(h.themeManager.ListThemesWithActive()),
+		IsDemoMode: middleware.IsDemoMode(),
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer,
 		i18n.T(lang, "nav.themes"),
 		themesBreadcrumbs(lang))
 	renderTempl(w, r, adminviews.ThemesListPage(pc, viewData))
+}
+
+// Import handles POST /admin/themes/import - installs a new custom theme.
+func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionThemeManagement, redirectAdminThemes) {
+		return
+	}
+	lang := h.renderer.GetAdminLang(r)
+	r.Body = http.MaxBytesReader(w, r.Body, theme.MaxArchiveBytes+(1<<20))
+	err := r.ParseMultipartForm(1 << 20)
+	if r.MultipartForm != nil {
+		defer func() { _ = r.MultipartForm.RemoveAll() }()
+	}
+	if err != nil {
+		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.invalid_upload"))
+		return
+	}
+	file, header, err := r.FormFile("archive")
+	if err != nil {
+		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.archive_required"))
+		return
+	}
+	defer func() { _ = file.Close() }()
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".tar.gz") || header.Size > theme.MaxArchiveBytes {
+		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.invalid_upload"))
+		return
+	}
+	name, err := h.themeManager.ImportArchive(file)
+	if err != nil {
+		slog.Warn("failed to import theme", "error", err, "user_id", middleware.GetUserID(r))
+		flashError(w, r, h.renderer, redirectAdminThemes, themeErrorMessage(lang, err, "themes.import_failed", "themes.import_error"))
+		return
+	}
+	h.invalidateThemeCaches()
+	slog.Info("admin imported theme", "theme", name, "user_id", middleware.GetUserID(r))
+	flashSuccess(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_success"))
+}
+
+// Delete handles POST /admin/themes/{name}/delete - removes an inactive custom theme.
+func (h *ThemesHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionThemeManagement, redirectAdminThemes) {
+		return
+	}
+	lang := h.renderer.GetAdminLang(r)
+	name := chi.URLParam(r, "name")
+	if err := h.themeManager.RemoveTheme(name); err != nil {
+		slog.Warn("failed to delete theme", "theme", name, "error", err, "user_id", middleware.GetUserID(r))
+		flashError(w, r, h.renderer, redirectAdminThemes, themeErrorMessage(lang, err, "themes.delete_failed", "themes.delete_error"))
+		return
+	}
+	h.invalidateThemeCaches()
+	slog.Info("admin deleted theme", "theme", name, "user_id", middleware.GetUserID(r))
+	flashSuccess(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.delete_success"))
+}
+
+// themeErrorMessage returns the flash text for a failed theme operation.
+// Validation problems are shown verbatim so the administrator can fix the
+// archive; internal errors, which may name server paths, are replaced by the
+// generic message and stay in the server log.
+func themeErrorMessage(lang string, err error, detailKey, genericKey string) string {
+	var validation theme.ValidationError
+	if errors.As(err, &validation) {
+		return i18n.T(lang, detailKey, validation.Error())
+	}
+	return i18n.T(lang, genericKey)
+}
+
+func (h *ThemesHandler) invalidateThemeCaches() {
+	if h.cacheManager != nil {
+		h.cacheManager.InvalidateThemeSettings()
+		h.cacheManager.InvalidateContent()
+	}
 }
 
 // Activate handles POST /admin/themes/activate - activates a theme.
