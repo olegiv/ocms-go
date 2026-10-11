@@ -295,7 +295,7 @@ Available release archives:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `OCMS_SESSION_SECRET` | Secret key for session encryption (min 32 bytes) | - | Yes |
+| `OCMS_SESSION_SECRET` | Secret key for session encryption (min 32 bytes; placeholder values from example files are refused, and the public test-suite secret is refused in production) | - | Yes |
 | `OCMS_DB_PATH` | Path to SQLite database file | `./data/ocms.db` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
@@ -351,7 +351,7 @@ Available release archives:
 
 ```bash
 # Set required environment variable
-export OCMS_SESSION_SECRET="your-secret-key-at-least-32-bytes"
+export OCMS_SESSION_SECRET="$(openssl rand -base64 32)"
 
 # Install repository-managed git hooks (run once per clone)
 make install-hooks
@@ -405,7 +405,10 @@ On first run with `OCMS_DO_SEED=true`, the application seeds a default admin use
 - **Email**: admin@example.com
 - **Password**: changeme1234
 
-Change these credentials immediately after first login.
+Change these credentials immediately after first login. Seeding never
+recreates `admin@example.com` while any administrator account exists, so a
+renamed or replaced admin is not brought back by a restart with
+`OCMS_DO_SEED=true`.
 
 ### Demo Mode
 

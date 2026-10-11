@@ -16,11 +16,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -95,10 +97,47 @@ func starterThemeArchive(t *testing.T) []byte {
 	return buffer.Bytes()
 }
 
+// themeImportPassword is the current password of themeImportUser.
+const themeImportPassword = "theme-import-pass-1234"
+
+var (
+	themeImportHashOnce sync.Once
+	themeImportHash     string
+)
+
+// themeImportUser returns an administrator whose stored hash matches
+// themeImportPassword; the Argon2 hash is computed once per test binary.
+func themeImportUser(t *testing.T) *store.User {
+	t.Helper()
+	themeImportHashOnce.Do(func() {
+		hash, err := auth.HashPassword(themeImportPassword)
+		if err != nil {
+			t.Fatal(err)
+		}
+		themeImportHash = hash
+	})
+	return &store.User{ID: 1, Email: "admin@example.com", Role: "admin", PasswordHash: themeImportHash}
+}
+
+// themeUploadRequest builds an import request that passes the password
+// confirmation, so the tests of archive handling are not affected by it.
 func themeUploadRequest(t *testing.T, h *ThemesHandler, filename string, contents []byte) *http.Request {
+	t.Helper()
+	return themeUploadRequestAs(t, h, filename, contents, themeImportUser(t), themeImportPassword)
+}
+
+// themeUploadRequestAs builds an import request on behalf of user (nil for
+// no user in context) carrying password as the confirmation field (empty
+// omits the field).
+func themeUploadRequestAs(t *testing.T, h *ThemesHandler, filename string, contents []byte, user *store.User, password string) *http.Request {
 	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
+	if password != "" {
+		if err := writer.WriteField("confirm_password", password); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if filename != "" {
 		part, err := writer.CreateFormFile("archive", filename)
 		if err != nil {
@@ -113,7 +152,48 @@ func themeUploadRequest(t *testing.T, h *ThemesHandler, filename string, content
 	}
 	r := httptest.NewRequest(http.MethodPost, "/admin/themes/import", &body)
 	r.Header.Set("Content-Type", writer.FormDataContentType())
-	return requestWithSession(h.sessionManager, r)
+	r = requestWithSession(h.sessionManager, r)
+	if user != nil {
+		r = addUserToContext(r, user)
+	}
+	return r
+}
+
+// TestThemeImportRequiresPasswordConfirmation fails when an archive can be
+// installed without the administrator re-entering their password: an
+// imported theme is same-origin code with the site's full privileges
+// (finding M-5, 2026-10-11).
+func TestThemeImportRequiresPasswordConfirmation(t *testing.T) {
+	archive := starterThemeArchive(t)
+	for _, tt := range []struct {
+		name     string
+		user     *store.User
+		password string
+	}{
+		{"missing password", themeImportUser(t), ""},
+		{"wrong password", themeImportUser(t), "not-" + themeImportPassword},
+		{"no user in context", nil, themeImportPassword},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := themeManagementHandler(t)
+			r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, tt.user, tt.password)
+			w := httptest.NewRecorder()
+			h.Import(w, r)
+			if w.Code != http.StatusSeeOther || h.themeManager.ThemeCount() != 0 {
+				t.Fatalf("import without confirmation: status %d, themes %d", w.Code, h.themeManager.ThemeCount())
+			}
+			if got := h.sessionManager.GetString(r.Context(), "flash"); got != i18n.T("en", "themes.import_password_invalid") {
+				t.Fatalf("flash = %q", got)
+			}
+		})
+	}
+
+	h := themeManagementHandler(t)
+	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), themeImportPassword)
+	h.Import(httptest.NewRecorder(), r)
+	if !h.themeManager.HasTheme("starter") {
+		t.Fatalf("import with the correct password failed: %q", h.sessionManager.GetString(r.Context(), "flash"))
+	}
 }
 
 func TestThemeManagementHandlerLifecycle(t *testing.T) {

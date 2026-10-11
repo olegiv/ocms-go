@@ -105,11 +105,21 @@ templ ThemesListPage(pc *PageContext, data ThemesListData) {
 					<p class="text-muted">{ pc.T("themes.management_demo_readonly") }</p>
 				} else {
 					<form method="POST" action="/admin/themes/import" enctype="multipart/form-data" class="space-y-4">
+						@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+							@alert.Description() {
+								{ pc.T("themes.import_warning") }
+							}
+						}
 						@label.Label(label.Props{For: "theme-archive"}) {
 							{ pc.T("themes.archive_label") }
 						}
 						@input.Input(input.Props{ID: "theme-archive", Name: "archive", Type: input.TypeFile, FileAccept: ".tar.gz", Attributes: templ.Attributes{"required": true, "aria-describedby": "theme-import-note"}})
 						<p id="theme-import-note" class="text-sm text-muted-foreground">{ pc.T("themes.import_note") }</p>
+						@label.Label(label.Props{For: "theme-import-password"}) {
+							{ pc.T("themes.import_password_label") }
+						}
+						@input.Input(input.Props{ID: "theme-import-password", Name: "confirm_password", Type: input.TypePassword, Attributes: templ.Attributes{"required": true, "autocomplete": "current-password", "aria-describedby": "theme-import-password-note"}})
+						<p id="theme-import-password-note" class="text-sm text-muted-foreground">{ pc.T("themes.import_password_hint") }</p>
 						@button.Button(button.Props{Type: button.TypeSubmit}) {
 							@icon.Upload(icon.Props{Size: 16})
 							{ pc.T("themes.import_button") }

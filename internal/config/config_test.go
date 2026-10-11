@@ -5,8 +5,14 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
+
+// testSessionSecret is a strong, non-placeholder secret for tests that must
+// get past every secret check, including the production rejection of the
+// public test-suite secret.
+const testSessionSecret = "k9Qw2xZt7Lp4Vn8sRb3Yh6Mc1Ud5Ef0Gj2Hx4Nz8Tq="
 
 func setEnv(t *testing.T, key, value string) {
 	t.Helper()
@@ -16,7 +22,7 @@ func setEnv(t *testing.T, key, value string) {
 func TestLoad_Defaults(t *testing.T) {
 	// Clear environment and set only required var
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 
 	cfg, err := Load()
 	if err != nil {
@@ -246,7 +252,7 @@ func TestLoad_CustomValues(t *testing.T) {
 
 func TestLoad_HCaptchaDisabled(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_HCAPTCHA_DISABLED", "true")
 
 	cfg, err := Load()
@@ -261,7 +267,7 @@ func TestLoad_HCaptchaDisabled(t *testing.T) {
 
 func TestLoad_RejectSeedInProduction(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_DO_SEED", "true")
 
@@ -383,7 +389,7 @@ func TestIsRepeatedPattern(t *testing.T) {
 
 func TestLoad_AllowSeedInProductionWithDemoMode(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_DO_SEED", "true")
 	setEnv(t, "OCMS_DEMO_MODE", "true")
@@ -399,7 +405,7 @@ func TestLoad_AllowSeedInProductionWithDemoMode(t *testing.T) {
 
 func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
 	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
@@ -464,7 +470,7 @@ func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 
 func TestLoad_ProductionSecureDefaults_ExplicitOverrideRespected(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
 	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
@@ -493,7 +499,7 @@ func TestLoad_ProductionSecureDefaults_ExplicitOverrideRespected(t *testing.T) {
 
 func TestLoad_RequireSanitizePageHTMLInProduction(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
 	setEnv(t, "OCMS_SANITIZE_PAGE_HTML", "false")
@@ -506,7 +512,7 @@ func TestLoad_RequireSanitizePageHTMLInProduction(t *testing.T) {
 
 func TestLoad_RequireBlockSuspiciousPageHTMLInProduction(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
 	setEnv(t, "OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", "false")
@@ -519,7 +525,7 @@ func TestLoad_RequireBlockSuspiciousPageHTMLInProduction(t *testing.T) {
 
 func TestLoad_RequireAPIAllowedCIDRsInProduction(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_REQUIRE_API_ALLOWED_CIDRS", "true")
 	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "")
@@ -532,7 +538,7 @@ func TestLoad_RequireAPIAllowedCIDRsInProduction(t *testing.T) {
 
 func TestLoad_RequireTrustedProxiesInProduction(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_REQUIRE_TRUSTED_PROXIES", "true")
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "")
@@ -545,7 +551,7 @@ func TestLoad_RequireTrustedProxiesInProduction(t *testing.T) {
 
 func TestLoad_RequireEmbedProxyTokenInProduction(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_REQUIRE_EMBED_PROXY_TOKEN", "true")
 	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "")
@@ -558,7 +564,7 @@ func TestLoad_RequireEmbedProxyTokenInProduction(t *testing.T) {
 
 func TestLoad_InvalidWebhookFormDataMode(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "invalid")
 
 	_, err := Load()
@@ -569,7 +575,7 @@ func TestLoad_InvalidWebhookFormDataMode(t *testing.T) {
 
 func TestLoad_InvalidAPIMaxTTLDays(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "-1")
 
 	_, err := Load()
@@ -580,7 +586,7 @@ func TestLoad_InvalidAPIMaxTTLDays(t *testing.T) {
 
 func TestLoad_APIMaxTTLDaysTooLarge(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "366")
 
 	_, err := Load()
@@ -591,7 +597,7 @@ func TestLoad_APIMaxTTLDaysTooLarge(t *testing.T) {
 
 func TestLoad_RequireWebhookFormDataMinimizationInProduction(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "full")
 	setEnv(t, "OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", "true")
@@ -661,6 +667,72 @@ func TestLoad_RejectsKnownWeakSecrets(t *testing.T) {
 				t.Fatal("Load() should reject known weak secret")
 			}
 		})
+	}
+}
+
+// TestLoad_RejectsPlaceholderSecretsInEveryEnvironment covers finding M-3
+// (2026-10-11): values copied from example files and documentation must not
+// start a server, even in development.
+func TestLoad_RejectsPlaceholderSecretsInEveryEnvironment(t *testing.T) {
+	for _, secret := range []string{
+		"replace-with-strong-random-secret",
+		"REPLACE-WITH-anything-long-enough-1234",
+		"change-me-please-to-something-random-1",
+		"changeme-changeme-changeme-changeme-1",
+		"your-secret-key-at-least-32-bytes",
+		"your-secure-secret-key-at-least-32-bytes",
+	} {
+		t.Run(secret, func(t *testing.T) {
+			os.Clearenv()
+			setEnv(t, "OCMS_SESSION_SECRET", secret)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load() accepted placeholder secret %q", secret)
+			}
+		})
+	}
+}
+
+// TestLoad_RejectsPublicTestSecretInProduction fails when the secret used by
+// CI, the test suite and the developer docs can start a production server.
+func TestLoad_RejectsPublicTestSecretInProduction(t *testing.T) {
+	for _, secret := range []string{"test-secret-key-32-bytes-long!!!", "TEST-SECRET-key-32-bytes-long-ish!!"} {
+		t.Run(secret, func(t *testing.T) {
+			os.Clearenv()
+			setProductionRequiredEnv(t)
+			setEnv(t, "OCMS_SESSION_SECRET", secret)
+			_, err := Load()
+			if err == nil || !strings.Contains(err.Error(), "public test-suite secret") {
+				t.Fatalf("Load() in production with %q: err = %v, want the public test-suite rejection", secret, err)
+			}
+		})
+	}
+}
+
+func TestLoad_AllowsPublicTestSecretInDevelopment(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() in development must keep accepting the test-suite secret: %v", err)
+	}
+}
+
+func TestLoad_RejectsPlaceholderEmbedProxyToken(t *testing.T) {
+	for _, token := range []string{"replace-with-embed-proxy-token", "changeme", "Your-Secret-Token"} {
+		t.Run(token, func(t *testing.T) {
+			os.Clearenv()
+			setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+			setEnv(t, "OCMS_EMBED_PROXY_TOKEN", token)
+			_, err := Load()
+			if err == nil || !strings.Contains(err.Error(), "OCMS_EMBED_PROXY_TOKEN") {
+				t.Fatalf("Load() with embed token %q: err = %v, want placeholder rejection", token, err)
+			}
+		})
+	}
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "Xq7LmP2vR9sT4wY6zB1nC3dF5gH8jK0a")
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() rejected a real embed token: %v", err)
 	}
 }
 
@@ -750,7 +822,7 @@ func TestConfig_GeoIPEnabled(t *testing.T) {
 
 func TestLoad_GeoIPDBPath(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 	setEnv(t, "OCMS_GEOIP_DB_PATH", "/path/to/GeoLite2-Country.mmdb")
 
 	cfg, err := Load()
@@ -769,7 +841,7 @@ func TestLoad_GeoIPDBPath(t *testing.T) {
 func TestLoad_SiteURL(t *testing.T) {
 	t.Run("unset", func(t *testing.T) {
 		os.Clearenv()
-		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 
 		cfg, err := Load()
 		if err != nil {
@@ -782,7 +854,7 @@ func TestLoad_SiteURL(t *testing.T) {
 
 	t.Run("set", func(t *testing.T) {
 		os.Clearenv()
-		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_SITE_URL", "https://ocms-demo.fly.dev")
 
 		cfg, err := Load()
@@ -798,7 +870,7 @@ func TestLoad_SiteURL(t *testing.T) {
 func TestLoad_UploadsDir(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		os.Clearenv()
-		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 
 		cfg, err := Load()
 		if err != nil {
@@ -812,7 +884,7 @@ func TestLoad_UploadsDir(t *testing.T) {
 
 	t.Run("custom_value", func(t *testing.T) {
 		os.Clearenv()
-		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_UPLOADS_DIR", "/var/www/uploads")
 
 		cfg, err := Load()
@@ -829,7 +901,7 @@ func TestLoad_UploadsDir(t *testing.T) {
 func TestLoad_CustomDir(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		os.Clearenv()
-		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 
 		cfg, err := Load()
 		if err != nil {
@@ -843,7 +915,7 @@ func TestLoad_CustomDir(t *testing.T) {
 
 	t.Run("custom_value", func(t *testing.T) {
 		os.Clearenv()
-		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
 		setEnv(t, "OCMS_CUSTOM_DIR", "/var/www/custom")
 
 		cfg, err := Load()

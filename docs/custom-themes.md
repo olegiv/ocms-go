@@ -58,9 +58,15 @@ and are written to the server log. Hidden `.theme-import-*` and
 removed while the server is stopped.
 
 Import and deletion are disabled in demo mode. These controls assume a single
-running instance with shared access to its custom theme directory. Administrators
-are trusted to install HTML and JavaScript. Editing, replacing, creating, and
-exporting themes in the browser are not included.
+running instance with shared access to its custom theme directory.
+
+An imported theme runs with the site's full privileges: its templates use the
+site's template functions (including `safeHTML` and `safeURL`) and its scripts
+run same-origin under the site's Content Security Policy, so a malicious
+archive is equivalent to an administrator account. The import form states this,
+and every import must be confirmed with the administrator's current password;
+install only archives from sources you trust and have reviewed. Editing,
+replacing, creating, and exporting themes in the browser are not included.
 
 Custom themes extend or replace oCMS core themes without modifying core code. They live in `custom/themes/` and are loaded automatically at startup.
 

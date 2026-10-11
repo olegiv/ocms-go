@@ -17,6 +17,16 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
+// MaxResultRows caps how many rows of a SELECT are read into memory and
+// rendered. A larger result is cut off and flagged as truncated instead of
+// building an unbounded page from the whole table.
+const MaxResultRows = 1000
+
+// queryTimeout bounds a single statement so a runaway query cannot hold a
+// database connection for the life of the request. It is a variable so tests
+// can expire it.
+var queryTimeout = 10 * time.Second
+
 // QueryResult contains the result of a SQL query execution.
 type QueryResult struct {
 	Columns      []string
@@ -25,6 +35,7 @@ type QueryResult struct {
 	ExecutionMs  int64
 	Error        string
 	IsSelect     bool
+	Truncated    bool // Rows stopped at MaxResultRows
 }
 
 // QueryHistoryItem represents a single query execution in history.
@@ -131,8 +142,13 @@ func (m *Module) executeQuery(ctx context.Context, query string, userID int64) *
 		IsSelect: isSelectQuery(query),
 	}
 
+	// The statement runs under its own deadline; history logging below uses
+	// the request context so a timed-out query is still recorded.
+	execCtx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+
 	if result.IsSelect {
-		rows, err := m.ctx.DB.QueryContext(ctx, query)
+		rows, err := m.ctx.DB.QueryContext(execCtx, query)
 		if err != nil {
 			result.Error = err.Error()
 			m.logQueryExecution(ctx, query, userID, 0, time.Since(start), err)
@@ -150,6 +166,10 @@ func (m *Module) executeQuery(ctx context.Context, query string, userID int64) *
 
 		var resultRows [][]string
 		for rows.Next() {
+			if len(resultRows) >= MaxResultRows {
+				result.Truncated = true
+				break
+			}
 			values := make([]any, len(columns))
 			valuePtrs := make([]any, len(columns))
 			for i := range values {
@@ -178,7 +198,7 @@ func (m *Module) executeQuery(ctx context.Context, query string, userID int64) *
 		result.Rows = resultRows
 		result.RowsAffected = int64(len(resultRows))
 	} else {
-		res, err := m.ctx.DB.ExecContext(ctx, query)
+		res, err := m.ctx.DB.ExecContext(execCtx, query)
 		if err != nil {
 			result.Error = err.Error()
 			m.logQueryExecution(ctx, query, userID, 0, time.Since(start), err)

@@ -1963,6 +1963,26 @@
             "translation": "Максимум 20 МиБ. Архив должен содержать одну именованную папку темы. Существующие темы нельзя заменить."
         },
         {
+            "id": "themes.import_warning",
+            "message": "A theme runs with full site privileges: its templates and scripts can read and change anything on this site. Install archives only from sources you trust and have reviewed.",
+            "translation": "Тема работает с полными правами сайта: её шаблоны и скрипты могут читать и изменять всё на этом сайте. Устанавливайте только архивы из проверенных и доверенных источников."
+        },
+        {
+            "id": "themes.import_password_label",
+            "message": "Confirm with your password",
+            "translation": "Подтвердите паролем"
+        },
+        {
+            "id": "themes.import_password_hint",
+            "message": "Enter your current password to confirm this installation.",
+            "translation": "Введите текущий пароль, чтобы подтвердить установку."
+        },
+        {
+            "id": "themes.import_password_invalid",
+            "message": "Theme not imported: enter your current password to confirm the installation.",
+            "translation": "Тема не импортирована: введите текущий пароль, чтобы подтвердить установку."
+        },
+        {
             "id": "themes.import_button",
             "message": "Import theme",
             "translation": "Импортировать тему"

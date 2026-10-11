@@ -13,10 +13,37 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-// knownWeakSecrets contains default/example secrets that must be rejected in production.
+// knownWeakSecrets contains default/example secrets that are rejected in every
+// environment: each one appears verbatim in a file this repository ships.
 var knownWeakSecrets = []string{
 	"change-me-to-32-byte-secret-key!",
 	"REPLACE_WITH_YOUR_OWN_SECRET_KEY!",
+	"replace-with-strong-random-secret", // .env.example.prod
+}
+
+// placeholderSecretPrefixes mark values copied from documentation or example
+// files without being replaced. They are rejected in every environment, for
+// the session secret and for the embed proxy token alike.
+var placeholderSecretPrefixes = []string{
+	"replace-with",
+	"replace_with",
+	"change-me",
+	"changeme",
+	"your-secret",
+	"your-secure",
+}
+
+// publicTestSecretPrefixes mark the secrets used by the test suite, CI and the
+// developer documentation. They clear the length and entropy checks, so they
+// are rejected by name in production; development keeps working with them.
+var publicTestSecretPrefixes = []string{
+	"test-secret",
+}
+
+// knownPlaceholderEmbedProxyTokens are example tokens shipped in this
+// repository that must never reach a running server.
+var knownPlaceholderEmbedProxyTokens = []string{
+	"replace-with-embed-proxy-token", // .env.example.prod
 }
 
 // Config holds the application configuration loaded from environment variables.
@@ -71,8 +98,8 @@ type Config struct {
 	RequireWebhookAllowedHosts       bool   `env:"OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS" envDefault:"false"`        // Reject startup in production when active webhooks exist without destination host allowlist
 
 	// Migrator source-database security configuration
-	MigratorAllowedDBHosts        string `env:"OCMS_MIGRATOR_ALLOWED_DB_HOSTS"`                                // Comma-separated hosts a migrator source may connect to; empty = no restriction
-	RequireMigratorAllowedDBHosts bool   `env:"OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS" envDefault:"false"`     // Reject startup in production when the migrator module is active without a source DB host allowlist
+	MigratorAllowedDBHosts        string `env:"OCMS_MIGRATOR_ALLOWED_DB_HOSTS"`                            // Comma-separated hosts a migrator source may connect to; empty = no restriction
+	RequireMigratorAllowedDBHosts bool   `env:"OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS" envDefault:"false"` // Reject startup in production when the migrator module is active without a source DB host allowlist
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
@@ -207,9 +234,18 @@ func Load() (*Config, error) {
 	}
 
 	// Reject known weak/default secrets
-	if slices.Contains(knownWeakSecrets, cfg.SessionSecret) {
-		return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default value and must not be used; " +
+	if slices.Contains(knownWeakSecrets, cfg.SessionSecret) || isPlaceholderSecret(cfg.SessionSecret) {
+		return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default or placeholder value and must not be used; " +
 			"generate a secure secret with: openssl rand -base64 32")
+	}
+	if cfg.Env == "production" && hasAnyPrefixFold(cfg.SessionSecret, publicTestSecretPrefixes) {
+		return nil, fmt.Errorf("OCMS_SESSION_SECRET is the public test-suite secret and must not be used in production; " +
+			"generate a secure secret with: openssl rand -base64 32")
+	}
+	if token := strings.TrimSpace(cfg.EmbedProxyToken); token != "" &&
+		(slices.Contains(knownPlaceholderEmbedProxyTokens, token) || isPlaceholderSecret(token)) {
+		return nil, fmt.Errorf("OCMS_EMBED_PROXY_TOKEN is a placeholder value and must not be used; " +
+			"generate a token with: openssl rand -base64 32")
 	}
 
 	// Low-entropy secrets: advisory in development, enforced in production.
@@ -237,6 +273,24 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// isPlaceholderSecret reports whether a secret still carries one of the
+// placeholder prefixes used in example files and documentation.
+func isPlaceholderSecret(secret string) bool {
+	return hasAnyPrefixFold(strings.TrimSpace(secret), placeholderSecretPrefixes)
+}
+
+// hasAnyPrefixFold reports whether s starts with any of the prefixes,
+// ignoring ASCII case.
+func hasAnyPrefixFold(s string, prefixes []string) bool {
+	lower := strings.ToLower(s)
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // countDistinctChars returns the number of distinct bytes in s. It is a

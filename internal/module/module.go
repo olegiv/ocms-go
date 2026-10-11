@@ -143,6 +143,22 @@ type ActivationDefaulter interface {
 	ActiveByDefault() bool
 }
 
+// EditorAccessible is an optional interface for modules whose admin routes
+// are meant for editors as well as administrators.
+//
+// The registry mounts every module's admin routes behind an admin-only gate
+// unless the module implements this interface and returns true. Module admin
+// pages are hidden from editors in the sidebar, and most of them change
+// site-wide behaviour (consent banners, tracking scripts, IP bans), so
+// editor access must be a deliberate, per-module decision rather than the
+// consequence of forgetting a middleware call.
+type EditorAccessible interface {
+	// EditorAdminRoutes reports whether editors may use the module's admin
+	// routes. The module's own handlers remain responsible for any finer
+	// checks.
+	EditorAdminRoutes() bool
+}
+
 // Migration represents a database migration for a module.
 type Migration struct {
 	Version     int64

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/auth"
+	"github.com/olegiv/ocms-go/internal/model"
 )
 
 // testDB creates a temporary test database.
@@ -314,6 +315,31 @@ func TestCountUsers(t *testing.T) {
 	}
 	if count != 3 {
 		t.Errorf("count = %d, want 3", count)
+	}
+}
+
+// TestSeedKeepsDefaultAdminAbsentWhileAnotherAdminExists fails when seeding
+// recreates admin@example.com (with its public password) after the operator
+// renamed or replaced it, as long as OCMS_DO_SEED stays on (finding M-4).
+func TestSeedKeepsDefaultAdminAbsentWhileAnotherAdminExists(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+
+	now := time.Now()
+	if _, err := q.CreateUser(ctx, CreateUserParams{
+		Email: "owner@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "Owner", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	if _, err := q.GetUserByEmail(ctx, DefaultAdminEmail); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("default admin was seeded although an administrator exists (err = %v)", err)
+	}
+	if n, err := q.CountUsers(ctx); err != nil || n != 1 {
+		t.Fatalf("users = %d, %v; want 1", n, err)
 	}
 }
 

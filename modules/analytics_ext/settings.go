@@ -90,8 +90,11 @@ func saveSettings(db *sql.DB, s *Settings) error {
 }
 
 // renderHeadScripts generates the tracking scripts for the <head> section.
-// SECURITY: Output is cast to template.HTML. All admin-controlled values
-// (GTM ID, GA4 ID, Matomo URL/ID) are escaped with template.HTMLEscapeString.
+// SECURITY: Output is cast to template.HTML. Every admin-controlled value is
+// first checked against its documented format (values stored before format
+// validation existed are skipped rather than injected), then escaped for the
+// context it lands in: template.JSEscapeString inside script string literals
+// and template.HTMLEscapeString inside HTML attributes.
 func (m *Module) renderHeadScripts(nonce string) template.HTML {
 	if m.settings == nil {
 		return ""
@@ -100,7 +103,7 @@ func (m *Module) renderHeadScripts(nonce string) template.HTML {
 	var scripts strings.Builder
 
 	// Google Tag Manager (head script)
-	if m.settings.GTMEnabled && m.settings.GTMContainerID != "" {
+	if m.gtmActive() {
 		scripts.WriteString(fmt.Sprintf(`<!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -108,11 +111,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','%s');</script>
 <!-- End Google Tag Manager -->
-`, template.HTMLEscapeString(m.settings.GTMContainerID)))
+`, template.JSEscapeString(m.settings.GTMContainerID)))
 	}
 
 	// Google Analytics 4 (only if GTM is not enabled, since GA4 is typically loaded via GTM)
-	if m.settings.GA4Enabled && m.settings.GA4MeasurementID != "" && !m.settings.GTMEnabled {
+	if m.ga4Active() && !m.settings.GTMEnabled {
 		scripts.WriteString(fmt.Sprintf(`<!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script>
 <script>
@@ -123,11 +126,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 </script>
 <!-- End Google Analytics 4 -->
 `, template.HTMLEscapeString(m.settings.GA4MeasurementID),
-			template.HTMLEscapeString(m.settings.GA4MeasurementID)))
+			template.JSEscapeString(m.settings.GA4MeasurementID)))
 	}
 
 	// Matomo tracking code (head portion - tracking code)
-	if m.settings.MatomoEnabled && m.settings.MatomoURL != "" && m.settings.MatomoSiteID != "" {
+	if m.matomoActive() {
 		matomoURL := strings.TrimSuffix(m.settings.MatomoURL, "/")
 		scripts.WriteString(fmt.Sprintf(`<!-- Matomo -->
 <script>
@@ -143,15 +146,16 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   })();
 </script>
 <!-- End Matomo Code -->
-`, template.HTMLEscapeString(matomoURL),
-			template.HTMLEscapeString(m.settings.MatomoSiteID)))
+`, template.JSEscapeString(matomoURL),
+			template.JSEscapeString(m.settings.MatomoSiteID)))
 	}
 
 	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))
 }
 
 // renderBodyScripts generates the tracking scripts for the end of <body>.
-// SECURITY: Same protections as renderHeadScripts - values are HTML-escaped.
+// SECURITY: Same protections as renderHeadScripts; these fragments are HTML
+// attributes, so values are HTML-escaped after the format check.
 func (m *Module) renderBodyScripts(nonce string) template.HTML {
 	if m.settings == nil {
 		return ""
@@ -160,7 +164,7 @@ func (m *Module) renderBodyScripts(nonce string) template.HTML {
 	var scripts strings.Builder
 
 	// Google Tag Manager (noscript fallback)
-	if m.settings.GTMEnabled && m.settings.GTMContainerID != "" {
+	if m.gtmActive() {
 		scripts.WriteString(fmt.Sprintf(`<!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=%s"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -169,7 +173,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 	}
 
 	// Matomo noscript fallback
-	if m.settings.MatomoEnabled && m.settings.MatomoURL != "" && m.settings.MatomoSiteID != "" {
+	if m.matomoActive() {
 		matomoURL := strings.TrimSuffix(m.settings.MatomoURL, "/")
 		scripts.WriteString(fmt.Sprintf(`<!-- Matomo Image Tracker -->
 <noscript><img referrerpolicy="no-referrer-when-downgrade" src="%s/matomo.php?idsite=%s&amp;rec=1" style="border:0" alt="" /></noscript>
@@ -179,4 +183,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 	}
 
 	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))
+}
+
+// gtmActive reports whether GTM is enabled with a well-formed container ID.
+func (m *Module) gtmActive() bool {
+	return m.settings.GTMEnabled && validGTMContainerID(m.settings.GTMContainerID)
+}
+
+// ga4Active reports whether GA4 is enabled with a well-formed measurement ID.
+func (m *Module) ga4Active() bool {
+	return m.settings.GA4Enabled && validGA4MeasurementID(m.settings.GA4MeasurementID)
+}
+
+// matomoActive reports whether Matomo is enabled with a well-formed URL and site ID.
+func (m *Module) matomoActive() bool {
+	return m.settings.MatomoEnabled && validMatomoURL(m.settings.MatomoURL) && validMatomoSiteID(m.settings.MatomoSiteID)
 }

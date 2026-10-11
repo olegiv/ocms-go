@@ -371,23 +371,27 @@ func TestRenderHeadScripts_EnabledWithoutID(t *testing.T) {
 	}
 }
 
-func TestRenderScripts_HTMLEscaping(t *testing.T) {
-	m := New()
-	m.settings = &Settings{
-		GA4Enabled:       true,
-		GA4MeasurementID: "G-<script>alert('xss')</script>",
-	}
-
-	result := string(m.renderHeadScripts(""))
-
-	// Should not contain raw script tags
-	if strings.Contains(result, "<script>alert") {
-		t.Error("XSS vulnerability: script tag not escaped")
-	}
-
-	// Should contain escaped version
-	if !strings.Contains(result, "&lt;script&gt;") {
-		t.Error("Script tag not properly HTML escaped")
+// TestRenderScripts_MalformedValuesNotInjected locks in the render-time
+// format check: an identifier that is not in its documented shape is never
+// written into the page, in either the script or the noscript fragment. The
+// values below are what a JavaScript-context breakout would look like after
+// HTML escaping alone (finding M-1, 2026-10-11).
+func TestRenderScripts_MalformedValuesNotInjected(t *testing.T) {
+	for name, settings := range map[string]*Settings{
+		"ga4 html":        {GA4Enabled: true, GA4MeasurementID: "G-<script>alert('xss')</script>"},
+		"ga4 js breakout": {GA4Enabled: true, GA4MeasurementID: "G-X');alert(1);//"},
+		"gtm js breakout": {GTMEnabled: true, GTMContainerID: "GTM-X');alert(1);//"},
+		"matomo url":      {MatomoEnabled: true, MatomoURL: `https://x.example.com/");alert(1);//`, MatomoSiteID: "1"},
+		"matomo site id":  {MatomoEnabled: true, MatomoURL: "https://x.example.com/", MatomoSiteID: "1');alert(1);//"},
+	} {
+		m := New()
+		m.settings = settings
+		if head := string(m.renderHeadScripts("")); head != "" {
+			t.Errorf("%s: head scripts rendered a malformed value: %s", name, head)
+		}
+		if body := string(m.renderBodyScripts("")); body != "" {
+			t.Errorf("%s: body scripts rendered a malformed value: %s", name, body)
+		}
 	}
 }
 

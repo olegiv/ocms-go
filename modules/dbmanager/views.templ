@@ -118,6 +118,9 @@ templ DBManagerPage(pc *adminviews.PageContext, data DBManagerViewData) {
 							<div class="result-stats">
 								if data.Result.IsSelect {
 									<span class="badge badge-info">{ fmt.Sprintf("%d", data.Result.RowsAffected) } { pc.T("dbmanager.results_rows") }</span>
+									if data.Result.Truncated {
+										<span class="badge badge-warning">{ pc.T("dbmanager.results_truncated", MaxResultRows) }</span>
+									}
 								} else {
 									<span class="badge badge-info">{ fmt.Sprintf("%d", data.Result.RowsAffected) } { pc.T("dbmanager.results_affected") }</span>
 								}

@@ -87,6 +87,10 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	for _, key := range validateTrackerFormats(newSettings) {
+		validationErrors = append(validationErrors, i18n.T(lang, key))
+	}
+
 	if len(validationErrors) > 0 {
 		m.ctx.Render.SetFlash(r, strings.Join(validationErrors, " "), "error")
 		http.Redirect(w, r, "/admin/external-analytics", http.StatusSeeOther)

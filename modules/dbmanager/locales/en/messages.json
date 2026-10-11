@@ -17,6 +17,7 @@
         {"id": "dbmanager.results_rows", "message": "Rows", "translation": "Rows"},
         {"id": "dbmanager.results_time", "message": "Execution time", "translation": "Execution time"},
         {"id": "dbmanager.results_affected", "message": "Rows affected", "translation": "Rows affected"},
+        {"id": "dbmanager.results_truncated", "message": "Only the first %d rows are shown", "translation": "Only the first %d rows are shown"},
         {"id": "dbmanager.results_empty", "message": "Query returned no results", "translation": "Query returned no results"},
         {"id": "dbmanager.results_success", "message": "Query executed successfully", "translation": "Query executed successfully"},
         {"id": "dbmanager.error_title", "message": "Error", "translation": "Error"},

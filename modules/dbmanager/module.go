@@ -44,6 +44,12 @@ func (m *Module) Init(ctx *module.Context) error {
 	return nil
 }
 
+// ActiveByDefault keeps the SQL console off until an administrator enables
+// it in Admin > Modules. The module runs arbitrary statements against the
+// live database, so a fresh install must not ship it switched on; sites that
+// already chose a status keep it (finding M-2, 2026-10-11).
+func (m *Module) ActiveByDefault() bool { return false }
+
 // Shutdown performs cleanup when the module is shutting down.
 func (m *Module) Shutdown() error {
 	if m.ctx != nil {

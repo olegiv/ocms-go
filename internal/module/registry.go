@@ -19,6 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -625,10 +626,26 @@ func (r *Registry) RouteAll(router chi.Router) {
 }
 
 // AdminRouteAll registers all module admin routes with active status middleware.
+//
+// Module admin routes are admin-only unless the module implements
+// EditorAccessible and returns true. The gate lives here, not in each module,
+// so that a module which forgets its own middleware is closed rather than open:
+// the router mounts these routes in the editor-level admin group, and the
+// sidebar already hides module pages from editors.
 func (r *Registry) AdminRouteAll(router chi.Router) {
 	r.routeAllWithFunc(router, true, func(m Module, subRouter chi.Router) {
+		if !AllowsEditors(m) {
+			subRouter.Use(middleware.RequireAdmin())
+		}
 		m.RegisterAdminRoutes(subRouter)
 	})
+}
+
+// AllowsEditors reports whether a module has opted its admin routes in for
+// editors through the EditorAccessible interface.
+func AllowsEditors(m Module) bool {
+	editorAccessible, ok := m.(EditorAccessible)
+	return ok && editorAccessible.EditorAdminRoutes()
 }
 
 // moduleActiveMiddleware returns middleware that checks if a module is active.

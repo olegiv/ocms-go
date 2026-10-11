@@ -28,7 +28,7 @@ func TestThemeListManagementControls(t *testing.T) {
 			t.Fatal(err)
 		}
 		html := buffer.String()
-		for _, expected := range []string{`action="/admin/themes/import"`, `enctype="multipart/form-data"`, `accept=".tar.gz"`, `action="/admin/themes/custom/delete"`, `aria-labelledby="delete-theme-title-custom"`, i18n.T(lang, "themes.import_title")} {
+		for _, expected := range []string{`action="/admin/themes/import"`, `enctype="multipart/form-data"`, `accept=".tar.gz"`, `name="confirm_password"`, `autocomplete="current-password"`, `action="/admin/themes/custom/delete"`, `aria-labelledby="delete-theme-title-custom"`, i18n.T(lang, "themes.import_title"), i18n.T(lang, "themes.import_warning")} {
 			if !strings.Contains(html, expected) {
 				t.Errorf("%s: missing %s", lang, expected)
 			}

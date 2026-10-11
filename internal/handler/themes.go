@@ -15,6 +15,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -86,6 +87,15 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.invalid_upload"))
 		return
 	}
+	// An imported theme runs with the site's full privileges (templates with
+	// safeHTML/safeURL, same-origin scripts), so every import re-authenticates
+	// the administrator rather than relying on the session alone.
+	user := middleware.GetUser(r)
+	if !passwordConfirmed(r.FormValue("confirm_password"), user) {
+		slog.Warn("theme import refused: password confirmation failed", "user_id", middleware.GetUserID(r))
+		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
+		return
+	}
 	file, header, err := r.FormFile("archive")
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.archive_required"))
@@ -122,6 +132,20 @@ func (h *ThemesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	h.invalidateThemeCaches()
 	slog.Info("admin deleted theme", "theme", name, "user_id", middleware.GetUserID(r))
 	flashSuccess(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.delete_success"))
+}
+
+// passwordConfirmed reports whether password is the current password of user.
+// A missing user or an empty submission never confirms.
+func passwordConfirmed(password string, user *store.User) bool {
+	if user == nil || password == "" {
+		return false
+	}
+	ok, err := auth.CheckPassword(password, user.PasswordHash)
+	if err != nil {
+		slog.Error("failed to verify password confirmation", "error", err, "user_id", user.ID)
+		return false
+	}
+	return ok
 }
 
 // themeErrorMessage returns the flash text for a failed theme operation.

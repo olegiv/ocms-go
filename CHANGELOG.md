@@ -21,6 +21,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `examples/themes/tiny-sample.tar.gz` theme is bundled for trying the flow.
   See `docs/custom-themes.md` and the wiki's Theme System page.
 
+### Security
+- **Module admin routes are admin-only by default.** The module registry now
+  mounts every module's admin routes behind an admin gate; a module that
+  wants editor access opts in with `EditorAdminRoutes()` (only Internal
+  Analytics does). Previously Privacy, External Analytics, Informer, Example,
+  Sentinel and the Bookmarks sample were reachable by editors. A startup test
+  keeps the opt-in list explicit.
+- **External Analytics validates tracker identifiers.** GA4, GTM and Matomo
+  values must match their documented formats on save, are escaped for the
+  JavaScript context they are rendered in, and are skipped at render time if a
+  stored value is malformed.
+- **DB Manager is inactive by default** on new installs, caps SELECT results at
+  1,000 rows and cancels statements after 10 seconds. Existing installs keep
+  their chosen status.
+- **Placeholder secrets are refused.** `OCMS_SESSION_SECRET` values copied
+  from example files or docs (`replace-with…`, `change-me…`, `your-secret…`)
+  fail startup in every environment, the public test-suite secret fails in
+  production, and a placeholder `OCMS_EMBED_PROXY_TOKEN` fails as well.
+- **Seeding never recreates the default admin** while any administrator
+  account exists, so a renamed or deleted `admin@example.com` does not return
+  on a restart that still has `OCMS_DO_SEED=true`.
+- **Theme import requires password confirmation** and the form warns that an
+  imported theme runs with the site's full privileges.
+
 ## [0.27.0] - 2026-10-09
 
 ### Changed
