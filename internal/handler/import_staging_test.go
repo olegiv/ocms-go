@@ -9,7 +9,38 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+// TestStagedImportExpiresOnRead fails when a staged payload older than
+// importStageMaxAge can still be confirmed: an administrator who stays active
+// keeps the session alive, so the file's age, not the session, must enforce
+// the advertised limit.
+func TestStagedImportExpiresOnRead(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	h := NewImportExportHandler(db, nil, sm)
+	req := requestWithSession(sm, httptest.NewRequest(http.MethodPost, "/admin/import", nil))
+	ctx := req.Context()
+
+	if err := h.stageImportPayload(ctx, []byte(`{"version":"1"}`)); err != nil {
+		t.Fatal(err)
+	}
+	path := sm.GetString(ctx, sessionKeyImportPayloadPath)
+	expired := time.Now().Add(-importStageMaxAge - time.Minute)
+	if err := os.Chtimes(path, expired, expired); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, staged, err := h.loadStagedImport(ctx); err != nil || staged {
+		t.Fatalf("expired payload loaded: staged=%v err=%v", staged, err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expired staged file still exists: %v", err)
+	}
+	if sm.Exists(ctx, sessionKeyImportPayloadPath) {
+		t.Fatal("session still references the expired payload")
+	}
+}
 
 // TestImportPayloadStagedOnDiskNotInSession fails when an uploaded import
 // goes back into the session row, or when the staged file outlives the

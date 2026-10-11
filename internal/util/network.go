@@ -44,6 +44,12 @@ func init() {
 		"2001:db8::/32",   // RFC 3849 - IPv6 documentation
 		"ff00::/8",        // RFC 4291 - IPv6 multicast
 		"::/128",          // IPv6 unspecified
+		// RFC 8215 local-use NAT64. The translator may use any prefix length
+		// from /48 to /96 inside this range (RFC 6052 section 2.2), so the
+		// position of the embedded IPv4 address is unknowable here and a
+		// private address could hide behind a decode that assumes /96. The
+		// whole range is refused instead.
+		"64:ff9b:1::/48",
 	}
 	for _, cidr := range cidrs {
 		_, block, err := net.ParseCIDR(cidr)
@@ -63,15 +69,15 @@ func isHTTPSOutboundRequired() bool {
 	return requireHTTPSOutbound.Load()
 }
 
-// IPv6 prefixes that carry an IPv4 address inside them. The embedded
-// address decides whether the destination is private: blocking the whole
-// prefix would cut IPv6-only hosts behind DNS64/NAT64 off from every IPv4
-// destination, while letting it through would reach 127.0.0.1 or 10.0.0.1
-// through a translator.
+// IPv6 prefixes that carry an IPv4 address at a fixed position. The
+// embedded address decides whether the destination is private: blocking the
+// whole prefix would cut IPv6-only hosts behind DNS64/NAT64 off from every
+// IPv4 destination, while letting it through would reach 127.0.0.1 or
+// 10.0.0.1 through a translator. The local-use NAT64 range 64:ff9b:1::/48
+// has no fixed position and is refused outright in privateIPBlocks.
 var (
-	nat64WellKnownPrefix = mustParseCIDR("64:ff9b::/96")   // RFC 6052, IPv4 in the last 32 bits
-	nat64LocalUsePrefix  = mustParseCIDR("64:ff9b:1::/48") // RFC 8215, IPv4 in the last 32 bits
-	sixToFourPrefix      = mustParseCIDR("2002::/16")      // RFC 3056, IPv4 in bits 16-47
+	nat64WellKnownPrefix = mustParseCIDR("64:ff9b::/96") // RFC 6052, IPv4 in the last 32 bits
+	sixToFourPrefix      = mustParseCIDR("2002::/16")    // RFC 3056, IPv4 in bits 16-47
 )
 
 func mustParseCIDR(cidr string) *net.IPNet {
@@ -93,7 +99,7 @@ func embeddedIPv4(ip net.IP) net.IP {
 		return nil
 	}
 	switch {
-	case nat64WellKnownPrefix.Contains(ip16), nat64LocalUsePrefix.Contains(ip16):
+	case nat64WellKnownPrefix.Contains(ip16):
 		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15])
 	case sixToFourPrefix.Contains(ip16):
 		return net.IPv4(ip16[2], ip16[3], ip16[4], ip16[5])

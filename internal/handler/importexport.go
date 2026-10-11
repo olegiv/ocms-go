@@ -733,6 +733,10 @@ func (h *ImportExportHandler) loadStagedImport(ctx context.Context) (payload []b
 		h.sessionManager.Remove(ctx, sessionKeyImportPayloadPath)
 		return nil, false, nil
 	}
+	if info, statErr := os.Stat(path); statErr == nil && time.Since(info.ModTime()) > importStageMaxAge {
+		h.discardStagedImport(ctx)
+		return nil, false, nil
+	}
 	payload, err = os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		h.sessionManager.Remove(ctx, sessionKeyImportPayloadPath)

@@ -60,9 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Content import stages uploads on disk** instead of base64 in the session
   table (kept for two hours, the session idle timeout), reports unreadable
   archives generically and logs the detail.
-- **Outbound URL checks judge NAT64 and 6to4 addresses by the IPv4 address
-  they embed** and block the discard-only, documentation and multicast IPv6
-  ranges in addition to the existing private ranges.
+- **Outbound URL checks judge well-known NAT64 and 6to4 addresses by the IPv4
+  address they embed**, refuse the local-use NAT64 range `64:ff9b:1::/48`
+  (its translator prefix length, and so the position of the embedded
+  address, is not fixed) and block the discard-only, documentation and
+  multicast IPv6 ranges in addition to the existing private ranges.
 - **Dify API key is a password field** that never reaches the form data; a
   blank submission keeps the stored key, and a save is refused if the stored
   settings cannot be read.

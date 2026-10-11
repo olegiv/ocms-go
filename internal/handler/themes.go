@@ -143,6 +143,9 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
 		return
 	}
+	if h.loginProtection != nil {
+		h.loginProtection.RecordSuccessfulLogin(user.Email, clientIP)
+	}
 	file, header, err := r.FormFile("archive")
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.archive_required"))

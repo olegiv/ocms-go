@@ -31,8 +31,11 @@ func TestIsPrivateIP(t *testing.T) {
 		{"NAT64 loopback", "64:ff9b::7f00:1", true},
 		{"NAT64 private", "64:ff9b::a00:1", true},
 		{"NAT64 public", "64:ff9b::808:808", false},
+		// The local-use NAT64 range allows any prefix length from /48 to /96,
+		// so the embedded address cannot be located; the range is refused.
 		{"local-use NAT64 link-local", "64:ff9b:1::a9fe:1", true},
-		{"local-use NAT64 public", "64:ff9b:1::101:101", false},
+		{"local-use NAT64 /96 layout public", "64:ff9b:1::101:101", true},
+		{"local-use NAT64 /48 layout hides 10.0.0.1", "64:ff9b:1:a00:0:100:808:808", true},
 		{"6to4 loopback", "2002:7f00:1::1", true},
 		{"6to4 private", "2002:c0a8:101::1", true},
 		{"6to4 public", "2002:808:808::1", false},

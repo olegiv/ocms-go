@@ -461,3 +461,31 @@ func TestThemeEventLogCarriesMetadata(t *testing.T) {
 		t.Fatalf("event metadata = %v, url %q, ip %q", meta, events[0].RequestUrl, events[0].IpAddress)
 	}
 }
+
+// TestThemeImportPasswordConfirmationResetsLockout fails when a valid
+// password confirmation leaves earlier failed confirmations counted: with a
+// limit of two, a typo, a correct confirmation and another typo must not
+// lock the account, because the correct confirmation proved identity.
+func TestThemeImportPasswordConfirmationResetsLockout(t *testing.T) {
+	h := themeManagementHandler(t)
+	lockoutDB, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	h.loginProtection = middleware.NewLoginProtection(lockoutDB, middleware.LoginProtectionConfig{MaxFailedAttempts: 2, LockoutDuration: time.Minute, AttemptWindow: time.Minute})
+	archive := starterThemeArchive(t)
+	user := themeImportUser(t)
+
+	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, "wrong-"+themeImportPassword))
+	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, themeImportPassword))
+	if h.themeManager.ThemeCount() != 1 {
+		t.Fatal("import with the correct password did not succeed")
+	}
+	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, "wrong-"+themeImportPassword)
+	h.Import(httptest.NewRecorder(), r)
+
+	if locked, _ := h.loginProtection.IsAccountLocked(user.Email, middleware.GetClientIP(r)); locked {
+		t.Fatal("account locked after one failure on each side of a valid confirmation")
+	}
+	if remaining := h.loginProtection.GetRemainingAttempts(user.Email, middleware.GetClientIP(r)); remaining != 1 {
+		t.Fatalf("remaining attempts = %d, want 1 (only the failure after the reset counts)", remaining)
+	}
+}
