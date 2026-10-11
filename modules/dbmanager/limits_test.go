@@ -88,3 +88,30 @@ func TestExecuteQueryHonoursTimeout(t *testing.T) {
 		t.Fatalf("history entries = %d, want 2 (timed-out statements must be recorded)", len(history))
 	}
 }
+
+// TestTruncatedQueryReleasesConnectionBeforeHistory fails when a truncated
+// SELECT keeps its result set, and so its pool connection, open while the
+// history insert waits for another connection: with a single-connection
+// pool that wait only ends when the query deadline cancels the cursor.
+func TestTruncatedQueryReleasesConnectionBeforeHistory(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	db.SetMaxOpenConns(1)
+	m := testModule(t, db)
+	m.queryTimeout = 3 * time.Second
+
+	start := time.Now()
+	result := m.executeQuery(context.Background(),
+		"WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n < 2500) SELECT n FROM seq", 1)
+	elapsed := time.Since(start)
+	if result.Error != "" || !result.Truncated {
+		t.Fatalf("executeQuery: error=%q truncated=%v", result.Error, result.Truncated)
+	}
+	if elapsed >= m.queryTimeout {
+		t.Fatalf("truncated query took %v, at least the %v deadline: the history insert waited for the cursor's connection", elapsed, m.queryTimeout)
+	}
+	history, err := m.getQueryHistory(context.Background(), 1)
+	if err != nil || len(history) != 1 || !history[0].Truncated {
+		t.Fatalf("history after a truncated query = %+v, %v; want one truncated entry", history, err)
+	}
+}

@@ -196,6 +196,9 @@ func (m *Module) executeQuery(ctx context.Context, query string, userID int64) *
 		if err := rows.Err(); err != nil {
 			return fail(err)
 		}
+		// A truncated result still holds its connection; release it before
+		// the history insert asks the pool for another one.
+		_ = rows.Close()
 
 		result.Rows = resultRows
 		result.RowsAffected = int64(len(resultRows))
