@@ -18,6 +18,12 @@ import (
 	"strings"
 )
 
+// sampleThemeArchiveURL downloads the bundled Tiny Sample theme archive from
+// the repository. The import card links to it so a first-time administrator
+// has something to try; the raw form downloads directly instead of landing on
+// the GitHub blob page.
+const sampleThemeArchiveURL = "https://github.com/olegiv/ocms-go/raw/master/examples/themes/tiny-sample.tar.gz"
+
 func safeThemeImageURL(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -115,6 +121,10 @@ templ ThemesListPage(pc *PageContext, data ThemesListData) {
 						}
 						@input.Input(input.Props{ID: "theme-archive", Name: "archive", Type: input.TypeFile, FileAccept: ".tar.gz", Attributes: templ.Attributes{"required": true, "aria-describedby": "theme-import-note"}})
 						<p id="theme-import-note" class="text-sm text-muted-foreground">{ pc.T("themes.import_note") }</p>
+						<p class="text-sm text-muted-foreground">
+							{ pc.T("themes.import_sample_hint") }
+							<a href={ templ.SafeURL(sampleThemeArchiveURL) } class="underline" target="_blank" rel="noopener noreferrer">{ pc.T("themes.import_sample_link") }</a>
+						</p>
 						@label.Label(label.Props{For: "theme-import-password"}) {
 							{ pc.T("themes.import_password_label") }
 						}

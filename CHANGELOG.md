@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entries are ignored. Archive problems are reported in the admin, while
   internal failures show a generic message and are logged. Core and active
   themes are protected, both actions are blocked in demo mode, and a ready-to-upload
-  `examples/themes/tiny-sample.tar.gz` theme is bundled for trying the flow.
+  `examples/themes/tiny-sample.tar.gz` theme is bundled for trying the flow:
+  the import card links to it and `examples/README.md` describes it.
   See `docs/custom-themes.md` and the wiki's Theme System page.
 
 ### Security

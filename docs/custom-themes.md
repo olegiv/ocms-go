@@ -73,9 +73,11 @@ Custom themes extend or replace oCMS core themes without modifying core code. Th
 ## Bundled Sample Archive
 
 Upload [`examples/themes/tiny-sample.tar.gz`](../examples/themes/tiny-sample.tar.gz)
-at **Admin > Themes**, then activate **Tiny Sample**. The archive contains a
-minimal HTML theme with all seven required page templates, responsive CSS, and
-an SVG preview. It has no JavaScript or external asset dependencies.
+at **Admin > Themes**, then activate **Tiny Sample**. The import card links to
+the archive on GitHub, and [`examples/README.md`](../examples/README.md)
+describes it. The archive contains a minimal HTML theme with all seven required
+page templates, responsive CSS, and an SVG preview. It has no JavaScript or
+external asset dependencies.
 
 The `tiny-sample` identifier is distinct from `starter`. The archive lives outside
 `custom/themes/`, so it is ready to import rather than already installed. Extract

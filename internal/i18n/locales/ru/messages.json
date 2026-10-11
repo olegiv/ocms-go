@@ -1963,6 +1963,16 @@
             "translation": "Максимум 20 МиБ. Архив должен содержать одну именованную папку темы. Существующие темы нельзя заменить."
         },
         {
+            "id": "themes.import_sample_hint",
+            "message": "New to theme archives? Try the bundled sample first:",
+            "translation": "Впервые устанавливаете тему? Сначала попробуйте образец из репозитория:"
+        },
+        {
+            "id": "themes.import_sample_link",
+            "message": "download the Tiny Sample archive",
+            "translation": "скачать архив Tiny Sample"
+        },
+        {
             "id": "themes.import_warning",
             "message": "A theme runs with full site privileges: its templates and scripts can read and change anything on this site. Install archives only from sources you trust and have reviewed.",
             "translation": "Тема работает с полными правами сайта: её шаблоны и скрипты могут читать и изменять всё на этом сайте. Устанавливайте только архивы из проверенных и доверенных источников."

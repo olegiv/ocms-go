@@ -116,7 +116,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 - **Template Override**: Themes can customize page templates
 - **Static Assets**: Theme-specific CSS, JavaScript, and images
 - **Theme Import and Deletion**: Admin upload of validated `.tar.gz` HTML themes and removal of inactive custom themes without a restart; core themes are protected. See [Custom Themes](docs/custom-themes.md).
-- **Sample Theme Archive**: Upload [Tiny Sample](examples/themes/tiny-sample.tar.gz) to try theme import and activation with a minimal HTML theme.
+- **Sample Theme Archive**: Upload [Tiny Sample](examples/themes/tiny-sample.tar.gz) to try theme import and activation with a minimal HTML theme; the import card links to it, and [examples/README.md](examples/README.md) describes it.
 
 ### Module System
 - **Extensible Architecture**: Add custom functionality via modules

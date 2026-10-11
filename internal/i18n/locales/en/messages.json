@@ -1963,6 +1963,16 @@
             "translation": "Maximum 20 MiB. The archive must contain one named theme directory. Existing themes cannot be replaced."
         },
         {
+            "id": "themes.import_sample_hint",
+            "message": "New to theme archives? Try the bundled sample first:",
+            "translation": "New to theme archives? Try the bundled sample first:"
+        },
+        {
+            "id": "themes.import_sample_link",
+            "message": "download the Tiny Sample archive",
+            "translation": "download the Tiny Sample archive"
+        },
+        {
             "id": "themes.import_warning",
             "message": "A theme runs with full site privileges: its templates and scripts can read and change anything on this site. Install archives only from sources you trust and have reviewed.",
             "translation": "A theme runs with full site privileges: its templates and scripts can read and change anything on this site. Install archives only from sources you trust and have reviewed."

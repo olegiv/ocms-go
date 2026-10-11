@@ -28,7 +28,7 @@ func TestThemeListManagementControls(t *testing.T) {
 			t.Fatal(err)
 		}
 		html := buffer.String()
-		for _, expected := range []string{`action="/admin/themes/import"`, `enctype="multipart/form-data"`, `accept=".tar.gz"`, `name="confirm_password"`, `autocomplete="current-password"`, `action="/admin/themes/custom/delete"`, `aria-labelledby="delete-theme-title-custom"`, i18n.T(lang, "themes.import_title"), i18n.T(lang, "themes.import_warning")} {
+		for _, expected := range []string{`action="/admin/themes/import"`, `enctype="multipart/form-data"`, `accept=".tar.gz"`, `name="confirm_password"`, `autocomplete="current-password"`, `action="/admin/themes/custom/delete"`, `aria-labelledby="delete-theme-title-custom"`, i18n.T(lang, "themes.import_title"), i18n.T(lang, "themes.import_warning"), `href="` + sampleThemeArchiveURL + `"`, `rel="noopener noreferrer"`, i18n.T(lang, "themes.import_sample_link")} {
 			if !strings.Contains(html, expected) {
 				t.Errorf("%s: missing %s", lang, expected)
 			}
@@ -44,8 +44,8 @@ func TestThemeListManagementControls(t *testing.T) {
 		if err := ThemesListPage(pc, data).Render(t.Context(), &buffer); err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(buffer.String(), `action="/admin/themes/import"`) || strings.Contains(buffer.String(), `action="/admin/themes/custom/delete"`) {
-			t.Fatal("demo rendered management forms")
+		if strings.Contains(buffer.String(), `action="/admin/themes/import"`) || strings.Contains(buffer.String(), `action="/admin/themes/custom/delete"`) || strings.Contains(buffer.String(), sampleThemeArchiveURL) {
+			t.Fatal("demo rendered management forms or the sample download link")
 		}
 	}
 }
