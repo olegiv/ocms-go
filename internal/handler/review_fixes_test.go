@@ -275,3 +275,41 @@ func pragmaColumns(t *testing.T, db *sql.DB, table string) []string {
 	}
 	return cols
 }
+
+// TestLoginLockoutIsScopedByClientAddress fails when the login handler stops
+// passing the client address into the lockout, which would lock the account
+// for every address after one attacker's failures.
+func TestLoginLockoutIsScopedByClientAddress(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	lockoutDB, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	lp := middleware.NewLoginProtection(lockoutDB, middleware.LoginProtectionConfig{MaxFailedAttempts: 3, LockoutDuration: time.Minute, AttemptWindow: time.Minute})
+	h := NewAuthHandler(db, renderer, sm, lp, nil)
+
+	attempt := func(remoteAddr string) string {
+		form := url.Values{"email": {"owner@example.com"}, "password": {"wrong"}}
+		r := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.RemoteAddr = remoteAddr
+		r = requestWithSession(sm, r)
+		h.Login(httptest.NewRecorder(), r)
+		return sm.GetString(r.Context(), "flash")
+	}
+	var last string
+	for range 3 {
+		last = attempt("198.51.100.7:1")
+	}
+	if !strings.Contains(last, i18n.T("en", "auth.too_many_attempts", "")[:10]) {
+		t.Fatalf("attacker's third failure flash = %q, want the lockout message", last)
+	}
+	if got := attempt("203.0.113.9:1"); got != i18n.T("en", "auth.attempts_remaining", 2) {
+		t.Fatalf("owner's address flash = %q, want %q (not locked by the attacker's address)", got, i18n.T("en", "auth.attempts_remaining", 2))
+	}
+}

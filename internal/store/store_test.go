@@ -320,7 +320,7 @@ func TestCountUsers(t *testing.T) {
 
 // TestSeedKeepsDefaultAdminAbsentWhileAnotherAdminExists fails when seeding
 // recreates admin@example.com (with its public password) after the operator
-// renamed or replaced it, as long as OCMS_DO_SEED stays on (finding M-4).
+// renamed or replaced it, as long as OCMS_DO_SEED stays on.
 func TestSeedKeepsDefaultAdminAbsentWhileAnotherAdminExists(t *testing.T) {
 	db, cleanup, ctx, q := testSetup(t)
 	defer cleanup()

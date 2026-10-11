@@ -168,7 +168,7 @@ so oCMS does not emit an archive it would refuse to restore.
 ### Import Process
 
 1. **Upload**: Select your export file
-2. **Validate**: Preview what will be imported
+2. **Validate**: Preview what will be imported. The uploaded file is kept on the server for two hours (the session idle timeout) while you review; after that, upload it again
 3. **Configure**: Set conflict resolution strategy
 4. **Import**: Execute the import
 5. **Review**: Check the import summary

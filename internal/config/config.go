@@ -7,25 +7,18 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"slices"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
 )
 
-// knownWeakSecrets contains default/example secrets rejected verbatim in
-// every environment. Today each entry is also caught by
-// placeholderSecretPrefixes; the list stays as the exact-match hook for a
-// future value that does not share one of those prefixes.
-var knownWeakSecrets = []string{
-	"change-me-to-32-byte-secret-key!",
-	"REPLACE_WITH_YOUR_OWN_SECRET_KEY!",
-	"replace-with-strong-random-secret", // .env.example.prod
-}
-
 // placeholderSecretPrefixes mark values copied from documentation or example
-// files without being replaced. They are rejected in every environment, for
-// the session secret and for the embed proxy token alike.
+// files without being replaced; the repository's own example secrets
+// ("change-me-to-32-byte-secret-key!", "REPLACE_WITH_YOUR_OWN_SECRET_KEY!",
+// "replace-with-strong-random-secret", "replace-with-embed-proxy-token") all
+// start with one of them. They are matched case-insensitively and rejected
+// in every environment, for the session secret and the embed proxy token
+// alike.
 var placeholderSecretPrefixes = []string{
 	"replace-with",
 	"replace_with",
@@ -40,13 +33,6 @@ var placeholderSecretPrefixes = []string{
 // are rejected by name in production; development keeps working with them.
 var publicTestSecretPrefixes = []string{
 	"test-secret",
-}
-
-// knownPlaceholderEmbedProxyTokens are example tokens shipped in this
-// repository that must never reach a running server (also caught by the
-// placeholder prefixes; kept as the exact-match hook).
-var knownPlaceholderEmbedProxyTokens = []string{
-	"replace-with-embed-proxy-token", // .env.example.prod
 }
 
 // Config holds the application configuration loaded from environment variables.
@@ -236,17 +222,16 @@ func Load() (*Config, error) {
 			MinSessionSecretLength, len(cfg.SessionSecret))
 	}
 
-	// Reject known weak/default secrets
-	if slices.Contains(knownWeakSecrets, cfg.SessionSecret) || isPlaceholderSecret(cfg.SessionSecret) {
+	// Reject known default/placeholder secrets
+	if isPlaceholderSecret(cfg.SessionSecret) {
 		return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default or placeholder value and must not be used; " +
 			"generate a secure secret with: openssl rand -base64 32")
 	}
-	if cfg.Env == "production" && hasAnyPrefixFold(cfg.SessionSecret, publicTestSecretPrefixes) {
+	if cfg.Env == "production" && hasAnyPrefixFold(strings.TrimSpace(cfg.SessionSecret), publicTestSecretPrefixes) {
 		return nil, fmt.Errorf("OCMS_SESSION_SECRET is the public test-suite secret and must not be used in production; " +
 			"generate a secure secret with: openssl rand -base64 32")
 	}
-	if token := strings.TrimSpace(cfg.EmbedProxyToken); token != "" &&
-		(slices.Contains(knownPlaceholderEmbedProxyTokens, token) || isPlaceholderSecret(token)) {
+	if token := strings.TrimSpace(cfg.EmbedProxyToken); token != "" && isPlaceholderSecret(token) {
 		return nil, fmt.Errorf("OCMS_EMBED_PROXY_TOKEN is a placeholder value and must not be used; " +
 			"generate a token with: openssl rand -base64 32")
 	}
@@ -285,11 +270,11 @@ func isPlaceholderSecret(secret string) bool {
 }
 
 // hasAnyPrefixFold reports whether s starts with any of the prefixes,
-// ignoring ASCII case.
+// ignoring ASCII case on both sides.
 func hasAnyPrefixFold(s string, prefixes []string) bool {
 	lower := strings.ToLower(s)
 	for _, prefix := range prefixes {
-		if strings.HasPrefix(lower, prefix) {
+		if strings.HasPrefix(lower, strings.ToLower(prefix)) {
 			return true
 		}
 	}

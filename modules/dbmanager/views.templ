@@ -119,7 +119,7 @@ templ DBManagerPage(pc *adminviews.PageContext, data DBManagerViewData) {
 								if data.Result.IsSelect {
 									<span class="badge badge-info">{ fmt.Sprintf("%d", data.Result.RowsAffected) } { pc.T("dbmanager.results_rows") }</span>
 									if data.Result.Truncated {
-										<span class="badge badge-warning">{ pc.T("dbmanager.results_truncated", MaxResultRows) }</span>
+										<span class="badge badge-warning">{ pc.T("dbmanager.results_truncated", maxResultRows) }</span>
 									}
 								} else {
 									<span class="badge badge-info">{ fmt.Sprintf("%d", data.Result.RowsAffected) } { pc.T("dbmanager.results_affected") }</span>
@@ -197,7 +197,12 @@ templ DBManagerPage(pc *adminviews.PageContext, data DBManagerViewData) {
 											</td>
 											<td>{ item.ExecutedAt.Format("2006-01-02 15:04:05") }</td>
 											<td>{ fmt.Sprintf("%d", item.ExecutionTime) } { pc.T("dbmanager.ms") }</td>
-											<td>{ fmt.Sprintf("%d", item.RowsAffected) }</td>
+											<td>
+												{ fmt.Sprintf("%d", item.RowsAffected) }
+												if item.Truncated {
+													<span class="badge badge-warning">{ pc.T("dbmanager.history_truncated") }</span>
+												}
+											</td>
 											<td>
 												if item.Error.Valid {
 													<span class="badge badge-danger" title={ item.Error.String }>{ pc.T("dbmanager.history_failed") }</span>

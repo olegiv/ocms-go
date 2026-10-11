@@ -53,7 +53,7 @@ Account lockout prevents password guessing attacks by temporarily blocking login
 ### How It Works
 
 1. Failed login attempts are tracked per email address **and** client address, and separately per email address alone
-2. After 5 failed attempts within 15 minutes from one address, that email + address pair is locked; the account owner can still sign in from another address. After 25 failed attempts within the window across all addresses, the account is locked for everyone, which stops a distributed guessing campaign. Knowing a victim's email is therefore not enough to lock them out from their own connection.
+2. After 5 failed attempts within 15 minutes from one address, that email + address pair is locked; the account owner can still sign in from another address. For IPv6 clients the "address" is the /64 block. After 25 failed attempts within the window across all addresses, the account is locked for everyone, which stops a distributed guessing campaign; an attacker with many addresses therefore gets at most five times the single-address budget before the account lock, and that lock doubles with each repetition. Knowing a victim's email is not enough to lock them out from their own connection.
 3. Lockout duration doubles with each subsequent lockout (exponential backoff):
    - 1st lockout: 15 minutes
    - 2nd lockout: 30 minutes

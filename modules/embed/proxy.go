@@ -30,13 +30,13 @@ import (
 )
 
 const (
-	maxDifyProxyBodyBytes    = 1 << 20
-	difyProxyTimeout         = 90 * time.Second
-	maxDifyIdentifierLen     = 128
-	maxDifyQueryLen          = 4096
-	maxDifyInputsCount       = 32
-	maxDifyInputKeyLen       = 64
-	maxDifyInputValueLen     = 512
+	maxDifyProxyBodyBytes = 1 << 20
+	difyProxyTimeout      = 90 * time.Second
+	maxDifyIdentifierLen  = 128
+	maxDifyQueryLen       = 4096
+	maxDifyInputsCount    = 32
+	maxDifyInputKeyLen    = 64
+	maxDifyInputValueLen  = 512
 	embedProxyTokenHeader = "X-Embed-Proxy-Token"
 	// embedProxyTokenTTL is long enough to cover a typical idle-then-interact
 	// session in an open tab without forcing a refresh round-trip, while
@@ -87,7 +87,7 @@ var difyProxyHTTPClient = &http.Client{
 		if err := util.ValidateWebhookURL(req.URL.String()); err != nil {
 			return fmt.Errorf("redirect blocked: %w", err)
 		}
-		// Re-check the upstream-host allowlist on every hop (finding L-01).
+		// Re-check the upstream-host allowlist on every hop.
 		// The SSRF check above blocks private IPs, but a redirect to a
 		// non-allowlisted *public* host would otherwise still be followed.
 		if validate, ok := req.Context().Value(upstreamHostValidatorCtxKey{}).(func(string) bool); ok && validate != nil {

@@ -132,7 +132,7 @@ func (lp *LoginProtection) CheckIPRateLimit(ip string) bool {
 // longer lock its owner out with a handful of guesses from one address: the
 // usual threshold locks only that email+IP pair, and the account itself locks
 // for everyone only after this many times as many failures, which still puts
-// a hard stop on a distributed guessing campaign (finding L-7, 2026-10-11).
+// a hard stop on a distributed guessing campaign.
 const accountLockoutMultiplier = 5
 
 // lockoutKeySeparator joins the scope name, the email and the client IP in
@@ -153,11 +153,26 @@ type lockoutScope struct {
 // lockoutScopes returns the pair scope first and the account scope second.
 func (lp *LoginProtection) lockoutScopes(email, ip string) [2]lockoutScope {
 	email = stripControlCharacters(email)
-	ip = stripControlCharacters(ip)
+	ip = lockoutAddress(stripControlCharacters(ip))
 	return [2]lockoutScope{
 		{name: "email+ip", key: "pair" + lockoutKeySeparator + email + lockoutKeySeparator + ip, threshold: lp.maxFailedAttempts},
 		{name: "account", key: "account" + lockoutKeySeparator + email, threshold: lp.maxFailedAttempts * accountLockoutMultiplier},
 	}
+}
+
+// lockoutAddress normalises the client address for the pair scope. An IPv6
+// client typically owns a whole /64, so the pair key uses that prefix;
+// otherwise every address in the block would get its own five attempts.
+func lockoutAddress(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || addr.Is4() || addr.Is4In6() {
+		return ip
+	}
+	prefix, err := addr.Prefix(64)
+	if err != nil {
+		return ip
+	}
+	return prefix.String()
 }
 
 // stripControlCharacters removes every control character, including the

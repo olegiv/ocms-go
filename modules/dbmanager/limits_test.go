@@ -14,7 +14,7 @@ import (
 )
 
 // TestActiveByDefaultFalse fails when the SQL console goes back to being
-// switched on in every fresh install (finding M-2, 2026-10-11).
+// switched on in every fresh install.
 func TestActiveByDefaultFalse(t *testing.T) {
 	var m module.Module = New()
 	defaulter, ok := m.(module.ActivationDefaulter)
@@ -27,7 +27,7 @@ func TestActiveByDefaultFalse(t *testing.T) {
 }
 
 // TestExecuteQueryCapsRows fails when a SELECT can return more than
-// MaxResultRows rows into the page.
+// maxResultRows rows into the page.
 func TestExecuteQueryCapsRows(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
@@ -38,8 +38,8 @@ func TestExecuteQueryCapsRows(t *testing.T) {
 	if result.Error != "" {
 		t.Fatalf("executeQuery error: %s", result.Error)
 	}
-	if len(result.Rows) != MaxResultRows || result.RowsAffected != MaxResultRows {
-		t.Errorf("rows = %d (reported %d), want %d", len(result.Rows), result.RowsAffected, MaxResultRows)
+	if len(result.Rows) != maxResultRows || result.RowsAffected != maxResultRows {
+		t.Errorf("rows = %d (reported %d), want %d", len(result.Rows), result.RowsAffected, maxResultRows)
 	}
 	if !result.Truncated {
 		t.Error("result must be flagged as truncated")
@@ -48,6 +48,18 @@ func TestExecuteQueryCapsRows(t *testing.T) {
 	small := m.executeQuery(context.Background(), "SELECT 1", 1)
 	if small.Truncated || len(small.Rows) != 1 {
 		t.Errorf("small result: truncated=%v rows=%d", small.Truncated, len(small.Rows))
+	}
+
+	// The history row records that the result was cut off (rows executed in
+	// the same second have no stable order, so match by query text).
+	history, err := m.getQueryHistory(context.Background(), 2)
+	if err != nil || len(history) != 2 {
+		t.Fatalf("history = %d, %v", len(history), err)
+	}
+	for _, item := range history {
+		if wantTruncated := strings.Contains(item.Query, "seq"); item.Truncated != wantTruncated {
+			t.Fatalf("history row %q truncated = %v, want %v", item.Query, item.Truncated, wantTruncated)
+		}
 	}
 }
 
@@ -59,14 +71,12 @@ func TestExecuteQueryHonoursTimeout(t *testing.T) {
 	defer cleanup()
 	m := testModule(t, db)
 
-	original := queryTimeout
-	queryTimeout = -time.Second
-	t.Cleanup(func() { queryTimeout = original })
+	m.queryTimeout = -time.Second
 
 	for _, query := range []string{"SELECT 1", "CREATE TABLE timeout_probe (id INTEGER)"} {
 		result := m.executeQuery(context.Background(), query, 1)
-		if !strings.Contains(result.Error, "context deadline exceeded") {
-			t.Errorf("%q: error = %q, want context deadline exceeded", query, result.Error)
+		if !strings.Contains(result.Error, "query cancelled after") {
+			t.Errorf("%q: error = %q, want the timeout message", query, result.Error)
 		}
 	}
 

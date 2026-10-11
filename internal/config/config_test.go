@@ -657,7 +657,11 @@ func TestLoad_SessionSecretMinimumLength(t *testing.T) {
 }
 
 func TestLoad_RejectsKnownWeakSecrets(t *testing.T) {
-	for _, weak := range knownWeakSecrets {
+	for _, weak := range []string{
+		"change-me-to-32-byte-secret-key!",
+		"REPLACE_WITH_YOUR_OWN_SECRET_KEY!",
+		"replace-with-strong-random-secret",
+	} {
 		t.Run(weak[:16], func(t *testing.T) {
 			os.Clearenv()
 			setEnv(t, "OCMS_SESSION_SECRET", weak)
@@ -670,8 +674,7 @@ func TestLoad_RejectsKnownWeakSecrets(t *testing.T) {
 	}
 }
 
-// TestLoad_RejectsPlaceholderSecretsInEveryEnvironment covers finding M-3
-// (2026-10-11): values copied from example files and documentation must not
+// TestLoad_RejectsPlaceholderSecretsInEveryEnvironment checks that values copied from example files and documentation must not
 // start a server, even in development.
 func TestLoad_RejectsPlaceholderSecretsInEveryEnvironment(t *testing.T) {
 	for _, secret := range []string{
@@ -695,7 +698,7 @@ func TestLoad_RejectsPlaceholderSecretsInEveryEnvironment(t *testing.T) {
 // TestLoad_RejectsPublicTestSecretInProduction fails when the secret used by
 // CI, the test suite and the developer docs can start a production server.
 func TestLoad_RejectsPublicTestSecretInProduction(t *testing.T) {
-	for _, secret := range []string{"test-secret-key-32-bytes-long!!!", "TEST-SECRET-key-32-bytes-long-ish!!"} {
+	for _, secret := range []string{"test-secret-key-32-bytes-long!!!", "TEST-SECRET-key-32-bytes-long-ish!!", " test-secret-key-32-bytes-long!!!"} {
 		t.Run(secret, func(t *testing.T) {
 			os.Clearenv()
 			setProductionRequiredEnv(t)
@@ -705,6 +708,15 @@ func TestLoad_RejectsPublicTestSecretInProduction(t *testing.T) {
 				t.Fatalf("Load() in production with %q: err = %v, want the public test-suite rejection", secret, err)
 			}
 		})
+	}
+}
+
+func TestHasAnyPrefixFoldIgnoresCaseOnBothSides(t *testing.T) {
+	if !hasAnyPrefixFold("replace-with-x", []string{"Replace-With"}) || !hasAnyPrefixFold("REPLACE-WITH-x", []string{"replace-with"}) {
+		t.Fatal("prefix matching must ignore case on the value and on the prefix")
+	}
+	if hasAnyPrefixFold("xreplace-with", []string{"replace-with"}) {
+		t.Fatal("a prefix must match at the start only")
 	}
 }
 

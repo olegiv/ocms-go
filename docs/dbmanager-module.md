@@ -17,7 +17,7 @@ This module allows administrators to:
 - Support for SELECT, INSERT, UPDATE, DELETE, PRAGMA, EXPLAIN, and WITH statements
 - Tabular display of SELECT query results
 - Row count and execution time metrics
-- Results capped at 1,000 rows (larger results are flagged as truncated) and a 10-second statement timeout
+- Results capped at 1,000 rows (larger results are flagged as truncated, in the result and in the history) and a 10-second statement timeout reported as "query cancelled after 10s"
 - Query history with click-to-reload functionality
 - Keyboard shortcut (Ctrl+Enter) for quick execution
 

@@ -13,7 +13,7 @@ import (
 
 // TestImportPayloadStagedOnDiskNotInSession fails when an uploaded import
 // goes back into the session row, or when the staged file outlives the
-// confirmation step (finding L-6, 2026-10-11).
+// confirmation step.
 func TestImportPayloadStagedOnDiskNotInSession(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 	h := NewImportExportHandler(db, nil, sm)

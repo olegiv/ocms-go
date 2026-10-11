@@ -631,7 +631,8 @@ func (r *Registry) RouteAll(router chi.Router) {
 // EditorAccessible and returns true. The gate lives here, not in each module,
 // so that a module which forgets its own middleware is closed rather than open:
 // the router mounts these routes in the editor-level admin group, and the
-// sidebar already hides module pages from editors.
+// sidebar already hides module pages from editors. Denials here are logged
+// to slog only; the registry has no EventService.
 func (r *Registry) AdminRouteAll(router chi.Router) {
 	r.routeAllWithFunc(router, true, func(m Module, subRouter chi.Router) {
 		if !AllowsEditors(m) {

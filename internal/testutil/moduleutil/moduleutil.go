@@ -28,7 +28,10 @@ func RunMigrations(t *testing.T, db *sql.DB, migrations []module.Migration) {
 // RunMigrationsDown rolls back all migrations for the given module.
 func RunMigrationsDown(t *testing.T, db *sql.DB, migrations []module.Migration) {
 	t.Helper()
-	for _, mig := range migrations {
+	// Roll back newest first, the way goose does, so a later migration that
+	// alters an earlier one's table is undone before that table is dropped.
+	for i := len(migrations) - 1; i >= 0; i-- {
+		mig := migrations[i]
 		if err := mig.Down(db); err != nil {
 			t.Fatalf("migration %d down: %v", mig.Version, err)
 		}

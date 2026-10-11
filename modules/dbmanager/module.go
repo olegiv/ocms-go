@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"embed"
 	"html/template"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -24,7 +25,13 @@ var localesFS embed.FS
 type Module struct {
 	module.BaseModule
 	ctx *module.Context
+	// queryTimeout bounds a single statement so a runaway query cannot hold
+	// a database connection for the life of the request.
+	queryTimeout time.Duration
 }
+
+// defaultQueryTimeout is the statement deadline a new module starts with.
+const defaultQueryTimeout = 10 * time.Second
 
 // New creates a new instance of the database manager module.
 func New() *Module {
@@ -34,6 +41,7 @@ func New() *Module {
 			"1.0.0",
 			"Database management tool for executing SQL queries",
 		),
+		queryTimeout: defaultQueryTimeout,
 	}
 }
 
@@ -47,7 +55,7 @@ func (m *Module) Init(ctx *module.Context) error {
 // ActiveByDefault keeps the SQL console off until an administrator enables
 // it in Admin > Modules. The module runs arbitrary statements against the
 // live database, so a fresh install must not ship it switched on; sites that
-// already chose a status keep it (finding M-2, 2026-10-11).
+// already chose a status keep it.
 func (m *Module) ActiveByDefault() bool { return false }
 
 // Shutdown performs cleanup when the module is shutting down.
@@ -119,6 +127,18 @@ func (m *Module) Migrations() []module.Migration {
 			},
 			Down: func(db *sql.DB) error {
 				_, err := db.Exec(`DROP TABLE IF EXISTS dbmanager_query_history`)
+				return err
+			},
+		},
+		{
+			Version:     2,
+			Description: "Record truncated results in dbmanager_query_history",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`ALTER TABLE dbmanager_query_history ADD COLUMN truncated INTEGER NOT NULL DEFAULT 0`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`ALTER TABLE dbmanager_query_history DROP COLUMN truncated`)
 				return err
 			},
 		},

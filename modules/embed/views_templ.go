@@ -23,11 +23,11 @@ import (
 	"github.com/olegiv/ocms-go/modules/embed/providers"
 )
 
-func inputType(fieldType string) string {
+func inputType(fieldType providers.FieldType) string {
 	switch fieldType {
-	case "url":
+	case providers.FieldURL:
 		return "url"
-	case "password":
+	case providers.FieldPassword:
 		return "password"
 	}
 	return "text"
@@ -43,8 +43,8 @@ func secretPlaceholder(field providers.SettingField) string {
 	return field.Placeholder
 }
 
-func maxLenForType(fieldType string) string {
-	if fieldType == "url" {
+func maxLenForType(fieldType providers.FieldType) string {
+	if fieldType == providers.FieldURL {
 		return "2048"
 	}
 	return "255"

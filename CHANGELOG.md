@@ -33,8 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JavaScript context they are rendered in, and are skipped at render time if a
   stored value is malformed.
 - **DB Manager is inactive by default** on new installs, caps SELECT results at
-  1,000 rows and cancels statements after 10 seconds. Existing installs keep
-  their chosen status.
+  1,000 rows and cancels statements after 10 seconds; a cancelled statement
+  says so, and the query history records truncated results. Existing
+  installs keep their chosen status.
 - **Placeholder secrets are refused.** `OCMS_SESSION_SECRET` values copied
   from example files or docs (`replace-with…`, `change-me…`, `your-secret…`)
   fail startup in every environment, the public test-suite secret fails in
@@ -53,10 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Login lockout is scoped to email + client address** (5 failures) with an
   account-wide lock after 25 failures across addresses, so knowing an email
   no longer lets an attacker lock its owner out, and the theme-import
-  password confirmation shares that lockout. Sessions now expire after
-  2 idle hours as well as 24 absolute hours.
+  password confirmation shares that lockout; IPv6 clients are keyed on their
+  /64. Sessions now expire after 2 idle hours as well as 24 absolute hours.
 - **Content import stages uploads on disk** instead of base64 in the session
-  table, reports unreadable archives generically and logs the detail.
+  table (kept for two hours, the session idle timeout), reports unreadable
+  archives generically and logs the detail.
 - **Outbound URL checks judge NAT64 and 6to4 addresses by the IPv4 address
   they embed** and block the discard-only, documentation and multicast IPv6
   ranges in addition to the existing private ranges.

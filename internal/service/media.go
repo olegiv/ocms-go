@@ -170,7 +170,7 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 		variants, err := s.processor.CreateAllVariants(processResult.FilePath, fileUUID, filename)
 		if err != nil {
 			// Log error but don't fail - we still have the original
-			slog.Warn("failed to create some media variants", "error", err)
+			slog.Warn("failed to create some media variants", "error", err, "media_id", media.ID, "uuid", fileUUID)
 		}
 
 		// Store variant records
@@ -184,7 +184,7 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 				CreatedAt: now,
 			})
 			if err != nil {
-				slog.Warn("failed to store media variant record", "error", err)
+				slog.Warn("failed to store media variant record", "error", err, "media_id", media.ID, "variant", v.Type)
 				continue
 			}
 			result.Variants = append(result.Variants, variant)
@@ -392,7 +392,7 @@ func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([
 			CreatedAt: now,
 		})
 		if err != nil {
-			slog.Warn("failed to store media variant record", "error", err)
+			slog.Warn("failed to store media variant record", "error", err, "media_id", mediaID, "variant", v.Type)
 			continue
 		}
 		result = append(result, variant)

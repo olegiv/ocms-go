@@ -40,7 +40,7 @@ func saveDifyForm(t *testing.T, m *Module, fields url.Values) {
 
 // TestSaveProviderSettingsKeepsStoredSecretWhenBlank fails when an empty
 // password field overwrites the stored API key: the form never echoes the key
-// back, so a blank submission must keep it (finding L-4, 2026-10-11).
+// back, so a blank submission must keep it.
 func TestSaveProviderSettingsKeepsStoredSecretWhenBlank(t *testing.T) {
 	m, cleanup := testModuleDB(t)
 	defer cleanup()

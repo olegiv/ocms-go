@@ -696,7 +696,7 @@ const importZipUnreadableMessage = "The archive could not be read as an oCMS exp
 const (
 	sessionKeyImportPayloadPath = "import_payload_path"
 	importStagePrefix           = "ocms-import-"
-	importStageMaxAge           = time.Hour
+	importStageMaxAge           = 2 * time.Hour // matches the session idle timeout
 )
 
 // stageImportPayload writes payload to a private temporary file and records

@@ -49,8 +49,7 @@ func samePrefixWrongKey(rawKey string) string {
 // TestAPIKeyAuth_PrefixHolderNeverReachesArgon2 fails when a request that
 // shares only the four-character prefix of a stored key triggers an Argon2
 // verification. Before the exact lookup, such requests burned the eight
-// shared verification slots and could deny API authentication to everyone
-// (finding L-5, 2026-10-11).
+// shared verification slots and could deny API authentication to everyone.
 func TestAPIKeyAuth_PrefixHolderNeverReachesArgon2(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()

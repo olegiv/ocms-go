@@ -34,8 +34,7 @@ var routeParamPattern = regexp.MustCompile(`\{[^}]+\}`)
 // allowlisted module stops opting in, or when any admin route of a non-listed
 // module answers an editor with anything but the registry's admin-only
 // denial. Module admin routes are mounted in the editor-level admin group, so
-// a module that forgets its own gate is otherwise reachable by every editor
-// (finding M-1, 2026-10-11; the same class as M-03/M-04 of 2026-08-12).
+// a module that forgets its own gate is otherwise reachable by every editor.
 func TestModuleAdminRoutesDenyEditorsUnlessAllowlisted(t *testing.T) {
 	for _, mod := range allModules() {
 		name := mod.Name()

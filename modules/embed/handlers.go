@@ -155,7 +155,7 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 	settings := make(map[string]string)
 	for _, field := range ctx.Provider.SettingsSchema() {
 		value := strings.TrimSpace(r.FormValue(field.ID))
-		if value == "" && field.Type == "password" && existingPS != nil {
+		if value == "" && field.Type == providers.FieldPassword && existingPS != nil {
 			value = existingPS.Settings[field.ID]
 		}
 		settings[field.ID] = value
@@ -497,7 +497,7 @@ func schemaWithStoredValues(schema []providers.SettingField, stored map[string]s
 		if !ok {
 			continue
 		}
-		if schema[i].Type == "password" {
+		if schema[i].Type == providers.FieldPassword {
 			schema[i].HasStoredValue = val != ""
 			continue
 		}

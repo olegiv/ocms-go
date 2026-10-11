@@ -28,7 +28,7 @@ func setWebhookHostPolicyForTest(t *testing.T, raw string, required bool) {
 
 // TestHTTPClientCheckRedirect_ReChecksAllowlist asserts the shared webhook HTTP
 // client re-applies the destination-host allowlist on every redirect hop
-// (finding M-01). Without this, a webhook whose approved destination later
+// . Without this, a webhook whose approved destination later
 // 302-redirects to a non-allowlisted public host would leak the signing secret
 // and any admin-configured custom headers (Go strips only Authorization/Cookie
 // across hosts). Raw public IPs are used so ValidateWebhookURL short-circuits

@@ -375,7 +375,7 @@ func TestRenderHeadScripts_EnabledWithoutID(t *testing.T) {
 // format check: an identifier that is not in its documented shape is never
 // written into the page, in either the script or the noscript fragment. The
 // values below are what a JavaScript-context breakout would look like after
-// HTML escaping alone (finding M-1, 2026-10-11).
+// HTML escaping alone.
 func TestRenderScripts_MalformedValuesNotInjected(t *testing.T) {
 	for name, settings := range map[string]*Settings{
 		"ga4 html":        {GA4Enabled: true, GA4MeasurementID: "G-<script>alert('xss')</script>"},

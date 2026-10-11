@@ -164,8 +164,7 @@ func themeUploadRequestAs(t *testing.T, h *ThemesHandler, filename string, conte
 
 // TestThemeImportRequiresPasswordConfirmation fails when an archive can be
 // installed without the administrator re-entering their password: an
-// imported theme is same-origin code with the site's full privileges
-// (finding M-5, 2026-10-11).
+// imported theme is same-origin code with the site's full privileges.
 func TestThemeImportRequiresPasswordConfirmation(t *testing.T) {
 	archive := starterThemeArchive(t)
 	for _, tt := range []struct {
@@ -388,8 +387,7 @@ func TestThemeManagementDemoMode(t *testing.T) {
 }
 
 // TestThemeManagementWritesEventLog fails when a theme import, a refused
-// import or a theme deletion stops appearing in the admin event log
-// (finding L-1, 2026-10-11).
+// import or a theme deletion stops appearing in the admin event log.
 func TestThemeManagementWritesEventLog(t *testing.T) {
 	h := themeManagementHandler(t)
 	archive := starterThemeArchive(t)

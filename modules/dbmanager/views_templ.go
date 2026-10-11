@@ -358,7 +358,7 @@ func DBManagerPage(pc *adminviews.PageContext, data DBManagerViewData) templ.Com
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var22 string
-							templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.results_truncated", MaxResultRows))
+							templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.results_truncated", maxResultRows))
 							if templ_7745c5c3_Err != nil {
 								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 122, Col: 96}
 							}
@@ -762,121 +762,144 @@ func DBManagerPage(pc *adminviews.PageContext, data DBManagerViewData) templ.Com
 					var templ_7745c5c3_Var46 string
 					templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", item.RowsAffected))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 200, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 201, Col: 50}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</td><td>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, " ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if item.Error.Valid {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<span class=\"badge badge-danger\" title=\"")
+					if item.Truncated {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<span class=\"badge badge-warning\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var47 string
-						templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.Error.String)
+						templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_truncated"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 203, Col: 71}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 203, Col: 84}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</span>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</td><td>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if item.Error.Valid {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "<span class=\"badge badge-danger\" title=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var48 string
-						templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_failed"))
+						templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.Error.String)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 203, Col: 108}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 208, Col: 71}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</span>")
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "<span class=\"badge badge-success\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var49 string
-						templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_success"))
+						templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_failed"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 205, Col: 82}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 208, Col: 108}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</span>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					} else {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "<span class=\"badge badge-success\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var50 string
+						templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_success"))
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 210, Col: 82}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "</tbody></table></div></div></div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</tbody></table></div></div></div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else if data.Result == nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "<div class=\"history-section\"><div class=\"card\"><div class=\"card-header\"><h2>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var50 string
-				templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_section"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 220, Col: 45}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</h2></div><div class=\"card-body\"><p class=\"text-muted text-center\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "<div class=\"history-section\"><div class=\"card\"><div class=\"card-header\"><h2>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var51 string
-				templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_empty"))
+				templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_section"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 223, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 225, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</p></div></div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</h2></div><div class=\"card-body\"><p class=\"text-muted text-center\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var52 string
+				templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("dbmanager.history_empty"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 228, Col: 73}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</p></div></div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, " <style>\n\t\t.dbmanager-warning {\n\t\t    margin-bottom: 1.5rem;\n\t\t}\n\n\t\t.warning-content {\n\t\t    display: flex;\n\t\t    align-items: flex-start;\n\t\t    gap: 1rem;\n\t\t}\n\n\t\t.warning-content svg {\n\t\t    flex-shrink: 0;\n\t\t    color: var(--warning-color, #f0ad4e);\n\t\t}\n\n\t\t.warning-content p {\n\t\t    margin: 0.25rem 0 0 0;\n\t\t}\n\n\t\t.query-section {\n\t\t    margin-bottom: 1.5rem;\n\t\t}\n\n\t\t.form-control-code {\n\t\t    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;\n\t\t    font-size: 0.875rem;\n\t\t    line-height: 1.5;\n\t\t    resize: vertical;\n\t\t}\n\n\t\t.form-actions {\n\t\t    display: flex;\n\t\t    gap: 0.5rem;\n\t\t    margin-top: 1rem;\n\t\t}\n\n\t\t.results-section {\n\t\t    margin-bottom: 1.5rem;\n\t\t}\n\n\t\t.result-stats {\n\t\t    display: flex;\n\t\t    gap: 0.5rem;\n\t\t}\n\n\t\t.history-section {\n\t\t    margin-bottom: 1.5rem;\n\t\t}\n\n\t\t.history-row {\n\t\t    cursor: pointer;\n\t\t}\n\n\t\t.history-row:hover {\n\t\t    background-color: var(--hover-bg, rgba(0,0,0,0.02));\n\t\t}\n\n\t\t.query-cell {\n\t\t    max-width: 400px;\n\t\t}\n\n\t\t.query-preview {\n\t\t    display: block;\n\t\t    overflow: hidden;\n\t\t    text-overflow: ellipsis;\n\t\t    white-space: nowrap;\n\t\t    font-size: 0.8125rem;\n\t\t}\n\n\t\t.card-success .card-header {\n\t\t    background-color: rgba(40, 167, 69, 0.1);\n\t\t    border-bottom-color: rgba(40, 167, 69, 0.2);\n\t\t}\n\n\t\t.card-danger .card-header {\n\t\t    background-color: rgba(220, 53, 69, 0.1);\n\t\t    border-bottom-color: rgba(220, 53, 69, 0.2);\n\t\t}\n\n\t\t.table-responsive {\n\t\t    overflow-x: auto;\n\t\t}\n\n\t\t.table th {\n\t\t    white-space: nowrap;\n\t\t}\n\n\t\t.table td {\n\t\t    max-width: 300px;\n\t\t    overflow: hidden;\n\t\t    text-overflow: ellipsis;\n\t\t    white-space: nowrap;\n\t\t}\n\t\t</style> <script nonce=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, " <style>\n\t\t.dbmanager-warning {\n\t\t    margin-bottom: 1.5rem;\n\t\t}\n\n\t\t.warning-content {\n\t\t    display: flex;\n\t\t    align-items: flex-start;\n\t\t    gap: 1rem;\n\t\t}\n\n\t\t.warning-content svg {\n\t\t    flex-shrink: 0;\n\t\t    color: var(--warning-color, #f0ad4e);\n\t\t}\n\n\t\t.warning-content p {\n\t\t    margin: 0.25rem 0 0 0;\n\t\t}\n\n\t\t.query-section {\n\t\t    margin-bottom: 1.5rem;\n\t\t}\n\n\t\t.form-control-code {\n\t\t    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;\n\t\t    font-size: 0.875rem;\n\t\t    line-height: 1.5;\n\t\t    resize: vertical;\n\t\t}\n\n\t\t.form-actions {\n\t\t    display: flex;\n\t\t    gap: 0.5rem;\n\t\t    margin-top: 1rem;\n\t\t}\n\n\t\t.results-section {\n\t\t    margin-bottom: 1.5rem;\n\t\t}\n\n\t\t.result-stats {\n\t\t    display: flex;\n\t\t    gap: 0.5rem;\n\t\t}\n\n\t\t.history-section {\n\t\t    margin-bottom: 1.5rem;\n\t\t}\n\n\t\t.history-row {\n\t\t    cursor: pointer;\n\t\t}\n\n\t\t.history-row:hover {\n\t\t    background-color: var(--hover-bg, rgba(0,0,0,0.02));\n\t\t}\n\n\t\t.query-cell {\n\t\t    max-width: 400px;\n\t\t}\n\n\t\t.query-preview {\n\t\t    display: block;\n\t\t    overflow: hidden;\n\t\t    text-overflow: ellipsis;\n\t\t    white-space: nowrap;\n\t\t    font-size: 0.8125rem;\n\t\t}\n\n\t\t.card-success .card-header {\n\t\t    background-color: rgba(40, 167, 69, 0.1);\n\t\t    border-bottom-color: rgba(40, 167, 69, 0.2);\n\t\t}\n\n\t\t.card-danger .card-header {\n\t\t    background-color: rgba(220, 53, 69, 0.1);\n\t\t    border-bottom-color: rgba(220, 53, 69, 0.2);\n\t\t}\n\n\t\t.table-responsive {\n\t\t    overflow-x: auto;\n\t\t}\n\n\t\t.table th {\n\t\t    white-space: nowrap;\n\t\t}\n\n\t\t.table td {\n\t\t    max-width: 300px;\n\t\t    overflow: hidden;\n\t\t    text-overflow: ellipsis;\n\t\t    white-space: nowrap;\n\t\t}\n\t\t</style> <script nonce=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var52 string
-			templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
+			var templ_7745c5c3_Var53 string
+			templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 323, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/dbmanager/views.templ`, Line: 328, Col: 37}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\">\n\t\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\t    // Click on history row to load query\n\t\t    document.querySelectorAll('.history-row').forEach(function(row) {\n\t\t        row.addEventListener('click', function() {\n\t\t            var query = this.getAttribute('data-query');\n\t\t            var textarea = document.getElementById('sql-query');\n\t\t            if (textarea && query) {\n\t\t                textarea.value = query;\n\t\t                textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });\n\t\t                textarea.focus();\n\t\t            }\n\t\t        });\n\t\t    });\n\n\t\t    // Keyboard shortcut: Ctrl+Enter to execute\n\t\t    var textarea = document.getElementById('sql-query');\n\t\t    if (textarea) {\n\t\t        textarea.addEventListener('keydown', function(e) {\n\t\t            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {\n\t\t                e.preventDefault();\n\t\t                document.getElementById('query-form').submit();\n\t\t            }\n\t\t        });\n\t\t    }\n\t\t});\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "\">\n\t\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\t    // Click on history row to load query\n\t\t    document.querySelectorAll('.history-row').forEach(function(row) {\n\t\t        row.addEventListener('click', function() {\n\t\t            var query = this.getAttribute('data-query');\n\t\t            var textarea = document.getElementById('sql-query');\n\t\t            if (textarea && query) {\n\t\t                textarea.value = query;\n\t\t                textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });\n\t\t                textarea.focus();\n\t\t            }\n\t\t        });\n\t\t    });\n\n\t\t    // Keyboard shortcut: Ctrl+Enter to execute\n\t\t    var textarea = document.getElementById('sql-query');\n\t\t    if (textarea) {\n\t\t        textarea.addEventListener('keydown', function(e) {\n\t\t            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {\n\t\t                e.preventDefault();\n\t\t                document.getElementById('query-form').submit();\n\t\t            }\n\t\t        });\n\t\t    }\n\t\t});\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -12,7 +12,7 @@ import (
 
 // TestLockoutIsScopedToEmailAndIP fails when failures from one address lock
 // an account for every address again: the per-address threshold must lock
-// only that email+IP pair (finding L-7, 2026-10-11).
+// only that email+IP pair.
 func TestLockoutIsScopedToEmailAndIP(t *testing.T) {
 	lp := NewLoginProtection(testLoginProtectionDB(t), testLoginProtectionConfig(3, time.Minute, time.Minute))
 	email := "owner@example.com"
@@ -140,5 +140,24 @@ func TestAccountScopeWindowReset(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	if locked, _ := lp.RecordFailedAttempt(email, "203.0.113.9"); locked {
 		t.Fatal("a failure after the window must start a new count, not lock")
+	}
+}
+
+// TestLockoutPairScopeUsesIPv6Prefix fails when every address in an IPv6
+// /64 gets its own pair-scope budget.
+func TestLockoutPairScopeUsesIPv6Prefix(t *testing.T) {
+	lp := NewLoginProtection(testLoginProtectionDB(t), testLoginProtectionConfig(3, time.Minute, time.Minute))
+	email := "owner@example.com"
+	for range 3 {
+		lp.RecordFailedAttempt(email, "2001:db8:1:2::1")
+	}
+	if locked, _ := lp.IsAccountLocked(email, "2001:db8:1:2:ffff::9"); !locked {
+		t.Fatal("another address in the same /64 must share the pair lock")
+	}
+	if locked, _ := lp.IsAccountLocked(email, "2001:db8:1:3::1"); locked {
+		t.Fatal("a different /64 must not be locked")
+	}
+	if lockoutAddress("203.0.113.9") != "203.0.113.9" || lockoutAddress("::ffff:203.0.113.9") != "::ffff:203.0.113.9" || lockoutAddress("garbage") != "garbage" {
+		t.Fatal("IPv4, IPv4-mapped and unparsable addresses must pass through unchanged")
 	}
 }

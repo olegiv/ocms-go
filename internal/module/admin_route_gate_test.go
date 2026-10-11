@@ -45,7 +45,7 @@ func adminRouteRequest(router http.Handler, path string, role string) *httptest.
 // TestAdminRouteAllGatesEditorsUnlessOptedIn fails when the registry stops
 // applying the admin-only gate to module admin routes, or applies it to a
 // module that deliberately opted in for editors. A module whose author forgot
-// RequireAdmin must be closed by default (finding M-1, 2026-10-11).
+// RequireAdmin must be closed by default.
 func TestAdminRouteAllGatesEditorsUnlessOptedIn(t *testing.T) {
 	r := NewRegistry(testutil.TestLoggerSilent())
 	plain := &gateModule{BaseModule: NewBaseModule("plain", "1.0.0", "no interface")}
