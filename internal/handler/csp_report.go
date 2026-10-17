@@ -25,10 +25,9 @@ const (
 // CSPReport handles POST /csp-report, where browsers send
 // Content-Security-Policy violation reports through report-uri; the Reporting
 // API format is accepted too. Each report is logged with bounded, sanitized
-// fields, so a blocked
-// script or a missing module host shows up in the logs instead of failing
-// silently in the browser. Anyone can post here, so the route is rate-limited
-// per IP and the request writes nothing but a log line.
+// fields, so a blocked script or a missing module host shows up in the logs
+// instead of failing silently in the browser. Anyone can post here, so the
+// route is rate-limited per IP and the request writes nothing but a log line.
 func CSPReport(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxCSPReportBytes)
 	var raw json.RawMessage

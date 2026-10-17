@@ -396,10 +396,11 @@ Never tell the user to "restart the server and test" - always run the tests your
 
 **Test-gate command:** `scripts/test-gate.sh`. It runs the full suite uncached (`go test -count=1 ./...`) and supplies the test session secret when `OCMS_SESSION_SECRET` is unset.
 
-It runs at two points, and a failing test blocks both:
+It runs at these points, and a failing test blocks each:
 
-1. **`/commit-prepare`**, before a commit message is drafted
-2. **`git push`**, through the `pre-push` hook (`.githooks/pre-push`), on exactly the commit being pushed. The hook refuses to push a ref that is not `HEAD`, or a tree with uncommitted or untracked files, because it tests the working tree.
+1. **`/commit-prepare`** (and `scripts/codex/commit-prepare.sh`), before a commit message is drafted
+2. **`scripts/codex/commit-do.sh`** (`make commit-do-local`), on the staged tree before it commits (gitignored files in the working tree are tested too, though not committed)
+3. **`git push`**, through the `pre-push` hook (`.githooks/pre-push`), on exactly the commit being pushed. The hook refuses to push a ref that is not `HEAD`, or a tree with uncommitted or untracked files, because it tests the working tree.
 
 Install the hook once per clone:
 

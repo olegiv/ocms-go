@@ -219,11 +219,15 @@ You can also run the Claude slash-command workflow directly from shell:
 ```
 
 The proxy runs `claude -p` with `--permission-mode dontAsk` and a per-command
-`--allowedTools` list, so a command can only run the git, Go and audit tools it
-needs; anything else is denied rather than prompted. Avoid
-`--dangerously-skip-permissions`: these commands read diffs, logs and scan
-output, and text in them could otherwise steer the session into any shell
-command.
+`--allowedTools` list. Rules for tools that run project or package code are
+exact (`scripts/test-gate.sh`, `go vet ./...`, `golangci-lint run ./...`,
+`npm audit`); git commands are allowed by prefix, so `git commit` runs the
+repository's hooks and `git diff --output=<file>` can write a file. Anything
+else is denied without a prompt, so a check that needs another tool is skipped
+and reported by the command rather than run. This is a best-effort fence, not
+a sandbox. Avoid `--dangerously-skip-permissions`: these
+commands read diffs, logs and scan output, and text in them could otherwise
+steer the session into any shell command.
 
 ## When to Use Which
 

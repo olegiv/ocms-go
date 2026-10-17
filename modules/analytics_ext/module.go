@@ -29,7 +29,8 @@ type Module struct {
 	// settingsMu guards settings: templates and the CSP read it on every
 	// request while the settings form replaces it. Settings values are
 	// replaced, never modified, so a reader may keep using the pointer it
-	// got (TestSettingsAccessHoldsTheLock).
+	// got. TestSettingsAccessHoldsTheLock checks that every access to the
+	// field takes the lock.
 	settingsMu sync.RWMutex
 }
 
@@ -121,8 +122,9 @@ func firstStringArg(args ...any) string {
 }
 
 // CSPSources allows Google Tag Manager and Google Analytics while the module
-// is active, and the configured Matomo server while Matomo tracking is enabled
-// with a valid URL: the tracker loads matomo.js from it and sends hits to it.
+// is active, whether or not a tracker is configured, and the configured Matomo
+// server while Matomo tracking is enabled with a valid URL and Site ID: the
+// tracker loads matomo.js from it and sends hits to it.
 func (m *Module) CSPSources() map[string][]string {
 	sources := map[string][]string{
 		"script-src": {
@@ -130,6 +132,8 @@ func (m *Module) CSPSources() map[string][]string {
 			"https://www.google-analytics.com",
 		},
 		"style-src": {"https://www.googletagmanager.com"},
+		// GTM's <noscript> fallback is an iframe.
+		"frame-src": {"https://www.googletagmanager.com"},
 		"connect-src": {
 			"https://www.google-analytics.com", "https://*.google-analytics.com",
 			"https://*.analytics.google.com",

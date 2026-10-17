@@ -5,6 +5,7 @@ package handler
 
 import (
 	"bytes"
+	"log"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -13,12 +14,19 @@ import (
 )
 
 // captureLogs routes slog output to a buffer for the rest of the test.
+// slog.SetDefault also points the log package at the new handler, and
+// restoring the default slog logger does not undo that, so the log package's
+// writer and flags are restored separately.
 func captureLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
-	previous := slog.Default()
+	previous, writer, flags := slog.Default(), log.Writer(), log.Flags()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
-	t.Cleanup(func() { slog.SetDefault(previous) })
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+		log.SetOutput(writer)
+		log.SetFlags(flags)
+	})
 	return &buf
 }
 

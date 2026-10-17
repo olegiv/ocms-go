@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -66,5 +67,35 @@ func TestNewInternalErrorKeepsCauseOutOfResponses(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "querying pages") || strings.Contains(string(raw), "canceled") {
 		t.Errorf("REST response leaks the cause: %s", raw)
+	}
+}
+
+// TestToHumaLogsInternalErrors checks that a 500 leaves its cause in the log.
+// The response says only "Internal server error", and ToHuma used to log
+// nothing, so a failed database lookup behind a v2 operation left no trace.
+func TestToHumaLogsInternalErrors(t *testing.T) {
+	var buf strings.Builder
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	for name, err := range map[string]error{
+		"plain error":    fmt.Errorf("checking page route conflicts: %w", errors.New("database is locked")),
+		"internal error": apiv2.NewInternalError("Error loading page", errors.New("disk I/O error")),
+	} {
+		buf.Reset()
+		_ = apiv2.ToHuma(err)
+		cause := "database is locked"
+		if name == "internal error" {
+			cause = "disk I/O error"
+		}
+		if !strings.Contains(buf.String(), cause) {
+			t.Errorf("%s: log = %q, want the cause %q", name, buf.String(), cause)
+		}
+	}
+	buf.Reset()
+	_ = apiv2.ToHuma(apiv2.NewError(apiv2.ErrNotFound, "page not found"))
+	if buf.Len() != 0 {
+		t.Errorf("a not-found error was logged: %q", buf.String())
 	}
 }

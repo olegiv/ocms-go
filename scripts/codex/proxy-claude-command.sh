@@ -22,33 +22,39 @@ if [[ "$slash_command" != /* ]]; then
   slash_command="/$slash_command"
 fi
 
-# Each command runs with only the tools it needs; anything else is denied
-# without a prompt (--permission-mode dontAsk). The commands read diffs, logs
-# and scan output, so a session that may run any shell command can be talked
-# into one by text it reads.
+# Each command runs with a fixed list of tools; anything else is denied
+# without a prompt (--permission-mode dontAsk), and the command reports the
+# check it could not run. The commands read diffs, logs and scan output, so a
+# session that may run any shell command can be talked into one by text it
+# reads. Rules for tools that run project or package code (go, the linters,
+# npm) are exact: a prefix such as "go test*" would also allow "go test -exec
+# <program>", "go env*" would allow "go env -w", and "npm audit*" would allow
+# "npm audit fix", which installs packages. The git rules stay prefixes:
+# "git commit" runs the repository's own hooks, and diff, log and show accept
+# --output=<file>, which writes a file. This is a best-effort fence, not a
+# sandbox.
 read_tools=(
   Read Glob Grep Agent Skill TodoWrite
   "Bash(git status*)" "Bash(git diff*)" "Bash(git log*)" "Bash(git show*)"
   "Bash(git rev-parse*)" "Bash(git ls-files*)" "Bash(git write-tree*)"
-  "Bash(date*)" "Bash(go version*)" "Bash(go env*)" "Bash(grep *)"
+  "Bash(date*)" "Bash(go version)" "Bash(go env GOWORK)" "Bash(go env GOTOOLDIR)"
+  "Bash(grep *)"
 )
 check_tools=(
-  "Bash(scripts/test-gate.sh*)" "Bash(./scripts/test-gate.sh*)"
-  "Bash(go vet*)" "Bash(go build*)" "Bash(go test*)" "Bash(gofmt -l*)"
-  "Bash(staticcheck*)" "Bash(errcheck*)" "Bash(golangci-lint run*)"
-  "Bash(nilaway*)" "Bash(goimports -l*)" "Bash(govulncheck*)"
+  "Bash(scripts/test-gate.sh)" "Bash(./scripts/test-gate.sh)"
+  "Bash(go vet ./...)" "Bash(go build ./...)" "Bash(gofmt -l *)"
+  "Bash(staticcheck ./...)" "Bash(errcheck ./...)" "Bash(golangci-lint run ./...)"
+  "Bash(nilaway ./...)" "Bash(goimports -l *)" "Bash(govulncheck *)"
 )
+tools=("${read_tools[@]}" "${check_tools[@]}")
 case "$slash_command" in
-  /code-quality | /commit-prepare)
-    tools=("${read_tools[@]}" "${check_tools[@]}")
-    ;;
+  /code-quality | /commit-prepare) ;;
   /commit-do)
-    tools=("${read_tools[@]}" "${check_tools[@]}" "Bash(git add -- *)" "Bash(git commit *)")
+    tools+=("Bash(git add -- *)" "Bash(git commit *)")
     ;;
   /security-audit)
-    tools=("${read_tools[@]}" "${check_tools[@]}"
-      "Bash(npm audit*)" "Bash(npm outdated*)" "Bash(mkdir -p .audit*)" "Bash(mv .audit/*)"
-      "Edit(.audit/**)")
+    # No mv: a pattern such as "mv .audit/*" cannot stop a "../" target.
+    tools+=("Bash(npm audit)" "Bash(npm audit --json)" "Bash(npm outdated)" "Bash(mkdir -p .audit/*)" "Edit(.audit/**)")
     ;;
   *)
     echo "Error: $slash_command is not a proxied command."

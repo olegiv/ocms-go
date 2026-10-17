@@ -12,6 +12,8 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +50,9 @@ type Registry struct {
 	// including inactive ones, pass through RouteAll, so later activation cannot
 	// expose a route shadowed by an imported database redirect.
 	publicRoutes map[string]map[string]struct{}
+	// cspProblems remembers the CSPSources panics and rejected sources
+	// already logged, so each is logged once instead of on every response.
+	cspProblems sync.Map
 }
 
 // NewRegistry creates a new module registry.
@@ -406,27 +411,68 @@ func (r *Registry) IsActive(name string) bool {
 // modules that implement CSPSourcer, keyed by directive, each source once and
 // in registration order. The security headers middleware calls it for every
 // response, so toggling a module changes the policy without a restart.
+//
+// Modules are called outside the registry lock, so a CSPSources that reaches
+// back into the registry cannot deadlock against SetActive, and a module that
+// panics is logged and left out instead of failing every response.
 func (r *Registry) ActiveCSPSources() map[string][]string {
+	type namedSourcer struct {
+		name    string
+		sourcer CSPSourcer
+	}
+	var active []namedSourcer
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	sources := map[string][]string{}
-	seen := map[string]bool{}
 	for _, name := range r.order {
 		sourcer, ok := r.modules[name].(CSPSourcer)
 		if !ok {
 			continue
 		}
 		// A module without a stored status counts as active, as in IsActive.
-		if active, exists := r.activeStatus[name]; exists && !active {
+		if isActive, exists := r.activeStatus[name]; exists && !isActive {
 			continue
 		}
-		for directive, values := range sourcer.CSPSources() {
+		active = append(active, namedSourcer{name, sourcer})
+	}
+	r.mu.RUnlock()
+
+	sources := map[string][]string{}
+	for _, entry := range active {
+		for directive, values := range r.moduleCSPSources(entry.name, entry.sourcer) {
 			for _, value := range values {
-				if key := directive + " " + value; !seen[key] {
-					seen[key] = true
+				if !slices.Contains(sources[directive], value) {
 					sources[directive] = append(sources[directive], value)
 				}
+			}
+		}
+	}
+	return sources
+}
+
+// moduleCSPSources calls one module's CSPSources and returns its host
+// sources. A panic leaves the module out, so the policy falls back to the base
+// for that module only, and a value that is not a host source
+// (middleware.IsCSPHostSource) is dropped here, where the module is known.
+// Each problem is logged once.
+func (r *Registry) moduleCSPSources(name string, sourcer CSPSourcer) (sources map[string][]string) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if _, seen := r.cspProblems.LoadOrStore(name, true); !seen {
+				r.logger.Error("module CSPSources panicked; its hosts are left out of the CSP",
+					"module", name, "panic", recovered, "stack", string(debug.Stack()))
+			}
+			sources = nil
+		}
+	}()
+	sources = map[string][]string{}
+	for directive, values := range sourcer.CSPSources() {
+		for _, value := range values {
+			if middleware.IsCSPHostSource(value) {
+				sources[directive] = append(sources[directive], value)
+				continue
+			}
+			if _, seen := r.cspProblems.LoadOrStore(name+" "+directive+" "+value, true); !seen {
+				r.logger.Warn("ignoring module CSP source that is not a host source",
+					"module", name, "directive", directive, "source", value)
 			}
 		}
 	}

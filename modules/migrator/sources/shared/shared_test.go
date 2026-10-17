@@ -1109,7 +1109,11 @@ func TestMakeUniqueSlugAvoidsApplicationRoutes(t *testing.T) {
 			t.Errorf("MakeUniqueSlug(%q) = %q, want %q", slug, got, slug+"-2")
 		}
 	}
-	if got := MakeUniqueSlug(ctx, queries, "blogroll"); got != "blogroll" {
-		t.Errorf("MakeUniqueSlug(%q) = %q, want an unrelated slug untouched", "blogroll", got)
+	// Segments that own only deeper paths or other methods leave the bare
+	// slug free; renaming these broke imported links.
+	for _, slug := range []string{"blogroll", "forms", "api", "uploads", "language"} {
+		if got := MakeUniqueSlug(ctx, queries, slug); got != slug {
+			t.Errorf("MakeUniqueSlug(%q) = %q, want a slug no exact route answers untouched", slug, got)
+		}
 	}
 }

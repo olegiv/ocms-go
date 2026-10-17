@@ -4,7 +4,8 @@
 # Only what is staged is committed: stage the files the message describes by
 # name first. The test gate runs on the working tree, so unstaged or untracked
 # changes that would make the tested tree differ from the commit are refused,
-# and the index must not change while the gate runs.
+# and the index must not change while the gate runs. Gitignored files are not
+# refused: the gate still compiles and tests them, but they are not committed.
 set -euo pipefail
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"

@@ -360,16 +360,30 @@ func TestCSPBuildEmitsBareDirectiveForEmptyValue(t *testing.T) {
 	}
 }
 
+// TestAddCSPSources checks that module sources extend only the directives the
+// policy already has and may widen, and only as host sources. A Matomo URL of
+// "https://*/" or "https://a.example;sandbox/" once reached the header as a
+// source that allowed every host or ended the directive (review of the
+// 2026-10-17 audit fixes).
 func TestAddCSPSources(t *testing.T) {
-	base := "default-src 'self'; script-src 'self'; upgrade-insecure-requests"
+	base := "default-src 'self'; script-src 'self'; frame-src 'self'; object-src 'none'; upgrade-insecure-requests"
 	if got := addCSPSources(base, nil); got != base {
 		t.Errorf("no sources: %q, want the policy unchanged", got)
 	}
 	got := addCSPSources(base, map[string][]string{
-		"script-src": {"https://a.example", "https://b.example"},
+		"script-src": {
+			"https://a.example", "https://*.b.example", "http://c.example:8080",
+			"https://*", "https:", "'unsafe-inline'", "https://d.example;sandbox", "https://e.example,script-src",
+			"https://f.example:99999", "https://f.example:", "https://[2001:db8::1]",
+		},
 		"frame-src":  {"https://a.example"},
+		"object-src": {"https://a.example"},
+		"worker-src": {"https://a.example"},
+		// Extendable, but absent from this policy: adding it would drop its
+		// fallback to default-src 'self'.
+		"img-src": {"https://a.example"},
 	})
-	want := "default-src 'self'; script-src 'self' https://a.example https://b.example; upgrade-insecure-requests; frame-src https://a.example"
+	want := "default-src 'self'; script-src 'self' https://a.example https://*.b.example http://c.example:8080; frame-src 'self' https://a.example; object-src 'none'; upgrade-insecure-requests"
 	if got != want {
 		t.Errorf("addCSPSources() =\n  %q\nwant\n  %q", got, want)
 	}
@@ -426,9 +440,10 @@ func TestCrossOriginPolicies(t *testing.T) {
 	}
 }
 
-// baseCSPHosts are the only third-party hosts the base policy may allow:
-// Google Fonts used by themes and YouTube frames in page content. A host that
-// a module loads belongs in that module's CSPSources instead.
+// baseCSPHosts are the only third-party host sources the base policy may
+// allow: Google Fonts used by themes and YouTube frames in page content
+// (img-src also allows the https: scheme for images). A host that a module
+// loads belongs in that module's CSPSources instead.
 var baseCSPHosts = map[string]bool{
 	"https://fonts.googleapis.com":     true,
 	"https://fonts.gstatic.com":        true,

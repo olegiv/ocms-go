@@ -50,7 +50,9 @@ When saving:
 - Every non-empty value must be in its documented format, whether or not its
   tracker is enabled: `G-` plus 4–20 uppercase letters or digits, `GTM-` plus
   4–12 uppercase letters or digits, an absolute `http(s)` URL without
-  credentials, query string or fragment, and a numeric Site ID. Values are
+  credentials, query string or fragment whose host is a plain DNS name or IPv4
+  address with an optional numeric port (a CSP cannot name an IPv6 address),
+  and a numeric Site ID. Values are
   checked again at render time and skipped if malformed; a malformed stored
   value is logged at startup and shown on the settings page.
 - Trailing slashes on Matomo URLs are normalized before storage.
@@ -60,7 +62,8 @@ Errors appear as flash messages.
 ## Content-Security-Policy
 
 While the module is active, the policy allows the Google Tag Manager and
-Google Analytics hosts. While Matomo tracking is enabled with a valid URL and
+Google Analytics hosts (including the GTM `<noscript>` iframe), whether or not
+a tracker is configured; deactivate the module when it is not used. While Matomo tracking is enabled with a valid URL and
 Site ID, it also allows that Matomo server's origin for `script-src` and
 `connect-src`, so `matomo.js` and tracking hits are not blocked. Saving the
 settings changes the policy on the next request.

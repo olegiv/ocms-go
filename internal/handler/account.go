@@ -8,7 +8,6 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
-	"github.com/olegiv/ocms-go/internal/model"
 	accountviews "github.com/olegiv/ocms-go/internal/views/account"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
@@ -25,9 +24,7 @@ func (h *AuthHandler) Account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Unknown roles share the public permission level, so require a known role.
-	switch user.Role {
-	case model.RoleAdmin, model.RoleEditor, model.RolePublic:
-	default:
+	if !isValidRole(user.Role) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -53,11 +50,6 @@ func (h *AuthHandler) Account(w http.ResponseWriter, r *http.Request) {
 	if user.LastLoginAt.Valid {
 		data.LastLoginAt = h.renderer.FormatDateTimeLocale(user.LastLoginAt.Time, lang)
 	}
-	for _, option := range h.renderer.AdminLangOptions() {
-		pc.LangOptions = append(pc.LangOptions, adminviews.LangOption{
-			Code: option.Code,
-			Name: option.Name,
-		})
-	}
+	pc.LangOptions = adminLangOptions(h.renderer)
 	renderTempl(w, r, accountviews.Page(pc, data))
 }

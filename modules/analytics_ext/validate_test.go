@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -30,6 +31,19 @@ func TestValidateTrackerFormats(t *testing.T) {
 		"matomo credentials": {Settings{MatomoURL: "https://user:pw@matomo.example.com/"}, []string{errMatomoURLInvalid}},
 		"matomo quote":       {Settings{MatomoURL: `https://matomo.example.com/");alert(1)//`}, []string{errMatomoURLInvalid}},
 		"matomo site id":     {Settings{MatomoSiteID: "1'"}, []string{errMatomoSiteIDInvalid}},
+		// The origin is written into the CSP: a wildcard would allow every
+		// host, and ";" or "," would end the directive or the whole policy.
+		"matomo wildcard host":      {Settings{MatomoURL: "https://*/"}, []string{errMatomoURLInvalid}},
+		"matomo wildcard subdomain": {Settings{MatomoURL: "https://*.example.com/"}, []string{errMatomoURLInvalid}},
+		"matomo directive break":    {Settings{MatomoURL: "https://a.example;sandbox/"}, []string{errMatomoURLInvalid}},
+		"matomo policy break":       {Settings{MatomoURL: "https://a.example,script-src/"}, []string{errMatomoURLInvalid}},
+		"matomo port out of range":  {Settings{MatomoURL: "https://a.example:99999/"}, []string{errMatomoURLInvalid}},
+		"matomo empty port":         {Settings{MatomoURL: "https://a.example:/"}, []string{errMatomoURLInvalid}},
+		// CSP host sources cannot name an IPv6 address, so the browser would
+		// block matomo.js after a successful save.
+		"matomo ipv6 host":      {Settings{MatomoURL: "https://[2001:db8::1]/"}, []string{errMatomoURLInvalid}},
+		"matomo host with port": {Settings{MatomoURL: "https://stats.example.com:8443/matomo/"}, nil},
+		"matomo ip host":        {Settings{MatomoURL: "http://192.168.1.10/"}, nil},
 		"disabled still checked": {
 			Settings{GA4Enabled: false, GA4MeasurementID: "bad", GTMEnabled: false, GTMContainerID: "bad"},
 			[]string{errGA4IDInvalid, errGTMIDInvalid},
@@ -37,6 +51,11 @@ func TestValidateTrackerFormats(t *testing.T) {
 	} {
 		if got := validateTrackerFormats(&tc.settings); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: validateTrackerFormats = %v, want %v", name, got, tc.want)
+		}
+		// Every accepted URL must yield an origin the CSP keeps, or the
+		// tracker saves fine and is then blocked in the browser.
+		if raw := tc.settings.MatomoURL; raw != "" && validMatomoURL(raw) && !middleware.IsCSPHostSource(matomoOrigin(raw)) {
+			t.Errorf("%s: %q is accepted but its origin %q is not a CSP host source", name, raw, matomoOrigin(raw))
 		}
 	}
 }

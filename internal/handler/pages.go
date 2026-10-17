@@ -576,6 +576,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.validatePageSlugCreate(r.Context(), input.Slug); errMsg != "" {
 		validationErrors["slug"] = errMsg
 	}
+	if errMsg := h.validatePageAliases(r.Context(), r.Form["aliases[]"]); errMsg != "" {
+		validationErrors["aliases"] = errMsg
+	}
 
 	// Status validation
 	if input.Status == "" {
@@ -620,6 +623,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 		data := PageFormData{
 			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
+			Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
 			AllCategories: categoryTree,
 			AllLanguages:  allLanguages,
 			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
@@ -855,6 +859,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if slugErr := h.validatePageSlugUpdate(r.Context(), input.Slug, existingPage.Slug, id); slugErr != "" {
 		validationErrors["slug"] = slugErr
 	}
+	if errMsg := h.validatePageAliases(r.Context(), r.Form["aliases[]"]); errMsg != "" {
+		validationErrors["aliases"] = errMsg
+	}
 
 	// Status validation
 	status := input.Status
@@ -901,6 +908,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Page:          &existingPage,
 			PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
 			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
+			Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
 			AllCategories: categoryTree,
 			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
 			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
@@ -1787,23 +1795,35 @@ func (h *PagesHandler) writePageGuarded(
 	return page, nil
 }
 
-// PageRouteConflict reports the message for a page route that an application
-// route or an active language would swallow, or an empty string when the path
-// is free.
+// PageRouteConflict reports the message for a page slug or alias path that an
+// application route or an active language would swallow, or an empty string
+// when the path is free.
 //
-// Application routes such as /login or /account are registered ahead of the
-// page catch-all, and the language middleware strips a leading segment that
-// matches an active language code before the frontend router runs, so a page
-// saved at either can never be reached. Slug uniqueness is checked only
-// against pages and aliases and would let this through silently, so the
-// namespaces are compared here.
+// chi matches an exact application route such as /login or /account before
+// the page catch-all, so a page or single-segment alias at that URL is never
+// served (util.IsReservedPageSlug). The language middleware strips a leading
+// segment that matches an active language code before the frontend router
+// runs, so a path starting with one is swallowed by the language homepage.
+// Slug uniqueness is checked only against pages and aliases and would let
+// both through silently, so the namespaces are compared here. A multi-segment
+// alias is reserved only where a route answers it (util.ReservedRoutePath:
+// "forms/contact", anything under "uploads/"); other paths below a route's
+// first segment ("blog/post/55") reach the page through the not-found alias
+// lookup.
 //
 // Exported because every path that writes a page slug owes callers the same
 // answer: the admin form, the v2 API, and anything added later. A path that
 // skips it stores a URL that resolves to something else.
-func PageRouteConflict(ctx context.Context, queries *store.Queries, firstSegment string) (string, error) {
-	if util.IsReservedRouteSegment(firstSegment) {
+func PageRouteConflict(ctx context.Context, queries *store.Queries, path string) (string, error) {
+	firstSegment, rest, _ := strings.Cut(path, "/")
+	if rest == "" && util.IsReservedPageSlug(firstSegment) {
 		return fmt.Sprintf("Conflicts with the application route /%s", firstSegment), nil
+	}
+	if pattern := util.ReservedRoutePath(path); pattern != "" {
+		if prefix, ok := strings.CutSuffix(pattern, "/**"); ok {
+			return fmt.Sprintf("Conflicts with the application routes under /%s/", prefix), nil
+		}
+		return fmt.Sprintf("Conflicts with the application route /%s", pattern), nil
 	}
 	if firstSegment == "" || !util.IsRoutableLanguageCode(firstSegment) {
 		return "", nil
@@ -1820,13 +1840,45 @@ func PageRouteConflict(ctx context.Context, queries *store.Queries, firstSegment
 	return "", nil
 }
 
-func (h *PagesHandler) pageRouteConflict(ctx context.Context, firstSegment string) string {
-	conflict, err := PageRouteConflict(ctx, h.queries, firstSegment)
+func (h *PagesHandler) pageRouteConflict(ctx context.Context, path string) string {
+	conflict, err := PageRouteConflict(ctx, h.queries, path)
 	if err != nil {
-		slog.Error("database error checking language prefixes", "error", err)
-		return "Error checking slug"
+		slog.Error("database error checking page route conflicts", "error", err, "path", path)
+		return "Error checking for route conflicts"
 	}
 	return conflict
+}
+
+// validatePageAliases returns the form error for the first submitted alias
+// that is malformed or that an application route or active language would
+// answer instead of the page, or "" when every alias can be stored. It runs
+// before any write, so an update never clears aliases it cannot save again.
+func (h *PagesHandler) validatePageAliases(ctx context.Context, aliases []string) string {
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		if !util.IsValidAlias(alias) {
+			return fmt.Sprintf("Alias /%s: use lowercase letters, numbers and hyphens, with / between segments", alias)
+		}
+		if conflict := h.pageRouteConflict(ctx, alias); conflict != "" {
+			return fmt.Sprintf("Alias /%s: %s", alias, conflict)
+		}
+	}
+	return ""
+}
+
+// pageAliasesFromForm returns the submitted aliases, so a form re-rendered
+// after a validation error keeps them.
+func pageAliasesFromForm(values []string) []store.PageAlias {
+	var aliases []store.PageAlias
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			aliases = append(aliases, store.PageAlias{Alias: value})
+		}
+	}
+	return aliases
 }
 
 // loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is
@@ -1968,16 +2020,21 @@ func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasS
 		}
 		// An alias is matched against the path the language middleware has
 		// already stripped, so one beginning with an active language code —
-		// "eng" or "eng/team" — or with an application route such as "login"
-		// is dead on arrival. Storing it would only promise a URL that never
-		// resolves.
-		firstSegment, _, _ := strings.Cut(alias, "/")
-		if conflict := h.pageRouteConflict(ctx, firstSegment); conflict != "" {
+		// "eng" or "eng/team" — is dead on arrival, and so is an alias that an
+		// application route answers, such as "login" or "uploads/a.pdf".
+		// validatePageAliases has already refused these on the form; this
+		// keeps other callers honest. A failed lookup keeps the alias, because
+		// an update has already cleared the old ones.
+		conflict, err := PageRouteConflict(ctx, h.queries, alias)
+		if err != nil {
+			slog.Error("database error re-checking page alias; keeping it",
+				"error", err, "page_id", pageID, "alias", alias)
+		} else if conflict != "" {
 			slog.Warn("skipping alias that a language prefix or application route would shadow",
 				"page_id", pageID, "alias", alias, "reason", conflict)
 			continue
 		}
-		_, err := h.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+		_, err = h.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
 			PageID:    pageID,
 			Alias:     alias,
 			CreatedAt: now,

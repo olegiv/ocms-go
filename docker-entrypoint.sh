@@ -15,10 +15,12 @@ DATA_DIRS="/app/data /app/uploads /app/custom/themes"
 # image filesystem is read-only there). It is created as the user the app
 # runs as: under the compose capability set root has no DAC_OVERRIDE and
 # cannot write into the ocms-owned volume. Arguments run the mkdir, e.g.
-# through su-exec.
+# through su-exec. A TMPDIR that cannot be created is dropped, so the app
+# falls back to /tmp instead of failing its first upload.
 ensure_tmpdir() {
-    if [ -n "${TMPDIR:-}" ]; then
-        "$@" mkdir -p "$TMPDIR" 2>/dev/null || echo "warning: could not create TMPDIR $TMPDIR"
+    if [ -n "${TMPDIR:-}" ] && ! "$@" mkdir -p "$TMPDIR"; then
+        echo "warning: could not create TMPDIR $TMPDIR; using /tmp instead" >&2
+        unset TMPDIR
     fi
 }
 
@@ -27,7 +29,10 @@ if [ "$(id -u)" = "0" ]; then
     echo "Fixing volume permissions..."
     for dir in $DATA_DIRS; do
         if [ -d "$dir" ]; then
-            chown -R ocms:ocms "$dir" 2>/dev/null || echo "warning: could not change ownership of $dir (read-only mount?)"
+            # chown -R reports every file it cannot change; keep the first.
+            if ! err=$(chown -R ocms:ocms "$dir" 2>&1); then
+                echo "warning: could not change ownership of $dir: $(printf '%s\n' "$err" | head -n 1)" >&2
+            fi
         fi
     done
     ensure_tmpdir su-exec ocms

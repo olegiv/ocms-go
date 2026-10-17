@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Test gate: the full Go test suite. /commit-prepare runs it before drafting a
-# commit message and .githooks/pre-push runs it before every push; a failing
-# test blocks both. Exits non-zero when any test fails.
+# Test gate: the full Go test suite. /commit-prepare and
+# scripts/codex/commit-prepare.sh run it before drafting a commit message,
+# scripts/codex/commit-do.sh before committing, and .githooks/pre-push before
+# every push; a failing test blocks each. Exits non-zero when any test fails.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"

@@ -36,9 +36,10 @@ type Module struct {
 	cron     *cron.Cron
 
 	// settingsMu guards settings: the tracker reads it on every frontend
-	// request while the settings form and salt rotation write it. Only the
-	// helpers in settings.go and getCurrentSalt touch the field
-	// (TestSettingsAccessHoldsTheLock).
+	// request while the settings form and salt rotation write it. The
+	// helpers in settings.go and getCurrentSalt are the only code that
+	// touches the field; TestSettingsAccessHoldsTheLock checks that every
+	// access takes the lock.
 	settingsMu sync.RWMutex
 
 	// bgWG tracks every goroutine the module starts, so Shutdown can wait for
@@ -285,8 +286,9 @@ func (m *Module) AdminURL() string {
 }
 
 // EditorAdminRoutes opts the module in for editors: it reports first-party
-// statistics that editors use, and every handler re-checks the role through
-// requireEditorAuth.
+// statistics that editors use, and every handler re-checks the role:
+// requireEditorAuth for the statistics pages, requireAdminAuth for settings
+// and aggregation.
 func (m *Module) EditorAdminRoutes() bool { return true }
 
 // SidebarLabel returns the display label for the admin sidebar.

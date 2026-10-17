@@ -69,13 +69,7 @@ func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		AdminLang: lang,
 	}
 
-	// Get language options
-	for _, opt := range h.renderer.AdminLangOptions() {
-		data.LangOptions = append(data.LangOptions, adminviews.LangOption{
-			Code: opt.Code,
-			Name: opt.Name,
-		})
-	}
+	data.LangOptions = adminLangOptions(h.renderer)
 
 	// Get hCaptcha state
 	data.HcaptchaEnabled = h.renderer.HcaptchaEnabled()

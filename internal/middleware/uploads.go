@@ -44,7 +44,8 @@ var inlineUploadExtensions = map[string]struct{}{
 // NoDirectoryFS wraps fsys so that directories report as not found. Wrapped in
 // it, http.FileServer answers a directory URL with 404 instead of listing the
 // files below it. TestFileServersRefuseDirectories (cmd/ocms) requires every
-// file server to use it.
+// http.FileServer to use it, and every http.ServeFile caller to check for a
+// directory, directly or through a function of its package.
 func NoDirectoryFS(fsys http.FileSystem) http.FileSystem {
 	return noDirectoryFS{fsys}
 }

@@ -16,7 +16,8 @@ import (
 // workflowFile is the part of a GitHub Actions workflow these tests read.
 type workflowFile struct {
 	Jobs map[string]struct {
-		Permissions map[string]string `yaml:"permissions"`
+		// Permissions is a scope map or a shorthand such as "read-all".
+		Permissions any `yaml:"permissions"`
 		Steps       []struct {
 			Name string            `yaml:"name"`
 			Uses string            `yaml:"uses"`
@@ -55,9 +56,10 @@ func TestReleaseArchivesAreAttested(t *testing.T) {
 	if !ok {
 		t.Fatal("release.yml has no build job")
 	}
+	perms, _ := build.Permissions.(map[string]any)
 	for _, perm := range []string{"id-token", "attestations"} {
-		if build.Permissions[perm] != "write" {
-			t.Errorf("build job permission %s = %q, want write", perm, build.Permissions[perm])
+		if perms[perm] != "write" {
+			t.Errorf("build job permission %s = %v, want write", perm, perms[perm])
 		}
 	}
 
@@ -101,9 +103,16 @@ var pinnedAction = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f
 // Bug state: change the attest step to actions/attest-build-provenance@v4
 // and this names it.
 func TestWorkflowActionsArePinned(t *testing.T) {
-	names, err := filepath.Glob(filepath.Join("..", "..", ".github", "workflows", "*.yml"))
-	if err != nil || len(names) == 0 {
-		t.Fatalf("listing workflows: %v (%d found)", err, len(names))
+	var names []string
+	for _, pattern := range []string{"*.yml", "*.yaml"} {
+		matches, err := filepath.Glob(filepath.Join("..", "..", ".github", "workflows", pattern))
+		if err != nil {
+			t.Fatalf("listing workflows: %v", err)
+		}
+		names = append(names, matches...)
+	}
+	if len(names) == 0 {
+		t.Fatal("no workflows found")
 	}
 	checked := 0
 	for _, path := range names {

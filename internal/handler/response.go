@@ -240,6 +240,6 @@ func setLanguagePreference(w http.ResponseWriter, r *http.Request, renderer *ren
 	// Set the language preference in session
 	renderer.SetAdminLang(r, lang)
 
-	// Redirect back to the referring page, or fallback URL if not available.
+	// Redirect back to a same-origin Referer, or to fallbackURL.
 	middleware.SafeRefererRedirect(w, r, fallbackURL)
 }

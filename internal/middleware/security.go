@@ -10,8 +10,10 @@ import (
 	"encoding/base64"
 	"log/slog"
 	"net/http"
-	"sort"
+	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 const cspNoncePlaceholder = "{{nonce}}"
@@ -55,7 +57,9 @@ type SecurityHeadersConfig struct {
 	// CSPSources, when set, is called for every response and returns
 	// third-party sources to add to ContentSecurityPolicy, keyed by directive.
 	// It lets an active module allow the hosts it loads while the base policy
-	// stays first-party.
+	// keeps scripts, connections and (apart from Google Fonts and YouTube)
+	// styles and frames first-party. addCSPSources
+	// accepts only host sources for directives the base policy already has.
 	CSPSources func() map[string][]string
 
 	// CrossOriginOpenerPolicy sets the Cross-Origin-Opener-Policy header.
@@ -84,13 +88,14 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 	}
 
 	// Default CSP - allow self, inline styles (for CMS features), Google Fonts
-	// for themes and YouTube frames for page content. Browsers report
-	// violations to /csp-report through report-uri, where they are logged.
-	// report-to is deliberately absent: Chrome ignores report-uri whenever
-	// report-to is present, and in testing it delivered report-uri reports
-	// at once but sent nothing through report-to (TestCSPReporting). Hosts that a module
-	// loads (analytics, hCaptcha) are added per request through CSPSources
-	// only while that module is active (TestBaseCSPHostsAreFirstPartyOrContent).
+	// for themes, YouTube frames for page content and images from any https:
+	// host. Browsers report violations to /csp-report through report-uri,
+	// where they are logged. report-to is deliberately absent: Chrome ignores
+	// report-uri whenever report-to is present, and in testing it delivered
+	// report-uri reports at once but sent nothing through report-to
+	// (TestCSPReporting keeps report-to out). Hosts that a module loads
+	// (analytics, hCaptcha) are added per request through CSPSources only
+	// while that module is active (TestBaseCSPHostsAreFirstPartyOrContent).
 	// unpkg.com and esm.sh were removed from both dev and prod CSPs: no script or
 	// fetch in this repo or its embedded assets loads from them, so keeping them
 	// in the allowlist only widened the supply-chain trust surface (FIND-007).
@@ -193,30 +198,78 @@ func cspPart(name, value string) string {
 	return name + " " + value
 }
 
-// addCSPSources appends sources to the matching directives of policy and
-// adds the directives policy lacks. Existing directives keep their order and
-// added ones follow sorted by name, so the header stays stable.
+// cspExtendableDirectives are the directives a module may add sources to.
+// Other directives must never be widened (object-src 'none', base-uri,
+// form-action, frame-ancestors), and a directive the policy lacks is not
+// created, because it would lose its fallback to default-src 'self'.
+var cspExtendableDirectives = map[string]bool{
+	"script-src": true, "style-src": true, "img-src": true,
+	"font-src": true, "connect-src": true, "frame-src": true,
+}
+
+// cspHostSource matches a scheme-qualified host source such as
+// https://example.com, https://*.example.com or http://host:8080. It rejects
+// anything that could widen a directive to every host ("https://*", "https:",
+// keywords) or end it (";" or "," in a host). CSP host sources cannot name an
+// IPv6 address, so neither does this.
+var cspHostSource = regexp.MustCompile(`^https?://(\*\.)?[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*(:([0-9]{1,5}))?$`)
+
+// IsCSPHostSource reports whether source is a host source that a module may
+// add to the Content-Security-Policy (see cspHostSource), with a port, if
+// any, between 1 and 65535. Settings that become CSP sources, such as a
+// tracker URL, should be validated with it so the value an administrator
+// saves is the value the policy keeps.
+func IsCSPHostSource(source string) bool {
+	match := cspHostSource.FindStringSubmatch(source)
+	if match == nil {
+		return false
+	}
+	if port := match[len(match)-1]; port != "" {
+		n, err := strconv.Atoi(port)
+		return err == nil && n >= 1 && n <= 65535
+	}
+	return true
+}
+
+// rejectedCSPSources remembers rejected sources so each is logged once, not on
+// every response.
+var rejectedCSPSources sync.Map
+
+// addCSPSources appends module sources to the matching directives of policy.
+// Only host sources for directives in cspExtendableDirectives that the policy
+// already has are added; anything else is dropped and logged once, so a bad
+// value from a module or its settings cannot widen or break the header.
 func addCSPSources(policy string, sources map[string][]string) string {
 	if len(sources) == 0 {
 		return policy
 	}
 	parts := strings.Split(policy, "; ")
-	present := make(map[string]bool, len(parts))
+	present := make(map[string]int, len(parts))
 	for i, part := range parts {
 		name, _, _ := strings.Cut(part, " ")
-		present[name] = true
-		if extra := sources[name]; len(extra) > 0 {
-			parts[i] = part + " " + strings.Join(extra, " ")
+		present[name] = i
+	}
+	for name, values := range sources {
+		i, ok := present[name]
+		for _, value := range values {
+			switch {
+			case !cspExtendableDirectives[name] || !ok:
+				rejectCSPSource(name, value, "directive cannot be extended")
+			case !IsCSPHostSource(value):
+				rejectCSPSource(name, value, "not a host source")
+			default:
+				parts[i] += " " + value
+			}
 		}
 	}
-	var added []string
-	for name, extra := range sources {
-		if !present[name] && len(extra) > 0 {
-			added = append(added, name+" "+strings.Join(extra, " "))
-		}
+	return strings.Join(parts, "; ")
+}
+
+// rejectCSPSource logs a dropped CSP source the first time it is seen.
+func rejectCSPSource(directive, source, reason string) {
+	if _, seen := rejectedCSPSources.LoadOrStore(directive+" "+source, true); !seen {
+		slog.Warn("ignoring CSP source", "directive", directive, "source", source, "reason", reason)
 	}
-	sort.Strings(added)
-	return strings.Join(append(parts, added...), "; ")
 }
 
 // buildPermissionsPolicy builds a Permissions-Policy string from a map.

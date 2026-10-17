@@ -25,14 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Internal Analytics settings are guarded by a lock, so saving them no longer
   races with the tracker. Saving settings and running aggregation are now
   admin-only; editors keep the statistics pages.
-- Core route names (`login`, `account`, `blog`, `search`, the built-in module
-  routes `analytics`, `embed` and `example`, and the rest of the reserved list
-  in `docs/multi-language.md`) can no longer be used as page slugs or alias
-  prefixes, since the route answers that URL first. The admin form and the
-  REST API reject them, the Migrator suffixes them (`blog-2`), and content
-  import rejects an archive containing one. Existing pages keep working while
-  their slug is unchanged. A drift test keeps the reserved list in step with
-  the router.
+- Page slugs and single-segment aliases can no longer use the names whose
+  exact URL a core route answers (`account`, `admin`, `blog`, `example`,
+  `health`, `login`, `search`), since that route answers first. The admin form
+  rejects them as slugs and aliases, the REST API as slugs, the Migrator
+  suffixes them (`blog-2`), and content import rejects an archive containing
+  one. The form also rejects multi-segment aliases that a route answers
+  (`forms/contact`, anything under `uploads/`) and names the alias instead of
+  dropping it on save. Existing pages stay editable while their slug is
+  unchanged, and other multi-segment aliases such as `blog/post/55` are
+  unaffected. `account`, `csp-report` and the built-in
+  module routes `analytics`, `embed` and `example` are now also reserved
+  language codes. Drift tests keep both lists in step with the router.
 - `/account` is disallowed in `robots.txt`, and content redirects and
   first-party analytics now share one list of private paths (`/admin`, `/api`,
   `/account`). Pages whose slug merely starts with `admin` are now tracked.
@@ -41,17 +45,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `X-XSS-Protection` is now `0`, which turns off the legacy browser XSS
   auditor; CSP remains the enforced protection. The reverse-proxy examples
   in `docs/reverse-proxy.md` match.
-- The Content-Security-Policy is first-party by default. Google Tag Manager
-  and Google Analytics hosts are allowed only while External Analytics is
-  active, and hCaptcha hosts only while the hCaptcha module is active;
-  toggling a module takes effect without a restart. Custom modules declare
+- The Content-Security-Policy is first-party by default for scripts, styles,
+  connections and frames, apart from Google Fonts and YouTube frames (images
+  may still come from any `https:` host).
+  Google Tag Manager and Google Analytics hosts are allowed only while
+  External Analytics is active, and hCaptcha hosts only while the hCaptcha
+  module is active, whether or not they are configured; toggling a module
+  takes effect without a restart. Module sources are accepted only as host
+  sources for directives the base policy already has, so a bad value cannot
+  widen or break the header. Custom modules declare
   their hosts with `module.CSPSourcer` (see `docs/custom-modules.md`). The
   unused `*.dify.ai` and `udify.app` entries are gone: the Dify widget talks
   only to the same-origin `/embed/dify` proxy.
-- Responses carry `Cross-Origin-Opener-Policy: same-origin` and
-  `Cross-Origin-Resource-Policy: same-origin`, except `/uploads/`, `/static/`
-  and `/themes/`, which stay embeddable (`cross-origin`) for feed readers and
-  other sites.
+- Every response carries `Cross-Origin-Opener-Policy: same-origin`, and
+  `Cross-Origin-Resource-Policy: same-origin` except under `/uploads/`,
+  `/static/` and `/themes/`, which stay embeddable (`cross-origin`) for feed
+  readers and other sites.
 - `docker-compose.yml` publishes the port on `127.0.0.1` by default (set
   `OCMS_PUBLISH_ADDRESS=0.0.0.0` when a proxy reaches it through another
   address) and runs the container with `no-new-privileges`, only the `CHOWN`,
@@ -61,16 +70,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - External Analytics settings are guarded by a lock, so saving them no longer
   races with page rendering, and an enabled Matomo server is now allowed by
   the CSP; before, the policy blocked `matomo.js` from its configured host.
+  The Matomo URL must name a plain host or IPv4 address with an optional
+  numeric port, so it cannot inject CSP sources or save a tracker the CSP
+  would block. The GTM `<noscript>` iframe
+  is allowed in `frame-src`.
 - Security headers are set before every middleware that can answer on its
   own, so trailing-slash and content redirects, sentinel bans and timeouts
   carry the CSP, HSTS and COOP headers too.
 - Browsers report CSP violations to `/csp-report` through `report-uri`.
   Reports are logged with bounded, sanitized fields and a per-IP rate limit.
   `report-to` is left out on purpose: Chrome ignores `report-uri` when it is
-  present and did not deliver Reporting API reports in testing. `csp-report`
-  joins the reserved route names.
-- Release archives carry signed build-provenance attestations; verify one
-  with `gh attestation verify <archive> --repo olegiv/ocms-go`.
+  present and did not deliver Reporting API reports in testing.
+- Release archives published after v0.28.0 carry signed build-provenance
+  attestations; verify one with
+  `gh attestation verify <archive> --repo olegiv/ocms-go`.
 
 #### Developer Tooling
 - `make commit-do-local` commits only the staged files, after the test gate

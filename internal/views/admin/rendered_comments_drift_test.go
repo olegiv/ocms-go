@@ -13,9 +13,14 @@ import (
 	"testing"
 )
 
-// htmlComment matches an HTML comment, which templ and html/template both send
-// to the browser.
+// htmlComment matches an HTML comment. templ sends HTML comments to the
+// browser; html/template strips them, but .html templates are scanned too, so
+// a template that moves to templ cannot start leaking a note.
 var htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
+
+// goFileName matches a Go source file name such as sri_test.go, and not a host
+// such as fonts.googleapis.com.
+var goFileName = regexp.MustCompile(`[\w/.-]+\.go\b`)
 
 // TestRenderedCommentsDoNotNameSourceFiles fails when a template carries an
 // HTML comment that names a Go source file. Such notes are written for
@@ -51,7 +56,7 @@ func TestRenderedCommentsDoNotNameSourceFiles(t *testing.T) {
 			text := string(source)
 			for _, loc := range htmlComment.FindAllStringIndex(text, -1) {
 				comment := text[loc[0]:loc[1]]
-				if strings.Contains(comment, ".go") {
+				if goFileName.MatchString(comment) {
 					rel, _ := filepath.Rel(root, path)
 					line := strings.Count(text[:loc[0]], "\n") + 1
 					offenders = append(offenders, rel+":"+strconv.Itoa(line))

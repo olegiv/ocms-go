@@ -181,17 +181,19 @@ func validateRoutableLanguage(language store.Language) error {
 }
 
 // ensureSlugAvailable reports a conflict error when the slug cannot serve as
-// this page's route: an active language owns the prefix, or another page whose
-// id is NOT exceptID already holds it. Pass 0 to check against all pages.
+// this page's route: an exact application route or an active language owns
+// it, or another page whose id is NOT exceptID already holds it. Pass 0 to
+// check against all pages.
 func (s *Service) ensureSlugAvailable(ctx context.Context, slug string, exceptID int64) error {
-	// Uniqueness is not the whole of availability. The language middleware
-	// strips a first path segment that matches an active language code before
-	// the frontend router runs, so a page written at that segment answers to
-	// nobody — the language homepage takes the URL. An API client renaming a
-	// page to "eng" used to succeed and quietly lose the page.
+	// Uniqueness is not the whole of availability. An exact application route
+	// such as /login answers before the page catch-all, and the language
+	// middleware strips a first path segment that matches an active language
+	// code before the frontend router runs, so a page written at either
+	// answers to nobody. An API client renaming a page to "eng" used to
+	// succeed and quietly lose the page.
 	conflict, err := handler.PageRouteConflict(ctx, s.queries, slug)
 	if err != nil {
-		return fmt.Errorf("checking language prefixes: %w", err)
+		return fmt.Errorf("checking page route conflicts: %w", err)
 	}
 	if conflict != "" {
 		return v2.NewValidationError(map[string]string{"slug": conflict}, "Validation failed")
@@ -586,8 +588,12 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 		if msg := handler.ValidateSlugFormat(*in.Slug); msg != "" {
 			return v2.NewValidationError(map[string]string{"slug": msg}, "Validation failed")
 		}
-		if err := s.ensureSlugAvailable(ctx, *in.Slug, existing.ID); err != nil {
-			return err
+		// An unchanged slug stays valid even when a later release reserved it,
+		// as in the admin form, so a GET-then-PATCH round trip keeps working.
+		if *in.Slug != existing.Slug {
+			if err := s.ensureSlugAvailable(ctx, *in.Slug, existing.ID); err != nil {
+				return err
+			}
 		}
 		params.Slug = *in.Slug
 	}

@@ -13,10 +13,13 @@ import (
 )
 
 // AssertFieldAccessHoldsLock fails when a function or closure in the non-test
-// Go files of dir touches the struct field named field without itself calling
+// Go files of dir touches the struct field named field without first calling
 // Lock or RLock on a selector named mutex (m.settingsMu.RLock(), for example).
-// Closures are checked on their own, because a lock taken by the enclosing
-// function is not held when they run.
+// The lock call must come before the first access in source order. Closures
+// are checked on their own, because a lock taken by the enclosing function is
+// not held when they run. The check is syntactic: it does not follow Unlock
+// calls or match receivers, so it guards against a forgotten lock rather than
+// proving the locking correct.
 //
 // It is meant for drift tests that keep a field which request handlers read
 // concurrently behind its mutex.
@@ -55,11 +58,12 @@ func AssertFieldAccessHoldsLock(t *testing.T, dir, field, mutex string) {
 	}
 }
 
-// checkFieldLock reports every .field access in body when body does not call
-// mutex.Lock or mutex.RLock itself, and recurses into closures separately.
+// checkFieldLock reports every .field access in body that comes before the
+// first mutex.Lock or mutex.RLock call in body (all of them when there is no
+// such call), and recurses into closures separately.
 func checkFieldLock(body *ast.BlockStmt, field, mutex string, accesses *int, report func(token.Pos)) {
 	var found []token.Pos
-	locked := false
+	firstLock := token.NoPos
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncLit:
@@ -70,16 +74,16 @@ func checkFieldLock(body *ast.BlockStmt, field, mutex string, accesses *int, rep
 			case field:
 				found = append(found, node.Pos())
 			case "Lock", "RLock":
-				if mu, ok := node.X.(*ast.SelectorExpr); ok && mu.Sel.Name == mutex {
-					locked = true
+				if mu, ok := node.X.(*ast.SelectorExpr); ok && mu.Sel.Name == mutex && !firstLock.IsValid() {
+					firstLock = node.Pos()
 				}
 			}
 		}
 		return true
 	})
 	*accesses += len(found)
-	if !locked {
-		for _, pos := range found {
+	for _, pos := range found {
+		if !firstLock.IsValid() || pos < firstLock {
 			report(pos)
 		}
 	}

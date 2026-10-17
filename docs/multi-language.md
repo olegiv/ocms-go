@@ -100,11 +100,17 @@ Core route names cannot be activated as language codes: `admin`, `api`,
 Legacy active rows using a reserved code are ignored by routing and logged,
 but administrators can still deactivate or rename them.
 
-The same names cannot be used as page slugs or as the first segment of a page
-alias, because the core route answers that URL before any page does. The admin
-form and the REST API reject them, the Migrator suffixes them (`blog-2`), and
-content import rejects an archive that contains one. An existing page already
-stored at a reserved slug stays editable as long as its slug is unchanged.
+Page slugs and single-segment aliases cannot use the names whose exact URL a
+core route answers: `account`, `admin`, `blog`, `example`, `health`, `login`,
+and `search`, because that route answers before any page does. The admin form
+rejects them as slugs and aliases, the REST API as slugs, the Migrator suffixes
+them (`blog-2`), and content import rejects an archive that contains one. The
+other reserved names own only deeper paths (`/forms/contact`) or other
+methods, so pages may use them. The admin form also rejects a multi-segment
+alias that a route answers, such as `forms/contact` or anything under
+`uploads/`; other multi-segment aliases such as `blog/post/55` keep working. An existing page
+already stored at a reserved slug stays editable as long as its slug is
+unchanged.
 
 ### Feed Language
 

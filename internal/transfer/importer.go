@@ -3008,7 +3008,7 @@ func validateSlugsAgainstLanguagePrefixes(
 	var errs []ImportError
 	for _, page := range data.Pages {
 		var message string
-		if util.IsReservedRouteSegment(page.Slug) {
+		if util.IsReservedPageSlug(page.Slug) {
 			message = fmt.Sprintf("page slug %q is the application route /%s; "+
 				"the imported page would be unreachable", page.Slug, page.Slug)
 		} else if _, shadowed := known[page.Slug]; shadowed {

@@ -918,9 +918,13 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 	if thm.IsEmbedded && thm.EmbeddedFS != nil {
 		// Serve from embedded filesystem
 		embeddedPath := "static/" + cleanPath
+		info, err := fs.Stat(thm.EmbeddedFS, embeddedPath)
+		if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) {
+			return
+		}
 		data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
 		if err != nil {
-			http.NotFound(w, r)
+			themeStaticFileServable(w, r, nil, err, themeName, cleanPath)
 			return
 		}
 
@@ -935,7 +939,7 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 	// Serve from filesystem for external themes
 	absStaticPath, err := filepath.Abs(thm.StaticPath)
 	if err != nil {
-		http.NotFound(w, r)
+		themeStaticFileServable(w, r, nil, err, themeName, cleanPath)
 		return
 	}
 	absStaticPath = filepath.Clean(absStaticPath)
@@ -949,12 +953,34 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 		return
 	}
 
-	// http.ServeFile lists a directory, so serve regular files only.
-	if info, err := os.Stat(absFilePath); err != nil || info.IsDir() {
-		http.NotFound(w, r)
+	info, err := os.Stat(absFilePath)
+	if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) {
 		return
 	}
 	http.ServeFile(w, r, absFilePath)
+}
+
+// themeStaticFileServable reports whether a theme static file whose lookup
+// returned info and err can be served, and answers the request when it
+// cannot. A missing file, a directory (http.ServeFile would list it) or a
+// path the file system refuses (invalid UTF-8, a NUL byte, an overlong name)
+// is a 404: anyone can request those. Any other error, such as a permission
+// problem on the theme directory, is logged and answered with an uncached
+// 500, so a broken deployment is not mistaken for a missing asset.
+func themeStaticFileServable(w http.ResponseWriter, r *http.Request, info fs.FileInfo, err error, themeName, file string) bool {
+	switch {
+	case err == nil && !info.IsDir():
+		return true
+	case err == nil, errors.Is(err, fs.ErrNotExist), errors.Is(err, fs.ErrInvalid),
+		errors.Is(err, syscall.ENOTDIR), errors.Is(err, syscall.EINVAL),
+		errors.Is(err, syscall.ENAMETOOLONG), errors.Is(err, syscall.EILSEQ):
+		http.NotFound(w, r)
+	default:
+		slog.Error("failed to read theme static file", "error", err, "theme", themeName, "file", file)
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
+	return false
 }
 
 // runPostModulePostureAudits runs production security posture checks that depend on module state.
@@ -1682,6 +1708,12 @@ func run() error {
 			next.ServeHTTP(w, r)
 		})
 	})
+	// Logger and Recoverer come before SecurityHeaders, so a panic in any
+	// later middleware, including module code that SecurityHeaders calls for
+	// the CSP, is logged and answered with a 500 instead of dropping the
+	// connection.
+	r.Use(chimw.Logger)
+	r.Use(chimw.Recoverer)
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.). It runs
 	// before every middleware that can answer on its own (bans, timeouts,
 	// trailing-slash and content redirects), so those responses carry the
@@ -1702,8 +1734,6 @@ func run() error {
 	// Sentinel IP ban check (always registered, checks active status at runtime)
 	r.Use(sentinelModule.GetMiddleware())
 	slog.Info("sentinel IP ban middleware registered")
-	r.Use(chimw.Logger)
-	r.Use(chimw.Recoverer)
 	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
 	r.Use(chimw.GetHead)                        // Handle HEAD requests for uptime monitoring
 	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
@@ -1814,8 +1844,8 @@ func run() error {
 	r.Get("/health/ready", healthHandler.Readiness)
 
 	// Browsers post Content-Security-Policy violation reports here. The route
-	// is anonymous and outside CSRF and sessions, so it only logs, and a
-	// per-IP limit keeps one client from flooding the log.
+	// is anonymous, not CSRF-protected and never reads the session, so it
+	// only logs, and a per-IP limit keeps one client from flooding the log.
 	cspReportLimiter := middleware.NewGlobalRateLimiter(1.0, 10)
 	r.With(cspReportLimiter.Middleware()).Post(handler.RouteCSPReport, handler.CSPReport)
 

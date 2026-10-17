@@ -85,7 +85,7 @@ func (rm *RedirectsMiddleware) InvalidateCache() {
 // Handler returns the middleware handler function.
 func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Keep application and private account routes outside content redirects.
+		// Admin, API and account routes are never subject to content redirects.
 		path := r.URL.Path
 		if util.IsPrivateRoutePath(path) {
 			next.ServeHTTP(w, r)

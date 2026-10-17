@@ -24,6 +24,16 @@ import (
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
+// adminLangOptions returns the admin interface languages for the language
+// switcher.
+func adminLangOptions(renderer *render.Renderer) []adminviews.LangOption {
+	var options []adminviews.LangOption
+	for _, lo := range renderer.AdminLangOptions() {
+		options = append(options, adminviews.LangOption{Code: lo.Code, Name: lo.Name})
+	}
+	return options
+}
+
 // buildPageContext creates a PageContext for templ views from the request state.
 func buildPageContext(
 	r *http.Request,
@@ -62,13 +72,7 @@ func buildPageContext(
 		})
 	}
 
-	// Populate language options for the header switcher
-	for _, lo := range renderer.AdminLangOptions() {
-		pc.LangOptions = append(pc.LangOptions, adminviews.LangOption{
-			Code: lo.Code,
-			Name: lo.Name,
-		})
-	}
+	pc.LangOptions = adminLangOptions(renderer)
 
 	// Get sidebar modules
 	for _, m := range renderer.ListSidebarModules() {

@@ -114,7 +114,9 @@ func scanRefererRedirect(body *ast.BlockStmt) (readsReferer bool, redirect token
 			readsReferer = true
 		case name == "Get" && len(call.Args) == 1 && isRefererLiteral(call.Args[0]):
 			readsReferer = true
-		case strings.Contains(name, "Redirect") && name != "SafeRefererRedirect" && !redirect.IsValid():
+		case (strings.Contains(name, "Redirect") || strings.HasPrefix(name, "flash")) &&
+			name != "SafeRefererRedirect" && !redirect.IsValid():
+			// flashError, flashSuccess and flashAndRedirect redirect too.
 			redirect = call.Pos()
 		}
 		return true

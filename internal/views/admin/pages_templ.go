@@ -5661,15 +5661,23 @@ func aliasesSection(pc *PageContext, data PageFormViewData) templ.Component {
 	})
 }
 
+// aliasManagerXData returns the Alpine initializer for the alias list. The
+// aliases are JSON-encoded: a form re-rendered after a validation error shows
+// them as submitted, and a quote in one must not end the JavaScript string.
 func aliasManagerXData(aliases []PageFormAliasView) string {
-	if len(aliases) == 0 {
+	type aliasEntry struct {
+		Value string `json:"value"`
+		ID    int64  `json:"id"`
+	}
+	entries := make([]aliasEntry, 0, len(aliases))
+	for _, a := range aliases {
+		entries = append(entries, aliasEntry{Value: a.Alias, ID: a.ID})
+	}
+	data, err := json.Marshal(entries)
+	if err != nil {
 		return "aliasManager([])"
 	}
-	var parts []string
-	for _, a := range aliases {
-		parts = append(parts, fmt.Sprintf(`{value:'%s',id:%d}`, a.Alias, a.ID))
-	}
-	return fmt.Sprintf("aliasManager([%s])", strings.Join(parts, ","))
+	return "aliasManager(" + string(data) + ")"
 }
 
 func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
@@ -5700,7 +5708,7 @@ func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var297 string
 		templ_7745c5c3_Var297, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("{ open: %t }", data.VideoURL != "" || data.VideoTitle != ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1395, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1403, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var297)
 		if templ_7745c5c3_Err != nil {
@@ -5721,7 +5729,7 @@ func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var298 string
 		templ_7745c5c3_Var298, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.video_section"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1398, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1406, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var298))
 		if templ_7745c5c3_Err != nil {
@@ -5746,7 +5754,7 @@ func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var300 string
 			templ_7745c5c3_Var300, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.video_url"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1402, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1410, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var300))
 			if templ_7745c5c3_Err != nil {
@@ -5778,7 +5786,7 @@ func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var301 string
 			templ_7745c5c3_Var301, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["video_url"])
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1413, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1421, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var301))
 			if templ_7745c5c3_Err != nil {
@@ -5796,7 +5804,7 @@ func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var302 string
 		templ_7745c5c3_Var302, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.video_url_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1415, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1423, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var302))
 		if templ_7745c5c3_Err != nil {
@@ -5821,7 +5829,7 @@ func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var304 string
 			templ_7745c5c3_Var304, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.video_title"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1418, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1426, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var304))
 			if templ_7745c5c3_Err != nil {
@@ -5852,7 +5860,7 @@ func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var305 string
 			templ_7745c5c3_Var305, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["video_title"])
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1428, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1436, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var305))
 			if templ_7745c5c3_Err != nil {
@@ -5870,7 +5878,7 @@ func videoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var306 string
 		templ_7745c5c3_Var306, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.video_title_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1430, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1438, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var306))
 		if templ_7745c5c3_Err != nil {
@@ -5912,7 +5920,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var308 string
 		templ_7745c5c3_Var308, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("{ open: %t }", seoOpen(data)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1437, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1445, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var308)
 		if templ_7745c5c3_Err != nil {
@@ -5933,7 +5941,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var309 string
 		templ_7745c5c3_Var309, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.title"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1440, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1448, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var309))
 		if templ_7745c5c3_Err != nil {
@@ -5958,7 +5966,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var311 string
 			templ_7745c5c3_Var311, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.meta_title"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1445, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1453, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var311))
 			if templ_7745c5c3_Err != nil {
@@ -5988,7 +5996,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var312 string
 		templ_7745c5c3_Var312, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.chars_recommended"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1455, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1463, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var312))
 		if templ_7745c5c3_Err != nil {
@@ -6001,7 +6009,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var313 string
 		templ_7745c5c3_Var313, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.may_be_truncated"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1456, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1464, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var313))
 		if templ_7745c5c3_Err != nil {
@@ -6026,7 +6034,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var315 string
 			templ_7745c5c3_Var315, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.meta_description"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1461, Col: 108}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1469, Col: 108}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var315))
 			if templ_7745c5c3_Err != nil {
@@ -6060,7 +6068,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var316 string
 		templ_7745c5c3_Var316, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.chars_recommended"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1475, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1483, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var316))
 		if templ_7745c5c3_Err != nil {
@@ -6073,7 +6081,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var317 string
 		templ_7745c5c3_Var317, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.may_be_truncated"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1476, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1484, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var317))
 		if templ_7745c5c3_Err != nil {
@@ -6098,7 +6106,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var319 string
 			templ_7745c5c3_Var319, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.meta_keywords"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1481, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1489, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var319))
 			if templ_7745c5c3_Err != nil {
@@ -6128,7 +6136,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var320 string
 		templ_7745c5c3_Var320, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.meta_keywords_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1490, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1498, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var320))
 		if templ_7745c5c3_Err != nil {
@@ -6141,7 +6149,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var321 string
 		templ_7745c5c3_Var321, templ_7745c5c3_Err = templ.ResolveAttributeValue(featuredImageJSON(data.OgImage))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1499, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1507, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var321)
 		if templ_7745c5c3_Err != nil {
@@ -6166,7 +6174,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var323 string
 			templ_7745c5c3_Var323, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.og_image"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1501, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1509, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var323))
 			if templ_7745c5c3_Err != nil {
@@ -6189,7 +6197,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var324 string
 		templ_7745c5c3_Var324, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.og_image_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1503, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1511, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var324))
 		if templ_7745c5c3_Err != nil {
@@ -6222,7 +6230,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var326 string
 			templ_7745c5c3_Var326, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.canonical_url"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1510, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1518, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var326))
 			if templ_7745c5c3_Err != nil {
@@ -6252,7 +6260,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var327 string
 		templ_7745c5c3_Var327, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.canonical_url_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1519, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1527, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var327))
 		if templ_7745c5c3_Err != nil {
@@ -6277,7 +6285,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var329 string
 			templ_7745c5c3_Var329, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.directives"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1523, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1531, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var329))
 			if templ_7745c5c3_Err != nil {
@@ -6306,7 +6314,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var330 string
 		templ_7745c5c3_Var330, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.no_index"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1533, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1541, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var330))
 		if templ_7745c5c3_Err != nil {
@@ -6319,7 +6327,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var331 string
 		templ_7745c5c3_Var331, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.no_index_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1534, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1542, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var331))
 		if templ_7745c5c3_Err != nil {
@@ -6342,7 +6350,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var332 string
 		templ_7745c5c3_Var332, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.no_follow"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1545, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1553, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var332))
 		if templ_7745c5c3_Err != nil {
@@ -6355,7 +6363,7 @@ func seoSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var333 string
 		templ_7745c5c3_Var333, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("seo.no_follow_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1546, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1554, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var333))
 		if templ_7745c5c3_Err != nil {
@@ -6397,7 +6405,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var335 string
 		templ_7745c5c3_Var335, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("{ open: %t }", scheduleOpen(data)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1556, Col: 94}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1564, Col: 94}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var335)
 		if templ_7745c5c3_Err != nil {
@@ -6418,7 +6426,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var336 string
 		templ_7745c5c3_Var336, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.title"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1559, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1567, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var336))
 		if templ_7745c5c3_Err != nil {
@@ -6444,7 +6452,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 				var templ_7745c5c3_Var338 string
 				templ_7745c5c3_Var338, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.scheduled"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1561, Col: 86}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1569, Col: 86}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var338))
 				if templ_7745c5c3_Err != nil {
@@ -6476,7 +6484,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var340 string
 			templ_7745c5c3_Var340, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.datetime"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1566, Col: 101}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1574, Col: 101}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var340))
 			if templ_7745c5c3_Err != nil {
@@ -6504,7 +6512,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var341 string
 		templ_7745c5c3_Var341, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1574, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1582, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var341))
 		if templ_7745c5c3_Err != nil {
@@ -6522,7 +6530,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var342 string
 			templ_7745c5c3_Var342, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.currently_scheduled"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1577, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1585, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var342))
 			if templ_7745c5c3_Err != nil {
@@ -6535,7 +6543,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var343 string
 			templ_7745c5c3_Var343, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduledAtFmt)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1577, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1585, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var343))
 			if templ_7745c5c3_Err != nil {
@@ -6561,7 +6569,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var345 string
 			templ_7745c5c3_Var345, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.created_at"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1582, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1590, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var345))
 			if templ_7745c5c3_Err != nil {
@@ -6589,7 +6597,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var346 string
 		templ_7745c5c3_Var346, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.created_at_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1590, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1598, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var346))
 		if templ_7745c5c3_Err != nil {
@@ -6607,7 +6615,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var347 string
 			templ_7745c5c3_Var347, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.created_at"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1593, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1601, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var347))
 			if templ_7745c5c3_Err != nil {
@@ -6620,7 +6628,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var348 string
 			templ_7745c5c3_Var348, templ_7745c5c3_Err = templ.JoinStringErrs(data.CreatedAtFmt)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1593, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1601, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var348))
 			if templ_7745c5c3_Err != nil {
@@ -6651,7 +6659,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 				var templ_7745c5c3_Var350 string
 				templ_7745c5c3_Var350, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.published_at"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1599, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1607, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var350))
 				if templ_7745c5c3_Err != nil {
@@ -6679,7 +6687,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var351 string
 			templ_7745c5c3_Var351, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.published_at_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1606, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1614, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var351))
 			if templ_7745c5c3_Err != nil {
@@ -6713,7 +6721,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var353 string
 			templ_7745c5c3_Var353, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.how_it_works"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1612, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1620, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var353))
 			if templ_7745c5c3_Err != nil {
@@ -6726,7 +6734,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var354 string
 			templ_7745c5c3_Var354, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.step1"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1614, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1622, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var354))
 			if templ_7745c5c3_Err != nil {
@@ -6739,7 +6747,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var355 string
 			templ_7745c5c3_Var355, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.step2"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1615, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1623, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var355))
 			if templ_7745c5c3_Err != nil {
@@ -6752,7 +6760,7 @@ func schedulingSection(pc *PageContext, data PageFormViewData) templ.Component {
 			var templ_7745c5c3_Var356 string
 			templ_7745c5c3_Var356, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("schedule.step3"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1616, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1624, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var356))
 			if templ_7745c5c3_Err != nil {
@@ -6815,7 +6823,7 @@ func mediaDropzoneSelectArea(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var358 string
 		templ_7745c5c3_Var358, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.click_to_select"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1642, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1650, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var358))
 		if templ_7745c5c3_Err != nil {
@@ -6844,7 +6852,7 @@ func mediaDropzoneSelectArea(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var360 string
 			templ_7745c5c3_Var360, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.change"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1660, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1668, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var360))
 			if templ_7745c5c3_Err != nil {
@@ -6879,7 +6887,7 @@ func mediaDropzoneSelectArea(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var362 string
 			templ_7745c5c3_Var362, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.remove"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1664, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1672, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var362))
 			if templ_7745c5c3_Err != nil {
@@ -6927,7 +6935,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var364 string
 		templ_7745c5c3_Var364, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.select_media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1677, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1685, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var364))
 		if templ_7745c5c3_Err != nil {
@@ -6940,7 +6948,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var365 string
 		templ_7745c5c3_Var365, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.close"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1678, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1686, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var365)
 		if templ_7745c5c3_Err != nil {
@@ -6965,7 +6973,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var366 string
 		templ_7745c5c3_Var366, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.all_types"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1692, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1700, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var366))
 		if templ_7745c5c3_Err != nil {
@@ -6978,7 +6986,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var367 string
 		templ_7745c5c3_Var367, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.images"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1693, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1701, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var367))
 		if templ_7745c5c3_Err != nil {
@@ -6991,7 +6999,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var368 string
 		templ_7745c5c3_Var368, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.documents"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1694, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1702, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var368))
 		if templ_7745c5c3_Err != nil {
@@ -7004,7 +7012,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var369 string
 		templ_7745c5c3_Var369, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.loading"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1702, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1710, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var369))
 		if templ_7745c5c3_Err != nil {
@@ -7025,7 +7033,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var370 string
 		templ_7745c5c3_Var370, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.no_media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1708, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1716, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var370))
 		if templ_7745c5c3_Err != nil {
@@ -7050,7 +7058,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var372 string
 			templ_7745c5c3_Var372, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.upload"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1710, Col: 29}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1718, Col: 29}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var372))
 			if templ_7745c5c3_Err != nil {
@@ -7081,7 +7089,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var374 string
 			templ_7745c5c3_Var374, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pagination.previous"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1746, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1754, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var374))
 			if templ_7745c5c3_Err != nil {
@@ -7100,7 +7108,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var375 string
 		templ_7745c5c3_Var375, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pagination.page"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1748, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1756, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var375))
 		if templ_7745c5c3_Err != nil {
@@ -7113,7 +7121,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var376 string
 		templ_7745c5c3_Var376, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pagination.of"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1748, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1756, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var376))
 		if templ_7745c5c3_Err != nil {
@@ -7138,7 +7146,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var378 string
 			templ_7745c5c3_Var378, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pagination.next"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1750, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1758, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var378))
 			if templ_7745c5c3_Err != nil {
@@ -7169,7 +7177,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var380 string
 			templ_7745c5c3_Var380, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1756, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1764, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var380))
 			if templ_7745c5c3_Err != nil {
@@ -7196,7 +7204,7 @@ func mediaDropzoneSelectModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var382 string
 			templ_7745c5c3_Var382, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("media.select_image"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1759, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1767, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var382))
 			if templ_7745c5c3_Err != nil {
@@ -7247,7 +7255,7 @@ func editorImageModal(pc *PageContext) templ.Component {
 		var templ_7745c5c3_Var384 string
 		templ_7745c5c3_Var384, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("editor.insert_image"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1775, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1783, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var384))
 		if templ_7745c5c3_Err != nil {
@@ -7284,7 +7292,7 @@ func editorImageModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var386 string
 			templ_7745c5c3_Var386, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("editor.alt_text"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1791, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1799, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var386))
 			if templ_7745c5c3_Err != nil {
@@ -7328,7 +7336,7 @@ func editorImageModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var388 string
 			templ_7745c5c3_Var388, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("editor.image_size"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1801, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1809, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var388))
 			if templ_7745c5c3_Err != nil {
@@ -7401,7 +7409,7 @@ func editorImageModal(pc *PageContext) templ.Component {
 					var templ_7745c5c3_Var393 string
 					templ_7745c5c3_Var393, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("editor.size_full"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1807, Col: 87}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1815, Col: 87}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var393))
 					if templ_7745c5c3_Err != nil {
@@ -7428,7 +7436,7 @@ func editorImageModal(pc *PageContext) templ.Component {
 					var templ_7745c5c3_Var395 string
 					templ_7745c5c3_Var395, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("editor.size_medium"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1808, Col: 107}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1816, Col: 107}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var395))
 					if templ_7745c5c3_Err != nil {
@@ -7455,7 +7463,7 @@ func editorImageModal(pc *PageContext) templ.Component {
 					var templ_7745c5c3_Var397 string
 					templ_7745c5c3_Var397, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("editor.size_small"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1809, Col: 89}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1817, Col: 89}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var397))
 					if templ_7745c5c3_Err != nil {
@@ -7498,7 +7506,7 @@ func editorImageModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var399 string
 			templ_7745c5c3_Var399, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1816, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1824, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var399))
 			if templ_7745c5c3_Err != nil {
@@ -7525,7 +7533,7 @@ func editorImageModal(pc *PageContext) templ.Component {
 			var templ_7745c5c3_Var401 string
 			templ_7745c5c3_Var401, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("editor.insert_image"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1819, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1827, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var401))
 			if templ_7745c5c3_Err != nil {
@@ -7576,7 +7584,7 @@ func pageFormScripts(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var403 string
 		templ_7745c5c3_Var403, templ_7745c5c3_Err = templ.ResolveAttributeValue("?v=" + utils.ScriptVersion)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1832, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1840, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var403)
 		if templ_7745c5c3_Err != nil {
@@ -7589,7 +7597,7 @@ func pageFormScripts(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var404 string
 		templ_7745c5c3_Var404, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1833, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1841, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var404)
 		if templ_7745c5c3_Err != nil {
@@ -7602,7 +7610,7 @@ func pageFormScripts(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var405 string
 		templ_7745c5c3_Var405, templ_7745c5c3_Err = templ.ResolveAttributeValue(utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1833, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1841, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var405)
 		if templ_7745c5c3_Err != nil {
@@ -7615,7 +7623,7 @@ func pageFormScripts(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var406 string
 		templ_7745c5c3_Var406, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1834, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1842, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var406)
 		if templ_7745c5c3_Err != nil {
@@ -7628,7 +7636,7 @@ func pageFormScripts(pc *PageContext, data PageFormViewData) templ.Component {
 		var templ_7745c5c3_Var407 string
 		templ_7745c5c3_Var407, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2057, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2065, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var407)
 		if templ_7745c5c3_Err != nil {
@@ -7713,7 +7721,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 					var templ_7745c5c3_Var412 string
 					templ_7745c5c3_Var412, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.back_to_page"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2161, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2169, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var412))
 					if templ_7745c5c3_Err != nil {
@@ -7799,7 +7807,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var418 string
 									templ_7745c5c3_Var418, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.version"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2170, Col: 50}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2178, Col: 50}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var418))
 									if templ_7745c5c3_Err != nil {
@@ -7826,7 +7834,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var420 string
 									templ_7745c5c3_Var420, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.title"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2171, Col: 45}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2179, Col: 45}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var420))
 									if templ_7745c5c3_Err != nil {
@@ -7853,7 +7861,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var422 string
 									templ_7745c5c3_Var422, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.changed_by"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2172, Col: 53}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2180, Col: 53}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var422))
 									if templ_7745c5c3_Err != nil {
@@ -7880,7 +7888,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var424 string
 									templ_7745c5c3_Var424, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.date"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2173, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2181, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var424))
 									if templ_7745c5c3_Err != nil {
@@ -7907,7 +7915,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var426 string
 									templ_7745c5c3_Var426, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.actions"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2174, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2182, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var426))
 									if templ_7745c5c3_Err != nil {
@@ -8015,7 +8023,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 						var templ_7745c5c3_Var430 string
 						templ_7745c5c3_Var430, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.no_versions"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2191, Col: 39}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2199, Col: 39}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var430))
 						if templ_7745c5c3_Err != nil {
@@ -8028,7 +8036,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 						var templ_7745c5c3_Var431 string
 						templ_7745c5c3_Var431, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.no_versions_hint"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2192, Col: 66}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2200, Col: 66}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var431))
 						if templ_7745c5c3_Err != nil {
@@ -8125,7 +8133,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var436 string
 					templ_7745c5c3_Var436, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", version.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2203, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2211, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var436))
 					if templ_7745c5c3_Err != nil {
@@ -8162,7 +8170,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var438 string
 				templ_7745c5c3_Var438, templ_7745c5c3_Err = templ.JoinStringErrs(version.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2206, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2214, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var438))
 				if templ_7745c5c3_Err != nil {
@@ -8197,7 +8205,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var440 string
 				templ_7745c5c3_Var440, templ_7745c5c3_Err = templ.JoinStringErrs(version.ChangedByName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2209, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2217, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var440))
 				if templ_7745c5c3_Err != nil {
@@ -8228,7 +8236,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var442 string
 				templ_7745c5c3_Var442, templ_7745c5c3_Err = templ.JoinStringErrs(version.CreatedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2211, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2219, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var442))
 				if templ_7745c5c3_Err != nil {
@@ -8311,7 +8319,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var446 string
 				templ_7745c5c3_Var446, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.preview_title"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2234, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2242, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var446))
 				if templ_7745c5c3_Err != nil {
@@ -8324,7 +8332,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var447 string
 				templ_7745c5c3_Var447, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", version.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2234, Col: 99}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2242, Col: 99}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var447))
 				if templ_7745c5c3_Err != nil {
@@ -8337,7 +8345,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var448 string
 				templ_7745c5c3_Var448, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.close"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2235, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2243, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var448)
 				if templ_7745c5c3_Err != nil {
@@ -8350,7 +8358,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var449 string
 				templ_7745c5c3_Var449, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.title"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2240, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2248, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var449))
 				if templ_7745c5c3_Err != nil {
@@ -8363,7 +8371,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var450 string
 				templ_7745c5c3_Var450, templ_7745c5c3_Err = templ.JoinStringErrs(version.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2240, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2248, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var450))
 				if templ_7745c5c3_Err != nil {
@@ -8376,7 +8384,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var451 string
 				templ_7745c5c3_Var451, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.changed_by"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2241, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2249, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var451))
 				if templ_7745c5c3_Err != nil {
@@ -8389,7 +8397,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var452 string
 				templ_7745c5c3_Var452, templ_7745c5c3_Err = templ.JoinStringErrs(version.ChangedByName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2241, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2249, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var452))
 				if templ_7745c5c3_Err != nil {
@@ -8402,7 +8410,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var453 string
 				templ_7745c5c3_Var453, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.date"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2242, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2250, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var453))
 				if templ_7745c5c3_Err != nil {
@@ -8415,7 +8423,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var454 string
 				templ_7745c5c3_Var454, templ_7745c5c3_Err = templ.JoinStringErrs(version.CreatedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2242, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2250, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var454))
 				if templ_7745c5c3_Err != nil {
@@ -8428,7 +8436,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var455 string
 				templ_7745c5c3_Var455, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.content"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2245, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2253, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var455))
 				if templ_7745c5c3_Err != nil {
@@ -8442,7 +8450,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var456 string
 					templ_7745c5c3_Var456, templ_7745c5c3_Err = templ.JoinStringErrs(version.Body)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2248, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2256, Col: 26}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var456))
 					if templ_7745c5c3_Err != nil {
@@ -8456,7 +8464,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var457 string
 					templ_7745c5c3_Var457, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("forms.no_content"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2250, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2258, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var457))
 					if templ_7745c5c3_Err != nil {
@@ -8486,7 +8494,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var459 string
 					templ_7745c5c3_Var459, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.close"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2258, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2266, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var459))
 					if templ_7745c5c3_Err != nil {
@@ -8505,7 +8513,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var460 templ.SafeURL
 				templ_7745c5c3_Var460, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2260, Col: 113}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2268, Col: 113}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var460))
 				if templ_7745c5c3_Err != nil {
@@ -8534,7 +8542,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var462 string
 					templ_7745c5c3_Var462, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_this"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2263, Col: 41}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2271, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var462))
 					if templ_7745c5c3_Err != nil {
@@ -8553,7 +8561,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var463 string
 				templ_7745c5c3_Var463, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_title"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2280, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2288, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var463))
 				if templ_7745c5c3_Err != nil {
@@ -8566,7 +8574,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var464 string
 				templ_7745c5c3_Var464, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.close"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2281, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2289, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var464)
 				if templ_7745c5c3_Err != nil {
@@ -8579,7 +8587,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var465 string
 				templ_7745c5c3_Var465, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_confirm"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2284, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2292, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var465))
 				if templ_7745c5c3_Err != nil {
@@ -8592,7 +8600,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var466 string
 				templ_7745c5c3_Var466, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", version.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2284, Col: 88}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2292, Col: 88}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var466))
 				if templ_7745c5c3_Err != nil {
@@ -8605,7 +8613,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var467 string
 				templ_7745c5c3_Var467, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_note"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2285, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2293, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var467))
 				if templ_7745c5c3_Err != nil {
@@ -8630,7 +8638,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var469 string
 					templ_7745c5c3_Var469, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2289, Col: 29}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2297, Col: 29}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var469))
 					if templ_7745c5c3_Err != nil {
@@ -8649,7 +8657,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var470 templ.SafeURL
 				templ_7745c5c3_Var470, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2291, Col: 113}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2299, Col: 113}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var470))
 				if templ_7745c5c3_Err != nil {
@@ -8678,7 +8686,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var472 string
 					templ_7745c5c3_Var472, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_version"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2294, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2302, Col: 44}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var472))
 					if templ_7745c5c3_Err != nil {

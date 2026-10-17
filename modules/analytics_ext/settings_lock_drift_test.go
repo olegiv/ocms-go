@@ -83,6 +83,8 @@ func TestCSPSourcesAllowsConfiguredMatomo(t *testing.T) {
 		{"enabled", &Settings{MatomoEnabled: true, MatomoURL: origin + "/matomo/", MatomoSiteID: "1"}, true},
 		{"disabled", &Settings{MatomoEnabled: false, MatomoURL: origin + "/matomo/", MatomoSiteID: "1"}, false},
 		{"malformed URL", &Settings{MatomoEnabled: true, MatomoURL: "javascript:alert(1)", MatomoSiteID: "1"}, false},
+		{"wildcard host", &Settings{MatomoEnabled: true, MatomoURL: "https://*/", MatomoSiteID: "1"}, false},
+		{"directive break", &Settings{MatomoEnabled: true, MatomoURL: origin + ";sandbox/", MatomoSiteID: "1"}, false},
 		{"missing site ID", &Settings{MatomoEnabled: true, MatomoURL: origin + "/", MatomoSiteID: ""}, false},
 		{"not loaded", nil, false},
 	} {
@@ -93,6 +95,11 @@ func TestCSPSourcesAllowsConfiguredMatomo(t *testing.T) {
 			for _, directive := range []string{"script-src", "connect-src"} {
 				if got := slices.Contains(sources[directive], origin); got != tt.want {
 					t.Errorf("%s contains %s = %v, want %v (%v)", directive, origin, got, tt.want, sources[directive])
+				}
+				for _, source := range sources[directive] {
+					if strings.ContainsAny(source, ";, ") || strings.HasSuffix(source, "://*") {
+						t.Errorf("%s has unsafe source %q", directive, source)
+					}
 				}
 			}
 			if !slices.Contains(sources["script-src"], "https://www.googletagmanager.com") {

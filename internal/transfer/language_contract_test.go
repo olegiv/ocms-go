@@ -1715,3 +1715,25 @@ func TestImportRejectsPageSlugShadowedByApplicationRoute(t *testing.T) {
 	_, lookupErr := ts.Queries.GetPageBySlug(ts.Ctx, "account")
 	assert.ErrorIs(t, lookupErr, sql.ErrNoRows)
 }
+
+// TestImportAcceptsPageSlugsNoExactRouteAnswers keeps the import of a site
+// whose pages use segments that routes own only below them (forms/{slug},
+// uploads/...) or answer only on POST (language). Reserving those failed such
+// imports outright.
+func TestImportAcceptsPageSlugsNoExactRouteAnswers(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	slugs := []string{"forms", "api", "uploads", "language"}
+	data := ExportData{Version: ExportVersion}
+	for i, slug := range slugs {
+		data.Pages = append(data.Pages, ExportPage{ID: int64(i + 1), Title: slug, Slug: slug, Status: "draft", LanguageCode: "en"})
+	}
+	opts := ImportOptions{ConflictStrategy: ConflictSkip, ImportPages: true}
+
+	_, err := NewImporter(ts.Queries, ts.DB, slog.Default()).Import(ts.Ctx, &data, opts)
+	require.NoError(t, err)
+	for _, slug := range slugs {
+		_, lookupErr := ts.Queries.GetPageBySlug(ts.Ctx, slug)
+		assert.NoError(t, lookupErr, "page %q was not imported", slug)
+	}
+}

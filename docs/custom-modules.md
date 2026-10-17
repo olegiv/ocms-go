@@ -531,11 +531,18 @@ Use it for modules that open a new remote surface, such as the built-in MCP serv
 
 ## Third-Party Hosts (Content-Security-Policy)
 
-The base Content-Security-Policy is first-party: it allows Google Fonts for
-themes and YouTube frames for page content, and nothing else from other hosts.
-A module that loads a script, stylesheet, frame or API call from another host
-implements `module.CSPSourcer`; its sources are added to the policy only while
-the module is active:
+The base Content-Security-Policy allows scripts, styles, connections and frames
+only from the site itself, plus Google Fonts for themes and YouTube frames for
+page content; images may come from any `https:` host. A module that loads a
+script, stylesheet, frame or API call from another host implements
+`module.CSPSourcer`; whatever it returns is added to the policy only while the
+module is active, so a module may return a host only once it is configured.
+Only host sources (`http://` or `https://` with a host, a `*.` subdomain
+wildcard and an optional port allowed) for `script-src`, `style-src`,
+`img-src`, `font-src`, `connect-src` and `frame-src` are accepted; anything
+else is dropped and logged once with the module's name. `CSPSources` runs on
+every response, outside the registry lock, so it must be cheap and must not
+block:
 
 ```go
 func (m *Module) CSPSources() map[string][]string {

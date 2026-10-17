@@ -8,8 +8,10 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -1076,5 +1078,58 @@ func TestActiveCSPSources(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ActiveCSPSources() = %v, want %v", got, want)
+	}
+}
+
+// panickingCSPModule is a mockModule whose CSPSources panics.
+type panickingCSPModule struct{ *mockModule }
+
+func (panickingCSPModule) CSPSources() map[string][]string { panic("broken module") }
+
+// TestActiveCSPSourcesSurvivesAPanickingModule checks that a module whose
+// CSPSources panics is left out instead of failing the response: the security
+// headers middleware calls this for every request, ahead of most of the chain.
+func TestActiveCSPSourcesSurvivesAPanickingModule(t *testing.T) {
+	var logs strings.Builder
+	r := NewRegistry(slog.New(slog.NewTextHandler(&logs, nil)))
+	for _, m := range []Module{
+		panickingCSPModule{newMockModule("broken", "1.0.0")},
+		cspModule{newMockModule("captcha", "1.0.0"), map[string][]string{"script-src": {"https://captcha.example"}}},
+	} {
+		if err := r.Register(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := r.ActiveCSPSources()
+	if want := map[string][]string{"script-src": {"https://captcha.example"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("ActiveCSPSources() = %v, want %v", got, want)
+	}
+	// Called for every response: one log entry, with the stack to find it.
+	r.ActiveCSPSources()
+	if n := strings.Count(logs.String(), "panicked"); n != 1 || !strings.Contains(logs.String(), "stack=") {
+		t.Errorf("panic logged %d times (want once, with a stack):\n%s", n, logs.String())
+	}
+}
+
+// TestActiveCSPSourcesDropsNonHostSources checks that a module's value that
+// is not a host source is dropped and logged once with the module's name, so
+// an operator can tell which module to fix.
+func TestActiveCSPSourcesDropsNonHostSources(t *testing.T) {
+	var logs strings.Builder
+	r := NewRegistry(slog.New(slog.NewTextHandler(&logs, nil)))
+	m := cspModule{newMockModule("tracker", "1.0.0"), map[string][]string{
+		"script-src": {"https://stats.example", "https://*", "'unsafe-inline'"},
+	}}
+	if err := r.Register(m); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		got := r.ActiveCSPSources()
+		if want := map[string][]string{"script-src": {"https://stats.example"}}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("ActiveCSPSources() = %v, want %v", got, want)
+		}
+	}
+	if n := strings.Count(logs.String(), "module=tracker"); n != 2 {
+		t.Errorf("rejected sources logged %d times, want once each (2) with the module name:\n%s", n, logs.String())
 	}
 }

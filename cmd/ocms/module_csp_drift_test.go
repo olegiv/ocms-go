@@ -16,17 +16,31 @@ import (
 	"github.com/olegiv/ocms-go/internal/module"
 )
 
-// thirdPartyLoad matches a browser load from an https host in module source:
-// an src attribute or property, or a fetch call.
-var thirdPartyLoad = regexp.MustCompile("(?:\\bsrc\\s*=\\s*|\\.src\\s*=\\s*|fetch\\(\\s*)[\"'`]?https://([a-z0-9.-]+)")
+// thirdPartyLoads maps each kind of browser load in module source to the CSP
+// directive that governs it; each pattern captures the https host. Images are
+// not listed: img-src allows every https: host.
+var thirdPartyLoads = []struct {
+	directive string
+	pattern   *regexp.Regexp
+}{
+	{"script-src", regexp.MustCompile(`<script\b[^>]*\bsrc\s*=\s*["']?https://([a-z0-9.-]+)`)},
+	{"script-src", regexp.MustCompile("\\.src\\s*=\\s*[\"'`]https://([a-z0-9.-]+)")}, // script element built in JS
+	{"frame-src", regexp.MustCompile(`<iframe\b[^>]*\bsrc\s*=\s*["']?https://([a-z0-9.-]+)`)},
+	{"style-src", regexp.MustCompile(`<link\b[^>]*\bhref\s*=\s*["']?https://([a-z0-9.-]+)`)},
+	{"connect-src", regexp.MustCompile("fetch\\(\\s*[\"'`]https://([a-z0-9.-]+)")},
+}
 
 // TestModuleThirdPartyHostsAreInCSPSources fails when a built-in module loads
-// a resource from a third-party host that its CSPSources does not allow.
+// a resource from a literal third-party host that its CSPSources does not
+// allow for the directive that load needs (a script under script-src, an
+// iframe under frame-src).
 //
-// The base Content-Security-Policy is first-party; each module adds the hosts
-// it needs only while it is active (security audit 2026-10-17, I-4). A module
-// that loads a host it does not declare is blocked by the browser in every
-// environment, which this catches before a release does.
+// The base Content-Security-Policy keeps scripts, connections and (apart
+// from Google Fonts and YouTube) styles and frames first-party; each module
+// adds the hosts it needs only while it is active (security audit
+// 2026-10-17, I-4). A module that loads a host it does not declare is blocked
+// by the browser in every environment, which this catches before a release
+// does.
 //
 // Bug state: drop "https://*.hcaptcha.com" from the hcaptcha module's
 // CSPSources and this names js.hcaptcha.com.
@@ -42,17 +56,14 @@ func TestModuleThirdPartyHostsAreInCSPSources(t *testing.T) {
 			continue
 		}
 		dir := filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(pkg, modulePath)))
-		hosts := thirdPartyHosts(t, dir)
-		var allowed []string
+		var sources map[string][]string
 		if sourcer, ok := mod.(module.CSPSourcer); ok {
-			for _, values := range sourcer.CSPSources() {
-				allowed = append(allowed, values...)
-			}
+			sources = sourcer.CSPSources()
 		}
-		for _, host := range hosts {
-			found[host] = true
-			if !cspAllowsHost(allowed, host) {
-				problems = append(problems, mod.Name()+" loads https://"+host)
+		for _, load := range thirdPartyHosts(t, dir) {
+			found[load.host] = true
+			if !cspAllowsHost(sources[load.directive], load.host) {
+				problems = append(problems, mod.Name()+" loads https://"+load.host+" ("+load.directive+")")
 			}
 		}
 	}
@@ -69,11 +80,18 @@ func TestModuleThirdPartyHostsAreInCSPSources(t *testing.T) {
 	}
 }
 
-// thirdPartyHosts returns the hosts that non-test, non-generated source files
-// under dir load in the browser.
-func thirdPartyHosts(t *testing.T, dir string) []string {
+// thirdPartyLoad is one host that module source loads, with the directive
+// that governs the load.
+type thirdPartyLoad struct {
+	directive string
+	host      string
+}
+
+// thirdPartyHosts returns the loads that non-test, non-generated source files
+// under dir make from third-party hosts in the browser.
+func thirdPartyHosts(t *testing.T, dir string) []thirdPartyLoad {
 	t.Helper()
-	seen := map[string]bool{}
+	seen := map[thirdPartyLoad]bool{}
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -96,20 +114,27 @@ func thirdPartyHosts(t *testing.T, dir string) []string {
 		if err != nil {
 			return err
 		}
-		for _, match := range thirdPartyLoad.FindAllStringSubmatch(string(source), -1) {
-			seen[match[1]] = true
+		for _, load := range thirdPartyLoads {
+			for _, match := range load.pattern.FindAllStringSubmatch(string(source), -1) {
+				seen[thirdPartyLoad{load.directive, match[1]}] = true
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("walking %s: %v", dir, err)
 	}
-	hosts := make([]string, 0, len(seen))
-	for host := range seen {
-		hosts = append(hosts, host)
+	loads := make([]thirdPartyLoad, 0, len(seen))
+	for load := range seen {
+		loads = append(loads, load)
 	}
-	sort.Strings(hosts)
-	return hosts
+	sort.Slice(loads, func(i, j int) bool {
+		if loads[i].host != loads[j].host {
+			return loads[i].host < loads[j].host
+		}
+		return loads[i].directive < loads[j].directive
+	})
+	return loads
 }
 
 // cspAllowsHost reports whether a CSP source list admits https://host, either

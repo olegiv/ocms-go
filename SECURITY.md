@@ -87,7 +87,8 @@ oCMS implements defense-in-depth security measures:
 - **Suspicious Markup Blocking**: Reject page writes containing dangerous HTML patterns (`OCMS_BLOCK_SUSPICIOUS_PAGE_HTML`)
 
 ### HTTP Security Headers
-- Content-Security-Policy (CSP), first-party by default; a module adds the
+- Content-Security-Policy (CSP), first-party for scripts, styles, connections
+  and frames apart from Google Fonts and YouTube frames; a module adds the
   third-party hosts it loads only while it is active
 - Strict-Transport-Security (HSTS)
 - X-Frame-Options: SAMEORIGIN
@@ -150,7 +151,7 @@ For detailed information, see:
 
 Security patches are announced via:
 
-- **GitHub Releases**: Tagged releases with security notes; archives carry signed build provenance (`gh attestation verify <archive> --repo olegiv/ocms-go`)
+- **GitHub Releases**: Tagged releases with security notes; archives published after v0.28.0 carry signed build provenance (`gh attestation verify <archive> --repo olegiv/ocms-go`)
 - **CHANGELOG.md**: Detailed change history
 
 Subscribe to repository releases to receive security update notifications.

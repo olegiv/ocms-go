@@ -3,7 +3,10 @@
 
 package util
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestSlugify(t *testing.T) {
 	tests := []struct {
@@ -599,6 +602,23 @@ func TestIsReservedLanguageCode(t *testing.T) {
 	}
 }
 
+func TestIsReservedPageSlug(t *testing.T) {
+	for _, slug := range []string{"account", "admin", "blog", "example", "health", "login", "search"} {
+		if !IsReservedPageSlug(slug) {
+			t.Errorf("IsReservedPageSlug(%q) = false, want true", slug)
+		}
+	}
+	// These own only deeper paths or other methods, so a page may use them.
+	for _, slug := range []string{"forms", "tag", "uploads", "language", "logout", "analytics", "api", "accounting"} {
+		if IsReservedPageSlug(slug) {
+			t.Errorf("IsReservedPageSlug(%q) = true, want false", slug)
+		}
+	}
+	if got := ReservedPageSlugs(); !slices.IsSorted(got) {
+		t.Errorf("ReservedPageSlugs() = %v, want sorted", got)
+	}
+}
+
 func TestIsPrivateRoutePath(t *testing.T) {
 	for path, want := range map[string]bool{
 		"/admin":            true,
@@ -620,5 +640,31 @@ func TestIsPrivateRoutePath(t *testing.T) {
 		if got := IsPrivateRoutePath(path); got != want {
 			t.Errorf("IsPrivateRoutePath(%q) = %v, want %v", path, got, want)
 		}
+	}
+}
+
+func TestReservedRoutePath(t *testing.T) {
+	for path, want := range map[string]string{
+		"forms/contact":                      "forms/*",
+		"forms/contact/thanks":               "",
+		"forms":                              "",
+		"admin":                              "admin/**",
+		"admin/pages/7":                      "admin/**",
+		"uploads/2016/report.pdf":            "uploads/**",
+		"themes/default/static/css/site.css": "themes/*/static/**",
+		"themes/default/preview":             "",
+		"health/live":                        "health/live",
+		"health/live/now":                    "",
+		"api/v2":                             "api/v2/**",
+		"api/other":                          "",
+		"blog/post/55":                       "",
+		"about/team":                         "",
+	} {
+		if got := ReservedRoutePath(path); got != want {
+			t.Errorf("ReservedRoutePath(%q) = %q, want %q", path, got, want)
+		}
+	}
+	if !slices.IsSorted(ReservedRoutePaths()) {
+		t.Error("ReservedRoutePaths is not sorted")
 	}
 }

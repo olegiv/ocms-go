@@ -339,4 +339,17 @@ func TestCreateAndUpdateRejectApplicationRouteSlugs(t *testing.T) {
 	if !errors.As(err, &de) || de.Kind != v2.ErrValidation {
 		t.Fatalf("Update() error = %v, want a validation error for the application route", err)
 	}
+
+	// A page stored at a now-reserved slug must stay editable through a
+	// GET-then-PATCH round trip that sends the unchanged slug back.
+	legacy, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Account", Slug: "account", Body: "b", Status: "draft", AuthorID: author.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage: %v", err)
+	}
+	unchanged, title := legacy.Slug, "Account (edited)"
+	if _, err := svc.Update(ctx, writer, legacy.ID, pages.UpdatePageBody{Slug: &unchanged, Title: &title}); err != nil {
+		t.Fatalf("Update() with the unchanged legacy slug: %v", err)
+	}
 }

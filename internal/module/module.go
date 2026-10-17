@@ -163,7 +163,15 @@ type EditorAccessible interface {
 // third-party hosts in the browser, such as a tracking script or a captcha
 // widget. The sources it returns, keyed by Content-Security-Policy directive
 // (for example "script-src"), are added to the policy only while the module
-// is active, so the base policy stays first-party.
+// is active. Only host sources (http:// or https:// with a host, a "*."
+// subdomain wildcard and an optional port allowed) for script-src, style-src,
+// img-src, font-src, connect-src and frame-src are accepted; anything else is
+// dropped and logged once.
+//
+// CSPSources is called concurrently on every response, outside the registry
+// lock, so it must be cheap and must not block; calling back into the
+// registry cannot deadlock. A panic leaves the module's hosts out of the
+// policy and is logged once.
 type CSPSourcer interface {
 	CSPSources() map[string][]string
 }

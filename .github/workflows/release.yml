@@ -55,8 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     # id-token and attestations let this job sign build provenance for the
-    # release archives through GitHub's Sigstore instance; nothing else here
-    # needs more than read access.
+    # release archives with Sigstore (the public-good instance, as the
+    # repository is public); nothing else here needs more than read access.
     permissions:
       contents: read
       id-token: write

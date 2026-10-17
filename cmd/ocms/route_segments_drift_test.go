@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,11 +24,12 @@ import (
 // TestTopLevelRoutesAreReserved fails when the router gains a top-level path
 // segment that util.IsReservedRouteSegment does not know.
 //
-// Application routes are registered on the root router ahead of the page
-// catch-all and the language-prefix mount, so a page slug or language code
-// equal to one of their first segments is shadowed. The reserved list was
-// kept by hand beside the redirect, analytics and robots.txt lists, and
-// /account reached only two of them (security audit 2026-10-17, L-2).
+// chi matches an application route's static segment before the
+// language-prefix mount, so a language code equal to one of these first
+// segments would collide with the route; page slugs are checked against exact
+// routes by TestExactRoutesReservePageSlugs. The reserved list was kept by
+// hand beside the redirect, analytics and robots.txt lists, and /account
+// reached only two of them (security audit 2026-10-17, L-2).
 //
 // The scan reads route registrations in cmd/ocms and in the RegisterRoutes
 // methods of built-in modules. It resolves string literals, constants and
@@ -48,7 +50,7 @@ func TestTopLevelRoutesAreReserved(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Errorf("these top-level routes are not in util.IsReservedRouteSegment, "+
-			"so a page slug or language code can take the same URL and be shadowed:\n  %s",
+			"so a language code can take the same URL prefix and be shadowed:\n  %s",
 			strings.Join(missing, "\n  "))
 	}
 }
@@ -88,9 +90,106 @@ func TestAuthenticatedRoutesArePrivate(t *testing.T) {
 	}
 }
 
+// TestExactRoutesReservePageSlugs fails when util.ReservedPageSlugs differs
+// from the single-segment URLs that a route answers on GET.
+//
+// chi matches such a route before the page catch-all, so a page saved at its
+// slug is never served; the list must name every one of them. The other
+// direction matters as much: reserving a name whose bare URL no route answers
+// (forms, uploads, POST-only language) refused pages that worked and failed
+// imports of sites containing them (review of the 2026-10-17 audit fixes).
+//
+// Bug state: drop "search" from util.reservedPageSlugs and this names the
+// frontend /search route; add "forms" and this reports that no exact route
+// answers /forms.
+func TestExactRoutesReservePageSlugs(t *testing.T) {
+	exact := map[string]string{}
+	for _, route := range scanTopLevelRoutes(t) {
+		switch route.method {
+		case "Get", "Handle", "HandleFunc", "Mount", "Route":
+			if route.exact {
+				exact[route.segment] = route.position
+			}
+		}
+	}
+	for segment, position := range exact {
+		if !util.IsReservedPageSlug(segment) {
+			t.Errorf("%s  /%s answers GET but is not in util.ReservedPageSlugs, so a page saved there is never served", position, segment)
+		}
+	}
+	for _, segment := range util.ReservedPageSlugs() {
+		if _, ok := exact[segment]; !ok {
+			t.Errorf("util.ReservedPageSlugs has %q but no route answers GET /%s; remove it so pages can use the slug", segment, segment)
+		}
+	}
+}
+
+// TestRoutePathsReserveAliases fails when util.ReservedRoutePaths differs
+// from the multi-segment paths and subtrees that routes answer on GET.
+//
+// A page alias such as "uploads/2016/report.pdf" or "forms/contact" is
+// answered by the route that owns it, so the alias lookup never runs and the
+// alias is dead; the admin form rejects aliases that match the list. Reserving
+// only first segments refused live aliases such as "blog/post/55", and
+// reserving nothing stored dead ones (review of the 2026-10-17 audit fixes).
+//
+// Bug state: drop "uploads/**" from util.reservedRoutePaths and this names
+// the /uploads/* registration; add "blog/post/*" and this reports that no
+// route answers it.
+func TestRoutePathsReserveAliases(t *testing.T) {
+	answered := map[string]string{}
+	for _, route := range scanTopLevelRoutes(t) {
+		if pattern, ok := aliasShadowPattern(route); ok {
+			answered[pattern] = route.position
+		}
+	}
+	for pattern, position := range answered {
+		if !slices.Contains(util.ReservedRoutePaths(), pattern) {
+			t.Errorf("%s  %s answers GET but is not in util.ReservedRoutePaths, so a page alias there is never served", position, pattern)
+		}
+	}
+	for _, pattern := range util.ReservedRoutePaths() {
+		if _, ok := answered[pattern]; !ok {
+			t.Errorf("util.ReservedRoutePaths has %q but no route answers it; remove it so aliases can use the path", pattern)
+		}
+	}
+}
+
+// aliasShadowPattern returns the util.ReservedRoutePaths pattern for a route
+// that answers GET on more than its first segment: "*" for each parameter and
+// a trailing "/**" for a route that answers a whole subtree.
+func aliasShadowPattern(route topLevelRoute) (string, bool) {
+	switch route.method {
+	case "Get", "Handle", "HandleFunc", "Mount", "Route":
+	default:
+		return "", false
+	}
+	path := strings.TrimPrefix(route.path, "/")
+	subtree := route.method == "Mount" || route.method == "Route"
+	if trimmed, ok := strings.CutSuffix(path, "/*"); ok {
+		path, subtree = trimmed, true
+	}
+	if !subtree && !strings.Contains(path, "/") {
+		return "", false // a single segment: TestExactRoutesReservePageSlugs
+	}
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		if strings.HasPrefix(part, "{") {
+			parts[i] = "*"
+		}
+	}
+	if subtree {
+		parts = append(parts, "**")
+	}
+	return strings.Join(parts, "/"), true
+}
+
 // topLevelRoute is one route registration on the root router.
 type topLevelRoute struct {
 	segment       string
+	path          string // the full registered path, e.g. "/forms/{slug}"
+	method        string // registrar name: Get, Post, Handle, Route, ...
+	exact         bool   // the path is exactly "/" + segment
 	authenticated bool
 	position      string
 }
@@ -149,7 +248,7 @@ func scanTopLevelRoutes(t *testing.T) []topLevelRoute {
 	var routes []topLevelRoute
 	scan := func(dir string, body *ast.BlockStmt) {
 		resolve := pathResolver{local: stringConstants(files[dir]), handler: handlerConsts}
-		walkRoutes(body, false, func(pathExpr ast.Expr, authenticated bool) {
+		walkRoutes(body, false, func(pathExpr ast.Expr, method string, authenticated bool) {
 			path, ok := resolve.value(pathExpr)
 			if !ok || !strings.HasPrefix(path, "/") {
 				return
@@ -162,6 +261,9 @@ func scanTopLevelRoutes(t *testing.T) []topLevelRoute {
 			}
 			routes = append(routes, topLevelRoute{
 				segment:       segment,
+				path:          path,
+				method:        method,
+				exact:         path == "/"+segment,
 				authenticated: authenticated,
 				position:      fset.Position(pathExpr.Pos()).String(),
 			})
@@ -203,7 +305,7 @@ func scanTopLevelRoutes(t *testing.T) []topLevelRoute {
 // walkRoutes calls visit with the path argument of every route registration in
 // body. Group bodies are walked in place; a Route body is not, because its
 // paths are relative to the prefix that Route itself registers.
-func walkRoutes(body *ast.BlockStmt, authenticated bool, visit func(ast.Expr, bool)) {
+func walkRoutes(body *ast.BlockStmt, authenticated bool, visit func(ast.Expr, string, bool)) {
 	ast.Inspect(body, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
@@ -224,10 +326,10 @@ func walkRoutes(body *ast.BlockStmt, authenticated bool, visit func(ast.Expr, bo
 			if fn, ok := call.Args[1].(*ast.FuncLit); ok {
 				routeAuth = routeAuth || bodyUsesAuth(fn.Body)
 			}
-			visit(call.Args[0], routeAuth)
+			visit(call.Args[0], name, routeAuth)
 			return false
 		case routeRegistrars[name] && len(call.Args) >= 1:
-			visit(call.Args[0], routeAuth)
+			visit(call.Args[0], name, routeAuth)
 		}
 		return true
 	})

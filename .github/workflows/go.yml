@@ -49,6 +49,13 @@ jobs:
       env:
         OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
 
+    # The settings tests drive saves and request-time reads concurrently;
+    # only the race detector turns a missing lock into a failure.
+    - name: Race tests (module settings locks)
+      run: go test -race -count=1 -run 'Settings' ./modules/analytics_int/... ./modules/analytics_ext/...
+      env:
+        OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
+
     - name: Vulnerability scan (Go)
       run: |
         go install golang.org/x/vuln/cmd/govulncheck@v1.9.0

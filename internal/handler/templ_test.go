@@ -8,11 +8,51 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"testing/fstest"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+// TestAdminLangOptions checks that the language switcher on the admin,
+// account and login pages lists every active language that has a locale.
+func TestAdminLangOptions(t *testing.T) {
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+	for _, lang := range []store.CreateLanguageParams{
+		{Code: "en", Name: "English", NativeName: "English", IsDefault: true, IsActive: true, Direction: "ltr", Position: 1},
+		{Code: "ru", Name: "Russian", NativeName: "Русский", IsActive: true, Direction: "ltr", Position: 2},
+	} {
+		if _, err := queries.GetLanguageByCode(t.Context(), lang.Code); err == nil {
+			continue
+		}
+		lang.CreatedAt, lang.UpdatedAt = now, now
+		if _, err := queries.CreateLanguage(t.Context(), lang); err != nil {
+			t.Fatalf("creating language %s: %v", lang.Code, err)
+		}
+	}
+	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var codes []string
+	for _, option := range adminLangOptions(renderer) {
+		if option.Name == "" {
+			t.Errorf("language %s has no name", option.Code)
+		}
+		codes = append(codes, option.Code)
+	}
+	if !slices.Equal(codes, []string{"en", "ru"}) {
+		t.Errorf("adminLangOptions codes = %v, want [en ru]", codes)
+	}
+}
 
 func TestConvertLanguageOption(t *testing.T) {
 	lang := store.Language{
