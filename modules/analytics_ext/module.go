@@ -9,6 +9,8 @@ import (
 	"database/sql"
 	"embed"
 	"html/template"
+	"net/url"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,6 +25,26 @@ type Module struct {
 	module.BaseModule
 	ctx      *module.Context
 	settings *Settings
+
+	// settingsMu guards settings: templates and the CSP read it on every
+	// request while the settings form replaces it. Settings values are
+	// replaced, never modified, so a reader may keep using the pointer it
+	// got (TestSettingsAccessHoldsTheLock).
+	settingsMu sync.RWMutex
+}
+
+// currentSettings returns the settings in effect, or nil before Init.
+func (m *Module) currentSettings() *Settings {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.settings
+}
+
+// storeSettings replaces the settings in effect.
+func (m *Module) storeSettings(settings *Settings) {
+	m.settingsMu.Lock()
+	m.settings = settings
+	m.settingsMu.Unlock()
 }
 
 // New creates a new instance of the external analytics module.
@@ -46,7 +68,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		ctx.Logger.Warn("failed to load analytics_ext settings, using defaults", "error", err)
 		settings = &Settings{}
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 	m.warnMalformedSettings()
 
 	m.ctx.Logger.Info("External Analytics module initialized",
@@ -99,10 +121,10 @@ func firstStringArg(args ...any) string {
 }
 
 // CSPSources allows Google Tag Manager and Google Analytics while the module
-// is active. A self-hosted Matomo is not covered: its host is configured at
-// run time and must be same-origin to pass the policy.
+// is active, and the configured Matomo server while Matomo tracking is enabled
+// with a valid URL: the tracker loads matomo.js from it and sends hits to it.
 func (m *Module) CSPSources() map[string][]string {
-	return map[string][]string{
+	sources := map[string][]string{
 		"script-src": {
 			"https://www.googletagmanager.com", "https://*.googletagmanager.com",
 			"https://www.google-analytics.com",
@@ -114,6 +136,23 @@ func (m *Module) CSPSources() map[string][]string {
 			"https://www.googletagmanager.com", "https://*.googletagmanager.com",
 		},
 	}
+	if settings := m.currentSettings(); settings != nil && matomoActive(settings) {
+		if origin := matomoOrigin(settings.MatomoURL); origin != "" {
+			sources["script-src"] = append(sources["script-src"], origin)
+			sources["connect-src"] = append(sources["connect-src"], origin)
+		}
+	}
+	return sources
+}
+
+// matomoOrigin returns the scheme and host of a Matomo URL that passed
+// validMatomoURL, or "" when it cannot be parsed.
+func matomoOrigin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 // AdminURL returns the admin dashboard URL for the module.
@@ -168,7 +207,7 @@ func (m *Module) ReloadSettings() error {
 	if err != nil {
 		return err
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 	m.warnMalformedSettings()
 	return nil
 }
@@ -177,7 +216,7 @@ func (m *Module) ReloadSettings() error {
 // the format check, since such a value is skipped at render time and tracking
 // would otherwise stop without a trace.
 func (m *Module) warnMalformedSettings() {
-	for _, key := range validateTrackerFormats(m.settings) {
+	for _, key := range validateTrackerFormats(m.currentSettings()) {
 		m.ctx.Logger.Warn("analytics_ext: stored tracker value is malformed and will not be rendered", "field", key)
 	}
 }

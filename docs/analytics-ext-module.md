@@ -57,6 +57,14 @@ When saving:
 
 Errors appear as flash messages.
 
+## Content-Security-Policy
+
+While the module is active, the policy allows the Google Tag Manager and
+Google Analytics hosts. While Matomo tracking is enabled with a valid URL and
+Site ID, it also allows that Matomo server's origin for `script-src` and
+`connect-src`, so `matomo.js` and tracking hits are not blocked. Saving the
+settings changes the policy on the next request.
+
 ## Template Functions
 
 Themes call these from the base template:

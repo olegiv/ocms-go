@@ -54,8 +54,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other sites.
 - `docker-compose.yml` publishes the port on `127.0.0.1` by default (set
   `OCMS_PUBLISH_ADDRESS=0.0.0.0` when a proxy reaches it through another
-  address) and runs the container with `no-new-privileges` and only the
-  `CHOWN`, `SETUID` and `SETGID` capabilities.
+  address) and runs the container with `no-new-privileges`, only the `CHOWN`,
+  `DAC_READ_SEARCH`, `SETUID` and `SETGID` capabilities its entrypoint needs,
+  and a read-only image filesystem. Temporary files go to
+  `TMPDIR=/app/data/tmp` on the data volume, which the entrypoint creates.
+- External Analytics settings are guarded by a lock, so saving them no longer
+  races with page rendering, and an enabled Matomo server is now allowed by
+  the CSP; before, the policy blocked `matomo.js` from its configured host.
+- Security headers are set before every middleware that can answer on its
+  own, so trailing-slash and content redirects, sentinel bans and timeouts
+  carry the CSP, HSTS and COOP headers too.
+- Browsers report CSP violations to `/csp-report` through `report-uri`.
+  Reports are logged with bounded, sanitized fields and a per-IP rate limit.
+  `report-to` is left out on purpose: Chrome ignores `report-uri` when it is
+  present and did not deliver Reporting API reports in testing. `csp-report`
+  joins the reserved route names.
+- Release archives carry signed build-provenance attestations; verify one
+  with `gh attestation verify <archive> --repo olegiv/ocms-go`.
 
 #### Developer Tooling
 - `make commit-do-local` commits only the staged files, after the test gate

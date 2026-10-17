@@ -253,6 +253,15 @@ Available release archives:
 - `ocms-linux-arm64.tar.gz`
 - `ocms-darwin-arm64.tar.gz`
 
+Each release also ships `checksums.txt`, and from the next release on every
+archive carries a signed build-provenance attestation that ties it to the
+release workflow run, commit and tag. Verify a download before running it:
+
+```bash
+curl -LO https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz
+gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
+```
+
 `go install` is not supported for the CMS binary because Go does not run the frontend asset pipeline before evaluating `//go:embed`.
 
 ### Build from source
@@ -442,8 +451,11 @@ Access the admin panel at http://localhost:8080/admin with:
 The port is published on `127.0.0.1` only. Set `OCMS_PUBLISH_ADDRESS=0.0.0.0`
 when a reverse proxy on another host, or a container that uses the host's
 address, has to reach it. The container runs with `no-new-privileges` and only
-the `CHOWN`, `SETUID` and `SETGID` capabilities its entrypoint needs to fix
-volume ownership and drop to the `ocms` user.
+the `CHOWN`, `DAC_READ_SEARCH`, `SETUID` and `SETGID` capabilities its
+entrypoint needs to fix volume ownership and drop to the `ocms` user; the
+switch to `ocms` clears them. The image filesystem is read-only: the app
+writes only to its volumes, temporary files go to `TMPDIR=/app/data/tmp` on
+the data volume, and `/tmp` is a small tmpfs.
 
 ### Docker Commands
 

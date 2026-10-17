@@ -84,7 +84,11 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 	}
 
 	// Default CSP - allow self, inline styles (for CMS features), Google Fonts
-	// for themes and YouTube frames for page content. Hosts that a module
+	// for themes and YouTube frames for page content. Browsers report
+	// violations to /csp-report through report-uri, where they are logged.
+	// report-to is deliberately absent: Chrome ignores report-uri whenever
+	// report-to is present, and in testing it delivered report-uri reports
+	// at once but sent nothing through report-to (TestCSPReporting). Hosts that a module
 	// loads (analytics, hCaptcha) are added per request through CSPSources
 	// only while that module is active (TestBaseCSPHostsAreFirstPartyOrContent).
 	// unpkg.com and esm.sh were removed from both dev and prod CSPs: no script or
@@ -104,6 +108,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 			"base-uri":        "'self'",
 			"form-action":     "'self'",
 			"frame-ancestors": "'self'",
+			"report-uri":      "/csp-report",
 		})
 	} else {
 		// Strict CSP for production.
@@ -122,6 +127,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 			"form-action":               "'self'",
 			"frame-ancestors":           "'self'",
 			"upgrade-insecure-requests": "",
+			"report-uri":                "/csp-report",
 		})
 		cfg.HSTSIncludeSubDomains = true
 	}
@@ -152,7 +158,7 @@ func buildCSP(directives map[string]string) string {
 	order := []string{
 		"default-src", "script-src", "style-src", "img-src", "font-src",
 		"connect-src", "frame-src", "object-src", "base-uri", "form-action",
-		"frame-ancestors", "upgrade-insecure-requests",
+		"frame-ancestors", "upgrade-insecure-requests", "report-uri",
 	}
 
 	for _, key := range order {

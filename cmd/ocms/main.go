@@ -1682,20 +1682,10 @@ func run() error {
 			next.ServeHTTP(w, r)
 		})
 	})
-	// Sentinel IP ban check (always registered, checks active status at runtime)
-	r.Use(sentinelModule.GetMiddleware())
-	slog.Info("sentinel IP ban middleware registered")
-	r.Use(chimw.Logger)
-	r.Use(chimw.Recoverer)
-	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
-	r.Use(chimw.GetHead)                        // Handle HEAD requests for uptime monitoring
-	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
-	r.Use(middleware.StripTrailingSlash)        // Redirect /path/ to /path (301)
-
-	// Global redirects middleware (database-driven URL redirects)
-	r.Use(redirectsMiddleware.Handler)
-
-	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.)
+	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.). It runs
+	// before every middleware that can answer on its own (bans, timeouts,
+	// trailing-slash and content redirects), so those responses carry the
+	// headers too (TestSecurityHeadersPrecedeAnsweringMiddleware).
 	securityConfig := middleware.DefaultSecurityHeadersConfig(cfg.IsDevelopment())
 	if cfg.HSTSPreload && !cfg.IsDevelopment() {
 		securityConfig.HSTSPreload = true
@@ -1708,6 +1698,19 @@ func run() error {
 		"hsts_preload", securityConfig.HSTSPreload,
 		"x_frame_options", "SAMEORIGIN",
 	)
+
+	// Sentinel IP ban check (always registered, checks active status at runtime)
+	r.Use(sentinelModule.GetMiddleware())
+	slog.Info("sentinel IP ban middleware registered")
+	r.Use(chimw.Logger)
+	r.Use(chimw.Recoverer)
+	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
+	r.Use(chimw.GetHead)                        // Handle HEAD requests for uptime monitoring
+	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
+	r.Use(middleware.StripTrailingSlash)        // Redirect /path/ to /path (301)
+
+	// Global redirects middleware (database-driven URL redirects)
+	r.Use(redirectsMiddleware.Handler)
 
 	// Request path middleware for logging context
 	r.Use(middleware.RequestPath)
@@ -1809,6 +1812,12 @@ func run() error {
 	r.Get("/health", healthHandler.Health)
 	r.Get("/health/live", healthHandler.Liveness)
 	r.Get("/health/ready", healthHandler.Readiness)
+
+	// Browsers post Content-Security-Policy violation reports here. The route
+	// is anonymous and outside CSRF and sessions, so it only logs, and a
+	// per-IP limit keeps one client from flooding the log.
+	cspReportLimiter := middleware.NewGlobalRateLimiter(1.0, 10)
+	r.With(cspReportLimiter.Middleware()).Post(handler.RouteCSPReport, handler.CSPReport)
 
 	useFrontendMiddleware := func(r chi.Router) {
 		// Optionally load user for context-aware caching (doesn't require login)

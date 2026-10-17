@@ -96,7 +96,7 @@ prefix returns 404. The URL prefix always wins over `?lang`.
 Core route names cannot be activated as language codes: `admin`, `api`,
 `blog`, `uploads`, `static`, `themes`, `health`, `login`, `logout`,
 `language`, `forms`, `search`, `tag`, `category`, `page`, `session`,
-`account`, and the built-in module routes `analytics`, `embed`, and `example`.
+`account`, `csp-report`, and the built-in module routes `analytics`, `embed`, and `example`.
 Legacy active rows using a reserved code are ignored by routing and logged,
 but administrators can still deactivate or rename them.
 

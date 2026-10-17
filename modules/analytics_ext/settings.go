@@ -96,14 +96,15 @@ func saveSettings(db *sql.DB, s *Settings) error {
 // context it lands in: template.JSEscapeString inside script string literals
 // and template.HTMLEscapeString inside HTML attributes.
 func (m *Module) renderHeadScripts(nonce string) template.HTML {
-	if m.settings == nil {
+	s := m.currentSettings()
+	if s == nil {
 		return ""
 	}
 
 	var scripts strings.Builder
 
 	// Google Tag Manager (head script)
-	if m.gtmActive() {
+	if gtmActive(s) {
 		scripts.WriteString(fmt.Sprintf(`<!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -111,11 +112,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','%s');</script>
 <!-- End Google Tag Manager -->
-`, template.JSEscapeString(m.settings.GTMContainerID)))
+`, template.JSEscapeString(s.GTMContainerID)))
 	}
 
 	// Google Analytics 4 (only if GTM is not enabled, since GA4 is typically loaded via GTM)
-	if m.ga4Active() && !m.settings.GTMEnabled {
+	if ga4Active(s) && !s.GTMEnabled {
 		scripts.WriteString(fmt.Sprintf(`<!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script>
 <script>
@@ -125,13 +126,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   gtag('config', '%s');
 </script>
 <!-- End Google Analytics 4 -->
-`, template.HTMLEscapeString(m.settings.GA4MeasurementID),
-			template.JSEscapeString(m.settings.GA4MeasurementID)))
+`, template.HTMLEscapeString(s.GA4MeasurementID),
+			template.JSEscapeString(s.GA4MeasurementID)))
 	}
 
 	// Matomo tracking code (head portion - tracking code)
-	if m.matomoActive() {
-		matomoURL := strings.TrimSuffix(m.settings.MatomoURL, "/")
+	if matomoActive(s) {
+		matomoURL := strings.TrimSuffix(s.MatomoURL, "/")
 		scripts.WriteString(fmt.Sprintf(`<!-- Matomo -->
 <script>
   var _paq = window._paq = window._paq || [];
@@ -147,7 +148,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 </script>
 <!-- End Matomo Code -->
 `, template.JSEscapeString(matomoURL),
-			template.JSEscapeString(m.settings.MatomoSiteID)))
+			template.JSEscapeString(s.MatomoSiteID)))
 	}
 
 	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))
@@ -157,45 +158,46 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 // SECURITY: Same protections as renderHeadScripts; these fragments are HTML
 // attributes, so values are HTML-escaped after the format check.
 func (m *Module) renderBodyScripts(nonce string) template.HTML {
-	if m.settings == nil {
+	s := m.currentSettings()
+	if s == nil {
 		return ""
 	}
 
 	var scripts strings.Builder
 
 	// Google Tag Manager (noscript fallback)
-	if m.gtmActive() {
+	if gtmActive(s) {
 		scripts.WriteString(fmt.Sprintf(`<!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=%s"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
-`, template.HTMLEscapeString(m.settings.GTMContainerID)))
+`, template.HTMLEscapeString(s.GTMContainerID)))
 	}
 
 	// Matomo noscript fallback
-	if m.matomoActive() {
-		matomoURL := strings.TrimSuffix(m.settings.MatomoURL, "/")
+	if matomoActive(s) {
+		matomoURL := strings.TrimSuffix(s.MatomoURL, "/")
 		scripts.WriteString(fmt.Sprintf(`<!-- Matomo Image Tracker -->
 <noscript><img referrerpolicy="no-referrer-when-downgrade" src="%s/matomo.php?idsite=%s&amp;rec=1" style="border:0" alt="" /></noscript>
 <!-- End Matomo -->
 `, template.HTMLEscapeString(matomoURL),
-			template.HTMLEscapeString(m.settings.MatomoSiteID)))
+			template.HTMLEscapeString(s.MatomoSiteID)))
 	}
 
 	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))
 }
 
 // gtmActive reports whether GTM is enabled with a well-formed container ID.
-func (m *Module) gtmActive() bool {
-	return m.settings.GTMEnabled && validGTMContainerID(m.settings.GTMContainerID)
+func gtmActive(s *Settings) bool {
+	return s.GTMEnabled && validGTMContainerID(s.GTMContainerID)
 }
 
 // ga4Active reports whether GA4 is enabled with a well-formed measurement ID.
-func (m *Module) ga4Active() bool {
-	return m.settings.GA4Enabled && validGA4MeasurementID(m.settings.GA4MeasurementID)
+func ga4Active(s *Settings) bool {
+	return s.GA4Enabled && validGA4MeasurementID(s.GA4MeasurementID)
 }
 
 // matomoActive reports whether Matomo is enabled with a well-formed URL and site ID.
-func (m *Module) matomoActive() bool {
-	return m.settings.MatomoEnabled && validMatomoURL(m.settings.MatomoURL) && validMatomoSiteID(m.settings.MatomoSiteID)
+func matomoActive(s *Settings) bool {
+	return s.MatomoEnabled && validMatomoURL(s.MatomoURL) && validMatomoSiteID(s.MatomoSiteID)
 }

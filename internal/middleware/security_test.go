@@ -453,3 +453,24 @@ func TestBaseCSPHostsAreFirstPartyOrContent(t *testing.T) {
 		}
 	}
 }
+
+// TestCSPReporting checks that violations are reported to /csp-report through
+// report-uri, and that report-to stays out of the policy: Chrome ignores
+// report-uri whenever report-to is present, and in testing it delivered
+// report-uri reports at once but sent nothing through report-to, so adding
+// it would silently drop Chrome's reports. Re-add it only with evidence that
+// its reports arrive.
+func TestCSPReporting(t *testing.T) {
+	for _, isDev := range []bool{false, true} {
+		handler := SecurityHeaders(DefaultSecurityHeadersConfig(isDev))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		csp := rec.Header().Get("Content-Security-Policy")
+		if !strings.Contains(csp, "report-uri /csp-report") {
+			t.Errorf("development=%v: CSP lacks report-uri /csp-report: %s", isDev, csp)
+		}
+		if strings.Contains(csp, "report-to") {
+			t.Errorf("development=%v: CSP has report-to, which makes Chrome drop report-uri: %s", isDev, csp)
+		}
+	}
+}

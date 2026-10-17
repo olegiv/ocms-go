@@ -583,7 +583,7 @@ func TestIsReservedLanguageCode(t *testing.T) {
 	reserved := []string{
 		"admin", "api", "blog", "uploads", "static", "themes", "health",
 		"login", "logout", "language", "forms", "search", "tag", "category",
-		"page", "session", "account", "analytics", "embed", "example",
+		"page", "session", "account", "csp-report", "analytics", "embed", "example",
 	}
 
 	for _, code := range reserved {

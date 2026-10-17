@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/handler"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -354,4 +356,21 @@ func stringConstants(files []*ast.File) map[string]string {
 		}
 	}
 	return values
+}
+
+// TestCSPReportEndpointIsRouted fails when the CSP sends violation reports to
+// a path the router does not serve, which would turn every report into a 404
+// and leave violations invisible again.
+func TestCSPReportEndpointIsRouted(t *testing.T) {
+	cfg := middleware.DefaultSecurityHeadersConfig(false)
+	if !strings.Contains(cfg.ContentSecurityPolicy, "report-uri "+handler.RouteCSPReport) {
+		t.Errorf("CSP report-uri does not point at %s: %s", handler.RouteCSPReport, cfg.ContentSecurityPolicy)
+	}
+	segment := strings.TrimPrefix(handler.RouteCSPReport, "/")
+	for _, route := range scanTopLevelRoutes(t) {
+		if route.segment == segment {
+			return
+		}
+	}
+	t.Errorf("no route registers %s", handler.RouteCSPReport)
 }

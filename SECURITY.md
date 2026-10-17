@@ -97,6 +97,11 @@ oCMS implements defense-in-depth security measures:
 - Cross-Origin-Opener-Policy: same-origin
 - Cross-Origin-Resource-Policy: same-origin, and cross-origin for `/uploads/`,
   `/static/` and `/themes/` so feed readers and other sites can show media
+- CSP `report-uri /csp-report`: browsers send violation reports there, and
+  they are logged with bounded fields and a per-IP rate limit
+
+The headers are set before any middleware that can answer on its own, so bans,
+timeouts and redirects carry them too.
 
 ### Webhook Security
 - **HMAC-SHA256 Signatures**: Verify webhook payload integrity
@@ -145,7 +150,7 @@ For detailed information, see:
 
 Security patches are announced via:
 
-- **GitHub Releases**: Tagged releases with security notes
+- **GitHub Releases**: Tagged releases with security notes; archives carry signed build provenance (`gh attestation verify <archive> --repo olegiv/ocms-go`)
 - **CHANGELOG.md**: Detailed change history
 
 Subscribe to repository releases to receive security update notifications.

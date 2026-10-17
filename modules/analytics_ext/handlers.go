@@ -22,8 +22,9 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	})
 	// A stored value that fails the format check is not rendered on the site;
 	// tell the administrator on the page they would use to fix it.
+	settings := m.currentSettings()
 	var warnings []string
-	for _, key := range validateTrackerFormats(m.settings) {
+	for _, key := range validateTrackerFormats(settings) {
 		warnings = append(warnings, i18n.T(lang, key))
 	}
 	if len(warnings) > 0 {
@@ -33,13 +34,13 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		pc.FlashType = "error"
 	}
 	viewData := AnalyticsExtViewData{
-		GA4Enabled:       m.settings.GA4Enabled,
-		GA4MeasurementID: m.settings.GA4MeasurementID,
-		GTMEnabled:       m.settings.GTMEnabled,
-		GTMContainerID:   m.settings.GTMContainerID,
-		MatomoEnabled:    m.settings.MatomoEnabled,
-		MatomoURL:        m.settings.MatomoURL,
-		MatomoSiteID:     m.settings.MatomoSiteID,
+		GA4Enabled:       settings.GA4Enabled,
+		GA4MeasurementID: settings.GA4MeasurementID,
+		GTMEnabled:       settings.GTMEnabled,
+		GTMContainerID:   settings.GTMContainerID,
+		MatomoEnabled:    settings.MatomoEnabled,
+		MatomoURL:        settings.MatomoURL,
+		MatomoSiteID:     settings.MatomoSiteID,
 	}
 	render.Templ(w, r, AnalyticsExtPage(pc, viewData))
 }
@@ -118,7 +119,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update in-memory settings
-	m.settings = newSettings
+	m.storeSettings(newSettings)
 
 	m.ctx.Logger.Info("external analytics settings updated",
 		"user", user.Email,

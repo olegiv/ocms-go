@@ -54,6 +54,8 @@ const (
 	RouteLogin = "/login"
 	// RouteAccount is the authenticated account overview route.
 	RouteAccount = "/account"
+	// RouteCSPReport receives Content-Security-Policy violation reports.
+	RouteCSPReport = "/csp-report"
 	// RouteLogout is the logout route.
 	RouteLogout = "/logout"
 	// RouteLanguage is the public language switch route.

@@ -27,17 +27,27 @@ services:
     ports:
       - "${OCMS_PUBLISH_ADDRESS:-127.0.0.1}:${OCMS_SERVER_PORT:-8080}:8080"
     # The entrypoint starts as root only to fix volume ownership, then drops
-    # to the ocms user with su-exec: it needs CHOWN for that and SETUID/SETGID
-    # to switch users. no-new-privileges blocks regaining root through a
-    # setuid binary afterwards.
+    # to the ocms user with su-exec: it needs CHOWN for that, DAC_READ_SEARCH
+    # to walk the private directories the app creates in its volumes, and
+    # SETUID/SETGID to switch users. The switch clears all of them, and
+    # no-new-privileges blocks regaining root through a setuid binary.
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
+      - DAC_READ_SEARCH
       - SETUID
       - SETGID
+    # The image filesystem is read-only; the app writes only to the volumes
+    # below. Temporary files (import staging, media export archives, large
+    # upload parts) go to TMPDIR on the data volume, because they can exceed
+    # what a memory-backed tmpfs should hold; /tmp is a small tmpfs for
+    # anything that ignores TMPDIR.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
     environment:
       # Required
       - OCMS_SESSION_SECRET=${OCMS_SESSION_SECRET:?Session secret is required (min 32 bytes)}
@@ -50,6 +60,8 @@ services:
       - OCMS_ERROR_LOG_PATH=${OCMS_ERROR_LOG_PATH:-}
       # Database
       - OCMS_DB_PATH=/app/data/ocms.db
+      # Temporary files on the data volume (the image filesystem is read-only)
+      - TMPDIR=/app/data/tmp
       # Theme/Custom content
       - OCMS_CUSTOM_DIR=/app/custom
       - OCMS_ACTIVE_THEME=${OCMS_ACTIVE_THEME:-default}
