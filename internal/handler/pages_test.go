@@ -1082,6 +1082,17 @@ func TestValidatePageAliases(t *testing.T) {
 			t.Errorf("%s: validatePageAliases(%v) = %q, want %q", name, tc.aliases, got, tc.want)
 		}
 	}
+	// A failed uniqueness lookup refuses the alias rather than letting the
+	// unique index drop it after the update cleared the page's aliases.
+	if _, err := db.ExecContext(ctx, "ALTER TABLE page_aliases RENAME TO page_aliases_away"); err != nil {
+		t.Fatalf("hiding page_aliases: %v", err)
+	}
+	if got := h.validatePageAliases(ctx, []string{"zz9/new-path"}, page.ID); !strings.Contains(got, "Error checking for alias conflicts") {
+		t.Errorf("validatePageAliases() = %q when the alias lookup fails, want the error on the form", got)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER TABLE page_aliases_away RENAME TO page_aliases"); err != nil {
+		t.Fatalf("restoring page_aliases: %v", err)
+	}
 	// "about" could be a language code, so checking it reads the languages table.
 	if _, err := db.ExecContext(ctx, "DROP TABLE languages"); err != nil {
 		t.Fatalf("dropping languages: %v", err)

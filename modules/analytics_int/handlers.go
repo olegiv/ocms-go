@@ -65,7 +65,8 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	lang := m.ctx.Render.GetAdminLang(r)
 	dateRange, startDate, endDate := parseDateRangeParam(r)
 
-	// Fetch all dashboard data
+	// Fetch all dashboard data, retrying settings that failed to load
+	settingsLoaded := m.ensureSettingsLoaded() == nil
 	settings := m.settingsSnapshot()
 	viewData := AnalyticsIntViewData{
 		Overview:     m.getOverviewStats(r.Context(), startDate, endDate),
@@ -77,6 +78,8 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		TimeSeries:   m.getTimeSeries(r.Context(), startDate, endDate),
 		DateRange:    dateRange,
 		Settings:     settings,
+
+		SettingsUnavailable: !settingsLoaded,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "analytics_int.title"), []render.Breadcrumb{
@@ -236,8 +239,16 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	// The form shows fallback values while the stored settings cannot be
 	// read; saving them would replace the administrator's settings.
-	if !m.ensureSettingsLoaded() {
-		m.ctx.Logger.Error("refusing to save analytics_int settings: the stored settings cannot be read")
+	// A form rendered from fallback values must not replace the stored
+	// settings, even once they can be read again.
+	if r.FormValue("from_fallback") == "1" {
+		m.ctx.Logger.Warn("refusing to save analytics_int settings: the form showed fallback values")
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_form_from_fallback"), "error")
+		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
+		return
+	}
+	if err := m.ensureSettingsLoaded(); err != nil {
+		m.ctx.Logger.Error("refusing to save analytics_int settings: the stored settings cannot be read", "error", err)
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_settings_unreadable"), "error")
 		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
 		return

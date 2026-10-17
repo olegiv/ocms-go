@@ -46,7 +46,8 @@ type Module struct {
 	// settingsLoaded is false while the stored settings cannot be read. The
 	// module then runs on fallback values with tracking off, and nothing that
 	// would act on them runs (expiry cleanup, salt saves, settings saves)
-	// until ensureSettingsLoaded succeeds; the hourly job retries it.
+	// until ensureSettingsLoaded succeeds; the hourly job, each dashboard view
+	// and each settings save retry it.
 	settingsLoaded atomic.Bool
 
 	// bgWG tracks every goroutine the module starts, so Shutdown can wait for
@@ -75,12 +76,13 @@ func (m *Module) Init(ctx *module.Context) error {
 	// Load settings. If they cannot be read, run with tracking off and write
 	// nothing: the defaults would switch tracking on, and saving them with the
 	// new salt below would overwrite the administrator's stored settings. The
-	// hourly job retries the load (ensureSettingsLoaded).
+	// hourly job, each dashboard view and each settings save retry the load
+	// (ensureSettingsLoaded).
 	settings, err := m.loadSettings()
 	loaded := err == nil
 	m.settingsLoaded.Store(loaded)
 	if !loaded {
-		ctx.Logger.Error("failed to load analytics_int settings; tracking is off until they load (retried hourly)", "error", err)
+		ctx.Logger.Error("failed to load analytics_int settings; tracking is off until they load", "error", err)
 		settings = &Settings{
 			Enabled:           false,
 			RetentionDays:     365,

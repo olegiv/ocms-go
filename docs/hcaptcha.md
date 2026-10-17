@@ -63,7 +63,7 @@ Note: Environment variables take precedence over database settings for the keys.
 | Theme | `light` / `dark` | Widget color theme |
 | Size | `normal` / `compact` | Widget size |
 
-If the stored settings cannot be read at startup (a database error), hCaptcha is turned on wherever the environment keys are set, even if the stored settings had it off (`OCMS_HCAPTCHA_DISABLED=true` still wins), with the default theme and size. The settings form refuses to save until the stored settings load, and the module retries the load at most once a minute, when it is next used. Without environment keys there is nothing to verify against, so protection is off until the settings load.
+If the stored settings cannot be read at startup (a database error), hCaptcha is turned on wherever the environment keys are set, even if the stored settings had it off (`OCMS_HCAPTCHA_DISABLED=true` still wins), with the default theme and size. The settings page shows a warning while it displays this fallback and disables saving; a save is refused until the stored settings load (the module retries the load at most once a minute when it is next used, and at once on a save), and a form rendered from the fallback is refused even after they recover. Without environment keys there is nothing to verify against, so protection is off until the settings load.
 
 ## Disabling hCaptcha
 
@@ -119,9 +119,9 @@ Failure: Show error, stay on login page
 
 ## Testing
 
-### Test Keys (Defaults)
+### Test Keys
 
-hCaptcha provides test keys for development and testing. **These are used as defaults** when no keys are configured:
+hCaptcha provides test keys for development and testing. Set them yourself; they are not applied automatically:
 
 | Key Type | Value |
 |----------|-------|

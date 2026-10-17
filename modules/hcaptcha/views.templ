@@ -1,6 +1,9 @@
 package hcaptcha
 
-import adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+import (
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+)
 
 type HCaptchaViewData struct {
 	Enabled       bool
@@ -10,6 +13,9 @@ type HCaptchaViewData struct {
 	SecretKeyMask string
 	Theme         string
 	Size          string
+	// SettingsUnavailable is set while the stored settings cannot be read
+	// and the page shows the fallback the module runs on.
+	SettingsUnavailable bool
 }
 
 templ HCaptchaPage(pc *adminviews.PageContext, data HCaptchaViewData) {
@@ -20,7 +26,17 @@ templ HCaptchaPage(pc *adminviews.PageContext, data HCaptchaViewData) {
 				<p class="page-description">{ pc.T("hcaptcha.description") }</p>
 			</div>
 		</div>
+		if data.SettingsUnavailable {
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "mb-6"}) {
+				@alert.Description() {
+					{ pc.T("hcaptcha.warning_settings_unreadable") }
+				}
+			}
+		}
 		<form method="POST" action="/admin/hcaptcha" class="hcaptcha-form">
+			if data.SettingsUnavailable {
+				<input type="hidden" name="from_fallback" value="1"/>
+			}
 			<!-- Enable/Disable Card -->
 			<div class="card hcaptcha-card">
 				<div class="card-header">
@@ -138,7 +154,7 @@ templ HCaptchaPage(pc *adminviews.PageContext, data HCaptchaViewData) {
 				</div>
 			</div>
 			<div class="form-actions">
-				<button type="submit" class="btn btn-primary">
+				<button type="submit" class="btn btn-primary" disabled?={ data.SettingsUnavailable }>
 					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
 						<polyline points="17 21 17 13 7 13 7 21"></polyline>

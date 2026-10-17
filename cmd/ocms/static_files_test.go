@@ -172,12 +172,14 @@ func TestServeEmbeddedThemeFile(t *testing.T) {
 // http.FileServer over a file system that is not wrapped in
 // middleware.NoDirectoryFS, or calls http.ServeFile or http.ServeContent
 // without first guarding it with a directory check: an earlier if statement
-// in the same block whose condition calls IsDir, or a function of its package
-// that does, such as `if !themeStaticFileServable(...) { return }`. Both
-// render a listing of every file below a directory URL; /uploads and theme
-// static directories were kept from doing so only by an accidental redirect
-// loop (security audit 2026-10-17, I-3). A check made on another branch does
-// not count.
+// in the same block whose body returns and whose condition calls IsDir, or a
+// function of its package that does, such as
+// `if !themeStaticFileServable(...) { return }`. FileServer and ServeFile
+// render a listing of every file below a directory URL, and an unguarded
+// ServeContent answers a directory with an error instead of a 404; /uploads
+// and theme static directories were kept from listing only by an accidental
+// redirect loop (security audit 2026-10-17, I-3). A check made on another
+// branch does not count.
 //
 // Bug state: unwrap the uploads file system in cmd/ocms/main.go and this names
 // the line; drop the `if !themeStaticFileServable(w, r, info, ...)` guard
@@ -234,7 +236,7 @@ func TestFileServersRefuseDirectories(t *testing.T) {
 							}
 							site := serveSite{dir: dir, pos: call.Pos()}
 							for _, earlier := range node.List[:i] {
-								if ifStmt, ok := earlier.(*ast.IfStmt); ok {
+								if ifStmt, ok := earlier.(*ast.IfStmt); ok && endsInReturn(ifStmt.Body) {
 									callees, isDir := directoryGuard(ifStmt.Cond)
 									site.guardCallees = append(site.guardCallees, callees...)
 									site.guardIsDir = site.guardIsDir || isDir
@@ -297,6 +299,16 @@ func isServeCall(call *ast.CallExpr) bool {
 		return true
 	}
 	return false
+}
+
+// endsInReturn reports whether block's last statement is a return, so the
+// statements after an if with that body run only when its condition is false.
+func endsInReturn(block *ast.BlockStmt) bool {
+	if len(block.List) == 0 {
+		return false
+	}
+	_, ok := block.List[len(block.List)-1].(*ast.ReturnStmt)
+	return ok
 }
 
 // directoryGuard returns the package-local functions an if condition calls

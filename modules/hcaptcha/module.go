@@ -67,6 +67,16 @@ func (m *Module) currentSettings() *Settings {
 	return m.settings
 }
 
+// settingsForForm returns the settings to show on the settings form and
+// whether they may be fallback values. The load state is read before the
+// settings: a reload that completes in between stores its settings before
+// marking them loaded, so fallback values never appear without the warning.
+func (m *Module) settingsForForm() (*Settings, bool) {
+	m.currentSettings() // retries the load when due
+	fromFallback := !m.reload.Loaded()
+	return m.currentSettings(), fromFallback
+}
+
 // storeSettings replaces the settings in effect.
 func (m *Module) storeSettings(settings *Settings) {
 	m.settingsMu.Lock()

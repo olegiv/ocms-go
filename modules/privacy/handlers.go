@@ -16,7 +16,7 @@ import (
 
 // handleDashboard handles GET /admin/privacy - shows the privacy settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	current := m.currentSettings()
+	current, fromFallback := m.settingsForForm()
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Serialize services to JSON
@@ -43,6 +43,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		GCMWaitForUpdate:            current.GCMWaitForUpdate,
 		ServicesJSON:                servicesJSON,
 		PredefinedServices:          PredefinedServices,
+		SettingsUnavailable:         fromFallback,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "privacy.title"), []render.Breadcrumb{
@@ -70,6 +71,14 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	lang := m.ctx.Render.GetAdminLang(r)
 
+	// A form rendered from fallback values must not replace the stored
+	// settings, even once they can be read again.
+	if r.FormValue("from_fallback") == "1" {
+		m.ctx.Logger.Warn("refusing to save privacy settings: the form showed fallback values")
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "privacy.error_form_from_fallback"), "error")
+		http.Redirect(w, r, "/admin/privacy", http.StatusSeeOther)
+		return
+	}
 	// The form shows fallback values while the stored settings cannot be
 	// read; saving them would replace the administrator's settings. Reload
 	// directly here rather than waiting out the retry interval.
@@ -132,11 +141,14 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	servicesJSON := r.FormValue("services")
 	if servicesJSON != "" && servicesJSON != "[]" {
 		var services []Service
-		if err := json.Unmarshal([]byte(servicesJSON), &services); err == nil {
-			newSettings.Services = services
-		} else {
-			m.ctx.Logger.Warn("failed to parse services JSON", "error", err)
+		if err := json.Unmarshal([]byte(servicesJSON), &services); err != nil {
+			// Saving would replace the stored services with none.
+			m.ctx.Logger.Warn("refusing to save privacy settings: invalid services JSON", "error", err)
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "privacy.error_services_invalid"), "error")
+			http.Redirect(w, r, "/admin/privacy", http.StatusSeeOther)
+			return
 		}
+		newSettings.Services = services
 	}
 
 	// Save to database

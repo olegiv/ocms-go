@@ -82,6 +82,10 @@ func TestDockerEntrypointTMPDIR(t *testing.T) {
 			if err != nil || !strings.Contains(string(logged), "ocms mkdir -p "+created) {
 				t.Errorf("TMPDIR was not created through su-exec ocms; su-exec calls: %q (%v)", logged, err)
 			}
+			// The app itself must not run as root.
+			if !strings.Contains(string(logged), "ocms sh -c") {
+				t.Errorf("the command was not started through su-exec ocms; su-exec calls: %q", logged)
+			}
 		}
 
 		stdout, stderr = run(filepath.Join(readOnly, "tmp"), asRoot)

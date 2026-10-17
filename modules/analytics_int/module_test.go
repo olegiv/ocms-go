@@ -216,6 +216,16 @@ func TestInitKeepsStoredSettingsWhenLoadFails(t *testing.T) {
 		t.Error("expiry cleanup ran on fallback settings")
 	}
 	admin := store.User{ID: 1, Email: "admin@test.com", Role: model.RoleAdmin}
+	dashboard := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/admin/internal-analytics", nil)
+		req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, admin))
+		rr := httptest.NewRecorder()
+		m.handleDashboard(rr, req)
+		return rr.Body.String()
+	}
+	if page := dashboard(); !strings.Contains(page, `name="from_fallback"`) || !strings.Contains(page, `role="alert"`) {
+		t.Error("the dashboard does not warn or mark its settings form while showing fallback values")
+	}
 	form := url.Values{"enabled": {"1"}, "retention_days": {"365"}}
 	req := httptest.NewRequest(http.MethodPost, "/admin/internal-analytics/settings", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -232,6 +242,19 @@ func TestInitKeepsStoredSettingsWhenLoadFails(t *testing.T) {
 	// and the stored 30-day retention applies.
 	if _, err := db.Exec(`UPDATE page_analytics_settings SET enabled = 1, salt_created_at = CURRENT_TIMESTAMP WHERE id = 1`); err != nil {
 		t.Fatal(err)
+	}
+	// A form rendered from fallback values is refused even though the row can
+	// be read again now.
+	form.Set("from_fallback", "1")
+	req = httptest.NewRequest(http.MethodPost, "/admin/internal-analytics/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, admin))
+	m.handleSaveSettings(httptest.NewRecorder(), req)
+	if err := db.QueryRow(`SELECT retention_days FROM page_analytics_settings WHERE id = 1`).Scan(&retention); err != nil {
+		t.Fatal(err)
+	}
+	if retention != 30 {
+		t.Errorf("retention = %d: a form rendered from fallback values replaced the recovered settings", retention)
 	}
 	if err := m.aggregateHourly(context.Background()); err != nil {
 		t.Fatalf("aggregateHourly: %v", err)

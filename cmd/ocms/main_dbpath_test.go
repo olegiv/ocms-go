@@ -5,6 +5,9 @@ package main
 
 import (
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -167,5 +170,148 @@ func TestLogRunFailure(t *testing.T) {
 	logRunFailure(&none)
 	if none != nil || strings.Count(buf.String(), "application exited with error") != 1 {
 		t.Error("a nil error was logged or wrapped")
+	}
+}
+
+// TestRunLogsFailuresBeforeClosingLogs fails when a failure path in run can
+// return after the error log file or the database close defer is registered
+// but before a defer logRunFailure(&runErr) follows it. Defers run
+// last-in, first-out, so without that defer the failure reaches main only
+// after both have closed, and is logged to stdout alone. The scan walks run's
+// statements in order: every close defer must be followed by a logRunFailure
+// defer before the next statement that can return.
+//
+// Bug state: delete the first defer logRunFailure(&runErr), after the logger
+// is set up, and this names the openDatabase return before the second one.
+func TestRunLogsFailuresBeforeClosingLogs(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "main.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var run *ast.FuncDecl
+	for _, decl := range file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "run" {
+			run = fn
+		}
+	}
+	if run == nil {
+		t.Fatal("no run function in main.go")
+	}
+	closes := 0
+	var pending []string // closes registered since the last logRunFailure defer
+	for _, stmt := range run.Body.List {
+		if deferStmt, ok := stmt.(*ast.DeferStmt); ok {
+			switch name := deferredCloser(deferStmt); name {
+			case "logRunFailure":
+				pending = nil
+			case "":
+			default:
+				closes++
+				pending = append(pending, name)
+			}
+			continue
+		}
+		if len(pending) > 0 && containsReturn(stmt) {
+			t.Errorf("%s can return after %v closes on return but before a defer logRunFailure(&runErr) follows",
+				fset.Position(stmt.Pos()), pending)
+			pending = nil
+		}
+	}
+	if closes < 2 {
+		t.Fatalf("found %d close defers in run, want the error log file and the database; the scan is stale", closes)
+	}
+}
+
+// deferredCloser names what a defer in run does: "logRunFailure", the log
+// destination it closes ("the error log file", "the database"), or "".
+func deferredCloser(deferStmt *ast.DeferStmt) string {
+	switch fun := deferStmt.Call.Fun.(type) {
+	case *ast.Ident:
+		switch fun.Name {
+		case "logRunFailure":
+			return "logRunFailure"
+		case "closeErrorLog":
+			return "the error log file"
+		}
+	case *ast.FuncLit:
+		closesDB := false
+		ast.Inspect(fun.Body, func(n ast.Node) bool {
+			if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "Close" {
+				if id, ok := sel.X.(*ast.Ident); ok && id.Name == "db" {
+					closesDB = true
+				}
+			}
+			return true
+		})
+		if closesDB {
+			return "the database"
+		}
+	}
+	return ""
+}
+
+// containsReturn reports whether stmt can return from the enclosing function:
+// it contains a return statement outside any function literal.
+func containsReturn(stmt ast.Stmt) bool {
+	found := false
+	ast.Inspect(stmt, func(n ast.Node) bool {
+		switch n.(type) {
+		case *ast.FuncLit:
+			return false
+		case *ast.ReturnStmt:
+			found = true
+		}
+		return !found
+	})
+	return found
+}
+
+// TestRunWaitsForServerFailures fails when run stops binding the listener
+// before it serves or stops waiting through waitForStop: a port that is taken
+// would then leave the process up with nothing listening.
+//
+// Bug state: replace waitForStop(quit, serveErr) with <-quit and this fails.
+func TestRunWaitsForServerFailures(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "main.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := map[string]bool{}
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "run" {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				switch fun := call.Fun.(type) {
+				case *ast.Ident:
+					calls[fun.Name] = true
+				case *ast.SelectorExpr:
+					if pkg, ok := fun.X.(*ast.Ident); ok {
+						calls[pkg.Name+"."+fun.Sel.Name] = true
+					}
+				}
+			}
+			return true
+		})
+	}
+	for _, want := range []string{"net.Listen", "waitForStop"} {
+		if !calls[want] {
+			t.Errorf("run does not call %s", want)
+		}
+	}
+
+	quit := make(chan os.Signal, 1)
+	serveErr := make(chan error, 1)
+	serveErr <- errors.New("bind: address already in use")
+	if err := waitForStop(quit, serveErr); err == nil {
+		t.Error("waitForStop returned nil for a server failure")
+	}
+	quit <- os.Interrupt
+	if err := waitForStop(quit, make(chan error)); err != nil {
+		t.Errorf("waitForStop on a signal = %v, want nil", err)
 	}
 }

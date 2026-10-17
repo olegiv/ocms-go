@@ -318,6 +318,17 @@ func main() {
 	}
 }
 
+// waitForStop blocks until a stop signal arrives, returning nil, or the
+// server fails, returning its error.
+func waitForStop(quit <-chan os.Signal, serveErr <-chan error) error {
+	select {
+	case <-quit:
+		return nil
+	case err := <-serveErr:
+		return err
+	}
+}
+
 // loggedRunError marks a run failure that run has already logged.
 type loggedRunError struct{ error }
 
@@ -2383,12 +2394,17 @@ func run() (runErr error) {
 		MaxHeaderBytes:    1 << 20,          // 1MB max header size
 	}
 
-	// Start server in goroutine. A failure to serve (the port is taken, say)
-	// ends run instead of leaving the process up with nothing listening.
+	// Bind before serving, so a port that is taken ends run with the error
+	// instead of leaving the process up with nothing listening; a later
+	// serve failure ends it through serveErr.
+	listener, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		return fmt.Errorf("listening on %s: %w", cfg.ServerAddr(), err)
+	}
 	serveErr := make(chan error, 1)
 	go func() {
 		slog.Info("starting server", "addr", cfg.ServerAddr(), "env", cfg.Env)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serveErr <- err
 		}
 	}()
@@ -2403,9 +2419,7 @@ func run() (runErr error) {
 	// Wait for an interrupt signal, or for the server to fail
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case <-quit:
-	case err := <-serveErr:
+	if err := waitForStop(quit, serveErr); err != nil {
 		return fmt.Errorf("serving on %s: %w", cfg.ServerAddr(), err)
 	}
 

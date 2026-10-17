@@ -152,21 +152,23 @@ func (m *Module) ReloadSettings() error {
 }
 
 // errSettingsNotLoaded reports work skipped because the stored settings could
-// not be read; the scheduler shows it as a failed run.
+// not be read; a scheduled run logs it as a failed run (Event Log), and a
+// manual trigger reports it.
 var errSettingsNotLoaded = errors.New("analytics_int settings are not loaded")
 
-// ensureSettingsLoaded reports whether the stored settings are in effect,
-// reloading them first if startup could not read them. Code that would act on
-// fallback values, such as deleting data past the retention period or saving
-// the settings form, runs only when it returns true.
-func (m *Module) ensureSettingsLoaded() bool {
+// ensureSettingsLoaded returns nil when the stored settings are in effect,
+// reloading them first if startup could not read them, and the reload error
+// otherwise. Code that would act on fallback values, such as deleting data
+// past the retention period or saving the settings form, runs only when it
+// returns nil.
+func (m *Module) ensureSettingsLoaded() error {
 	if m.settingsLoaded.Load() {
-		return true
+		return nil
 	}
 	if err := m.ReloadSettings(); err != nil {
 		m.ctx.Logger.Warn("analytics_int settings still cannot be read", "error", err)
-		return false
+		return err
 	}
 	m.ctx.Logger.Info("analytics_int settings loaded; tracking follows them again")
-	return true
+	return nil
 }

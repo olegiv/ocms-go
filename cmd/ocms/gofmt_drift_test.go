@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/format"
 	"io/fs"
@@ -22,14 +23,17 @@ import (
 // scratch files do not fail the gate; in an exported tree (no .git) every
 // file is tracked, so it walks the tree.
 //
-// Bug state: re-align a struct literal's values by hand in any file and this
-// names the file.
+// Bug state: re-align a struct literal's values by hand in any tracked file
+// and this names the file.
 func TestGoFilesAreGofmtFormatted(t *testing.T) {
 	root := filepath.Join("..", "..")
 	checked := 0
 	var unformatted []string
 	check := func(path string) error {
 		src, err := os.ReadFile(path) // #nosec G304 -- tracked repository files
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // tracked but deleted in the working tree
+		}
 		if err != nil {
 			return err
 		}

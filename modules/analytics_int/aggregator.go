@@ -135,9 +135,9 @@ func (m *Module) runStartupCatchUp(stopCtx context.Context) {
 // Aggregates ALL hours within the lookback window (48h) to catch up
 // on any periods missed while the machine was stopped.
 func (m *Module) aggregateHourly(ctx context.Context) error {
-	// Retry settings that failed to load at startup; aggregation itself does
-	// not depend on them.
-	m.ensureSettingsLoaded()
+	// Retry settings that failed to load at startup (a failure is logged
+	// there); aggregation itself does not depend on them.
+	_ = m.ensureSettingsLoaded()
 
 	now := time.Now()
 	windowStart := now.Add(-hourlyLookback)
@@ -331,8 +331,8 @@ func (m *Module) cleanupOldRawData(ctx context.Context) error {
 // cleanupExpiredData deletes all aggregate data older than retention period.
 func (m *Module) cleanupExpiredData(ctx context.Context) error {
 	// The fallback retention is not the administrator's: never delete by it.
-	if !m.ensureSettingsLoaded() {
-		return fmt.Errorf("skipping expired analytics data cleanup: %w", errSettingsNotLoaded)
+	if err := m.ensureSettingsLoaded(); err != nil {
+		return fmt.Errorf("skipping expired analytics data cleanup: %w: %w", errSettingsNotLoaded, err)
 	}
 	settings := m.settingsSnapshot()
 	cutoff := time.Now().AddDate(0, 0, -settings.RetentionDays)

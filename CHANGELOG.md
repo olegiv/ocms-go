@@ -15,9 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A startup failure is logged before the error log file and the event log
-  close, so it reaches `OCMS_ERROR_LOG_PATH` and the Event Log too, not only
-  stdout, and a server that cannot listen (the port is taken) now exits
-  instead of staying up with nothing served. REST v2 error logs carry the
+  close, so it reaches `OCMS_ERROR_LOG_PATH` and, once the database is open,
+  the Event Log too, not only stdout; a server that cannot listen (the port is
+  taken) now exits instead of staying up with nothing served. REST v2 error logs carry the
   request ID, method and route. The database's WAL and shared-memory files
   are made owner-only along with the database file.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
@@ -34,17 +34,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   races with the tracker. Saving settings and running aggregation are now
   admin-only; editors keep the statistics pages. If its settings cannot be read
   at startup, Internal Analytics now runs with tracking off, skips expiry
-  cleanup (reported as a failed run), refuses settings saves and retries the
-  load hourly; it used to switch tracking on and save its defaults over the
-  stored settings.
+  cleanup (logged as a failed run), refuses settings saves and retries the
+  load from the hourly job, each dashboard view and each save; it used to
+  switch tracking on and save its defaults over the stored settings.
 - hCaptcha, Privacy and Informer settings are guarded by a lock too, so saving
   or reloading them no longer races with the pages that render them.
 - If its settings cannot be read at startup, the Privacy module now turns the
   consent banner on with Google Consent Mode denying ad and analytics storage
   (it used to switch off while other modules' trackers kept loading), and
   hCaptcha turns on wherever environment keys are set (it used to switch
-  off). Their settings forms refuse to save until the stored settings load,
-  which they retry at most once a minute, when next used.
+  off). Their settings pages warn while they show these fallback values and
+  disable saving; the forms refuse to save until the stored settings load
+  (retried at most once a minute when next used, and at once by a save), and
+  a form rendered from fallback values is refused even after they recover.
+- The Privacy settings form refuses a services list that is not valid JSON;
+  it used to save it as an empty list, dropping every configured service.
 - Page slugs and single-segment aliases can no longer use the names whose
   exact URL a core route answers (`account`, `admin`, `blog`, `example`,
   `health`, `login`, `search`), since that route answers first. The admin form

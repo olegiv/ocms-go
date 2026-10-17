@@ -4,11 +4,14 @@
 package hcaptcha
 
 import (
+	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
@@ -39,6 +42,9 @@ func TestSettingsLoadFailureKeepsEnvKeyProtection(t *testing.T) {
 	if !m.IsEnabled() || !strings.Contains(string(m.RenderWidget()), `data-sitekey="env-site-key"`) {
 		t.Fatal("captcha is off after a settings load failure although environment keys are set")
 	}
+	if page := dashboardBody(t, m); !strings.Contains(page, `name="from_fallback"`) || !strings.Contains(page, `role="alert"`) {
+		t.Error("the settings page does not warn or mark its form while showing fallback values")
+	}
 
 	body := strings.NewReader("enabled=1&site_key=form-key&secret_key=form-secret&theme=dark&size=compact")
 	req := requestWithUser(body, store.User{ID: 1, Email: "admin@test.com", Role: "admin"})
@@ -52,14 +58,43 @@ func TestSettingsLoadFailureKeepsEnvKeyProtection(t *testing.T) {
 		t.Errorf("stored theme = %q: the settings form saved over settings it could not read", theme)
 	}
 
-	// Repair the row: the next read reloads it without a restart.
+	// Repair the row. A form rendered from the fallback is still refused: its
+	// values would replace the settings that can now be read.
 	if _, err := db.Exec(`UPDATE hcaptcha_settings SET enabled = 0 WHERE id = 1`); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(time.Millisecond)
+	body = strings.NewReader("from_fallback=1&enabled=1&site_key=form-key&secret_key=form-secret&theme=dark&size=compact")
+	req = requestWithUser(body, store.User{ID: 1, Email: "admin@test.com", Role: "admin"})
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	m.handleSaveSettings(httptest.NewRecorder(), req)
+	if err := db.QueryRow(`SELECT theme FROM hcaptcha_settings WHERE id = 1`).Scan(&theme); err != nil {
+		t.Fatal(err)
+	}
+	if theme != "stored" {
+		t.Errorf("stored theme = %q: a form rendered from fallback values replaced the recovered settings", theme)
+	}
+	// The next read reloads the row without a restart. The settings page is
+	// that read here, so it must retry before deciding whether to warn.
+	if strings.Contains(dashboardBody(t, m), `name="from_fallback"`) {
+		t.Error("the first settings page after the repair still marks its form as fallback")
+	}
 	if got := m.GetSettings(); got.Enabled || got.Theme != "stored" || got.SiteKey != "env-site-key" {
 		t.Errorf("after the repair: %+v, want the stored (disabled) settings with the env key", got)
 	}
+}
+
+// dashboardBody renders the settings page for an admin.
+func dashboardBody(t *testing.T, m *Module) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/admin/hcaptcha", nil)
+	req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, store.User{ID: 1, Email: "admin@test.com", Role: "admin"}))
+	rr := httptest.NewRecorder()
+	m.handleDashboard(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("settings page: status %d", rr.Code)
+	}
+	return rr.Body.String()
 }
 
 // TestSettingsLoadFailureWithoutKeys documents the limit: with no keys in the
@@ -75,5 +110,19 @@ func TestSettingsLoadFailureWithoutKeys(t *testing.T) {
 	}
 	if m.IsEnabled() {
 		t.Error("captcha reports enabled without any keys")
+	}
+
+	// OCMS_HCAPTCHA_DISABLED wins over the fallback even with keys set, so an
+	// hCaptcha outage can still be bypassed while the settings are unreadable.
+	disabled := New()
+	disabledCtx, _ := moduleutil.TestModuleContext(t, db)
+	disabledCtx.Config.HCaptchaSiteKey = "env-site-key"
+	disabledCtx.Config.HCaptchaSecretKey = "env-secret"
+	disabledCtx.Config.HCaptchaDisabled = true
+	if err := disabled.Init(disabledCtx); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if disabled.IsEnabled() {
+		t.Error("captcha is on although OCMS_HCAPTCHA_DISABLED is set")
 	}
 }
