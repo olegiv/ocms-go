@@ -54,6 +54,7 @@
         {"id": "privacy.save_button", "message": "Save Settings", "translation": "Сохранить настройки"},
         {"id": "privacy.success_save", "message": "Privacy settings saved successfully", "translation": "Настройки конфиденциальности успешно сохранены"},
         {"id": "privacy.error_save", "message": "Failed to save privacy settings", "translation": "Не удалось сохранить настройки конфиденциальности"},
+        {"id": "privacy.error_settings_unreadable", "message": "The stored privacy settings cannot be read, so nothing was saved. Try again later.", "translation": "Сохранённые настройки конфиденциальности не удаётся прочитать, поэтому ничего не сохранено. Повторите попытку позже."},
         {"id": "privacy.error_parse_form", "message": "Failed to parse form data", "translation": "Не удалось обработать данные формы"},
         {"id": "privacy.klaro_link", "message": "Learn more about Klaro", "translation": "Узнайте больше о Klaro на klaro.org"},
         {"id": "privacy.manage_cookies", "message": "Cookie Settings", "translation": "Настройки cookie"},

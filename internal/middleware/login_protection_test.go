@@ -485,7 +485,7 @@ func TestAnnotateTrustedProxy(t *testing.T) {
 	if err := SetTrustedProxies([]string{"127.0.0.1/32"}); err != nil {
 		t.Fatalf("SetTrustedProxies: %v", err)
 	}
-	defer SetTrustedProxies(nil) //nolint:errcheck
+	defer func() { _ = SetTrustedProxies(nil) }()
 
 	t.Run("preserves trust after RemoteAddr rewrite", func(t *testing.T) {
 		var got bool

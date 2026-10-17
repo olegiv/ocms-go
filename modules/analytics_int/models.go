@@ -84,8 +84,8 @@ type PageRead struct {
 	Path        string
 	PageID      *int64
 	SessionHash string
-	ScrollDepth int       // Percentage of content scrolled (0-100)
-	TimeOnPage  int       // Seconds spent on page
+	ScrollDepth int // Percentage of content scrolled (0-100)
+	TimeOnPage  int // Seconds spent on page
 	CreatedAt   time.Time
 }
 

@@ -522,8 +522,8 @@ func TestBuildKlaroConfigMultipleServices(t *testing.T) {
 					GCMConsentType: "analytics_storage",
 				},
 				{
-					Name:    "matomo",
-					Title:   "Matomo",
+					Name:     "matomo",
+					Title:    "Matomo",
 					Purposes: []string{"analytics"},
 				},
 			},

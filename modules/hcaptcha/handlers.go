@@ -52,6 +52,18 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	lang := m.ctx.Render.GetAdminLang(r)
 
+	// The form shows fallback values while the stored settings cannot be
+	// read; saving them would replace the administrator's settings. Reload
+	// directly here rather than waiting out the retry interval.
+	if !m.reload.Loaded() {
+		if err := m.ReloadSettings(); err != nil {
+			m.ctx.Logger.Error("refusing to save hCaptcha settings: the stored settings cannot be read", "error", err)
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "hcaptcha.error_settings_unreadable"), "error")
+			http.Redirect(w, r, "/admin/hcaptcha", http.StatusSeeOther)
+			return
+		}
+	}
+
 	if err := r.ParseForm(); err != nil {
 		m.ctx.Logger.Error("failed to parse form", "error", err)
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "hcaptcha.error_parse_form"), "error")
@@ -110,17 +122,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update in-memory settings (preserve env overrides)
-	if m.ctx.Config.HCaptchaSiteKey != "" {
-		newSettings.SiteKey = m.ctx.Config.HCaptchaSiteKey
-	}
-	if m.ctx.Config.HCaptchaSecretKey != "" {
-		newSettings.SecretKey = m.ctx.Config.HCaptchaSecretKey
-	}
-	// Force-disable when OCMS_HCAPTCHA_DISABLED=true
-	if m.ctx.Config.HCaptchaDisabled {
-		newSettings.Enabled = false
-	}
-	m.storeSettings(newSettings)
+	m.storeSettings(m.withEnvOverrides(newSettings))
 
 	m.ctx.Logger.Info("hCaptcha settings updated",
 		"user", user.Email,

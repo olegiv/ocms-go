@@ -557,7 +557,7 @@ func TestSecurityDeclarationEnforcedAtRuntime(t *testing.T) {
 				t.Fatalf("%s %s: %v", entry.method, url, err)
 			}
 			body := readAll(resp)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			seen[opKey{entry.method, live}] = true
 			if resp.StatusCode != http.StatusUnauthorized {
 				t.Errorf("%s %s: op %q declares ApiKeyAuth but unauthenticated request returned %d, want 401\nbody=%s",
@@ -835,7 +835,7 @@ func TestPermissionRequiredBeforeBodyParse(t *testing.T) {
 			t.Fatalf("%s %s: %v", tc.method, tc.path, err)
 		}
 		_ = readAll(resp)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s %s (op %s) with read-only key: want 403, got %d", tc.method, tc.path, tc.op, resp.StatusCode)
 		}
@@ -876,7 +876,7 @@ func TestOpenAPIJSONBytesMatchesServed(t *testing.T) {
 	w := httptest.NewRecorder()
 	docs.ServeOpenAPIJSON(w, httptest.NewRequest(http.MethodGet, "/api/v2/openapi.json", nil))
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	servedBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read served body: %v", err)

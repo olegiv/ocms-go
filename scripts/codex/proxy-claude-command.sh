@@ -43,7 +43,7 @@ read_tools=(
 check_tools=(
   "Bash(scripts/test-gate.sh)" "Bash(./scripts/test-gate.sh)"
   "Bash(go vet ./...)" "Bash(go build ./...)" "Bash(gofmt -l *)"
-  "Bash(staticcheck ./...)" "Bash(errcheck ./...)" "Bash(golangci-lint run ./...)"
+  "Bash(staticcheck ./...)" "Bash(errcheck -ignoregenerated ./...)" "Bash(golangci-lint run ./...)"
   "Bash(nilaway ./...)" "Bash(goimports -l *)" "Bash(govulncheck *)"
 )
 tools=("${read_tools[@]}" "${check_tools[@]}")

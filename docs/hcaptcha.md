@@ -63,6 +63,8 @@ Note: Environment variables take precedence over database settings for the keys.
 | Theme | `light` / `dark` | Widget color theme |
 | Size | `normal` / `compact` | Widget size |
 
+If the stored settings cannot be read at startup (a database error), hCaptcha is turned on wherever the environment keys are set, even if the stored settings had it off (`OCMS_HCAPTCHA_DISABLED=true` still wins), with the default theme and size. The settings form refuses to save until the stored settings load, and the module retries the load at most once a minute, when it is next used. Without environment keys there is nothing to verify against, so protection is off until the settings load.
+
 ## Disabling hCaptcha
 
 ### Option A: Admin Interface

@@ -216,6 +216,17 @@ func saveSettings(db *sql.DB, s *Settings) error {
 	return err
 }
 
+// consentSafeSettings are the settings in effect when the stored ones cannot
+// be read at startup: the banner is turned on, even if the stored settings had
+// it off, and Google Consent Mode denies ad and analytics storage
+// (ad_storage, ad_user_data, ad_personalization, analytics_storage) by
+// default, so trackers that honour it collect nothing without consent.
+func consentSafeSettings() *Settings {
+	settings := defaultSettings()
+	settings.Enabled = true
+	return settings
+}
+
 // defaultSettings returns default privacy settings.
 func defaultSettings() *Settings {
 	return &Settings{

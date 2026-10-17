@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"testing"
@@ -169,26 +170,32 @@ func TestServeEmbeddedThemeFile(t *testing.T) {
 
 // TestFileServersRefuseDirectories fails when production code builds an
 // http.FileServer over a file system that is not wrapped in
-// middleware.NoDirectoryFS, or calls http.ServeFile in a function that
-// neither checks for a directory nor calls a function of its package that
-// does. Both render a listing of every file below a directory URL; /uploads
-// and theme static directories were kept from doing so only by an accidental
-// redirect loop (security audit 2026-10-17, I-3).
+// middleware.NoDirectoryFS, or calls http.ServeFile or http.ServeContent
+// without first guarding it with a directory check: an earlier if statement
+// in the same block whose condition calls IsDir, or a function of its package
+// that does, such as `if !themeStaticFileServable(...) { return }`. Both
+// render a listing of every file below a directory URL; /uploads and theme
+// static directories were kept from doing so only by an accidental redirect
+// loop (security audit 2026-10-17, I-3). A check made on another branch does
+// not count.
 //
 // Bug state: unwrap the uploads file system in cmd/ocms/main.go and this names
-// the line.
+// the line; drop the `if !themeStaticFileServable(w, r, info, ...)` guard
+// before ServeContent and this names the ServeContent call.
 func TestFileServersRefuseDirectories(t *testing.T) {
 	root := filepath.Join("..", "..")
 	fset := token.NewFileSet()
 	servers := 0
 	var offenders []string
-	// fileServerFunc is a function that calls http.ServeFile.
-	type fileServerFunc struct {
-		dir        string
-		calls      map[string]bool
-		serveFiles []ast.Node
+	// serveSite is an http.ServeFile or ServeContent call and the directory
+	// checks of the if statements before it in its block.
+	type serveSite struct {
+		dir          string
+		pos          token.Pos
+		guardCallees []string
+		guardIsDir   bool
 	}
-	var fileServerFuncs []fileServerFunc
+	var sites []serveSite
 	checksDirectory := map[string]bool{} // "dir.func" for functions that call IsDir
 	for _, tree := range []string{"cmd", "internal", "modules"} {
 		err := filepath.WalkDir(filepath.Join(root, tree), func(path string, d fs.DirEntry, err error) error {
@@ -202,24 +209,40 @@ func TestFileServersRefuseDirectories(t *testing.T) {
 			if err != nil {
 				return err
 			}
+			dir := filepath.Dir(path)
 			for _, decl := range file.Decls {
 				fn, ok := decl.(*ast.FuncDecl)
 				if !ok || fn.Body == nil {
 					continue
 				}
-				dir := filepath.Dir(path)
-				calls := map[string]bool{}
-				var serveFiles []ast.Node
+				guarded := map[token.Pos]serveSite{}
 				ast.Inspect(fn.Body, func(n ast.Node) bool {
 					switch node := n.(type) {
 					case *ast.SelectorExpr:
 						if node.Sel.Name == "IsDir" {
 							checksDirectory[dir+"."+fn.Name.Name] = true
 						}
-					case *ast.CallExpr:
-						if callee, ok := node.Fun.(*ast.Ident); ok {
-							calls[callee.Name] = true
+					case *ast.BlockStmt:
+						for i, stmt := range node.List {
+							expr, ok := stmt.(*ast.ExprStmt)
+							if !ok {
+								continue
+							}
+							call, ok := expr.X.(*ast.CallExpr)
+							if !ok || !isServeCall(call) {
+								continue
+							}
+							site := serveSite{dir: dir, pos: call.Pos()}
+							for _, earlier := range node.List[:i] {
+								if ifStmt, ok := earlier.(*ast.IfStmt); ok {
+									callees, isDir := directoryGuard(ifStmt.Cond)
+									site.guardCallees = append(site.guardCallees, callees...)
+									site.guardIsDir = site.guardIsDir || isDir
+								}
+							}
+							guarded[call.Pos()] = site
 						}
+					case *ast.CallExpr:
 						switch httpCall(node) {
 						case "FileServer", "FileServerFS":
 							servers++
@@ -229,14 +252,17 @@ func TestFileServersRefuseDirectories(t *testing.T) {
 							}
 						case "ServeFile", "ServeFileFS", "ServeContent":
 							servers++
-							serveFiles = append(serveFiles, node)
+							if _, ok := guarded[node.Pos()]; !ok {
+								// Not a statement of its own (deferred, nested in an
+								// expression): there is no block to guard it.
+								guarded[node.Pos()] = serveSite{dir: dir, pos: node.Pos()}
+							}
 						}
 					}
 					return true
 				})
-				if len(serveFiles) > 0 {
-					calls[fn.Name.Name] = true
-					fileServerFuncs = append(fileServerFuncs, fileServerFunc{dir, calls, serveFiles})
+				for _, site := range guarded {
+					sites = append(sites, site)
 				}
 			}
 			return nil
@@ -245,24 +271,49 @@ func TestFileServersRefuseDirectories(t *testing.T) {
 			t.Fatalf("walking %s: %v", tree, err)
 		}
 	}
-	for _, fn := range fileServerFuncs {
-		checked := false
-		for callee := range fn.calls {
-			checked = checked || checksDirectory[fn.dir+"."+callee]
+	for _, site := range sites {
+		ok := site.guardIsDir
+		for _, callee := range site.guardCallees {
+			ok = ok || checksDirectory[site.dir+"."+callee]
 		}
-		if !checked {
-			for _, call := range fn.serveFiles {
-				offenders = append(offenders, fset.Position(call.Pos()).String()+
-					"  http.ServeFile without a directory check")
-			}
+		if !ok {
+			offenders = append(offenders, fset.Position(site.pos).String()+
+				"  http.ServeFile/ServeContent without a directory check guarding it")
 		}
 	}
 	if servers == 0 {
 		t.Fatal("no file server found; the scan is broken and this test is vacuous")
 	}
 	if len(offenders) > 0 {
+		sort.Strings(offenders)
 		t.Errorf("these file servers can list a directory:\n  %s", strings.Join(offenders, "\n  "))
 	}
+}
+
+// isServeCall reports whether call is http.ServeFile, ServeFileFS or ServeContent.
+func isServeCall(call *ast.CallExpr) bool {
+	switch httpCall(call) {
+	case "ServeFile", "ServeFileFS", "ServeContent":
+		return true
+	}
+	return false
+}
+
+// directoryGuard returns the package-local functions an if condition calls
+// and whether it calls IsDir itself.
+func directoryGuard(cond ast.Expr) (callees []string, isDir bool) {
+	ast.Inspect(cond, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.SelectorExpr:
+			isDir = isDir || node.Sel.Name == "IsDir"
+		case *ast.CallExpr:
+			if ident, ok := node.Fun.(*ast.Ident); ok {
+				callees = append(callees, ident.Name)
+			}
+		}
+		return true
+	})
+	return callees, isDir
 }
 
 // httpCall returns the function name of a call to the net/http package, or "".

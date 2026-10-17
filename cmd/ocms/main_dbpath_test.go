@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -110,8 +111,10 @@ func TestWithErrorLog(t *testing.T) {
 	}
 }
 
-// TestOpenDatabase checks that the database file ends up owner-only even
-// when it already existed with a wider mode, and that migrations ran.
+// TestOpenDatabase checks that the database file and its WAL and
+// shared-memory files end up owner-only even when the database already
+// existed with a wider mode (SQLite gives the sidecars that mode on open),
+// and that migrations ran.
 func TestOpenDatabase(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ocms.db")
 	if err := os.WriteFile(dbPath, nil, 0o644); err != nil {
@@ -125,15 +128,44 @@ func TestOpenDatabase(t *testing.T) {
 		t.Fatalf("openDatabase: %v", err)
 	}
 	defer func() { _ = db.Close() }()
-	info, err := os.Stat(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if mode := info.Mode().Perm(); mode != 0o600 {
-		t.Errorf("database mode = %v, want 0600", mode)
+	for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("%s: %v (the database runs in WAL mode, so the file should exist)", filepath.Base(path), err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("%s mode = %v, want 0600", filepath.Base(path), mode)
+		}
 	}
 	var pages int
 	if err := db.QueryRow("SELECT COUNT(*) FROM pages").Scan(&pages); err != nil {
 		t.Errorf("migrations did not run: %v", err)
+	}
+}
+
+// TestLogRunFailure checks that a run failure is logged once, by the first
+// deferred call to see it, and marked so main does not log it again after
+// run's deferred closes have shut the error log file and the event log.
+func TestLogRunFailure(t *testing.T) {
+	var buf strings.Builder
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	runErr := errors.New("running migrations: disk I/O error")
+	logRunFailure(&runErr)
+	logRunFailure(&runErr)
+	if n := strings.Count(buf.String(), "application exited with error"); n != 1 {
+		t.Errorf("failure logged %d times, want once:\n%s", n, buf.String())
+	}
+	var logged loggedRunError
+	if !errors.As(runErr, &logged) || !strings.Contains(runErr.Error(), "disk I/O error") {
+		t.Errorf("runErr = %v, want the original error marked as logged", runErr)
+	}
+
+	var none error
+	logRunFailure(&none)
+	if none != nil || strings.Count(buf.String(), "application exited with error") != 1 {
+		t.Error("a nil error was logged or wrapped")
 	}
 }

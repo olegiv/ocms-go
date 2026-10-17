@@ -70,6 +70,18 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	lang := m.ctx.Render.GetAdminLang(r)
 
+	// The form shows fallback values while the stored settings cannot be
+	// read; saving them would replace the administrator's settings. Reload
+	// directly here rather than waiting out the retry interval.
+	if !m.reload.Loaded() {
+		if err := m.ReloadSettings(); err != nil {
+			m.ctx.Logger.Error("refusing to save privacy settings: the stored settings cannot be read", "error", err)
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "privacy.error_settings_unreadable"), "error")
+			http.Redirect(w, r, "/admin/privacy", http.StatusSeeOther)
+			return
+		}
+	}
+
 	if err := r.ParseForm(); err != nil {
 		m.ctx.Logger.Error("failed to parse form", "error", err)
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "privacy.error_parse_form"), "error")

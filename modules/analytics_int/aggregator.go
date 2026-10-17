@@ -5,6 +5,7 @@ package analytics_int
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -331,8 +332,7 @@ func (m *Module) cleanupOldRawData(ctx context.Context) error {
 func (m *Module) cleanupExpiredData(ctx context.Context) error {
 	// The fallback retention is not the administrator's: never delete by it.
 	if !m.ensureSettingsLoaded() {
-		m.ctx.Logger.Warn("skipping expired analytics data cleanup until the settings load")
-		return nil
+		return fmt.Errorf("skipping expired analytics data cleanup: %w", errSettingsNotLoaded)
 	}
 	settings := m.settingsSnapshot()
 	cutoff := time.Now().AddDate(0, 0, -settings.RetentionDays)

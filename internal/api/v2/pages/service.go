@@ -428,7 +428,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 	if err != nil {
 		return nil, v2.NewInternalError("Failed to start transaction", err)
 	}
-	defer tx.Rollback() //nolint:errcheck
+	defer func() { _ = tx.Rollback() }()
 	txq := s.queries.WithTx(tx)
 
 	canCreateTags := a.HasPermission(model.PermissionTaxonomyWrite)
@@ -522,7 +522,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 	if err != nil {
 		return nil, v2.NewInternalError("Failed to start transaction", err)
 	}
-	defer tx.Rollback() //nolint:errcheck
+	defer func() { _ = tx.Rollback() }()
 	txq := s.queries.WithTx(tx)
 
 	hasTagChange := in.TagIDs != nil || in.TagNames != nil
@@ -702,7 +702,7 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 	if err != nil {
 		return v2.NewInternalError("Failed to start transaction", err)
 	}
-	defer tx.Rollback() //nolint:errcheck
+	defer func() { _ = tx.Rollback() }()
 	txq := s.queries.WithTx(tx)
 	if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
 		return v2.NewInternalError("Failed to clear categories", err)

@@ -44,10 +44,24 @@ type Module struct {
 	// got. TestSettingsAccessHoldsTheLock checks that every access to the
 	// field takes the lock.
 	settingsMu sync.RWMutex
+	// reload records whether the stored settings are in effect. If they fail
+	// to load, the module runs on the environment keys alone; currentSettings retries the
+	// load and the settings form refuses to save until it succeeds.
+	reload module.SettingsReloadGate
 }
 
-// currentSettings returns the settings in effect, or nil before Init.
+// currentSettings returns the settings in effect, or nil before Init. While
+// the stored settings cannot be read it first retries loading them, at most
+// once per module.SettingsRetryInterval.
 func (m *Module) currentSettings() *Settings {
+	if m.ctx != nil && !m.reload.Loaded() {
+		switch loaded, err := m.reload.Retry(m.ReloadSettings); {
+		case err != nil:
+			m.ctx.Logger.Warn("hCaptcha settings still cannot be read; using the fallback", "error", err)
+		case loaded:
+			m.ctx.Logger.Info("hCaptcha settings loaded; the stored settings apply again")
+		}
+	}
 	m.settingsMu.RLock()
 	defer m.settingsMu.RUnlock()
 	return m.settings
@@ -75,26 +89,21 @@ func New() *Module {
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 
-	// Load settings from database
+	// Load settings from database. Without them, turn protection on wherever
+	// it can run, even if the stored settings had it off: the environment keys
+	// alone are enough to verify logins (OCMS_HCAPTCHA_DISABLED still wins).
 	settings, err := loadSettings(ctx.DB)
 	if err != nil {
-		ctx.Logger.Warn("failed to load hCaptcha settings, using defaults", "error", err)
-		settings = &Settings{}
+		if ctx.Config.HCaptchaEnabled() && !ctx.Config.HCaptchaDisabled {
+			ctx.Logger.Error("failed to load hCaptcha settings; using the environment keys until they load", "error", err)
+		} else {
+			ctx.Logger.Error("failed to load hCaptcha settings; login protection is off until they load", "error", err)
+		}
+		settings = &Settings{Enabled: true}
+	} else {
+		m.reload.MarkLoaded()
 	}
-
-	// Override with environment variables if set
-	if ctx.Config.HCaptchaSiteKey != "" {
-		settings.SiteKey = ctx.Config.HCaptchaSiteKey
-	}
-	if ctx.Config.HCaptchaSecretKey != "" {
-		settings.SecretKey = ctx.Config.HCaptchaSecretKey
-	}
-
-	// Force-disable when OCMS_HCAPTCHA_DISABLED=true
-	if ctx.Config.HCaptchaDisabled {
-		settings.Enabled = false
-	}
-
+	settings = m.withEnvOverrides(settings)
 	m.storeSettings(settings)
 
 	// Register hooks for login form integration
@@ -285,22 +294,25 @@ func (m *Module) ReloadSettings() error {
 	if err != nil {
 		return err
 	}
+	m.storeSettings(m.withEnvOverrides(settings))
+	m.reload.MarkLoaded()
+	return nil
+}
 
-	// Override with environment variables if set
+// withEnvOverrides applies the OCMS_HCAPTCHA_* environment settings, which
+// take precedence over the stored ones, and returns settings.
+func (m *Module) withEnvOverrides(settings *Settings) *Settings {
 	if m.ctx.Config.HCaptchaSiteKey != "" {
 		settings.SiteKey = m.ctx.Config.HCaptchaSiteKey
 	}
 	if m.ctx.Config.HCaptchaSecretKey != "" {
 		settings.SecretKey = m.ctx.Config.HCaptchaSecretKey
 	}
-
 	// Force-disable when OCMS_HCAPTCHA_DISABLED=true
 	if m.ctx.Config.HCaptchaDisabled {
 		settings.Enabled = false
 	}
-
-	m.storeSettings(settings)
-	return nil
+	return settings
 }
 
 // IsEnabled returns whether hCaptcha protection is enabled and configured.

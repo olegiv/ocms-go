@@ -45,7 +45,7 @@ func TestClientError(t *testing.T) {
 		}{
 			{"empty file", func() error {
 				f := tempMultipartFile(t, []byte{})
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 				_, err := detectAndValidateUploadMime(f, "test.png")
 				return err
 			}},

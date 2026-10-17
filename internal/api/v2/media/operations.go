@@ -47,7 +47,7 @@ type MediaListMeta struct {
 // ListMediaOutput is the paginated response envelope.
 type ListMediaOutput struct {
 	Body struct {
-		Data []Media  `json:"data"`
+		Data []Media       `json:"data"`
 		Meta MediaListMeta `json:"meta"`
 	}
 }
@@ -76,7 +76,7 @@ func registerList(api huma.API, svc *Service) {
 		f.IncludeVariants, f.IncludeFolder, f.IncludeTranslations = parseIncludes(in.Include)
 		result, err := svc.List(ctx, actor, f)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &ListMediaOutput{}
 		out.Body.Data = result.Media
@@ -117,7 +117,7 @@ func registerGet(api huma.API, svc *Service) {
 		f.IncludeVariants, f.IncludeFolder, f.IncludeTranslations = parseIncludes(in.Include)
 		m, err := svc.Get(ctx, actor, in.ID, f)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &MediaOutput{}
 		out.Body.Data = *m
@@ -149,7 +149,7 @@ func registerUploadSingle(api huma.API, svc *Service) {
 		actor := v2.ActorFromContext(ctx)
 		data := in.RawBody.Data()
 		if !data.File.IsSet {
-			return nil, v2.ToHuma(v2.NewValidationError(map[string]string{"file": "File is required"}, "Validation failed"))
+			return nil, v2.ToHuma(ctx, v2.NewValidationError(map[string]string{"file": "File is required"}, "Validation failed"))
 		}
 		folderID := parseFolderID(data.FolderID)
 		m, err := svc.Upload(ctx, actor, UploadMediaMetadata{FolderID: folderID, Alt: data.Alt, Caption: data.Caption}, UploadedFile{
@@ -159,7 +159,7 @@ func registerUploadSingle(api huma.API, svc *Service) {
 			ContentType: data.File.ContentType,
 		})
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &MediaOutput{}
 		out.Body.Data = *m
@@ -215,7 +215,7 @@ func registerUploadBatch(api huma.API, svc *Service) {
 		folderID := parseFolderID(data.FolderID)
 		res, err := svc.UploadBatch(ctx, actor, UploadMediaMetadata{FolderID: folderID, Alt: data.Alt, Caption: data.Caption}, files)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &UploadBatchOutput{}
 		out.Body.Data.Uploaded = res.Uploaded
@@ -226,7 +226,7 @@ func registerUploadBatch(api huma.API, svc *Service) {
 
 // UpdateMediaInput carries the id path param plus the partial update body.
 type UpdateMediaInput struct {
-	ID   int64       `path:"id" minimum:"1"`
+	ID   int64           `path:"id" minimum:"1"`
 	Body UpdateMediaBody `contentType:"application/json"`
 }
 
@@ -243,7 +243,7 @@ func registerUpdate(api huma.API, svc *Service) {
 		actor := v2.ActorFromContext(ctx)
 		m, err := svc.Update(ctx, actor, in.ID, in.Body)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &MediaOutput{}
 		out.Body.Data = *m
@@ -269,7 +269,7 @@ func registerDelete(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *DeleteMediaInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)
 		if err := svc.Delete(ctx, actor, in.ID); err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		return nil, nil
 	})

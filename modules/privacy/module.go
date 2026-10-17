@@ -31,10 +31,24 @@ type Module struct {
 	// got. TestSettingsAccessHoldsTheLock checks that every access to the
 	// field takes the lock.
 	settingsMu sync.RWMutex
+	// reload records whether the stored settings are in effect. If they fail
+	// to load, the module runs on consentSafeSettings; currentSettings retries the
+	// load and the settings form refuses to save until it succeeds.
+	reload module.SettingsReloadGate
 }
 
-// currentSettings returns the settings in effect, or nil before Init.
+// currentSettings returns the settings in effect, or nil before Init. While
+// the stored settings cannot be read it first retries loading them, at most
+// once per module.SettingsRetryInterval.
 func (m *Module) currentSettings() *Settings {
+	if m.ctx != nil && !m.reload.Loaded() {
+		switch loaded, err := m.reload.Retry(m.ReloadSettings); {
+		case err != nil:
+			m.ctx.Logger.Warn("privacy settings still cannot be read; using the fallback", "error", err)
+		case loaded:
+			m.ctx.Logger.Info("privacy settings loaded; the stored settings apply again")
+		}
+	}
 	m.settingsMu.RLock()
 	defer m.settingsMu.RUnlock()
 	return m.settings
@@ -62,11 +76,15 @@ func New() *Module {
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 
-	// Load settings from database
+	// Load settings from database. Without them, fail towards consent: an
+	// empty fallback would drop the banner and the Consent Mode defaults
+	// while other modules' trackers keep loading.
 	settings, err := loadSettings(ctx.DB)
 	if err != nil {
-		ctx.Logger.Warn("failed to load privacy settings, using defaults", "error", err)
-		settings = &Settings{}
+		ctx.Logger.Error("failed to load privacy settings; denying all consent until they load", "error", err)
+		settings = consentSafeSettings()
+	} else {
+		m.reload.MarkLoaded()
 	}
 	m.storeSettings(settings)
 
@@ -255,6 +273,7 @@ func (m *Module) ReloadSettings() error {
 		return err
 	}
 	m.storeSettings(settings)
+	m.reload.MarkLoaded()
 	return nil
 }
 

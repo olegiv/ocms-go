@@ -444,7 +444,7 @@ Before submitting code, verify with:
 ```bash
 go vet ./...              # Check for common issues
 staticcheck ./...         # Extended static analysis
-errcheck ./...            # Detect unhandled errors
+errcheck -ignoregenerated ./...  # Detect unhandled errors (skips sqlc/templ output)
 ```
 
 Install errcheck if needed: `go install github.com/kisielk/errcheck@latest`

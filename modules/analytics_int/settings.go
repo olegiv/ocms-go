@@ -151,6 +151,10 @@ func (m *Module) ReloadSettings() error {
 	return nil
 }
 
+// errSettingsNotLoaded reports work skipped because the stored settings could
+// not be read; the scheduler shows it as a failed run.
+var errSettingsNotLoaded = errors.New("analytics_int settings are not loaded")
+
 // ensureSettingsLoaded reports whether the stored settings are in effect,
 // reloading them first if startup could not read them. Code that would act on
 // fallback values, such as deleting data past the retention period or saving

@@ -310,9 +310,29 @@ func main() {
 	}
 
 	if err := run(); err != nil {
-		slog.Error("application failed to start", "error", err)
+		var logged loggedRunError
+		if !errors.As(err, &logged) {
+			slog.Error("application exited with error", "error", err)
+		}
 		os.Exit(1)
 	}
+}
+
+// loggedRunError marks a run failure that run has already logged.
+type loggedRunError struct{ error }
+
+func (e loggedRunError) Unwrap() error { return e.error }
+
+// logRunFailure logs *runErr once and marks it as logged. run defers it so
+// the failure is logged while the error log file and the event log are still
+// open, before run's deferred closes shut them.
+func logRunFailure(runErr *error) {
+	var logged loggedRunError
+	if *runErr == nil || errors.As(*runErr, &logged) {
+		return
+	}
+	slog.Error("application exited with error", "error", *runErr)
+	*runErr = loggedRunError{*runErr}
 }
 
 // parseLogLevel converts a log level string to slog.Level.
@@ -1432,13 +1452,19 @@ func openDatabase(dsn string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initializing database: %w", err)
 	}
-	// Restrict database file permissions to the owner only.
-	// Skip non-file DSNs such as ":memory:" where no real file exists on disk.
+	// Restrict database file permissions to the owner only, including the WAL
+	// and shared-memory files: SQLite creates them on open with the database
+	// file's mode, so a file that existed with a wider mode leaves them
+	// readable too, and the WAL holds recent writes. Files SQLite creates
+	// later take the database file's (now owner-only) mode. Skip non-file
+	// DSNs such as ":memory:" where no real file exists on disk.
 	if dbFilePath, isFileDSN := sqliteFilePathFromDSN(dsn); isFileDSN {
-		if info, statErr := os.Stat(dbFilePath); statErr == nil && info.Mode().IsRegular() {
-			if err := os.Chmod(dbFilePath, 0600); err != nil {
-				_ = db.Close()
-				return nil, fmt.Errorf("setting database file permissions: %w", err)
+		for _, file := range []string{dbFilePath, dbFilePath + "-wal", dbFilePath + "-shm"} {
+			if info, statErr := os.Stat(file); statErr == nil && info.Mode().IsRegular() {
+				if err := os.Chmod(file, 0600); err != nil {
+					_ = db.Close()
+					return nil, fmt.Errorf("setting database file permissions: %w", err)
+				}
 			}
 		}
 	} else {
@@ -1511,7 +1537,7 @@ func seedDemoInformer(cfg *config.Config, db *sql.DB, registry *module.Registry,
 	}
 }
 
-func run() error {
+func run() (runErr error) {
 	loadEnvFile()
 	cfg, allowedEmbedUpstreamHosts, allowedWebhookHosts, err := loadConfig()
 	if err != nil {
@@ -1540,6 +1566,10 @@ func run() error {
 
 	logger := slog.New(withErrorLog(stdoutHandler, errorLogFile))
 	slog.SetDefault(logger)
+	// From here on run logs its own failure, before the deferred closes of
+	// the error log file (and, below, of the database behind the event log)
+	// run; main would otherwise log it after they have closed.
+	defer logRunFailure(&runErr)
 
 	logProductionSecurityWarnings(cfg)
 
@@ -1585,6 +1615,7 @@ func run() error {
 	logger = slog.New(eventLogHandler)
 	slog.SetDefault(logger)
 	slog.Info("event log integration enabled", "min_level", "warn")
+	defer logRunFailure(&runErr) // while the event log database is still open
 	eventService := service.NewEventService(db)
 
 	// Seed default data
@@ -2352,11 +2383,13 @@ func run() error {
 		MaxHeaderBytes:    1 << 20,          // 1MB max header size
 	}
 
-	// Start server in goroutine
+	// Start server in goroutine. A failure to serve (the port is taken, say)
+	// ends run instead of leaving the process up with nothing listening.
+	serveErr := make(chan error, 1)
 	go func() {
 		slog.Info("starting server", "addr", cfg.ServerAddr(), "env", cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server error", "error", err)
+			serveErr <- err
 		}
 	}()
 
@@ -2367,10 +2400,14 @@ func run() error {
 			"version": appVersion,
 		})
 
-	// Wait for interrupt signal
+	// Wait for an interrupt signal, or for the server to fail
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case <-quit:
+	case err := <-serveErr:
+		return fmt.Errorf("serving on %s: %w", cfg.ServerAddr(), err)
+	}
 
 	slog.Info("shutting down server...")
 

@@ -238,7 +238,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	// read; saving them would replace the administrator's settings.
 	if !m.ensureSettingsLoaded() {
 		m.ctx.Logger.Error("refusing to save analytics_int settings: the stored settings cannot be read")
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_save"), "error")
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_settings_unreadable"), "error")
 		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
 		return
 	}

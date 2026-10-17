@@ -9,8 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 
 	apiv2 "github.com/olegiv/ocms-go/internal/api/v2"
 )
@@ -29,7 +33,7 @@ func TestErrorCodeMatchesRESTEnvelope(t *testing.T) {
 	}
 	for _, kind := range kinds {
 		domainErr := apiv2.NewError(kind, "message")
-		raw, err := json.Marshal(apiv2.ToHuma(domainErr))
+		raw, err := json.Marshal(apiv2.ToHuma(context.Background(), domainErr))
 		if err != nil {
 			t.Fatalf("marshal REST error for kind %d: %v", kind, err)
 		}
@@ -61,7 +65,7 @@ func TestNewInternalErrorKeepsCauseOutOfResponses(t *testing.T) {
 		t.Errorf("code %q message %q, want internal_error and the curated message", domainErr.Code(), domainErr.Error())
 	}
 
-	raw, err := json.Marshal(apiv2.ToHuma(domainErr))
+	raw, err := json.Marshal(apiv2.ToHuma(context.Background(), domainErr))
 	if err != nil {
 		t.Fatalf("marshal REST error: %v", err)
 	}
@@ -84,7 +88,7 @@ func TestToHumaLogsInternalErrors(t *testing.T) {
 		"internal error": apiv2.NewInternalError("Error loading page", errors.New("disk I/O error")),
 	} {
 		buf.Reset()
-		_ = apiv2.ToHuma(err)
+		_ = apiv2.ToHuma(context.Background(), err)
 		cause := "database is locked"
 		if name == "internal error" {
 			cause = "disk I/O error"
@@ -94,13 +98,33 @@ func TestToHumaLogsInternalErrors(t *testing.T) {
 		}
 	}
 	buf.Reset()
-	_ = apiv2.ToHuma(apiv2.NewError(apiv2.ErrNotFound, "page not found"))
+	_ = apiv2.ToHuma(context.Background(), apiv2.NewError(apiv2.ErrNotFound, "page not found"))
 	if buf.Len() != 0 {
 		t.Errorf("a not-found error was logged: %q", buf.String())
 	}
+	// The log names the request, so a 500 can be matched to its access-log
+	// line by request ID.
+	buf.Reset()
+	rctx := chi.NewRouteContext()
+	rctx.RouteMethod = http.MethodPatch
+	rctx.RoutePatterns = []string{"/api/v2/pages/{id}"}
+	reqCtx := context.WithValue(context.Background(), chi.RouteCtxKey, rctx)
+	reqCtx = context.WithValue(reqCtx, chimw.RequestIDKey, "host/abc-000042")
+	for _, err := range []error{
+		errors.New("database is locked"),
+		apiv2.NewInternalError("Error updating page", errors.New("database is locked")),
+	} {
+		buf.Reset()
+		_ = apiv2.ToHuma(reqCtx, err)
+		for _, want := range []string{"request_id=host/abc-000042", "method=PATCH", "route=/api/v2/pages/{id}"} {
+			if !strings.Contains(buf.String(), want) {
+				t.Errorf("log = %q, want %s", buf.String(), want)
+			}
+		}
+	}
 	// A client that disconnects is not an error in the event log.
 	buf.Reset()
-	_ = apiv2.ToHuma(apiv2.NewInternalError("Error loading page", context.Canceled))
+	_ = apiv2.ToHuma(context.Background(), apiv2.NewInternalError("Error loading page", context.Canceled))
 	if !strings.Contains(buf.String(), "level=WARN") {
 		t.Errorf("a cancelled request was logged as %q, want a warning", buf.String())
 	}

@@ -49,7 +49,7 @@ type ListTagsInput struct {
 // ListTagsOutput is the paginated tags response envelope.
 type ListTagsOutput struct {
 	Body struct {
-		Data []TaxonomyTag            `json:"data"`
+		Data []TaxonomyTag    `json:"data"`
 		Meta TaxonomyListMeta `json:"meta"`
 	}
 }
@@ -65,7 +65,7 @@ func registerListTags(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *ListTagsInput) (*ListTagsOutput, error) {
 		res, err := svc.ListTags(ctx, in.Page, in.PerPage)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &ListTagsOutput{}
 		out.Body.Data = res.Tags
@@ -97,7 +97,7 @@ func registerGetTag(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *GetTagInput) (*TagOutput, error) {
 		t, err := svc.GetTag(ctx, in.ID)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &TagOutput{}
 		out.Body.Data = *t
@@ -124,7 +124,7 @@ func registerCreateTag(api huma.API, svc *Service) {
 		actor := v2.ActorFromContext(ctx)
 		t, err := svc.CreateTag(ctx, actor, in.Body)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &TagOutput{}
 		out.Body.Data = *t
@@ -151,7 +151,7 @@ func registerUpdateTag(api huma.API, svc *Service) {
 		actor := v2.ActorFromContext(ctx)
 		t, err := svc.UpdateTag(ctx, actor, in.ID, in.Body)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &TagOutput{}
 		out.Body.Data = *t
@@ -177,7 +177,7 @@ func registerDeleteTag(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *DeleteTagInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)
 		if err := svc.DeleteTag(ctx, actor, in.ID); err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		return nil, nil
 	})
@@ -211,7 +211,7 @@ func registerListCategories(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *ListCategoriesInput) (*ListCategoriesOutput, error) {
 		cats, err := svc.ListCategories(ctx, !in.Flat)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &ListCategoriesOutput{}
 		out.Body.Data = cats
@@ -243,7 +243,7 @@ func registerGetCategory(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *GetCategoryInput) (*CategoryOutput, error) {
 		c, err := svc.GetCategory(ctx, in.ID)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &CategoryOutput{}
 		out.Body.Data = *c
@@ -270,7 +270,7 @@ func registerCreateCategory(api huma.API, svc *Service) {
 		actor := v2.ActorFromContext(ctx)
 		c, err := svc.CreateCategory(ctx, actor, in.Body)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &CategoryOutput{}
 		out.Body.Data = *c
@@ -297,7 +297,7 @@ func registerUpdateCategory(api huma.API, svc *Service) {
 		actor := v2.ActorFromContext(ctx)
 		c, err := svc.UpdateCategory(ctx, actor, in.ID, in.Body)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &CategoryOutput{}
 		out.Body.Data = *c
@@ -323,7 +323,7 @@ func registerDeleteCategory(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *DeleteCategoryInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)
 		if err := svc.DeleteCategory(ctx, actor, in.ID); err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		return nil, nil
 	})

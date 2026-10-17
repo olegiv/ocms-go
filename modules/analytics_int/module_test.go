@@ -6,6 +6,7 @@ package analytics_int
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -201,8 +202,8 @@ func TestInitKeepsStoredSettingsWhenLoadFails(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO page_analytics_daily (date, path, views) VALUES (?, '/old', 1)`, oldDate); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.cleanupExpiredData(context.Background()); err != nil {
-		t.Fatalf("cleanupExpiredData: %v", err)
+	if err := m.cleanupExpiredData(context.Background()); !errors.Is(err, errSettingsNotLoaded) {
+		t.Fatalf("cleanupExpiredData = %v, want errSettingsNotLoaded so the scheduler shows the skip", err)
 	}
 	countDaily := func() int {
 		var n int

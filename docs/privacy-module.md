@@ -53,6 +53,8 @@ Access at **Admin > Privacy** or `/admin/privacy`.
 | Google Consent Mode v2 | Wait for update (ms) | How long GCM waits for consent before applying defaults (default `500`) |
 | Services | JSON array | Declare each tracked service — name, purposes, cookie patterns, required flag |
 
+If the stored settings cannot be read at startup (a database error), the module fails towards consent: the banner is turned on, even if the stored settings had it off, and Google Consent Mode denies ad and analytics storage (`ad_storage`, `ad_user_data`, `ad_personalization`, `analytics_storage`) by default, so trackers that honour it collect nothing without consent. The settings form refuses to save until the stored settings load, and the module retries the load at most once a minute, when it is next used.
+
 ## Template Functions
 
 Themes call these from the base layout:

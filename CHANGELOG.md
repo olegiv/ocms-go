@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   site theme. See `docs/login-security.md`.
 
 ### Fixed
+- A startup failure is logged before the error log file and the event log
+  close, so it reaches `OCMS_ERROR_LOG_PATH` and the Event Log too, not only
+  stdout, and a server that cannot listen (the port is taken) now exits
+  instead of staying up with nothing served. REST v2 error logs carry the
+  request ID, method and route. The database's WAL and shared-memory files
+  are made owner-only along with the database file.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
   so a later run can no longer commit other staged changes under it.
 - Editors now land at `/admin` after login. Public users land at `/account`;
@@ -28,10 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   races with the tracker. Saving settings and running aggregation are now
   admin-only; editors keep the statistics pages. If its settings cannot be read
   at startup, Internal Analytics now runs with tracking off, skips expiry
-  cleanup, refuses settings saves and retries the load hourly; it used to
-  switch tracking on and save its defaults over the stored settings.
+  cleanup (reported as a failed run), refuses settings saves and retries the
+  load hourly; it used to switch tracking on and save its defaults over the
+  stored settings.
 - hCaptcha, Privacy and Informer settings are guarded by a lock too, so saving
   or reloading them no longer races with the pages that render them.
+- If its settings cannot be read at startup, the Privacy module now turns the
+  consent banner on with Google Consent Mode denying ad and analytics storage
+  (it used to switch off while other modules' trackers kept loading), and
+  hCaptcha turns on wherever environment keys are set (it used to switch
+  off). Their settings forms refuse to save until the stored settings load,
+  which they retry at most once a minute, when next used.
 - Page slugs and single-segment aliases can no longer use the names whose
   exact URL a core route answers (`account`, `admin`, `blog`, `example`,
   `health`, `login`, `search`), since that route answers first. The admin form

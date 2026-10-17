@@ -11,6 +11,8 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 )
 
 // ErrorKind classifies domain errors so services can express semantic meaning
@@ -106,28 +108,42 @@ func (e *statusError) MarshalJSON() ([]byte, error) {
 // ErrorBody envelope. Domain errors preserve their kind/fields; anything else
 // becomes a 500 with a generic message so internals don't leak. Internal
 // errors are logged here with their cause, because the response carries only
-// a generic or curated message, never the cause. A cancelled or timed-out
-// request is logged as a warning: the client went away, nothing failed.
-func ToHuma(err error) error {
+// a generic or curated message, never the cause; the log names the request
+// (ctx's request ID, method and route) so it can be matched to the access
+// log. A request the client cancelled is logged as a warning: the client went
+// away, nothing failed. A timeout stays an error, because the deadline on this
+// path is the server's own request timeout (a slow query or a locked
+// database).
+func ToHuma(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
 	level := slog.LevelError
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if errors.Is(err, context.Canceled) {
 		level = slog.LevelWarn
 	}
 	var de *Error
 	if errors.As(err, &de) {
 		if de.Kind == ErrInternal {
-			slog.Log(context.Background(), level, "v2 internal error", "error", de.Msg, "cause", de.Wrap)
+			slog.Log(ctx, level, "v2 internal error", append(requestLogAttrs(ctx), "error", de.Msg, "cause", de.Wrap)...)
 		}
 		return domainToStatusError(de)
 	}
-	slog.Log(context.Background(), level, "v2 unexpected error", "error", err)
+	slog.Log(ctx, level, "v2 unexpected error", append(requestLogAttrs(ctx), "error", err)...)
 	return &statusError{
 		status: http.StatusInternalServerError,
 		body:   ErrorBody{Error: ErrorDetail{Code: "internal_error", Message: "Internal server error"}},
 	}
+}
+
+// requestLogAttrs returns the request ID, method and route pattern that chi
+// recorded in ctx, for logging an error against its request.
+func requestLogAttrs(ctx context.Context) []any {
+	attrs := []any{"request_id", chimw.GetReqID(ctx)}
+	if rctx := chi.RouteContext(ctx); rctx != nil {
+		attrs = append(attrs, "method", rctx.RouteMethod, "route", rctx.RoutePattern())
+	}
+	return attrs
 }
 
 func domainToStatusError(e *Error) huma.StatusError {
