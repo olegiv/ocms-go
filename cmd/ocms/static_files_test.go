@@ -76,6 +76,16 @@ func TestThemeStaticRefusesDirectories(t *testing.T) {
 		}
 		t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
 		cases["/themes/probe/static/css/locked/a.css"] = http.StatusInternalServerError
+		// A file the server may not read, in a readable directory.
+		unreadable := filepath.Join(static, "secret.css")
+		if err := os.WriteFile(unreadable, []byte("b{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(unreadable, 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(unreadable, 0o644) })
+		cases["/themes/probe/static/css/secret.css"] = http.StatusInternalServerError
 	}
 	for path, want := range cases {
 		rr := httptest.NewRecorder()
@@ -83,8 +93,13 @@ func TestThemeStaticRefusesDirectories(t *testing.T) {
 		if rr.Code != want {
 			t.Errorf("GET %s = %d, want %d; body %q", path, rr.Code, want, rr.Body.String())
 		}
-		if want == http.StatusInternalServerError && rr.Header().Get("Cache-Control") != "no-store" {
-			t.Errorf("GET %s: Cache-Control = %q, want no-store", path, rr.Header().Get("Cache-Control"))
+		switch cache := rr.Header().Get("Cache-Control"); {
+		case want == http.StatusInternalServerError && cache != "no-store":
+			t.Errorf("GET %s: Cache-Control = %q, want no-store", path, cache)
+		case want == http.StatusNotFound && cache == themeStaticCacheControl:
+			t.Errorf("GET %s: a 404 carries the month-long Cache-Control", path)
+		case want == http.StatusOK && cache != themeStaticCacheControl:
+			t.Errorf("GET %s: Cache-Control = %q, want %q", path, cache, themeStaticCacheControl)
 		}
 	}
 }
@@ -121,6 +136,33 @@ func TestThemeStaticFileServable(t *testing.T) {
 		if got != tc.servable || rr.Code != tc.wantCode || rr.Header().Get("Cache-Control") != tc.wantCache {
 			t.Errorf("%s: servable=%v code=%d Cache-Control=%q, want %v %d %q",
 				name, got, rr.Code, rr.Header().Get("Cache-Control"), tc.servable, tc.wantCode, tc.wantCache)
+		}
+	}
+}
+
+// TestServeEmbeddedThemeFile checks the embedded-theme branch on the core
+// default theme, as the theme manager hands it over (fs.Sub of the embedded
+// file system): a file is served and cached, while a directory or a missing
+// file is an uncached 404. Reading a directory from an embed.FS fails with
+// "is a directory", which would otherwise be a 500 that anyone can trigger.
+func TestServeEmbeddedThemeFile(t *testing.T) {
+	fsys, err := fs.Sub(themes.FS, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for file, want := range map[string]int{
+		"css/theme.css":   http.StatusOK,
+		"css":             http.StatusNotFound,
+		"css/missing.css": http.StatusNotFound,
+	} {
+		rr := httptest.NewRecorder()
+		serveEmbeddedThemeFile(rr, httptest.NewRequest(http.MethodGet, "/", nil), fsys, "default", file)
+		cached := rr.Header().Get("Cache-Control") == themeStaticCacheControl
+		if rr.Code != want || cached != (want == http.StatusOK) {
+			t.Errorf("%s: code %d, cached %v; want %d, cached %v", file, rr.Code, cached, want, want == http.StatusOK)
+		}
+		if want == http.StatusOK && (rr.Body.Len() == 0 || rr.Header().Get("Content-Type") == "") {
+			t.Errorf("%s: %d-byte body, Content-Type %q", file, rr.Body.Len(), rr.Header().Get("Content-Type"))
 		}
 	}
 }
@@ -185,7 +227,7 @@ func TestFileServersRefuseDirectories(t *testing.T) {
 								offenders = append(offenders, fset.Position(node.Pos()).String()+
 									"  http.FileServer without middleware.NoDirectoryFS")
 							}
-						case "ServeFile", "ServeFileFS":
+						case "ServeFile", "ServeFileFS", "ServeContent":
 							servers++
 							serveFiles = append(serveFiles, node)
 						}

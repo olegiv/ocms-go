@@ -590,8 +590,8 @@ func operationDeclaresAPIKey(op *huma.Operation) bool {
 	return hasAPIKey
 }
 
-// readAll drains resp.Body for error-message rendering. Wraps to isolate the
-// json-unused import (pulled in for future assertions on error payload shape).
+// readAll drains resp.Body so a failing request's body can be shown in the
+// test error.
 func readAll(resp *http.Response) []byte {
 	buf := make([]byte, 0, 256)
 	chunk := make([]byte, 256)
@@ -603,12 +603,6 @@ func readAll(resp *http.Response) []byte {
 		if err != nil {
 			break
 		}
-	}
-	// Validate response is JSON-shaped without unmarshalling — keeps the
-	// encoding/json import relevant and protects against HTML error pages.
-	if len(buf) > 0 && buf[0] == '{' {
-		var probe map[string]any
-		_ = json.Unmarshal(buf, &probe)
 	}
 	return buf
 }

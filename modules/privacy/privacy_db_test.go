@@ -467,7 +467,7 @@ func TestMigrationV3SkipsEmptyServices(t *testing.T) {
 
 func TestBuildKlaroConfigNilSettings(t *testing.T) {
 	m := &Module{settings: nil}
-	klaroConfig := m.buildKlaroConfig()
+	klaroConfig := m.buildKlaroConfig(m.settings)
 	if klaroConfig != "var klaroConfig = {};" {
 		t.Errorf("expected empty config for nil settings, got %q", klaroConfig)
 	}
@@ -481,7 +481,7 @@ func TestBuildKlaroConfigLightTheme(t *testing.T) {
 			CookieName: "klaro",
 		},
 	}
-	cfg := m.buildKlaroConfig()
+	cfg := m.buildKlaroConfig(m.settings)
 	if !strings.Contains(cfg, "theme: ['light']") {
 		t.Error("config should contain light theme")
 	}
@@ -494,7 +494,7 @@ func TestBuildKlaroConfigNoPrivacyURL(t *testing.T) {
 			CookieName: "klaro",
 		},
 	}
-	cfg := m.buildKlaroConfig()
+	cfg := m.buildKlaroConfig(m.settings)
 	if strings.Contains(cfg, "privacyPolicy:") {
 		t.Error("config should not contain privacyPolicy when URL is empty")
 	}
@@ -529,7 +529,7 @@ func TestBuildKlaroConfigMultipleServices(t *testing.T) {
 			},
 		},
 	}
-	cfg := m.buildKlaroConfig()
+	cfg := m.buildKlaroConfig(m.settings)
 	if !strings.Contains(cfg, "name: 'klaro'") {
 		t.Error("config should contain klaro service")
 	}
@@ -565,7 +565,7 @@ func TestBuildServiceConfigNoGCMWhenDisabled(t *testing.T) {
 			},
 		},
 	}
-	cfg := m.buildKlaroConfig()
+	cfg := m.buildKlaroConfig(m.settings)
 	// No callback should appear because GCMEnabled=false
 	if strings.Contains(cfg, "gtag('consent', 'update'") {
 		t.Error("GCM callback should not appear when GCMEnabled is false")
@@ -603,7 +603,7 @@ func TestRenderGCMDefaultsAllGranted(t *testing.T) {
 			GCMWaitForUpdate:            250,
 		},
 	}
-	script := m.renderGCMDefaults()
+	script := m.renderGCMDefaults(m.settings)
 	for _, field := range []string{"analytics_storage", "ad_storage", "ad_user_data", "ad_personalization"} {
 		if !strings.Contains(script, "'"+field+"': 'granted'") {
 			t.Errorf("expected %q to be 'granted'", field)
@@ -632,7 +632,7 @@ func TestRenderHeadScriptsWithNonce(t *testing.T) {
 
 func TestGetPositionCSSNilSettings(t *testing.T) {
 	m := &Module{settings: nil}
-	css := m.getPositionCSS()
+	css := m.getPositionCSS(m.settings)
 	if css != "" {
 		t.Errorf("getPositionCSS() with nil settings should return empty, got %q", css)
 	}

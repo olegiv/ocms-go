@@ -48,7 +48,10 @@ fi
 # Running this script is the approval the interactive pre-commit hook asks
 # for, and the tree checks a hook would add ran above.
 git commit --no-verify -F "$MSG_FILE"
+# The message described this commit only: remove it, so a later run cannot
+# commit other staged changes under it and must prepare its own.
+rm -f "$MSG_FILE"
 
 echo
-echo "Commit created with message from $MSG_FILE (tested tree $tested_tree)"
+echo "Commit created (tested tree $tested_tree); the prepared message was used and removed."
 git status --short

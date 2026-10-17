@@ -127,20 +127,31 @@ func TestExactRoutesReservePageSlugs(t *testing.T) {
 // TestRoutePathsReserveAliases fails when util.ReservedRoutePaths differs
 // from the multi-segment paths and subtrees that routes answer on GET.
 //
-// A page alias such as "uploads/2016/report.pdf" or "forms/contact" is
-// answered by the route that owns it, so the alias lookup never runs and the
-// alias is dead; the admin form rejects aliases that match the list. Reserving
-// only first segments refused live aliases such as "blog/post/55", and
-// reserving nothing stored dead ones (review of the 2026-10-17 audit fixes).
+// A page alias such as "uploads/2016/report" or "blog/tag/news" is answered
+// by the route that owns it, so the alias lookup never runs and the alias is
+// dead; the admin form rejects aliases that match the list. Reserving only
+// first segments refused live aliases such as "blog/post/55", reserving
+// nothing stored dead ones, and reserving /uploads itself or parameter routes
+// that fall back to the alias lookup refused slugs and aliases that work
+// (reviews of the 2026-10-17 audit fixes).
 //
-// Bug state: drop "uploads/**" from util.reservedRoutePaths and this names
+// Bug state: drop "uploads/*/**" from util.reservedRoutePaths and this names
 // the /uploads/* registration; add "blog/post/*" and this reports that no
 // route answers it.
 func TestRoutePathsReserveAliases(t *testing.T) {
 	answered := map[string]string{}
+	fallbacks := map[string]bool{}
 	for _, route := range scanTopLevelRoutes(t) {
+		if aliasFallbackRoutes[route.path] {
+			fallbacks[route.path] = true
+		}
 		if pattern, ok := aliasShadowPattern(route); ok {
 			answered[pattern] = route.position
+		}
+	}
+	for path := range aliasFallbackRoutes {
+		if !fallbacks[path] {
+			t.Errorf("aliasFallbackRoutes names %s, which no route registers", path)
 		}
 	}
 	for pattern, position := range answered {
@@ -155,21 +166,37 @@ func TestRoutePathsReserveAliases(t *testing.T) {
 	}
 }
 
+// aliasFallbackRoutes are parameter routes whose handlers send a miss to the
+// frontend not-found handler, which resolves page aliases, so an alias below
+// them works while no such page, term or form exists.
+var aliasFallbackRoutes = map[string]bool{
+	handler.RoutePageByID:     true,
+	handler.RouteCategorySlug: true,
+	handler.RouteTagSlug:      true,
+	handler.RouteFormsSlug:    true,
+}
+
 // aliasShadowPattern returns the util.ReservedRoutePaths pattern for a route
-// that answers GET on more than its first segment: "*" for each parameter and
-// a trailing "/**" for a route that answers a whole subtree.
+// that answers GET on more than its first segment without falling back to the
+// alias lookup: "*" for each parameter, a trailing "/**" for a mounted router
+// (which answers its prefix too) and "/*/**" for a /x/* route (which answers
+// only paths below its prefix).
 func aliasShadowPattern(route topLevelRoute) (string, bool) {
 	switch route.method {
 	case "Get", "Handle", "HandleFunc", "Mount", "Route":
 	default:
 		return "", false
 	}
-	path := strings.TrimPrefix(route.path, "/")
-	subtree := route.method == "Mount" || route.method == "Route"
-	if trimmed, ok := strings.CutSuffix(path, "/*"); ok {
-		path, subtree = trimmed, true
+	if aliasFallbackRoutes[route.path] {
+		return "", false
 	}
-	if !subtree && !strings.Contains(path, "/") {
+	path := strings.TrimPrefix(route.path, "/")
+	mounted := route.method == "Mount" || route.method == "Route"
+	belowOnly := false
+	if trimmed, ok := strings.CutSuffix(path, "/*"); ok {
+		path, belowOnly = trimmed, true
+	}
+	if !mounted && !belowOnly && !strings.Contains(path, "/") {
 		return "", false // a single segment: TestExactRoutesReservePageSlugs
 	}
 	parts := strings.Split(path, "/")
@@ -178,7 +205,10 @@ func aliasShadowPattern(route topLevelRoute) (string, bool) {
 			parts[i] = "*"
 		}
 	}
-	if subtree {
+	switch {
+	case belowOnly:
+		parts = append(parts, "*", "**")
+	case mounted:
 		parts = append(parts, "**")
 	}
 	return strings.Join(parts, "/"), true

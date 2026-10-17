@@ -239,20 +239,21 @@ func boolToInt(b bool) int {
 // renderHeadScripts generates privacy/consent scripts for the <head> section.
 // This MUST be called BEFORE analytics scripts for proper GCM initialization.
 func (m *Module) renderHeadScripts(nonce string) template.HTML {
-	if m.settings == nil || !m.settings.Enabled {
+	settings := m.currentSettings()
+	if settings == nil || !settings.Enabled {
 		return ""
 	}
 
 	var scripts strings.Builder
 
 	// 1. Debug script FIRST (if enabled) - must intercept gtag before it's called
-	if m.settings.Debug {
+	if settings.Debug {
 		scripts.WriteString(m.renderDebugScript())
 	}
 
 	// 2. Google Consent Mode v2 defaults (before any gtag calls)
-	if m.settings.GCMEnabled {
-		scripts.WriteString(m.renderGCMDefaults())
+	if settings.GCMEnabled {
+		scripts.WriteString(m.renderGCMDefaults(settings))
 	}
 
 	// 3. Klaro CSS
@@ -260,7 +261,7 @@ func (m *Module) renderHeadScripts(nonce string) template.HTML {
 `)
 
 	// 4. Position CSS overrides
-	positionCSS := m.getPositionCSS()
+	positionCSS := m.getPositionCSS(settings)
 	if positionCSS != "" {
 		fmt.Fprintf(&scripts, "<style>\n%s</style>\n", positionCSS)
 	}
@@ -269,7 +270,7 @@ func (m *Module) renderHeadScripts(nonce string) template.HTML {
 	fmt.Fprintf(&scripts, `<script>
 %s
 </script>
-`, m.buildKlaroConfig())
+`, m.buildKlaroConfig(settings))
 
 	// 6. Klaro script
 	// Cache-busted like every other vendored script. /static/dist/ is served
@@ -299,8 +300,8 @@ document.addEventListener('click', function(event) {
 }
 
 // getPositionCSS returns CSS for positioning the Klaro notice.
-func (m *Module) getPositionCSS() string {
-	if m.settings == nil {
+func (m *Module) getPositionCSS(settings *Settings) string {
+	if settings == nil {
 		return ""
 	}
 
@@ -323,7 +324,7 @@ func (m *Module) getPositionCSS() string {
 `
 
 	// Add position-specific CSS
-	switch m.settings.Position {
+	switch settings.Position {
 	case "bottom-left":
 		css += `.klaro .cookie-notice { right: auto !important; left: 20px !important; }`
 	case "top-right":
@@ -397,7 +398,8 @@ func (m *Module) renderDebugScript() string {
 
 // renderFooterLink returns an HTML link to open the Klaro consent modal.
 func (m *Module) renderFooterLink(langCode string) template.HTML {
-	if m.settings == nil || !m.settings.Enabled {
+	settings := m.currentSettings()
+	if settings == nil || !settings.Enabled {
 		return ""
 	}
 
@@ -406,21 +408,21 @@ func (m *Module) renderFooterLink(langCode string) template.HTML {
 }
 
 // renderGCMDefaults generates the Google Consent Mode v2 default consent state.
-func (m *Module) renderGCMDefaults() string {
+func (m *Module) renderGCMDefaults(settings *Settings) string {
 	analyticsDefault := "denied"
-	if m.settings.GCMDefaultAnalytics {
+	if settings.GCMDefaultAnalytics {
 		analyticsDefault = "granted"
 	}
 	adStorageDefault := "denied"
-	if m.settings.GCMDefaultAdStorage {
+	if settings.GCMDefaultAdStorage {
 		adStorageDefault = "granted"
 	}
 	adUserDataDefault := "denied"
-	if m.settings.GCMDefaultAdUserData {
+	if settings.GCMDefaultAdUserData {
 		adUserDataDefault = "granted"
 	}
 	adPersonalizationDefault := "denied"
-	if m.settings.GCMDefaultAdPersonalization {
+	if settings.GCMDefaultAdPersonalization {
 		adPersonalizationDefault = "granted"
 	}
 
@@ -436,5 +438,5 @@ gtag('consent', 'default', {
     'wait_for_update': %d
 });
 </script>
-`, adStorageDefault, adUserDataDefault, adPersonalizationDefault, analyticsDefault, m.settings.GCMWaitForUpdate)
+`, adStorageDefault, adUserDataDefault, adPersonalizationDefault, analyticsDefault, settings.GCMWaitForUpdate)
 }

@@ -83,7 +83,11 @@ func (m *Module) getCurrentSalt() string {
 	m.settings.CurrentSalt = newSalt
 	m.settings.SaltCreatedAt = timeNow()
 
-	// Save to database (ignore errors, will retry on next request)
+	// Save to database (ignore errors, will retry on next request). Fallback
+	// settings are never written over stored ones.
+	if !m.settingsLoaded.Load() {
+		return newSalt
+	}
 	if err := m.saveSalt(newSalt); err != nil {
 		m.ctx.Logger.Warn("failed to save rotated salt", "error", err)
 	} else {

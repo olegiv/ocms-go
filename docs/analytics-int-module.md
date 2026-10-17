@@ -51,12 +51,14 @@ do not see those forms, and their requests get `403 Forbidden`.
 |---------|---------|-------------|
 | Enabled | on | Toggle tracking on/off |
 | Show post statistics | on | Display view/read counts on public post pages |
-| Retention days | 365 | How long raw views/reads are kept before aggregation prunes them |
+| Retention days | 365 | How long aggregated statistics are kept (raw views are pruned after 7 days) |
 | Excluded paths | — | URL prefixes to skip (one per line) |
 | Excluded IPs | — | IPs or CIDRs to exclude globally (one per line) |
 | Salt rotation (h) | 24 | How often the visitor-hash salt rotates |
 
 IPs in `excluded_ips` are silently dropped before any data is written — useful for internal pen-testing and monitoring traffic.
+
+If the stored settings cannot be read at startup (a database error), the module logs an error and runs on fallback values with tracking off. It writes nothing in that state: expiry cleanup and salt saves are skipped, and the settings form refuses to save. The hourly aggregation job retries the load, and tracking follows the stored settings again once it succeeds.
 
 ### Self-referral filtering
 

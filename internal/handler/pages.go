@@ -576,7 +576,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.validatePageSlugCreate(r.Context(), input.Slug); errMsg != "" {
 		validationErrors["slug"] = errMsg
 	}
-	if errMsg := h.validatePageAliases(r.Context(), r.Form["aliases[]"]); errMsg != "" {
+	if errMsg := h.validatePageAliases(r.Context(), r.Form["aliases[]"], 0); errMsg != "" {
 		validationErrors["aliases"] = errMsg
 	}
 
@@ -859,7 +859,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if slugErr := h.validatePageSlugUpdate(r.Context(), input.Slug, existingPage.Slug, id); slugErr != "" {
 		validationErrors["slug"] = slugErr
 	}
-	if errMsg := h.validatePageAliases(r.Context(), r.Form["aliases[]"]); errMsg != "" {
+	if errMsg := h.validatePageAliases(r.Context(), r.Form["aliases[]"], id); errMsg != "" {
 		validationErrors["aliases"] = errMsg
 	}
 
@@ -1801,15 +1801,15 @@ func (h *PagesHandler) writePageGuarded(
 //
 // chi matches an exact application route such as /login or /account before
 // the page catch-all, so a page or single-segment alias at that URL is never
-// served (util.IsReservedPageSlug). The language middleware strips a leading
-// segment that matches an active language code before the frontend router
-// runs, so a path starting with one is swallowed by the language homepage.
-// Slug uniqueness is checked only against pages and aliases and would let
-// both through silently, so the namespaces are compared here. A multi-segment
-// alias is reserved only where a route answers it (util.ReservedRoutePath:
-// "forms/contact", anything under "uploads/"); other paths below a route's
-// first segment ("blog/post/55") reach the page through the not-found alias
-// lookup.
+// served (util.IsReservedPageSlug). The language middleware treats a leading
+// segment that matches an active language code as a prefix: the bare code
+// serves the language homepage, and a longer path such as "eng/team" is
+// routed without it, so the page is never reached. Slug uniqueness is checked
+// only against pages and aliases and would let both through silently, so the
+// namespaces are compared here. A multi-segment alias is reserved only where a
+// route answers it (util.ReservedRoutePath: "blog/tag/news", anything below
+// "uploads/"); other paths ("blog/post/55", or "tag/news" while no such tag
+// exists) reach the page through the not-found alias lookup.
 //
 // Exported because every path that writes a page slug owes callers the same
 // answer: the admin form, the v2 API, and anything added later. A path that
@@ -1821,6 +1821,7 @@ func PageRouteConflict(ctx context.Context, queries *store.Queries, path string)
 	}
 	if pattern := util.ReservedRoutePath(path); pattern != "" {
 		if prefix, ok := strings.CutSuffix(pattern, "/**"); ok {
+			prefix = strings.TrimSuffix(prefix, "/*")
 			return fmt.Sprintf("Conflicts with the application routes under /%s/", prefix), nil
 		}
 		return fmt.Sprintf("Conflicts with the application route /%s", pattern), nil
@@ -1850,10 +1851,13 @@ func (h *PagesHandler) pageRouteConflict(ctx context.Context, path string) strin
 }
 
 // validatePageAliases returns the form error for the first submitted alias
-// that is malformed or that an application route or active language would
-// answer instead of the page, or "" when every alias can be stored. It runs
-// before any write, so an update never clears aliases it cannot save again.
-func (h *PagesHandler) validatePageAliases(ctx context.Context, aliases []string) string {
+// that is malformed, listed twice, already used by another page (as its slug
+// or an alias) or answered by an application route or active language instead
+// of the page, or "" when every alias can be stored. pageID is the page being
+// edited, or 0 for a new one. It runs before any write, so an update never
+// clears aliases it cannot save again.
+func (h *PagesHandler) validatePageAliases(ctx context.Context, aliases []string, pageID int64) string {
+	seen := make(map[string]bool, len(aliases))
 	for _, alias := range aliases {
 		alias = strings.TrimSpace(alias)
 		if alias == "" {
@@ -1862,8 +1866,22 @@ func (h *PagesHandler) validatePageAliases(ctx context.Context, aliases []string
 		if !util.IsValidAlias(alias) {
 			return fmt.Sprintf("Alias /%s: use lowercase letters, numbers and hyphens, with / between segments", alias)
 		}
+		if seen[alias] {
+			return fmt.Sprintf("Alias /%s is listed twice", alias)
+		}
+		seen[alias] = true
 		if conflict := h.pageRouteConflict(ctx, alias); conflict != "" {
 			return fmt.Sprintf("Alias /%s: %s", alias, conflict)
+		}
+		taken, err := h.queries.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{
+			Slug: alias, ID: pageID, Alias: alias, PageID: pageID,
+		})
+		if err != nil {
+			slog.Error("database error checking page alias", "error", err, "alias", alias, "page_id", pageID)
+			return "Error checking for alias conflicts"
+		}
+		if taken != 0 {
+			return fmt.Sprintf("Alias /%s is already used by another page", alias)
 		}
 	}
 	return ""
@@ -2021,10 +2039,11 @@ func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasS
 		// An alias is matched against the path the language middleware has
 		// already stripped, so one beginning with an active language code —
 		// "eng" or "eng/team" — is dead on arrival, and so is an alias that an
-		// application route answers, such as "login" or "uploads/a.pdf".
+		// application route answers, such as "login" or "uploads/2016/report".
 		// validatePageAliases has already refused these on the form; this
-		// keeps other callers honest. A failed lookup keeps the alias, because
-		// an update has already cleared the old ones.
+		// catches a language activated between that check and the save. A
+		// failed lookup keeps the alias, because an update has already cleared
+		// the old ones.
 		conflict, err := PageRouteConflict(ctx, h.queries, alias)
 		if err != nil {
 			slog.Error("database error re-checking page alias; keeping it",

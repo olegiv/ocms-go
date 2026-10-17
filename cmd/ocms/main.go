@@ -888,10 +888,10 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 		return
 	}
 
-	// Security headers for static files
+	// Security headers for static files. Cache-Control is set only when a
+	// file is served, so a 404 during a deploy is not cached for a month.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	w.Header().Set("Cache-Control", "public, max-age=2592000")
 
 	// Strip the prefix to get the requested file path
 	reqPath := r.URL.Path
@@ -916,23 +916,7 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 
 	// Handle embedded vs external themes
 	if thm.IsEmbedded && thm.EmbeddedFS != nil {
-		// Serve from embedded filesystem
-		embeddedPath := "static/" + cleanPath
-		info, err := fs.Stat(thm.EmbeddedFS, embeddedPath)
-		if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) {
-			return
-		}
-		data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
-		if err != nil {
-			themeStaticFileServable(w, r, nil, err, themeName, cleanPath)
-			return
-		}
-
-		// Set content type based on file extension
-		contentType := handler.ContentTypeByExtension(cleanPath)
-		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
-		_, _ = w.Write(data)
+		serveEmbeddedThemeFile(w, r, thm.EmbeddedFS, themeName, cleanPath)
 		return
 	}
 
@@ -953,20 +937,51 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 		return
 	}
 
-	info, err := os.Stat(absFilePath)
+	// Open the file before answering, so a file the server cannot read is a
+	// logged 500 rather than a silent 403 from the file server.
+	file, err := os.Open(absFilePath) // #nosec G304 -- contained in the theme's static directory above
+	if err != nil {
+		themeStaticFileServable(w, r, nil, err, themeName, cleanPath)
+		return
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
 	if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) {
 		return
 	}
-	http.ServeFile(w, r, absFilePath)
+	w.Header().Set("Cache-Control", themeStaticCacheControl)
+	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+}
+
+// themeStaticCacheControl is the Cache-Control header of a served theme file.
+const themeStaticCacheControl = "public, max-age=2592000"
+
+// serveEmbeddedThemeFile serves static/<file> from an embedded theme's file
+// system; themeStaticFileServable answers anything that cannot be served.
+func serveEmbeddedThemeFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, themeName, file string) {
+	embeddedPath := "static/" + file
+	info, err := fs.Stat(fsys, embeddedPath)
+	if !themeStaticFileServable(w, r, info, err, themeName, file) {
+		return
+	}
+	data, err := fs.ReadFile(fsys, embeddedPath)
+	if err != nil {
+		themeStaticFileServable(w, r, nil, err, themeName, file)
+		return
+	}
+	w.Header().Set("Cache-Control", themeStaticCacheControl)
+	w.Header().Set("Content-Type", handler.ContentTypeByExtension(file))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	_, _ = w.Write(data)
 }
 
 // themeStaticFileServable reports whether a theme static file whose lookup
 // returned info and err can be served, and answers the request when it
-// cannot. A missing file, a directory (http.ServeFile would list it) or a
-// path the file system refuses (invalid UTF-8, a NUL byte, an overlong name)
-// is a 404: anyone can request those. Any other error, such as a permission
-// problem on the theme directory, is logged and answered with an uncached
-// 500, so a broken deployment is not mistaken for a missing asset.
+// cannot. A missing file, a directory or a path the file system refuses
+// (invalid UTF-8, a NUL byte, an overlong name) is a 404: anyone can request
+// those. Any other error, such as a file or directory the server may not
+// read, is logged and answered with an uncached 500, so a broken deployment
+// is not mistaken for a missing asset.
 func themeStaticFileServable(w http.ResponseWriter, r *http.Request, info fs.FileInfo, err error, themeName, file string) bool {
 	switch {
 	case err == nil && !info.IsDir():
@@ -1440,8 +1455,8 @@ func openDatabase(dsn string) (*sql.DB, error) {
 }
 
 // seedDatabase applies the opt-in seed data and the OCMS_SITE_URL override
-// and rotates the demo and default admin passwords. It returns the demo admin
-// password for this startup, or "" when there is no demo admin.
+// and, in demo mode, rotates the demo and default admin passwords. It returns
+// the demo admin password for this startup, or "" when there is none.
 func seedDatabase(ctx context.Context, cfg *config.Config, db *sql.DB) (string, error) {
 	if err := store.Seed(ctx, db, cfg.DoSeed); err != nil {
 		return "", fmt.Errorf("seeding database: %w", err)
@@ -1564,7 +1579,7 @@ func run() error {
 	}(db)
 
 	// Upgrade logger to also write WARN and ERROR logs to the Event Log database.
-	// The handler chain is: ErrorFileHandler (optional) → EventLogHandler → stdout.
+	// The handler chain is: EventLogHandler → ErrorFileHandler (optional) → stdout.
 	upgradedStdout := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
 	eventLogHandler := logging.NewEventLogHandler(withErrorLog(upgradedStdout, errorLogFile), db)
 	logger = slog.New(eventLogHandler)

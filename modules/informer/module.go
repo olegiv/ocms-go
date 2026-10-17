@@ -34,9 +34,29 @@ type Module struct {
 	module.BaseModule
 	ctx      *module.Context
 	settings *Settings
+	// settingsMu guards settings: frontend pages read them on every request while
+	// the settings form and ReloadSettings replace them. Settings values are
+	// replaced, never modified, so a reader may keep using the pointer it
+	// got. TestSettingsAccessHoldsTheLock checks that every access to the
+	// field takes the lock.
+	settingsMu sync.RWMutex
 
 	demoPasswordMu sync.RWMutex
 	demoPassword   string
+}
+
+// currentSettings returns the settings in effect, or nil before Init.
+func (m *Module) currentSettings() *Settings {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.settings
+}
+
+// storeSettings replaces the settings in effect.
+func (m *Module) storeSettings(settings *Settings) {
+	m.settingsMu.Lock()
+	m.settings = settings
+	m.settingsMu.Unlock()
 }
 
 // New creates a new instance of the informer module.
@@ -59,7 +79,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		ctx.Logger.Warn("failed to load informer settings, using defaults", "error", err)
 		settings = defaultSettings()
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 
 	m.ctx.Logger.Info("Informer module initialized",
 		"enabled", settings.Enabled,
@@ -78,7 +98,7 @@ func (m *Module) ReloadSettings() error {
 	if err != nil {
 		return fmt.Errorf("reloading informer settings: %w", err)
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 	return nil
 }
 
@@ -218,13 +238,14 @@ func (m *Module) Migrations() []module.Migration {
 // SECURITY: The informer text is sanitized with bluemonday UGC policy before
 // rendering as HTML. Style/script-adjacent values remain escaped.
 func (m *Module) renderBar(nonce string) template.HTML {
-	if m.settings == nil || !m.settings.Enabled || m.settings.Text == "" {
+	settings := m.currentSettings()
+	if settings == nil || !settings.Enabled || settings.Text == "" {
 		return ""
 	}
 
-	bgColor := html.EscapeString(m.settings.BgColor)
-	textColor := html.EscapeString(m.settings.TextColor)
-	text := security.SanitizePageHTML(m.settings.Text)
+	bgColor := html.EscapeString(settings.BgColor)
+	textColor := html.EscapeString(settings.TextColor)
+	text := security.SanitizePageHTML(settings.Text)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor)
@@ -249,7 +270,7 @@ func (m *Module) renderBar(nonce string) template.HTML {
 </style>`)
 
 	// JavaScript for cookie-based dismissal (version-aware: resets on settings change)
-	version := html.EscapeString(m.settings.Version)
+	version := html.EscapeString(settings.Version)
 	fmt.Fprintf(&b, `<script>
 (function(){
 var cn="%s",ver="%s";

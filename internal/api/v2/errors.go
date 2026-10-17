@@ -4,6 +4,7 @@
 package v2
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -104,20 +105,25 @@ func (e *statusError) MarshalJSON() ([]byte, error) {
 // ToHuma translates any error into a huma.StatusError with the project's
 // ErrorBody envelope. Domain errors preserve their kind/fields; anything else
 // becomes a 500 with a generic message so internals don't leak. Internal
-// errors are logged here with their cause, because the response carries
-// neither.
+// errors are logged here with their cause, because the response carries only
+// a generic or curated message, never the cause. A cancelled or timed-out
+// request is logged as a warning: the client went away, nothing failed.
 func ToHuma(err error) error {
 	if err == nil {
 		return nil
 	}
+	level := slog.LevelError
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		level = slog.LevelWarn
+	}
 	var de *Error
 	if errors.As(err, &de) {
 		if de.Kind == ErrInternal {
-			slog.Error("v2 internal error", "error", de.Msg, "cause", de.Wrap)
+			slog.Log(context.Background(), level, "v2 internal error", "error", de.Msg, "cause", de.Wrap)
 		}
 		return domainToStatusError(de)
 	}
-	slog.Error("v2 unexpected error", "error", err)
+	slog.Log(context.Background(), level, "v2 unexpected error", "error", err)
 	return &statusError{
 		status: http.StatusInternalServerError,
 		body:   ErrorBody{Error: ErrorDetail{Code: "internal_error", Message: "Internal server error"}},

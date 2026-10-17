@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   site theme. See `docs/login-security.md`.
 
 ### Fixed
+- `scripts/codex/commit-do.sh` removes the prepared message after committing,
+  so a later run can no longer commit other staged changes under it.
 - Editors now land at `/admin` after login. Public users land at `/account`;
   visiting `/login` with an existing session uses the same role-based destination.
   Resolves [#188](https://github.com/olegiv/ocms-go/issues/188).
@@ -24,15 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check as demo mode.
 - Internal Analytics settings are guarded by a lock, so saving them no longer
   races with the tracker. Saving settings and running aggregation are now
-  admin-only; editors keep the statistics pages.
+  admin-only; editors keep the statistics pages. If its settings cannot be read
+  at startup, Internal Analytics now runs with tracking off, skips expiry
+  cleanup, refuses settings saves and retries the load hourly; it used to
+  switch tracking on and save its defaults over the stored settings.
+- hCaptcha, Privacy and Informer settings are guarded by a lock too, so saving
+  or reloading them no longer races with the pages that render them.
 - Page slugs and single-segment aliases can no longer use the names whose
   exact URL a core route answers (`account`, `admin`, `blog`, `example`,
   `health`, `login`, `search`), since that route answers first. The admin form
   rejects them as slugs and aliases, the REST API as slugs, the Migrator
   suffixes them (`blog-2`), and content import rejects an archive containing
   one. The form also rejects multi-segment aliases that a route answers
-  (`forms/contact`, anything under `uploads/`) and names the alias instead of
-  dropping it on save. Existing pages stay editable while their slug is
+  (`blog/tag/news`, anything below `uploads/`), aliases another page already
+  uses and repeated aliases, and names the alias instead of dropping it on
+  save. Existing pages stay editable while their slug is
   unchanged, and other multi-segment aliases such as `blog/post/55` are
   unaffected. `account`, `csp-report` and the built-in
   module routes `analytics`, `embed` and `example` are now also reserved
@@ -41,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first-party analytics now share one list of private paths (`/admin`, `/api`,
   `/account`). Pages whose slug merely starts with `admin` are now tracked.
 - `/uploads`, `/static/dist` and custom theme static routes answer a directory
-  URL with 404 instead of a file listing.
+  URL with 404 instead of a file listing. A theme file the server cannot read
+  is now a logged 500, and a missing one is no longer cached for a month.
 - `X-XSS-Protection` is now `0`, which turns off the legacy browser XSS
   auditor; CSP remains the enforced protection. The reverse-proxy examples
   in `docs/reverse-proxy.md` match.

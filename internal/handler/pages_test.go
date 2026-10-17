@@ -985,7 +985,7 @@ func TestPageSlugCannotClaimApplicationRoute(t *testing.T) {
 			t.Errorf("validatePageSlugCreate(%q) accepted a slug an application route shadows", slug)
 		}
 	}
-	for _, slug := range []string{"accounting", "forms", "analytics", "language"} {
+	for _, slug := range []string{"accounting", "forms", "analytics", "language", "uploads", "static", "themes", "api"} {
 		if got := h.validatePageSlugCreate(ctx, slug); got != "" {
 			t.Errorf("validatePageSlugCreate(%q) = %q, want a slug no exact route answers to be free", slug, got)
 		}
@@ -1004,7 +1004,7 @@ func TestPageSlugCannotClaimApplicationRoute(t *testing.T) {
 		t.Error("validatePageSlugUpdate() accepted a rename onto /login")
 	}
 
-	h.savePageAliases(ctx, legacy.ID, []string{"login", "account/settings", "about/team", "blog/post/55", "forms/contact", "uploads/2016/report"})
+	h.savePageAliases(ctx, legacy.ID, []string{"login", "account/settings", "about/team", "blog/post/55", "forms/contact", "blog/tag/news", "uploads/2016/report"})
 	aliases, err := queries.GetAliasesForPage(ctx, legacy.ID)
 	if err != nil {
 		t.Fatalf("GetAliasesForPage failed: %v", err)
@@ -1014,8 +1014,8 @@ func TestPageSlugCannotClaimApplicationRoute(t *testing.T) {
 		stored = append(stored, alias.Alias)
 	}
 	slices.Sort(stored)
-	if want := []string{"about/team", "account/settings", "blog/post/55"}; !slices.Equal(stored, want) {
-		t.Errorf("stored aliases = %v, want %v (/login, /forms/{slug} and /uploads/* answer the others)", stored, want)
+	if want := []string{"about/team", "account/settings", "blog/post/55", "forms/contact"}; !slices.Equal(stored, want) {
+		t.Errorf("stored aliases = %v, want %v (/login, /blog/tag/{slug} and /uploads/* answer the others; a missing form falls back to aliases)", stored, want)
 	}
 }
 
@@ -1029,16 +1029,16 @@ func TestValidatePageAliases(t *testing.T) {
 	ctx := context.Background()
 	h := NewPagesHandler(db, nil, sm)
 
-	if got := h.validatePageAliases(ctx, []string{"about/team", "  ", "blog/post/55", "account/settings"}); got != "" {
+	if got := h.validatePageAliases(ctx, []string{"about/team", "  ", "blog/post/55", "account/settings"}, 0); got != "" {
 		t.Errorf("validatePageAliases() = %q for aliases no route answers", got)
 	}
 	for alias, want := range map[string]string{
 		"login":               "/login",
-		"forms/contact":       "/forms/*",
+		"blog/tag/news":       "/blog/tag/*",
 		"uploads/2016/report": "under /uploads/",
 		"Not An Alias":        "lowercase letters",
 	} {
-		got := h.validatePageAliases(ctx, []string{"about/team", alias})
+		got := h.validatePageAliases(ctx, []string{"about/team", alias}, 0)
 		if !strings.Contains(got, "/"+alias) || !strings.Contains(got, want) {
 			t.Errorf("validatePageAliases(%q) = %q, want it to name the alias and %q", alias, got, want)
 		}
@@ -1050,11 +1050,43 @@ func TestValidatePageAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreatePage failed: %v", err)
 	}
+	other, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Other", Slug: "other-page", Body: "Content", Status: "published", AuthorID: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+	for _, alias := range []struct {
+		pageID int64
+		path   string
+	}{{other.ID, "old/other"}, {page.ID, "old/team"}} {
+		if _, err := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{PageID: alias.pageID, Alias: alias.path, CreatedAt: time.Now()}); err != nil {
+			t.Fatalf("CreatePageAlias: %v", err)
+		}
+	}
+	// The unique index would reject these on save, after an update has
+	// already cleared the page's aliases.
+	for name, tc := range map[string]struct {
+		aliases []string
+		pageID  int64
+		want    string
+	}{
+		"another page's alias": {[]string{"old/other"}, page.ID, "already used by another page"},
+		"another page's slug":  {[]string{"other-page/x", "other-page"}, page.ID, "already used by another page"},
+		"listed twice":         {[]string{"new/path", "new/path"}, page.ID, "listed twice"},
+		"own alias kept":       {[]string{"old/team"}, page.ID, ""},
+		"own alias, new page":  {[]string{"old/team"}, 0, "already used by another page"},
+	} {
+		got := h.validatePageAliases(ctx, tc.aliases, tc.pageID)
+		if (tc.want == "") != (got == "") || !strings.Contains(got, tc.want) {
+			t.Errorf("%s: validatePageAliases(%v) = %q, want %q", name, tc.aliases, got, tc.want)
+		}
+	}
 	// "about" could be a language code, so checking it reads the languages table.
 	if _, err := db.ExecContext(ctx, "DROP TABLE languages"); err != nil {
 		t.Fatalf("dropping languages: %v", err)
 	}
-	if got := h.validatePageAliases(ctx, []string{"about/team"}); !strings.Contains(got, "Error checking") {
+	if got := h.validatePageAliases(ctx, []string{"about/team"}, page.ID); !strings.Contains(got, "Error checking") {
 		t.Errorf("validatePageAliases() = %q on a failed lookup, want the error on the form", got)
 	}
 	h.savePageAliases(ctx, page.ID, []string{"about/team"})
@@ -1062,7 +1094,7 @@ func TestValidatePageAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAliasesForPage failed: %v", err)
 	}
-	if len(aliases) != 1 || aliases[0].Alias != "about/team" {
+	if !slices.ContainsFunc(aliases, func(a store.PageAlias) bool { return a.Alias == "about/team" }) {
 		t.Errorf("aliases after a failed lookup = %v, want about/team kept", aliases)
 	}
 }

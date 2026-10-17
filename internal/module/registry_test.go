@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/testutil"
 
@@ -1082,6 +1083,42 @@ func TestActiveCSPSources(t *testing.T) {
 }
 
 // panickingCSPModule is a mockModule whose CSPSources panics.
+// reentrantCSPModule calls a registry method that takes the write lock from
+// CSPSources, as a module that checks or changes its own status might.
+type reentrantCSPModule struct {
+	*mockModule
+	registry *Registry
+}
+
+func (m reentrantCSPModule) CSPSources() map[string][]string {
+	_ = m.registry.Register(newMockModule("late", "1.0.0"))
+	return map[string][]string{"script-src": {"https://reentrant.example"}}
+}
+
+// TestActiveCSPSourcesCallsModulesOutsideTheLock fails when ActiveCSPSources
+// calls a module's CSPSources while holding the registry lock. A module that
+// calls back into the registry would then deadlock, and since the security
+// headers middleware runs this on every response, every request would hang.
+//
+// Bug state: call r.moduleCSPSources inside the r.mu.RLock section of
+// ActiveCSPSources and this times out.
+func TestActiveCSPSourcesCallsModulesOutsideTheLock(t *testing.T) {
+	r := NewRegistry(testutil.TestLoggerSilent())
+	if err := r.Register(reentrantCSPModule{newMockModule("reentrant", "1.0.0"), r}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan map[string][]string, 1)
+	go func() { done <- r.ActiveCSPSources() }()
+	select {
+	case got := <-done:
+		if want := []string{"https://reentrant.example"}; !reflect.DeepEqual(got["script-src"], want) {
+			t.Errorf("script-src = %v, want %v", got["script-src"], want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ActiveCSPSources deadlocked: it called CSPSources under the registry lock")
+	}
+}
+
 type panickingCSPModule struct{ *mockModule }
 
 func (panickingCSPModule) CSPSources() map[string][]string { panic("broken module") }

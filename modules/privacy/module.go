@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 
@@ -24,6 +25,26 @@ type Module struct {
 	module.BaseModule
 	ctx      *module.Context
 	settings *Settings
+	// settingsMu guards settings: the consent banner scripts and footer link read them on every request while
+	// the settings form and ReloadSettings replace them. Settings values are
+	// replaced, never modified, so a reader may keep using the pointer it
+	// got. TestSettingsAccessHoldsTheLock checks that every access to the
+	// field takes the lock.
+	settingsMu sync.RWMutex
+}
+
+// currentSettings returns the settings in effect, or nil before Init.
+func (m *Module) currentSettings() *Settings {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.settings
+}
+
+// storeSettings replaces the settings in effect.
+func (m *Module) storeSettings(settings *Settings) {
+	m.settingsMu.Lock()
+	m.settings = settings
+	m.settingsMu.Unlock()
 }
 
 // New creates a new instance of the privacy module.
@@ -47,7 +68,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		ctx.Logger.Warn("failed to load privacy settings, using defaults", "error", err)
 		settings = &Settings{}
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 
 	m.ctx.Logger.Info("Privacy module initialized",
 		"enabled", settings.Enabled,
@@ -233,11 +254,12 @@ func (m *Module) ReloadSettings() error {
 	if err != nil {
 		return err
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 	return nil
 }
 
 // IsEnabled returns whether privacy consent is enabled.
 func (m *Module) IsEnabled() bool {
-	return m.settings != nil && m.settings.Enabled
+	settings := m.currentSettings()
+	return settings != nil && settings.Enabled
 }

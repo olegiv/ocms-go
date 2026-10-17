@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"embed"
 	"html/template"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 
@@ -37,6 +38,26 @@ type Module struct {
 	module.BaseModule
 	ctx      *module.Context
 	settings *Settings
+	// settingsMu guards settings: the login and form pages read them on every request while
+	// the settings form and ReloadSettings replace them. Settings values are
+	// replaced, never modified, so a reader may keep using the pointer it
+	// got. TestSettingsAccessHoldsTheLock checks that every access to the
+	// field takes the lock.
+	settingsMu sync.RWMutex
+}
+
+// currentSettings returns the settings in effect, or nil before Init.
+func (m *Module) currentSettings() *Settings {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.settings
+}
+
+// storeSettings replaces the settings in effect.
+func (m *Module) storeSettings(settings *Settings) {
+	m.settingsMu.Lock()
+	m.settings = settings
+	m.settingsMu.Unlock()
 }
 
 // New creates a new instance of the hCaptcha module.
@@ -74,7 +95,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		settings.Enabled = false
 	}
 
-	m.settings = settings
+	m.storeSettings(settings)
 
 	// Register hooks for login form integration
 	m.registerHooks()
@@ -278,19 +299,25 @@ func (m *Module) ReloadSettings() error {
 		settings.Enabled = false
 	}
 
-	m.settings = settings
+	m.storeSettings(settings)
 	return nil
 }
 
 // IsEnabled returns whether hCaptcha protection is enabled and configured.
 func (m *Module) IsEnabled() bool {
-	return m.settings != nil && m.settings.Enabled && m.settings.SiteKey != "" && m.settings.SecretKey != ""
+	return settingsEnabled(m.currentSettings())
+}
+
+// settingsEnabled reports whether settings turn protection on with both keys set.
+func settingsEnabled(settings *Settings) bool {
+	return settings != nil && settings.Enabled && settings.SiteKey != "" && settings.SecretKey != ""
 }
 
 // GetSettings returns a copy of the current settings (for use by other packages).
 func (m *Module) GetSettings() Settings {
-	if m.settings == nil {
+	settings := m.currentSettings()
+	if settings == nil {
 		return Settings{}
 	}
-	return *m.settings
+	return *settings
 }

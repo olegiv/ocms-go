@@ -40,7 +40,8 @@ type VerifyResponse struct {
 
 // Verify checks the hCaptcha response token with the hCaptcha API.
 func (m *Module) Verify(response, remoteIP string) (*VerifyResponse, error) {
-	if !m.IsEnabled() {
+	settings := m.currentSettings()
+	if !settingsEnabled(settings) {
 		// If not enabled, skip verification
 		return &VerifyResponse{Success: true}, nil
 	}
@@ -51,7 +52,7 @@ func (m *Module) Verify(response, remoteIP string) (*VerifyResponse, error) {
 
 	// Prepare form data
 	data := url.Values{}
-	data.Set("secret", m.settings.SecretKey)
+	data.Set("secret", settings.SecretKey)
 	data.Set("response", response)
 	if remoteIP != "" {
 		data.Set("remoteip", remoteIP)

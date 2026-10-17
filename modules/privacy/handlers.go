@@ -16,30 +16,31 @@ import (
 
 // handleDashboard handles GET /admin/privacy - shows the privacy settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	current := m.currentSettings()
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Serialize services to JSON
 	servicesJSON := "[]"
-	if len(m.settings.Services) > 0 {
-		if data, err := json.Marshal(m.settings.Services); err == nil {
+	if len(current.Services) > 0 {
+		if data, err := json.Marshal(current.Services); err == nil {
 			servicesJSON = string(data)
 		}
 	}
 
 	viewData := PrivacyViewData{
-		Enabled:                     m.settings.Enabled,
-		Debug:                       m.settings.Debug,
-		PrivacyPolicyURL:            m.settings.PrivacyPolicyURL,
-		CookieName:                  m.settings.CookieName,
-		CookieExpiresDays:           m.settings.CookieExpiresDays,
-		Theme:                       m.settings.Theme,
-		Position:                    m.settings.Position,
-		GCMEnabled:                  m.settings.GCMEnabled,
-		GCMDefaultAnalytics:         m.settings.GCMDefaultAnalytics,
-		GCMDefaultAdStorage:         m.settings.GCMDefaultAdStorage,
-		GCMDefaultAdUserData:        m.settings.GCMDefaultAdUserData,
-		GCMDefaultAdPersonalization: m.settings.GCMDefaultAdPersonalization,
-		GCMWaitForUpdate:            m.settings.GCMWaitForUpdate,
+		Enabled:                     current.Enabled,
+		Debug:                       current.Debug,
+		PrivacyPolicyURL:            current.PrivacyPolicyURL,
+		CookieName:                  current.CookieName,
+		CookieExpiresDays:           current.CookieExpiresDays,
+		Theme:                       current.Theme,
+		Position:                    current.Position,
+		GCMEnabled:                  current.GCMEnabled,
+		GCMDefaultAnalytics:         current.GCMDefaultAnalytics,
+		GCMDefaultAdStorage:         current.GCMDefaultAdStorage,
+		GCMDefaultAdUserData:        current.GCMDefaultAdUserData,
+		GCMDefaultAdPersonalization: current.GCMDefaultAdPersonalization,
+		GCMWaitForUpdate:            current.GCMWaitForUpdate,
 		ServicesJSON:                servicesJSON,
 		PredefinedServices:          PredefinedServices,
 	}
@@ -135,7 +136,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update in-memory settings
-	m.settings = newSettings
+	m.storeSettings(newSettings)
 
 	m.ctx.Logger.Info("Privacy settings updated",
 		"user", user.Email,

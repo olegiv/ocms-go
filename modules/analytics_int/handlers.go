@@ -234,6 +234,15 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The form shows fallback values while the stored settings cannot be
+	// read; saving them would replace the administrator's settings.
+	if !m.ensureSettingsLoaded() {
+		m.ctx.Logger.Error("refusing to save analytics_int settings: the stored settings cannot be read")
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_save"), "error")
+		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
+		return
+	}
+
 	// Update and save settings
 	err := m.updateSettings(func(settings *Settings) {
 		settings.Enabled = r.FormValue("enabled") == "1"

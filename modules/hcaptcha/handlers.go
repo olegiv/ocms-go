@@ -14,16 +14,17 @@ import (
 
 // handleDashboard handles GET /admin/hcaptcha - shows the hCaptcha settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	current := m.currentSettings()
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	displaySettings := HCaptchaViewData{
-		Enabled:       m.settings.Enabled,
+		Enabled:       current.Enabled,
 		EnvDisabled:   m.ctx.Config.HCaptchaDisabled,
-		SiteKey:       m.settings.SiteKey,
-		SecretKey:     m.settings.SecretKey,
-		SecretKeyMask: maskSecretKey(m.settings.SecretKey),
-		Theme:         m.settings.Theme,
-		Size:          m.settings.Size,
+		SiteKey:       current.SiteKey,
+		SecretKey:     current.SecretKey,
+		SecretKeyMask: maskSecretKey(current.SecretKey),
+		Theme:         current.Theme,
+		Size:          current.Size,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "hcaptcha.title"), []render.Breadcrumb{
@@ -69,7 +70,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	// Handle secret key - if unchanged placeholder, keep old value
 	secretKey := strings.TrimSpace(r.FormValue("secret_key"))
 	if secretKey == "" || isPlaceholder(secretKey) {
-		newSettings.SecretKey = m.settings.SecretKey
+		newSettings.SecretKey = m.currentSettings().SecretKey
 	} else {
 		newSettings.SecretKey = secretKey
 	}
@@ -119,7 +120,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	if m.ctx.Config.HCaptchaDisabled {
 		newSettings.Enabled = false
 	}
-	m.settings = newSettings
+	m.storeSettings(newSettings)
 
 	m.ctx.Logger.Info("hCaptcha settings updated",
 		"user", user.Email,

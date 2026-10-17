@@ -107,7 +107,7 @@ rejects them as slugs and aliases, the REST API as slugs, the Migrator suffixes
 them (`blog-2`), and content import rejects an archive that contains one. The
 other reserved names own only deeper paths (`/forms/contact`) or other
 methods, so pages may use them. The admin form also rejects a multi-segment
-alias that a route answers, such as `forms/contact` or anything under
+alias that a route answers, such as `blog/tag/news` or anything below
 `uploads/`; other multi-segment aliases such as `blog/post/55` keep working. An existing page
 already stored at a reserved slug stays editable as long as its slug is
 unchanged.

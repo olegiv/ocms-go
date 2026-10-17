@@ -144,30 +144,32 @@ func ReservedPageSlugs() []string {
 }
 
 // reservedRoutePaths are the multi-segment paths that application and
-// built-in module routes answer on GET. A "*" segment stands for one route
-// parameter, and a trailing "/**" means the route answers the prefix and
-// everything below it. A page alias matching one is answered by the route
-// and never reaches the alias lookup. TestRoutePathsReserveAliases (cmd/ocms)
-// keeps the list equal to the router's registrations.
+// built-in module routes answer on GET without falling back to the page alias
+// lookup. A "*" segment stands for one path segment and a trailing "/**" for
+// zero or more further segments: "admin/**" covers /admin and everything below
+// it (a mounted router), while "uploads/*/**" covers only paths below
+// /uploads, because chi's /uploads/* does not answer /uploads itself.
+// Parameter routes whose handlers resolve page aliases on a miss (/page/{id},
+// /category/{slug}, /tag/{slug}, /forms/{slug}) are left out: an alias there
+// works while no such page, term or form exists. A page alias matching an
+// entry is answered by the route and never reaches the alias lookup.
+// TestRoutePathsReserveAliases (cmd/ocms) keeps the list equal to the
+// router's registrations.
 var reservedRoutePaths = []string{
 	"admin/**",
 	"api/informer/demo-credentials",
 	"api/mcp",
 	"api/v2/**",
 	"blog/tag/*",
-	"category/*",
 	"embed/dify/messages/*/suggested",
 	"embed/dify/token",
-	"forms/*",
 	"health/live",
 	"health/ready",
-	"page/*",
 	"session/get",
 	"session/set",
-	"static/dist/**",
-	"tag/*",
-	"themes/*/static/**",
-	"uploads/**",
+	"static/dist/*/**",
+	"themes/*/static/*/**",
+	"uploads/*/**",
 }
 
 // ReservedRoutePath returns the reserved route path that a slash-separated

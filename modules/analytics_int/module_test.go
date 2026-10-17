@@ -6,10 +6,17 @@ package analytics_int
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/geoip"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
@@ -145,6 +152,97 @@ func TestModuleInit(t *testing.T) {
 	// Verify salt is generated
 	if m.settings.CurrentSalt == "" {
 		t.Error("CurrentSalt should be generated after Init")
+	}
+}
+
+// TestInitKeepsStoredSettingsWhenLoadFails checks that a settings load error
+// at startup leaves tracking off and the stored row untouched. The fallback
+// used to enable tracking and save its defaults with a fresh salt, so one
+// failed read switched tracking back on for good.
+func TestInitKeepsStoredSettingsWhenLoadFails(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	m := New()
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	// Tracking off, with a timestamp that cannot be scanned, so loading fails.
+	if _, err := db.Exec(`UPDATE page_analytics_settings
+		SET enabled = 0, retention_days = 30, current_salt = '', salt_created_at = 'not a time'
+		WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	ctx, _ := moduleutil.TestModuleContextWithStore(t, db)
+	m.ctx = ctx
+	if _, err := m.loadSettings(); err == nil {
+		t.Fatal("loadSettings accepted a malformed timestamp; the test no longer exercises a failed load")
+	}
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	defer func() { _ = m.Shutdown() }()
+
+	if m.IsEnabled() {
+		t.Error("tracking is on after the settings failed to load")
+	}
+	var enabled, retention int
+	var salt, created string
+	if err := db.QueryRow(`SELECT enabled, retention_days, current_salt, salt_created_at
+		FROM page_analytics_settings WHERE id = 1`).Scan(&enabled, &retention, &salt, &created); err != nil {
+		t.Fatal(err)
+	}
+	if enabled != 0 || retention != 30 || salt != "" || created != "not a time" {
+		t.Errorf("stored settings changed after a failed load: enabled=%d retention=%d salt=%q created=%q",
+			enabled, retention, salt, created)
+	}
+
+	// Nothing acts on the fallback values: expiry cleanup would delete this
+	// 400-day-old row by the fallback 365-day retention, and saving the form
+	// would write the fallback values over the stored row.
+	oldDate := time.Now().AddDate(0, 0, -400).Format(dateFormat)
+	if _, err := db.Exec(`INSERT INTO page_analytics_daily (date, path, views) VALUES (?, '/old', 1)`, oldDate); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.cleanupExpiredData(context.Background()); err != nil {
+		t.Fatalf("cleanupExpiredData: %v", err)
+	}
+	countDaily := func() int {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM page_analytics_daily WHERE path = '/old'`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if countDaily() != 1 {
+		t.Error("expiry cleanup ran on fallback settings")
+	}
+	admin := store.User{ID: 1, Email: "admin@test.com", Role: model.RoleAdmin}
+	form := url.Values{"enabled": {"1"}, "retention_days": {"365"}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/internal-analytics/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, admin))
+	m.handleSaveSettings(httptest.NewRecorder(), req)
+	if err := db.QueryRow(`SELECT enabled, retention_days FROM page_analytics_settings WHERE id = 1`).Scan(&enabled, &retention); err != nil {
+		t.Fatal(err)
+	}
+	if enabled != 0 || retention != 30 {
+		t.Errorf("the settings form saved over unread settings: enabled=%d retention=%d", enabled, retention)
+	}
+
+	// Once the row can be read, the hourly job picks the stored settings up
+	// and the stored 30-day retention applies.
+	if _, err := db.Exec(`UPDATE page_analytics_settings SET enabled = 1, salt_created_at = CURRENT_TIMESTAMP WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.aggregateHourly(context.Background()); err != nil {
+		t.Fatalf("aggregateHourly: %v", err)
+	}
+	if !m.IsEnabled() || m.settingsSnapshot().RetentionDays != 30 {
+		t.Errorf("after the retry: enabled=%v retention=%d, want the stored settings", m.IsEnabled(), m.settingsSnapshot().RetentionDays)
+	}
+	if err := m.cleanupExpiredData(context.Background()); err != nil {
+		t.Fatalf("cleanupExpiredData: %v", err)
+	}
+	if countDaily() != 0 {
+		t.Error("expiry cleanup did not apply the stored retention once the settings loaded")
 	}
 }
 

@@ -48,6 +48,7 @@ func (m *Module) loadSettings() (*Settings, error) {
 	var excludePaths []string
 	if excludePathsJSON != "" {
 		if err := json.Unmarshal([]byte(excludePathsJSON), &excludePaths); err != nil {
+			m.ctx.Logger.Warn("analytics_int exclude_paths is not valid JSON; no paths are excluded", "error", err)
 			excludePaths = []string{}
 		}
 	}
@@ -146,5 +147,22 @@ func (m *Module) ReloadSettings() error {
 		return err
 	}
 	m.storeSettings(settings)
+	m.settingsLoaded.Store(true)
 	return nil
+}
+
+// ensureSettingsLoaded reports whether the stored settings are in effect,
+// reloading them first if startup could not read them. Code that would act on
+// fallback values, such as deleting data past the retention period or saving
+// the settings form, runs only when it returns true.
+func (m *Module) ensureSettingsLoaded() bool {
+	if m.settingsLoaded.Load() {
+		return true
+	}
+	if err := m.ReloadSettings(); err != nil {
+		m.ctx.Logger.Warn("analytics_int settings still cannot be read", "error", err)
+		return false
+	}
+	m.ctx.Logger.Info("analytics_int settings loaded; tracking follows them again")
+	return true
 }

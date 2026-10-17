@@ -25,9 +25,8 @@ var validGCMConsentTypes = map[string]bool{
 	"security_storage":        true,
 }
 
-// buildKlaroConfig generates the Klaro configuration JavaScript.
-func (m *Module) buildKlaroConfig() string {
-	s := m.settings
+// buildKlaroConfig generates the Klaro configuration JavaScript from s.
+func (m *Module) buildKlaroConfig(s *Settings) string {
 	if s == nil {
 		return "var klaroConfig = {};"
 	}
@@ -125,7 +124,7 @@ func (m *Module) buildKlaroConfig() string {
 	// Services
 	config.WriteString("    services: [\n")
 	for i, svc := range s.Services {
-		config.WriteString(m.buildServiceConfig(svc))
+		config.WriteString(m.buildServiceConfig(svc, s.GCMEnabled))
 		if i < len(s.Services)-1 {
 			config.WriteString(",")
 		}
@@ -138,7 +137,7 @@ func (m *Module) buildKlaroConfig() string {
 }
 
 // buildServiceConfig generates the Klaro service configuration for a single service.
-func (m *Module) buildServiceConfig(svc Service) string {
+func (m *Module) buildServiceConfig(svc Service, gcmEnabled bool) string {
 	var config strings.Builder
 
 	config.WriteString("        {\n")
@@ -182,7 +181,7 @@ func (m *Module) buildServiceConfig(svc Service) string {
 	}
 
 	// Google Consent Mode callback
-	if svc.GCMConsentType != "" && m.settings.GCMEnabled {
+	if svc.GCMConsentType != "" && gcmEnabled {
 		config.WriteString(m.buildGCMCallback(svc.GCMConsentType))
 	}
 

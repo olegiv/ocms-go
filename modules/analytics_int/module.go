@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/robfig/cron/v3"
@@ -42,6 +43,12 @@ type Module struct {
 	// access takes the lock.
 	settingsMu sync.RWMutex
 
+	// settingsLoaded is false while the stored settings cannot be read. The
+	// module then runs on fallback values with tracking off, and nothing that
+	// would act on them runs (expiry cleanup, salt saves, settings saves)
+	// until ensureSettingsLoaded succeeds; the hourly job retries it.
+	settingsLoaded atomic.Bool
+
 	// bgWG tracks every goroutine the module starts, so Shutdown can wait for
 	// in-flight writes before the database and GeoIP reader close. bgCancel
 	// stops the startup catch-up while it is still waiting to run.
@@ -65,12 +72,17 @@ func New() *Module {
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 
-	// Load settings
+	// Load settings. If they cannot be read, run with tracking off and write
+	// nothing: the defaults would switch tracking on, and saving them with the
+	// new salt below would overwrite the administrator's stored settings. The
+	// hourly job retries the load (ensureSettingsLoaded).
 	settings, err := m.loadSettings()
-	if err != nil {
-		ctx.Logger.Warn("failed to load analytics_int settings, using defaults", "error", err)
+	loaded := err == nil
+	m.settingsLoaded.Store(loaded)
+	if !loaded {
+		ctx.Logger.Error("failed to load analytics_int settings; tracking is off until they load (retried hourly)", "error", err)
 		settings = &Settings{
-			Enabled:           true,
+			Enabled:           false,
 			RetentionDays:     365,
 			SaltRotationHours: 24,
 			ExcludePaths:      []string{},
@@ -81,7 +93,11 @@ func (m *Module) Init(ctx *module.Context) error {
 		if salt := generateRandomSalt(); salt != "" {
 			settings.CurrentSalt = salt
 			settings.SaltCreatedAt = timeNow()
-			_ = m.saveSettings(settings)
+			if loaded {
+				if err := m.saveSettings(settings); err != nil {
+					ctx.Logger.Warn("failed to save analytics_int salt", "error", err)
+				}
+			}
 		}
 	}
 	m.storeSettings(settings)

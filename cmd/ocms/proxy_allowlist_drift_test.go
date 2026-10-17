@@ -31,7 +31,8 @@ var codeRunningCommands = map[string]bool{
 // 2026-10-17 audit fixes).
 //
 // Bug state: change "Bash(go vet ./...)" in
-// scripts/codex/proxy-claude-command.sh to "Bash(go vet*)" and this names it.
+// scripts/codex/proxy-claude-command.sh to "Bash(go vet*)", or
+// "Bash(staticcheck ./...)" to "Bash(staticcheck*)", and this names it.
 func TestProxyRulesForCodeRunningToolsAreExact(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "scripts", "codex", "proxy-claude-command.sh"))
 	if err != nil {
@@ -40,7 +41,12 @@ func TestProxyRulesForCodeRunningToolsAreExact(t *testing.T) {
 	checked := 0
 	for _, match := range proxyBashRule.FindAllStringSubmatch(string(data), -1) {
 		rule := match[1]
-		command, _, _ := strings.Cut(rule, " ")
+		// The command name ends at the first space or wildcard, so
+		// "staticcheck*" is checked as staticcheck.
+		command := rule
+		if i := strings.IndexAny(rule, " *"); i >= 0 {
+			command = rule[:i]
+		}
 		if !codeRunningCommands[command] {
 			continue
 		}

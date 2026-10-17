@@ -179,9 +179,9 @@ func (m *Module) Init(ctx *module.Context) error {
 		"banned_count", len(m.bannedPatterns),
 		"autoban_paths", len(m.autoBanPaths),
 		"whitelisted", len(m.whitelistPatterns),
-		"ban_check_enabled", m.banCheckEnabled,
-		"autoban_enabled", m.autoBanEnabled,
-		"honeypot_autoban_enabled", m.honeypotAutoBanEnabled,
+		"ban_check_enabled", m.IsBanCheckEnabled(),
+		"autoban_enabled", m.IsAutoBanEnabled(),
+		"honeypot_autoban_enabled", m.IsHoneypotAutoBanEnabled(),
 		"geoip_enabled", m.geoIP.IsEnabled(),
 	)
 	return nil

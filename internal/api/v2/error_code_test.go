@@ -98,4 +98,10 @@ func TestToHumaLogsInternalErrors(t *testing.T) {
 	if buf.Len() != 0 {
 		t.Errorf("a not-found error was logged: %q", buf.String())
 	}
+	// A client that disconnects is not an error in the event log.
+	buf.Reset()
+	_ = apiv2.ToHuma(apiv2.NewInternalError("Error loading page", context.Canceled))
+	if !strings.Contains(buf.String(), "level=WARN") {
+		t.Errorf("a cancelled request was logged as %q, want a warning", buf.String())
+	}
 }

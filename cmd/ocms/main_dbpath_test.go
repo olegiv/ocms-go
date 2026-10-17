@@ -4,8 +4,10 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +59,10 @@ func TestOpenErrorLog(t *testing.T) {
 	if err := os.WriteFile(logPath, []byte("earlier\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// WriteFile's mode is filtered by the umask; set it outright.
+	if err := os.Chmod(logPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	file, err := openErrorLog(logPath)
 	if err != nil {
 		t.Fatalf("openErrorLog: %v", err)
@@ -71,5 +77,63 @@ func TestOpenErrorLog(t *testing.T) {
 	}
 	if _, err := openErrorLog(filepath.Join(t.TempDir(), "missing", "error.log")); err == nil {
 		t.Error("openErrorLog succeeded in a directory that does not exist")
+	}
+}
+
+// TestWithErrorLog checks that the error log receives ERROR records only,
+// while every record still reaches the base handler.
+func TestWithErrorLog(t *testing.T) {
+	t.Parallel()
+
+	file, err := openErrorLog(filepath.Join(t.TempDir(), "error.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeErrorLog(file)
+	var base strings.Builder
+	logger := slog.New(withErrorLog(slog.NewTextHandler(&base, nil), file))
+	logger.Info("routine startup")
+	logger.Error("disk full")
+
+	data, err := os.ReadFile(file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); !strings.Contains(got, "disk full") || strings.Contains(got, "routine startup") {
+		t.Errorf("error log = %q, want only the ERROR record", got)
+	}
+	if !strings.Contains(base.String(), "routine startup") || !strings.Contains(base.String(), "disk full") {
+		t.Errorf("base handler = %q, want both records", base.String())
+	}
+	if withErrorLog(slog.NewTextHandler(&base, nil), nil) == nil {
+		t.Error("withErrorLog without a file returned no handler")
+	}
+}
+
+// TestOpenDatabase checks that the database file ends up owner-only even
+// when it already existed with a wider mode, and that migrations ran.
+func TestOpenDatabase(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ocms.db")
+	if err := os.WriteFile(dbPath, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dbPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	db, err := openDatabase(dbPath)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("database mode = %v, want 0600", mode)
+	}
+	var pages int
+	if err := db.QueryRow("SELECT COUNT(*) FROM pages").Scan(&pages); err != nil {
+		t.Errorf("migrations did not run: %v", err)
 	}
 }

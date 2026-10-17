@@ -645,13 +645,17 @@ func TestIsPrivateRoutePath(t *testing.T) {
 
 func TestReservedRoutePath(t *testing.T) {
 	for path, want := range map[string]string{
-		"forms/contact":                      "forms/*",
-		"forms/contact/thanks":               "",
-		"forms":                              "",
+		"blog/tag/news":                      "blog/tag/*",
+		"blog/tag/news/more":                 "",
+		"forms/contact":                      "",
+		"page/about":                         "",
+		"tag/news":                           "",
 		"admin":                              "admin/**",
 		"admin/pages/7":                      "admin/**",
-		"uploads/2016/report.pdf":            "uploads/**",
-		"themes/default/static/css/site.css": "themes/*/static/**",
+		"uploads":                            "",
+		"uploads/2016/report.pdf":            "uploads/*/**",
+		"themes/default/static":              "",
+		"themes/default/static/css/site.css": "themes/*/static/*/**",
 		"themes/default/preview":             "",
 		"health/live":                        "health/live",
 		"health/live/now":                    "",
