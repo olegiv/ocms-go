@@ -44,8 +44,8 @@ type Service struct {
 }
 
 // NewService constructs a Pages service. Cache and events may be nil for tests.
-func NewService(db *sql.DB, queries *store.Queries, cache *cache.Manager, events *service.EventService, policy Policy) *Service {
-	return &Service{db: db, queries: queries, cache: cache, events: events, policy: policy}
+func NewService(db *sql.DB, queries *store.Queries, cacheManager *cache.Manager, events *service.EventService, policy Policy) *Service {
+	return &Service{db: db, queries: queries, cache: cacheManager, events: events, policy: policy}
 }
 
 // requireWritePerm returns a forbidden domain error if the actor can't write pages.

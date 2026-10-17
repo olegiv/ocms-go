@@ -357,8 +357,8 @@ func (e *Exporter) ExportToWriter(ctx context.Context, opts ExportOptions, w io.
 }
 
 // ExportToFile writes the export as JSON to a file.
-func (e *Exporter) ExportToFile(ctx context.Context, opts ExportOptions, path string) error {
-	f, err := e.openExportFile(path)
+func (e *Exporter) ExportToFile(ctx context.Context, opts ExportOptions, filePath string) error {
+	f, err := e.openExportFile(filePath)
 	if err != nil {
 		return err
 	}
@@ -528,9 +528,9 @@ func (e *Exporter) writeMediaArchive(ctx context.Context, opts ExportOptions, w 
 }
 
 // ExportWithMediaToFile creates a zip archive file containing export.json and media files.
-func (e *Exporter) ExportWithMediaToFile(ctx context.Context, opts ExportOptions, path string) error {
-	dir := filepath.Dir(path)
-	staged, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*.tmp")
+func (e *Exporter) ExportWithMediaToFile(ctx context.Context, opts ExportOptions, filePath string) error {
+	dir := filepath.Dir(filePath)
+	staged, err := os.CreateTemp(dir, "."+filepath.Base(filePath)+"-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create staged export file: %w", err)
 	}
@@ -544,7 +544,7 @@ func (e *Exporter) ExportWithMediaToFile(ctx context.Context, opts ExportOptions
 	if err := errors.Join(writeErr, closeErr); err != nil {
 		return err
 	}
-	if err := os.Rename(stagedPath, path); err != nil {
+	if err := os.Rename(stagedPath, filePath); err != nil {
 		return fmt.Errorf("publish media export: %w", err)
 	}
 	return nil

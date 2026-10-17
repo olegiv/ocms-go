@@ -210,7 +210,7 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 				}
 			}
 			b.WriteString("- Pages: ")
-			b.WriteString(fmt.Sprintf("%d", c.UsageCount))
+			fmt.Fprintf(&b, "%d", c.UsageCount)
 			b.WriteString("\n\n")
 		}
 	}
@@ -242,7 +242,7 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 			b.WriteString("- ")
 			b.WriteString(t.Name)
 			b.WriteString(" (")
-			b.WriteString(fmt.Sprintf("%d", t.UsageCount))
+			fmt.Fprintf(&b, "%d", t.UsageCount)
 			b.WriteString(" pages) — URL: ")
 			b.WriteString(tagURL)
 			b.WriteString("\n")

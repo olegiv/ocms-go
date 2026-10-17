@@ -3,7 +3,11 @@
 
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestSQLiteFilePathFromDSN(t *testing.T) {
 	t.Parallel()
@@ -36,5 +40,36 @@ func TestSQLiteFilePathFromDSN(t *testing.T) {
 				t.Fatalf("path mismatch: got %q want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestOpenErrorLog checks the optional error log: no file without a path,
+// and owner-only permissions even on a file that already existed with a
+// wider mode (OpenFile applies the mode only when it creates the file).
+func TestOpenErrorLog(t *testing.T) {
+	t.Parallel()
+
+	if file, err := openErrorLog(""); file != nil || err != nil {
+		t.Fatalf("openErrorLog(\"\") = %v, %v; want no file", file, err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "error.log")
+	if err := os.WriteFile(logPath, []byte("earlier\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	file, err := openErrorLog(logPath)
+	if err != nil {
+		t.Fatalf("openErrorLog: %v", err)
+	}
+	defer closeErrorLog(file)
+	info, err := os.Stat(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("error log mode = %v, want 0600", mode)
+	}
+	if _, err := openErrorLog(filepath.Join(t.TempDir(), "missing", "error.log")); err == nil {
+		t.Error("openErrorLog succeeded in a directory that does not exist")
 	}
 }

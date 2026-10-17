@@ -91,9 +91,9 @@ func TestHandleRunAggregation_Authorized(t *testing.T) {
 }
 
 // testAuthorizedJSONHandler tests that a handler returns OK with JSON content-type when authorized.
-func testAuthorizedJSONHandler(t *testing.T, url string, handler http.HandlerFunc) {
+func testAuthorizedJSONHandler(t *testing.T, target string, handler http.HandlerFunc) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req := httptest.NewRequest(http.MethodGet, target, nil)
 	user := store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
 	ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, user)
 	req = req.WithContext(ctx)
@@ -112,9 +112,9 @@ func testAuthorizedJSONHandler(t *testing.T, url string, handler http.HandlerFun
 }
 
 // testUnauthorizedHandler tests that a handler returns Unauthorized when no user context is set.
-func testUnauthorizedHandler(t *testing.T, url string, handler http.HandlerFunc) {
+func testUnauthorizedHandler(t *testing.T, target string, handler http.HandlerFunc) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req := httptest.NewRequest(http.MethodGet, target, nil)
 	rr := httptest.NewRecorder()
 
 	handler(rr, req)

@@ -556,7 +556,7 @@ func TestSecurityDeclarationEnforcedAtRuntime(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s %s: %v", entry.method, url, err)
 			}
-			body, _ := readAll(resp)
+			body := readAll(resp)
 			resp.Body.Close()
 			seen[opKey{entry.method, live}] = true
 			if resp.StatusCode != http.StatusUnauthorized {
@@ -592,7 +592,7 @@ func operationDeclaresAPIKey(op *huma.Operation) bool {
 
 // readAll drains resp.Body for error-message rendering. Wraps to isolate the
 // json-unused import (pulled in for future assertions on error payload shape).
-func readAll(resp *http.Response) ([]byte, error) {
+func readAll(resp *http.Response) []byte {
 	buf := make([]byte, 0, 256)
 	chunk := make([]byte, 256)
 	for {
@@ -610,7 +610,7 @@ func readAll(resp *http.Response) ([]byte, error) {
 		var probe map[string]any
 		_ = json.Unmarshal(buf, &probe)
 	}
-	return buf, nil
+	return buf
 }
 
 // TestNullableInt64SchemaShape verifies that `UpdateMediaBody.folder_id`
@@ -840,7 +840,7 @@ func TestPermissionRequiredBeforeBodyParse(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s %s: %v", tc.method, tc.path, err)
 		}
-		_, _ = readAll(resp)
+		_ = readAll(resp)
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s %s (op %s) with read-only key: want 403, got %d", tc.method, tc.path, tc.op, resp.StatusCode)

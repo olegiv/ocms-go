@@ -59,22 +59,23 @@ type Handler struct {
 // optional API key auth, …) still applies to huma-routed requests.
 func Register(r chi.Router, deps Deps) *Handler {
 	cfg := huma.DefaultConfig("oCMS REST API", "2.0.0")
-	cfg.OpenAPI.Info.Description = "REST API v2 for oCMS. Spec generated from Go types via huma v2 — requests and responses match the handler implementation exactly."
-	cfg.OpenAPI.Info.License = &huma.License{
+	spec := cfg.OpenAPI
+	spec.Info.Description = "REST API v2 for oCMS. Spec generated from Go types via huma v2 — requests and responses match the handler implementation exactly."
+	spec.Info.License = &huma.License{
 		Name:       "GPL-3.0-or-later",
 		Identifier: "GPL-3.0-or-later",
 	}
-	cfg.OpenAPI.Servers = []*huma.Server{{URL: "/api/v2"}}
+	spec.Servers = []*huma.Server{{URL: "/api/v2"}}
 
 	// Advertise the API-key bearer scheme in the generated OpenAPI spec so Swagger
 	// UI renders an authorize prompt and write operations show the padlock icon.
-	if cfg.OpenAPI.Components == nil {
-		cfg.OpenAPI.Components = &huma.Components{}
+	if spec.Components == nil {
+		spec.Components = &huma.Components{}
 	}
-	if cfg.OpenAPI.Components.SecuritySchemes == nil {
-		cfg.OpenAPI.Components.SecuritySchemes = map[string]*huma.SecurityScheme{}
+	if spec.Components.SecuritySchemes == nil {
+		spec.Components.SecuritySchemes = map[string]*huma.SecurityScheme{}
 	}
-	cfg.OpenAPI.Components.SecuritySchemes["ApiKeyAuth"] = &huma.SecurityScheme{
+	spec.Components.SecuritySchemes["ApiKeyAuth"] = &huma.SecurityScheme{
 		Type:         "http",
 		Scheme:       "bearer",
 		BearerFormat: "API key",

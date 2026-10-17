@@ -262,14 +262,14 @@ func (m *Module) renderHeadScripts(nonce string) template.HTML {
 	// 4. Position CSS overrides
 	positionCSS := m.getPositionCSS()
 	if positionCSS != "" {
-		scripts.WriteString(fmt.Sprintf("<style>\n%s</style>\n", positionCSS))
+		fmt.Fprintf(&scripts, "<style>\n%s</style>\n", positionCSS)
 	}
 
 	// 5. Klaro configuration
-	scripts.WriteString(fmt.Sprintf(`<script>
+	fmt.Fprintf(&scripts, `<script>
 %s
 </script>
-`, m.buildKlaroConfig()))
+`, m.buildKlaroConfig())
 
 	// 6. Klaro script
 	// Cache-busted like every other vendored script. /static/dist/ is served

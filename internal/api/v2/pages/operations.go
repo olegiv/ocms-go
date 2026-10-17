@@ -11,7 +11,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/olegiv/ocms-go/internal/api/v2"
+	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 )
 
 // Register wires Pages operations onto the v2 huma API. The handler layer is

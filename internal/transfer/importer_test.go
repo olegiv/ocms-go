@@ -519,8 +519,8 @@ func TestImporter_DryRun(t *testing.T) {
 	importer := NewImporter(nil, nil, nil)
 
 	// Validate would work without database
-	errors := importer.Validate(data)
-	assert.Empty(t, errors)
+	validationErrors := importer.Validate(data)
+	assert.Empty(t, validationErrors)
 }
 
 // containsIgnoreCase checks if s contains substr (case-insensitive).

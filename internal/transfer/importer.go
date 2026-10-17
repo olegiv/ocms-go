@@ -1564,9 +1564,7 @@ func cleanupOwnedMediaFiles(uploadRoot *os.Root, ledger *mediaFileLedger, mediaU
 // over the microseconds between that failed copy and this call, unlike the
 // whole-import window cleanupOwnedMediaFiles has to survive.
 func cleanupPartialMediaFile(uploadRoot *os.Root, ledger *mediaFileLedger) error {
-	return cleanupMediaFiles(uploadRoot, ledger, nil, func(current, recorded fs.FileInfo) bool {
-		return os.SameFile(current, recorded)
-	})
+	return cleanupMediaFiles(uploadRoot, ledger, nil, os.SameFile)
 }
 
 func cleanupMediaFiles(

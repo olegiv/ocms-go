@@ -227,12 +227,12 @@ func (m *Module) renderBar(nonce string) template.HTML {
 	text := security.SanitizePageHTML(m.settings.Text)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf(`<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor))
+	fmt.Fprintf(&b, `<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor)
 	b.WriteString(`<div class="informer-bar-content">`)
 	b.WriteString(`<span class="informer-bar-spinner"></span>`)
-	b.WriteString(fmt.Sprintf(`<span class="informer-bar-text">%s</span>`, text))
+	fmt.Fprintf(&b, `<span class="informer-bar-text">%s</span>`, text)
 	b.WriteString(`</div>`)
-	b.WriteString(fmt.Sprintf(`<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;">`, textColor))
+	fmt.Fprintf(&b, `<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;">`, textColor)
 	b.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`)
 	b.WriteString(`</button>`)
 	b.WriteString(`</div>`)
@@ -250,7 +250,7 @@ func (m *Module) renderBar(nonce string) template.HTML {
 
 	// JavaScript for cookie-based dismissal (version-aware: resets on settings change)
 	version := html.EscapeString(m.settings.Version)
-	b.WriteString(fmt.Sprintf(`<script>
+	fmt.Fprintf(&b, `<script>
 (function(){
 var cn="%s",ver="%s";
 function getCookie(n){var m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?decodeURIComponent(m[1]):null}
@@ -260,7 +260,7 @@ window.dismissInformer=function(){var el=document.getElementById('informer-bar')
 var closeBtn=document.querySelector('#informer-bar .informer-bar-close');
 if(closeBtn){closeBtn.addEventListener('click',function(){window.dismissInformer()})}
 })();
-</script>`, cookieName, version))
+</script>`, cookieName, version)
 
 	// In demo mode, fetch the current demo admin password at runtime so the banner
 	// always shows credentials matching the live DB hash — even when the page HTML

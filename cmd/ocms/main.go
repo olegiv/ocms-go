@@ -1345,27 +1345,162 @@ func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *
 	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
 }
 
-func run() error {
-	// Load .env: use OCMS_ENV_FILE if set (site instance mode),
-	// otherwise fall back to .env in CWD (standalone mode).
+// loadEnvFile loads OCMS_ENV_FILE when it is set (site instance mode),
+// otherwise .env in the working directory (standalone mode). A missing file
+// is not an error: the environment may already hold the settings.
+func loadEnvFile() {
 	if envFile := os.Getenv("OCMS_ENV_FILE"); envFile != "" {
 		_ = godotenv.Load(envFile)
+		return
+	}
+	_ = godotenv.Load()
+}
+
+// loadConfig loads the configuration and parses the embed upstream and
+// webhook destination host allowlists it names.
+func loadConfig() (cfg *config.Config, embedUpstreamHosts, webhookHosts map[string]struct{}, err error) {
+	cfg, err = config.Load()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("loading config: %w", err)
+	}
+	embedUpstreamHosts, err = parseAllowedEmbedUpstreamHosts(cfg.EmbedAllowedUpstreamHosts)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parsing OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS: %w", err)
+	}
+	webhookHosts, err = webhook.ParseAllowedHosts(cfg.WebhookAllowedHosts)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parsing OCMS_WEBHOOK_ALLOWED_HOSTS: %w", err)
+	}
+	return cfg, embedUpstreamHosts, webhookHosts, nil
+}
+
+// openErrorLog opens the optional file that receives a copy of ERROR+ logs,
+// readable by the owner only. It returns nil when filePath is empty.
+func openErrorLog(filePath string) (*os.File, error) {
+	if filePath == "" {
+		return nil, nil
+	}
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("opening error log file %s: %w", filePath, err)
+	}
+	// Enforce permissions on pre-existing files (OpenFile only sets mode on create).
+	if err := file.Chmod(0600); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("setting error log file permissions %s: %w", filePath, err)
+	}
+	return file, nil
+}
+
+// closeErrorLog closes the error log file, if one is open.
+func closeErrorLog(file *os.File) {
+	if file != nil {
+		_ = file.Close()
+	}
+}
+
+// withErrorLog returns base, teeing ERROR+ records to errorLogFile when one
+// is open.
+func withErrorLog(base slog.Handler, errorLogFile *os.File) slog.Handler {
+	if errorLogFile == nil {
+		return base
+	}
+	errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{Level: slog.LevelError})
+	return logging.NewErrorFileHandler(base, errorHandler, slog.LevelError)
+}
+
+// openDatabase opens the SQLite database, restricts its file to the owner and
+// applies the migrations. The caller closes the returned handle.
+func openDatabase(dsn string) (*sql.DB, error) {
+	slog.Info("initializing database", "path", dsn)
+	db, err := store.NewDB(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("initializing database: %w", err)
+	}
+	// Restrict database file permissions to the owner only.
+	// Skip non-file DSNs such as ":memory:" where no real file exists on disk.
+	if dbFilePath, isFileDSN := sqliteFilePathFromDSN(dsn); isFileDSN {
+		if info, statErr := os.Stat(dbFilePath); statErr == nil && info.Mode().IsRegular() {
+			if err := os.Chmod(dbFilePath, 0600); err != nil {
+				_ = db.Close()
+				return nil, fmt.Errorf("setting database file permissions: %w", err)
+			}
+		}
 	} else {
-		_ = godotenv.Load()
+		slog.Debug("skipping database chmod for non-file sqlite dsn", "dsn", dsn)
 	}
 
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+	slog.Info("running database migrations")
+	if err := store.Migrate(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("running migrations: %w", err)
 	}
-	allowedEmbedUpstreamHosts, err := parseAllowedEmbedUpstreamHosts(cfg.EmbedAllowedUpstreamHosts)
-	if err != nil {
-		return fmt.Errorf("parsing OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS: %w", err)
+	slog.Info("database ready")
+	return db, nil
+}
+
+// seedDatabase applies the opt-in seed data and the OCMS_SITE_URL override
+// and rotates the demo and default admin passwords. It returns the demo admin
+// password for this startup, or "" when there is no demo admin.
+func seedDatabase(ctx context.Context, cfg *config.Config, db *sql.DB) (string, error) {
+	if err := store.Seed(ctx, db, cfg.DoSeed); err != nil {
+		return "", fmt.Errorf("seeding database: %w", err)
 	}
-	allowedWebhookHosts, err := webhook.ParseAllowedHosts(cfg.WebhookAllowedHosts)
+	// Seed demo content if both base seeding and demo mode are enabled
+	if cfg.DoSeed {
+		if err := store.SeedDemo(ctx, db); err != nil {
+			return "", fmt.Errorf("seeding demo content: %w", err)
+		}
+	}
+	if err := applySiteURLOverride(ctx, db, cfg.SiteURL); err != nil {
+		return "", err
+	}
+	demoAdminPassword, err := store.RotateDemoAdminPassword(ctx, db)
 	if err != nil {
-		return fmt.Errorf("parsing OCMS_WEBHOOK_ALLOWED_HOSTS: %w", err)
+		return "", fmt.Errorf("rotating demo admin password: %w", err)
+	}
+	if demoAdminPassword != "" {
+		slog.Warn(
+			"demo admin password rotated for this startup",
+			"email", store.DemoAdminEmail,
+		)
+	}
+	if _, err := store.RotateDefaultAdminPassword(ctx, db); err != nil {
+		return "", fmt.Errorf("rotating default admin password: %w", err)
+	}
+	return demoAdminPassword, nil
+}
+
+// seedDemoInformer seeds the informer module's demo settings when seeding or
+// demo mode is on. It must run after module initialization has created the
+// informer's table.
+func seedDemoInformer(cfg *config.Config, db *sql.DB, registry *module.Registry, demoAdminPassword string) {
+	if !cfg.DoSeed && !middleware.IsDemoMode() {
+		return
+	}
+	if err := store.SeedDemoInformerSettings(db); err != nil {
+		slog.Warn("failed to seed demo informer settings", "error", err)
+		return
+	}
+	mod, ok := registry.Get("informer")
+	if !ok {
+		return
+	}
+	inf, ok := mod.(*informer.Module)
+	if !ok {
+		return
+	}
+	inf.SetDemoPassword(demoAdminPassword)
+	if err := inf.ReloadSettings(); err != nil {
+		slog.Warn("failed to reload informer settings after demo seed", "error", err)
+	}
+}
+
+func run() error {
+	loadEnvFile()
+	cfg, allowedEmbedUpstreamHosts, allowedWebhookHosts, err := loadConfig()
+	if err != nil {
+		return err
 	}
 
 	// Create version info from build-time injected values
@@ -1382,28 +1517,13 @@ func run() error {
 	})
 
 	// Optional: tee ERROR+ logs to a separate file
-	var primaryHandler slog.Handler = stdoutHandler
-	var errorLogFile *os.File
-	if cfg.ErrorLogPath != "" {
-		var err error
-		errorLogFile, err = os.OpenFile(cfg.ErrorLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return fmt.Errorf("opening error log file %s: %w", cfg.ErrorLogPath, err)
-		}
-		// Enforce permissions on pre-existing files (OpenFile only sets mode on create).
-		if err = errorLogFile.Chmod(0600); err != nil {
-			errorLogFile.Close()
-			return fmt.Errorf("setting error log file permissions %s: %w", cfg.ErrorLogPath, err)
-		}
-		defer errorLogFile.Close()
-
-		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{
-			Level: slog.LevelError,
-		})
-		primaryHandler = logging.NewErrorFileHandler(stdoutHandler, errorHandler, slog.LevelError)
+	errorLogFile, err := openErrorLog(cfg.ErrorLogPath)
+	if err != nil {
+		return err
 	}
+	defer closeErrorLog(errorLogFile)
 
-	logger := slog.New(primaryHandler)
+	logger := slog.New(withErrorLog(stdoutHandler, errorLogFile))
 	slog.SetDefault(logger)
 
 	logProductionSecurityWarnings(cfg)
@@ -1432,22 +1552,9 @@ func run() error {
 	}
 
 	// Initialize database
-	slog.Info("initializing database", "path", cfg.DBPath)
-	db, err := store.NewDB(cfg.DBPath)
+	db, err := openDatabase(cfg.DBPath)
 	if err != nil {
-		return fmt.Errorf("initializing database: %w", err)
-	}
-	// Restrict database file permissions to the owner only.
-	// Skip non-file DSNs such as ":memory:" where no real file exists on disk.
-	if dbFilePath, isFileDSN := sqliteFilePathFromDSN(cfg.DBPath); isFileDSN {
-		if info, statErr := os.Stat(dbFilePath); statErr == nil && info.Mode().IsRegular() {
-			if err := os.Chmod(dbFilePath, 0600); err != nil {
-				_ = db.Close()
-				return fmt.Errorf("setting database file permissions: %w", err)
-			}
-		}
-	} else {
-		slog.Debug("skipping database chmod for non-file sqlite dsn", "dsn", cfg.DBPath)
+		return err
 	}
 	defer func(db *sql.DB) {
 		err = db.Close()
@@ -1456,24 +1563,10 @@ func run() error {
 		}
 	}(db)
 
-	// Run migrations
-	slog.Info("running database migrations")
-	if err := store.Migrate(db); err != nil {
-		return fmt.Errorf("running migrations: %w", err)
-	}
-	slog.Info("database ready")
-
 	// Upgrade logger to also write WARN and ERROR logs to the Event Log database.
 	// The handler chain is: ErrorFileHandler (optional) → EventLogHandler → stdout.
 	upgradedStdout := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
-	var upgradedPrimary slog.Handler = upgradedStdout
-	if errorLogFile != nil {
-		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{
-			Level: slog.LevelError,
-		})
-		upgradedPrimary = logging.NewErrorFileHandler(upgradedStdout, errorHandler, slog.LevelError)
-	}
-	eventLogHandler := logging.NewEventLogHandler(upgradedPrimary, db)
+	eventLogHandler := logging.NewEventLogHandler(withErrorLog(upgradedStdout, errorLogFile), db)
 	logger = slog.New(eventLogHandler)
 	slog.SetDefault(logger)
 	slog.Info("event log integration enabled", "min_level", "warn")
@@ -1481,31 +1574,9 @@ func run() error {
 
 	// Seed default data
 	ctx := context.Background()
-	if err := store.Seed(ctx, db, cfg.DoSeed); err != nil {
-		return fmt.Errorf("seeding database: %w", err)
-	}
-
-	// Seed demo content if both base seeding and demo mode are enabled
-	if cfg.DoSeed {
-		if err := store.SeedDemo(ctx, db); err != nil {
-			return fmt.Errorf("seeding demo content: %w", err)
-		}
-	}
-	if err := applySiteURLOverride(ctx, db, cfg.SiteURL); err != nil {
-		return err
-	}
-	demoAdminPassword, err := store.RotateDemoAdminPassword(ctx, db)
+	demoAdminPassword, err := seedDatabase(ctx, cfg, db)
 	if err != nil {
-		return fmt.Errorf("rotating demo admin password: %w", err)
-	}
-	if demoAdminPassword != "" {
-		slog.Warn(
-			"demo admin password rotated for this startup",
-			"email", store.DemoAdminEmail,
-		)
-	}
-	if _, err := store.RotateDefaultAdminPassword(ctx, db); err != nil {
-		return fmt.Errorf("rotating default admin password: %w", err)
+		return err
 	}
 
 	// Update i18n from database settings
@@ -1633,18 +1704,7 @@ func run() error {
 	}()
 
 	// Seed demo informer settings (must run after module init creates the table)
-	if cfg.DoSeed || middleware.IsDemoMode() {
-		if err := store.SeedDemoInformerSettings(db); err != nil {
-			slog.Warn("failed to seed demo informer settings", "error", err)
-		} else if mod, ok := moduleRegistry.Get("informer"); ok {
-			if inf, ok := mod.(*informer.Module); ok {
-				inf.SetDemoPassword(demoAdminPassword)
-				if err := inf.ReloadSettings(); err != nil {
-					slog.Warn("failed to reload informer settings after demo seed", "error", err)
-				}
-			}
-		}
-	}
+	seedDemoInformer(cfg, db, moduleRegistry, demoAdminPassword)
 
 	// Always initialize sentinel for middleware to work even if module is inactive.
 	// InitAll skips Init() for inactive modules, but sentinel middleware is always

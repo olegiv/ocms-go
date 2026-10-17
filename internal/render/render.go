@@ -1089,7 +1089,7 @@ func getUserRole(user any) string {
 	v := reflect.ValueOf(user)
 
 	// Handle pointer types
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return ""
 		}

@@ -77,12 +77,12 @@ func (m *Module) RenderWidget() template.HTML {
 	html.WriteString(`<script src="https://js.hcaptcha.com/1/api.js" async defer></script>`)
 
 	// Add hCaptcha widget div
-	html.WriteString(fmt.Sprintf(
+	fmt.Fprintf(&html,
 		`<div class="h-captcha" data-sitekey="%s" data-theme="%s" data-size="%s"></div>`,
 		template.HTMLEscapeString(m.settings.SiteKey),
 		template.HTMLEscapeString(m.settings.Theme),
 		template.HTMLEscapeString(m.settings.Size),
-	))
+	)
 
 	return template.HTML(html.String())
 }

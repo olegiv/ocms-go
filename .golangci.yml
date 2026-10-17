@@ -69,6 +69,13 @@ linters:
       - linters:
           - staticcheck
         text: 'SA9003:'
+      # huma names OpenAPI schemas after Go types, so the v2 API types keep
+      # their package prefix (MediaListMeta, TaxonomyTag): the short names
+      # would collide across packages and renaming changes the published spec.
+      - linters:
+          - revive
+        path: internal/api/v2/
+        text: 'exported: type name will be used as'
     paths:
       - .*\.sql\.go$
       - vendor

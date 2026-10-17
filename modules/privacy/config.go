@@ -43,12 +43,12 @@ func (m *Module) buildKlaroConfig() string {
 
 	// Storage configuration
 	config.WriteString("    storageMethod: 'cookie',\n")
-	config.WriteString(fmt.Sprintf("    storageName: '%s',\n", template.JSEscapeString(s.CookieName)))
-	config.WriteString(fmt.Sprintf("    cookieExpiresAfterDays: %d,\n", s.CookieExpiresDays))
+	fmt.Fprintf(&config, "    storageName: '%s',\n", template.JSEscapeString(s.CookieName))
+	fmt.Fprintf(&config, "    cookieExpiresAfterDays: %d,\n", s.CookieExpiresDays)
 
 	// Privacy policy URL
 	if s.PrivacyPolicyURL != "" {
-		config.WriteString(fmt.Sprintf("    privacyPolicy: '%s',\n", template.JSEscapeString(s.PrivacyPolicyURL)))
+		fmt.Fprintf(&config, "    privacyPolicy: '%s',\n", template.JSEscapeString(s.PrivacyPolicyURL))
 	}
 
 	// Default consent state (require explicit consent)
@@ -69,7 +69,7 @@ func (m *Module) buildKlaroConfig() string {
 	config.WriteString("    translations: {\n")
 	config.WriteString("        zz: {\n")
 	if s.PrivacyPolicyURL != "" {
-		config.WriteString(fmt.Sprintf("            privacyPolicyUrl: '%s'\n", template.JSEscapeString(s.PrivacyPolicyURL)))
+		fmt.Fprintf(&config, "            privacyPolicyUrl: '%s'\n", template.JSEscapeString(s.PrivacyPolicyURL))
 	}
 	config.WriteString("        },\n")
 	config.WriteString("        en: {\n")
@@ -142,14 +142,14 @@ func (m *Module) buildServiceConfig(svc Service) string {
 	var config strings.Builder
 
 	config.WriteString("        {\n")
-	config.WriteString(fmt.Sprintf("            name: '%s',\n", template.JSEscapeString(svc.Name)))
-	config.WriteString(fmt.Sprintf("            title: '%s',\n", template.JSEscapeString(svc.Title)))
-	config.WriteString(fmt.Sprintf("            description: '%s',\n", template.JSEscapeString(svc.Description)))
+	fmt.Fprintf(&config, "            name: '%s',\n", template.JSEscapeString(svc.Name))
+	fmt.Fprintf(&config, "            title: '%s',\n", template.JSEscapeString(svc.Title))
+	fmt.Fprintf(&config, "            description: '%s',\n", template.JSEscapeString(svc.Description))
 
 	// Purposes
 	if len(svc.Purposes) > 0 {
 		purposesJSON, _ := json.Marshal(svc.Purposes)
-		config.WriteString(fmt.Sprintf("            purposes: %s,\n", string(purposesJSON)))
+		fmt.Fprintf(&config, "            purposes: %s,\n", string(purposesJSON))
 	}
 
 	// Required and default
@@ -175,7 +175,7 @@ func (m *Module) buildServiceConfig(svc Service) string {
 			if !first {
 				config.WriteString(", ")
 			}
-			config.WriteString(fmt.Sprintf("/%s/", cookie.Pattern))
+			fmt.Fprintf(&config, "/%s/", cookie.Pattern)
 			first = false
 		}
 		config.WriteString("],\n")
@@ -201,7 +201,7 @@ func (m *Module) buildGCMCallback(gcmConsentType string) string {
 		if ct == "" || !validGCMConsentTypes[ct] {
 			continue // skip empty or unrecognized consent types
 		}
-		updates.WriteString(fmt.Sprintf("                    '%s': consent ? 'granted' : 'denied',\n", ct))
+		fmt.Fprintf(&updates, "                    '%s': consent ? 'granted' : 'denied',\n", ct)
 	}
 
 	return fmt.Sprintf(`            callback: function(consent, service) {

@@ -105,19 +105,19 @@ func (m *Module) renderHeadScripts(nonce string) template.HTML {
 
 	// Google Tag Manager (head script)
 	if gtmActive(s) {
-		scripts.WriteString(fmt.Sprintf(`<!-- Google Tag Manager -->
+		fmt.Fprintf(&scripts, `<!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
 j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','%s');</script>
 <!-- End Google Tag Manager -->
-`, template.JSEscapeString(s.GTMContainerID)))
+`, template.JSEscapeString(s.GTMContainerID))
 	}
 
 	// Google Analytics 4 (only if GTM is not enabled, since GA4 is typically loaded via GTM)
 	if ga4Active(s) && !s.GTMEnabled {
-		scripts.WriteString(fmt.Sprintf(`<!-- Google Analytics 4 -->
+		fmt.Fprintf(&scripts, `<!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -127,13 +127,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 </script>
 <!-- End Google Analytics 4 -->
 `, template.HTMLEscapeString(s.GA4MeasurementID),
-			template.JSEscapeString(s.GA4MeasurementID)))
+			template.JSEscapeString(s.GA4MeasurementID))
 	}
 
 	// Matomo tracking code (head portion - tracking code)
 	if matomoActive(s) {
 		matomoURL := strings.TrimSuffix(s.MatomoURL, "/")
-		scripts.WriteString(fmt.Sprintf(`<!-- Matomo -->
+		fmt.Fprintf(&scripts, `<!-- Matomo -->
 <script>
   var _paq = window._paq = window._paq || [];
   _paq.push(['trackPageView']);
@@ -148,7 +148,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 </script>
 <!-- End Matomo Code -->
 `, template.JSEscapeString(matomoURL),
-			template.JSEscapeString(s.MatomoSiteID)))
+			template.JSEscapeString(s.MatomoSiteID))
 	}
 
 	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))
@@ -167,21 +167,21 @@ func (m *Module) renderBodyScripts(nonce string) template.HTML {
 
 	// Google Tag Manager (noscript fallback)
 	if gtmActive(s) {
-		scripts.WriteString(fmt.Sprintf(`<!-- Google Tag Manager (noscript) -->
+		fmt.Fprintf(&scripts, `<!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=%s"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
-`, template.HTMLEscapeString(s.GTMContainerID)))
+`, template.HTMLEscapeString(s.GTMContainerID))
 	}
 
 	// Matomo noscript fallback
 	if matomoActive(s) {
 		matomoURL := strings.TrimSuffix(s.MatomoURL, "/")
-		scripts.WriteString(fmt.Sprintf(`<!-- Matomo Image Tracker -->
+		fmt.Fprintf(&scripts, `<!-- Matomo Image Tracker -->
 <noscript><img referrerpolicy="no-referrer-when-downgrade" src="%s/matomo.php?idsite=%s&amp;rec=1" style="border:0" alt="" /></noscript>
 <!-- End Matomo -->
 `, template.HTMLEscapeString(matomoURL),
-			template.HTMLEscapeString(s.MatomoSiteID)))
+			template.HTMLEscapeString(s.MatomoSiteID))
 	}
 
 	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))

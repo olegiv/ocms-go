@@ -39,13 +39,13 @@ func seedPageWithHTML(t *testing.T, db *sql.DB, slug, title, bodyHTML, summary s
 // refuses to emit absolute URLs (and therefore refuses markdown) until
 // site_url is configured, so that an attacker-supplied Host header cannot
 // leak into agent-consumed [Source](…) links (FIND-001).
-func seedSiteURL(t *testing.T, db *sql.DB, url string) {
+func seedSiteURL(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.Exec(
 		`INSERT INTO config (key, value, type, language_code)
 		 VALUES ('site_url', ?, 'string', 'en')
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-		url,
+		"https://example.com",
 	)
 	if err != nil {
 		t.Fatalf("seed site_url: %v", err)
@@ -57,7 +57,7 @@ func seedSiteURL(t *testing.T, db *sql.DB, url string) {
 func TestFrontendHandler_Page_Markdown_Negotiated(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	seedPageWithHTML(t, db, "hello",
 		"Hello World",
 		`<p>Welcome to <strong>oCMS</strong>.</p><ul><li>one</li><li>two</li></ul>`,
@@ -97,7 +97,7 @@ func TestFrontendHandler_Page_Markdown_Negotiated(t *testing.T) {
 func TestFrontendHandler_Page_Markdown_DefaultPrefixCanonicalizesUnprefixed(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	seedPageWithHTML(t, db, "markdown-canonical", "Canonical", `<p>Body</p>`, "", admin.ID)
 
 	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
@@ -192,7 +192,7 @@ func TestFrontendHandler_Page_Markdown_DraftAnonymousGets404(t *testing.T) {
 func TestFrontendHandler_Page_Markdown_DraftEditorSeesMarkdown(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	createDraftPage(t, db, admin.ID)
 	editor := createTestUser(t, db, testUser{
 		Email: "editor-md@example.com",
@@ -251,7 +251,7 @@ func TestFrontendHandler_Page_Markdown_RequiresConfiguredSiteURL(t *testing.T) {
 func TestFrontendHandler_Page_Markdown_ScriptsStripped(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	seedPageWithHTML(t, db, "evil",
 		"Safe",
 		`<p>Hello</p><script>alert(1)</script><iframe src="javascript:evil"></iframe>`,
