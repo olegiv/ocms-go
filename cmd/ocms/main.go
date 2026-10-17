@@ -1700,6 +1700,8 @@ func run() error {
 	if cfg.HSTSPreload && !cfg.IsDevelopment() {
 		securityConfig.HSTSPreload = true
 	}
+	// Third-party hosts join the CSP only while the module loading them is active.
+	securityConfig.CSPSources = moduleRegistry.ActiveCSPSources
 	r.Use(middleware.SecurityHeaders(securityConfig))
 	slog.Info("security headers middleware initialized",
 		"hsts", !cfg.IsDevelopment(),

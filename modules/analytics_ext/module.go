@@ -98,6 +98,24 @@ func firstStringArg(args ...any) string {
 	return s
 }
 
+// CSPSources allows Google Tag Manager and Google Analytics while the module
+// is active. A self-hosted Matomo is not covered: its host is configured at
+// run time and must be same-origin to pass the policy.
+func (m *Module) CSPSources() map[string][]string {
+	return map[string][]string{
+		"script-src": {
+			"https://www.googletagmanager.com", "https://*.googletagmanager.com",
+			"https://www.google-analytics.com",
+		},
+		"style-src": {"https://www.googletagmanager.com"},
+		"connect-src": {
+			"https://www.google-analytics.com", "https://*.google-analytics.com",
+			"https://*.analytics.google.com",
+			"https://www.googletagmanager.com", "https://*.googletagmanager.com",
+		},
+	}
+}
+
 // AdminURL returns the admin dashboard URL for the module.
 func (m *Module) AdminURL() string {
 	return "/admin/external-analytics"

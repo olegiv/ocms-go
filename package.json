@@ -12,8 +12,8 @@
     "htmx.org": "4.0.0",
     "klaro": "^0.7.22",
     "prismjs": "^1.30.0",
-    "swagger-ui-dist": "^5.33.1",
-    "tinymce": "^8.9.3"
+    "swagger-ui-dist": "^5.33.3",
+    "tinymce": "^8.10.0"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",

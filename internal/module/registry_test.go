@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -1032,5 +1033,48 @@ func TestListInfoShowsInitializedStatus(t *testing.T) {
 				t.Error("expected mod-b to show as NOT initialized")
 			}
 		}
+	}
+}
+
+// cspModule is a mockModule that declares Content-Security-Policy sources.
+type cspModule struct {
+	*mockModule
+	sources map[string][]string
+}
+
+func (m cspModule) CSPSources() map[string][]string { return m.sources }
+
+// TestActiveCSPSources checks that only active modules contribute CSP
+// sources, that a module without a stored status counts as active, and that
+// a source shared by two modules is listed once.
+func TestActiveCSPSources(t *testing.T) {
+	r := NewRegistry(testutil.TestLoggerSilent())
+	modules := []Module{
+		cspModule{newMockModule("captcha", "1.0.0"), map[string][]string{
+			"script-src": {"https://captcha.example"}, "frame-src": {"https://captcha.example"},
+		}},
+		cspModule{newMockModule("tracker", "1.0.0"), map[string][]string{
+			"script-src": {"https://tracker.example", "https://captcha.example"},
+		}},
+		cspModule{newMockModule("inactive", "1.0.0"), map[string][]string{
+			"script-src": {"https://inactive.example"},
+		}},
+		newMockModule("plain", "1.0.0"),
+	}
+	for _, m := range modules {
+		if err := r.Register(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.activeStatus["captcha"] = true
+	r.activeStatus["inactive"] = false // "tracker" has no stored status
+
+	got := r.ActiveCSPSources()
+	want := map[string][]string{
+		"script-src": {"https://captcha.example", "https://tracker.example"},
+		"frame-src":  {"https://captcha.example"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ActiveCSPSources() = %v, want %v", got, want)
 	}
 }

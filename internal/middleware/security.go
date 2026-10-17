@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -50,18 +51,42 @@ type SecurityHeadersConfig struct {
 	// ExcludePaths are paths that should skip security headers.
 	// Useful for API endpoints that need different policies.
 	ExcludePaths []string
+
+	// CSPSources, when set, is called for every response and returns
+	// third-party sources to add to ContentSecurityPolicy, keyed by directive.
+	// It lets an active module allow the hosts it loads while the base policy
+	// stays first-party.
+	CSPSources func() map[string][]string
+
+	// CrossOriginOpenerPolicy sets the Cross-Origin-Opener-Policy header.
+	CrossOriginOpenerPolicy string
+
+	// CrossOriginResourcePolicy sets the Cross-Origin-Resource-Policy header
+	// on every response except those under PublicResourcePrefixes.
+	CrossOriginResourcePolicy string
+
+	// PublicResourcePrefixes are path prefixes whose responses other sites
+	// may embed, such as uploaded images shown by feed readers. They are
+	// sent with Cross-Origin-Resource-Policy: cross-origin.
+	PublicResourcePrefixes []string
 }
 
 // DefaultSecurityHeadersConfig returns a SecurityHeadersConfig with sensible defaults.
 func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 	cfg := SecurityHeadersConfig{
-		IsDevelopment:  isDev,
-		HSTSMaxAge:     31536000, // 1 year
-		FrameOptions:   "SAMEORIGIN",
-		ReferrerPolicy: "strict-origin-when-cross-origin",
+		IsDevelopment:             isDev,
+		HSTSMaxAge:                31536000, // 1 year
+		FrameOptions:              "SAMEORIGIN",
+		ReferrerPolicy:            "strict-origin-when-cross-origin",
+		CrossOriginOpenerPolicy:   "same-origin",
+		CrossOriginResourcePolicy: "same-origin",
+		PublicResourcePrefixes:    []string{"/uploads/", "/static/", "/themes/"},
 	}
 
-	// Default CSP - allow self, inline styles (for CMS features), and common analytics.
+	// Default CSP - allow self, inline styles (for CMS features), Google Fonts
+	// for themes and YouTube frames for page content. Hosts that a module
+	// loads (analytics, hCaptcha) are added per request through CSPSources
+	// only while that module is active (TestBaseCSPHostsAreFirstPartyOrContent).
 	// unpkg.com and esm.sh were removed from both dev and prod CSPs: no script or
 	// fetch in this repo or its embedded assets loads from them, so keeping them
 	// in the allowlist only widened the supply-chain trust surface (FIND-007).
@@ -69,12 +94,12 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// More permissive in development for easier debugging
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src":     "'self'",
-			"script-src":      "'self' 'nonce-{{nonce}}' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"style-src":       "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
+			"script-src":      "'self' 'nonce-{{nonce}}' 'unsafe-inline' 'unsafe-eval'",
+			"style-src":       "'self' 'unsafe-inline' https://fonts.googleapis.com",
 			"img-src":         "'self' data: blob: https:",
 			"font-src":        "'self' data: https://fonts.gstatic.com",
-			"connect-src":     "'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"frame-src":       "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app https://www.youtube.com https://www.youtube-nocookie.com",
+			"connect-src":     "'self'",
+			"frame-src":       "'self' https://www.youtube.com https://www.youtube-nocookie.com",
 			"object-src":      "'none'",
 			"base-uri":        "'self'",
 			"form-action":     "'self'",
@@ -86,12 +111,12 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// authored HTML up to https:// at request time (FIND-008).
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src":               "'self'",
-			"script-src":                "'self' 'nonce-{{nonce}}' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"style-src":                 "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
+			"script-src":                "'self' 'nonce-{{nonce}}' 'unsafe-eval'",
+			"style-src":                 "'self' 'unsafe-inline' https://fonts.googleapis.com",
 			"img-src":                   "'self' data: blob: https:",
 			"font-src":                  "'self' data: https://fonts.gstatic.com",
-			"connect-src":               "'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"frame-src":                 "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app https://www.youtube.com https://www.youtube-nocookie.com",
+			"connect-src":               "'self'",
+			"frame-src":                 "'self' https://www.youtube.com https://www.youtube-nocookie.com",
 			"object-src":                "'none'",
 			"base-uri":                  "'self'",
 			"form-action":               "'self'",
@@ -162,6 +187,32 @@ func cspPart(name, value string) string {
 	return name + " " + value
 }
 
+// addCSPSources appends sources to the matching directives of policy and
+// adds the directives policy lacks. Existing directives keep their order and
+// added ones follow sorted by name, so the header stays stable.
+func addCSPSources(policy string, sources map[string][]string) string {
+	if len(sources) == 0 {
+		return policy
+	}
+	parts := strings.Split(policy, "; ")
+	present := make(map[string]bool, len(parts))
+	for i, part := range parts {
+		name, _, _ := strings.Cut(part, " ")
+		present[name] = true
+		if extra := sources[name]; len(extra) > 0 {
+			parts[i] = part + " " + strings.Join(extra, " ")
+		}
+	}
+	var added []string
+	for name, extra := range sources {
+		if !present[name] && len(extra) > 0 {
+			added = append(added, name+" "+strings.Join(extra, " "))
+		}
+	}
+	sort.Strings(added)
+	return strings.Join(append(parts, added...), "; ")
+}
+
 // buildPermissionsPolicy builds a Permissions-Policy string from a map.
 func buildPermissionsPolicy(policies map[string]string) string {
 	var parts []string
@@ -196,7 +247,11 @@ func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler 
 
 			// Content-Security-Policy
 			if cfg.ContentSecurityPolicy != "" {
-				w.Header().Set("Content-Security-Policy", applyCSPNonce(cfg.ContentSecurityPolicy, nonce))
+				policy := cfg.ContentSecurityPolicy
+				if cfg.CSPSources != nil {
+					policy = addCSPSources(policy, cfg.CSPSources())
+				}
+				w.Header().Set("Content-Security-Policy", applyCSPNonce(policy, nonce))
 			}
 
 			// Strict-Transport-Security (only in production over HTTPS)
@@ -232,6 +287,25 @@ func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler 
 			// Permissions-Policy (formerly Feature-Policy)
 			if cfg.PermissionsPolicy != "" {
 				w.Header().Set("Permissions-Policy", cfg.PermissionsPolicy)
+			}
+
+			// Cross-Origin-Opener-Policy isolates the browsing context from
+			// cross-origin windows that open it or that it opens.
+			if cfg.CrossOriginOpenerPolicy != "" {
+				w.Header().Set("Cross-Origin-Opener-Policy", cfg.CrossOriginOpenerPolicy)
+			}
+
+			// Cross-Origin-Resource-Policy keeps other sites from embedding
+			// pages and API responses, except public media and assets.
+			if cfg.CrossOriginResourcePolicy != "" {
+				resourcePolicy := cfg.CrossOriginResourcePolicy
+				for _, prefix := range cfg.PublicResourcePrefixes {
+					if strings.HasPrefix(r.URL.Path, prefix) {
+						resourcePolicy = "cross-origin"
+						break
+					}
+				}
+				w.Header().Set("Cross-Origin-Resource-Policy", resourcePolicy)
 			}
 
 			next.ServeHTTP(w, r)

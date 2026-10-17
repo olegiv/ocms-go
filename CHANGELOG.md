@@ -41,6 +41,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `X-XSS-Protection` is now `0`, which turns off the legacy browser XSS
   auditor; CSP remains the enforced protection. The reverse-proxy examples
   in `docs/reverse-proxy.md` match.
+- The Content-Security-Policy is first-party by default. Google Tag Manager
+  and Google Analytics hosts are allowed only while External Analytics is
+  active, and hCaptcha hosts only while the hCaptcha module is active;
+  toggling a module takes effect without a restart. Custom modules declare
+  their hosts with `module.CSPSourcer` (see `docs/custom-modules.md`). The
+  unused `*.dify.ai` and `udify.app` entries are gone: the Dify widget talks
+  only to the same-origin `/embed/dify` proxy.
+- Responses carry `Cross-Origin-Opener-Policy: same-origin` and
+  `Cross-Origin-Resource-Policy: same-origin`, except `/uploads/`, `/static/`
+  and `/themes/`, which stay embeddable (`cross-origin`) for feed readers and
+  other sites.
+- `docker-compose.yml` publishes the port on `127.0.0.1` by default (set
+  `OCMS_PUBLISH_ADDRESS=0.0.0.0` when a proxy reaches it through another
+  address) and runs the container with `no-new-privileges` and only the
+  `CHOWN`, `SETUID` and `SETGID` capabilities.
 
 #### Developer Tooling
 - `make commit-do-local` commits only the staged files, after the test gate
@@ -52,6 +67,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/release-gh-prepare` validates a version argument against a semver pattern
   before it reaches `git`, and `/update-wiki` asks for approval before the wiki
   commit and again before the push.
+- The shared Claude Code tooling is updated: `/fly-deploy` and `/code-quality`
+  auto-approve only the commands they run, and `/fly-deploy` reads a
+  single-quoted app name from `fly.toml` correctly.
+
+### Changed
+
+#### Dependencies
+- Update go-chi/chi 5.3.2 → 5.5.0, maxminddb-golang 2.7.0 → 2.8.0,
+  golang.org/x/crypto 0.57.0 → 0.58.0, x/image 0.46.0 → 0.47.0, x/net
+  0.60.0 → 0.61.0, x/text 0.42.0 → 0.43.0. goose stays at 3.28.0: 3.29.0
+  requires a modernc libc newer than the one modernc.org/sqlite 1.60.1 is
+  built against.
+- Update tinymce 8.9.3 → 8.10.0 and swagger-ui-dist 5.33.1 → 5.33.3, with
+  refreshed integrity hashes.
 
 ## [0.28.0] - 2026-10-12
 

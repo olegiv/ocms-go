@@ -529,6 +529,30 @@ func (m *Module) ActiveByDefault() bool {
 
 Use it for modules that open a new remote surface, such as the built-in MCP server (`modules/mcpserver`), so an upgrade never exposes one without being asked. Like `AllowedEnvs`, it only sets the status at first registration; after that the `modules` table wins. `Init` runs when the module is activated, and the registry serializes activation, so it runs once even when two admins switch the module on at the same time. Build anything that depends on it (routes' handlers, rate limiters) in `Init` and read it per request rather than capturing it in `RegisterRoutes`.
 
+## Third-Party Hosts (Content-Security-Policy)
+
+The base Content-Security-Policy is first-party: it allows Google Fonts for
+themes and YouTube frames for page content, and nothing else from other hosts.
+A module that loads a script, stylesheet, frame or API call from another host
+implements `module.CSPSourcer`; its sources are added to the policy only while
+the module is active:
+
+```go
+func (m *Module) CSPSources() map[string][]string {
+    hosts := []string{"https://widget.example.com"}
+    return map[string][]string{
+        "script-src":  hosts,
+        "connect-src": hosts,
+    }
+}
+```
+
+The policy is assembled for every response, so toggling the module in
+**Admin > Modules** takes effect without a restart. For built-in modules,
+`TestModuleThirdPartyHostsAreInCSPSources` fails when module source loads a
+host its `CSPSources` does not allow, and `TestBaseCSPHostsAreFirstPartyOrContent`
+fails when a module host is added to the base policy instead.
+
 ## Reference Implementation
 
 See the bookmarks module at `custom/modules/bookmarks/` for a complete working example with:

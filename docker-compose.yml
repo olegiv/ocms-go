@@ -7,6 +7,10 @@
 #   docker compose --profile redis up -d    # Start with Redis caching
 #   docker compose down                     # Stop services
 #   docker compose logs -f ocms             # View logs
+#
+# The port is published on 127.0.0.1 only, for a reverse proxy on the same
+# host. Set OCMS_PUBLISH_ADDRESS=0.0.0.0 when the proxy reaches the container
+# through another address (another host, or a container using the host IP).
 
 services:
   ocms:
@@ -21,7 +25,19 @@ services:
     container_name: ocms
     restart: unless-stopped
     ports:
-      - "${OCMS_SERVER_PORT:-8080}:8080"
+      - "${OCMS_PUBLISH_ADDRESS:-127.0.0.1}:${OCMS_SERVER_PORT:-8080}:8080"
+    # The entrypoint starts as root only to fix volume ownership, then drops
+    # to the ocms user with su-exec: it needs CHOWN for that and SETUID/SETGID
+    # to switch users. no-new-privileges blocks regaining root through a
+    # setuid binary afterwards.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     environment:
       # Required
       - OCMS_SESSION_SECRET=${OCMS_SESSION_SECRET:?Session secret is required (min 32 bytes)}
@@ -78,6 +94,8 @@ services:
       - redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - redis_data:/data
     healthcheck:

@@ -359,3 +359,97 @@ func TestCSPBuildEmitsBareDirectiveForEmptyValue(t *testing.T) {
 		t.Errorf("buildCSP emitted trailing space for value-less directive: %q", csp)
 	}
 }
+
+func TestAddCSPSources(t *testing.T) {
+	base := "default-src 'self'; script-src 'self'; upgrade-insecure-requests"
+	if got := addCSPSources(base, nil); got != base {
+		t.Errorf("no sources: %q, want the policy unchanged", got)
+	}
+	got := addCSPSources(base, map[string][]string{
+		"script-src": {"https://a.example", "https://b.example"},
+		"frame-src":  {"https://a.example"},
+	})
+	want := "default-src 'self'; script-src 'self' https://a.example https://b.example; upgrade-insecure-requests; frame-src https://a.example"
+	if got != want {
+		t.Errorf("addCSPSources() =\n  %q\nwant\n  %q", got, want)
+	}
+}
+
+// TestSecurityHeadersAddsCSPSourcesPerRequest checks that the sources hook is
+// consulted for every response, so toggling a module changes the policy
+// without a restart.
+func TestSecurityHeadersAddsCSPSourcesPerRequest(t *testing.T) {
+	cfg := DefaultSecurityHeadersConfig(false)
+	var sources map[string][]string
+	cfg.CSPSources = func() map[string][]string { return sources }
+	handler := SecurityHeaders(cfg)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	csp := func() string {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		return rec.Header().Get("Content-Security-Policy")
+	}
+
+	if strings.Contains(csp(), "hcaptcha.com") {
+		t.Fatal("base policy allows hcaptcha.com with no module asking for it")
+	}
+	sources = map[string][]string{"script-src": {"https://hcaptcha.com"}}
+	if !strings.Contains(csp(), "script-src 'self' 'nonce-") || !strings.Contains(csp(), "https://hcaptcha.com") {
+		t.Errorf("CSP = %q, want the module source in script-src", csp())
+	}
+	sources = nil
+	if strings.Contains(csp(), "hcaptcha.com") {
+		t.Error("source stayed in the policy after the hook stopped returning it")
+	}
+}
+
+// TestCrossOriginPolicies checks COOP on every response and CORP same-origin
+// everywhere except public media and assets, which other sites may embed
+// (security audit 2026-10-17, I-4).
+func TestCrossOriginPolicies(t *testing.T) {
+	handler := SecurityHeaders(DefaultSecurityHeadersConfig(false))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	for path, wantCORP := range map[string]string{
+		"/":                               "same-origin",
+		"/admin/pages":                    "same-origin",
+		"/api/v2/pages":                   "same-origin",
+		"/uploads/originals/photo.jpg":    "cross-origin",
+		"/static/dist/js/alpine.min.js":   "cross-origin",
+		"/themes/default/static/site.css": "cross-origin",
+	} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("Cross-Origin-Opener-Policy"); got != "same-origin" {
+			t.Errorf("%s: Cross-Origin-Opener-Policy = %q, want same-origin", path, got)
+		}
+		if got := rec.Header().Get("Cross-Origin-Resource-Policy"); got != wantCORP {
+			t.Errorf("%s: Cross-Origin-Resource-Policy = %q, want %q", path, got, wantCORP)
+		}
+	}
+}
+
+// baseCSPHosts are the only third-party hosts the base policy may allow:
+// Google Fonts used by themes and YouTube frames in page content. A host that
+// a module loads belongs in that module's CSPSources instead.
+var baseCSPHosts = map[string]bool{
+	"https://fonts.googleapis.com":     true,
+	"https://fonts.gstatic.com":        true,
+	"https://www.youtube.com":          true,
+	"https://www.youtube-nocookie.com": true,
+}
+
+// TestBaseCSPHostsAreFirstPartyOrContent fails when the base policy allows a
+// third-party host outside baseCSPHosts. Analytics, captcha and chat hosts
+// used to be allowed on every page whether or not their module was active
+// (security audit 2026-10-17, I-4).
+//
+// Bug state: add https://hcaptcha.com back to the production script-src and
+// this names it.
+func TestBaseCSPHostsAreFirstPartyOrContent(t *testing.T) {
+	for _, isDev := range []bool{false, true} {
+		policy := DefaultSecurityHeadersConfig(isDev).ContentSecurityPolicy
+		for _, field := range strings.Fields(strings.ReplaceAll(policy, ";", " ")) {
+			if strings.HasPrefix(field, "https://") && !baseCSPHosts[field] {
+				t.Errorf("development=%v: base CSP allows %s; declare it in the owning module's CSPSources", isDev, field)
+			}
+		}
+	}
+}

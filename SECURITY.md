@@ -87,11 +87,16 @@ oCMS implements defense-in-depth security measures:
 - **Suspicious Markup Blocking**: Reject page writes containing dangerous HTML patterns (`OCMS_BLOCK_SUSPICIOUS_PAGE_HTML`)
 
 ### HTTP Security Headers
-- Content-Security-Policy (CSP)
+- Content-Security-Policy (CSP), first-party by default; a module adds the
+  third-party hosts it loads only while it is active
 - Strict-Transport-Security (HSTS)
 - X-Frame-Options: SAMEORIGIN
 - X-Content-Type-Options: nosniff
+- X-XSS-Protection: 0 (legacy XSS auditor off; CSP is the protection)
 - Referrer-Policy: strict-origin-when-cross-origin
+- Cross-Origin-Opener-Policy: same-origin
+- Cross-Origin-Resource-Policy: same-origin, and cross-origin for `/uploads/`,
+  `/static/` and `/themes/` so feed readers and other sites can show media
 
 ### Webhook Security
 - **HMAC-SHA256 Signatures**: Verify webhook payload integrity

@@ -178,6 +178,18 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 	}
 }
 
+// CSPSources allows the hCaptcha widget while the module is active: its
+// script, styles, challenge frame and API calls are served from hcaptcha.com.
+func (m *Module) CSPSources() map[string][]string {
+	hosts := []string{"https://hcaptcha.com", "https://*.hcaptcha.com"}
+	return map[string][]string{
+		"script-src":  hosts,
+		"style-src":   hosts,
+		"connect-src": hosts,
+		"frame-src":   hosts,
+	}
+}
+
 // AdminURL returns the admin dashboard URL for the module.
 func (m *Module) AdminURL() string {
 	return "/admin/hcaptcha"

@@ -159,6 +159,15 @@ type EditorAccessible interface {
 	EditorAdminRoutes() bool
 }
 
+// CSPSourcer is an optional interface for modules that load resources from
+// third-party hosts in the browser, such as a tracking script or a captcha
+// widget. The sources it returns, keyed by Content-Security-Policy directive
+// (for example "script-src"), are added to the policy only while the module
+// is active, so the base policy stays first-party.
+type CSPSourcer interface {
+	CSPSources() map[string][]string
+}
+
 // Migration represents a database migration for a module.
 type Migration struct {
 	Version     int64

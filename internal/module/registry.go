@@ -402,6 +402,37 @@ func (r *Registry) IsActive(name string) bool {
 	return r.getStatus(r.activeStatus, name, true)
 }
 
+// ActiveCSPSources returns the Content-Security-Policy sources of the active
+// modules that implement CSPSourcer, keyed by directive, each source once and
+// in registration order. The security headers middleware calls it for every
+// response, so toggling a module changes the policy without a restart.
+func (r *Registry) ActiveCSPSources() map[string][]string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	sources := map[string][]string{}
+	seen := map[string]bool{}
+	for _, name := range r.order {
+		sourcer, ok := r.modules[name].(CSPSourcer)
+		if !ok {
+			continue
+		}
+		// A module without a stored status counts as active, as in IsActive.
+		if active, exists := r.activeStatus[name]; exists && !active {
+			continue
+		}
+		for directive, values := range sourcer.CSPSources() {
+			for _, value := range values {
+				if key := directive + " " + value; !seen[key] {
+					seen[key] = true
+					sources[directive] = append(sources[directive], value)
+				}
+			}
+		}
+	}
+	return sources
+}
+
 // SetActive sets a module's active status and persists it to the database.
 // When activating a module that was never initialized (e.g., it was inactive
 // at server startup), Init() and translation loading are performed first.

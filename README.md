@@ -439,6 +439,12 @@ Access the admin panel at http://localhost:8080/admin with:
 - **Email**: admin@example.com
 - **Password**: changeme1234
 
+The port is published on `127.0.0.1` only. Set `OCMS_PUBLISH_ADDRESS=0.0.0.0`
+when a reverse proxy on another host, or a container that uses the host's
+address, has to reach it. The container runs with `no-new-privileges` and only
+the `CHOWN`, `SETUID` and `SETGID` capabilities its entrypoint needs to fix
+volume ownership and drop to the `ocms` user.
+
 ### Docker Commands
 
 | Command | Description |
