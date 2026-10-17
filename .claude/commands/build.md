@@ -1,3 +1,7 @@
+---
+description: "Build the oCMS production binary"
+---
+
 Build the oCMS production binary.
 
 Steps:

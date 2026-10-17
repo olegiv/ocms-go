@@ -392,8 +392,8 @@ make run
 | `make commit-do` | Proxy to Claude slash command `/commit-do` |
 | `make code-quality` | Proxy to Claude slash command `/code-quality` |
 | `make security-audit` | Proxy to Claude slash command `/security-audit` |
-| `make commit-prepare-local` | Run local commit-prepare shell script |
-| `make commit-do-local` | Run local commit-do shell script |
+| `make commit-prepare-local` | Run the test gate, then draft a commit message locally |
+| `make commit-do-local` | Commit the staged files with the drafted message after the test gate |
 | `make code-quality-local` | Run local code quality shell script (`golangci-lint`, `nilaway`, `go test`) |
 | `make security-audit-local` | Run local security audit shell script (writes to `.audit/`) |
 | `make install-hooks` | Configure git to use repository-managed hooks from `.githooks` |
@@ -925,11 +925,18 @@ or ask Codex in chat to run them.
 You can run slash-command equivalents through Claude CLI:
 
 ```bash
-claude -p "/commit-prepare" --dangerously-skip-permissions
-claude -p "/commit-do" --dangerously-skip-permissions
-claude -p "/code-quality" --dangerously-skip-permissions
-claude -p "/security-audit" --dangerously-skip-permissions
+./scripts/codex/proxy-claude-command.sh /commit-prepare
+./scripts/codex/proxy-claude-command.sh /commit-do
+./scripts/codex/proxy-claude-command.sh /code-quality
+./scripts/codex/proxy-claude-command.sh /security-audit
 ```
+
+The proxy runs `claude -p` with `--permission-mode dontAsk` and a per-command
+`--allowedTools` list, so a command can only run the git, Go and audit tools it
+needs; anything else is denied rather than prompted. Avoid
+`--dangerously-skip-permissions`: these commands read diffs, logs and scan
+output, and text in them could otherwise steer the session into any shell
+command.
 
 Codex wrapper commands (Claude proxy by default):
 

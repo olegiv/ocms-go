@@ -110,6 +110,8 @@ func TestValidateLanguageCodeForSave(t *testing.T) {
 		{name: "uppercase code", code: "EN", isActive: true, wantError: true},
 		{name: "new active reserved code", code: "blog", isActive: true, wantError: true},
 		{name: "new inactive reserved code", code: "blog", wantError: true},
+		{name: "account namespace is reserved", code: "account", isActive: true, wantError: true},
+		{name: "legacy account language can be deactivated", code: "account", existingCode: "account"},
 		{name: "activate legacy reserved code", code: "blog", isActive: true, existingCode: "blog", wantError: true},
 		{name: "deactivate legacy reserved code", code: "blog", existingCode: "blog"},
 		{name: "rename legacy reserved code", code: "fr", isActive: true, existingCode: "blog"},

@@ -34,7 +34,12 @@ type Module struct {
 	settings *Settings
 	geoIP    *geoip.Lookup
 	cron     *cron.Cron
-	saltMu   sync.RWMutex
+
+	// settingsMu guards settings: the tracker reads it on every frontend
+	// request while the settings form and salt rotation write it. Only the
+	// helpers in settings.go and getCurrentSalt touch the field
+	// (TestSettingsAccessHoldsTheLock).
+	settingsMu sync.RWMutex
 
 	// bgWG tracks every goroutine the module starts, so Shutdown can wait for
 	// in-flight writes before the database and GeoIP reader close. bgCancel
@@ -70,16 +75,15 @@ func (m *Module) Init(ctx *module.Context) error {
 			ExcludePaths:      []string{},
 		}
 	}
-	m.settings = settings
-
 	// Ensure we have a salt
-	if m.settings.CurrentSalt == "" {
+	if settings.CurrentSalt == "" {
 		if salt := generateRandomSalt(); salt != "" {
-			m.settings.CurrentSalt = salt
-			m.settings.SaltCreatedAt = timeNow()
-			_ = m.saveSettings()
+			settings.CurrentSalt = salt
+			settings.SaltCreatedAt = timeNow()
+			_ = m.saveSettings(settings)
 		}
 	}
+	m.storeSettings(settings)
 
 	// Initialize GeoIP lookup with path from config
 	geoIPPath := ""
@@ -194,21 +198,19 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 func (m *Module) TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"analyticsPostStats": func(slug string) PageStats {
-			if m.ctx == nil || m.ctx.DB == nil || m.settings == nil || !m.settings.Enabled {
+			if m.ctx == nil || m.ctx.DB == nil || !m.IsEnabled() {
 				return PageStats{}
 			}
 			return m.getPageStats(context.Background(), "/"+slug)
 		},
 		"analyticsShowPostStats": func() bool {
-			if m.settings == nil {
-				return false
-			}
-			return m.settings.Enabled && m.settings.ShowPostStats
+			settings := m.settingsSnapshot()
+			return settings.Enabled && settings.ShowPostStats
 		},
 		// analyticsIntReadTracker returns static JS with a server-generated nonce.
 		// IMPORTANT: never interpolate user-controlled data — template.HTML bypasses auto-escape.
 		"analyticsIntReadTracker": func(args ...any) template.HTML {
-			if m.settings == nil || !m.settings.Enabled {
+			if !m.IsEnabled() {
 				return ""
 			}
 			nonce := ""
@@ -571,10 +573,8 @@ func (m *Module) GetTrackingMiddleware() func(next http.Handler) http.Handler {
 
 // IsEnabled returns whether analytics tracking is enabled.
 func (m *Module) IsEnabled() bool {
-	if m.settings == nil {
-		return false
-	}
-	return m.settings.Enabled
+	settings := m.settingsSnapshot()
+	return settings.Enabled
 }
 
 // getSiteDomain reads the site domain from the config table on each call.

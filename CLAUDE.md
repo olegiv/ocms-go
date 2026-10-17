@@ -31,18 +31,18 @@ make commit-prepare       # Proxy to Claude /commit-prepare
 make commit-do            # Proxy to Claude /commit-do
 make code-quality         # Proxy to Claude /code-quality
 make security-audit       # Proxy to Claude /security-audit
-make commit-prepare-local # Run local commit-prepare shell script
-make commit-do-local      # Run local commit-do shell script
+make commit-prepare-local # Test gate, then draft a commit message locally
+make commit-do-local      # Commit staged files after the test gate
 make code-quality-local   # Run local quality checks shell script
 make security-audit-local # Run local security audit shell script
 # Codex note: /code-quality, /security-audit, /commit-prepare, and /commit-do
 # are not registered UI slash commands and may show "No commands". Use make
 # targets or ask in chat: "run code-quality", "run security-audit", etc.
-# Run Claude slash command from CLI (non-interactive):
-claude -p "/commit-prepare" --dangerously-skip-permissions
-claude -p "/commit-do" --dangerously-skip-permissions
-claude -p "/code-quality" --dangerously-skip-permissions
-claude -p "/security-audit" --dangerously-skip-permissions
+# Run Claude slash command from CLI (non-interactive, scoped tool allowlist):
+./scripts/codex/proxy-claude-command.sh /commit-prepare
+./scripts/codex/proxy-claude-command.sh /commit-do
+./scripts/codex/proxy-claude-command.sh /code-quality
+./scripts/codex/proxy-claude-command.sh /security-audit
 
 # Database migrations
 make migrate-up          # Apply migrations

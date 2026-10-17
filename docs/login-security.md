@@ -2,6 +2,55 @@
 
 OCMS includes built-in protection against brute force attacks and DDoS on the login form. This document describes the security measures and how to configure them.
 
+## Login destinations and account dashboard
+
+Successful login and authenticated visits to `/login` use the same destinations:
+
+| Role | Destination | Access |
+|------|-------------|--------|
+| Administrator (`admin`) | `/admin` | Full administration |
+| Editor (`editor`) | `/admin` | Content management; administrator-only routes remain forbidden |
+| Public (`public`) | `/account` | Own account overview; no administration access |
+| Unrecognized role | `/` | No account dashboard or administration access |
+
+The public role is intended for users without staff privileges. Core does not
+provide public self-registration; administrators or imports provision accounts.
+Redirect destinations are fixed internal paths and cannot be overridden by login
+query parameters or form fields.
+
+`GET /account` requires a valid session and shows only the current user's name,
+email, creation date and last-login date. Administrators and editors can also
+visit it directly. It includes site branding, a website link, language selection
+and the existing POST logout action. Account details are read-only: there is no
+profile editor, password-change form or account deletion. The interface uses the
+same language preference and localized dates as login and administration, with
+English and Russian translations and a fallback when no login is recorded.
+
+The dashboard shares the admin header, collapsible sidebar, cards and mobile
+navigation. Its account variant shows only My account, Visit website and Log out;
+the same account navigation is used for administrators and editors visiting
+`/account`. The profile link leads to `/account`, and language selection submits
+to `/language`. Administrative settings, content and module links are omitted.
+Themes do not need an account template. Responses containing account details use
+`Cache-Control: private, no-store` and `noindex, nofollow`. Authentication reloads
+the user and role from the database for each protected request, so demoting an
+editor to public removes admin access immediately. Deleted users and sessions
+invalidated by password changes must sign in again.
+
+### Reserved `/account` route
+
+`/account` is an unprefixed core route, alongside `/login` and `/logout`;
+language selection does not change its URL. `account` is reserved as a language
+prefix, and content redirect rules (including wildcard rules) cannot intercept
+`/account` or paths below it. Similar names such as `/accounting` remain available
+for content redirects. New pages and aliases cannot use the `account` slug,
+`robots.txt` disallows `/account`, and first-party analytics does not record it.
+
+Before upgrading, rename any page slug, alias, module route or language prefix
+that already uses `/account`. The core dashboard takes precedence at `/account`;
+existing conflicting content is not renamed or deleted automatically. No schema
+migration or site-theme changes are required.
+
 ## Overview
 
 The login protection system provides two layers of defense:

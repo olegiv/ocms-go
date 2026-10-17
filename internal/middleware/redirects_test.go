@@ -13,17 +13,13 @@ import (
 	"github.com/olegiv/ocms-go/modules/migrator/sources/shared"
 )
 
-func TestRedirectHandlerSkipsOnlyAdminAndAPISegments(t *testing.T) {
+func TestRedirectHandlerSkipsApplicationSegments(t *testing.T) {
 	rm := &RedirectsMiddleware{
 		redirects: []store.Redirect{{
-			SourcePath: "/administrator",
+			SourcePath: "/**",
 			TargetUrl:  "/target",
 			StatusCode: http.StatusMovedPermanently,
-			Enabled:    true,
-		}, {
-			SourcePath: "/apiary",
-			TargetUrl:  "/target",
-			StatusCode: http.StatusMovedPermanently,
+			IsWildcard: true,
 			Enabled:    true,
 		}},
 		lastLoad: time.Now(),
@@ -42,8 +38,12 @@ func TestRedirectHandlerSkipsOnlyAdminAndAPISegments(t *testing.T) {
 		{path: "/admin/users", wantStatus: http.StatusNoContent},
 		{path: "/api", wantStatus: http.StatusNoContent},
 		{path: "/api/v2/pages", wantStatus: http.StatusNoContent},
+		{path: "/account", wantStatus: http.StatusNoContent},
+		{path: "/account/", wantStatus: http.StatusNoContent},
+		{path: "/account/settings", wantStatus: http.StatusNoContent},
 		{path: "/administrator", wantStatus: http.StatusMovedPermanently},
 		{path: "/apiary", wantStatus: http.StatusMovedPermanently},
+		{path: "/accounting", wantStatus: http.StatusMovedPermanently},
 	}
 
 	for _, tt := range tests {

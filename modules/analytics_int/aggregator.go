@@ -325,7 +325,8 @@ func (m *Module) cleanupOldRawData(ctx context.Context) error {
 
 // cleanupExpiredData deletes all aggregate data older than retention period.
 func (m *Module) cleanupExpiredData(ctx context.Context) error {
-	cutoff := time.Now().AddDate(0, 0, -m.settings.RetentionDays)
+	settings := m.settingsSnapshot()
+	cutoff := time.Now().AddDate(0, 0, -settings.RetentionDays)
 	cutoffDateStr := cutoff.Format(dateFormat)
 	cutoffTimeStr := cutoff.Format(datetimeFormat)
 

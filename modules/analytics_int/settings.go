@@ -63,19 +63,56 @@ func (m *Module) loadSettings() (*Settings, error) {
 	}, nil
 }
 
+// settingsSnapshot returns a copy of the settings, or the zero value (tracking
+// disabled) before they are loaded. The copy shares ExcludePaths with the
+// stored value; writers replace that slice and never modify it in place.
+func (m *Module) settingsSnapshot() Settings {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	if m.settings == nil {
+		return Settings{}
+	}
+	return *m.settings
+}
+
+// storeSettings replaces the settings with ones loaded from the database.
+func (m *Module) storeSettings(settings *Settings) {
+	m.settingsMu.Lock()
+	m.settings = settings
+	m.settingsMu.Unlock()
+}
+
+// updateSettings applies change to a copy of the settings, saves the copy and
+// publishes it only when the save succeeds. The lock is held across the save
+// so a concurrent salt rotation cannot be overwritten by a stale copy.
+func (m *Module) updateSettings(change func(*Settings)) error {
+	m.settingsMu.Lock()
+	defer m.settingsMu.Unlock()
+	if m.settings == nil {
+		return errors.New("analytics_int settings are not loaded")
+	}
+	next := *m.settings
+	change(&next)
+	if err := m.saveSettings(&next); err != nil {
+		return err
+	}
+	m.settings = &next
+	return nil
+}
+
 // saveSettings saves settings to the database.
-func (m *Module) saveSettings() error {
-	excludePathsJSON, err := json.Marshal(m.settings.ExcludePaths)
+func (m *Module) saveSettings(settings *Settings) error {
+	excludePathsJSON, err := json.Marshal(settings.ExcludePaths)
 	if err != nil {
 		excludePathsJSON = []byte("[]")
 	}
 
 	enabled := 0
-	if m.settings.Enabled {
+	if settings.Enabled {
 		enabled = 1
 	}
 	showPostStats := 0
-	if m.settings.ShowPostStats {
+	if settings.ShowPostStats {
 		showPostStats = 1
 	}
 
@@ -85,8 +122,8 @@ func (m *Module) saveSettings() error {
 		    current_salt = ?, salt_created_at = ?, salt_rotation_hours = ?,
 		    show_post_stats = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = 1
-	`, enabled, m.settings.RetentionDays, string(excludePathsJSON),
-		m.settings.CurrentSalt, m.settings.SaltCreatedAt, m.settings.SaltRotationHours,
+	`, enabled, settings.RetentionDays, string(excludePathsJSON),
+		settings.CurrentSalt, settings.SaltCreatedAt, settings.SaltRotationHours,
 		showPostStats)
 
 	return err
@@ -108,6 +145,6 @@ func (m *Module) ReloadSettings() error {
 	if err != nil {
 		return err
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 	return nil
 }

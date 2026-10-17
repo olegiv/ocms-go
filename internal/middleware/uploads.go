@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"path"
@@ -38,6 +39,35 @@ var inlineUploadExtensions = map[string]struct{}{
 	".png":  {},
 	".webm": {},
 	".webp": {},
+}
+
+// NoDirectoryFS wraps fsys so that directories report as not found. Wrapped in
+// it, http.FileServer answers a directory URL with 404 instead of listing the
+// files below it. TestFileServersRefuseDirectories (cmd/ocms) requires every
+// file server to use it.
+func NoDirectoryFS(fsys http.FileSystem) http.FileSystem {
+	return noDirectoryFS{fsys}
+}
+
+type noDirectoryFS struct {
+	http.FileSystem
+}
+
+func (fsys noDirectoryFS) Open(name string) (http.File, error) {
+	file, err := fsys.FileSystem.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if info.IsDir() {
+		_ = file.Close()
+		return nil, fs.ErrNotExist
+	}
+	return file, nil
 }
 
 // SecureUploads hardens uploads serving by denying active content extensions

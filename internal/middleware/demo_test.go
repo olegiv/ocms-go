@@ -309,7 +309,7 @@ func TestSafeRefererRedirect(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 
-			safeRefererRedirect(rec, req, fallback)
+			SafeRefererRedirect(rec, req, fallback)
 
 			if rec.Code != http.StatusSeeOther {
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)

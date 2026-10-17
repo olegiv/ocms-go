@@ -1,4 +1,5 @@
 ---
+argument-hint: "[version]"
 description: "Cut an ocms-go release: update CHANGELOG, commit, push, and push a v* tag to trigger the release workflow. Mandatory user approval of the version and tag push."
 ---
 
@@ -10,9 +11,18 @@ last tag, let the user pick the version, write the approved notes into
 Pushing the tag triggers `.github/workflows/release.yml`, which builds assets,
 compiles release binaries, uploads archives, and creates the GitHub Release.
 
-Optional argument: a version override like `0.21.0` or `v0.21.0`. If provided,
-the version-selection question is skipped and the argument is used directly
-after validation, while the content, commit, push, and tag gates still apply.
+Optional argument: a version override like `0.21.0` or `v0.21.0`, passed as
+`$ARGUMENTS`. If provided, the version-selection question is skipped and the
+value is used as the release version, while the content, commit, push, and tag
+gates still apply.
+
+**Validate `$ARGUMENTS` before using it anywhere.** If it is non-empty it MUST
+match the regex `^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$` exactly
+(optional leading `v`, then `MAJOR.MINOR.PATCH`, optional `-prerelease`). If it
+does not match, abort immediately and ask the user for a valid version. Never
+pass an unvalidated argument to `git`, `gh`, or the tag name: a value beginning
+with `-` (for example `--delete`) could be parsed as a flag, and anything else
+outside the pattern could name an unintended ref.
 
 ## Hard preconditions - abort if any fails
 
@@ -82,7 +92,8 @@ Offer 2-3 version options based on the draft:
 - Patch bump if the draft is only fixes, security, or small behavior changes.
 
 Present the options and let the user pick, override with a version string, or
-cancel. Never skip this step unless the user passed a version argument.
+cancel. A typed version must pass the same regex as `$ARGUMENTS`. Never skip
+this step unless the user passed a valid version argument.
 
 ## Step 4 - infer release title
 

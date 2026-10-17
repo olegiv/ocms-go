@@ -81,8 +81,14 @@ func TestEveryVendoredScriptIsProtected(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
+			// Dot directories hold tooling and gitignored audit snapshots of
+			// older trees, and output/ holds gitignored scratch files; none of
+			// them ships, and their stale copies would fail this test.
+			if path != root && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
 			switch d.Name() {
-			case ".git", "node_modules", "vendor", "bin", "data", "uploads", "wiki", "dist":
+			case "node_modules", "vendor", "bin", "data", "uploads", "wiki", "dist", "output":
 				return filepath.SkipDir
 			}
 			return nil

@@ -1,3 +1,7 @@
+---
+description: "Clean build artifacts and temporary files"
+---
+
 Clean build artifacts and temporary files.
 
 Steps:

@@ -41,6 +41,10 @@ Access at **Admin > Modules > Internal Analytics** or `/admin/internal-analytics
 | POST | `/admin/internal-analytics/aggregate` | Trigger aggregation manually |
 | POST | `/analytics/read` | Public read-tracking beacon (rate-limited, CSRF-exempt) |
 
+Editors and administrators can open the dashboard, the report and the JSON
+endpoints. Saving settings and triggering aggregation are admin-only: editors
+do not see those forms, and their requests get `403 Forbidden`.
+
 ### Settings
 
 | Setting | Default | Description |

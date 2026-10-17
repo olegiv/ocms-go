@@ -67,10 +67,6 @@ func TestNewAuthHandler(t *testing.T) {
 	}
 }
 
-// Note: Login and Logout handler methods require a renderer to set flash messages.
-// Full handler testing would require a mock renderer or integration tests.
-// These tests focus on validation logic and data structures.
-
 func TestAuthHandler_LoginProtectionNil(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 
@@ -82,6 +78,4 @@ func TestAuthHandler_LoginProtectionNil(t *testing.T) {
 		t.Error("loginProtection should be nil")
 	}
 
-	// Note: Full Login method testing requires a mock renderer.
-	// This test verifies handler construction with nil login protection.
 }

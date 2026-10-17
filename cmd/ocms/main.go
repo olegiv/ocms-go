@@ -949,6 +949,11 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 		return
 	}
 
+	// http.ServeFile lists a directory, so serve regular files only.
+	if info, err := os.Stat(absFilePath); err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
 	http.ServeFile(w, r, absFilePath)
 }
 
@@ -1861,6 +1866,13 @@ func run() error {
 		r.Post(handler.RouteLanguage, authHandler.SetLanguage)
 	})
 
+	// Account overview uses the core layout and current database permissions.
+	r.With(csrfMiddleware,
+		middleware.Auth(sessionManager),
+		middleware.LoadUser(sessionManager, db),
+		middleware.LoadSiteConfig(db, nil),
+	).Get(handler.RouteAccount, authHandler.Account)
+
 	// Session test routes (development only)
 	if cfg.IsDevelopment() {
 		r.Get("/session/set", func(w http.ResponseWriter, r *http.Request) {
@@ -2190,13 +2202,13 @@ func run() error {
 		return fmt.Errorf("getting static fs: %w", err)
 	}
 	// Static assets: cache for 1 year (31536000 seconds)
-	staticHandler := middleware.StaticCache(31536000)(http.StripPrefix("/static/dist/", http.FileServer(http.FS(staticFS))))
+	staticHandler := middleware.StaticCache(31536000)(http.StripPrefix("/static/dist/", http.FileServer(middleware.NoDirectoryFS(http.FS(staticFS)))))
 	r.Handle("/static/dist/*", staticHandler)
 
 	// Serve uploaded media files from uploads directory (configured via OCMS_UPLOADS_DIR)
 	// Uploads: cache for 1 week (604800 seconds)
 	uploadsDirFS := http.Dir(cfg.UploadsDir)
-	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", middleware.SecureUploads(http.FileServer(uploadsDirFS))))
+	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", middleware.SecureUploads(http.FileServer(middleware.NoDirectoryFS(uploadsDirFS)))))
 	r.Handle("/uploads/*", uploadsHandler)
 
 	// Serve theme static files with caching (1 month = 2592000 seconds)

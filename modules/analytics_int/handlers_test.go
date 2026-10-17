@@ -5,12 +5,18 @@ package analytics_int
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
@@ -156,4 +162,44 @@ func TestHandleRealtime_Authorized(t *testing.T) {
 	defer func() { _ = m.Shutdown() }()
 
 	testAuthorizedJSONHandler(t, "/admin/internal-analytics/api/realtime", m.handleRealtime)
+}
+
+// TestSaveSettingsDuringTracking saves the settings form while the tracker
+// filters requests. Run with -race: before the settings lock the form wrote
+// the fields the tracker reads on every request (security audit 2026-10-17,
+// L-3). Without -race it still checks that the last save wins.
+func TestSaveSettingsDuringTracking(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	admin := store.User{ID: 1, Email: "admin@test.com", Role: model.RoleAdmin}
+	const saves = 20
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range saves {
+			form := url.Values{"enabled": {"1"}, "retention_days": {"90"}, "exclude_paths": {fmt.Sprintf("/private-%d", i)}}
+			req := httptest.NewRequest(http.MethodPost, "/admin/internal-analytics/settings", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, admin))
+			m.handleSaveSettings(httptest.NewRecorder(), req)
+		}
+	})
+	wg.Go(func() {
+		for range 10 * saves {
+			_ = m.IsEnabled()
+			_ = m.shouldTrack(httptest.NewRequest(http.MethodGet, "/about", nil))
+		}
+	})
+	wg.Wait()
+
+	settings := m.settingsSnapshot()
+	if want := []string{fmt.Sprintf("/private-%d", saves-1)}; !slices.Equal(settings.ExcludePaths, want) {
+		t.Errorf("ExcludePaths = %v, want %v", settings.ExcludePaths, want)
+	}
+	if settings.RetentionDays != 90 {
+		t.Errorf("RetentionDays = %d, want 90", settings.RetentionDays)
+	}
 }

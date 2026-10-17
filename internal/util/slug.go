@@ -107,14 +107,37 @@ func IsValidLangCode(s string) bool {
 	return true
 }
 
+// IsReservedRouteSegment reports whether s is the first path segment of a
+// route that the application or a built-in module registers. A language URL
+// prefix or a page slug equal to one of them is shadowed by that route.
+// TestTopLevelRoutesAreReserved (cmd/ocms) keeps the list in step with the
+// router.
+func IsReservedRouteSegment(s string) bool {
+	switch s {
+	case "admin", "api", "blog", "uploads", "static", "themes", "health",
+		"login", "logout", "language", "forms", "search", "tag", "category",
+		"page", "session", "account", "analytics", "embed", "example":
+		return true
+	default:
+		return false
+	}
+}
+
 // IsReservedLanguageCode reports whether a language code conflicts with a
 // top-level route owned by the application. Reserved codes must not be used as
 // language URL prefixes, even when legacy data marks them as active.
 func IsReservedLanguageCode(s string) bool {
-	switch s {
-	case "admin", "api", "blog", "uploads", "static", "themes", "health",
-		"login", "logout", "language", "forms", "search", "tag", "category",
-		"page", "session":
+	return IsReservedRouteSegment(s)
+}
+
+// IsPrivateRoutePath reports whether path belongs to the admin UI, the API or
+// the signed-in account area. Content redirects and first-party analytics
+// leave these paths alone. TestAuthenticatedRoutesArePrivate (cmd/ocms) fails
+// when a session-authenticated top-level route is missing here.
+func IsPrivateRoutePath(path string) bool {
+	first, _, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
+	switch first {
+	case "admin", "api", "account":
 		return true
 	default:
 		return false

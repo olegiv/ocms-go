@@ -189,7 +189,7 @@ func (s *Service) ensureSlugAvailable(ctx context.Context, slug string, exceptID
 	// the frontend router runs, so a page written at that segment answers to
 	// nobody — the language homepage takes the URL. An API client renaming a
 	// page to "eng" used to succeed and quietly lose the page.
-	conflict, err := handler.LanguagePrefixConflict(ctx, s.queries, slug)
+	conflict, err := handler.PageRouteConflict(ctx, s.queries, slug)
 	if err != nil {
 		return fmt.Errorf("checking language prefixes: %w", err)
 	}

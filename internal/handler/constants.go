@@ -52,6 +52,8 @@ const (
 
 	// RouteLogin is the login route.
 	RouteLogin = "/login"
+	// RouteAccount is the authenticated account overview route.
+	RouteAccount = "/account"
 	// RouteLogout is the logout route.
 	RouteLogout = "/logout"
 	// RouteLanguage is the public language switch route.

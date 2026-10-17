@@ -7,7 +7,7 @@ package admin
 templ Sidebar(pc *PageContext) {
 	<aside class="admin-sidebar" :class="{ 'open': sidebarOpen, 'collapsed': sidebarCollapsed }">
 		<div class="sidebar-header">
-			<a href="/admin" class="sidebar-brand">
+			<a href={ templ.SafeURL(pc.HomeURL()) } class="sidebar-brand">
 				if pc.SiteName != "" {
 					{ pc.SiteName }
 				} else {
@@ -29,61 +29,68 @@ templ Sidebar(pc *PageContext) {
 			</button>
 		</div>
 		<nav class="sidebar-nav">
-			<!-- Content section -->
-			<div class="nav-section">
-				<div class="nav-section-title">{ pc.T("nav.content") }</div>
-				@navLink(pc, "/admin", pc.T("nav.dashboard"), pc.IsActive("/admin"), iconDashboard())
-				if pc.IsEditor() {
-					@navLinkPrefix(pc, "/admin/pages", pc.T("nav.pages"), pc.HasPrefix("/admin/pages"), iconPages())
-					@navLinkPrefix(pc, "/admin/media", pc.T("nav.media"), pc.HasPrefix("/admin/media"), iconMedia())
-					@navLinkPrefix(pc, "/admin/menus", pc.T("nav.menus"), pc.HasPrefix("/admin/menus"), iconMenus())
-					@navLinkPrefix(pc, "/admin/forms", pc.T("nav.forms"), pc.HasPrefix("/admin/forms"), iconForms())
-				}
-			</div>
-			<!-- Taxonomy section -->
-			if pc.IsEditor() {
+			if pc.AccountLayout {
 				<div class="nav-section">
-					<div class="nav-section-title">{ pc.T("nav.taxonomy") }</div>
-					@navLinkPrefix(pc, "/admin/categories", pc.T("nav.categories"), pc.HasPrefix("/admin/categories"), iconCategories())
-					@navLinkPrefix(pc, "/admin/tags", pc.T("nav.tags"), pc.HasPrefix("/admin/tags"), iconTags())
+					@navLink(pc, "/account", pc.T("account.title"), pc.IsActive("/account"), iconDashboard())
+					@navLink(pc, "/", pc.T("account.visit_website"), false, iconGlobe())
 				</div>
-			}
-			<!-- Admin section -->
-			<div class="nav-section">
-				<div class="nav-section-title">{ pc.T("nav.admin") }</div>
-				if pc.IsAdmin() {
-					@navLinkPrefix(pc, "/admin/users", pc.T("nav.users"), pc.HasPrefix("/admin/users"), iconUsers())
-					@navLinkPrefix(pc, "/admin/api-keys", pc.T("nav.api_keys"), pc.HasPrefix("/admin/api-keys"), iconAPIKeys())
-					@navLinkPrefix(pc, "/admin/webhooks", pc.T("nav.webhooks"), pc.HasPrefix("/admin/webhooks"), iconWebhooks())
-					@navLinkPrefix(pc, "/admin/redirects", pc.T("nav.redirects"), pc.HasPrefix("/admin/redirects"), iconRedirects())
-				}
-				<a href="/api/v2/docs" class="nav-link" target="_blank">
-					@iconAPIDocs()
-					<span>{ pc.T("nav.api_docs") }</span>
-				</a>
-				if pc.IsAdmin() {
-					@navLinkPrefix(pc, "/admin/docs", pc.T("nav.site_docs"), pc.HasPrefix("/admin/docs"), iconDocs())
-				}
-				@navLinkPrefix(pc, "/admin/events", pc.T("nav.event_log"), pc.HasPrefix("/admin/events"), iconEvents())
-				if pc.IsAdmin() {
-					@navLinkPrefix(pc, "/admin/themes", pc.T("nav.themes"), pc.HasPrefix("/admin/themes"), iconThemes())
-					@navLinkPrefix(pc, "/admin/languages", pc.T("nav.languages"), pc.HasPrefix("/admin/languages"), iconLanguages())
-					@navLinkPrefix(pc, "/admin/config", pc.T("nav.settings"), pc.HasPrefix("/admin/config"), iconSettings())
-					@navLinkPrefix(pc, "/admin/cache", pc.T("nav.cache"), pc.HasPrefix("/admin/cache"), iconCache())
-					@navLinkPrefix(pc, "/admin/scheduler", pc.T("nav.scheduler"), pc.HasPrefix("/admin/scheduler"), iconScheduler())
-					@navLinkPrefix(pc, "/admin/export", pc.T("nav.export"), pc.HasPrefix("/admin/export"), iconExport())
-					@navLinkPrefix(pc, "/admin/import", pc.T("nav.import"), pc.HasPrefix("/admin/import"), iconImport())
-				}
-			</div>
-			<!-- Modules section -->
-			if pc.IsAdmin() {
+			} else {
+				<!-- Content section -->
 				<div class="nav-section">
-					<div class="nav-section-title">{ pc.T("nav.modules") }</div>
-					@navLink(pc, "/admin/modules", pc.T("nav.all_modules"), pc.IsActive("/admin/modules"), iconModules())
-					for _, mod := range pc.SidebarModules {
-						@navLinkPrefix(pc, mod.AdminURL, pc.T(mod.Label), pc.HasPrefix(mod.AdminURL), iconModule())
+					<div class="nav-section-title">{ pc.T("nav.content") }</div>
+					@navLink(pc, "/admin", pc.T("nav.dashboard"), pc.IsActive("/admin"), iconDashboard())
+					if pc.IsEditor() {
+						@navLinkPrefix(pc, "/admin/pages", pc.T("nav.pages"), pc.HasPrefix("/admin/pages"), iconPages())
+						@navLinkPrefix(pc, "/admin/media", pc.T("nav.media"), pc.HasPrefix("/admin/media"), iconMedia())
+						@navLinkPrefix(pc, "/admin/menus", pc.T("nav.menus"), pc.HasPrefix("/admin/menus"), iconMenus())
+						@navLinkPrefix(pc, "/admin/forms", pc.T("nav.forms"), pc.HasPrefix("/admin/forms"), iconForms())
 					}
 				</div>
+				<!-- Taxonomy section -->
+				if pc.IsEditor() {
+					<div class="nav-section">
+						<div class="nav-section-title">{ pc.T("nav.taxonomy") }</div>
+						@navLinkPrefix(pc, "/admin/categories", pc.T("nav.categories"), pc.HasPrefix("/admin/categories"), iconCategories())
+						@navLinkPrefix(pc, "/admin/tags", pc.T("nav.tags"), pc.HasPrefix("/admin/tags"), iconTags())
+					</div>
+				}
+				<!-- Admin section -->
+				<div class="nav-section">
+					<div class="nav-section-title">{ pc.T("nav.admin") }</div>
+					if pc.IsAdmin() {
+						@navLinkPrefix(pc, "/admin/users", pc.T("nav.users"), pc.HasPrefix("/admin/users"), iconUsers())
+						@navLinkPrefix(pc, "/admin/api-keys", pc.T("nav.api_keys"), pc.HasPrefix("/admin/api-keys"), iconAPIKeys())
+						@navLinkPrefix(pc, "/admin/webhooks", pc.T("nav.webhooks"), pc.HasPrefix("/admin/webhooks"), iconWebhooks())
+						@navLinkPrefix(pc, "/admin/redirects", pc.T("nav.redirects"), pc.HasPrefix("/admin/redirects"), iconRedirects())
+					}
+					<a href="/api/v2/docs" class="nav-link" target="_blank">
+						@iconAPIDocs()
+						<span>{ pc.T("nav.api_docs") }</span>
+					</a>
+					if pc.IsAdmin() {
+						@navLinkPrefix(pc, "/admin/docs", pc.T("nav.site_docs"), pc.HasPrefix("/admin/docs"), iconDocs())
+					}
+					@navLinkPrefix(pc, "/admin/events", pc.T("nav.event_log"), pc.HasPrefix("/admin/events"), iconEvents())
+					if pc.IsAdmin() {
+						@navLinkPrefix(pc, "/admin/themes", pc.T("nav.themes"), pc.HasPrefix("/admin/themes"), iconThemes())
+						@navLinkPrefix(pc, "/admin/languages", pc.T("nav.languages"), pc.HasPrefix("/admin/languages"), iconLanguages())
+						@navLinkPrefix(pc, "/admin/config", pc.T("nav.settings"), pc.HasPrefix("/admin/config"), iconSettings())
+						@navLinkPrefix(pc, "/admin/cache", pc.T("nav.cache"), pc.HasPrefix("/admin/cache"), iconCache())
+						@navLinkPrefix(pc, "/admin/scheduler", pc.T("nav.scheduler"), pc.HasPrefix("/admin/scheduler"), iconScheduler())
+						@navLinkPrefix(pc, "/admin/export", pc.T("nav.export"), pc.HasPrefix("/admin/export"), iconExport())
+						@navLinkPrefix(pc, "/admin/import", pc.T("nav.import"), pc.HasPrefix("/admin/import"), iconImport())
+					}
+				</div>
+				<!-- Modules section -->
+				if pc.IsAdmin() {
+					<div class="nav-section">
+						<div class="nav-section-title">{ pc.T("nav.modules") }</div>
+						@navLink(pc, "/admin/modules", pc.T("nav.all_modules"), pc.IsActive("/admin/modules"), iconModules())
+						for _, mod := range pc.SidebarModules {
+							@navLinkPrefix(pc, mod.AdminURL, pc.T(mod.Label), pc.HasPrefix(mod.AdminURL), iconModule())
+						}
+					</div>
+				}
 			}
 			<div class="nav-section">
 				<form action="/logout" method="POST">

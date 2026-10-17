@@ -219,9 +219,10 @@ func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler 
 			// X-Content-Type-Options - prevent MIME sniffing
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 
-			// X-XSS-Protection - legacy but still useful for older browsers
-			// Note: Modern browsers ignore this in favor of CSP
-			w.Header().Set("X-XSS-Protection", "1; mode=block")
+			// X-XSS-Protection: 0 turns off the legacy XSS auditor of older
+			// browsers, whose blocking mode could be abused to leak page
+			// state; CSP is the protection that modern browsers enforce.
+			w.Header().Set("X-XSS-Protection", "0")
 
 			// Referrer-Policy
 			if cfg.ReferrerPolicy != "" {

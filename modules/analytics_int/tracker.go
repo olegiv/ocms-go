@@ -50,7 +50,7 @@ func (m *Module) TrackingMiddleware() func(http.Handler) http.Handler {
 			}
 
 			// Skip if tracking is disabled
-			if m.settings == nil || !m.settings.Enabled {
+			if !m.IsEnabled() {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -121,20 +121,14 @@ func (m *Module) shouldTrack(r *http.Request) bool {
 		}
 	}
 
-	// Skip admin and API routes
-	adminAPIPrefixes := []string{
-		"/admin",
-		"/api/",
-		"/health",
-	}
-	for _, prefix := range adminAPIPrefixes {
-		if strings.HasPrefix(path, prefix) {
-			return false
-		}
+	// Skip admin, API and account routes, and health probes
+	if util.IsPrivateRoutePath(path) || strings.HasPrefix(path, "/health") {
+		return false
 	}
 
 	// Skip user-configured excluded paths
-	for _, excludePath := range m.settings.ExcludePaths {
+	settings := m.settingsSnapshot()
+	for _, excludePath := range settings.ExcludePaths {
 		if strings.HasPrefix(path, excludePath) {
 			return false
 		}

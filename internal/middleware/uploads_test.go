@@ -6,6 +6,8 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -86,5 +88,32 @@ func TestSanitizeContentDispositionFilename(t *testing.T) {
 				t.Fatalf("sanitizeContentDispositionFilename(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestNoDirectoryFS checks that a file server over a wrapped file system
+// serves files and answers every directory URL with 404 instead of a listing.
+func TestNoDirectoryFS(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "originals"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "originals", "photo.jpg"), []byte("jpg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	server := http.StripPrefix("/uploads/", http.FileServer(NoDirectoryFS(http.Dir(dir))))
+
+	for path, want := range map[string]int{
+		"/uploads/originals/photo.jpg": http.StatusOK,
+		"/uploads/":                    http.StatusNotFound,
+		"/uploads/originals":           http.StatusNotFound,
+		"/uploads/originals/":          http.StatusNotFound,
+		"/uploads/missing.jpg":         http.StatusNotFound,
+	} {
+		rr := httptest.NewRecorder()
+		server.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+		if rr.Code != want {
+			t.Errorf("GET %s = %d, want %d; body %q", path, rr.Code, want, rr.Body.String())
+		}
 	}
 }

@@ -95,9 +95,16 @@ prefix returns 404. The URL prefix always wins over `?lang`.
 
 Core route names cannot be activated as language codes: `admin`, `api`,
 `blog`, `uploads`, `static`, `themes`, `health`, `login`, `logout`,
-`language`, `forms`, `search`, `tag`, `category`, `page`, and `session`.
+`language`, `forms`, `search`, `tag`, `category`, `page`, `session`,
+`account`, and the built-in module routes `analytics`, `embed`, and `example`.
 Legacy active rows using a reserved code are ignored by routing and logged,
 but administrators can still deactivate or rename them.
+
+The same names cannot be used as page slugs or as the first segment of a page
+alias, because the core route answers that URL before any page does. The admin
+form and the REST API reject them, the Migrator suffixes them (`blog-2`), and
+content import rejects an archive that contains one. An existing page already
+stored at a reserved slug stays editable as long as its slug is unchanged.
 
 ### Feed Language
 

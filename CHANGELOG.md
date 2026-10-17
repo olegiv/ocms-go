@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A read-only account dashboard at `/account` for signed-in users, with account
+  details, English/Russian interface languages and logout. It shares the admin
+  dashboard layout with account-specific navigation, independently of the active
+  site theme. See `docs/login-security.md`.
+
+### Fixed
+- Editors now land at `/admin` after login. Public users land at `/account`;
+  visiting `/login` with an existing session uses the same role-based destination.
+  Resolves [#188](https://github.com/olegiv/ocms-go/issues/188).
+
+### Security
+- The language switch no longer redirects to another site when the Referer is
+  a same-host URL whose path starts with `//`. It now uses the same Referer
+  check as demo mode.
+- Internal Analytics settings are guarded by a lock, so saving them no longer
+  races with the tracker. Saving settings and running aggregation are now
+  admin-only; editors keep the statistics pages.
+- Core route names (`login`, `account`, `blog`, `search`, the built-in module
+  routes `analytics`, `embed` and `example`, and the rest of the reserved list
+  in `docs/multi-language.md`) can no longer be used as page slugs or alias
+  prefixes, since the route answers that URL first. The admin form and the
+  REST API reject them, the Migrator suffixes them (`blog-2`), and content
+  import rejects an archive containing one. Existing pages keep working while
+  their slug is unchanged. A drift test keeps the reserved list in step with
+  the router.
+- `/account` is disallowed in `robots.txt`, and content redirects and
+  first-party analytics now share one list of private paths (`/admin`, `/api`,
+  `/account`). Pages whose slug merely starts with `admin` are now tracked.
+- `/uploads`, `/static/dist` and custom theme static routes answer a directory
+  URL with 404 instead of a file listing.
+- `X-XSS-Protection` is now `0`, which turns off the legacy browser XSS
+  auditor; CSP remains the enforced protection. The reverse-proxy examples
+  in `docs/reverse-proxy.md` match.
+
+#### Developer Tooling
+- `make commit-do-local` commits only the staged files, after the test gate
+  passes on exactly that tree; `make commit-prepare-local` always runs the
+  test gate before drafting a message.
+- The Claude command proxy (`make commit-prepare`, `make code-quality`, …)
+  runs with `--permission-mode dontAsk` and a per-command tool allowlist
+  instead of `--dangerously-skip-permissions`.
+- `/release-gh-prepare` validates a version argument against a semver pattern
+  before it reaches `git`, and `/update-wiki` asks for approval before the wiki
+  commit and again before the push.
+
 ## [0.28.0] - 2026-10-12
 
 ### Added

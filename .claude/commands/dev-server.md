@@ -1,3 +1,7 @@
+---
+description: "Start the oCMS development server with asset compilation"
+---
+
 Start the oCMS development server with asset compilation.
 
 Steps:
@@ -21,4 +25,4 @@ To stop the server: Use `make stop` or Ctrl+C
 
 Note: Default credentials on first run:
 - Email: admin@example.com
-- Password: changeme
+- Password: changeme1234

@@ -381,7 +381,7 @@ func TestSettingsSaveLoad(t *testing.T) {
 	m.settings.ExcludePaths = []string{"/private", "/api"}
 
 	// Save
-	if err := m.saveSettings(); err != nil {
+	if err := m.saveSettings(m.settings); err != nil {
 		t.Fatalf("saveSettings failed: %v", err)
 	}
 
@@ -633,7 +633,7 @@ func TestSettingsShowPostStats(t *testing.T) {
 
 	// Disable and save
 	m.settings.ShowPostStats = false
-	if err := m.saveSettings(); err != nil {
+	if err := m.saveSettings(m.settings); err != nil {
 		t.Fatalf("saveSettings failed: %v", err)
 	}
 

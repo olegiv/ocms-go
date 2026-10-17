@@ -176,6 +176,11 @@ func TestSecurityHeadersAllHeadersPresent(t *testing.T) {
 			t.Errorf("missing required header: %s", header)
 		}
 	}
+	// The legacy XSS auditor stays off; "1; mode=block" re-enables it in the
+	// browsers that still have one (security audit 2026-10-17, I-4).
+	if got := rec.Header().Get("X-XSS-Protection"); got != "0" {
+		t.Errorf("X-XSS-Protection = %q, want \"0\"", got)
+	}
 }
 
 func TestBuildCSP(t *testing.T) {

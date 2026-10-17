@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
+# Commit the staged changes with the message prepared by commit-prepare.sh.
+#
+# Only what is staged is committed: stage the files the message describes by
+# name first. The test gate runs on the working tree, so unstaged or untracked
+# changes that would make the tested tree differ from the commit are refused,
+# and the index must not change while the gate runs.
 set -euo pipefail
 
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
 STATE_DIR="$ROOT_DIR/.git/.codex"
 MSG_FILE="$STATE_DIR/commit-message.txt"
 
-if [[ -z "$(git status --porcelain)" ]]; then
-  echo "No changes to commit."
-  exit 0
+if git diff --cached --quiet; then
+  echo "Nothing is staged. Stage the files the prepared message describes"
+  echo "(git add -- <file>...), then rerun."
+  exit 2
 fi
 
 if [[ ! -s "$MSG_FILE" ]]; then
@@ -16,14 +24,30 @@ if [[ ! -s "$MSG_FILE" ]]; then
   exit 2
 fi
 
-git add .
+# Submodules hold no Go code the suite builds (same rule as .githooks/pre-push).
+if ! git diff --quiet --ignore-submodules || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+  echo "Unstaged or untracked changes would be tested but not committed."
+  echo "Stage, stash or remove them first:"
+  git status --short
+  exit 2
+fi
 
-# Enforce path guard even when skipping git hooks in this helper flow.
 "$ROOT_DIR/scripts/check-no-absolute-paths.sh" --staged
 
-# Bypass git hooks only for explicit commit command helper usage.
+tested_tree="$(git write-tree)"
+if ! "$ROOT_DIR/scripts/test-gate.sh"; then
+  echo "Tests failed; nothing was committed."
+  exit 1
+fi
+if [[ "$(git write-tree)" != "$tested_tree" ]]; then
+  echo "The index changed while the tests ran; rerun to test what will be committed."
+  exit 2
+fi
+
+# Running this script is the approval the interactive pre-commit hook asks
+# for, and the tree checks a hook would add ran above.
 git commit --no-verify -F "$MSG_FILE"
 
 echo
-echo "Commit created with message from $MSG_FILE"
+echo "Commit created with message from $MSG_FILE (tested tree $tested_tree)"
 git status --short

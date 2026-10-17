@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // RedirectsMiddleware handles URL redirects based on database rules.
@@ -84,9 +85,9 @@ func (rm *RedirectsMiddleware) InvalidateCache() {
 // Handler returns the middleware handler function.
 func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip admin and API routes
+		// Keep application and private account routes outside content redirects.
 		path := r.URL.Path
-		if hasPathSegmentPrefix(path, "/admin") || hasPathSegmentPrefix(path, "/api") {
+		if util.IsPrivateRoutePath(path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -141,10 +142,6 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func hasPathSegmentPrefix(path, prefix string) bool {
-	return path == prefix || strings.HasPrefix(path, prefix+"/")
 }
 
 // matchPathWithCaptures matches a request path against a source pattern and returns captured wildcard segments.

@@ -371,60 +371,62 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 			</div>
 		</div>
 		<!-- Settings -->
-		<div class="settings-section">
-			<div class="card">
-				<div class="card-header">
-					<h3>{ pc.T("analytics_int.settings") }</h3>
-				</div>
-				<div class="card-body">
-					<form method="POST" action="/admin/internal-analytics/settings">
-						<div class="form-group">
-							<label class="form-check">
-								<input type="checkbox" name="enabled" value="1" checked?={ data.Settings.Enabled }/>
-								<span>{ pc.T("analytics_int.enabled") }</span>
-							</label>
-							<p class="form-hint">{ pc.T("analytics_int.enabled_hint") }</p>
-						</div>
-						<div class="form-group">
-							<label class="form-check">
-								<input type="checkbox" name="show_post_stats" value="1" checked?={ data.Settings.ShowPostStats }/>
-								<span>{ pc.T("analytics_int.show_post_stats") }</span>
-							</label>
-							<p class="form-hint">{ pc.T("analytics_int.show_post_stats_hint") }</p>
-						</div>
-						<div class="form-group">
-							<label>{ pc.T("analytics_int.retention_days") }</label>
-							<input type="number" name="retention_days" value={ strconv.Itoa(data.Settings.RetentionDays) } min="30" max="730" class="form-control form-control-sm"/>
-							<p class="form-hint">{ pc.T("analytics_int.retention_hint") }</p>
-						</div>
-						<div class="form-group">
-							<label>{ pc.T("analytics_int.exclude_paths") }</label>
-							<textarea name="exclude_paths" rows="3" class="form-control" placeholder="/private&#10;/internal">
-								for i, path := range data.Settings.ExcludePaths {
-									{ path }
-									if i < len(data.Settings.ExcludePaths)-1 {
-										{ "\n" }
+		if pc.IsAdmin() {
+			<div class="settings-section">
+				<div class="card">
+					<div class="card-header">
+						<h3>{ pc.T("analytics_int.settings") }</h3>
+					</div>
+					<div class="card-body">
+						<form method="POST" action="/admin/internal-analytics/settings">
+							<div class="form-group">
+								<label class="form-check">
+									<input type="checkbox" name="enabled" value="1" checked?={ data.Settings.Enabled }/>
+									<span>{ pc.T("analytics_int.enabled") }</span>
+								</label>
+								<p class="form-hint">{ pc.T("analytics_int.enabled_hint") }</p>
+							</div>
+							<div class="form-group">
+								<label class="form-check">
+									<input type="checkbox" name="show_post_stats" value="1" checked?={ data.Settings.ShowPostStats }/>
+									<span>{ pc.T("analytics_int.show_post_stats") }</span>
+								</label>
+								<p class="form-hint">{ pc.T("analytics_int.show_post_stats_hint") }</p>
+							</div>
+							<div class="form-group">
+								<label>{ pc.T("analytics_int.retention_days") }</label>
+								<input type="number" name="retention_days" value={ strconv.Itoa(data.Settings.RetentionDays) } min="30" max="730" class="form-control form-control-sm"/>
+								<p class="form-hint">{ pc.T("analytics_int.retention_hint") }</p>
+							</div>
+							<div class="form-group">
+								<label>{ pc.T("analytics_int.exclude_paths") }</label>
+								<textarea name="exclude_paths" rows="3" class="form-control" placeholder="/private&#10;/internal">
+									for i, path := range data.Settings.ExcludePaths {
+										{ path }
+										if i < len(data.Settings.ExcludePaths)-1 {
+											{ "\n" }
+										}
 									}
-								}
-							</textarea>
-							<p class="form-hint">{ pc.T("analytics_int.exclude_hint") }</p>
-						</div>
-						<button type="submit" class="btn btn-primary">{ pc.T("analytics_int.save_settings") }</button>
-					</form>
+								</textarea>
+								<p class="form-hint">{ pc.T("analytics_int.exclude_hint") }</p>
+							</div>
+							<button type="submit" class="btn btn-primary">{ pc.T("analytics_int.save_settings") }</button>
+						</form>
+					</div>
+				</div>
+				<div class="card mt-4">
+					<div class="card-header">
+						<h3>{ pc.T("analytics_int.run_aggregation") }</h3>
+					</div>
+					<div class="card-body">
+						<form method="POST" action="/admin/internal-analytics/aggregate">
+							<p class="form-hint mb-2">{ pc.T("analytics_int.run_aggregation_hint") }</p>
+							<button type="submit" class="btn btn-primary">{ pc.T("analytics_int.run_aggregation") }</button>
+						</form>
+					</div>
 				</div>
 			</div>
-			<div class="card mt-4">
-				<div class="card-header">
-					<h3>{ pc.T("analytics_int.run_aggregation") }</h3>
-				</div>
-				<div class="card-body">
-					<form method="POST" action="/admin/internal-analytics/aggregate">
-						<p class="form-hint mb-2">{ pc.T("analytics_int.run_aggregation_hint") }</p>
-						<button type="submit" class="btn btn-primary">{ pc.T("analytics_int.run_aggregation") }</button>
-					</form>
-				</div>
-			</div>
-		</div>
+		}
 		<script nonce={ templ.GetNonce(ctx) }>
 		// Update real-time count every 30 seconds
 		setInterval(function() {

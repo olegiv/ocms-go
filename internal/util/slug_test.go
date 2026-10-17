@@ -583,7 +583,7 @@ func TestIsReservedLanguageCode(t *testing.T) {
 	reserved := []string{
 		"admin", "api", "blog", "uploads", "static", "themes", "health",
 		"login", "logout", "language", "forms", "search", "tag", "category",
-		"page", "session",
+		"page", "session", "account", "analytics", "embed", "example",
 	}
 
 	for _, code := range reserved {
@@ -595,6 +595,30 @@ func TestIsReservedLanguageCode(t *testing.T) {
 	for _, code := range []string{"en", "zh-hans", "administrator", "blogs", "docs"} {
 		if IsReservedLanguageCode(code) {
 			t.Errorf("IsReservedLanguageCode(%q) = true, want false", code)
+		}
+	}
+}
+
+func TestIsPrivateRoutePath(t *testing.T) {
+	for path, want := range map[string]bool{
+		"/admin":            true,
+		"/admin/pages":      true,
+		"/api":              true,
+		"/api/v2/pages":     true,
+		"/account":          true,
+		"/account/":         true,
+		"/":                 false,
+		"/administrator":    false,
+		"/apiary":           false,
+		"/accounting":       false,
+		"/blog/admin":       false,
+		"/login":            false,
+		"/health/live":      false,
+		"/en/account":       false,
+		"/static/admin.css": false,
+	} {
+		if got := IsPrivateRoutePath(path); got != want {
+			t.Errorf("IsPrivateRoutePath(%q) = %v, want %v", path, got, want)
 		}
 	}
 }

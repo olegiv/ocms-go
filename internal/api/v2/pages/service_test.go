@@ -301,3 +301,42 @@ func TestURLSchemeAllowlistIsEnforced(t *testing.T) {
 		})
 	}
 }
+
+// TestCreateAndUpdateRejectApplicationRouteSlugs refuses page slugs that an
+// application route such as /account answers first (security audit
+// 2026-10-17, L-2).
+func TestCreateAndUpdateRejectApplicationRouteSlugs(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	svc := pages.NewService(db, queries, nil, nil, pages.Policy{})
+	ctx := context.Background()
+	now := time.Now()
+
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "api@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "API",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	writer := v2.Actor{
+		APIKey:      &store.ApiKey{ID: 1, CreatedBy: author.ID},
+		Permissions: []string{model.PermissionPagesWrite},
+	}
+
+	var de *v2.Error
+	_, err = svc.Create(ctx, writer, pages.CreatePageBody{Title: "Account", Slug: "account", Body: "b"})
+	if !errors.As(err, &de) || de.Kind != v2.ErrValidation {
+		t.Fatalf("Create() error = %v, want a validation error for the application route", err)
+	}
+	created, err := svc.Create(ctx, writer, pages.CreatePageBody{Title: "Accounting", Slug: "accounting", Body: "b"})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want a free slug to be accepted", err)
+	}
+	reserved := "login"
+	_, err = svc.Update(ctx, writer, created.ID, pages.UpdatePageBody{Slug: &reserved})
+	if !errors.As(err, &de) || de.Kind != v2.ErrValidation {
+		t.Fatalf("Update() error = %v, want a validation error for the application route", err)
+	}
+}

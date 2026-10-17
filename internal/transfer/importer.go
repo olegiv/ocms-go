@@ -2992,7 +2992,7 @@ func (i *Importer) previewLanguageContract(
 }
 
 // validateSlugsAgainstLanguagePrefixes refuses an archive whose page routes
-// the destination's languages would swallow.
+// the destination's languages or application routes would swallow.
 //
 // known holds the codes that route once this import settles, archive languages
 // included, so an archive carrying both a language "eng" and a page "eng"
@@ -3002,20 +3002,22 @@ func (i *Importer) previewLanguageContract(
 func validateSlugsAgainstLanguagePrefixes(
 	data *ExportData, opts ImportOptions, known map[string]struct{},
 ) []ImportError {
-	if !opts.ImportPages || len(known) == 0 {
+	if !opts.ImportPages {
 		return nil
 	}
 	var errs []ImportError
 	for _, page := range data.Pages {
-		if _, shadowed := known[page.Slug]; !shadowed {
+		var message string
+		if util.IsReservedRouteSegment(page.Slug) {
+			message = fmt.Sprintf("page slug %q is the application route /%s; "+
+				"the imported page would be unreachable", page.Slug, page.Slug)
+		} else if _, shadowed := known[page.Slug]; shadowed {
+			message = fmt.Sprintf("page slug %q is the URL prefix of active language %q; "+
+				"the imported page would be unreachable", page.Slug, page.Slug)
+		} else {
 			continue
 		}
-		errs = append(errs, ImportError{
-			Entity: "page",
-			ID:     page.Slug,
-			Message: fmt.Sprintf("page slug %q is the URL prefix of active language %q; "+
-				"the imported page would be unreachable", page.Slug, page.Slug),
-		})
+		errs = append(errs, ImportError{Entity: "page", ID: page.Slug, Message: message})
 	}
 	return errs
 }

@@ -3,6 +3,46 @@
     "language": "en",
     "messages": [
         {
+            "id": "account.title",
+            "message": "My account",
+            "translation": "My account"
+        },
+        {
+            "id": "account.description",
+            "message": "Your account details.",
+            "translation": "Your account details."
+        },
+        {
+            "id": "account.name",
+            "message": "Name",
+            "translation": "Name"
+        },
+        {
+            "id": "account.email",
+            "message": "Email",
+            "translation": "Email"
+        },
+        {
+            "id": "account.created_at",
+            "message": "Account created",
+            "translation": "Account created"
+        },
+        {
+            "id": "account.last_login_at",
+            "message": "Last login",
+            "translation": "Last login"
+        },
+        {
+            "id": "account.no_login",
+            "message": "No login recorded",
+            "translation": "No login recorded"
+        },
+        {
+            "id": "account.visit_website",
+            "message": "Visit website",
+            "translation": "Visit website"
+        },
+        {
             "id": "nav.dashboard",
             "message": "Dashboard",
             "translation": "Dashboard"

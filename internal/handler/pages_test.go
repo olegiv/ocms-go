@@ -962,6 +962,50 @@ func TestPageSlugCannotClaimActiveLanguagePrefix(t *testing.T) {
 	}
 }
 
+// TestPageSlugCannotClaimApplicationRoute covers the third namespace a page
+// route competes with: application routes such as /login or /account are
+// registered ahead of the page catch-all, so a page saved at one is never
+// served (security audit 2026-10-17, L-2). A legacy page already stored there
+// stays editable as long as its slug does not change.
+func TestPageSlugCannotClaimApplicationRoute(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	h := NewPagesHandler(db, nil, sm)
+
+	for _, slug := range []string{"login", "account", "analytics"} {
+		if got := h.validatePageSlugCreate(ctx, slug); got == "" {
+			t.Errorf("validatePageSlugCreate(%q) accepted a slug an application route shadows", slug)
+		}
+	}
+	if got := h.validatePageSlugCreate(ctx, "accounting"); got != "" {
+		t.Errorf("validatePageSlugCreate(\"accounting\") = %q, want a longer slug to be unaffected", got)
+	}
+
+	legacy, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Account", Slug: "account", Body: "Content", Status: "published", AuthorID: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+	if got := h.validatePageSlugUpdate(ctx, legacy.Slug, legacy.Slug, legacy.ID); got != "" {
+		t.Errorf("validatePageSlugUpdate() rejected a legacy page's unchanged slug: %q", got)
+	}
+	if got := h.validatePageSlugUpdate(ctx, "login", legacy.Slug, legacy.ID); got == "" {
+		t.Error("validatePageSlugUpdate() accepted a rename onto /login")
+	}
+
+	h.savePageAliases(ctx, legacy.ID, []string{"login", "account/settings", "about/team"})
+	aliases, err := queries.GetAliasesForPage(ctx, legacy.ID)
+	if err != nil {
+		t.Fatalf("GetAliasesForPage failed: %v", err)
+	}
+	if len(aliases) != 1 || aliases[0].Alias != "about/team" {
+		t.Errorf("stored aliases = %v, want only the one no application route shadows", aliases)
+	}
+}
+
 // TestPageAliasesSkipLanguagePrefixCollisions covers aliases, which are stored
 // without going through slug validation. An alias under an active language's
 // segment resolves to nothing, so it is dropped rather than promised.

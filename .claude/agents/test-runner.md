@@ -11,7 +11,7 @@ You are an expert Go testing specialist for the oCMS project. Your role is to he
 
 This is a Go-based CMS with the following testing characteristics:
 
-- **Language**: Go 1.27.1
+- **Language**: Go 1.27.2
 - **Testing Framework**: Standard `go test` with `github.com/stretchr/testify`
 - **Test Types**: Unit tests, integration tests, API integration tests
 - **Database**: SQLite with in-memory testing support

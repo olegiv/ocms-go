@@ -1690,7 +1690,7 @@ func validatePageTitle(title string) string {
 // validatePageSlugCreate validates a page slug for creation.
 // Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) string {
-	if conflict := h.languagePrefixConflict(ctx, slug); conflict != "" {
+	if conflict := h.pageRouteConflict(ctx, slug); conflict != "" {
 		return conflict
 	}
 	return ValidateSlugWithChecker(slug, func() (int64, error) {
@@ -1705,7 +1705,7 @@ func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) 
 // Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, currentSlug string, pageID int64) string {
 	if slug != currentSlug {
-		if conflict := h.languagePrefixConflict(ctx, slug); conflict != "" {
+		if conflict := h.pageRouteConflict(ctx, slug); conflict != "" {
 			return conflict
 		}
 	}
@@ -1769,7 +1769,7 @@ func (h *PagesHandler) writePageGuarded(
 
 	queries := store.New(h.db).WithTx(tx)
 	if slug != currentSlug {
-		conflict, conflictErr := LanguagePrefixConflict(ctx, queries, slug)
+		conflict, conflictErr := PageRouteConflict(ctx, queries, slug)
 		if conflictErr != nil {
 			return store.Page{}, conflictErr
 		}
@@ -1787,19 +1787,24 @@ func (h *PagesHandler) writePageGuarded(
 	return page, nil
 }
 
-// LanguagePrefixConflict reports the message for a page route that an active
-// language would swallow, or an empty string when the path is free.
+// PageRouteConflict reports the message for a page route that an application
+// route or an active language would swallow, or an empty string when the path
+// is free.
 //
-// The language middleware runs ahead of the frontend router and strips a
-// leading segment that matches an active language code, so a page saved at
-// that segment can never be reached — the language homepage answers instead.
-// Slug uniqueness is checked only against pages and aliases and would let this
-// through silently, so the two namespaces are compared here.
+// Application routes such as /login or /account are registered ahead of the
+// page catch-all, and the language middleware strips a leading segment that
+// matches an active language code before the frontend router runs, so a page
+// saved at either can never be reached. Slug uniqueness is checked only
+// against pages and aliases and would let this through silently, so the
+// namespaces are compared here.
 //
 // Exported because every path that writes a page slug owes callers the same
 // answer: the admin form, the v2 API, and anything added later. A path that
 // skips it stores a URL that resolves to something else.
-func LanguagePrefixConflict(ctx context.Context, queries *store.Queries, firstSegment string) (string, error) {
+func PageRouteConflict(ctx context.Context, queries *store.Queries, firstSegment string) (string, error) {
+	if util.IsReservedRouteSegment(firstSegment) {
+		return fmt.Sprintf("Conflicts with the application route /%s", firstSegment), nil
+	}
 	if firstSegment == "" || !util.IsRoutableLanguageCode(firstSegment) {
 		return "", nil
 	}
@@ -1815,8 +1820,8 @@ func LanguagePrefixConflict(ctx context.Context, queries *store.Queries, firstSe
 	return "", nil
 }
 
-func (h *PagesHandler) languagePrefixConflict(ctx context.Context, firstSegment string) string {
-	conflict, err := LanguagePrefixConflict(ctx, h.queries, firstSegment)
+func (h *PagesHandler) pageRouteConflict(ctx context.Context, firstSegment string) string {
+	conflict, err := PageRouteConflict(ctx, h.queries, firstSegment)
 	if err != nil {
 		slog.Error("database error checking language prefixes", "error", err)
 		return "Error checking slug"
@@ -1963,11 +1968,12 @@ func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasS
 		}
 		// An alias is matched against the path the language middleware has
 		// already stripped, so one beginning with an active language code —
-		// "eng" or "eng/team" — is dead on arrival. Storing it would only
-		// promise a URL that never resolves.
+		// "eng" or "eng/team" — or with an application route such as "login"
+		// is dead on arrival. Storing it would only promise a URL that never
+		// resolves.
 		firstSegment, _, _ := strings.Cut(alias, "/")
-		if conflict := h.languagePrefixConflict(ctx, firstSegment); conflict != "" {
-			slog.Warn("skipping alias that a language prefix would shadow",
+		if conflict := h.pageRouteConflict(ctx, firstSegment); conflict != "" {
+			slog.Warn("skipping alias that a language prefix or application route would shadow",
 				"page_id", pageID, "alias", alias, "reason", conflict)
 			continue
 		}

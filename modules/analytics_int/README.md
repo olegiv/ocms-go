@@ -65,6 +65,9 @@ A one-time purge action is available in the settings to clean up existing self-r
 | POST | `/admin/internal-analytics/aggregate` | Trigger aggregation |
 | POST | `/analytics/read` | Read tracking beacon (public) |
 
+The GET routes are open to editors and administrators; the settings and
+aggregation POSTs are admin-only.
+
 ## Database Tables
 
 - `page_analytics_views` - Raw page view events

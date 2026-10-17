@@ -3,6 +3,46 @@
     "language": "ru",
     "messages": [
         {
+            "id": "account.title",
+            "message": "My account",
+            "translation": "Моя учётная запись"
+        },
+        {
+            "id": "account.description",
+            "message": "Your account details.",
+            "translation": "Данные вашей учётной записи."
+        },
+        {
+            "id": "account.name",
+            "message": "Name",
+            "translation": "Имя"
+        },
+        {
+            "id": "account.email",
+            "message": "Email",
+            "translation": "Электронная почта"
+        },
+        {
+            "id": "account.created_at",
+            "message": "Account created",
+            "translation": "Дата создания"
+        },
+        {
+            "id": "account.last_login_at",
+            "message": "Last login",
+            "translation": "Последний вход"
+        },
+        {
+            "id": "account.no_login",
+            "message": "No login recorded",
+            "translation": "Вход ещё не зарегистрирован"
+        },
+        {
+            "id": "account.visit_website",
+            "message": "Visit website",
+            "translation": "Перейти на сайт"
+        },
+        {
             "id": "nav.dashboard",
             "message": "Dashboard",
             "translation": "Панель управления"

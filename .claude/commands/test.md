@@ -1,3 +1,7 @@
+---
+description: "Run all Go tests for the oCMS project with verbose output and coverage reporting"
+---
+
 Run all Go tests for the oCMS project with verbose output and coverage reporting.
 
 Steps:

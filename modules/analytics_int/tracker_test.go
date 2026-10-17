@@ -231,6 +231,8 @@ func TestShouldTrack(t *testing.T) {
 		{name: "admin pages", method: "GET", path: "/admin/pages", expected: false},
 		{name: "API endpoint", method: "GET", path: "/api/v2/pages", expected: false},
 		{name: "health check", method: "GET", path: "/health", expected: false},
+		{name: "account page", method: "GET", path: "/account", expected: false},
+		{name: "page whose slug starts with admin", method: "GET", path: "/administration", expected: true},
 
 		// Should NOT track - non-GET methods
 		{name: "POST request", method: "POST", path: "/contact", expected: false},

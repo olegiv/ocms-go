@@ -55,18 +55,18 @@ func anonymizeIP(ip string) string {
 
 // getCurrentSalt returns the current salt, rotating if necessary.
 func (m *Module) getCurrentSalt() string {
-	m.saltMu.RLock()
+	m.settingsMu.RLock()
 	rotationDuration := time.Duration(m.settings.SaltRotationHours) * time.Hour
 	if time.Since(m.settings.SaltCreatedAt) < rotationDuration {
 		salt := m.settings.CurrentSalt
-		m.saltMu.RUnlock()
+		m.settingsMu.RUnlock()
 		return salt
 	}
-	m.saltMu.RUnlock()
+	m.settingsMu.RUnlock()
 
 	// Need to rotate salt
-	m.saltMu.Lock()
-	defer m.saltMu.Unlock()
+	m.settingsMu.Lock()
+	defer m.settingsMu.Unlock()
 
 	// Double-check after acquiring write lock
 	rotationDuration = time.Duration(m.settings.SaltRotationHours) * time.Hour

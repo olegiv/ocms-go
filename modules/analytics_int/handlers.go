@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,12 +23,23 @@ import (
 // requireEditorAuth checks if the user is authenticated with editor or admin role.
 // Returns the user if authorized, nil otherwise.
 func (m *Module) requireEditorAuth(w http.ResponseWriter, r *http.Request) *store.User {
+	return requireRole(w, r, model.RoleEditor, model.RoleAdmin)
+}
+
+// requireAdminAuth checks if the user is authenticated with the admin role.
+// Editors may view statistics but not change settings or run aggregation.
+func (m *Module) requireAdminAuth(w http.ResponseWriter, r *http.Request) *store.User {
+	return requireRole(w, r, model.RoleAdmin)
+}
+
+// requireRole returns the user when it has one of roles, or writes 401/403 and returns nil.
+func requireRole(w http.ResponseWriter, r *http.Request, roles ...string) *store.User {
 	user := middleware.GetUser(r)
 	if user == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return nil
 	}
-	if user.Role != model.RoleEditor && user.Role != model.RoleAdmin {
+	if !slices.Contains(roles, user.Role) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return nil
 	}
@@ -54,6 +66,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	dateRange, startDate, endDate := parseDateRangeParam(r)
 
 	// Fetch all dashboard data
+	settings := m.settingsSnapshot()
 	viewData := AnalyticsIntViewData{
 		Overview:     m.getOverviewStats(r.Context(), startDate, endDate),
 		TopPages:     m.getTopPages(r.Context(), startDate, endDate, 10),
@@ -63,7 +76,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Countries:    m.getCountryStats(r.Context(), startDate, endDate, 10),
 		TimeSeries:   m.getTimeSeries(r.Context(), startDate, endDate),
 		DateRange:    dateRange,
-		Settings:     *m.settings,
+		Settings:     settings,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "analytics_int.title"), []render.Breadcrumb{
@@ -111,7 +124,7 @@ const maxReadBodySize = 1024 // 1 KB
 // This is a public endpoint that receives read beacons from the frontend JS.
 func (m *Module) handleRecordRead(w http.ResponseWriter, r *http.Request) {
 	// Skip if tracking is disabled
-	if m.settings == nil || !m.settings.Enabled {
+	if !m.IsEnabled() {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -207,7 +220,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := m.requireEditorAuth(w, r)
+	user := m.requireAdminAuth(w, r)
 	if user == nil {
 		return
 	}
@@ -221,33 +234,33 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update settings
-	m.settings.Enabled = r.FormValue("enabled") == "1"
-	m.settings.ShowPostStats = r.FormValue("show_post_stats") == "1"
+	// Update and save settings
+	err := m.updateSettings(func(settings *Settings) {
+		settings.Enabled = r.FormValue("enabled") == "1"
+		settings.ShowPostStats = r.FormValue("show_post_stats") == "1"
 
-	// Parse retention days
-	if retentionStr := r.FormValue("retention_days"); retentionStr != "" {
-		if retention, err := strconv.Atoi(retentionStr); err == nil && retention >= 30 && retention <= 730 {
-			m.settings.RetentionDays = retention
-		}
-	}
-
-	// Parse excluded paths (newline-separated, max 100 entries, max 512 chars each)
-	excludePathsStr := r.FormValue("exclude_paths")
-	var excludePaths []string
-	for path := range strings.SplitSeq(excludePathsStr, "\n") {
-		path = strings.TrimSpace(path)
-		if path != "" && len(path) <= 512 {
-			excludePaths = append(excludePaths, path)
-			if len(excludePaths) >= 100 {
-				break
+		// Parse retention days
+		if retentionStr := r.FormValue("retention_days"); retentionStr != "" {
+			if retention, err := strconv.Atoi(retentionStr); err == nil && retention >= 30 && retention <= 730 {
+				settings.RetentionDays = retention
 			}
 		}
-	}
-	m.settings.ExcludePaths = excludePaths
 
-	// Save to database
-	if err := m.saveSettings(); err != nil {
+		// Parse excluded paths (newline-separated, max 100 entries, max 512 chars each)
+		excludePathsStr := r.FormValue("exclude_paths")
+		var excludePaths []string
+		for path := range strings.SplitSeq(excludePathsStr, "\n") {
+			path = strings.TrimSpace(path)
+			if path != "" && len(path) <= 512 {
+				excludePaths = append(excludePaths, path)
+				if len(excludePaths) >= 100 {
+					break
+				}
+			}
+		}
+		settings.ExcludePaths = excludePaths
+	})
+	if err != nil {
 		m.ctx.Logger.Error("failed to save settings", "error", err)
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_save"), "error")
 	} else {
@@ -260,7 +273,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 // handleRunAggregation triggers full aggregation of historical data.
 func (m *Module) handleRunAggregation(w http.ResponseWriter, r *http.Request) {
-	user := m.requireEditorAuth(w, r)
+	user := m.requireAdminAuth(w, r)
 	if user == nil {
 		return
 	}
