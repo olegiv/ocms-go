@@ -27,6 +27,9 @@ LOCAL_BINARY="${LOCAL_BINARY:-bin/${BINARY_NAME}-linux-amd64}"
 REMOTE_BIN_DIR="${REMOTE_BIN_DIR:-/opt/ocms/bin}"
 REMOTE_BINARY="${REMOTE_BINARY:-${BINARY_NAME}-linux-amd64}"
 REMOTE_RUN_BINARY="${REMOTE_BIN_DIR}/ocms"
+# Where the upload lands: never on the running binary or another file the
+# deploy uses (remote_upload_path in helper.sh).
+REMOTE_UPLOAD="$(remote_upload_path "${REMOTE_BIN_DIR}" "${REMOTE_BINARY}")"
 
 # Defaults
 SSH_USER="root"
@@ -162,11 +165,11 @@ echo_ok "Backup complete"
 # under basename "$LOCAL_BINARY", so overriding only one of the two names would
 # leave the install below reading a path the upload never wrote.
 echo_step "Transferring binary to server..."
-scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/${REMOTE_BINARY}"
+scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_UPLOAD}"
 echo_ok "Binary transferred"
 
 echo_step "Installing binary as ${REMOTE_RUN_BINARY}..."
-ssh_cmd "$(install_binary_command "${REMOTE_BIN_DIR}/${REMOTE_BINARY}" "${REMOTE_RUN_BINARY}")"
+ssh_cmd "$(install_binary_command "${REMOTE_UPLOAD}" "${REMOTE_RUN_BINARY}")"
 echo_ok "Binary installed"
 
 # Step 4: Restart the instances on the new binary

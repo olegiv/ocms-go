@@ -438,7 +438,9 @@ clean: ## Remove build artifacts
 # that checkout, and reporting success against a database the app never opens.
 #
 # The migrate targets run `ocms migrate`, not the goose CLI, which does not know
-# the Go migrations in internal/store.
+# the Go migrations in internal/store. They pass $(site_env) like dev and run:
+# from inside CORE_DIR, ocms migrate would otherwise read the core checkout's
+# .env, or fail on a relative OCMS_ENV_FILE resolved against CORE_DIR.
 #
 # The guard below is a backstop against a broken resolution, not a user-facing
 # constraint: a relative path in the .env is fine and gets resolved.
@@ -448,12 +450,12 @@ require-db-path: require-env-file
 
 migrate-up: require-db-path ## Apply pending database migrations
 	@$(with_core_lock) \
-	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" up
+	cd "$(CORE_DIR)" && $(site_env) $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" up
 
 migrate-down: require-db-path ## Roll back the last migration
 	@$(with_core_lock) \
-	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" down
+	cd "$(CORE_DIR)" && $(site_env) $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" down
 
 migrate-status: require-db-path ## Show migration status
 	@$(with_core_lock) \
-	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" status
+	cd "$(CORE_DIR)" && $(site_env) $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" status

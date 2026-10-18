@@ -74,3 +74,56 @@ func TestSiteMakefileRequiresTheEnvFile(t *testing.T) {
 		}
 	})
 }
+
+// TestSiteMakefileMigratesWithTheSiteEnv runs the site.mk migrate targets
+// with make -n and checks that each hands ocms migrate the site's env file,
+// resolved against the site. The recipes cd into CORE_DIR and passed none,
+// so ocms migrate read the core checkout's .env, and a relative
+// OCMS_ENV_FILE=site.env resolved against CORE_DIR and failed (local Codex
+// review of the audit branch).
+//
+// Bug state: drop $(site_env) from a migrate recipe in site.mk and this
+// fails.
+func TestSiteMakefileMigratesWithTheSiteEnv(t *testing.T) {
+	makeBin, err := exec.LookPath("make")
+	if err != nil {
+		t.Skip("make is not installed")
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	site := t.TempDir()
+	cases := []struct{ name, override, envFile string }{
+		{"default .env", "", filepath.Join(site, ".env")},
+		{"relative OCMS_ENV_FILE", "site.env", filepath.Join(site, "site.env")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.WriteFile(tc.envFile, []byte("OCMS_DB_PATH=data/site.db\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			for _, target := range []string{"migrate-up", "migrate-down", "migrate-status"} {
+				cmd := exec.Command(makeBin, "-n", "-f", filepath.Join(root, "site.mk"), "SITE_DIR="+site, "CORE_DIR="+root, target) // #nosec G204 -- fixed arguments
+				cmd.Dir = site
+				cmd.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, "OCMS_") })
+				if tc.override != "" {
+					cmd.Env = append(cmd.Env, "OCMS_ENV_FILE="+tc.override)
+				}
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("make -n %s: %v\n%s", target, err, out)
+				}
+				var recipe string
+				for line := range strings.Lines(string(out)) {
+					if strings.Contains(line, " migrate ") {
+						recipe = line
+					}
+				}
+				if want := `OCMS_ENV_FILE="` + tc.envFile + `"`; !strings.Contains(recipe, want) {
+					t.Errorf("%s runs %q, want it to pass %s", target, strings.TrimSpace(recipe), want)
+				}
+			}
+		})
+	}
+}

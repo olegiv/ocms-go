@@ -59,6 +59,20 @@ backup_binary_command() {
     printf "if [ -e '%s' ]; then cp -p '%s' '%s.backup.new' && mv -f '%s.backup.new' '%s.backup'; else echo 'No %s yet; nothing to back up.' >&2; fi" "$1" "$1" "$1" "$1" "$1" "$1"
 }
 
+# remote_upload_path prints where the deploy scripts upload binary name $2 in
+# directory $1: $1/$2, unless $2 names a file the deploy itself uses there
+# (the running binary, the install's and the backup's staging copies, the
+# backup, ocmsctl), and then $1/ocms.upload. The upload happens while the
+# instances still run, so scp onto ocms failed with "Text file busy", and the
+# other names would have overwritten the install's copy, the backup or the
+# control script.
+remote_upload_path() {
+    case "${2#./}" in
+        ocms|ocms.new|ocms.backup|ocms.backup.new|ocmsctl) printf '%s/ocms.upload' "$1" ;;
+        *) printf '%s/%s' "$1" "$2" ;;
+    esac
+}
+
 echo_dry_run() {
     echo -e "$(_ts) ${YELLOW}[DRY-RUN]${NC} $1"
 }

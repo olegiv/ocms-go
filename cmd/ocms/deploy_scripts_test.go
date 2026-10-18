@@ -19,7 +19,9 @@ import (
 // copies beside the destination and renames over it, so a running binary is
 // replaced instead of failing the copy with "Text file busy".
 // backup_binary_command must copy the binary to .backup, and succeed with a
-// note when there is no binary yet.
+// note when there is no binary yet. remote_upload_path must move an upload
+// whose name is a file the deploy uses (ocms, its staging copies, the backup,
+// ocmsctl) to ocms.upload.
 func TestDeployBinaryCommands(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	if err != nil {
@@ -78,6 +80,24 @@ func TestDeployBinaryCommands(t *testing.T) {
 		}
 		if os.SameFile(before, info) {
 			t.Error("the install wrote into the existing file, as cp onto a running binary would, instead of renaming a new one over it")
+		}
+	})
+
+	t.Run("upload path", func(t *testing.T) {
+		const dir = "/opt/ocms/bin"
+		for name, want := range map[string]string{
+			"ocms-linux-amd64": dir + "/ocms-linux-amd64",
+			"ocms":             dir + "/ocms.upload",
+			"./ocms":           dir + "/ocms.upload",
+			"ocms.new":         dir + "/ocms.upload",
+			"ocms.backup":      dir + "/ocms.upload",
+			"ocms.backup.new":  dir + "/ocms.upload",
+			"ocmsctl":          dir + "/ocms.upload",
+		} {
+			out, err := exec.Command(bash, "-c", `source "$1" && remote_upload_path "$2" "$3"`, "bash", helper, dir, name).CombinedOutput() // #nosec G204 -- fixed script, test values
+			if err != nil || string(out) != want {
+				t.Errorf("remote_upload_path %s %s = %q, %v; want %s", dir, name, out, err, want)
+			}
 		}
 	})
 
@@ -148,7 +168,7 @@ func TestDeployScriptsInstallTheUpload(t *testing.T) {
 	}
 	for _, name := range []string{"deploy.sh", "deploy-binary.sh"} {
 		src := read(name)
-		install := strings.Index(src, `install_binary_command "${REMOTE_BIN_DIR}/${REMOTE_BINARY}" "${REMOTE_RUN_BINARY}"`)
+		install := strings.Index(src, `install_binary_command "${REMOTE_UPLOAD}" "${REMOTE_RUN_BINARY}"`)
 		stop := strings.Index(src, "ocmsctl stop")
 		switch {
 		case install < 0:
@@ -192,38 +212,53 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{
-		"cp -p '/opt/ocms/bin/ocms' '/opt/ocms/bin/ocms.backup.new'",
-		"scp bin/ocms-linux-amd64 root@server.example.com:/opt/ocms/bin/ocms-linux-amd64",
-		"cp '/opt/ocms/bin/ocms-linux-amd64' '/opt/ocms/bin/ocms.new' && chmod 755 '/opt/ocms/bin/ocms.new' && mv -f '/opt/ocms/bin/ocms.new' '/opt/ocms/bin/ocms'",
-		"/opt/ocms/bin/ocmsctl stop site_a",
-		"/opt/ocms/bin/ocmsctl start site_a",
+	order := func(upload string) []string {
+		return []string{
+			"cp -p '/opt/ocms/bin/ocms' '/opt/ocms/bin/ocms.backup.new'",
+			"scp bin/ocms-linux-amd64 root@server.example.com:" + upload,
+			"cp '" + upload + "' '/opt/ocms/bin/ocms.new' && chmod 755 '/opt/ocms/bin/ocms.new' && mv -f '/opt/ocms/bin/ocms.new' '/opt/ocms/bin/ocms'",
+			"/opt/ocms/bin/ocmsctl stop site_a",
+			"/opt/ocms/bin/ocmsctl start site_a",
+		}
 	}
-	for _, script := range []string{"deploy.sh", "deploy-binary.sh"} {
-		t.Run(script, func(t *testing.T) {
-			cmd := exec.Command(bash, filepath.Join("scripts", "deploy", script), "server.example.com", "site_a", "--skip-build", "--dry-run") // #nosec G204 -- fixed repository script
-			cmd.Dir = root
-			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				t.Fatalf("dry run: %v\n%s", err, out)
-			}
-			var commands []string
-			for line := range strings.Lines(string(out)) {
-				if _, command, ok := strings.Cut(line, "[DRY-RUN] "); ok {
-					commands = append(commands, strings.TrimSpace(command))
+	cases := []struct {
+		name string
+		env  []string
+		want []string
+	}{
+		{"default upload name", nil, order("/opt/ocms/bin/ocms-linux-amd64")},
+		// The upload happens while the instance runs: scp onto the running
+		// binary failed with "Text file busy" (local Codex review).
+		{"REMOTE_BINARY=ocms", []string{"REMOTE_BINARY=ocms"}, order("/opt/ocms/bin/ocms.upload")},
+	}
+	for _, tc := range cases {
+		for _, script := range []string{"deploy.sh", "deploy-binary.sh"} {
+			t.Run(tc.name+"/"+script, func(t *testing.T) {
+				want := tc.want
+				cmd := exec.Command(bash, filepath.Join("scripts", "deploy", script), "server.example.com", "site_a", "--skip-build", "--dry-run") // #nosec G204 -- fixed repository script
+				cmd.Dir = root
+				cmd.Env = append([]string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}, tc.env...)
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("dry run: %v\n%s", err, out)
 				}
-			}
-			next := 0
-			for _, command := range commands {
-				if next < len(want) && strings.Contains(command, want[next]) {
-					next++
+				var commands []string
+				for line := range strings.Lines(string(out)) {
+					if _, command, ok := strings.Cut(line, "[DRY-RUN] "); ok {
+						commands = append(commands, strings.TrimSpace(command))
+					}
 				}
-			}
-			if next < len(want) {
-				t.Errorf("the dry run never reached %q in order; it ran:\n%s", want[next], strings.Join(commands, "\n"))
-			}
-		})
+				next := 0
+				for _, command := range commands {
+					if next < len(want) && strings.Contains(command, want[next]) {
+						next++
+					}
+				}
+				if next < len(want) {
+					t.Errorf("the dry run never reached %q in order; it ran:\n%s", want[next], strings.Join(commands, "\n"))
+				}
+			})
+		}
 	}
 }
 

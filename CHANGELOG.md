@@ -17,10 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   environment, `.env` or the file `OCMS_ENV_FILE` names, as `serve` reads
   them, or on `-db <path>`; commands other than `up` refuse a database that
   is not there. `make migrate-up`, `migrate-down` and `migrate-status`, in the
-  Makefile and in `site.mk`, use it instead of the goose CLI, which does not
-  know the Go migration that moves stored times to UTC: `goose down` failed on
-  it, and `goose up` could apply later SQL migrations first, after which the
-  server refused to start.
+  Makefile and in `site.mk` (with the site's env file), use it instead of the
+  goose CLI, which does not know the Go migration that moves stored times to
+  UTC: `goose down` failed on it, and `goose up` could apply later SQL
+  migrations first, after which the server refused to start.
 
 ### Fixed
 - A startup failure is logged before the error log file and the event log
@@ -98,7 +98,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stops every site with `ocmsctl stop`, which also reaches a site started
   with `ocmsctl` rather than systemd; that site kept serving on its port, so
   the copy onto its binary failed ("Text file busy") after the units were
-  stopped. The binary is now renamed into place.
+  stopped. The binary is now renamed into place. An upload whose name is a
+  file the deploy itself uses (`REMOTE_BINARY=ocms`, say) goes to
+  `ocms.upload` instead, so it neither overwrites the running binary nor
+  the backup.
   The `setup-site.sh` usage example passes its own path check.
 - `deploy-multi.sh` reports a site that fails to stop or start and carries on
   with the others; one failure ended the script, leaving every site it had
