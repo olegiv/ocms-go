@@ -51,6 +51,7 @@ func newPolicyTestDB(t *testing.T) *sql.DB {
 		);
 		CREATE TABLE api_keys (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL DEFAULT 'policy key',
 			is_active INTEGER NOT NULL DEFAULT 1,
 			expires_at DATETIME
 		);
@@ -201,19 +202,31 @@ func TestAuditRequiredHTTPSOutboundPosture_AllowsCompliantConfig(t *testing.T) {
 	}
 }
 
-func TestAuditRequiredAPIKeyExpiryPosture_RejectsNonExpiringActiveKeys(t *testing.T) {
+// TestAuditRequiredAPIKeyExpiryPosture_WarnsAboutNonExpiringActiveKeys
+// checks that an active key without an expiry is logged by ID and name and
+// does not stop the start: authentication rejects the key anyway, and
+// refusing to start turned one unusable key into a site that would not
+// start.
+//
+// Bug state: return an error for such a key again and this fails.
+func TestAuditRequiredAPIKeyExpiryPosture_WarnsAboutNonExpiringActiveKeys(t *testing.T) {
 	db := newPolicyTestDB(t)
 	if _, err := db.Exec(`INSERT INTO api_keys (is_active, expires_at) VALUES (1, NULL)`); err != nil {
 		t.Fatalf("inserting api key: %v", err)
 	}
+	logs := captureDefaultLog(t)
 
-	if err := auditRequiredAPIKeyExpiryPosture(context.Background(), db); err == nil {
-		t.Fatal("expected error when active API key has no expiry")
+	if err := auditRequiredAPIKeyExpiryPosture(context.Background(), db); err != nil {
+		t.Fatalf("audit = %v, want the start to go ahead", err)
+	}
+	if !strings.Contains(logs.String(), "without an expiration") || !strings.Contains(logs.String(), `keys="1: policy key"`) {
+		t.Errorf("the key without an expiry was not logged by ID and name:\n%s", logs.String())
 	}
 }
 
 func TestAuditRequiredAPIKeyExpiryPosture_AllowsCompliantConfig(t *testing.T) {
 	db := newPolicyTestDB(t)
+	logs := captureDefaultLog(t)
 	_, err := db.Exec(`
 		INSERT INTO api_keys (is_active, expires_at) VALUES
 			(1, '2030-01-01T00:00:00Z'),
@@ -226,21 +239,34 @@ func TestAuditRequiredAPIKeyExpiryPosture_AllowsCompliantConfig(t *testing.T) {
 	if err := auditRequiredAPIKeyExpiryPosture(context.Background(), db); err != nil {
 		t.Fatalf("expected compliant API key expiry posture to pass, got: %v", err)
 	}
+	if logs.Len() != 0 {
+		t.Errorf("compliant keys were logged:\n%s", logs.String())
+	}
 }
 
-func TestAuditRequiredAPIKeySourceCIDRPosture_RejectsMissingCIDRs(t *testing.T) {
+// TestAuditRequiredAPIKeySourceCIDRPosture_WarnsAboutMissingCIDRs checks
+// that an active key without a source CIDR is logged by ID and name and does
+// not stop the start: authentication rejects the key anyway.
+//
+// Bug state: return an error for such a key again and this fails.
+func TestAuditRequiredAPIKeySourceCIDRPosture_WarnsAboutMissingCIDRs(t *testing.T) {
 	db := newPolicyTestDB(t)
 	if _, err := db.Exec(`INSERT INTO api_keys (is_active, expires_at) VALUES (1, '2030-01-01T00:00:00Z')`); err != nil {
 		t.Fatalf("inserting api key: %v", err)
 	}
+	logs := captureDefaultLog(t)
 
-	if err := auditRequiredAPIKeySourceCIDRPosture(context.Background(), db); err == nil {
-		t.Fatal("expected error when active API key has no source CIDR")
+	if err := auditRequiredAPIKeySourceCIDRPosture(context.Background(), db); err != nil {
+		t.Fatalf("audit = %v, want the start to go ahead", err)
+	}
+	if !strings.Contains(logs.String(), "without a source CIDR restriction") || !strings.Contains(logs.String(), `keys="1: policy key"`) {
+		t.Errorf("the key without a source CIDR was not logged by ID:\n%s", logs.String())
 	}
 }
 
 func TestAuditRequiredAPIKeySourceCIDRPosture_AllowsCompliantConfig(t *testing.T) {
 	db := newPolicyTestDB(t)
+	logs := captureDefaultLog(t)
 
 	res, err := db.Exec(`INSERT INTO api_keys (is_active, expires_at) VALUES (1, '2030-01-01T00:00:00Z')`)
 	if err != nil {
@@ -259,6 +285,9 @@ func TestAuditRequiredAPIKeySourceCIDRPosture_AllowsCompliantConfig(t *testing.T
 
 	if err := auditRequiredAPIKeySourceCIDRPosture(context.Background(), db); err != nil {
 		t.Fatalf("expected compliant API key source CIDR posture to pass, got: %v", err)
+	}
+	if logs.Len() != 0 {
+		t.Errorf("compliant keys were logged:\n%s", logs.String())
 	}
 }
 

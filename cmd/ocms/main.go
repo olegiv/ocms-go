@@ -865,70 +865,65 @@ func auditRequiredWebhookAllowedHostPolicyPosture(ctx context.Context, db *sql.D
 	return nil
 }
 
+// The three API key posture checks below log the active keys a production
+// key policy rejects instead of refusing to start. Request authentication
+// already refuses those keys (internal/middleware/api.go), so stopping the
+// start turned one unusable key into a site that would not start: v0.29.0
+// stopped a production instance over a never-used key whose lifetime
+// exceeded OCMS_API_KEY_MAX_TTL_DAYS. A database error still stops it.
+
+// auditRequiredAPIKeyExpiryPosture logs each active API key without an
+// expiry while OCMS_REQUIRE_API_KEY_EXPIRY is enabled.
 func auditRequiredAPIKeyExpiryPosture(ctx context.Context, db *sql.DB) error {
-	var nonExpiringActiveKeys int
-	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`).Scan(&nonExpiringActiveKeys)
-	if err != nil {
-		return fmt.Errorf("auditing API key expiry posture: %w", err)
-	}
-
-	if nonExpiringActiveKeys > 0 {
-		return fmt.Errorf(
-			"refusing to start in production: OCMS_REQUIRE_API_KEY_EXPIRY is enabled but %d active API key(s) have no expiration",
-			nonExpiringActiveKeys,
-		)
-	}
-
-	return nil
+	return warnPolicyAPIKeys(ctx, db, "auditing API key expiry posture",
+		`SELECT id, name FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`,
+		"API keys without an expiration are rejected while OCMS_REQUIRE_API_KEY_EXPIRY is enabled; set an expiry or revoke them")
 }
 
-// auditRequiredAPIKeyMaxTTLPosture refuses a production start while an
-// active API key has no expiry or a lifetime longer than maxTTLDays. The
-// times are compared in Go: SQLite's date functions cannot read the
-// time.Time.String() text the driver stored before _time_format=sqlite, so
-// the check used to skip every key the app created, and the driver parses
-// both formats.
+// auditRequiredAPIKeyMaxTTLPosture logs each active API key that has no
+// expiry or a lifetime longer than maxTTLDays. The times are compared in
+// Go: SQLite's date functions cannot read the time.Time.String() text the
+// driver stored before _time_format=sqlite, so the check used to skip every
+// key the app created, and the driver parses both formats.
 func auditRequiredAPIKeyMaxTTLPosture(ctx context.Context, db *sql.DB, maxTTLDays int) error {
 	if maxTTLDays <= 0 {
 		return nil
 	}
 
-	rows, err := db.QueryContext(ctx, `SELECT created_at, expires_at FROM api_keys WHERE is_active = 1`)
+	rows, err := db.QueryContext(ctx, `SELECT id, name, created_at, expires_at FROM api_keys WHERE is_active = 1`)
 	if err != nil {
 		return fmt.Errorf("auditing API key max TTL posture: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	maxTTL := time.Duration(maxTTLDays) * 24 * time.Hour
-	keysOutsideTTL := 0
+	var keys []string
 	for rows.Next() {
+		var id int64
+		var name string
 		var created time.Time
 		var expires sql.NullTime
-		if err := rows.Scan(&created, &expires); err != nil {
+		if err := rows.Scan(&id, &name, &created, &expires); err != nil {
 			return fmt.Errorf("auditing API key max TTL posture: %w", err)
 		}
 		if !expires.Valid || expires.Time.Sub(created) > maxTTL {
-			keysOutsideTTL++
+			keys = append(keys, fmt.Sprintf("%d: %s", id, name))
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("auditing API key max TTL posture: %w", err)
 	}
-
-	if keysOutsideTTL > 0 {
-		return fmt.Errorf(
-			"refusing to start in production: OCMS_API_KEY_MAX_TTL_DAYS=%d but %d active API key(s) exceed this lifetime policy",
-			maxTTLDays,
-			keysOutsideTTL,
-		)
+	if len(keys) > 0 {
+		slog.Warn("API key lifetimes exceed OCMS_API_KEY_MAX_TTL_DAYS and the keys are rejected; revoke them or raise the limit",
+			"keys", strings.Join(keys, "; "), "max_ttl_days", maxTTLDays)
 	}
-
 	return nil
 }
 
+// auditRequiredAPIKeySourceCIDRPosture logs each active API key without a
+// source CIDR while OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is enabled.
 func auditRequiredAPIKeySourceCIDRPosture(ctx context.Context, db *sql.DB) error {
-	var keysWithoutSourceCIDRs int
-	err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*)
+	return warnPolicyAPIKeys(ctx, db, "auditing API key source CIDR posture", `
+		SELECT k.id, k.name
 		FROM api_keys k
 		WHERE k.is_active = 1
 		  AND NOT EXISTS (
@@ -936,18 +931,33 @@ func auditRequiredAPIKeySourceCIDRPosture(ctx context.Context, db *sql.DB) error
 		  	FROM api_key_source_cidrs c
 		  	WHERE c.api_key_id = k.id
 		  )
-	`).Scan(&keysWithoutSourceCIDRs)
+	`, "API keys without a source CIDR restriction are rejected while OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is enabled; add one or revoke them")
+}
+
+// warnPolicyAPIKeys logs message once, listing every API key query returns
+// as id and name; what wraps a database error. One record per check, as the
+// Event Log keeps only the first of a run of warnings with one message.
+func warnPolicyAPIKeys(ctx context.Context, db *sql.DB, what, query, message string) error {
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		return fmt.Errorf("auditing API key source CIDR posture: %w", err)
+		return fmt.Errorf("%s: %w", what, err)
 	}
-
-	if keysWithoutSourceCIDRs > 0 {
-		return fmt.Errorf(
-			"refusing to start in production: OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is enabled but %d active API key(s) have no source CIDR restriction",
-			keysWithoutSourceCIDRs,
-		)
+	defer func() { _ = rows.Close() }()
+	var keys []string
+	for rows.Next() {
+		var id int64
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return fmt.Errorf("%s: %w", what, err)
+		}
+		keys = append(keys, fmt.Sprintf("%d: %s", id, name))
 	}
-
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	if len(keys) > 0 {
+		slog.Warn(message, "keys", strings.Join(keys, "; "))
+	}
 	return nil
 }
 

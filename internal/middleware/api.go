@@ -857,6 +857,14 @@ func addAPIKeyToContext(next http.Handler, w http.ResponseWriter, r *http.Reques
 	next.ServeHTTP(w, r.WithContext(ctx))
 }
 
+// ValidAPIKey returns the API key r carries when it passes every check
+// APIKeyAuth applies, the key policies and source CIDR rules included, or
+// nil. It writes nothing: validateAPIKey writes only when auth is required.
+func ValidAPIKey(r *http.Request, queries *store.Queries) *store.ApiKey {
+	key, _ := validateAPIKey(nil, r, queries, false)
+	return key
+}
+
 // OptionalAPIKeyAuth creates middleware that optionally validates API key authentication.
 // Unlike APIKeyAuth, this middleware does not require authentication - it simply
 // adds the API key to context if a valid one is provided.

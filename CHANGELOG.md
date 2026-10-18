@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A production start no longer fails over individual API keys that break a
+  key policy (`OCMS_API_KEY_MAX_TTL_DAYS`, `OCMS_REQUIRE_API_KEY_EXPIRY`,
+  `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS`). Each such key is logged by ID and
+  name at startup, in the Event Log too, and requests with it are still
+  refused. In 0.29.0 one never-used key whose lifetime exceeded the limit
+  stopped a production site from starting. `/health` now accepts an API key
+  only under the checks the REST API applies (key policies, global and
+  per-key source CIDRs, source-IP change), so such a key gets the public
+  answer there too.
+
 ## [0.29.0] - 2026-10-18
 
 ### Breaking Changes

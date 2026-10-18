@@ -17,10 +17,13 @@ import (
 // one and the time.Time.String() text the driver wrote before
 // _time_format=sqlite. The check used to compare with SQLite's datetime(),
 // which cannot read the old text, so it skipped every key the app had
-// created (review of the 2026-10-17 audit fixes).
+// created (review of the 2026-10-17 audit fixes). A key outside the policy
+// is logged, not a reason to refuse the start: v0.29.0 stopped a production
+// instance over one never-used key that authentication rejected anyway.
 //
 // Bug state: compare with datetime(expires_at) > datetime(created_at, ...)
-// in SQL again and the old-format case passes a key it should refuse.
+// in SQL again and the old-format case logs nothing; return an error for a
+// key outside the policy and the start is refused again.
 func TestAuditRequiredAPIKeyMaxTTLPosture(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
@@ -28,12 +31,13 @@ func TestAuditRequiredAPIKeyMaxTTLPosture(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO users (id, email, password_hash, role, name) VALUES (1, 'admin@test.com', 'x', 'admin', 'Admin')`); err != nil {
 		t.Fatal(err)
 	}
+	logs := captureDefaultLog(t)
 	created := time.Date(2026, 1, 10, 12, 0, 0, 0, time.FixedZone("CET", 3600))
 	cases := []struct {
 		name            string
 		active          bool
 		created, expiry any
-		refused         bool
+		warned          bool
 	}{
 		{"30 days", true, created, created.AddDate(0, 0, 30), false},
 		{"400 days", true, created, created.AddDate(0, 0, 400), true},
@@ -52,10 +56,35 @@ func TestAuditRequiredAPIKeyMaxTTLPosture(t *testing.T) {
 			VALUES ('k', 'hash', 'pfx', ?, 1, ?, ?)`, tc.active, tc.created, tc.expiry); err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
-		err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, 90)
-		if refused := err != nil && strings.Contains(err.Error(), "exceed this lifetime policy"); refused != tc.refused {
-			t.Errorf("%s: audit = %v, want refused=%v", tc.name, err, tc.refused)
+		logs.Reset()
+		if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, 90); err != nil {
+			t.Errorf("%s: audit = %v, want the start to go ahead", tc.name, err)
 		}
+		if warned := strings.Contains(logs.String(), "exceed OCMS_API_KEY_MAX_TTL_DAYS"); warned != tc.warned {
+			t.Errorf("%s: warned = %v, want %v; log:\n%s", tc.name, warned, tc.warned, logs.String())
+		}
+		if tc.warned && !strings.Contains(logs.String(), ": k") {
+			t.Errorf("%s: the warning does not name the key:\n%s", tc.name, logs.String())
+		}
+	}
+
+	// Several keys outside the policy go into one record: the Event Log
+	// keeps only the first of a run of warnings with one message.
+	if _, err := db.Exec(`DELETE FROM api_keys`); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"first", "second"} {
+		if _, err := db.Exec(`INSERT INTO api_keys (name, key_hash, key_prefix, is_active, created_by, created_at, expires_at)
+			VALUES (?, 'hash-' || ?, 'pfx', 1, 1, ?, ?)`, name, name, created, created.AddDate(0, 0, 400)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	logs.Reset()
+	if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, 90); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(logs.String(), "exceed OCMS_API_KEY_MAX_TTL_DAYS"); got != 1 || !strings.Contains(logs.String(), ": first; ") || !strings.Contains(logs.String(), ": second") {
+		t.Errorf("want one warning naming both keys, got %d:\n%s", got, logs.String())
 	}
 	if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, 0); err != nil {
 		t.Errorf("a zero limit audits nothing, got %v", err)
