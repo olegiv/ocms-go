@@ -118,6 +118,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does: 3-7 menu items in every menu, not 5-20 in the main menu.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
   so a later run can no longer commit other staged changes under it.
+- Tests that walk the repository skip the same directories, listed once in
+  `internal/testutil/repotree`, including the gitignored `.audit/` and
+  `output/`; local copies of older trees there failed some of them on a
+  developer's checkout and blocked its pushes.
 - Editors now land at `/admin` after login. Public users land at `/account`;
   visiting `/login` with an existing session uses the same role-based destination.
   Resolves [#188](https://github.com/olegiv/ocms-go/issues/188).

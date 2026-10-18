@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // pageRouteGuards are the identifiers that decide whether a slug can serve as
@@ -58,12 +60,13 @@ func TestEveryPageWriterConsultsARouteGuard(t *testing.T) {
 	writers := 0
 
 	for _, tree := range []string{"internal", "modules"} {
-		walkErr := filepath.WalkDir(filepath.Join(root, tree), func(path string, entry fs.DirEntry, err error) error {
+		treeRoot := filepath.Join(root, tree)
+		walkErr := filepath.WalkDir(treeRoot, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if entry.IsDir() {
-				if entry.Name() == "node_modules" || entry.Name() == "vendor" {
+				if repotree.Skip(treeRoot, path, entry) {
 					return filepath.SkipDir
 				}
 				return nil

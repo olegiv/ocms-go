@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // htmlComment matches an HTML comment. templ sends HTML comments to the
@@ -35,12 +37,13 @@ func TestRenderedCommentsDoNotNameSourceFiles(t *testing.T) {
 	scanned := 0
 	var offenders []string
 	for _, tree := range []string{"internal", "web", "modules"} {
-		err := filepath.WalkDir(filepath.Join(root, tree), func(path string, d fs.DirEntry, err error) error {
+		treeRoot := filepath.Join(root, tree)
+		err := filepath.WalkDir(treeRoot, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if d.IsDir() {
-				if d.Name() == "node_modules" || d.Name() == "dist" {
+				if repotree.Skip(treeRoot, path, d) {
 					return filepath.SkipDir
 				}
 				return nil

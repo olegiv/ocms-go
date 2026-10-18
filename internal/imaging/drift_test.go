@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // This test enforces an invariant mechanically rather than by review. Fixing
@@ -44,8 +46,7 @@ func TestOnlyMigratorSourcesDownscaleImages(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", "bin", "data", "uploads":
+			if repotree.Skip(root, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

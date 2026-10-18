@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 func TestMediaURLEncodesFilename(t *testing.T) {
@@ -99,8 +101,7 @@ func TestUploadURLsAreBuiltByHelper(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", "bin", "data", "uploads", "wiki":
+			if repotree.Skip(root, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

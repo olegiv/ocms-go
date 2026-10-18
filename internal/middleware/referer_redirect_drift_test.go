@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // TestRefererRedirectsUseSafeHelper fails when runtime code redirects in a
@@ -39,13 +41,7 @@ func TestRefererRedirectsUseSafeHelper(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			// Dot directories hold tooling and gitignored audit snapshots;
-			// output/ holds gitignored scratch programs.
-			if path != repoRoot && strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
-			}
-			switch d.Name() {
-			case "node_modules", "vendor", "wiki", "bin", "data", "uploads", "output":
+			if repotree.Skip(repoRoot, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // TestNoHardcodedVariantLists fails on any string-literal slice that enumerates
@@ -47,8 +49,7 @@ func TestNoHardcodedVariantLists(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", "wiki", "bin", "data", "uploads":
+			if repotree.Skip(repoRoot, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

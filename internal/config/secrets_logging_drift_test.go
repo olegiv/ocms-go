@@ -16,6 +16,8 @@ import (
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/config"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // secretConfigFields are the config.Config fields whose values are credentials.
@@ -93,8 +95,7 @@ func TestSecretConfigFieldsNeverReachALogCall(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", "wiki", "bin", "data", "uploads":
+			if repotree.Skip(repoRoot, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

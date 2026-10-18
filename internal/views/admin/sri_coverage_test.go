@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // firstPartyScripts ship with the repository rather than with an npm upgrade,
@@ -81,14 +83,7 @@ func TestEveryVendoredScriptIsProtected(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			// Dot directories hold tooling and gitignored audit snapshots of
-			// older trees, and output/ holds gitignored scratch files; none of
-			// them ships, and their stale copies would fail this test.
-			if path != root && strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
-			}
-			switch d.Name() {
-			case "node_modules", "vendor", "bin", "data", "uploads", "wiki", "dist", "output":
+			if repotree.Skip(root, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

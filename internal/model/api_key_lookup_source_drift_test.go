@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // codeQLPasswordProducerPatterns are the name heuristics CodeQL's Go library
@@ -63,8 +65,7 @@ func TestAPIKeyLookupInputsAreNotNamedLikePasswords(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", "wiki", "bin", "data", "uploads", "output":
+			if repotree.Skip(repoRoot, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // walkRepoFiles calls visit for each repository file whose slash-separated
@@ -19,8 +21,7 @@ import (
 // file is checked before it is staged while gitignored scratch is not, and
 // it skips tracked files deleted in the working tree; a git failure there is
 // returned. In an exported tree (no .git) every file is tracked, so it walks
-// the tree, skipping dot directories and, at the top level, the dependency,
-// wiki, scratch and data directories.
+// the tree, skipping the directories repotree.Skip names.
 func walkRepoFiles(root string, keep func(rel string) bool, visit func(path, rel string) error) error {
 	if _, err := os.Lstat(filepath.Join(root, ".git")); err == nil {
 		tracked, err := trackedFiles(root)
@@ -49,16 +50,8 @@ func walkRepoFiles(root string, keep func(rel string) bool, visit func(path, rel
 			return err
 		}
 		if d.IsDir() {
-			// Dot directories hold tooling and gitignored audit snapshots;
-			// the others hold dependencies, the wiki, scratch and data.
-			if path != root && strings.HasPrefix(d.Name(), ".") {
+			if repotree.Skip(root, path, d) {
 				return filepath.SkipDir
-			}
-			if filepath.Dir(path) == root {
-				switch d.Name() {
-				case "node_modules", "vendor", "wiki", "output", "bin", "data", "uploads":
-					return filepath.SkipDir
-				}
 			}
 			return nil
 		}
