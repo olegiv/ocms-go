@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parse, or whose `OCMS_ENV_FILE` names a file it cannot read, no longer
   starts, and neither does `ocms migrate`; fix the file (godotenv's error
   names the line) before upgrading.
+- **Long-lived API keys stop a production start.** In production,
+  `OCMS_API_KEY_MAX_TTL_DAYS` defaults to 90 days, and the start check now
+  reads the stored times correctly: an instance with an active API key that
+  has no expiry, or whose lifetime from creation to expiry exceeds the limit,
+  refuses to start. v0.28.0's check only caught keys without an expiry.
+  Before upgrading, revoke such keys or set `OCMS_API_KEY_MAX_TTL_DAYS` (up
+  to 365, or 0 to turn the limit off).
 
 ### Added
 - **Role-based landing after login and an account dashboard** — editors now
