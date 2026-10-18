@@ -7,11 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-18
+
+### Breaking Changes
+- **Stored timestamps are rewritten to UTC, once and for good.** A migration
+  rewrites the timestamps stored with a zone in every table, module tables
+  included, to UTC: values in Go's debug format
+  (`2026-10-18 05:41:31.17 +0200 CEST m=+0.08`) and values with a non-UTC
+  offset become `2026-10-18 03:41:31.17+00:00`. Times stored without a zone
+  are left as they are: SQLite's `CURRENT_TIMESTAMP` text, already UTC, and
+  Internal Analytics' local wall-clock times; values that look zoned but do
+  not parse are left too and logged. The rewrite cannot be undone
+  (`ocms migrate down` only forgets the migration): back up the database
+  before upgrading.
+- **Times are shown and returned in UTC.** Admin and public pages show dates
+  and times in UTC on a host whose time zone is not UTC, where they used to
+  show local time. The REST API, webhook payloads and content exports return
+  times in UTC (`2026-10-18T03:41:31Z`) instead of the server's local offset
+  (`2026-10-18T05:41:31+02:00`): the same instants, but clients that compare
+  or display the raw strings see the change. The Docker image runs in UTC
+  unless `TZ` is set.
+- **An unreadable env file stops startup.** A server whose `.env` does not
+  parse, or whose `OCMS_ENV_FILE` names a file it cannot read, no longer
+  starts, and neither does `ocms migrate`; fix the file (godotenv's error
+  names the line) before upgrading.
+
 ### Added
-- A read-only account dashboard at `/account` for signed-in users, with account
-  details, English/Russian interface languages and logout. It shares the admin
-  dashboard layout with account-specific navigation, independently of the active
-  site theme. See `docs/login-security.md`.
+- **Role-based landing after login and an account dashboard** — editors now
+  land on the admin dashboard at `/admin` after logging in, and public users
+  on a new read-only account dashboard at `/account` (account details,
+  English or Russian interface, logout), instead of the site homepage, from
+  where they had to type `/admin`. A signed-in user who opens `/login` is
+  sent to the same page. The account dashboard uses the admin layout with
+  its own navigation, whatever the site theme. Resolves
+  [#188](https://github.com/olegiv/ocms-go/issues/188). See
+  `docs/login-security.md`.
 - `ocms migrate up|down|status|version` runs the database migrations without
   starting the server, on the database `OCMS_DB_PATH` names in the
   environment, `.env` or the file `OCMS_ENV_FILE` names, as `serve` reads
@@ -125,9 +155,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `internal/testutil/repotree`, including the gitignored `.audit/` and
   `output/`; local copies of older trees there failed some of them on a
   developer's checkout and blocked its pushes.
-- Editors now land at `/admin` after login. Public users land at `/account`;
-  visiting `/login` with an existing session uses the same role-based destination.
-  Resolves [#188](https://github.com/olegiv/ocms-go/issues/188).
 
 ### Security
 - A panic in a request handler no longer stops the server. The request timeout
@@ -276,23 +303,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built against.
 - Update tinymce 8.9.3 → 8.10.0 and swagger-ui-dist 5.33.1 → 5.33.3, with
   refreshed integrity hashes.
-
-### Upgrade notes
-- A one-off migration rewrites the timestamps stored with a zone in every
-  table, module tables included, to UTC: values in Go's debug format
-  (`2026-10-18 05:41:31.17 +0200 CEST m=+0.08`) and values with a non-UTC
-  offset become `2026-10-18 03:41:31.17+00:00`. Times stored without a zone
-  are left as they are: SQLite's `CURRENT_TIMESTAMP` text, already UTC, and
-  Internal Analytics' local wall-clock times. Values that look zoned but do not
-  parse are left too and logged. The rewrite cannot be undone (`ocms migrate
-  down` only forgets the migration), so back up the database first.
-- A server whose `.env` does not parse, or whose `OCMS_ENV_FILE` names a file
-  it cannot read, no longer starts; fix the file (godotenv's error names the
-  line) before upgrading.
-- Times read from the database now come back in UTC, and admin and public
-  pages show them as they come: on a host whose time zone is not UTC, dates
-  and times that used to show in local time now show in UTC. The Docker image
-  runs in UTC unless `TZ` is set.
 
 ## [0.28.0] - 2026-10-12
 
@@ -1947,7 +1957,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/olegiv/ocms-go/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/olegiv/ocms-go/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/olegiv/ocms-go/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/olegiv/ocms-go/compare/v0.25.0...v0.26.0
