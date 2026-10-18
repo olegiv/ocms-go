@@ -1,6 +1,6 @@
 # Privacy Module
 
-The Privacy module adds cookie-consent management to oCMS using [Klaro](https://klaro.org/) plus Google Consent Mode v2 (GCM). When enabled, it injects the Klaro consent banner on public pages, defers non-essential tracking scripts until the visitor consents, and signals consent state to Google services via GCM.
+The Privacy module adds cookie-consent management to oCMS using [Klaro](https://klaro.org/) plus Google Consent Mode v2 (GCM). When enabled, it injects the Klaro consent banner on public pages and signals consent state to Google services via GCM. It does not block or delay any script: trackers that do not honour Consent Mode, such as Matomo, load whether or not the visitor consents.
 
 Pair this module with **External Analytics** or any third-party tracker that must respect visitor consent. The Internal Analytics module does not require consent because it stores no personal data (see `docs/analytics-int-module.md`).
 
@@ -21,10 +21,10 @@ Pair this module with **External Analytics** or any third-party tracker that mus
 1. `privacyHead` is called by the theme *before* any tracker injection — it emits:
    - The GCM `dataLayer.push(['consent','default',...])` block reflecting the configured defaults, and
    - The Klaro configuration and loader.
-2. Visitor interaction with the Klaro banner updates the consent cookie, which in turn triggers Klaro's `updateGtagConsent` so GCM-aware scripts (e.g. GA4 via External Analytics) start tracking once consent is granted.
+2. Visitor interaction with the Klaro banner updates the consent cookie and runs each service's `callback`, which sends `gtag('consent', 'update', ...)` for that service's `gcm_consent_type` (when GCM is enabled), so GCM-aware scripts (e.g. GA4 via External Analytics) start tracking once consent is granted.
 3. The `privacyFooterLink` helper renders a themed `<a>` element that reopens the consent modal from the site footer.
 
-Essential cookies (Klaro's own consent cookie plus oCMS session / language cookies) are declared as a non-opt-out service so visitors cannot turn them off.
+The predefined **Essential Cookies** service (Klaro's own consent cookie plus oCMS session / language cookies) is a required, non-opt-out service, so visitors cannot turn it off. It is not declared automatically: add it from the predefined list on the settings page.
 
 ## Admin Interface
 
@@ -51,7 +51,7 @@ Access at **Admin > Privacy** or `/admin/privacy`.
 | Google Consent Mode v2 | GCM enabled | Emit the GCM default block |
 | Google Consent Mode v2 | Default analytics / ad storage / ad user data / ad personalization | Default `denied` (0); flip to granted (1) per purpose |
 | Google Consent Mode v2 | Wait for update (ms) | How long GCM waits for consent before applying defaults (default `500`) |
-| Services | JSON array | Declare each tracked service — name, purposes, cookie patterns, required flag |
+| Services | Service list | Add services from the predefined list (Essential Cookies, Google Analytics, Google Ads, Google Tag Manager, Matomo) and edit each one's title, description, purposes, GCM consent type and required / default flags; cookie patterns come from the predefined entry. Stored as a JSON array |
 
 If the stored settings cannot be read at startup (a database error), the module fails towards consent: the banner is turned on, even if the stored settings had it off, and Google Consent Mode denies ad and analytics storage (`ad_storage`, `ad_user_data`, `ad_personalization`, `analytics_storage`) by default, so trackers that honour it collect nothing without consent. The settings page shows a warning while it displays this fallback and disables saving; a save is refused until the stored settings load (the module retries the load at most once a minute when it is next used; saving a form opened before the restart retries it at once), and a form rendered from the fallback is refused even after they recover.
 
@@ -64,7 +64,7 @@ Themes call these from the base layout:
 | `privacyHead nonce` | Inside `<head>` | **Must be emitted BEFORE `analyticsExtHead`** so GCM defaults initialize before GA4 loads. |
 | `privacyFooterLink langCode` | Anywhere in the footer | Returns `""` if the module is disabled. |
 
-Both helpers return `template.HTML` and respect the CSP nonce.
+Both helpers return `template.HTML`. `privacyHead` adds the CSP nonce to its inline scripts; `privacyFooterLink` emits no script, so it takes only the language code.
 
 ## Database Schema
 
@@ -95,9 +95,9 @@ Migration 3 renames and normalizes the built-in Essential Cookies service so it 
 
 ## Interaction with Other Modules
 
-- **External Analytics**: declare each tracker (GA4, GTM, Matomo) as a privacy service so consent gates injection. With GCM enabled, GA4/GTM respond to consent updates without re-rendering the page.
+- **External Analytics**: GA4, GTM and Matomo are injected whether or not the visitor has consented; services declared here do not gate that injection. With GCM enabled, GA4/GTM start from the configured Consent Mode defaults and respond to consent updates without re-rendering the page, provided a service with a `gcm_consent_type` (for example the predefined Google Analytics service) sends the update. Matomo has no consent integration in this module.
 - **Internal Analytics**: does **not** require consent because no personal data is stored. No service entry needed.
-- **Forms (captcha)**: if hCaptcha is enabled, add it as a service with required purposes so the visitor understands what the challenge loads.
+- **Forms (captcha)**: the predefined services include no hCaptcha entry, and services can only be added from that list, so hCaptcha cannot be declared here; mention it in the privacy policy instead.
 
 ## Testing
 

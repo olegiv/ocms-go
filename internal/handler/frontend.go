@@ -1802,9 +1802,8 @@ func (h *FrontendHandler) APICatalog(w http.ResponseWriter, r *http.Request) {
 
 // AgentSkillsIndex serves /.well-known/agent-skills/index.json per the
 // Agent Skills Discovery RFC (v0.2.0). The declared skill references the
-// live OpenAPI document; the sha256 field is currently empty because
-// computing it would require pulling in the huma spec at request time
-// (tracked as a follow-up in docs/agent-ready.md).
+// live OpenAPI document, and its sha256 is the digest of that document,
+// computed on first use and cached (openAPISHA256).
 func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Request) {
 	siteURL, ok := h.requireConfiguredSiteURL(w, r, "agent-skills index")
 	if !ok {

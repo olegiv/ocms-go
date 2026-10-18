@@ -1,6 +1,6 @@
 # GeoIP Country Detection
 
-OCMS Internal Analytics module supports GeoIP-based country detection using the MaxMind GeoLite2-Country database.
+OCMS Internal Analytics module supports GeoIP-based country detection using the MaxMind GeoLite2-Country database. The Sentinel module reads the same database to record the country of banned IPs.
 
 ## Overview
 
@@ -8,7 +8,6 @@ When enabled, the analytics module detects and records the country of each visit
 
 - Country breakdown statistics on the analytics dashboard
 - Geographic distribution charts
-- Country-specific filtering options
 
 ## Setup
 
@@ -37,7 +36,7 @@ Environment="OCMS_GEOIP_DB_PATH=/opt/geoip/GeoLite2-Country.mmdb"
 
 ### 3. Restart OCMS
 
-The database is loaded once at startup for optimal performance.
+The database is loaded at startup for optimal performance.
 
 ## Database Updates
 
@@ -45,9 +44,9 @@ MaxMind updates the GeoLite2 databases weekly (Tuesdays). To update:
 
 1. Download the new database from MaxMind
 2. Replace the existing `.mmdb` file
-3. OCMS automatically detects file changes and reloads the database within an hour
+3. Internal Analytics automatically detects file changes and reloads the database within an hour (the hourly `geoip_reload` job listed at `/admin/scheduler`, scheduled only if the database loaded at startup)
 
-Alternatively, restart OCMS to immediately load the new database.
+Alternatively, restart OCMS to immediately load the new database. The Sentinel module loads the database only at startup, so it needs a restart to pick up a replaced file.
 
 ## Graceful Degradation
 
@@ -55,12 +54,12 @@ If the GeoIP database is not configured or cannot be loaded:
 
 - The analytics module continues to function normally
 - Country detection is silently disabled
-- The "Countries" section shows "Unknown" for all visitors
-- A warning is logged at startup
+- The "Countries" section shows "Unknown" for public addresses (private and loopback addresses still show as "Local Network")
+- A startup message is logged: info when `OCMS_GEOIP_DB_PATH` is unset, warning when the file cannot be loaded
 
 ## Performance
 
-- Database is loaded once at startup (memory-mapped)
+- Database is loaded at startup (memory-mapped) and reloaded when the file changes
 - Lookups are thread-safe and extremely fast (<1ms)
 - Memory usage depends on database size (~5MB for GeoLite2-Country)
 
@@ -95,8 +94,8 @@ If the GeoIP database is not configured or cannot be loaded:
 
 ### All Visitors Showing as "Local Network"
 
-- This means all traffic is coming from private IP ranges (10.x.x.x, 192.168.x.x, 172.16.x.x)
-- If behind a reverse proxy, ensure X-Real-IP or X-Forwarded-For headers are properly configured
+- This means all traffic is coming from private or loopback IP ranges (10.x.x.x, 192.168.x.x, 172.16.x.x to 172.31.x.x, 127.x.x.x)
+- If behind a reverse proxy, ensure it sends X-Forwarded-For or X-Real-IP and that its address is listed in `OCMS_TRUSTED_PROXIES`; forwarding headers are ignored from any other peer
 - See [Reverse Proxy documentation](reverse-proxy.md) for header configuration
 
 ## Environment Variables

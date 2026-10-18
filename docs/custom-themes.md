@@ -83,8 +83,8 @@ external asset dependencies.
 The `tiny-sample` identifier is distinct from `starter`. The archive lives outside
 `custom/themes/`, so it is ready to import rather than already installed. Extract
 it to edit the templates; the included README describes its scope. This sample
-is intended for import testing and small content sites; it omits public forms,
-widgets, and theme settings.
+is intended for import testing and small content sites; it omits widgets,
+custom menus, and theme settings.
 
 ## Quick Start
 
@@ -179,16 +179,16 @@ The `theme.json` file is the only required file. It defines the theme's metadata
 |-------|------|----------|-------------|
 | `name` | string | Yes | Display name |
 | `version` | string | Yes | Semantic version. Also the asset cache-buster — see [Cache Busting](#cache-busting) |
-| `author` | string | Yes | Theme author |
-| `description` | string | Yes | Brief description |
+| `author` | string | No | Theme author |
+| `description` | string | No | Brief description |
 | `screenshot` | string | No | Preview image filename |
-| `templates` | object | Yes | Maps page types to template files |
+| `templates` | object | No | Currently ignored: each page type renders from `templates/pages/{type}.html` |
 | `settings` | array | No | Configurable theme settings |
 | `widget_areas` | array | No | Widget placement areas |
 
 ### Template Mapping
 
-The `templates` object maps page types to template file paths (relative to `templates/`):
+The `templates` object is read from `theme.json` but not used when pages render: each page type renders from `templates/pages/{type}.html`, the paths this example lists:
 
 ```json
 {
@@ -269,7 +269,10 @@ Render widgets in templates:
 
 ```html
 {{range (index .Widgets "sidebar")}}
-    {{renderWidget . $.ThemeSettings $.LangCode}}
+    <div class="widget widget-{{.Type}}">
+        {{if .Title}}<h3>{{.Title}}</h3>{{end}}
+        {{.Content}}
+    </div>
 {{end}}
 ```
 
@@ -305,11 +308,15 @@ The base layout (`layouts/base.html`) provides the HTML shell. Required elements
     <link rel="stylesheet" href="/themes/mytheme/static/css/theme.css">
 
     <!-- Integration hooks (required) -->
-    {{privacyHead}}
-    {{analyticsExtHead}}
+    {{privacyHead .CSPNonce}}
+    {{analyticsExtHead .CSPNonce}}
     {{embedHead .CSPNonce .PageOrigin}}
 </head>
 <body>
+    <!-- Integration hooks (required): the informer bar sits at the top of the page -->
+    {{informerBar .CSPNonce}}
+    {{analyticsExtBody .CSPNonce}}
+
     {{template "header.html" .}}
 
     <main>
@@ -320,9 +327,7 @@ The base layout (`layouts/base.html`) provides the HTML shell. Required elements
     {{template "footer.html" .}}
 
     <!-- Integration hooks (required) -->
-    {{analyticsExtBody}}
     {{embedBody .CSPNonce .PageOrigin}}
-    {{informerBar}}
 
     <script src="/themes/mytheme/static/js/theme.js"></script>
 </body>
@@ -337,7 +342,7 @@ Each page template must define a `"content"` block:
 {{define "content"}}
 <article>
     <h1>{{.Page.Title}}</h1>
-    <div>{{.Page.Body | safeHTML}}</div>
+    <div>{{.Page.Body}}</div>
 </article>
 {{end}}
 ```
@@ -351,7 +356,7 @@ Partials define a named block matching their filename:
 <header>
     <a href="/">{{.SiteName}}</a>
     <nav>
-        {{range buildMenuTree .HeaderMenuItems}}
+        {{range .Navigation}}
             <a href="{{.URL}}">{{.Title}}</a>
         {{end}}
     </nav>
@@ -365,12 +370,12 @@ Themes must include these function calls for oCMS features to work:
 
 | Hook | Location | Purpose |
 |------|----------|---------|
-| `{{privacyHead}}` | `<head>` | Privacy consent scripts |
-| `{{analyticsExtHead}}` | `<head>` | External analytics head scripts |
-| `{{analyticsExtBody}}` | Before `</body>` | External analytics body scripts |
+| `{{privacyHead .CSPNonce}}` | `<head>` | Privacy consent scripts |
+| `{{analyticsExtHead .CSPNonce}}` | `<head>` | External analytics head scripts |
+| `{{analyticsExtBody .CSPNonce}}` | After `<body>` | External analytics noscript fallbacks |
 | `{{embedHead .CSPNonce .PageOrigin}}` | `<head>` | Embedded head content |
 | `{{embedBody .CSPNonce .PageOrigin}}` | Before `</body>` | Embedded body content |
-| `{{informerBar}}` | In `<body>` | Informer bar widget |
+| `{{informerBar .CSPNonce}}` | After `<body>` | Informer bar widget |
 
 ### Structured data and breadcrumbs
 
@@ -436,8 +441,8 @@ Common data available in all templates:
 | `.Pages` | array | List of pages (for list/archive views) |
 | `.Categories` | array | Available categories |
 | `.Tags` | array | Available tags |
-| `.HeaderMenuItems` | array | Header navigation items |
-| `.FooterMenuItems` | array | Footer navigation items |
+| `.Navigation` | array | Header navigation items |
+| `.FooterNav` | array | Footer navigation items |
 | `.ThemeSettings` | map | Theme setting values |
 | `.Widgets` | map | Widgets by area |
 | `.Pagination` | object | Pagination state |
@@ -468,7 +473,7 @@ Place translations in `locales/{lang}/messages.json`:
 
 ```json
 {
-    "$schema": "../../../../.schema/i18n-schema.json",
+    "$schema": "../../../../../.schema/i18n-schema.json",
     "language": "en",
     "messages": [
         {
@@ -568,10 +573,10 @@ Two traps:
   sees the new CSS, so the change looks deployed, while everyone who has
   visited before keeps the old copy for up to 30 days.
 
-The bundled themes (`default`, `developer`, `starter`) link their assets bare,
-so they have no cache busting and no example to copy. That is survivable for a
-theme embedded in the binary and edited rarely, but the same 30 days apply to
-it — add the token to any theme you iterate on.
+The bundled themes (`default`, `developer`, `starter`) add the token to their
+stylesheet URL only. Their `theme.js` and other assets are linked bare, so the
+same 30 days apply to them — add the token to every asset of any theme you
+iterate on.
 
 ### CSS Best Practices
 

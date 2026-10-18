@@ -12,10 +12,10 @@ oCMS supports embedding videos on pages as an optional field, rendered between t
 ## How It Works
 
 1. In the admin page editor, expand the **Video** section and paste a video URL
-2. Optionally add a **Video Title** (max 255 characters) displayed above the embed
-3. The URL is validated server-side against registered providers
-3. On the frontend, the video is rendered as a responsive iframe embed between the page header and body content
-4. All three core themes (Default, Developer, Starter) include responsive video styling (16:9 aspect ratio)
+2. Optionally add a **Video Title** (max 255 bytes in the admin editor) displayed above the embed
+3. The admin editor validates the URL server-side against registered providers
+4. On the frontend, the video is rendered as a responsive iframe embed between the page header and body content
+5. The Default and Developer core themes and the Starter theme (`custom/themes/starter/`) include responsive video styling (16:9 aspect ratio), each with its own class names
 
 ## Security
 
@@ -49,13 +49,15 @@ curl -X PUT /api/v2/pages/1 \
   -d '{"video_url": ""}'
 ```
 
+The REST API checks only the URL scheme (`http`, `https` or none) and a 2048-character limit on `video_url`. It does not check that a provider recognizes the URL, and `video_title` has no length limit. A URL that no provider recognizes is stored but renders no embed. The provider check and the 255-character title limit apply only to the admin editor.
+
 ## Import/Export
 
 The `video_url` and `video_title` fields are included in page exports and can be imported from JSON/ZIP files.
 
 ## Theme Integration
 
-All core themes render the video embed with an optional title:
+Every bundled theme renders the video embed with an optional title. The markup below is the Default theme's; the Developer theme uses `dev-page-video` and `dev-page-video-title`, and the Starter theme uses `st-article__video` and `st-article__video-title`:
 
 ```html
 {{if .Page.VideoEmbedHTML}}

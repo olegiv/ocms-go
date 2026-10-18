@@ -4,10 +4,11 @@ oCMS includes a built-in cron scheduler that manages periodic tasks across the c
 
 ## Overview
 
-The scheduler manages two types of jobs:
+The scheduler manages three types of jobs:
 
 - **Core jobs** — Built-in system tasks (e.g., published page scheduling)
 - **Module jobs** — Tasks registered by installed modules (e.g., analytics reporting, data cleanup)
+- **Custom tasks** — Scheduled HTTP GET requests that administrators create in the admin UI (see [Custom Tasks](#custom-tasks))
 
 Each job has:
 - A default schedule (cron expression)
@@ -19,36 +20,42 @@ Each job has:
 
 ### Core Scheduler
 
-The core scheduler manages a single `*cron.Cron` instance that runs continuously in the background. Jobs are registered at application startup:
+The core scheduler manages a single `*cron.Cron` instance that runs continuously in the background (the custom-task executor shares it). Jobs are registered at application startup:
 
 ```go
 // Core job: runs on schedule
 entryID, _ := cronInst.AddFunc(effectiveSchedule, jobFunc)
-registry.Register("core", "publish_scheduled", "Publish scheduled pages", "0 * * * *", cronInst, entryID, jobFunc, triggerFunc)
+registry.Register("core", "scheduled_pages", "Publish pages scheduled for publishing", "* * * * *", cronInst, entryID, jobFunc, triggerFunc)
 ```
 
-### Module Cron Functions
+Built-in jobs:
 
-Modules can register cron jobs through the `ModuleCron()` lifecycle hook:
+| Source | Name | Default schedule | Description |
+|--------|------|------------------|-------------|
+| `core` | `scheduled_pages` | `* * * * *` (every minute) | Publish pages scheduled for publishing; can be triggered manually |
+| `core` | `demo_reset` | `0 1 * * *` (daily at 01:00 server time, UTC on Fly.io) | Only in demo mode: reset the demo data and restart; no manual trigger |
+| `task` | `cleanup` | `0 3 * * *` (daily at 03:00 server time) | Delete custom-task runs older than 30 days; can be triggered manually |
+
+### Module Jobs
+
+Modules register jobs through `module.Context.SchedulerRegistry`. A module keeps its own `*cron.Cron`, reads any saved override, adds the job, and registers it so it shows up in the admin UI (see `modules/analytics_int` for a working example):
 
 ```go
-// Module job: returns cron expression and execution function
-func (m *Module) ModuleCron() (string, func()) {
-    return "0 1 * * *", func() {
-        // Execute job
-    }
+schedule := defaultSchedule
+if m.ctx.SchedulerRegistry != nil {
+    schedule = m.ctx.SchedulerRegistry.GetEffectiveSchedule("analytics_int", jobName, defaultSchedule)
 }
+entryID, err := m.cron.AddFunc(schedule, cronFunc)
+// ...
+m.ctx.SchedulerRegistry.Register("analytics_int", jobName, description, defaultSchedule,
+    m.cron, entryID, cronFunc, triggerFunc) // triggerFunc may be nil
 ```
 
-The core system automatically:
-1. Collects cron functions from all active modules
-2. Loads effective schedules from the database
-3. Registers each job in the scheduler registry
-4. Manages execution and timing information
+Jobs are registered from the module's `Init`, which runs only for active modules. A module that passes a nil `triggerFunc` gets no **Run Now** button. The registry applies schedule edits by replacing the job's entry in the module's cron instance.
 
 ## Viewing Jobs
 
-Navigate to `/admin/scheduler` to view all scheduled jobs in a table:
+Navigate to `/admin/scheduler` (admin only) to view all scheduled jobs in a table:
 
 | Column | Description |
 |--------|-------------|
@@ -60,7 +67,8 @@ Navigate to `/admin/scheduler` to view all scheduled jobs in a table:
 | **Actions** | Edit, reset, or trigger buttons |
 
 The **Source** column uses color-coded badges:
-- **Blue** (primary) — Core system job
+- **Indigo** — Core system job
+- **Green** — Custom task (`task`)
 - **Cyan** — Module job
 
 ## Editing Job Schedules
@@ -71,7 +79,7 @@ Click the **Edit** button to change a job's cron schedule:
 2. Enter a new cron expression (standard 5-field or `@every` interval format)
 3. Click **Save** — The new schedule takes effect immediately
 
-The system validates the cron expression before applying it. If validation fails, the previous schedule is restored automatically.
+The system validates the cron expression before applying it. An invalid expression is rejected and the current schedule stays in place.
 
 ### Cron Expression Format
 
@@ -107,7 +115,7 @@ Use `*` to match any value in a field.
 
 ## Manually Triggering Jobs
 
-If a job supports manual triggers, a **Trigger Now** button appears in the actions column. Click it to execute the job immediately (outside its normal schedule).
+If a job supports manual triggers, a **Run Now** button appears in the actions column. Click it to execute the job immediately (outside its normal schedule).
 
 The system confirms your action before executing.
 
@@ -155,6 +163,25 @@ On startup, the scheduler loads all overrides and applies them to jobs automatic
 
 The `scheduler_overrides` table is created by goose migration `20260213100000_create_scheduler_overrides.sql`. All override queries use SQLC-generated type-safe code. A runtime `CREATE TABLE IF NOT EXISTS` remains as a safety net for backwards compatibility with databases that predate the migration.
 
+## Custom Tasks
+
+Below the jobs table, the **Custom Tasks** section lets administrators schedule an HTTP GET request to a URL (**New Task**):
+
+| Field | Rules |
+|-------|-------|
+| Name | 3-100 characters |
+| URL | At most 2048 characters; `http` or `https` (only `https` when `OCMS_REQUIRE_HTTPS_OUTBOUND` is on, which is the default in production) |
+| Schedule | Cron expression or `@every` interval |
+| Timeout | 1-300 seconds (default 30) |
+
+Each task can be edited, enabled or disabled, run immediately (rate limited to one manual run per 10 seconds per task), deleted together with its run history, and its runs inspected (status, HTTP status code, duration, error). Active tasks also appear in the jobs table with source `task` and name `task_<id>`.
+
+Safety rules:
+
+- URLs that resolve to private, loopback, link-local or other reserved addresses, `localhost` and cloud metadata hosts are rejected. The check runs when the task is saved, again before every run, and on every redirect (at most 10).
+- The response body is not stored: a run records only the content type and the number of bytes read (the read is capped at 4096 bytes).
+- Runs older than 30 days are deleted daily by the `task:cleanup` job.
+
 ## Demo Mode Restrictions
 
 When `OCMS_DEMO_MODE=true`, scheduler modifications are disabled to prevent demo users from breaking the demo experience:
@@ -163,6 +190,7 @@ When `OCMS_DEMO_MODE=true`, scheduler modifications are disabled to prevent demo
 - ✗ Edit job schedules
 - ✗ Reset schedules
 - ✗ Trigger jobs manually
+- ✗ Create, edit, enable/disable, delete or run custom tasks
 
 Attempting to modify schedules in demo mode shows an error and redirects to the scheduler page. This prevents accidental or intentional changes to demo job timing.
 
@@ -173,6 +201,7 @@ Scheduler events are logged for audit trails:
 - **Schedule updated** — Recorded when a job's cron expression is changed
 - **Schedule reset** — Recorded when an override is removed
 - **Job manually triggered** — Recorded when a job is executed manually
+- **Scheduled task created / updated / enabled / disabled / deleted / manually triggered** — Recorded for custom tasks
 
 Each event includes:
 - The user who made the change
@@ -185,11 +214,11 @@ View audit logs at `/admin/events` to review scheduler changes.
 
 ## Common Use Cases
 
-### Delay Publishing Scheduled Pages
+### Check for Scheduled Pages Less Often
 
-By default, scheduled pages are published every hour at :00. If you need more frequent publishing (e.g., for real-time updates), change the schedule:
+By default, pages scheduled for publishing are picked up every minute (`core:scheduled_pages`). If a minute-level check is more than you need, change the schedule:
 
-**Current:** `0 * * * *` (every hour)
+**Current:** `* * * * *` (every minute)
 **New:** `*/5 * * * *` (every 5 minutes)
 
 ### Disable a Job
@@ -200,7 +229,7 @@ To prevent a job from running, set its schedule to an impossible expression:
 0 0 31 2 *  (never - Feb 31 doesn't exist)
 ```
 
-Or coordinate with the module maintainer to remove the module entirely.
+For a custom task, use **Disable** instead.
 
 ### Shift Job Timing
 

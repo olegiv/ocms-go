@@ -2064,7 +2064,8 @@ func run() (runErr error) {
 
 	r.Use(sessionManager.LoadAndSave)
 
-	// CSRF protection middleware (applied globally, API routes will be exempted)
+	// CSRF protection middleware, attached to the route groups that take form
+	// posts; the REST API and MCP routes are not behind it.
 	csrfConfig := middleware.DefaultCSRFConfig([]byte(cfg.SessionSecret), cfg.IsDevelopment())
 	csrfMiddleware := middleware.CSRF(csrfConfig)
 	slog.Info("CSRF protection initialized", "secure", !cfg.IsDevelopment())

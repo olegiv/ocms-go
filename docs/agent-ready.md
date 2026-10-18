@@ -16,8 +16,13 @@ request to the homepage. The checks are those exercised by
 | Markdown for Agents | `Accept: text/markdown` on `GET /` and `GET /{slug}` | [Cloudflare Markdown for Agents](https://developers.cloudflare.com/fundamentals/reference/markdown-for-agents/) |
 | API Catalog | `/.well-known/api-catalog` | RFC 9727 (linkset format RFC 9264) |
 | Agent Skills index | `/.well-known/agent-skills/index.json` | [Cloudflare Agent Skills Discovery RFC v0.2.0](https://github.com/cloudflare/agent-skills-discovery-rfc) |
-| MCP Server Card | `/.well-known/mcp/server-card.json` | draft SEP-1649 while the MCP module is active |
+| MCP Server Card | `/.well-known/mcp/server-card.json` | draft SEP-1649 (REST-only card while the MCP module is off) |
 | Security contact | `/.well-known/security.txt` | RFC 9116 (unrelated, included for completeness) |
+
+The API Catalog, Agent Skills index and MCP Server Card build absolute URLs
+from the configured `site_url`, so each answers `503 Service Unavailable`
+until it is set. The MCP Server Card additionally requires `site_url` to be
+a plain `http(s)` origin (scheme and host, no path).
 
 The `Link` header on `GET /` advertises three relations:
 
@@ -39,7 +44,8 @@ Both keys live in the admin `Config` table and can be edited via
 
 oCMS ships an MCP transport as the opt-in **MCP Server** module: Streamable
 HTTP at `POST /api/mcp` with read-only tools (see
-[mcp-module.md](mcp-module.md)). The server card follows the module's state:
+[mcp-module.md](mcp-module.md)). The server card is always served and
+follows the module's state:
 
 - **Module active:** the card names the endpoint in the SEP-1649 `transport`
   object (`"type": "streamable-http"`, `"endpoint": "https://…/api/mcp"`). It
@@ -63,7 +69,9 @@ card, it is served with `Cache-Control: no-cache`.
 The homepage (`/`) and page routes (`/{slug}`, and their language-prefixed
 variants) honor `Accept: text/markdown`. When the header signals a
 markdown preference, the handler returns a plain-text Markdown
-representation in place of the HTML theme output:
+representation in place of the HTML theme output. Markdown carries absolute
+URLs, so it is served only when `site_url` is configured; otherwise the
+request falls through to HTML:
 
 - `Content-Type: text/markdown; charset=utf-8`
 - `Vary: Accept` (also set on the HTML response so reverse-proxy caches
@@ -91,12 +99,14 @@ wiring is in `internal/handler/frontend.go` (`Home` and `Page`).
 
 ## Agent Skills SHA-256
 
-The `sha256` field of the `ocms-rest-api` skill currently renders as an
-empty string. Computing the digest of the live OpenAPI bytes at request
-time would require cross-package access to the huma registry. A
-follow-up (Phase 2) will inject a precomputed digest from `main.go`
-after the API is built; the exported helper `seo.ComputeSHA256Hex` is
-already in place.
+The `sha256` field of the `ocms-rest-api` skill is the hex SHA-256 of the
+exact OpenAPI JSON bytes served at `/api/v2/openapi.json`. `cmd/ocms/main.go`
+wires those bytes into the frontend handler (`SetOpenAPISpecProvider`) once
+the v2 API is built; the digest is computed with `seo.ComputeSHA256Hex` on
+the first request to the index and cached for the process lifetime, since
+the spec is deterministic from compiled-in Go types. If no provider is wired
+or the computation fails, the field is an empty string and the next request
+retries.
 
 ## Local verification
 

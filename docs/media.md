@@ -16,6 +16,8 @@ When an image is uploaded, OCMS automatically generates multiple size variants:
 | `grid` | 256x256 | 85% | Crop | Admin grid views |
 | `thumbnail` | 150x150 | 80% | Crop | Search results, admin previews |
 
+The quality setting applies to JPEG output only. PNG, GIF and WebP files are re-encoded without one (PNG and WebP losslessly).
+
 ### Storage Structure
 
 ```
@@ -49,17 +51,18 @@ Different contexts use different image variants for optimal performance:
 | Context | Variant | Reason |
 |---------|---------|--------|
 | Single page featured image | `large` | High quality for main content |
-| OG image (social sharing) | `og` | Optimized 1200x630 for social platforms (< 200KB) |
-| Homepage listings | `medium` | Balance of quality and speed |
-| Category/tag archives | `medium` | Balance of quality and speed |
+| OG image (social sharing) | `og` | Sized 1200x630 for social platforms |
+| Homepage listings | `thumbnail` as `src`, `small` and `medium` in `srcset` | The browser picks the size it needs |
+| Category/tag archives | `thumbnail` as `src`, `small` and `medium` in `srcset` | The browser picks the size it needs |
 | Search results | `thumbnail` | Fast loading, small previews |
-| Admin media picker | `grid` | Quick grid view |
+| Admin media library grid | `grid` | Quick grid view (falls back to `thumbnail`, then the original) |
+| Admin media picker | `thumbnail` | Quick selection |
 
 OG image variant selection priority: `og` > `large` > `medium` > `thumbnail`.
 
 ## API Response
 
-The REST API returns all variant URLs:
+The REST API returns the URLs of the original, `thumbnail`, `medium` and `large` variants (the last three for every `image/*` file, even an ICO, which gets no variants, so those URLs 404). Add `?include=variants` to list every generated variant with its own URL, including `small`, `grid` and `og`:
 
 ```json
 {
@@ -68,7 +71,6 @@ The REST API returns all variant URLs:
   "urls": {
     "original": "/uploads/originals/885181c9-2d79-403d-a6e5-6e06ddb3f107/photo.jpg",
     "large": "/uploads/large/885181c9-2d79-403d-a6e5-6e06ddb3f107/photo.jpg",
-    "og": "/uploads/og/885181c9-2d79-403d-a6e5-6e06ddb3f107/photo.jpg",
     "medium": "/uploads/medium/885181c9-2d79-403d-a6e5-6e06ddb3f107/photo.jpg",
     "thumbnail": "/uploads/thumbnail/885181c9-2d79-403d-a6e5-6e06ddb3f107/photo.jpg"
   }
@@ -82,13 +84,16 @@ When assigning a featured image to a page, the image must meet minimum size requ
 - **Minimum dimensions**: 1200 x 800 pixels
 - **Supported formats**: JPEG, PNG, GIF, WebP
 
-Size validation is enforced when creating a page or changing the featured image on an existing page. If a page already has a featured image that is below the minimum size, saving other fields on that page will not trigger validation — the existing image is grandfathered.
+Size validation is enforced in the admin page editor when creating a page or changing the featured image on an existing page; the REST API does not check it. If a page already has a featured image that is below the minimum size, saving other fields on that page will not trigger validation — the existing image is grandfathered.
 
 ## Supported Formats
 
 - **Images**: JPEG, PNG, GIF, WebP
+- **Icons**: ICO (stored without variants)
+- **Video**: MP4, WebM (stored without variants)
 - **Documents**: PDF (stored without variants)
-- **Other**: Files are stored in `originals` only
+
+The type is detected from the file content and the extension must match it; any other type is rejected. Files other than images are stored in `originals` only.
 
 ## Cache Headers
 
@@ -104,7 +109,8 @@ In theme templates, use the appropriate variant:
 <!-- Single page featured image -->
 <img src="{{ .FeaturedImage }}" alt="Featured">
 
-<!-- Listing page (use medium via pageToView) -->
+<!-- Listing page: .FeaturedImage is the thumbnail; .FeaturedImageSmall and
+     .FeaturedImageMedium are available for srcset when those variants exist -->
 {{ range .Pages }}
 <img src="{{ .FeaturedImage }}" alt="{{ .Title }}">
 {{ end }}
@@ -118,4 +124,4 @@ In theme templates, use the appropriate variant:
 
 ## Storage Location
 
-Uploaded files are stored in the `./uploads` directory relative to the application root. This path is not configurable via environment variables.
+Uploaded files are stored in the directory set by `OCMS_UPLOADS_DIR` (default: `./uploads`, relative to the working directory of the process).

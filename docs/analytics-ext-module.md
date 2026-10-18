@@ -55,7 +55,7 @@ When saving:
   and a numeric Site ID. Values are
   checked again at render time and skipped if malformed; a malformed stored
   value is logged at startup and shown on the settings page.
-- Trailing slashes on Matomo URLs are normalized before storage.
+- The Matomo URL is stored as entered; one trailing slash is removed when the tracking script is rendered.
 
 Errors appear as flash messages.
 
@@ -77,7 +77,7 @@ Themes call these from the base template:
 | `analyticsExtHead` | Inside `<head>` | GA4 / GTM / Matomo head scripts |
 | `analyticsExtBody` | End of `<body>` | GTM `<noscript>` iframe, Matomo image fallback |
 
-Both functions return `template.HTML`; all IDs are HTML-escaped before injection.
+Both functions return `template.HTML`; every ID is escaped for where it lands (JS-escaped inside scripts, HTML-escaped inside attributes) before injection.
 
 ## Database Schema
 
@@ -105,7 +105,7 @@ External trackers run in the visitor's browser, so oCMS cannot exclude IPs serve
 - **Google Tag Manager**: use built-in IP variables to filter inside tag triggers.
 - **Matomo**: Administration > Websites > Excluded IPs.
 
-For server-side exclusion of internal or pen-testing traffic, use the **Internal Analytics** module's `Excluded IPs` setting (see `docs/analytics-int-module.md`).
+For server-side exclusion of internal or pen-testing traffic, use the global **Excluded IPs** setting (`excluded_ips`) in Admin > Site Configuration, which the **Internal Analytics** module honors (see `docs/analytics-int-module.md`).
 
 ## Testing
 
@@ -114,4 +114,4 @@ OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! \
   go test -v ./modules/analytics_ext/...
 ```
 
-Covers settings load/save, script rendering, and HTML escaping of IDs.
+Covers settings load/save, script rendering, and format validation of the IDs.

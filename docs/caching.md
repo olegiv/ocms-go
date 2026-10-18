@@ -16,7 +16,7 @@ Error responses use `no-store`.
 | Cache | Purpose | Invalidation |
 |-------|---------|--------------|
 | **Config** | Site settings (site_name, etc.) | On config update |
-| **Sitemap** | Generated sitemap.xml | On page/category/tag changes |
+| **Sitemap** | Generated sitemap.xml | On page and language changes, theme activation and settings, and Migrator imports; also expires after 1 hour |
 | **Pages** | Published page content | On page create/update/delete |
 | **Menus** | Menu structure and items | On menu/item changes |
 | **Languages** | Active languages list | On language changes |
@@ -53,10 +53,9 @@ This ensures users see content appropriate for their language and access level.
 ```go
 // Admin routes: no cache for site config
 r.Use(middleware.LoadSiteConfig(db, nil))
-
-// Frontend routes: use cache for performance
-r.Use(middleware.LoadSiteConfig(db, cacheManager))
 ```
+
+Public frontend handlers read site configuration through the cache manager (`cacheManager.GetConfig`) for performance.
 
 ## Cache Backends
 
@@ -66,11 +65,11 @@ r.Use(middleware.LoadSiteConfig(db, cacheManager))
 - No external dependencies
 - Lost on restart
 
-### Redis (Distributed)
+### Redis (Optional)
 
-- Multi-instance caching
-- Shared across servers
-- Persists across restarts
+- Connected at startup when `OCMS_REDIS_URL` is set; if Redis is unreachable, oCMS logs a warning and falls back to memory
+- The backend type and health are shown at `/admin/cache`, and "clear all" also removes the Redis keys under `OCMS_CACHE_PREFIX`
+- The config, sitemap, page, menu, language and translation caches are held in each instance's own memory. They are not stored in Redis and are not shared between instances, so each instance invalidates only its own copies
 
 Configure with environment variables:
 
@@ -111,18 +110,18 @@ Caches are automatically invalidated when content changes:
 - **Menu/item changed** → Menu cache
 - **Config changed** → Config cache
 - **Language changed** → Language cache
-- **Translation changed** → Translation cache for that entity
+- **Translation changed** → Translation cache for that entity type
 
 ## Cache Preloading
 
 On startup, oCMS preloads frequently accessed data:
 
 ```go
-cacheManager.Preload(ctx, siteURL)
+cacheManager.Preload(ctx, "")
 ```
 
 This loads:
 - Site configuration
 - All menus
 - Active languages
-- Sitemap (if siteURL provided)
+- Sitemap (only when `siteURL` is non-empty; startup passes an empty value, so the sitemap is built on the first `/sitemap.xml` request)

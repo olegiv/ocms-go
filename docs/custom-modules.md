@@ -167,7 +167,7 @@ they tell oCMS's own modules from a site's copies — and abort rather than gues
 if it is not.
 
 Because sites share one core tree, every target that touches it — `dev`, `run`,
-`build*`, `test`, `assets`, `sync-modules` and `clean-modules` — holds a lock at
+`build*`, `test`, `assets`, `migrate-*`, `sync-modules` and `clean-modules` — holds a lock at
 `$(CORE_DIR)/.site-build.lock` for its whole duration. Without it a second site
 could replace the modules after the first site's sync finished but while its
 compiler was still reading, producing a binary containing the wrong site's code;
@@ -183,7 +183,9 @@ every site would share one uploads directory. A relative value in your `.env` is
 fine; it is resolved for you.
 
 The same resolution applies to the migrate targets, so `ocms migrate` and the
-server always open the same database.
+server always open the same database. The targets that run, stop or migrate the
+server (`dev`, `run`, `stop`, `restart`, `migrate-*`) stop when the site `.env`
+is missing, instead of falling back to `data/ocms.db` and port 8080.
 
 Copy, do not symlink: Go's wildcards skip symlinked directories, so
 `go test ./...` would silently omit the module and report success with failing
@@ -224,7 +226,7 @@ type Module interface {
     Dependencies() []string                // Other module names this depends on
 
     Init(ctx *Context) error               // Initialize with app context
-    Shutdown() error                       // Cleanup on shutdown
+    Shutdown() error                       // Cleanup on shutdown; return within module.ShutdownTimeout
 
     RegisterRoutes(r chi.Router)           // Public routes (e.g., /bookmarks)
     RegisterAdminRoutes(r chi.Router)      // Admin routes (e.g., /admin/bookmarks)
@@ -252,6 +254,8 @@ func New() *Module {
     }
 }
 ```
+
+`Registry.ShutdownAll` calls `Shutdown` on the modules in reverse order of registration and gives them all one shared budget, `module.ShutdownTimeout` (7 seconds). Each module is waited for only what is left of it, but for at least 100 ms, so a slow module cannot starve the ones after it. A `Shutdown` still running when its wait ends, or one that panics, is reported as an error and left behind, and the next module goes ahead; after that the server closes the database, so a straggler can find it closed. A `Shutdown` that waits for its own goroutines should use `module.WaitWithin(&wg, d)` instead of `wg.Wait()`, so a stuck goroutine cannot hold it.
 
 ## Module Context
 

@@ -10,7 +10,7 @@ A development tool for generating random test data in oCMS with full multi-langu
 - Generate 5-20 random categories (nested hierarchy) with translations
 - Generate 5-20 placeholder images (colored rectangles with variants)
 - Generate 5-20 published pages with tags, categories, and featured images
-- Generate 5-10 menu items in Main Menu (nested, linked to pages)
+- Generate 3-7 menu items in every menu (nested, linked to pages)
 - Track all generated items for bulk deletion
 - Clean up generated content with one click
 

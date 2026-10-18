@@ -11,10 +11,11 @@ CSRF attacks exploit authenticated users by tricking them into submitting malici
 The `filippo.io/csrf/gorilla` library uses **Fetch metadata headers** (specifically `Sec-Fetch-Site`) provided by modern browsers to determine request origin:
 
 1. **Fetch Metadata**: Browsers automatically include `Sec-Fetch-Site` header indicating whether the request is same-origin, same-site, cross-site, or none
-2. **Form Token**: Forms include a hidden `gorilla.csrf.Token` field for compatibility
-3. **Validation**: On form submission, the server validates that:
-   - The `Sec-Fetch-Site` header indicates a same-origin or trusted request
-   - The request's Origin/Referer header matches trusted origins (for legacy browser fallback)
+2. **No Form Token**: The library ignores tokens, and oCMS forms do not include a hidden token field
+3. **Validation**: For every method except GET, HEAD and OPTIONS, the server checks that:
+   - `Sec-Fetch-Site` is `same-origin` or `none`; any other value (`same-site`, `cross-site`) is rejected unless the request's `Origin` header exactly matches a trusted origin
+   - When `Sec-Fetch-Site` is missing (legacy browsers), the host of the `Origin` header must match the request `Host` (or the `Origin` must be a trusted origin); the Referer header is not used
+   - Requests carrying neither header are assumed to be same-origin or non-browser requests (curl, scripts) and are allowed
 
 This approach is more reliable than cookie-based CSRF protection because:
 - It doesn't depend on cookie settings (SameSite, Secure, etc.)
@@ -27,7 +28,7 @@ CSRF protection is configured in `internal/middleware/csrf.go`:
 
 ```go
 type CSRFConfig struct {
-    AuthKey        []byte           // 32-byte key for token encryption
+    AuthKey        []byte           // Passed to the library, which ignores it (no tokens)
     ErrorHandler   http.Handler     // Custom error handler
     TrustedOrigins []string         // Allowed origins for cross-origin requests
 }
@@ -37,24 +38,27 @@ Note: Cookie-related options (Secure, Domain, Path, MaxAge, SameSite) are no lon
 
 ### TrustedOrigins Format
 
-**IMPORTANT**: The `TrustedOrigins` must be in `host:port` format, NOT full URLs.
+**IMPORTANT**: oCMS's built-in list is scheme-less (`localhost:8080`,
+`127.0.0.1:8080`). The library treats a scheme-less entry as `https://host:port`
+and compares it with the request's `Origin` header exactly, so on a plain-HTTP
+dev server those entries trust nothing. To trust a plain-HTTP origin, list it with
+its scheme (`http://localhost:8080`), which the library accepts.
+`middleware.ValidateTrustedOrigins` would reject that form, but the application
+never calls it.
 
 ```go
-// CORRECT - host:port format
+// host:port format (matched as https://localhost:8080, https://127.0.0.1:8080)
 TrustedOrigins: []string{
     "localhost:8080",
     "127.0.0.1:8080",
 }
-
-// WRONG - full URLs cause "origin invalid" errors
-TrustedOrigins: []string{
-    "http://localhost:8080",  // DO NOT USE
-}
 ```
+
+The list comes from `DefaultCSRFConfig`; there is no environment variable for it.
 
 ### Development vs Production
 
-In development mode (`OCMS_ENV=development`):
+In development mode (`OCMS_ENV=development`, the default):
 - `localhost:8080` and `127.0.0.1:8080` are trusted origins
 
 In production mode (`OCMS_ENV=production`):
@@ -90,17 +94,17 @@ fetch('/api/endpoint', {
 });
 ```
 
-## Skipping CSRF for API Routes
+## Where CSRF Applies
 
-REST API endpoints use token-based authentication instead of CSRF. These routes are excluded from CSRF protection:
+The CSRF middleware is attached to the browser-facing route groups in `cmd/ocms/main.go`:
+`/admin/*`, the auth routes (`/login`, `/logout`, `/language`), `/account`, and the public
+form routes (`/forms/{slug}`). The REST API (`/api/v2/*`) and the MCP endpoint (`/api/mcp`)
+use API-key authentication instead and are not mounted behind the CSRF middleware at all.
+`/csp-report`, the internal analytics beacon and the modules' public routes (such as the
+Embed module's `POST /embed/dify/chat-messages`) are outside the CSRF middleware as well.
 
-```go
-// API routes skip CSRF validation
-r.Route("/api", func(r chi.Router) {
-    r.Use(middleware.SkipCSRF("/api/v2/..."))
-    // ... API routes
-})
-```
+`middleware.SkipCSRF(paths...)` can exempt exact paths from a group that has the middleware,
+but no application route uses it.
 
 ## Troubleshooting
 
@@ -110,9 +114,8 @@ This error occurs when CSRF validation fails. Check the server logs for the spec
 
 | Error Reason | Cause | Solution |
 |--------------|-------|----------|
-| `Sec-Fetch-Site cross-site` | Request from different site | Ensure request is from same origin |
-| `origin invalid` | Origin header doesn't match trusted origins | Check TrustedOrigins uses host:port format |
-| `referer not supplied` | No Referer header (legacy browser) | Use a modern browser |
+| `cross-origin request detected from Sec-Fetch-Site header` | `Sec-Fetch-Site` is `cross-site` or `same-site` and the `Origin` is not trusted | Ensure request is from same origin |
+| `cross-origin request detected, and/or browser is out of date: Sec-Fetch-Site is missing, and Origin does not match Host` | Legacy browser (or a client that sets `Origin`) whose `Origin` host differs from `Host` | Use a modern browser, or check that the reverse proxy forwards the original `Host` |
 
 ### Debugging CSRF Issues
 
@@ -122,14 +125,14 @@ This error occurs when CSRF validation fails. Check the server logs for the spec
 
 ### Common Mistakes
 
-1. **Using full URLs in TrustedOrigins**: Use `localhost:8080`, not `http://localhost:8080`
+1. **Leaving out the scheme of a plain-HTTP origin**: `localhost:8080` is matched as `https://localhost:8080`; write `http://localhost:8080` to trust the plain-HTTP origin
 2. **Cross-origin requests without TrustedOrigins**: Add the origin to TrustedOrigins if legitimate
-3. **HTTPS mismatch**: In production, ensure both site and requests use HTTPS
+3. **HTTPS mismatch**: A scheme-less trusted origin is matched as `https://`, so a request from the plain-HTTP variant of that origin is not trusted
+4. **Reverse proxy changing `Host`**: Without `Sec-Fetch-Site`, the `Origin` host is compared with the `Host` the application sees; see [Reverse Proxy](./reverse-proxy.md)
 
 ## Security Considerations
 
-- The CSRF auth key should be the same as the session secret (`OCMS_SESSION_SECRET`)
-- Minimum 32-byte key length is required
+- oCMS passes `OCMS_SESSION_SECRET` to the CSRF middleware as `AuthKey`, but the library ignores it; the session secret itself must still be at least 32 bytes
 - In production, always use HTTPS
 - Modern browsers send Fetch metadata headers automatically, providing strong CSRF protection
 
@@ -138,17 +141,22 @@ This error occurs when CSRF validation fails. Check the server logs for the spec
 ```bash
 # Test that CSRF is enforced (should return 403 for cross-site requests)
 curl -X POST http://localhost:8080/login \
+  -H "Sec-Fetch-Site: cross-site" \
+  -d "email=test@test.com&password=test"
+
+# Same with only an Origin header that does not match Host (also 403)
+curl -X POST http://localhost:8080/login \
+  -H "Origin: https://evil.example" \
   -d "email=test@test.com&password=test"
 
 # Test with proper headers (simulating same-origin request)
-# Note: curl doesn't send Sec-Fetch-Site, so use Referer/Origin for testing
 curl -X POST http://localhost:8080/login \
   -H "Origin: http://localhost:8080" \
   -H "Referer: http://localhost:8080/login" \
   -d "email=admin@example.com&password=changeme"
 ```
 
-Note: Real browsers automatically include `Sec-Fetch-Site` headers which the library uses for validation. curl doesn't include these headers, so the library falls back to Origin/Referer validation.
+Note: Real browsers automatically include `Sec-Fetch-Site` headers which the library uses for validation. curl doesn't include them, so the library compares the `Origin` header with `Host` when one is sent; a request with neither header is treated as a non-browser request and allowed, so a bare `curl -X POST` is not rejected.
 
 ## Related Documentation
 

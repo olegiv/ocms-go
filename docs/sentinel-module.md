@@ -18,7 +18,7 @@ Sentinel is an IP security module for oCMS that provides IP banning, automatic b
 
 ### How It Works
 
-Sentinel registers middleware at position 3 in the global middleware chain (after `RequestID` and `TrustedRealIP`). For every request, the middleware:
+Sentinel registers its middleware early in the global chain: after `RequestID`, the trusted-proxy real-IP step, `Logger`, `Recoverer` and `SecurityHeaders` (so a 403 from a ban still carries the security headers), and before compression, the request timeout, redirects and the session middleware. For every request, the middleware:
 
 1. Checks if the module is active (skips if deactivated at runtime)
 2. Checks the IP whitelist (whitelisted IPs bypass all checks)
@@ -50,9 +50,9 @@ Add IP bans manually with optional notes and URL context. Supports wildcard patt
 | `192.168.1.100` | Exact IP |
 | `192.168.1.*` | Any IP in 192.168.1.0/24 |
 | `192.168.*.*` | Any IP in 192.168.0.0/16 |
-| `10*` | Partial match: 100.x.x.x, 101.x.x.x, etc. |
+| `10*` | Partial match on the first octet: 10.x.x.x, 100.x.x.x, 101.x.x.x, etc. |
 
-Bans from auto-ban (path or honeypot) are logged with the triggering path/form and country code.
+Bans from auto-ban (path or honeypot) store the triggering path or form URL (in the `url` column and the note) and the country code. Each one also writes an "IP auto-banned by Sentinel" entry to the admin event log, with the matched pattern and country as metadata.
 
 ### Auto-Ban Paths
 
@@ -85,12 +85,12 @@ The flow:
 1. Bot submits form with `_website` field filled
 2. Forms handler detects honeypot, logs a security warning event
 3. Fires the `security.honeypot_triggered` hook
-4. Sentinel hook handler checks settings and whitelist
+4. Sentinel hook handler checks the Auto-Ban on Honeypot setting, the whitelist, existing bans, and skips logged-in admins/editors
 5. Bans the IP via `sentinel_banned_ips` table
 6. Bot receives a fake success response (silent rejection)
 7. All subsequent requests from the IP are blocked with 403
 
-The ban record includes the form URL and `honeypot:<form_slug>` as the matched pattern.
+The ban record stores the form URL; `honeypot:<form_slug>` is recorded as the matched pattern in the event log entry.
 
 ### IP Whitelist
 

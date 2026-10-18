@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `OCMS_ENV_FILE` names, missing or unreadable, or a `.env` that does not
   parse. It started without the settings in it, such as the database path or
   production mode; only a missing `.env` is still ignored.
+- The Developer module's generate and delete descriptions now say what it
+  does: 3-7 menu items in every menu, not 5-20 in the main menu.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
   so a later run can no longer commit other staged changes under it.
 - Editors now land at `/admin` after login. Public users land at `/account`;
@@ -202,6 +204,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   submodule so the tests that read the shared tooling run there too. CI also
   runs the race detector over the server stop, the request timeout, the Event
   Log writer and the module registry with its settings retry gate.
+- `site.mk`'s `dev`, `run`, `stop`, `restart` and `migrate-*` targets stop
+  when the site `.env` is missing; read with errors hidden, it left the
+  database at `data/ocms.db` and the port at 8080, which `make stop` could
+  kill in another server. `make test` warns.
+- A drift test checks that module `Shutdown` methods, and the methods they
+  call on their receiver, wait for their goroutines with `module.WaitWithin`
+  rather than `Wait()` or a bare channel receive.
 
 ### Changed
 

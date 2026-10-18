@@ -17,8 +17,8 @@ import (
 // Note: filippo.io/csrf/gorilla uses Fetch metadata headers instead of cookies,
 // so cookie-related options (Secure, Domain, Path, MaxAge, SameSite) are no longer used.
 type CSRFConfig struct {
-	// AuthKey is a 32-byte key used to authenticate the CSRF token.
-	// This should be the same as the session secret for simplicity.
+	// AuthKey is kept for compatibility: filippo.io/csrf checks Sec-Fetch-Site
+	// and Origin headers rather than signed tokens, so it does not use a key.
 	AuthKey []byte
 
 	// ErrorHandler is called when CSRF validation fails.
@@ -35,8 +35,8 @@ func DefaultCSRFConfig(authKey []byte, isDev bool) CSRFConfig {
 		AuthKey: authKey,
 	}
 
-	// In development, trust localhost origins for easier testing
-	// Note: csrf library expects host-only values, not full URLs
+	// In development, trust localhost origins for easier testing. The csrf
+	// library matches a scheme-less entry only as https://host:port.
 	if isDev {
 		cfg.TrustedOrigins = []string{
 			"localhost:8080",
@@ -47,8 +47,9 @@ func DefaultCSRFConfig(authKey []byte, isDev bool) CSRFConfig {
 	return cfg
 }
 
-// ValidateTrustedOrigins checks that origins are in the correct format.
-// The filippo.io/csrf library expects host:port format, not full URLs.
+// ValidateTrustedOrigins checks that origins are in host:port form. The
+// application does not call it: filippo.io/csrf also accepts full URLs, and
+// matches a scheme-less entry only as https://host:port.
 func ValidateTrustedOrigins(origins []string) error {
 	for _, origin := range origins {
 		// Check for URL schemes (should not be present)

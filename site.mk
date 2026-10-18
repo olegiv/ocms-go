@@ -26,9 +26,11 @@
 # sync-modules,
 # clean-modules, migrate-up, migrate-down, migrate-status.
 #
-# Reads OCMS_SERVER_PORT and OCMS_DB_PATH out of the site .env. OCMS_DB_PATH
-# must be absolute — the migrate targets refuse a relative one, because the
-# server resolves it against core/ while make would resolve it against the site.
+# Reads OCMS_SERVER_PORT, OCMS_DB_PATH, OCMS_CUSTOM_DIR and OCMS_UPLOADS_DIR out
+# of the site .env, which the targets that run, stop or migrate the server
+# require (require-env-file). A relative path is resolved against SITE_DIR,
+# because the server would resolve it against core/ while make resolves it
+# against the site.
 #
 # sync-modules/clean-modules need CORE_DIR to be a git checkout: git is how they
 # tell oCMS's own modules from a site's copies. They abort rather than guess if
@@ -40,7 +42,7 @@
 .PHONY: help sync-modules clean-modules dev run stop restart build build-prod \
         build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-all-platforms \
         assets clean \
-        test require-db-path migrate-up migrate-down migrate-status
+        test require-env-file require-db-path migrate-up migrate-down migrate-status
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 SITE_DIR         ?= $(shell pwd)
@@ -340,24 +342,33 @@ clean-modules: ## Remove this site's module copies from core
 	mv "$(OWNERS).tmp" "$(OWNERS)"; \
 	echo "Core module copies removed"
 
+# ── Site .env ────────────────────────────────────────────────────────────────
+# env_get reads the site .env with errors hidden, so without the file every
+# value would fall back without a word: the database to data/ocms.db and the
+# port to 8080, which may be another server's, for `make stop` to kill. The
+# targets that run, stop or migrate this site's server therefore require the
+# file, as the server itself does through OCMS_ENV_FILE; `make test` warns.
+require-env-file:
+	@[ -f "$(env_file)" ] || { echo "site.mk: $(env_file) does not exist; create the site .env or point OCMS_ENV_FILE at it" >&2; exit 1; }
+
 # ── Server ───────────────────────────────────────────────────────────────────
-dev: ## Sync modules, build assets, run the dev server
+dev: require-env-file ## Sync modules, build assets, run the dev server
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
 	$(MAKE) --no-print-directory assets; \
 	cd "$(CORE_DIR)" && $(site_env) $(GO) run $(MAIN_DIR)
 
-run: ## Run the dev server without rebuilding assets
+run: require-env-file ## Run the dev server without rebuilding assets
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
 	cd "$(CORE_DIR)" && $(site_env) $(GO) run $(MAIN_DIR)
 
-stop: ## Kill the server on the configured port
+stop: require-env-file ## Kill the server on the configured port
 	@[ -n "$(server_port)" ] || { echo "stop: OCMS_SERVER_PORT is not set in $(env_file)" >&2; exit 1; }
 	@lsof -ti:$(server_port) -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
 	@echo "Server stopped on port $(server_port)"
 
-restart: ## Restart the dev server
+restart: require-env-file ## Restart the dev server
 	@$(MAKE) --no-print-directory stop
 	@$(MAKE) --no-print-directory dev
 
@@ -409,6 +420,7 @@ assets: ## Compile SCSS and copy JS dependencies
 	cd "$(CORE_DIR)" && $(MAKE) assets
 
 test: ## Run the full Go test suite
+	@[ -f "$(env_file)" ] || echo "site.mk: warning: $(env_file) does not exist; the tests run without the site's settings" >&2
 	@$(with_core_lock) \
 	$(MAKE) --no-print-directory sync-modules; \
 	cd "$(CORE_DIR)" && $(site_env) $(GO) test -v ./...
@@ -430,7 +442,7 @@ clean: ## Remove build artifacts
 #
 # The guard below is a backstop against a broken resolution, not a user-facing
 # constraint: a relative path in the .env is fine and gets resolved.
-require-db-path:
+require-db-path: require-env-file
 	@[ -n "$(db_path)" ] || { echo "OCMS_DB_PATH is empty (SITE_DIR unset?)" >&2; exit 1; }
 	@case "$(db_path)" in /*) ;; *) echo "OCMS_DB_PATH did not resolve to an absolute path: $(db_path)" >&2; exit 1;; esac
 

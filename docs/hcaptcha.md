@@ -1,6 +1,6 @@
 # hCaptcha Integration
 
-OCMS includes an hCaptcha module to protect the login form from automated attacks and bots. This document describes how to configure and use hCaptcha protection.
+OCMS includes an hCaptcha module to protect the login form, and public forms that have a captcha field, from automated attacks and bots. This document describes how to configure and use hCaptcha protection.
 
 ## Overview
 
@@ -11,7 +11,7 @@ OCMS includes an hCaptcha module to protect the login form from automated attack
 - Bot registrations
 - Spam submissions
 
-The hCaptcha module integrates seamlessly with the login form and can be configured entirely through the admin interface or environment variables.
+The hCaptcha module integrates seamlessly with the login form and public forms. It is configured through the admin interface; environment variables can supply the keys.
 
 ## Getting Started
 
@@ -59,7 +59,7 @@ Note: Environment variables take precedence over database settings for the keys.
 |---------|---------|-------------|
 | Enabled | On/Off | Enable or disable hCaptcha protection |
 | Site Key | String | Your hCaptcha public site key |
-| Secret Key | String | Your hCaptcha secret key (stored securely) |
+| Secret Key | String | Your hCaptcha secret key (masked in the admin interface) |
 | Theme | `light` / `dark` | Widget color theme |
 | Size | `normal` / `compact` | Widget size |
 
@@ -101,7 +101,7 @@ This overrides the database `enabled` flag at runtime. The admin UI toggle is ig
 
 ## How It Works
 
-1. When enabled, the hCaptcha widget appears on the login form
+1. When enabled, the hCaptcha widget appears on the login form and on public forms that have a captcha field
 2. Users must complete the CAPTCHA challenge before submitting
 3. The server verifies the response with hCaptcha's API
 4. Login proceeds only if verification succeeds
@@ -133,7 +133,7 @@ With test keys:
 - No actual challenge is shown
 - Verification always succeeds
 
-This means you can enable hCaptcha immediately in development without setting up a real hCaptcha account. Just enable it in the admin interface and it will work with the test keys.
+This means you can enable hCaptcha immediately in development without setting up a real hCaptcha account. Enter the test keys in the admin interface (or set them through the environment variables) and enable it.
 
 ### Using Custom Keys
 
@@ -142,7 +142,7 @@ To use your own production keys, either set them via environment variables:
 ```bash
 OCMS_HCAPTCHA_SITE_KEY="your-site-key" \
 OCMS_HCAPTCHA_SECRET_KEY="your-secret-key" \
-OCMS_SESSION_SECRET=your-secret-key \
+OCMS_SESSION_SECRET="$(openssl rand -base64 32)" \
 ./ocms
 ```
 
@@ -153,8 +153,7 @@ Or configure them in the admin interface at **Modules > hCaptcha**.
 | Error | Cause | Solution |
 |-------|-------|----------|
 | "Please complete the captcha" | User didn't complete the challenge | Complete the hCaptcha widget |
-| "Captcha verification failed" | Network or API error | Check internet connection, try again |
-| "Invalid captcha response" | Token rejected by hCaptcha | Complete the challenge again |
+| "Captcha verification failed. Please try again." | Network or API error, or the token was rejected by hCaptcha | Check internet connection, complete the challenge again |
 
 ## Troubleshooting
 
@@ -203,9 +202,9 @@ proxy_set_header X-Real-IP $remote_addr;
 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 ```
 
-The module checks headers in this order:
-1. `X-Forwarded-For`
-2. `X-Real-IP`
+The module uses the client IP resolved by oCMS (`middleware.GetClientIP`). Forwarding headers are honored only when the direct peer is listed in `OCMS_TRUSTED_PROXIES`; the order is:
+1. `X-Forwarded-For` (the first address from the right that is not a trusted proxy)
+2. `X-Real-IP`, only when `X-Forwarded-For` is absent
 3. `RemoteAddr`
 
 ## Integration with Login Security

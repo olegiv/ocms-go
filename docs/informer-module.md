@@ -7,9 +7,9 @@ The Informer module displays a dismissible notification bar with a spinning indi
 - **Notification bar** above the page content with a spinning indicator
 - **Dismissible** - visitors can close the bar; their preference is stored in a cookie
 - **Auto-reset** - saving settings in admin resets all dismissals so everyone sees the updated bar
-- **HTML support** - notification text supports HTML for links, bold, and other formatting
+- **HTML support** - notification text supports sanitized HTML for links, bold, and other formatting
 - **Customizable colors** - configurable background and text colors via the admin panel
-- **Translatable** - the notification text can be translated via locale files
+- **Translated admin UI** - admin labels and messages are translated (`en`, `ru`); the bar text itself is shown as entered
 - **Admin control** - enable/disable and update text from `/admin/informer`
 - **Demo mode** - automatically enabled with admin access info when `OCMS_DEMO_MODE=true`
 
@@ -31,10 +31,10 @@ The admin page includes a live preview that updates as you change settings.
 The notification text supports HTML tags for rich formatting:
 
 ```html
-Check our <a href="/sale" style="color:#fff;text-decoration:underline">sale page</a> for <strong>50% off</strong>!
+Check our <a href="/sale">sale page</a> for <strong>50% off</strong>!
 ```
 
-Since only admin users can edit the text, it is rendered as-is without escaping.
+The text is sanitized before it is rendered, with the same bluemonday UGC policy used for page HTML (`security.SanitizePageHTML`): scripts, event-handler attributes and inline `style` attributes are removed, and links get `rel="nofollow"`. Set the colors with the Background Color and Text Color settings instead of inline styles. The colors are HTML-escaped, not sanitized.
 
 ## Cookie-Based Dismissal
 
@@ -50,29 +50,23 @@ The bar is rendered with `display:none` by default and shown via JavaScript only
 
 ## Demo Mode
 
-When `OCMS_DEMO_MODE=true`, the informer bar is automatically enabled on startup with a message showing how to access the admin dashboard, including the demo login credentials.
+When `OCMS_DEMO_MODE=true`, the informer bar is automatically enabled on every startup with a message showing how to access the admin dashboard, including the demo admin email. Because each startup saves the settings again, the version counter increments and earlier dismissals are reset.
+
+The demo password is not part of the page HTML. The bar's JavaScript fetches it at page-view time from the public endpoint `GET /api/informer/demo-credentials` (JSON `{"password": "..."}`, `Cache-Control: no-store`), which answers 404 unless `OCMS_DEMO_MODE=true`. In demo mode the admin settings form refuses to save.
 
 ## Translating the Bar Text
 
-The notification text entered in the admin panel is used as-is. For multi-language sites, you can provide translated versions of the text by adding entries to your theme or global locale files:
+The notification text entered in the admin panel is rendered as-is: the module does not look it up in locale files. (The admin help text mentions an `informer.bar_text` locale key, but nothing reads it.) For multi-language sites, put the translated wording in the text itself.
 
-```json
-{
-    "messages": [
-        {"id": "informer.bar_text", "message": "Maintenance in progress", "translation": "Wartungsarbeiten..."}
-    ]
-}
-```
-
-The admin UI labels and messages are already translated in `en` and `ru` locales within the module.
+The admin UI labels and messages are translated in `en` and `ru` locales within the module.
 
 ## Theme Integration
 
-The informer bar is injected into the page via the `informerBar` template function, which is called in the theme's `base.html` layout:
+The informer bar is injected into the page via the `informerBar` template function, which is called in the theme's `base.html` layout. The CSP nonce is passed so the bar's inline scripts are allowed by the Content-Security-Policy:
 
 ```html
 <body>
-    {{informerBar}}
+    {{informerBar .CSPNonce}}
     ...
 </body>
 ```
@@ -86,6 +80,7 @@ Both the `default` and `developer` themes include this integration. Custom theme
 - **Cookie name**: `ocms_informer_dismissed`
 - **Cookie value**: settings version counter (integer)
 - **Admin URL**: `/admin/informer`
-- **Template function**: `informerBar` - returns the full HTML/CSS/JS for the bar
+- **Public route**: `GET /api/informer/demo-credentials` (demo mode only)
+- **Template function**: `informerBar` - returns the full HTML/CSS/JS for the bar (takes the CSP nonce as its optional argument)
 
 The bar renders in normal document flow above the page content. It uses a CSS animation (`@keyframes informer-spin`) for the spinning indicator and inline styles for color customization.

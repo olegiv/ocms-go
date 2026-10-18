@@ -147,7 +147,7 @@ The hook source is in `.claude/shared/global/hooks/`.
 
 8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management, migrations, active status toggle, and embedded i18n translations. Custom modules live in `custom/modules/` and self-register via `init()` + a per-module `custom/modules/imports_<name>.go` (never a shared list — see `custom/modules/doc.go`). They must NOT implement `TemplateFuncs()`: that is the sole extension point needing a core edit, because every module template func requires a matching no-op placeholder in `internal/render/render.go` or `TestEveryModuleTemplateFuncHasRendererPlaceholder` fails. See `custom/modules/bookmarks/` for reference implementation.
 
-9. **Caching** (`internal/cache/`): Supports both in-memory and Redis caching with automatic fallback. Caches site config, menus, languages, and sitemaps. Set `OCMS_REDIS_URL` for distributed caching across multiple instances.
+9. **Caching** (`internal/cache/`): In-memory caches of site config, menus, languages, sitemaps and pages, per process. `OCMS_REDIS_URL` opens a Redis connection the cache admin shows and clears, but no cache layer reads or writes it yet, so instances do not share caches.
 
 10. **Scheduler** (`internal/scheduler/`): Cron-based task scheduler for scheduled publishing.
 
@@ -185,14 +185,15 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OCMS_SESSION_SECRET` | Yes | - | Min 32 bytes; keys CSRF protection (sessions are stored server-side) |
+| `OCMS_SESSION_SECRET` | Yes | - | Min 32 bytes; required and validated, but nothing is keyed with it today (sessions are stored server-side; CSRF checks Fetch metadata headers) |
 | `OCMS_DB_PATH` | No | `./data/ocms.db` | SQLite database path |
+| `OCMS_ENV_FILE` | No | `./.env` | Env file to read instead of `./.env` (site instance mode); missing, unreadable or unparsable fails startup and `ocms migrate` (a missing `./.env` is ignored). Read in `cmd/ocms` (`loadEnvFile`), not `config.go` |
 | `OCMS_SERVER_HOST` | No | `localhost` | Server bind host |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
 | `OCMS_ENV` | No | `development` | Set to `production` for prod |
 | `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
-| `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes/modules |
+| `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes (custom modules are compiled in) |
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
 | `OCMS_SITE_URL` | No | - | Full site URL written into site config on startup (overrides DB/admin setting); sitemap and agent-discovery docs 503 until set. Scheme and host only (`https://example.com`) — a path, query, fragment, credentials or an out-of-range port fails startup |
@@ -203,10 +204,10 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OCMS_REDIS_URL` | No | - | Redis URL for distributed cache (e.g., `redis://localhost:6379/0`) |
+| `OCMS_REDIS_URL` | No | - | Redis URL (e.g., `redis://localhost:6379/0`); connected and shown in the cache admin, not used by the caches yet |
 | `OCMS_CACHE_PREFIX` | No | `ocms:` | Key prefix for Redis cache entries |
-| `OCMS_CACHE_TTL` | No | `3600` | Default cache TTL in seconds |
-| `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for in-memory cache |
+| `OCMS_CACHE_TTL` | No | `3600` | TTL in seconds for the Redis (or fallback) cache, not used by the caches yet |
+| `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for that fallback memory cache, not used by the caches yet |
 
 ### Auth / anti-abuse
 
@@ -230,7 +231,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OCMS_API_ALLOWED_CIDRS` | No | - | Global CIDRs/IPs allowed to use API keys |
-| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | No | `false` (effective `true` in prod) | Fail API key auth if global allowlist is unset |
+| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | No | `false` (effective `true` in prod) | Fail startup in production, and API key auth elsewhere, if the global allowlist is unset |
 | `OCMS_REQUIRE_API_KEY_EXPIRY` | No | `false` (effective `true` in prod) | Reject API keys without an expiration timestamp |
 | `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | No | `false` (effective `true` in prod) | Reject API keys without per-key source CIDR restrictions |
 | `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | No | `false` (effective `true` in prod) | Deactivate API keys when source IP changes and no per-key CIDRs are set |
@@ -273,7 +274,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 When `OCMS_DO_SEED=true`, seeds admin user: `admin@example.com` / `changeme1234`
 
-When `OCMS_DEMO_MODE=true`, also seeds demo users: `demo@example.com` / `demo1234demo` (admin) and `editor@example.com` / `demo1234demo` (editor)
+When `OCMS_DEMO_MODE=true`, also seeds demo users: `demo@example.com` (admin; its password is rotated to a random value on every startup and shown in the informer bar, and the default admin's password is rotated too while it is still `changeme1234`) and `editor@example.com` / `demo1234demo` (editor)
 
 Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 
@@ -335,17 +336,16 @@ Tools are thin adapters over the v2 domain services; their input/output schemas 
 
 **Public (unauthenticated):** Returns only `{"status":"healthy"}` or `{"status":"degraded"}` — no internal details exposed.
 
-**Authenticated (admin session or API key):** Returns full details including uptime, version, database latency, disk space. Add `?verbose=true` for Go runtime info (goroutines, memory, CPU count).
+**Authenticated (valid API key or editor session):** Adds timestamp, uptime and version.
+
+**Admin session:** Full details: database and disk checks and a security summary. Add `?verbose=true` for Go runtime info (goroutines, memory, CPU count).
 
 ```bash
 # Public — minimal status only
 curl http://localhost:8080/health
 
-# Authenticated — full details via API key
+# API key — status, timestamp, uptime, version
 curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/health
-
-# Authenticated with system info
-curl -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/health?verbose=true"
 ```
 
 ### SEO Routes

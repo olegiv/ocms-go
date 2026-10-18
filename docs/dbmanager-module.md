@@ -23,14 +23,14 @@ This module allows administrators to:
 
 ## Installation
 
-The DB Manager module is registered in `cmd/ocms/main.go`:
+The DB Manager module is registered in `registerModules` in `cmd/ocms/main.go`:
 
 ```go
 import "github.com/olegiv/ocms-go/modules/dbmanager"
 
-// In main()
-if err := moduleRegistry.Register(dbmanager.New()); err != nil {
-    return fmt.Errorf("registering dbmanager module: %w", err)
+// In registerModules()
+if err := registry.Register(dbmanager.New()); err != nil {
+    return nil, fmt.Errorf("registering dbmanager module: %w", err)
 }
 ```
 
@@ -85,7 +85,8 @@ CREATE TABLE dbmanager_query_history (
     executed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     rows_affected INTEGER DEFAULT 0,
     execution_time_ms INTEGER DEFAULT 0,
-    error TEXT
+    error TEXT,
+    truncated INTEGER NOT NULL DEFAULT 0  -- added by migration 2
 );
 ```
 
@@ -104,6 +105,7 @@ This provides an audit trail of database operations performed through the module
 | rows_affected | INTEGER | Number of rows returned/affected |
 | execution_time_ms | INTEGER | Execution duration in milliseconds |
 | error | TEXT | Error message if query failed (NULL on success) |
+| truncated | INTEGER | 1 if the result was cut off at 1,000 rows, else 0 |
 
 ## Module Structure
 
@@ -111,7 +113,8 @@ This provides an audit trail of database operations performed through the module
 modules/dbmanager/
 ├── module.go           # Module definition, lifecycle, migrations
 ├── handlers.go         # HTTP handlers and query execution logic
-├── dbmanager_test.go   # Unit tests
+├── views.templ         # templ admin page (views_templ.go is generated)
+├── *_test.go           # Unit tests
 └── locales/            # Embedded i18n translations
     ├── en/
     │   └── messages.json
@@ -152,6 +155,7 @@ All translation keys are prefixed with `dbmanager.`:
 
 - Inactive by default; enable it only while it is needed
 - Results are capped at 1,000 rows and each statement is cancelled after 10 seconds
+- Query execution is refused in demo mode (the history stays visible)
 
 The module is protected by:
 

@@ -22,7 +22,7 @@ For the module's own detailed notes and JS snippets, see `modules/analytics_int/
 
 1. `TrackingMiddleware` records each non-excluded request into `page_analytics_views` with an anonymized visitor hash and session hash (both derived from the rotating salt).
 2. Themes optionally inject `analyticsIntReadTracker` — an inline `<script>` that posts `{path, scroll_depth, time_on_page}` to `POST /analytics/read` once both thresholds are met. The endpoint is CSRF-exempt (anonymous engagement data, no session mutation) but rate-limited to 2 req/s per IP with burst 5.
-3. A cron job aggregates the raw `page_analytics_views` and `page_analytics_reads` tables into the hourly/daily/referrer/tech/geo tables, then prunes old raw rows past the retention horizon.
+3. Cron jobs aggregate the raw `page_analytics_views` table into the hourly/daily/referrer/tech/geo tables, delete raw views after 7 days, and delete aggregates older than the retention period. `page_analytics_reads` is neither aggregated nor pruned: read counts are queried from it directly.
 4. A separate cron job (`geoip_reload`, default `0 * * * *`) re-opens the GeoLite2 file so database updates take effect without a server restart.
 
 ## Admin Interface
@@ -35,7 +35,7 @@ Access at **Admin > Modules > Internal Analytics** or `/admin/internal-analytics
 |--------|------|-------------|
 | GET | `/admin/internal-analytics` | Dashboard (overview, charts) |
 | GET | `/admin/internal-analytics/report` | Views & Reads report (per-page counts, read rate) |
-| GET | `/admin/internal-analytics/api/stats` | JSON stats (HTMX fragment) |
+| GET | `/admin/internal-analytics/api/stats` | JSON stats (overview, top pages, time series) |
 | GET | `/admin/internal-analytics/api/realtime` | Real-time visitor count |
 | POST | `/admin/internal-analytics/settings` | Save settings |
 | POST | `/admin/internal-analytics/aggregate` | Trigger aggregation manually |
@@ -53,16 +53,16 @@ do not see those forms, and their requests get `403 Forbidden`.
 | Show post statistics | on | Display view/read counts on public post pages |
 | Retention days | 365 | How long aggregated statistics are kept (raw views are pruned after 7 days) |
 | Excluded paths | — | URL prefixes to skip (one per line) |
-| Excluded IPs | — | IPs or CIDRs to exclude globally (one per line) |
-| Salt rotation (h) | 24 | How often the visitor-hash salt rotates |
 
-IPs in `excluded_ips` are silently dropped before any data is written — useful for internal pen-testing and monitoring traffic.
+Excluded IPs are not a module setting. The module reads the global `excluded_ips` config key (IPs or CIDRs, one per line), which is edited in Admin > Site Configuration, on every request. Requests from a matching IP are silently dropped before any data is written — useful for internal pen-testing and monitoring traffic.
+
+The visitor-hash salt rotates every 24 hours by default (`salt_rotation_hours` in `page_analytics_settings`); there is no admin setting for it.
 
 If the stored settings cannot be read at startup (a database error), the module logs an error and runs on fallback values with tracking off. It does not act on those values: expiry cleanup is skipped (logged as a failed run in the Event Log; a manual trigger reports it), salt saves are skipped, and the dashboard shows a warning and disables saving; a form rendered from the fallback is refused even after the settings recover. Aggregation and the 7-day raw-data cleanup keep running. The hourly aggregation job and the dashboard retry the load at most once a minute, the weekly expiry cleanup retries it at once, and tracking follows the stored settings again once it succeeds; saving stays disabled until then.
 
 ### Self-referral filtering
 
-If `site_url` is set in Admin > Site Configuration, the module strips referrers whose domain matches the site domain (case-insensitive, with or without `www.`). Migration 9 one-shot-purges existing self-referral rows from both raw and aggregated tables on first install of v1.0.1+.
+If `site_url` is set in Admin > Site Configuration, the module strips referrers whose domain matches the site domain (case-insensitive, with or without `www.`). Migration 9 runs once on first install of v1.0.1+ (when `site_url` is already set): it blanks `referrer_domain` on matching rows in `page_analytics_views` and deletes matching rows from `page_analytics_referrers`.
 
 ## Template Functions
 
@@ -72,7 +72,7 @@ If `site_url` is set in Admin > Site Configuration, the module strips referrers 
 | `analyticsShowPostStats()` | `bool` | Guard for the block above |
 | `analyticsIntReadTracker(nonce)` | `template.HTML` | Inline `<script>` for read tracking (pass the CSP nonce) |
 
-Both the default and starter themes display view/read counts on post pages via these helpers.
+The core default and developer themes (`internal/themes/`) and the starter theme (`custom/themes/starter/`) display view/read counts on post pages via these helpers.
 
 ## Environment Variables
 
@@ -100,9 +100,9 @@ Managed via module migrations (11 versions):
 ## Privacy Notes
 
 - No cookies, no local storage.
-- Visitor and session identifiers are hashes rotated by the configured salt schedule.
+- Visitor and session identifiers are hashes that change with a rotating salt (every 24 hours by default) and with the date.
 - IP addresses are never persisted — only derived hashes.
-- All raw rows fall off after the retention window; only aggregates remain indefinitely.
+- Raw page views are deleted after 7 days and aggregates after the retention window. Raw read events (`page_analytics_reads`) are not pruned.
 
 ## Testing
 
