@@ -4,14 +4,18 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/pressly/goose/v3"
 
 	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -1175,15 +1179,16 @@ func TestNewDBKeepsInMemoryDatabasesOnOneConnection(t *testing.T) {
 }
 
 // TestNewDBStoresTimesInSQLiteFormat checks the text a time.Time is stored
-// as: "2006-01-02 15:04:05.999999999-07:00", which SQLite's date functions
-// read, round-trips to the same instant, and leaves rows written in the
+// as: "2006-01-02 15:04:05.999999999+00:00", in UTC, which SQLite's date
+// functions read, round-trips to the same instant, and leaves rows written in the
 // driver's old default, time.Time.String() with a monotonic suffix,
 // readable, for file and in-memory databases. Every time.Time the app bound
 // used to be stored in that old default (review of the 2026-10-17 audit
 // fixes).
 //
-// Bug state: drop _time_format=sqlite from the DSN in NewDBWithConfig and
-// this fails.
+// Bug state: drop _time_format=sqlite or _timezone=UTC from the DSN in
+// NewDBWithConfig and this fails, in any local zone: the stored time is in
+// CEST.
 func TestNewDBStoresTimesInSQLiteFormat(t *testing.T) {
 	for name, path := range map[string]string{"file": t.TempDir() + "/times.db", "memory": ":memory:"} {
 		t.Run(name, func(t *testing.T) { checkStoredTimeFormat(t, path) })
@@ -1201,7 +1206,7 @@ func checkStoredTimeFormat(t *testing.T, path string) {
 	if _, err := db.Exec(`CREATE TABLE probe (id INTEGER PRIMARY KEY, at DATETIME)`); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now()
+	now := time.Now().In(time.FixedZone("CEST", 2*3600))
 	if _, err := db.Exec(`INSERT INTO probe (id, at) VALUES (1, ?)`, now); err != nil {
 		t.Fatal(err)
 	}
@@ -1210,8 +1215,8 @@ func checkStoredTimeFormat(t *testing.T, path string) {
 	if err := db.QueryRow(`SELECT CAST(at AS TEXT), datetime(at) FROM probe WHERE id = 1`).Scan(&raw, &normalized); err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?[+-]\d{2}:\d{2}$`).MatchString(raw) {
-		t.Errorf("a time is stored as %q, want 2006-01-02 15:04:05.999999999-07:00", raw)
+	if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?\+00:00$`).MatchString(raw) {
+		t.Errorf("a time is stored as %q, want 2006-01-02 15:04:05.999999999+00:00 (UTC)", raw)
 	}
 	if !normalized.Valid {
 		t.Errorf("SQLite's datetime() cannot read the stored time %q", raw)
@@ -1237,14 +1242,15 @@ func checkStoredTimeFormat(t *testing.T, path string) {
 	}
 }
 
-// TestOldAndNewTimeFormatsOrderTogether checks that rows stored in the old
-// time format (time.Time.String()) and the new one sort and filter together
-// by the instant they hold, within the same second too, so a column holding
-// both still orders correctly and a cutoff passed as a time.Time (written in
-// the new format) deletes the right rows. Old rows are not rewritten.
+// TestOldAndNewTimeFormatsOrderTogether checks that after the UTC time
+// migration, rows written in the old format (time.Time.String(), local
+// time) and rows written now sort and filter together by instant, within
+// the same second too, so a cutoff passed as a time.Time deletes the right
+// rows. Without the migration the old local-time text and the new UTC text
+// would sort by their wall clocks.
 //
 // Bug state: set _time_format=datetime in NewDBWithConfig, which drops the
-// fraction and the offset, and this fails.
+// fraction and the offset, or skip the migration, and this fails.
 func TestOldAndNewTimeFormatsOrderTogether(t *testing.T) {
 	db, err := NewDB(t.TempDir() + "/order.db")
 	if err != nil {
@@ -1265,13 +1271,15 @@ func TestOldAndNewTimeFormatsOrderTogether(t *testing.T) {
 		{"c-old", "2026-10-18 05:41:31.25 +0200 CEST m=+2.0"},
 		{"d-new", base.Add(500 * time.Millisecond)},
 		{"e-old", "2026-10-18 05:41:31.75 +0200 CEST"},
-		{"f-new", base.Add(time.Second)},
+		{"f-sql", "2026-10-18 03:41:32"}, // CURRENT_TIMESTAMP text: UTC, no offset
+		{"g-new", base.Add(2 * time.Second)},
 	}
 	for i := len(rows) - 1; i >= 0; i-- { // insert out of order
 		if _, err := db.Exec(`INSERT INTO probe (label, at) VALUES (?, ?)`, rows[i].label, rows[i].at); err != nil {
 			t.Fatal(err)
 		}
 	}
+	runTimeMigration(t, db)
 	got, err := db.Query(`SELECT label FROM probe ORDER BY at`)
 	if err != nil {
 		t.Fatal(err)
@@ -1288,7 +1296,7 @@ func TestOldAndNewTimeFormatsOrderTogether(t *testing.T) {
 	if err := got.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if want := "a-old b-new c-old d-new e-old f-new"; strings.Join(order, " ") != want {
+	if want := "a-old b-new c-old d-new e-old f-sql g-new"; strings.Join(order, " ") != want {
 		t.Errorf("rows sort as %q, want %q", strings.Join(order, " "), want)
 	}
 	// Cut off between c-old (.25) and d-new (.5).
@@ -1299,7 +1307,126 @@ func TestOldAndNewTimeFormatsOrderTogether(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM probe`).Scan(&left); err != nil {
 		t.Fatal(err)
 	}
-	if left != 3 {
-		t.Errorf("a cutoff at .4 left %d rows, want d-new, e-old and f-new", left)
+	if left != 4 {
+		t.Errorf("a cutoff at .4 left %d rows, want d-new, e-old, f-sql and g-new", left)
+	}
+}
+
+// runTimeMigration runs migrateTimesToUTC on db in a transaction.
+func runTimeMigration(t *testing.T, db *sql.DB) {
+	t.Helper()
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateTimesToUTC(context.Background(), tx); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("migrateTimesToUTC: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMigrateTimesToUTC checks the migration that moves stored times to UTC,
+// run by Migrate over a table that exists before it, as module tables do:
+// old time.Time.String() text, with a named or a numeric zone, and text with
+// a non-UTC offset becomes UTC text in the stored layout, at full precision,
+// in DATETIME, TIMESTAMP and DATE columns; UTC text, SQLite's own
+// CURRENT_TIMESTAMP text, NULL, values that do not parse, which are logged,
+// and columns not declared as times are left alone. A second run changes
+// nothing, and rolling it back only forgets it.
+//
+// Bug state: register the migration without its up function, drop the GLOB
+// for "+02:00" offsets in migrateTimeColumn, drop the offset-only layout in
+// parseStoredTime, or format with .Format(time.DateTime), and this fails.
+func TestMigrateTimesToUTC(t *testing.T) {
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	db, err := NewDB(t.TempDir() + "/migrate.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`CREATE TABLE "mod-probe" (id INTEGER PRIMARY KEY, at DATETIME, stamp TIMESTAMP, day DATE, note TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ stored, want string }{
+		{"2026-10-18 05:41:31.179863 +0200 CEST m=+0.088685751", "2026-10-18 03:41:31.179863+00:00"},
+		{"2026-01-10 12:00:00 +0100 CET", "2026-01-10 11:00:00+00:00"},
+		{"2026-03-01 07:30:00.123456789 -0500 EST m=+1.5", "2026-03-01 12:30:00.123456789+00:00"},
+		{"2026-10-18 09:26:31 +0545 +0545 m=+0.1", "2026-10-18 03:41:31+00:00"},
+		{"2026-10-18 05:41:31.5+02:00", "2026-10-18 03:41:31.5+00:00"},
+		{"2026-10-18 01:41:31.5-02:00", "2026-10-18 03:41:31.5+00:00"},
+		{"2026-10-18T05:41:31+02:00", "2026-10-18 03:41:31+00:00"},
+		{"2026-10-18 03:41:31.5+00:00", "2026-10-18 03:41:31.5+00:00"},
+		{"2026-10-18 03:41:31", "2026-10-18 03:41:31"},
+		{"not a time", "not a time"},
+		{"2026-13-45 05:41:31 +0200 CEST", "2026-13-45 05:41:31 +0200 CEST"},
+	}
+	for i, c := range cases {
+		if _, err := db.Exec(`INSERT INTO "mod-probe" (id, at, stamp, day, note) VALUES (?, ?, ?, ?, ?)`, i+1, c.stored, c.stored, c.stored, c.stored); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO "mod-probe" (id) VALUES (100)`); err != nil {
+		t.Fatal(err)
+	}
+	check := func(when string) {
+		t.Helper()
+		for i, c := range cases {
+			var at, stamp, day, note string
+			if err := db.QueryRow(`SELECT CAST(at AS TEXT), CAST(stamp AS TEXT), CAST(day AS TEXT), note FROM "mod-probe" WHERE id = ?`, i+1).Scan(&at, &stamp, &day, &note); err != nil {
+				t.Fatal(err)
+			}
+			for column, got := range map[string]string{"DATETIME": at, "TIMESTAMP": stamp, "DATE": day} {
+				if got != c.want {
+					t.Errorf("%s: in a %s column, %q became %q, want %q", when, column, c.stored, got, c.want)
+				}
+			}
+			if note != c.stored {
+				t.Errorf("%s: the TEXT column changed from %q to %q", when, c.stored, note)
+			}
+		}
+	}
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	check("after Migrate")
+	for _, want := range []string{"left times that do not parse", `table=mod-probe column=day count=1 example="2026-13-45`} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("the values left unparsed were not logged with %q:\n%s", want, logs.String())
+		}
+	}
+	runTimeMigration(t, db)
+	check("after a second run")
+
+	version, err := goose.NumericComponent(timeMigrationName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := func() bool {
+		t.Helper()
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM goose_db_version WHERE version_id = ? AND is_applied`, version).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n == 1
+	}
+	if !applied() {
+		t.Fatalf("Migrate did not record the UTC time migration (%s)", timeMigrationName)
+	}
+	if err := RunMigrationCommand(context.Background(), db, "down"); err != nil {
+		t.Fatalf("rolling back the UTC time migration: %v", err)
+	}
+	if applied() {
+		t.Error("rolling back left the UTC time migration recorded")
+	}
+	check("after rolling back")
+	if err := Migrate(db); err != nil || !applied() {
+		t.Errorf("Migrate after a rollback: err=%v, recorded=%t", err, applied())
 	}
 }

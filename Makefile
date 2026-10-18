@@ -119,14 +119,15 @@ clean:
 clean-db:
 	rm -rf data/*.db
 
+# Run through `ocms migrate`: the goose CLI does not know the Go migrations.
 migrate-up:
-	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) up
+	go run ./cmd/ocms migrate -db $(DB_PATH) up
 
 migrate-down:
-	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) down
+	go run ./cmd/ocms migrate -db $(DB_PATH) down
 
 migrate-status:
-	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) status
+	go run ./cmd/ocms migrate -db $(DB_PATH) status
 
 migrate-create:
 	@read -p "Migration name: " name; \

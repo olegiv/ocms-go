@@ -464,9 +464,20 @@ func TestInsertPageView(t *testing.T) {
 	}
 }
 
+// TestGetRealTimeVisitorCount counts the visitors of the last minutes. The
+// clock runs at -07:00, so the views are stored with a wall clock that is not
+// UTC on any host, and a cutoff compared in UTC misses them (review of the
+// 2026-10-17 audit fixes).
+//
+// Bug state: pass cutoff as a time.Time in GetRealTimeVisitorCount and this
+// fails.
 func TestGetRealTimeVisitorCount(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
+	now := time.Now().In(time.FixedZone("PDT", -7*3600))
+	previous := timeNow
+	timeNow = func() time.Time { return now }
+	t.Cleanup(func() { timeNow = previous })
 
 	m := testModule(t, db)
 	defer func() { _ = m.Shutdown() }()
@@ -478,7 +489,6 @@ func TestGetRealTimeVisitorCount(t *testing.T) {
 	}
 
 	// Insert some page views
-	now := time.Now()
 	views := []*PageView{
 		{VisitorHash: "visitor1", Path: "/", SessionHash: "s1", CreatedAt: now},
 		{VisitorHash: "visitor1", Path: "/about", SessionHash: "s1", CreatedAt: now}, // same visitor

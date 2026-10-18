@@ -4,6 +4,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
@@ -62,11 +63,11 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 	// busy_timeout and journal_mode, causing SQLITE_BUSY under load.
 	// _time_format=sqlite stores time.Time values as
 	// "2006-01-02 15:04:05.999999999-07:00", which SQLite's date functions
-	// read; the driver's default is time.Time.String(), with a zone name and
-	// a monotonic-clock suffix ("+0200 CEST m=+0.08"). Rows written before
-	// keep that text: the driver still parses it for DATETIME columns, and
-	// it sorts with the new text by instant, but SQLite's date functions
-	// return NULL for it.
+	// read, instead of the driver's default, time.Time.String(), with a zone
+	// name and a monotonic-clock suffix ("+0200 CEST m=+0.08").
+	// _timezone=UTC stores them in UTC, as SQLite stores CURRENT_TIMESTAMP,
+	// so the two sort together in a column, and reads times back in UTC.
+	// The migration in time_migration.go moved older rows to that text.
 	dsn := path +
 		"?_pragma=busy_timeout(5000)" +
 		"&_pragma=journal_mode(WAL)" +
@@ -78,7 +79,8 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 		"&_pragma=page_size(4096)" +
 		"&_pragma=wal_autocheckpoint(1000)" +
 		"&_txlock=immediate" +
-		"&_time_format=sqlite"
+		"&_time_format=sqlite" +
+		"&_timezone=UTC"
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -117,13 +119,20 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 
 // Migrate runs all pending database migrations.
 func Migrate(db *sql.DB) error {
+	return RunMigrationCommand(context.Background(), db, "up")
+}
+
+// RunMigrationCommand runs a goose command (up, down, status, version) over
+// the embedded SQL migrations and the Go migrations registered by this
+// package, which goose's own CLI does not know.
+func RunMigrationCommand(ctx context.Context, db *sql.DB, command string, args ...string) error {
 	goose.SetBaseFS(migrations)
 
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return fmt.Errorf("setting dialect: %w", err)
 	}
 
-	if err := goose.Up(db, "migrations"); err != nil {
+	if err := goose.RunContext(ctx, command, db, "migrations", args...); err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}
 

@@ -230,10 +230,10 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 
 // serveEndpoint dispatches to the chain built by Init.
 //
-// It recovers panics itself. The global middleware.Timeout runs handlers on a
-// goroutine of its own, out of reach of chi's Recoverer, so without this a
-// panic anywhere in the chain or in the SDK's request handling would end the
-// process.
+// It recovers panics itself, so a panic in the chain or in the SDK's request
+// handling answers with a JSON error rather than the plain-text 500 of the
+// global middleware.Timeout's recovery. Panics on the SDK's own goroutines,
+// which neither reaches, are recovered per MCP method and per tool.
 func (m *Module) serveEndpoint(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		p := recover()

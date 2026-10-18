@@ -18,9 +18,11 @@ import (
 // TestStopGracePeriodsCoverTheDrain fails when a shipped deployment (Fly,
 // Docker Compose, the systemd unit or ocmsctl) gives the app less time to
 // stop than the request drain (shutdownTimeout), the wait for handlers still
-// running (handlerDrainTimeout) and a margin for the "Server stopped" event,
-// which can wait out the database's 5-second busy timeout. The module and
-// worker shutdowns that follow are best effort within whatever time is left.
+// running (handlerDrainTimeout), a margin for the "Server stopped" event,
+// which can wait out the database's 5-second busy timeout, the shared
+// budget of the shutdown steps (cleanupTimeout), the Event Log close
+// (eventLogCloseTimeout), and a second for the shortest waits of steps after
+// a spent budget and the exit.
 // It also fails when a deployment stops the app with a signal it does not
 // catch, or when the container entrypoint does not exec the app, which would
 // leave the shell as PID 1 to swallow the signal. Fly's default kill_timeout
@@ -30,9 +32,9 @@ import (
 //
 // Bug state: lower kill_timeout in fly.toml, stop_grace_period in
 // docker-compose.yml, TimeoutStopSec in scripts/deploy/ocms@.service or the
-// wait in scripts/deploy/ocmsctl below 40 seconds and this fails.
+// wait in scripts/deploy/ocmsctl below 54 seconds and this fails.
 func TestStopGracePeriodsCoverTheDrain(t *testing.T) {
-	need := shutdownTimeout + handlerDrainTimeout + 5*time.Second
+	need := shutdownTimeout + handlerDrainTimeout + 5*time.Second + cleanupTimeout + eventLogCloseTimeout + time.Second
 	root := filepath.Join("..", "..")
 	read := func(name string) string {
 		t.Helper()

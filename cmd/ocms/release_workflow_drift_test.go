@@ -179,3 +179,39 @@ func TestCIChecksOutSharedTooling(t *testing.T) {
 		t.Error("go.yml checks out the .claude/shared submodule only after it runs the tests")
 	}
 }
+
+// TestCIRacesConcurrentCode fails when the Go workflow stops running the
+// race detector over the packages with concurrent code: the server stop
+// (cmd/ocms), the request timeout and its panic recovery
+// (internal/middleware) and the Event Log writer (internal/logging), which
+// run work in goroutines of their own, and the settings retry gate
+// (internal/module), which concurrent requests call. CI ran it only over
+// the module settings tests (review of the 2026-10-17 audit fixes).
+//
+// Bug state: drop ./internal/logging/ from the race step in go.yml and this
+// names it.
+func TestCIRacesConcurrentCode(t *testing.T) {
+	wf := readWorkflow(t, "go.yml")
+	build, ok := wf.Jobs["build"]
+	if !ok {
+		t.Fatal("go.yml has no build job")
+	}
+	raced := map[string]bool{}
+	for _, step := range build.Steps {
+		run := strings.TrimSpace(step.Run)
+		if !strings.HasPrefix(run, "go test ") || !strings.Contains(run, " -race") || step.If != nil || step.ContinueOnError != nil {
+			continue
+		}
+		if strings.Contains(run, " -run ") {
+			continue // a filtered run does not cover a package's other tests
+		}
+		for _, field := range strings.Fields(run) {
+			raced[field] = true
+		}
+	}
+	for _, pkg := range []string{"./cmd/ocms/", "./internal/middleware/", "./internal/logging/", "./internal/module/"} {
+		if !raced[pkg] {
+			t.Errorf("go.yml runs no unfiltered go test -race step over %s", pkg)
+		}
+	}
+}

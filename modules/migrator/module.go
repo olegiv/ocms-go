@@ -31,11 +31,12 @@ import (
 //go:embed locales
 var localesFS embed.FS
 
-// shutdownDrainTimeout bounds how long Shutdown waits for in-flight imports to
-// notice cancellation before the process moves on.
+// shutdownMarkTimeout is the part of module.ShutdownTimeout that Shutdown
+// keeps for marking the jobs still running interrupted; it waits the rest
+// for in-flight imports to notice cancellation.
 const (
-	shutdownDrainTimeout = 10 * time.Second
-	cleanupDrainTimeout  = 30 * time.Second
+	shutdownMarkTimeout = 3 * time.Second
+	cleanupDrainTimeout = 30 * time.Second
 )
 
 // Module implements the module.Module interface for the migrator module.
@@ -151,11 +152,14 @@ func (m *Module) CheckActivation(ctx *module.Context) error {
 	return nil
 }
 
-// Shutdown cancels in-flight imports and waits briefly for them to unwind.
+// Shutdown cancels in-flight imports and waits briefly for them to unwind,
+// within module.ShutdownTimeout.
 func (m *Module) Shutdown() error {
 	if m.ctx == nil {
 		return nil
 	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), module.ShutdownTimeout)
+	defer cancel()
 
 	m.jobsMu.Lock()
 	for _, cancel := range m.cancel {
@@ -170,12 +174,10 @@ func (m *Module) Shutdown() error {
 	}()
 	select {
 	case <-done:
-	case <-time.After(shutdownDrainTimeout):
+	case <-time.After(module.ShutdownTimeout - shutdownMarkTimeout):
 		m.ctx.Logger.Warn("timed out waiting for migrator imports to stop")
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), finishJobTimeout)
-	defer cancel()
 	m.markJobsInterruptedForRun(shutdownCtx)
 
 	m.ctx.Logger.Info("Migrator module shutting down")

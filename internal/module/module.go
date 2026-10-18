@@ -11,6 +11,7 @@ import (
 	"embed"
 	"html/template"
 	"log/slog"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -21,6 +22,12 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+// ShutdownTimeout is the longest a module's Shutdown should take. The
+// server's shutdown steps, the modules' first, share a budget only a few
+// seconds longer, and the server then closes the database and exits, so a
+// Shutdown still running past its share finds the database closed.
+const ShutdownTimeout = 7 * time.Second
 
 // Context provides access to application services for modules.
 //
@@ -93,7 +100,8 @@ type Module interface {
 
 	// Init initializes the module with the given context.
 	Init(ctx *Context) error
-	// Shutdown performs cleanup when the module is shutting down.
+	// Shutdown performs cleanup when the module is shutting down. It should
+	// return within ShutdownTimeout.
 	Shutdown() error
 
 	// RegisterRoutes registers public routes for the module.

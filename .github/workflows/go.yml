@@ -63,6 +63,14 @@ jobs:
       env:
         OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
 
+    # The server stop, the request timeout's panic recovery and the Event Log
+    # writer run work in goroutines of their own, and concurrent requests
+    # call the settings retry gate.
+    - name: Race tests (server lifecycle, request timeout, event log, modules)
+      run: go test -race -count=1 ./cmd/ocms/ ./internal/middleware/ ./internal/logging/ ./internal/module/
+      env:
+        OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
+
     - name: Vulnerability scan (Go)
       run: |
         go install golang.org/x/vuln/cmd/govulncheck@v1.9.0

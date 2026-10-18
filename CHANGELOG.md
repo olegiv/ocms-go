@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   details, English/Russian interface languages and logout. It shares the admin
   dashboard layout with account-specific navigation, independently of the active
   site theme. See `docs/login-security.md`.
+- `ocms migrate up|down|status|version` runs the database migrations without
+  starting the server. `make migrate-up`, `migrate-down` and `migrate-status`,
+  in the Makefile and in `site.mk`, use it instead of the goose CLI, which does
+  not know the Go migration that moves stored times to UTC: `goose down` failed
+  on it, and `goose up` could apply later SQL migrations first, after which the
+  server refused to start.
 
 ### Fixed
 - A startup failure is logged before the error log file and the event log
@@ -23,27 +29,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as the server starts gets a graceful shutdown; connections still open when
   the 30-second shutdown ends are closed, and handlers still running,
   including ones the 30-second request timeout has already answered, get up to
-  5 more seconds to return before the cleanup closes the database. `fly.toml`,
-  `docker-compose.yml`, the systemd unit and `ocmsctl` give the app 45 seconds
-  to stop; Fly's default of 5 seconds, Docker's of 10 and the 30 the unit and
-  `ocmsctl` allowed killed it mid-drain. The start is recorded alongside
-  serving, so a slow Event Log write delays neither the first requests nor a
-  stop, and a failed write through the event service is logged at error level
-  naming the lost event; that record, and those of the other code that logs a
-  failed Event Log write, stay out of the Event Log (writing them there on a
-  locked database waited out the busy timeout a second time), and a log entry
-  the Event Log handler cannot store is reported in the log instead of
-  dropped. REST v2 error logs carry the request ID, method and route. The
+  5 more seconds to return before the cleanup closes the database. The
+  shutdown steps after that (modules, webhook deliveries, scheduled jobs, the
+  cache) share a 10-second budget, of which a module's shutdown is to take at
+  most 7 (the migrator now waits 4 seconds for its imports instead of 10); a
+  step still running then, or one that panics, is logged and left behind, and
+  the Event Log writer then gets 3 seconds of its own. `fly.toml`,
+  `docker-compose.yml`, the systemd unit and `ocmsctl` give the app 60 seconds
+  to stop; Fly's default of 5 seconds,
+  Docker's of 10 and the 30 the unit and `ocmsctl` allowed killed it
+  mid-drain. The start is recorded alongside serving, so a slow Event Log
+  write delays neither the first requests nor a stop, and a failed write
+  through the event service is logged at error level naming the lost event;
+  that record, and those of the other code that logs a failed Event Log write,
+  stay out of the Event Log (writing them there on a locked database waited
+  out the busy timeout a second time), and a log entry the Event Log handler
+  cannot store is reported in the log instead of dropped. The Event Log is
+  written in the background, so a log call no longer waits for the database
+  (on a locked one it waited up to 5 seconds); queued entries are written at
+  shutdown within those 3 seconds, and entries dropped because the queue was
+  full or left unwritten at shutdown are counted in the log. REST v2 error logs carry the request ID, method and route. The
   database's WAL and shared-memory files are made owner-only along with the
   database file. An in-memory database (`OCMS_DB_PATH=:memory:`) keeps a
   single connection; with the default pool each connection opened its own
-  empty database. Times the app passes as `time.Time` are stored as
-  `2006-01-02 15:04:05.999999999-07:00` (e.g. `2026-10-18
-  05:41:31.179863+02:00`), which SQLite's date functions read, instead of the
-  SQLite driver's default, Go's debug format with a zone name and a
-  monotonic-clock suffix (`+0200 CEST m=+0.08`). Rows written before are not
-  rewritten: they still load and sort with the new ones, but SQLite's date
-  functions cannot read them.
+  empty database. Times the app passes as `time.Time` are stored in UTC as
+  `2006-01-02 15:04:05.999999999+00:00` (e.g. `2026-10-18
+  03:41:31.179863+00:00`), which SQLite's date functions read and which sorts
+  with the UTC times SQLite writes itself (`CURRENT_TIMESTAMP`), instead of
+  the SQLite driver's default, Go's debug format in local time with a zone
+  name and a monotonic-clock suffix (`+0200 CEST m=+0.08`).
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
   so a later run can no longer commit other staged changes under it.
 - Editors now land at `/admin` after login. Public users land at `/account`;
@@ -51,6 +65,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Resolves [#188](https://github.com/olegiv/ocms-go/issues/188).
 
 ### Security
+- A panic in a request handler no longer stops the server. The request timeout
+  runs each handler in a goroutine of its own, which chi's panic recovery in
+  front of it cannot reach, so any panic ended the process; the timeout now
+  recovers it and logs it with its stack and request ID. It answers 500,
+  without the headers the handler had set, or, if the response had already
+  started, drops the connection so a partial page is not taken for a whole
+  one. Handlers also set their headers apart from the timeout's 503: a handler
+  setting headers as the timeout answered could end the process with
+  concurrent map writes. What a handler writes after the timeout has answered
+  is dropped instead of reaching a response that is already finished.
 - The production start check for API key lifetimes
   (`OCMS_API_KEY_MAX_TTL_DAYS`, 90 days by default in production) now compares
   the stored times in Go. It compared them with SQLite's `datetime()`, which
@@ -166,7 +190,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constants, struct fields and lists), templ components, admin templates and
   theme templates exists in English and Russian, and that in-memory SQLite
   test databases keep a single connection. CI checks out the `.claude/shared`
-  submodule so the tests that read the shared tooling run there too.
+  submodule so the tests that read the shared tooling run there too. CI also
+  runs the race detector over the server stop, the request timeout, the Event
+  Log writer and the module registry with its settings retry gate.
 
 ### Changed
 
@@ -178,6 +204,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built against.
 - Update tinymce 8.9.3 → 8.10.0 and swagger-ui-dist 5.33.1 → 5.33.3, with
   refreshed integrity hashes.
+
+### Upgrade notes
+- A one-off migration rewrites the timestamps stored with a zone in every
+  table, module tables included, to UTC: values in Go's debug format
+  (`2026-10-18 05:41:31.17 +0200 CEST m=+0.08`) and values with a non-UTC
+  offset become `2026-10-18 03:41:31.17+00:00`. Times stored without a zone
+  are left as they are: SQLite's `CURRENT_TIMESTAMP` text, already UTC, and
+  Internal Analytics' local wall-clock times. Values that look zoned but do not
+  parse are left too and logged. The rewrite cannot be undone (`ocms migrate
+  down` only forgets the migration), so back up the database first.
+- Times read from the database now come back in UTC, and admin and public
+  pages show them as they come: on a host whose time zone is not UTC, dates
+  and times that used to show in local time now show in UTC. The Docker image
+  runs in UTC unless `TZ` is set.
 
 ## [0.28.0] - 2026-10-12
 

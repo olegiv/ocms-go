@@ -27,7 +27,6 @@ SITES_CONF="/etc/ocms/sites.conf"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
@@ -204,10 +203,12 @@ cmd_stop() {
     echo_info "Stopping site '$site_id' (PID: $pid)..."
     kill -SIGTERM "$pid"
 
-    # Wait for graceful shutdown (up to 45 seconds: the app drains requests
-    # for up to 30, then waits up to 5 more for handlers still running)
+    # Wait for graceful shutdown (up to 60 seconds: the app drains requests
+    # for up to 30, waits up to 5 more for handlers still running, records
+    # the stop (up to 5), and gives its shutdown steps up to 10 and its
+    # Event Log writer up to 3)
     local waited=0
-    while is_pid_running "$pid" && [ $waited -lt 45 ]; do
+    while is_pid_running "$pid" && [ $waited -lt 60 ]; do
         sleep 1
         waited=$((waited + 1))
     done

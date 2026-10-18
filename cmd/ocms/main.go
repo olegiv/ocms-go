@@ -19,8 +19,10 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -211,6 +213,8 @@ func parseCommand(args []string) (cmd string, rest []string) {
 	switch args[0] {
 	case "init":
 		return "init", args[1:]
+	case "migrate":
+		return "migrate", args[1:]
 	case "serve":
 		return "serve", args[1:]
 	default:
@@ -219,12 +223,19 @@ func parseCommand(args []string) (cmd string, rest []string) {
 }
 
 func main() {
-	// Subcommand dispatch. "init" scaffolds and exits; "serve" (the default)
-	// falls through to the normal flag parsing and run() path below.
+	// Subcommand dispatch. "init" scaffolds and "migrate" runs migrations,
+	// then both exit; "serve" (the default) falls through to the normal flag
+	// parsing and run() path below.
 	switch cmd, rest := parseCommand(os.Args[1:]); cmd {
 	case "init":
 		if err := runInit(rest); err != nil {
 			slog.Error("init failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	case "migrate":
+		if err := runMigrate(rest); err != nil {
+			slog.Error("migrate failed", "error", err)
 			os.Exit(1)
 		}
 		return
@@ -243,6 +254,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: %s [command] [options]\n\n", os.Args[0])
 		_, _ = fmt.Fprintf(os.Stderr, "Commands:\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  init <dir>    Scaffold a new site directory (.env + data dirs) and exit\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  migrate <cmd> Run database migrations (up, down, status, version) and exit\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  serve         Start the server (default when no command is given)\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
@@ -313,6 +325,54 @@ const shutdownTimeout = 30 * time.Second
 // they can finish before run's deferred cleanup closes the database; any
 // still running after it are logged and the cleanup proceeds.
 const handlerDrainTimeout = 5 * time.Second
+
+// cleanupTimeout bounds the shutdown steps run's deferred cleanup takes after
+// the server has stopped (module shutdowns, the webhook dispatcher, the
+// scheduler, the cache), so the process exits within a deployment's stop
+// grace period: the modules' module.ShutdownTimeout and three seconds for
+// the other steps.
+const cleanupTimeout = module.ShutdownTimeout + 3*time.Second
+
+// eventLogCloseTimeout is how long the Event Log writer gets to write what is
+// queued at exit. It follows the shutdown steps outside their budget, so a
+// step that overran the budget cannot leave it no time.
+const eventLogCloseTimeout = 3 * time.Second
+
+// cleanupBudget shares a time limit among run's deferred shutdown steps: the
+// clock starts with the first step, and each waits only for what is left
+// (at least minCleanupWait). A step still running then, or one that panics,
+// is logged and left behind, so the steps after it and the exit go ahead.
+type cleanupBudget struct {
+	limit    time.Duration
+	once     sync.Once
+	deadline time.Time
+}
+
+// minCleanupWait is the least a shutdown step is waited for, so quick steps
+// after a spent budget still finish.
+const minCleanupWait = 100 * time.Millisecond
+
+// within runs the named step and waits for it until the budget runs out.
+func (b *cleanupBudget) within(name string, step func()) {
+	b.once.Do(func() { b.deadline = time.Now().Add(b.limit) })
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			if p := recover(); p != nil {
+				slog.Error("shutdown step panicked; continuing", "step", name, "panic", p, "stack", string(debug.Stack()))
+			}
+		}()
+		step()
+	}()
+	timer := time.NewTimer(max(time.Until(b.deadline), minCleanupWait))
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		slog.Warn("shutdown step did not finish within the cleanup budget; continuing", "step", name, "budget", b.limit)
+	}
+}
 
 // stopPolicy says how serveUntilStopped stops the server.
 type stopPolicy struct {
@@ -1729,6 +1789,9 @@ func run() (runErr error) {
 			slog.Error("error closing database connection", "error", err)
 		}
 	}(db)
+	// The shutdown steps share one time limit (cleanupTimeout), so a slow
+	// one cannot hold the exit past a deployment's stop grace period.
+	cleanup := &cleanupBudget{limit: cleanupTimeout}
 
 	// Upgrade logger to also write WARN and ERROR logs to the Event Log database.
 	// The handler chain is: EventLogHandler → ErrorFileHandler (optional) → stdout.
@@ -1737,6 +1800,15 @@ func run() (runErr error) {
 	logger = slog.New(eventLogHandler)
 	slog.SetDefault(logger)
 	slog.Info("event log integration enabled", "min_level", "warn")
+	// The Event Log is written in the background: write what is queued,
+	// the failure logged below included, before the database closes.
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), eventLogCloseTimeout)
+		defer cancel()
+		if err := eventLogHandler.Close(ctx); err != nil {
+			slog.Error("the event log writer did not finish in time; continuing", "error", err, "timeout", eventLogCloseTimeout)
+		}
+	}()
 	defer logRunFailure(&runErr) // while the event log database is still open
 	eventService := service.NewEventService(db)
 
@@ -1769,7 +1841,7 @@ func run() (runErr error) {
 
 	// Initialize cache manager
 	cacheManager := initCacheManager(ctx, db, cfg)
-	defer cacheManager.Stop()
+	defer cleanup.within("cache", cacheManager.Stop)
 
 	// Wire excluded IPs config into all event service instances for IP filtering
 	service.SetGlobalConfigGetter(cacheManager.GetConfig)
@@ -1810,7 +1882,7 @@ func run() (runErr error) {
 	if err := sched.Start(); err != nil {
 		return fmt.Errorf("starting scheduler: %w", err)
 	}
-	defer sched.Stop()
+	defer cleanup.within("scheduler", sched.Stop)
 
 	// Initialize task executor for user-created scheduled URL tasks
 	taskExecutor := scheduler.NewTaskExecutor(db, logger, schedulerRegistry, sched.Cron())
@@ -1826,7 +1898,7 @@ func run() (runErr error) {
 	// Initialize and start webhook dispatcher
 	webhookDispatcher := webhook.NewDispatcher(db, logger, webhook.DefaultConfig())
 	webhookDispatcher.Start(ctx)
-	defer webhookDispatcher.Stop()
+	defer cleanup.within("webhook dispatcher", webhookDispatcher.Stop)
 	slog.Info("webhook dispatcher initialized")
 
 	// Initialize hook registry
@@ -1865,11 +1937,11 @@ func run() (runErr error) {
 	if err := moduleRegistry.InitAll(moduleCtx); err != nil {
 		return fmt.Errorf("initializing modules: %w", err)
 	}
-	defer func() {
+	defer cleanup.within("modules", func() {
 		if err := moduleRegistry.ShutdownAll(); err != nil {
 			slog.Error("error shutting down modules", "error", err)
 		}
-	}()
+	})
 
 	// Seed demo informer settings (must run after module init creates the table)
 	seedDemoInformer(cfg, db, moduleRegistry, demoAdminPassword)
@@ -1940,9 +2012,10 @@ func run() (runErr error) {
 		})
 	})
 	// Logger and Recoverer come before SecurityHeaders, so a panic in any
-	// later middleware, including module code that SecurityHeaders calls for
-	// the CSP, is logged and answered with a 500 instead of dropping the
-	// connection.
+	// later middleware up to Timeout, including module code that
+	// SecurityHeaders calls for the CSP, is logged and answered with a 500
+	// instead of dropping the connection. Timeout recovers the panics behind
+	// it itself.
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.). It runs

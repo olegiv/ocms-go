@@ -15,7 +15,7 @@ import (
 
 // TestParseCommand locks the back-compat dispatch invariant: bare invocations,
 // flag-only invocations (systemd/Docker style), and unknown tokens must all
-// route to serve; only "init"/"serve" are real subcommands.
+// route to serve; only "init"/"migrate"/"serve" are real subcommands.
 func TestParseCommand(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -30,6 +30,7 @@ func TestParseCommand(t *testing.T) {
 		{"serve with flag", []string{"serve", "-version"}, "serve", []string{"-version"}},
 		{"init", []string{"init", "my-site"}, "init", []string{"my-site"}},
 		{"init with flag", []string{"init", "-force", "my-site"}, "init", []string{"-force", "my-site"}},
+		{"migrate", []string{"migrate", "-db", "x.db", "up"}, "migrate", []string{"-db", "x.db", "up"}},
 		{"unknown token", []string{"bogus"}, "serve", []string{"bogus"}},
 	}
 	for _, tt := range tests {

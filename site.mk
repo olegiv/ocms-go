@@ -51,7 +51,6 @@ CORE_DIR         ?= $(SITE_DIR)/core
 # Resolve relative values against SITE_DIR once, here.
 abspath_site = $(if $(patsubst /%,,$(1)),$(SITE_DIR)/$(1),$(1))
 override CORE_DIR := $(call abspath_site,$(CORE_DIR))
-MIGRATIONS_DIR   ?= $(CORE_DIR)/internal/store/migrations
 SITE_MODULES_DIR ?= $(SITE_DIR)/custom/modules
 CORE_MODULES_DIR ?= $(CORE_DIR)/custom/modules
 
@@ -420,11 +419,14 @@ clean: ## Remove build artifacts
 
 # ── Database ─────────────────────────────────────────────────────────────────
 # OCMS_DB_PATH comes from the site .env, the same file the server reads, and is
-# resolved against SITE_DIR above so goose and the server always agree. Without
-# that, internal/config's ./data/ocms.db default plus `dev`/`run` cd-ing into
-# core/ would have goose migrating <site>/data/ocms.db while the server opened
-# <core>/data/ocms.db — shared with every other site using that checkout, and
-# reporting success against a database the app never opens.
+# resolved against SITE_DIR above so the migrations and the server always
+# agree. Without that, internal/config's ./data/ocms.db default plus `dev`/`run`
+# cd-ing into core/ would have the migrations run on <site>/data/ocms.db while
+# the server opened <core>/data/ocms.db — shared with every other site using
+# that checkout, and reporting success against a database the app never opens.
+#
+# The migrate targets run `ocms migrate`, not the goose CLI, which does not know
+# the Go migrations in internal/store.
 #
 # The guard below is a backstop against a broken resolution, not a user-facing
 # constraint: a relative path in the .env is fine and gets resolved.
@@ -433,10 +435,13 @@ require-db-path:
 	@case "$(db_path)" in /*) ;; *) echo "OCMS_DB_PATH did not resolve to an absolute path: $(db_path)" >&2; exit 1;; esac
 
 migrate-up: require-db-path ## Apply pending database migrations
-	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(db_path)" up
+	@$(with_core_lock) \
+	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" up
 
 migrate-down: require-db-path ## Roll back the last migration
-	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(db_path)" down
+	@$(with_core_lock) \
+	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" down
 
 migrate-status: require-db-path ## Show migration status
-	goose -dir "$(MIGRATIONS_DIR)" sqlite3 "$(db_path)" status
+	@$(with_core_lock) \
+	cd "$(CORE_DIR)" && $(GO) run $(MAIN_DIR) migrate -db "$(db_path)" status

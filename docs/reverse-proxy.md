@@ -401,7 +401,7 @@ version: '3.8'
 services:
   ocms:
     build: .
-    stop_grace_period: 45s  # the app drains requests for up to 30 seconds on SIGTERM
+    stop_grace_period: 60s  # the app drains requests for up to 30 seconds on SIGTERM, then shuts down
     environment:
       - OCMS_SESSION_SECRET=your-secret-key-at-least-32-bytes
       - OCMS_SERVER_HOST=0.0.0.0

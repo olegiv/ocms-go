@@ -24,10 +24,11 @@ services:
     image: ocms:latest
     container_name: ocms
     restart: unless-stopped
-    # On SIGTERM the app drains requests for up to 30 seconds, then waits up
-    # to 5 more for handlers still running and records the stop. Docker's
+    # On SIGTERM the app drains requests for up to 30 seconds, waits up to 5
+    # more for handlers still running, records the stop (up to 5), and gives
+    # its shutdown steps up to 10 and its Event Log writer up to 3. Docker's
     # default of 10 seconds would kill it mid-drain.
-    stop_grace_period: 45s
+    stop_grace_period: 60s
     ports:
       - "${OCMS_PUBLISH_ADDRESS:-127.0.0.1}:${OCMS_SERVER_PORT:-8080}:8080"
     # The entrypoint starts as root only to fix volume ownership, then drops
