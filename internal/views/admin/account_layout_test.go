@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
@@ -53,6 +54,49 @@ func TestDashboardLayoutDefaultNavigation(t *testing.T) {
 			}
 			if got := strings.Contains(body, `href="/admin/example"`); got != (role == model.RoleAdmin) {
 				t.Errorf("module navigation present = %v for role %s", got, role)
+			}
+		})
+	}
+}
+
+func TestSidebarCollapseToggleAnnouncesState(t *testing.T) {
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	for lang, labels := range map[string][2]string{
+		"en": {"Collapse sidebar", "Expand sidebar"},
+		"ru": {"Свернуть меню", "Развернуть меню"},
+	} {
+		t.Run(lang, func(t *testing.T) {
+			pc := testPageContext()
+			pc.AdminLang = lang
+			body := renderAdminTemplate(t, Sidebar(pc))
+			start := strings.Index(body, `class="sidebar-collapse-btn"`)
+			if start < 0 {
+				t.Fatal("sidebar collapse toggle not rendered")
+			}
+			toggle := body[start:]
+			toggle = toggle[:strings.Index(toggle, "</button>")]
+			for _, want := range []string{
+				`data-collapse-label="` + labels[0] + `"`,
+				`data-expand-label="` + labels[1] + `"`,
+				`:title="sidebarCollapsed ? $el.dataset.expandLabel : $el.dataset.collapseLabel"`,
+				`:aria-label="sidebarCollapsed ? $el.dataset.expandLabel : $el.dataset.collapseLabel"`,
+				`:aria-expanded="!sidebarCollapsed"`,
+				`aria-hidden="true"`,
+				`:class="{ 'flipped': sidebarCollapsed }"`,
+			} {
+				if !strings.Contains(toggle, want) {
+					t.Errorf("collapse toggle missing %q", want)
+				}
+			}
+			// Tailwind's rotate-180 stacks on the SCSS transform: the chevron
+			// would turn 360 degrees and never point to "expand".
+			if strings.Contains(toggle, "rotate-") {
+				t.Error("collapse chevron uses a Tailwind rotate utility as its state class")
+			}
+			if !strings.Contains(body, `<button type="button" class="sidebar-collapse-btn"`) {
+				t.Error("collapse toggle is not type=button")
 			}
 		})
 	}

@@ -128,7 +128,9 @@
     flex-shrink: 0;
     transition: transform $transition-normal;
 
-    &.rotate-180 {
+    // Not .rotate-180: Tailwind's utility of that name adds `rotate: 180deg`
+    // on top of this transform, turning the chevron a full 360 degrees.
+    &.flipped {
       transform: rotate(180deg);
     }
   }

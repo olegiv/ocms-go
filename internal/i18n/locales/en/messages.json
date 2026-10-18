@@ -148,6 +148,11 @@
             "translation": "Collapse sidebar"
         },
         {
+            "id": "nav.expand_sidebar",
+            "message": "Expand sidebar",
+            "translation": "Expand sidebar"
+        },
+        {
             "id": "nav.profile",
             "message": "Profile",
             "translation": "Profile"

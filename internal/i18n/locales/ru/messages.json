@@ -148,6 +148,11 @@
             "translation": "Свернуть меню"
         },
         {
+            "id": "nav.expand_sidebar",
+            "message": "Expand sidebar",
+            "translation": "Развернуть меню"
+        },
+        {
             "id": "nav.profile",
             "message": "Profile",
             "translation": "Профиль"
