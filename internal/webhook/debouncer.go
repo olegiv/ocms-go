@@ -206,11 +206,12 @@ func (d *Debouncer) Flush() {
 	}
 }
 
-// Stop stops the debouncer and flushes all pending events.
+// Stop flushes all pending events and waits until they are dispatched; only
+// then does it cancel the context their dispatch runs with.
 func (d *Debouncer) Stop() {
 	d.Flush()
-	d.cancel()
 	d.wg.Wait()
+	d.cancel()
 }
 
 // PendingCount returns the number of pending events.

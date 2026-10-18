@@ -15,8 +15,10 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/olegiv/ocms-go/internal/demo"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
 // Scheduler handles scheduled tasks like publishing pages.
@@ -25,6 +27,7 @@ type Scheduler struct {
 	cron     *cron.Cron
 	logger   *slog.Logger
 	registry *Registry
+	webhooks webhook.EventDispatcher
 }
 
 // New creates a new scheduler instance.
@@ -35,6 +38,12 @@ func New(db *sql.DB, logger *slog.Logger, registry *Registry) *Scheduler {
 		logger:   logger,
 		registry: registry,
 	}
+}
+
+// SetWebhookDispatcher makes scheduled publishing send the page.published
+// webhook event the admin UI's publish toggle sends. Call it before Start.
+func (s *Scheduler) SetWebhookDispatcher(d webhook.EventDispatcher) {
+	s.webhooks = d
 }
 
 // Cron returns the cron instance.
@@ -129,10 +138,11 @@ func (s *Scheduler) processScheduledPages() error {
 	return nil
 }
 
-// publishPage publishes a single scheduled page and logs the event.
+// publishPage publishes a single scheduled page, logs the event and sends the
+// page.published webhook event.
 func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, page store.Page, now time.Time) error {
 	// Publish the page
-	_, err := queries.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
+	published, err := queries.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
 		PublishedAt: sql.NullTime{Time: now, Valid: true},
 		UpdatedAt:   now,
 		ID:          page.ID,
@@ -163,6 +173,9 @@ func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, pag
 	if err != nil {
 		// Kept out of the Event Log it failed to write (service.WithoutEventLog).
 		s.logger.WarnContext(service.WithoutEventLog(ctx), "failed to log scheduled publish event", "event", message, "error", err)
+	}
+	if s.webhooks != nil {
+		webhook.DispatchPageEvent(ctx, s.webhooks, model.EventPagePublished, published, "")
 	}
 
 	return nil

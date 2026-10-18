@@ -233,18 +233,17 @@ Options:
 
 The script:
 1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
-2. Backs up current binary on server
-3. Stops all listed instances via `ocmsctl`
-4. Transfers binary via `scp`
-5. Starts all instances
+2. Backs up the running binary, `/opt/ocms/bin/ocms`, to `/opt/ocms/bin/ocms.backup`; a
+   backup that fails stops the deploy
+3. Transfers the binary via `scp` to `/opt/ocms/bin/ocms-linux-amd64`
+4. Installs it as `/opt/ocms/bin/ocms`, the binary `ocmsctl` and `ocms@.service` run, by
+   copying it beside that file and renaming it over, which leaves the running binary alone,
+   so a failed upload or install stops no instance
+5. Restarts all listed instances via `ocmsctl` (stop, then start)
 6. Checks each instance status
 
-**The upload does not replace the running binary.** The script copies the file to
-`/opt/ocms/bin/ocms-linux-amd64` (and backs up that path), while `ocmsctl` and `ocms@.service`
-run `/opt/ocms/bin/ocms`. To switch over, install the uploaded file on the server
-(`sudo install -m 755 /opt/ocms/bin/ocms-linux-amd64 /opt/ocms/bin/ocms`, which replaces the file
-rather than writing into the running binary, then restart the instances) or
-use `deploy-multi.sh` below.
+All instances share `/opt/ocms/bin/ocms`, so instances the command does not list keep
+running the old binary until they restart.
 
 ### Single Instance — With Custom Content (from local machine)
 
@@ -272,26 +271,24 @@ Options:
 - `-u, --user USER` — SSH user (default: `root`)
 - `--sync-custom` — force sync custom/ directory even if empty
 - `--skip-build` — skip `make build-linux-amd64`, use existing `bin/ocms-linux-amd64`
-- `--skip-binary` — skip binary build, backup, and transfer (deploy custom content only)
+- `--skip-binary` — skip binary build, backup, transfer and install (deploy custom content only)
 - `--dry-run` — print commands without executing
 
 Symlinked directories inside `custom/` are followed during deployment. Before syncing, symlinks outside `custom/modules/` are validated: broken symlinks or links that resolve outside `custom/` abort the deploy before the instance is stopped. Symlinks under `custom/modules/` are exempt, since that directory is never synced.
 
 The script:
 1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
-2. Backs up current binary on server
-3. Stops the instance via `ocmsctl`
-4. Transfers binary via `scp`
+2. Backs up the running binary, `/opt/ocms/bin/ocms`, to `/opt/ocms/bin/ocms.backup`; a
+   backup that fails stops the deploy
+3. Transfers the binary via `scp` and installs it as `/opt/ocms/bin/ocms` while the instance
+   still runs, as `deploy-binary.sh` does (other instances keep the old binary until they restart)
+4. Stops the instance via `ocmsctl`
 5. (If custom themes exist) Syncs `custom/` to `{vhost}/custom/` via
    `rsync -aLz --delete --exclude='/modules/'` — see [Custom Modules](#custom-modules)
    (`-v` is the instance directory created by `setup-site.sh`, not the domain root)
 6. (If custom themes exist) Sets ownership to `{owner}:{group}`
 7. Starts the instance
 8. Checks instance status
-
-As with `deploy-binary.sh`, the binary lands at `/opt/ocms/bin/ocms-linux-amd64`, not at
-`/opt/ocms/bin/ocms`, which is the path `ocmsctl` and `ocms@.service` run; install it there
-(or use `deploy-multi.sh`) for the new version to take effect.
 
 ### Multi-Instance (on server)
 
@@ -310,7 +307,7 @@ sudo /opt/ocms/deploy-multi.sh /tmp/ocms
 
 For development builds, replace the release download with `make build-linux-amd64`.
 
-This backs up the current binary to `/opt/ocms/bin/ocms.backup`, stops the running `ocms@<site_id>` units, installs the new binary as `/opt/ocms/bin/ocms`, starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). It only stops systemd units: stop any instance started with `ocmsctl` first, or copying the binary fails ("Text file busy") and aborts the deploy after the units were stopped. On failure it prints rollback instructions; on success it deletes the uploaded binary.
+This backs up the current binary to `/opt/ocms/bin/ocms.backup`, installs the new binary as `/opt/ocms/bin/ocms` while the sites still run (renaming it into place, so a failed install stops nothing), stops every site in `sites.conf` with `ocmsctl stop` (through systemd or its PID file, whichever runs it), starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). On failure it prints rollback instructions; on success it deletes the uploaded binary.
 
 Or manually:
 ```bash

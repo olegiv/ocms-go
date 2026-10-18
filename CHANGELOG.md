@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the 30-second shutdown ends are closed, and handlers still running,
   including ones the 30-second request timeout has already answered, get up to
   5 more seconds to return before the cleanup closes the database. The
-  shutdown steps after that (modules, webhook deliveries, scheduled jobs, the
+  shutdown steps after that (modules, scheduled jobs, webhook deliveries, the
   cache) share a 10-second budget, of which the modules' shutdowns take at
   most 7 together (the migrator now waits 4 seconds for its imports instead
   of 10, and Internal Analytics 2 for its background work, including running
@@ -67,6 +67,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `OCMS_ENV_FILE` names, missing or unreadable, or a `.env` that does not
   parse. It started without the settings in it, such as the database path or
   production mode; only a missing `.env` is still ignored.
+- A checkbox form field stores every checked option, joined with `, `, and
+  a form re-rendered for a validation error keeps exactly those checked (a
+  box is no longer checked because its option is part of another's, such as
+  `Post` in `Postcard`); only the first was kept. A value that is not one of
+  the field's options is refused. Themes get `checkedOption` for their form
+  templates.
+- The category form saves its Position field; categories were created at 0
+  and kept their position on save. A negative or non-numeric value is
+  refused.
+- The REST API sends the `page.created`, `page.updated`, `page.deleted`,
+  `media.uploaded` and `media.deleted` webhook events, and scheduled
+  publishing sends `page.published`; only the admin UI sent them, so
+  integrations missed those changes. Events still in the one-second debounce
+  window when the server stops are now delivered; the dispatcher stopped
+  before flushing them and dropped them.
+- `docker-compose.yml` passes every variable the app reads into the container,
+  apart from the listen address, port and paths it fixes;
+  `OCMS_TRUSTED_PROXIES` was commented out and `OCMS_API_ALLOWED_CIDRS` missing,
+  so a production container could not start whatever `.env` said. Variables
+  with a production default are passed without a value, so leaving them unset
+  keeps that default, and an empty value (`OCMS_REQUIRE_FORM_CAPTCHA=` in
+  `.env`) now counts as unset too instead of turning the default off.
+- `deploy.sh` and `deploy-binary.sh` install the uploaded binary as
+  `/opt/ocms/bin/ocms`, the one `ocmsctl` and `ocms@.service` run, and back that
+  one up; they restarted the instances on the old binary. All three deploy
+  scripts install before stopping any instance, so a failed upload or install
+  leaves them running, and a failed backup stops the deploy instead of being
+  reported as complete. `deploy-multi.sh`
+  stops every site with `ocmsctl stop`, which also reaches a site started
+  with `ocmsctl` rather than systemd; that site kept serving on its port, so
+  the copy onto its binary failed ("Text file busy") after the units were
+  stopped. The binary is now renamed into place.
+  The `setup-site.sh` usage example passes its own path check.
 - The Developer module's generate and delete descriptions now say what it
   does: 3-7 menu items in every menu, not 5-20 in the main menu.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,

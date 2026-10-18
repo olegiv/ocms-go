@@ -47,7 +47,7 @@ For local testing, consider using:
 | `user.created` | When a new user is created |
 | `user.deleted` | When a user is deleted |
 
-Events are dispatched by the admin UI handlers (pages, media, users and public form submissions). Changes made through the REST API or by the scheduler (scheduled publishing) do not currently dispatch webhook events.
+Events are dispatched by the admin UI handlers (pages, media, users and public form submissions), by the REST API for page and media writes (`page.created`, `page.updated`, `page.deleted`, `media.uploaded`, `media.deleted`), and by scheduled publishing (`page.published`). Creating or editing a page, a status change in the edit form or the REST API included, sends only `page.created` or `page.updated`; `page.published` comes from the publish toggle and scheduled publishing, `page.unpublished` only from the publish toggle. Restoring a page version, creating a translation and content imports send no events. `author_email` is the email of the user who made the change, which can differ from `author_id`'s user; events from the REST API and the scheduler carry none.
 
 ## Payload Format
 

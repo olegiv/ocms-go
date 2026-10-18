@@ -22,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
 // maxSummaryRunes caps the summary length (measured in unicode runes, not bytes).
@@ -36,16 +37,32 @@ type Policy struct {
 // Service owns Page business logic end-to-end: validation, transactions,
 // cache invalidation, event logging.
 type Service struct {
-	db      *sql.DB
-	queries *store.Queries
-	cache   *cache.Manager
-	events  *service.EventService
-	policy  Policy
+	db       *sql.DB
+	queries  *store.Queries
+	cache    *cache.Manager
+	events   *service.EventService
+	policy   Policy
+	webhooks webhook.EventDispatcher
 }
 
 // NewService constructs a Pages service. Cache and events may be nil for tests.
 func NewService(db *sql.DB, queries *store.Queries, cacheManager *cache.Manager, events *service.EventService, policy Policy) *Service {
 	return &Service{db: db, queries: queries, cache: cacheManager, events: events, policy: policy}
+}
+
+// SetWebhookDispatcher makes page writes send the page.created, page.updated
+// and page.deleted webhook events the admin UI sends. Call it before serving.
+func (s *Service) SetWebhookDispatcher(d webhook.EventDispatcher) {
+	s.webhooks = d
+}
+
+// dispatchPageEvent sends a page webhook event when a dispatcher is set. The
+// actor is an API key, not a signed-in user, so like the scheduler's events it
+// carries no author_email.
+func (s *Service) dispatchPageEvent(ctx context.Context, eventType string, page store.Page) {
+	if s.webhooks != nil {
+		webhook.DispatchPageEvent(ctx, s.webhooks, eventType, page, "")
+	}
 }
 
 // requireWritePerm returns a forbidden domain error if the actor can't write pages.
@@ -457,6 +474,7 @@ func (s *Service) Create(ctx context.Context, a v2.Actor, in CreatePageBody) (*P
 		"title":   page.Title,
 		"status":  page.Status,
 	})
+	s.dispatchPageEvent(ctx, model.EventPageCreated, page)
 
 	dto := dtoFromStore(page)
 	s.populateIncludes(ctx, &dto, page.ID, true, ListFilter{IncludeCategories: true, IncludeTags: true})
@@ -573,6 +591,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		"title":   page.Title,
 		"status":  page.Status,
 	})
+	s.dispatchPageEvent(ctx, model.EventPageUpdated, page)
 
 	dto := dtoFromStore(page)
 	s.populateIncludes(ctx, &dto, page.ID, true, ListFilter{IncludeCategories: true, IncludeTags: true})
@@ -725,6 +744,7 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		"slug":    page.Slug,
 		"title":   page.Title,
 	})
+	s.dispatchPageEvent(ctx, model.EventPageDeleted, page)
 	return nil
 }
 

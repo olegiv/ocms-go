@@ -463,7 +463,13 @@ The image defaults to `OCMS_ENV=production`, which refuses `OCMS_DO_SEED=true`
 and fails to start without `OCMS_TRUSTED_PROXIES` and `OCMS_API_ALLOWED_CIDRS`,
 so this first, seeded run sets `OCMS_ENV=development`. Change the admin
 credentials before starting in production: production startup refuses to run
-while the default seeded credentials are active.
+while the default seeded credentials are active. A production container also
+needs, in a `.env` file beside `docker-compose.yml`: `OCMS_TRUSTED_PROXIES`,
+`OCMS_API_ALLOWED_CIDRS`, `OCMS_EMBED_PROXY_TOKEN` while the Embed module is
+active (it is on a fresh install), and the hCaptcha keys or
+`OCMS_REQUIRE_FORM_CAPTCHA=false`. Compose passes the container every variable
+the app reads except the listen address, the port and the `/app` paths, which
+it fixes.
 
 The port is published on `127.0.0.1` only. Set `OCMS_PUBLISH_ADDRESS=0.0.0.0`
 when a reverse proxy on another host, or a container that uses the host's

@@ -135,34 +135,7 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 	if h.dispatcher == nil {
 		return
 	}
-
-	var languageCode *string
-	if page.LanguageCode != "" {
-		languageCode = new(page.LanguageCode)
-	}
-
-	var publishedAt *string
-	if page.PublishedAt.Valid {
-		publishedAt = new(page.PublishedAt.Time.Format(time.RFC3339))
-	}
-
-	data := webhook.PageEventData{
-		ID:           page.ID,
-		Title:        page.Title,
-		Slug:         page.Slug,
-		Status:       page.Status,
-		AuthorID:     page.AuthorID,
-		AuthorEmail:  authorEmail,
-		LanguageCode: languageCode,
-		PublishedAt:  publishedAt,
-	}
-
-	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
-		slog.Error("failed to dispatch webhook event",
-			"error", err,
-			"event_type", eventType,
-			"page_id", page.ID)
-	}
+	webhook.DispatchPageEvent(ctx, h.dispatcher, eventType, page, authorEmail)
 }
 
 // PagesListData holds data for the pages list template.

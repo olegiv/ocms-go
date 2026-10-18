@@ -80,22 +80,7 @@ func (h *MediaHandler) dispatchMediaEvent(ctx context.Context, eventType string,
 	if h.dispatcher == nil {
 		return
 	}
-
-	data := webhook.MediaEventData{
-		ID:         media.ID,
-		UUID:       media.Uuid,
-		Filename:   media.Filename,
-		MimeType:   media.MimeType,
-		Size:       media.Size,
-		UploaderID: media.UploadedBy,
-	}
-
-	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
-		slog.Error("failed to dispatch webhook event",
-			"error", err,
-			"event_type", eventType,
-			"media_id", media.ID)
-	}
+	webhook.DispatchMediaEvent(ctx, h.dispatcher, eventType, media)
 }
 
 // MediaItem represents a media item with additional computed fields.

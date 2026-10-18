@@ -98,7 +98,7 @@
                 {{$fieldID := .ID}}
                 {{range $i, $opt := $options}}
                 <label class="st-form__checkbox">
-                    <input type="checkbox" name="{{$fieldName}}" value="{{$opt}}" {{if contains $selectedValue $opt}}checked{{end}}>
+                    <input type="checkbox" name="{{$fieldName}}" value="{{$opt}}" {{if checkedOption $selectedValue $opt}}checked{{end}}>
                     <span>{{$opt}}</span>
                 </label>
                 {{end}}

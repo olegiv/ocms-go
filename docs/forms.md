@@ -23,7 +23,7 @@ The forms system consists of three parts:
 | `date` | Date picker (YYYY-MM-DD) | -- | Built-in date format check |
 | `select` | Dropdown menu | JSON array of options | -- |
 | `radio` | Radio button group | JSON array of options | -- |
-| `checkbox` | Checkbox group (only the first checked option is stored) | JSON array of options | -- |
+| `checkbox` | Checkbox group (every checked option is stored, joined with `, `; a value that is not one of the options is refused) | JSON array of options | -- |
 | `file` | File upload input | -- | Parsed but not processed |
 | `captcha` | hCaptcha widget | -- | Verified via hook (not stored) |
 

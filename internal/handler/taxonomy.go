@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -747,6 +748,20 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 	renderTempl(w, r, adminviews.CategoryFormPage(pc, viewData))
 }
 
+// parseCategoryPosition parses the category form's position: blank keeps
+// fallback, anything else must be a whole number of 0 or more. It returns the
+// position and an error message, empty when the value is valid.
+func parseCategoryPosition(value string, fallback int64) (int64, string) {
+	if value == "" {
+		return fallback, ""
+	}
+	position, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || position < 0 {
+		return fallback, "Position must be a whole number of 0 or more"
+	}
+	return position, ""
+}
+
 // CreateCategory handles POST /admin/categories - creates a new category.
 func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminCategoriesNew) {
@@ -764,6 +779,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	description := strings.TrimSpace(r.FormValue("description"))
 	parentIDStr := r.FormValue("parent_id")
+	positionStr := strings.TrimSpace(r.FormValue("position"))
 	languageCode := strings.TrimSpace(r.FormValue("language_code"))
 
 	// Parse parent ID
@@ -777,6 +793,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		"slug":          slug,
 		"description":   description,
 		"parent_id":     parentIDStr,
+		"position":      positionStr,
 		"language_code": languageCode,
 	}
 
@@ -792,6 +809,10 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	}
 	if errMsg := h.validateCategorySlugCreate(r.Context(), slug); errMsg != "" {
 		validationErrors["slug"] = errMsg
+	}
+	position, errMsg := parseCategoryPosition(positionStr, 0)
+	if errMsg != "" {
+		validationErrors["position"] = errMsg
 	}
 
 	// If there are validation errors, re-render the form
@@ -830,7 +851,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		Slug:         slug,
 		Description:  util.NullStringFromValue(description),
 		ParentID:     parentID,
-		Position:     0,
+		Position:     position,
 		LanguageCode: languageCode,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -909,6 +930,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	description := strings.TrimSpace(r.FormValue("description"))
 	parentIDStr := r.FormValue("parent_id")
+	positionStr := strings.TrimSpace(r.FormValue("position"))
 
 	// Parse parent ID
 	parentID := util.ParseNullInt64(parentIDStr)
@@ -919,6 +941,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		"slug":        slug,
 		"description": description,
 		"parent_id":   parentIDStr,
+		"position":    positionStr,
 	}
 
 	slug = autoGenerateSlug(name, slug, formValues)
@@ -930,6 +953,10 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	}
 	if errMsg := h.validateCategorySlugUpdate(r.Context(), slug, existingCategory.Slug, id); errMsg != "" {
 		validationErrors["slug"] = errMsg
+	}
+	position, errMsg := parseCategoryPosition(positionStr, existingCategory.Position)
+	if errMsg != "" {
+		validationErrors["position"] = errMsg
 	}
 
 	// Prevent setting parent to self or descendant
@@ -976,7 +1003,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		Slug:         slug,
 		Description:  util.NullStringFromValue(description),
 		ParentID:     parentID,
-		Position:     existingCategory.Position,
+		Position:     position,
 		LanguageCode: existingCategory.LanguageCode,
 		UpdatedAt:    now,
 	})

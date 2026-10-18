@@ -12,6 +12,7 @@ import (
 	"errors"
 	"html/template"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -666,7 +667,10 @@ func testThemeManager() *theme.Manager {
 	return theme.NewManager(emptyFS, "", slog.Default())
 }
 
-func loadedFrontendThemeManager(t *testing.T, activeTheme string) *theme.Manager {
+// loadedFrontendThemeManager loads the core and custom themes with test
+// template functions and activates activeTheme. overrides replace functions
+// of the test map, such as its parseJSON stub.
+func loadedFrontendThemeManager(t *testing.T, activeTheme string, overrides ...template.FuncMap) *theme.Manager {
 	t.Helper()
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -685,6 +689,9 @@ func loadedFrontendThemeManager(t *testing.T, activeTheme string) *theme.Manager
 		"analyticsExtBody", "embedBody", "analyticsIntReadTracker", "privacyFooterLink",
 	} {
 		funcs[name] = emptyModuleHTML
+	}
+	for _, override := range overrides {
+		maps.Copy(funcs, override)
 	}
 	m.SetFuncMap(funcs)
 	if err := m.LoadThemes(); err != nil {

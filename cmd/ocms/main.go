@@ -1886,9 +1886,18 @@ func run() (runErr error) {
 	// Note: Theme loading is deferred until after modules are initialized
 	// so that module template functions (like analyticsHead) are available
 
+	// Initialize and start the webhook dispatcher before the scheduler, which
+	// sends page.published for scheduled publishing. Its deferred stop then
+	// runs after the scheduler's.
+	webhookDispatcher := webhook.NewDispatcher(db, logger, webhook.DefaultConfig())
+	webhookDispatcher.Start(ctx)
+	defer cleanup.within("webhook dispatcher", webhookDispatcher.Stop)
+	slog.Info("webhook dispatcher initialized")
+
 	// Initialize scheduler registry and scheduler
 	schedulerRegistry := scheduler.NewRegistry(db, logger)
 	sched := scheduler.New(db, logger, schedulerRegistry)
+	sched.SetWebhookDispatcher(webhookDispatcher)
 	if err := sched.Start(); err != nil {
 		return fmt.Errorf("starting scheduler: %w", err)
 	}
@@ -1904,12 +1913,6 @@ func run() (runErr error) {
 		}
 		slog.Info("demo reset scheduled", "schedule", "daily at 01:00 UTC")
 	}
-
-	// Initialize and start webhook dispatcher
-	webhookDispatcher := webhook.NewDispatcher(db, logger, webhook.DefaultConfig())
-	webhookDispatcher.Start(ctx)
-	defer cleanup.within("webhook dispatcher", webhookDispatcher.Stop)
-	slog.Info("webhook dispatcher initialized")
 
 	// Initialize hook registry
 	hookRegistry := module.NewHookRegistry(logger)
@@ -2529,8 +2532,10 @@ func run() (runErr error) {
 			BlockSuspiciousMarkup: cfg.BlockSuspiciousPageHTML,
 			SanitizeHTML:          cfg.SanitizePageHTML,
 		})
+		pagesSvc.SetWebhookDispatcher(webhookDispatcher)
 		apiv2pages.Register(apiV2.API, pagesSvc)
 		mediaSvc := apiv2media.NewService(db, v2Queries, v2Events, cfg.UploadsDir)
+		mediaSvc.SetWebhookDispatcher(webhookDispatcher)
 		apiv2media.Register(apiV2.API, mediaSvc)
 		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries, v2Events)
 		apiv2taxonomy.Register(apiV2.API, taxonomySvc)

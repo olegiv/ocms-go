@@ -26,6 +26,7 @@ fi
 # Configuration
 BINARY_PATH="/opt/ocms/bin/ocms"
 BACKUP_PATH="/opt/ocms/bin/ocms.backup"
+OCMSCTL="/opt/ocms/bin/ocmsctl"
 SITES_CONF="/etc/ocms/sites.conf"
 HEALTH_RETRIES=10
 HEALTH_INTERVAL=2
@@ -100,22 +101,29 @@ if [ -f "$BINARY_PATH" ]; then
     cp "$BINARY_PATH" "$BACKUP_PATH"
 fi
 
-# --- Stop all instances ---
-
-echo_info "Stopping all instances..."
-for site_id in "${SITE_IDS[@]}"; do
-    if systemctl is-active --quiet "ocms@${site_id}" 2>/dev/null; then
-        echo "  Stopping ocms@$site_id..."
-        systemctl stop "ocms@${site_id}" || true
-    fi
-done
-sleep 2
-
-# --- Replace binary ---
+# --- Install the new binary while the sites still run ---
 
 echo_info "Installing new binary..."
-cp "$NEW_BINARY" "$BINARY_PATH"
-chmod 755 "$BINARY_PATH"
+# Copy beside the old binary and rename over it: the rename leaves the running
+# binary alone, so this happens before any site stops, and a failed install
+# stops nothing.
+cp "$NEW_BINARY" "${BINARY_PATH}.new"
+chmod 755 "${BINARY_PATH}.new"
+mv -f "${BINARY_PATH}.new" "$BINARY_PATH"
+
+# --- Stop all instances ---
+
+# ocmsctl stops a site whichever way it runs: through systemd when its unit
+# is active, otherwise through its PID file. Stopping only the systemd units
+# left a site started with `ocmsctl start` serving on its port: copying onto
+# its binary failed ("Text file busy"), and with the rename above the new
+# binary would migrate its database, fail to listen and restart-loop while
+# the health check reached the old process.
+echo_info "Stopping all instances..."
+for site_id in "${SITE_IDS[@]}"; do
+    echo "  Stopping $site_id..."
+    "$OCMSCTL" stop "$site_id"
+done
 
 # --- Start all instances and health check ---
 
@@ -149,7 +157,7 @@ if [ ${#FAILED_SITES[@]} -gt 0 ]; then
     done
     echo ""
     echo "To rollback:"
-    echo "  sudo cp $BACKUP_PATH $BINARY_PATH"
+    echo "  sudo cp $BACKUP_PATH $BINARY_PATH.new && sudo mv -f $BINARY_PATH.new $BINARY_PATH"
     echo "  sudo systemctl restart 'ocms@*'"
     exit 1
 else

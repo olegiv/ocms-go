@@ -463,6 +463,19 @@ Core themes, the starter and fallback layout already include this loop. The list
 is empty when the configured site origin is missing or invalid. See
 [RSS and Atom feeds](feeds.md) for endpoints, visibility and HTTP behavior.
 
+### Checkbox Fields in Forms
+
+A checkbox field's checked options reach `pages/form.html` in `.Values` joined with
+`, `. Use `checkedOption` to mark a box checked when a form is shown again after a
+validation error; it matches whole options, so `Post` is not checked by `Postcard`:
+
+```html
+<input type="checkbox" name="{{$fieldName}}" value="{{$opt}}"
+       {{if checkedOption (index $.Values $fieldName) $opt}}checked{{end}}>
+```
+
+`contains` matches substrings of the joined value and checks such boxes wrongly.
+
 ## Translations
 
 Theme translations override global translations for specific keys. The `TTheme` template function checks the active theme's translations first, then falls back to the global i18n catalog.

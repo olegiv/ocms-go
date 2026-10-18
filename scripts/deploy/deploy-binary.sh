@@ -17,17 +17,16 @@ source "${SCRIPT_DIR}/helper.sh"
 # bin/ocms-linux-amd64 and abort.
 #
 # NOTE: this affects only which file is built and which path is uploaded. The
-# launchers do NOT derive from it, and do not even match the default: ocmsctl
-# and ocms@.service both hardcode /opt/ocms/bin/ocms, while this uploads
-# /opt/ocms/bin/ocms-linux-amd64. Nothing here renames one to the other — that
-# is an operator step (scripts/deploy/deploy-multi.sh, run on the server, or the
-# manual cp in the Quick Start). ocms@.service is also a single template shared
-# by every instance, so a per-site BINARY_NAME cannot give a site its own
-# running binary.
+# launchers do NOT derive from it: ocmsctl and ocms@.service both run
+# /opt/ocms/bin/ocms, REMOTE_RUN_BINARY with the default REMOTE_BIN_DIR, so the
+# upload is installed there before the instances restart. ocms@.service is also a single template shared by
+# every instance, so a per-site BINARY_NAME cannot give a site its own running
+# binary, and installing replaces the binary every instance runs.
 BINARY_NAME="${BINARY_NAME:-ocms}"
 LOCAL_BINARY="${LOCAL_BINARY:-bin/${BINARY_NAME}-linux-amd64}"
 REMOTE_BIN_DIR="${REMOTE_BIN_DIR:-/opt/ocms/bin}"
 REMOTE_BINARY="${REMOTE_BINARY:-${BINARY_NAME}-linux-amd64}"
+REMOTE_RUN_BINARY="${REMOTE_BIN_DIR}/ocms"
 
 # Defaults
 SSH_USER="root"
@@ -153,23 +152,29 @@ fi
 
 # Step 2: Backup current binary on server
 echo_step "Backing up current binary on server..."
-ssh_cmd "cp ${REMOTE_BIN_DIR}/${REMOTE_BINARY} ${REMOTE_BIN_DIR}/${REMOTE_BINARY}.backup 2>/dev/null || true"
+ssh_cmd "$(backup_binary_command "${REMOTE_RUN_BINARY}")"
 echo_ok "Backup complete"
 
-# Step 3: Stop all instances
+# Step 3: Transfer and install the binary while the instances still run: the
+# install renames the new binary into place, which leaves a running one alone,
+# so a failed upload or install stops nothing.
+# Name the destination explicitly: scp to a bare directory would land the file
+# under basename "$LOCAL_BINARY", so overriding only one of the two names would
+# leave the install below reading a path the upload never wrote.
+echo_step "Transferring binary to server..."
+scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/${REMOTE_BINARY}"
+echo_ok "Binary transferred"
+
+echo_step "Installing binary as ${REMOTE_RUN_BINARY}..."
+ssh_cmd "$(install_binary_command "${REMOTE_BIN_DIR}/${REMOTE_BINARY}" "${REMOTE_RUN_BINARY}")"
+echo_ok "Binary installed"
+
+# Step 4: Restart the instances on the new binary
 for instance in "${INSTANCES[@]}"; do
     echo_step "Stopping instance '${instance}'..."
     ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${instance}"
     echo_ok "Instance '${instance}' stopped"
 done
-
-# Step 4: Transfer binary
-# Name the destination explicitly: scp to a bare directory would land the file
-# under basename "$LOCAL_BINARY", so overriding only one of the two names would
-# put the upload and the backup at different paths.
-echo_step "Transferring binary to server..."
-scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/${REMOTE_BINARY}"
-echo_ok "Binary transferred"
 
 # Step 5: Start all instances
 for instance in "${INSTANCES[@]}"; do

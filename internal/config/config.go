@@ -351,15 +351,23 @@ func applyProductionSecurityDefaults(cfg *Config) {
 	setIntIfUnset("OCMS_API_KEY_MAX_TTL_DAYS", &cfg.APIMaxTTLDays, DefaultProductionAPIMaxTTLDays)
 }
 
+// envIsSet reports whether key has a value. An empty or blank value counts as
+// unset: docker-compose.yml passes a variable an .env line leaves empty as an
+// empty string, and that must not turn a production default off.
+func envIsSet(key string) bool {
+	value, ok := os.LookupEnv(key)
+	return ok && strings.TrimSpace(value) != ""
+}
+
 func setBoolIfUnset(key string, target *bool) {
-	if _, ok := os.LookupEnv(key); ok {
+	if envIsSet(key) {
 		return
 	}
 	*target = true
 }
 
 func setIntIfUnset(key string, target *int, value int) {
-	if _, ok := os.LookupEnv(key); ok {
+	if envIsSet(key) {
 		return
 	}
 	*target = value

@@ -99,6 +99,7 @@ func MinimalThemeFuncMap() template.FuncMap {
 		"hasPrefix":               func(s, prefix string) bool { return false },
 		"hasSuffix":               func(s, suffix string) bool { return false },
 		"contains":                func(s, substr string) bool { return false },
+		"checkedOption":           func(value, option string) bool { return false },
 		"replace":                 func(s, old, nw string) string { return s },
 		"lower":                   func(s string) string { return s },
 		"upper":                   func(s string) string { return s },
