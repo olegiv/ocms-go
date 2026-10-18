@@ -126,3 +126,34 @@ func TestSettingsLoadFailureWithoutKeys(t *testing.T) {
 		t.Error("captcha is on although OCMS_HCAPTCHA_DISABLED is set")
 	}
 }
+
+// TestSaveRefusesMalformedForm checks that a settings form whose body does
+// not parse is refused instead of saved from the part that parsed. Reading
+// from_fallback parsed the form first and dropped the error, and the later
+// ParseForm returned nil, so a bad escape saved empty keys and turned
+// hCaptcha off (Codex review of PR #189).
+//
+// Bug state: read from_fallback before r.ParseForm in handleSaveSettings and
+// this fails.
+func TestSaveRefusesMalformedForm(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	m := testModule(t, db)
+	if _, err := db.Exec(`UPDATE hcaptcha_settings SET enabled = 1, site_key = 'stored-key', secret_key = 'stored-secret' WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ReloadSettings(); err != nil {
+		t.Fatal(err)
+	}
+	req := requestWithUser(strings.NewReader("enabled=0&site_key=%zz"), store.User{ID: 1, Email: "admin@test.com", Role: "admin"})
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	m.handleSaveSettings(httptest.NewRecorder(), req)
+	var enabled bool
+	var siteKey string
+	if err := db.QueryRow(`SELECT enabled, site_key FROM hcaptcha_settings WHERE id = 1`).Scan(&enabled, &siteKey); err != nil {
+		t.Fatal(err)
+	}
+	if !enabled || siteKey != "stored-key" {
+		t.Errorf("stored settings = enabled %v, site key %q: a form that did not parse was saved", enabled, siteKey)
+	}
+}

@@ -4,6 +4,9 @@
 package main
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"testing"
 
 	"github.com/alexedwards/scs/v2"
@@ -50,4 +53,56 @@ func TestAllModulesMirrorsRegisterModules(t *testing.T) {
 	if !registered["mcp"] {
 		t.Error("the MCP module must be registered at startup")
 	}
+}
+
+// TestInternalAnalyticsTrackingIgnoresStartupEnabled fails when run installs
+// the internal analytics tracking middleware only if tracking is enabled
+// while the router is built. The middleware checks IsEnabled per request;
+// installed only when enabled, it tracked nothing until a restart when the
+// settings loaded after a startup read failure or tracking was turned on
+// later (Codex review of PR #189). Whether the module is active at startup
+// may still decide it.
+//
+// Bug state: guard r.Use(internalAnalyticsModule.GetTrackingMiddleware()) in
+// main.go with `internalAnalyticsModule.IsEnabled()` and this fails.
+func TestInternalAnalyticsTrackingIgnoresStartupEnabled(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "main.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	var ancestors []ast.Node
+	ast.Inspect(file, func(n ast.Node) bool {
+		if n == nil {
+			ancestors = ancestors[:len(ancestors)-1]
+			return true
+		}
+		if call, ok := n.(*ast.CallExpr); ok && calledName(call) == "GetTrackingMiddleware" {
+			found = true
+			for _, ancestor := range ancestors {
+				if ifStmt, ok := ancestor.(*ast.IfStmt); ok && callsMethod(ifStmt.Cond, "IsEnabled") {
+					t.Errorf("%s installs the tracking middleware only while tracking is enabled; it checks IsEnabled per request", fset.Position(call.Pos()))
+				}
+			}
+		}
+		ancestors = append(ancestors, n)
+		return true
+	})
+	if !found {
+		t.Fatal("main.go never installs GetTrackingMiddleware; the layout changed and this test is vacuous")
+	}
+}
+
+// callsMethod reports whether expr contains a call of a method or function
+// named name.
+func callsMethod(expr ast.Expr, name string) bool {
+	found := false
+	ast.Inspect(expr, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && calledName(call) == name {
+			found = true
+		}
+		return !found
+	})
+	return found
 }

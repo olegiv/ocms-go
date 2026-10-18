@@ -174,6 +174,12 @@ func (m *Module) registerHooks() {
 			if !ok {
 				return data, nil
 			}
+			// A required captcha refuses while hCaptcha is off: settings that
+			// load after the startup check can disable it.
+			if m.ctx.Config != nil && m.ctx.Config.RequireFormCaptcha && !m.IsEnabled() {
+				req.Verified, req.ErrorCode = false, "hcaptcha.error_verification"
+				return req, nil
+			}
 			return m.VerifyFromRequest(req)
 		},
 	})

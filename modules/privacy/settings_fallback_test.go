@@ -132,3 +132,33 @@ func dashboardBody(t *testing.T, m *Module) string {
 	}
 	return rr.Body.String()
 }
+
+// TestSaveRefusesMalformedForm checks that a settings form whose body does
+// not parse is refused instead of saved from the part that parsed. Reading
+// from_fallback parsed the form first and dropped the error, and the later
+// ParseForm returned nil, so a bad escape turned the consent banner off
+// (Codex review of PR #189).
+//
+// Bug state: read from_fallback before r.ParseForm in handleSaveSettings and
+// this fails.
+func TestSaveRefusesMalformedForm(t *testing.T) {
+	m, db := newTestModule(t)
+	if _, err := db.Exec(`UPDATE privacy_settings SET enabled = 1 WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ReloadSettings(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/admin/privacy", strings.NewReader("enabled=0&cookie_name=%zz"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, store.User{ID: 1, Email: "admin@test.com", Role: "admin"}))
+	m.ctx.Render = &render.Renderer{}
+	m.handleSaveSettings(httptest.NewRecorder(), req)
+	var enabled bool
+	if err := db.QueryRow(`SELECT enabled FROM privacy_settings WHERE id = 1`).Scan(&enabled); err != nil {
+		t.Fatal(err)
+	}
+	if !enabled {
+		t.Error("the consent banner was turned off by a form that did not parse")
+	}
+}

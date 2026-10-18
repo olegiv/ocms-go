@@ -36,6 +36,11 @@ func TestRunMigrate(t *testing.T) {
 			t.Fatalf("ocms migrate %s: %v", command, err)
 		}
 	}
+	// A file: URI names the same database; its status is not refused as
+	// missing (Codex review of PR #189).
+	if err := runMigrate([]string{"-db", "file:" + path, "status"}); err != nil {
+		t.Errorf("ocms migrate status on a file: URI: %v", err)
+	}
 	for _, args := range [][]string{{"-db", path}, {"-db", path, "create"}, {"-db", path, "up", "extra"}} {
 		if err := runMigrate(args); err == nil {
 			t.Errorf("ocms migrate %v succeeded, want it refused", args)

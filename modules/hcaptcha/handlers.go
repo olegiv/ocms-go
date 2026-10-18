@@ -53,6 +53,12 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	lang := m.ctx.Render.GetAdminLang(r)
 
+	if err := r.ParseForm(); err != nil {
+		m.ctx.Logger.Error("failed to parse form", "error", err)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "hcaptcha.error_parse_form"), "error")
+		http.Redirect(w, r, "/admin/hcaptcha", http.StatusSeeOther)
+		return
+	}
 	// A form rendered from fallback values must not replace the stored
 	// settings, even once they can be read again.
 	if r.FormValue("from_fallback") == "1" {
@@ -71,13 +77,6 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/admin/hcaptcha", http.StatusSeeOther)
 			return
 		}
-	}
-
-	if err := r.ParseForm(); err != nil {
-		m.ctx.Logger.Error("failed to parse form", "error", err)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "hcaptcha.error_parse_form"), "error")
-		http.Redirect(w, r, "/admin/hcaptcha", http.StatusSeeOther)
-		return
 	}
 
 	// Build new settings from form

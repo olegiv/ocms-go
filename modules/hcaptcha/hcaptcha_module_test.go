@@ -1046,3 +1046,27 @@ func TestLoadSettingsEmptyKeysFallback(t *testing.T) {
 		t.Errorf("SecretKey = %q, want empty", settings.SecretKey)
 	}
 }
+
+// TestHookFormCaptchaVerifyFailsClosedWhenRequired checks that with
+// OCMS_REQUIRE_FORM_CAPTCHA set, the form captcha hook refuses while
+// hCaptcha is off. Settings that load after the startup check can turn it
+// off, and a disabled verifier passed every submission (Codex review of
+// PR #189). Without the requirement, a disabled verifier still passes, as
+// TestHookFormCaptchaVerify checks.
+//
+// Bug state: drop the RequireFormCaptcha check from the form verify hook and
+// this fails.
+func TestHookFormCaptchaVerifyFailsClosedWhenRequired(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	m, hooks := testModuleWithHooks(t, db)
+	m.ctx.Config.RequireFormCaptcha = true
+	m.storeSettings(&Settings{Enabled: false})
+	result, err := hooks.Call(context.Background(), HookFormCaptchaVerify, &VerifyRequest{Response: ""})
+	if err != nil {
+		t.Fatalf("Call HookFormCaptchaVerify: %v", err)
+	}
+	if vr, ok := result.(*VerifyRequest); !ok || vr.Verified || vr.ErrorCode != "hcaptcha.error_verification" {
+		t.Errorf("result = %+v, want a refusal while a required captcha is off", result)
+	}
+}

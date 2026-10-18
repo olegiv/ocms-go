@@ -56,7 +56,11 @@ func runMigrate(args []string) error {
 	}
 	command := fs.Arg(0)
 	if command != "up" {
-		if _, err := os.Stat(*dbPath); err != nil {
+		target := *dbPath
+		if path, ok := sqliteFilePathFromDSN(target); ok {
+			target = path // a file: URI names its file without the scheme and query
+		}
+		if _, err := os.Stat(target); err != nil {
 			return fmt.Errorf("no database to %s at %s: %w", command, *dbPath, err)
 		}
 	}

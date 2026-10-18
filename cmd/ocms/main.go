@@ -1110,8 +1110,8 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 	// lookups that require forward slashes.
 	cleanPath := strings.TrimPrefix(path.Clean("/"+requestedPath), "/")
 
-	// Reject paths that try to escape (start with .. or are absolute)
-	if cleanPath == "" || strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
+	// Reject paths that escape the static directory, are absolute or empty
+	if !filepath.IsLocal(cleanPath) {
 		http.NotFound(w, r)
 		return
 	}
@@ -2173,8 +2173,11 @@ func run() (runErr error) {
 	useFrontendMiddleware := func(r chi.Router) {
 		// Optionally load user for context-aware caching (doesn't require login)
 		r.Use(middleware.OptionalLoadUser(sessionManager, db))
-		// Add internal analytics tracking middleware (if module is enabled)
-		if internalAnalyticsModule.IsEnabled() {
+		// Internal analytics tracking checks IsEnabled per request, so settings
+		// that load or change after startup take effect without a restart. It
+		// is installed for a module active, and so initialized, at startup: one
+		// activated later would run Init while requests run its middleware.
+		if moduleRegistry.IsActive(internalAnalyticsModule.Name()) {
 			r.Use(internalAnalyticsModule.GetTrackingMiddleware())
 		}
 		// RFC 8288 Link header on "/" advertising the API catalog and
