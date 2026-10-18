@@ -422,12 +422,17 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		}
 		return v2.NewInternalError("Failed to load media", err)
 	}
-	if err := s.uploader.Delete(ctx, id); err != nil {
+	// Files left on disk do not undo the delete: the records are gone.
+	err = s.uploader.Delete(ctx, id)
+	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 		return v2.NewInternalError("Failed to delete media", err)
 	}
-	s.logMediaAudit(ctx, a, "API: Media deleted", map[string]any{
-		"media_id": id,
-	})
+	audit := map[string]any{"media_id": id}
+	if err != nil {
+		slog.Error("media deleted but its files were not removed", "error", err, "media_id", id, "uuid", media.Uuid)
+		audit["files_removed"] = false
+	}
+	s.logMediaAudit(ctx, a, "API: Media deleted", audit)
 	s.dispatchMediaEvent(ctx, model.EventMediaDeleted, media)
 	return nil
 }

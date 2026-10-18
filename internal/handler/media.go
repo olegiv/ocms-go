@@ -627,26 +627,50 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Delete media (files and DB records)
 	err = h.mediaService.Delete(r.Context(), id)
-	if err != nil {
+	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 		slog.Error("failed to delete media", "error", err, "media_id", id)
 		http.Error(w, "Error deleting media", http.StatusInternalServerError)
 		return
 	}
-
-	slog.Info("media deleted", "media_id", id, "filename", media.Filename, "deleted_by", middleware.GetUserID(r))
-	_ = h.eventService.LogMediaEvent(r.Context(), model.EventLevelInfo, "Media deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"media_id": id, "filename": media.Filename})
-
-	// Dispatch media.deleted webhook event
-	h.dispatchMediaEvent(r.Context(), model.EventMediaDeleted, media)
+	h.recordMediaDelete(r, media, err)
 
 	// For HTMX requests, return empty response
 	if r.Header.Get("HX-Request") == "true" {
+		if err != nil {
+			// Reload the library so the warning shows instead of the card
+			// just disappearing.
+			h.renderer.SetFlash(r, mediaFilesLeftMessage, "warning")
+			w.Header().Set("HX-Refresh", "true")
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
 	// For regular requests, redirect
+	if err != nil {
+		flashAndRedirect(w, r, h.renderer, redirectAdminMedia, mediaFilesLeftMessage, "warning")
+		return
+	}
 	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Media deleted successfully")
+}
+
+// mediaFilesLeftMessage tells the admin that a delete left files on disk,
+// where they are still served at their old URLs.
+const mediaFilesLeftMessage = "Media deleted, but its files could not be removed from disk"
+
+// recordMediaDelete logs, records and announces a delete whose database
+// records are gone. deleteErr is what MediaService.Delete returned: nil, or
+// an ErrMediaFilesNotRemoved error when the files stayed on disk, which is
+// logged as an error and so also reaches the Event Log.
+func (h *MediaHandler) recordMediaDelete(r *http.Request, media store.Medium, deleteErr error) {
+	if deleteErr != nil {
+		slog.Error("media deleted but its files were not removed", "error", deleteErr, "media_id", media.ID, "uuid", media.Uuid)
+	}
+	slog.Info("media deleted", "media_id", media.ID, "filename", media.Filename, "deleted_by", middleware.GetUserID(r))
+	_ = h.eventService.LogMediaEvent(r.Context(), model.EventLevelInfo, "Media deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"media_id": media.ID, "filename": media.Filename})
+
+	// Dispatch media.deleted webhook event
+	h.dispatchMediaEvent(r.Context(), model.EventMediaDeleted, media)
 }
 
 // BulkDelete handles POST /admin/media/bulk-delete - deletes multiple media items.
@@ -663,7 +687,7 @@ func (h *MediaHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	failed := make([]bulkActionFailedItem, 0)
-	deleted := 0
+	deleted, filesLeft := 0, 0
 
 	for _, id := range ids {
 		media, err := h.queries.GetMediaByID(r.Context(), id)
@@ -677,18 +701,23 @@ func (h *MediaHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if err := h.mediaService.Delete(r.Context(), id); err != nil {
+		err = h.mediaService.Delete(r.Context(), id)
+		if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 			slog.Error("failed to bulk delete media", "error", err, "media_id", id)
 			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting media"})
 			continue
 		}
-
-		slog.Info("media deleted", "media_id", id, "filename", media.Filename, "deleted_by", middleware.GetUserID(r))
-		_ = h.eventService.LogMediaEvent(r.Context(), model.EventLevelInfo, "Media deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"media_id": id, "filename": media.Filename})
-		h.dispatchMediaEvent(r.Context(), model.EventMediaDeleted, media)
+		h.recordMediaDelete(r, media, err)
+		if err != nil {
+			filesLeft++
+		}
 		deleted++
 	}
 
+	if filesLeft > 0 {
+		// The library reloads after a bulk delete and shows this.
+		h.renderer.SetFlash(r, fmt.Sprintf("%d media deleted, but their files could not be removed from disk", filesLeft), "warning")
+	}
 	writeBulkActionSuccess(w, deleted, failed)
 }
 

@@ -566,8 +566,8 @@ func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
 	svc := NewMediaService(db, uploadRoot)
 	svc.deleteMediaFiles = func(*os.Root, string) error { return errors.New("injected cleanup failure") }
 	err = svc.Delete(ctx, media.ID)
-	if err == nil || !strings.Contains(err.Error(), "injected cleanup failure") {
-		t.Fatalf("Delete() error = %v", err)
+	if !errors.Is(err, ErrMediaFilesNotRemoved) || !strings.Contains(err.Error(), "injected cleanup failure") {
+		t.Fatalf("Delete() error = %v, want ErrMediaFilesNotRemoved with the cleanup failure", err)
 	}
 	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("media row lookup = %v, want committed deletion", err)
@@ -620,8 +620,8 @@ func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *test
 	svc := NewMediaService(db, uploadRoot)
 	svc.beforeMediaCommit = cancel
 	err = svc.Delete(ctx, media.ID)
-	if err == nil || !errors.Is(err, context.Canceled) {
-		t.Fatalf("Delete() error = %v, want context.Canceled", err)
+	if err == nil || !errors.Is(err, context.Canceled) || errors.Is(err, ErrMediaFilesNotRemoved) {
+		t.Fatalf("Delete() error = %v, want context.Canceled, not a completed delete", err)
 	}
 	if _, err := queries.GetMediaByID(context.Background(), media.ID); err != nil {
 		t.Fatalf("media row was not rolled back: %v", err)

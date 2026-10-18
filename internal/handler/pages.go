@@ -1153,48 +1153,44 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	var message string
-	var eventType string
+	var updatedPage store.Page
+	action, eventType := "published", model.EventPagePublished
 
+	// Both updates apply only while the page still has the status read
+	// above, so a toggle racing the scheduler cannot publish it twice.
 	if page.Status == PageStatusPublished {
-		// Unpublish
-		_, err = h.queries.UnpublishPage(r.Context(), store.UnpublishPageParams{
+		action, eventType = "unpublished", model.EventPageUnpublished
+		updatedPage, err = h.queries.UnpublishPage(r.Context(), store.UnpublishPageParams{
 			ID:        id,
 			UpdatedAt: now,
 		})
-		message = "Page unpublished successfully"
-		eventType = model.EventPageUnpublished
-		slog.Info("page unpublished", "page_id", id, "slug", page.Slug, "unpublished_by", middleware.GetUserID(r))
-		_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page unpublished", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
 	} else {
-		// Publish
-		_, err = h.queries.PublishPage(r.Context(), store.PublishPageParams{
+		updatedPage, err = h.queries.PublishUnpublishedPage(r.Context(), store.PublishUnpublishedPageParams{
 			ID:          id,
 			UpdatedAt:   now,
 			PublishedAt: sql.NullTime{Time: now, Valid: true},
 		})
-		message = "Page published successfully"
-		eventType = model.EventPagePublished
-		slog.Info("page published", "page_id", id, "slug", page.Slug, "published_by", middleware.GetUserID(r))
-		_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page published", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
 	}
 
+	if errors.Is(err, sql.ErrNoRows) {
+		flashError(w, r, h.renderer, redirectAdminPages, "The page status changed meanwhile; check it and try again")
+		return
+	}
 	if err != nil {
 		slog.Error("failed to toggle publish status", "error", err, "page_id", id)
 		flashError(w, r, h.renderer, redirectAdminPages, "Error updating page status")
 		return
 	}
 
+	slog.Info("page "+action, "page_id", id, "slug", page.Slug, action+"_by", middleware.GetUserID(r))
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page "+action, middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
+
 	// Invalidate page cache after visibility changes.
 	h.invalidatePageCache(id)
 
-	// Get updated page for webhook event
-	updatedPage, err := h.queries.GetPageByID(r.Context(), id)
-	if err == nil {
-		h.dispatchPageEvent(r.Context(), eventType, updatedPage, middleware.GetUserEmail(r))
-	}
+	h.dispatchPageEvent(r.Context(), eventType, updatedPage, middleware.GetUserEmail(r))
 
-	flashSuccess(w, r, h.renderer, redirectAdminPages, message)
+	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page "+action+" successfully")
 }
 
 // VersionsPerPage is the number of versions to display per page.

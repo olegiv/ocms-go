@@ -100,6 +100,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the copy onto its binary failed ("Text file busy") after the units were
   stopped. The binary is now renamed into place.
   The `setup-site.sh` usage example passes its own path check.
+- `deploy-multi.sh` reports a site that fails to stop or start and carries on
+  with the others; one failure ended the script, leaving every site it had
+  stopped but not yet started down. A site that did not stop is not started.
+- A page published by the publish toggle and by scheduled publishing at the
+  same moment sends `page.published` once; both published it and sent the
+  event. Scheduled publishing also skips a page unscheduled or rescheduled
+  to a later time after it was listed, and the toggle no longer logs "Page
+  published" when its update failed.
+- Deleting media whose files cannot be removed from disk completes the
+  delete: the records were already gone, but the admin UI and the REST API
+  answered 500 (bulk delete counted a failure) and sent no `media.deleted`
+  event. The admin UI now warns
+  that the files stayed on disk, where they are still served, and the server
+  logs them as an error, which the Event Log also records.
 - The Developer module's generate and delete descriptions now say what it
   does: 3-7 menu items in every menu, not 5-20 in the main menu.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,

@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"syscall"
@@ -20,6 +21,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
+
+// errNoLongerDue reports a page published, unscheduled or rescheduled to a
+// later time after processScheduledPages listed it.
+var errNoLongerDue = errors.New("page no longer due for publishing")
 
 // Scheduler handles scheduled tasks like publishing pages.
 type Scheduler struct {
@@ -120,6 +125,10 @@ func (s *Scheduler) processScheduledPages() error {
 
 	for _, page := range pages {
 		if err := s.publishPage(ctx, queries, page, now); err != nil {
+			if errors.Is(err, errNoLongerDue) {
+				s.logger.Info("skipped scheduled page changed since it was listed", "page_id", page.ID)
+				continue
+			}
 			s.logger.Error("failed to publish scheduled page",
 				"page_id", page.ID,
 				"page_title", page.Title,
@@ -139,14 +148,18 @@ func (s *Scheduler) processScheduledPages() error {
 }
 
 // publishPage publishes a single scheduled page, logs the event and sends the
-// page.published webhook event.
+// page.published webhook event. It returns errNoLongerDue, and does nothing
+// else, when the page is no longer a draft due by now.
 func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, page store.Page, now time.Time) error {
-	// Publish the page
 	published, err := queries.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
 		PublishedAt: sql.NullTime{Time: now, Valid: true},
 		UpdatedAt:   now,
 		ID:          page.ID,
+		ScheduledAt: sql.NullTime{Time: now, Valid: true},
 	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return errNoLongerDue
+	}
 	if err != nil {
 		return err
 	}

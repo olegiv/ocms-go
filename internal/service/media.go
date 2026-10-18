@@ -80,6 +80,11 @@ type UploadResult struct {
 	Variants []store.MediaVariant
 }
 
+// ErrMediaFilesNotRemoved reports a media delete that removed and committed
+// the database records but left files on disk. The media is gone for the
+// application, so callers treat the delete as done and log the leftover.
+var ErrMediaFilesNotRemoved = errors.New("media files not removed")
+
 // MediaService handles media file operations.
 type MediaService struct {
 	db                 *sql.DB
@@ -223,7 +228,8 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 	return &result, nil
 }
 
-// Delete removes a media item and its files.
+// Delete removes a media item and its files. An error wrapping
+// ErrMediaFilesNotRemoved means the records are gone but files remain.
 func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -236,8 +242,16 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr err
 		if !committed {
 			resultErr = errors.Join(resultErr, tx.Rollback())
 		}
-		if uploadRoot != nil {
-			resultErr = errors.Join(resultErr, uploadRoot.Close())
+		if uploadRoot == nil {
+			return
+		}
+		if err := uploadRoot.Close(); err != nil {
+			if !committed {
+				resultErr = errors.Join(resultErr, err)
+				return
+			}
+			// The records are gone; a failed close does not undo the delete.
+			slog.Warn("failed to close uploads directory after media delete", "error", err, "media_id", mediaID)
 		}
 	}()
 
@@ -285,7 +299,7 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr err
 			remove = imaging.DeleteMediaFilesFromRoot
 		}
 		if err := remove(uploadRoot, media.Uuid); err != nil {
-			return fmt.Errorf("failed to delete media files: %w", err)
+			return fmt.Errorf("%w: %w", ErrMediaFilesNotRemoved, err)
 		}
 	}
 

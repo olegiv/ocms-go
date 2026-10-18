@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -223,5 +224,107 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 				t.Errorf("the dry run never reached %q in order; it ran:\n%s", want[next], strings.Join(commands, "\n"))
 			}
 		})
+	}
+}
+
+// TestDeployMultiKeepsGoingAfterAFailure runs deploy-multi.sh, with its paths
+// moved to a temporary directory and stubs for systemctl, ocmsctl, curl,
+// sleep and file, over three sites: site_a fails to start and site_c fails
+// to stop. The script must still start site_b, leave site_c alone, report
+// both failures and exit 1. Under set -e alone, the first failure ended the
+// script, leaving every site it had stopped but not yet started down.
+//
+// Bug state: drop the `if !` around `systemctl start` or `"$OCMSCTL" stop`
+// and this fails.
+func TestDeployMultiKeepsGoingAfterAFailure(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	scripts, stubs, bin := filepath.Join(tmp, "scripts"), filepath.Join(tmp, "stubs"), filepath.Join(tmp, "bin")
+	for _, dir := range []string{scripts, stubs, bin} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(path, content string, mode os.FileMode) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(content), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src, err := os.ReadFile(filepath.Join(root, "scripts", "deploy", "deploy-multi.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(src)
+	for old, replacement := range map[string]string{
+		`BINARY_PATH="/opt/ocms/bin/ocms"`:        `BINARY_PATH="` + filepath.Join(bin, "ocms") + `"`,
+		`BACKUP_PATH="/opt/ocms/bin/ocms.backup"`: `BACKUP_PATH="` + filepath.Join(bin, "ocms.backup") + `"`,
+		`OCMSCTL="/opt/ocms/bin/ocmsctl"`:         `OCMSCTL="` + filepath.Join(stubs, "ocmsctl") + `"`,
+		`SITES_CONF="/etc/ocms/sites.conf"`:       `SITES_CONF="` + filepath.Join(tmp, "sites.conf") + `"`,
+		`HEALTH_RETRIES=10`:                       `HEALTH_RETRIES=1`,
+		`if [ "$EUID" -ne 0 ]; then`:              `if false; then`,
+	} {
+		if strings.Count(script, old) != 1 {
+			t.Fatalf("deploy-multi.sh no longer has exactly one %q to redirect for the test", old)
+		}
+		script = strings.Replace(script, old, replacement, 1)
+	}
+	write(filepath.Join(scripts, "deploy-multi.sh"), script, 0o755)
+	helper, err := os.ReadFile(filepath.Join(root, "scripts", "deploy", "helper.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(filepath.Join(scripts, "helper.sh"), string(helper), 0o644)
+
+	calls := filepath.Join(tmp, "calls.log")
+	write(filepath.Join(stubs, "systemctl"), `#!/bin/sh
+echo "systemctl $*" >> "`+calls+`"
+[ "$2" != "ocms@site_a" ]
+`, 0o755)
+	write(filepath.Join(stubs, "ocmsctl"), `#!/bin/sh
+echo "ocmsctl $*" >> "`+calls+`"
+[ "$2" != "site_c" ]
+`, 0o755)
+	write(filepath.Join(stubs, "curl"), "#!/bin/sh\nexit 0\n", 0o755)
+	write(filepath.Join(stubs, "sleep"), "#!/bin/sh\nexit 0\n", 0o755)
+	write(filepath.Join(stubs, "file"), "#!/bin/sh\necho \"$1: ELF 64-bit LSB executable\"\n", 0o755)
+	write(filepath.Join(tmp, "sites.conf"), "site_a /srv/a ocms 8001\nsite_b /srv/b ocms 8002\nsite_c /srv/c ocms 8003\n", 0o644)
+	write(filepath.Join(bin, "ocms"), "old", 0o755)
+	newBinary := filepath.Join(tmp, "ocms-new")
+	write(newBinary, "new", 0o755)
+
+	cmd := exec.Command(bash, filepath.Join(scripts, "deploy-multi.sh"), newBinary) // #nosec G204 -- copy of a repository script
+	cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + tmp}
+	out, err := cmd.CombinedOutput()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("deploy-multi.sh: %v, want exit status 1\n%s", err, out)
+	}
+	logged, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"systemctl start ocms@site_a", "systemctl start ocms@site_b"} {
+		if !strings.Contains(string(logged), want) {
+			t.Errorf("the script never ran %q; it ran:\n%s\noutput:\n%s", want, logged, out)
+		}
+	}
+	if strings.Contains(string(logged), "ocms@site_c") {
+		t.Errorf("the script started site_c, which did not stop:\n%s", logged)
+	}
+	for _, site := range []string{"site_a", "site_c"} {
+		if !strings.Contains(string(out), "  - "+site+"\n") {
+			t.Errorf("the failure report does not list %s:\n%s", site, out)
+		}
+	}
+	if installed, err := os.ReadFile(filepath.Join(bin, "ocms")); err != nil || string(installed) != "new" {
+		t.Errorf("installed binary = %q, %v; want the new one", installed, err)
 	}
 }

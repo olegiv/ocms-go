@@ -307,7 +307,7 @@ sudo /opt/ocms/deploy-multi.sh /tmp/ocms
 
 For development builds, replace the release download with `make build-linux-amd64`.
 
-This backs up the current binary to `/opt/ocms/bin/ocms.backup`, installs the new binary as `/opt/ocms/bin/ocms` while the sites still run (renaming it into place, so a failed install stops nothing), stops every site in `sites.conf` with `ocmsctl stop` (through systemd or its PID file, whichever runs it), starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). On failure it prints rollback instructions; on success it deletes the uploaded binary.
+This backs up the current binary to `/opt/ocms/bin/ocms.backup`, installs the new binary as `/opt/ocms/bin/ocms` while the sites still run (renaming it into place, so a failed install stops nothing), stops every site in `sites.conf` with `ocmsctl stop` (through systemd or its PID file, whichever runs it), starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). A site that fails to stop or start is reported as failed and the others carry on; a site that did not stop is not started, because its old process may still be running. On failure it prints rollback instructions; on success it deletes the uploaded binary.
 
 Or manually:
 ```bash

@@ -6,9 +6,14 @@ package media_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,7 +105,7 @@ func TestFailedMediaDeleteSendsNoWebhookEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	row, err := queries.CreateMedia(ctx, store.CreateMediaParams{
-		Uuid: "u-1", Filename: "a.png", MimeType: "image/png", Size: 1, UploadedBy: uploader.ID, LanguageCode: "en",
+		Uuid: "11111111-1111-4111-8111-111111111111", Filename: "a.png", MimeType: "image/png", Size: 1, UploadedBy: uploader.ID, LanguageCode: "en",
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -110,10 +115,59 @@ func TestFailedMediaDeleteSendsNoWebhookEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	writer := v2.Actor{APIKey: &store.ApiKey{ID: 1, CreatedBy: uploader.ID}, Permissions: []string{model.PermissionMediaWrite}}
-	if err := svc.Delete(ctx, writer, row.ID); err == nil {
-		t.Fatal("the delete succeeded; the trigger did not refuse it and this test is vacuous")
+	if err := svc.Delete(ctx, writer, row.ID); err == nil || !strings.Contains(fmt.Sprint(errors.Unwrap(err)), "probe") {
+		t.Fatalf("Delete() = %v; the trigger did not refuse it and this test is vacuous", err)
 	}
 	if events := recorder.Events(); len(events) != 0 {
 		t.Errorf("events = %+v, want none for a delete that failed", events)
+	}
+}
+
+// TestMediaDeleteWithFilesLeftSendsWebhookEvent deletes, through the REST
+// media service, media whose files cannot be removed. The database records
+// are gone, so the delete must succeed and send media.deleted: it answered
+// 500 and sent nothing, though the media no longer existed.
+//
+// Bug state: in media.Service.Delete, return an internal error for
+// ErrMediaFilesNotRemoved and this fails.
+func TestMediaDeleteWithFilesLeftSendsWebhookEvent(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	uploadDir := t.TempDir()
+	svc := media.NewService(db, queries, nil, uploadDir)
+	recorder := &testutil.WebhookRecorder{}
+	svc.SetWebhookDispatcher(recorder)
+	ctx := context.Background()
+	now := time.Now()
+	uploader, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "media@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "Media", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const uuid = "22222222-2222-4222-8222-222222222222"
+	row, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+		Uuid: uuid, Filename: "file.pdf", MimeType: model.MimeTypePDF, Size: 3, UploadedBy: uploader.ID, LanguageCode: "en",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirs := testutil.LockMediaFiles(t, uploadDir, uuid)
+
+	writer := v2.Actor{APIKey: &store.ApiKey{ID: 1, CreatedBy: uploader.ID}, Permissions: []string{model.PermissionMediaWrite}}
+	if err := svc.Delete(ctx, writer, row.ID); err != nil {
+		t.Fatalf("Delete() = %v, want success: the records are gone", err)
+	}
+	if _, err := os.Stat(dirs[0]); err != nil {
+		t.Fatalf("%s is gone (%v): the removal did not fail and this test is vacuous", dirs[0], err)
+	}
+	if _, err := queries.GetMediaByID(ctx, row.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("media lookup = %v, want it deleted", err)
+	}
+	events := recorder.Events()
+	if len(events) != 1 || events[0].Type != model.EventMediaDeleted {
+		t.Errorf("sent %+v, want media.deleted", events)
 	}
 }

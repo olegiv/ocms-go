@@ -787,6 +787,50 @@ func TestUnpublishPageClearsScheduledAt(t *testing.T) {
 	}
 }
 
+// TestPublishToggleQueriesMatchOnlyTheOtherStatus checks that the admin
+// publish toggle's queries change only a page with the status the toggle
+// read: publishing a published page, or unpublishing a draft, matches no
+// row. Without that, a toggle racing the scheduler published the page a
+// second time and sent page.published twice.
+//
+// Bug state: drop the status condition from PublishUnpublishedPage or
+// UnpublishPage and this fails.
+func TestPublishToggleQueriesMatchOnlyTheOtherStatus(t *testing.T) {
+	_, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+
+	user := createTestUser(t, q, ctx, "author@example.com")
+	langCode := getDefaultLangCode(t, q, ctx)
+	now := time.Now()
+	create := func(slug, status string) Page {
+		t.Helper()
+		page, err := q.CreatePage(ctx, CreatePageParams{
+			Title: slug, Slug: slug, Body: "b", Status: status, AuthorID: user.ID, LanguageCode: langCode,
+			CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreatePage: %v", err)
+		}
+		return page
+	}
+
+	published := create("already-published", "published")
+	if _, err := q.PublishUnpublishedPage(ctx, PublishUnpublishedPageParams{
+		ID: published.ID, PublishedAt: sql.NullTime{Time: now, Valid: true}, UpdatedAt: now,
+	}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("PublishUnpublishedPage(published page) error = %v, want sql.ErrNoRows", err)
+	}
+	draft := create("still-draft", "draft")
+	if _, err := q.UnpublishPage(ctx, UnpublishPageParams{ID: draft.ID, UpdatedAt: now}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("UnpublishPage(draft) error = %v, want sql.ErrNoRows", err)
+	}
+	if got, err := q.PublishUnpublishedPage(ctx, PublishUnpublishedPageParams{
+		ID: draft.ID, PublishedAt: sql.NullTime{Time: now, Valid: true}, UpdatedAt: now,
+	}); err != nil || got.Status != "published" {
+		t.Errorf("PublishUnpublishedPage(draft) = %q, %v; want it published", got.Status, err)
+	}
+}
+
 // Phase 2 Tests
 
 // Tag CRUD Tests

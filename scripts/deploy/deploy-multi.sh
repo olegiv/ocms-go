@@ -119,23 +119,40 @@ mv -f "${BINARY_PATH}.new" "$BINARY_PATH"
 # its binary failed ("Text file busy"), and with the rename above the new
 # binary would migrate its database, fail to listen and restart-loop while
 # the health check reached the old process.
+# A site that fails to stop or start is reported and the loop goes on: with
+# set -e alone, one failure ended the script, leaving every site it had
+# stopped but not yet started down. A site that did not stop is not started,
+# because its old process may still answer the health check.
 echo_info "Stopping all instances..."
-for site_id in "${SITE_IDS[@]}"; do
+declare -a FAILED_SITES
+declare -a STOP_FAILED
+for i in "${!SITE_IDS[@]}"; do
+    site_id="${SITE_IDS[$i]}"
     echo "  Stopping $site_id..."
-    "$OCMSCTL" stop "$site_id"
+    if ! "$OCMSCTL" stop "$site_id"; then
+        echo_error "Could not stop $site_id; not starting it. Check it with: $OCMSCTL status $site_id"
+        STOP_FAILED[i]=1
+        FAILED_SITES+=("$site_id")
+    fi
 done
 
 # --- Start all instances and health check ---
 
 echo_info "Starting all instances..."
-declare -a FAILED_SITES
 
 for i in "${!SITE_IDS[@]}"; do
     site_id="${SITE_IDS[$i]}"
     port="${SITE_PORTS[$i]}"
+    if [ -n "${STOP_FAILED[$i]:-}" ]; then
+        continue
+    fi
 
     echo -n "  Starting ocms@$site_id (port $port)... "
-    systemctl start "ocms@${site_id}"
+    if ! systemctl start "ocms@${site_id}"; then
+        echo -e "${RED}FAILED${NC} (systemctl start)"
+        FAILED_SITES+=("$site_id")
+        continue
+    fi
     sleep 2
 
     if health_check "$port"; then

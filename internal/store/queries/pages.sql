@@ -33,10 +33,19 @@ SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
+-- name: PublishUnpublishedPage :one
+-- Publishes the page only while it is not published, so a request that read
+-- it as a draft cannot publish it a second time after the scheduler did.
+UPDATE pages
+SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
+WHERE id = ? AND status <> 'published'
+RETURNING *;
+
 -- name: UnpublishPage :one
+-- Unpublishes the page only while it is published.
 UPDATE pages
 SET status = 'draft', published_at = NULL, scheduled_at = NULL, updated_at = ?
-WHERE id = ?
+WHERE id = ? AND status = 'published'
 RETURNING *;
 
 -- name: DeletePage :exec
@@ -224,9 +233,12 @@ WHERE scheduled_at IS NOT NULL AND scheduled_at <= ? AND status = 'draft'
 ORDER BY scheduled_at;
 
 -- name: PublishScheduledPage :one
+-- Publishes the page only while it is still a draft scheduled by the given
+-- time, so a page published, unscheduled or rescheduled to a later time
+-- after the scheduler listed it is left alone.
 UPDATE pages
 SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
-WHERE id = ?
+WHERE id = ? AND status = 'draft' AND scheduled_at IS NOT NULL AND scheduled_at <= ?
 RETURNING *;
 
 -- name: ClearPageScheduledAt :exec
