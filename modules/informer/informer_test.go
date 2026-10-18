@@ -289,6 +289,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	m := New()
 	for _, migration := range m.Migrations() {
@@ -433,6 +434,7 @@ func TestMigrationUpDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 	defer func() { _ = db.Close() }()
 
 	m := New()
@@ -470,6 +472,7 @@ func TestMigrationV2UpDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 	defer func() { _ = db.Close() }()
 
 	m := New()
@@ -522,6 +525,7 @@ func TestLoadSettingsNoTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 	defer func() { _ = db.Close() }()
 
 	_, err = loadSettings(db)

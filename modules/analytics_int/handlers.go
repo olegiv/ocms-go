@@ -66,7 +66,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	dateRange, startDate, endDate := parseDateRangeParam(r)
 
 	// Fetch all dashboard data, retrying settings that failed to load
-	settingsLoaded := m.ensureSettingsLoaded() == nil
+	settingsLoaded := m.retrySettingsLoad() == nil
 	settings := m.settingsSnapshot()
 	viewData := AnalyticsIntViewData{
 		Overview:     m.getOverviewStats(r.Context(), startDate, endDate),

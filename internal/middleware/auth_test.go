@@ -199,6 +199,7 @@ func newLoadUserTestSetup(t *testing.T, userSessionVersion int64) (*sql.DB, *scs
 	if err != nil {
 		t.Fatalf("sql.Open: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 
 	if _, err := db.Exec(`

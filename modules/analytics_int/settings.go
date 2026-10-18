@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -147,7 +148,7 @@ func (m *Module) ReloadSettings() error {
 		return err
 	}
 	m.storeSettings(settings)
-	m.settingsLoaded.Store(true)
+	m.reload.MarkLoaded()
 	return nil
 }
 
@@ -157,17 +158,44 @@ func (m *Module) ReloadSettings() error {
 var errSettingsNotLoaded = errors.New("analytics_int settings are not loaded")
 
 // ensureSettingsLoaded returns nil when the stored settings are in effect,
-// reloading them first if startup could not read them, and the reload error
-// otherwise. Code that would act on fallback values, such as deleting data
-// past the retention period or saving the settings form, runs only when it
-// returns nil.
+// reloading them at once if startup could not read them, and otherwise the
+// reload error wrapped in errSettingsNotLoaded. It does not wait for or
+// reset the retry interval. The weekly expiry cleanup calls it, and so does
+// a save that passes the fallback-form check, since both act on the result.
 func (m *Module) ensureSettingsLoaded() error {
-	if m.settingsLoaded.Load() {
+	if m.reload.Loaded() {
 		return nil
 	}
-	if err := m.ReloadSettings(); err != nil {
+	return m.logSettingsReload(m.ReloadSettings())
+}
+
+// retrySettingsLoad returns nil when the stored settings are in effect,
+// reloading them first if startup could not read them and the gate has not
+// tried within its interval (module.SettingsRetryInterval unless
+// RetryInterval is set); ensureSettingsLoaded's reloads do not count. It
+// returns errSettingsNotLoaded otherwise, wrapping the reload error when a
+// reload failed. The hourly aggregation and the dashboard call it, so
+// settings that stay unreadable are queried and logged at most once per
+// interval.
+func (m *Module) retrySettingsLoad() error {
+	if m.reload.Loaded() {
+		return nil
+	}
+	loaded, err := m.reload.Retry(m.ReloadSettings)
+	if !loaded && err == nil {
+		// Tried within the interval, or another caller's retry is running.
+		return errSettingsNotLoaded
+	}
+	return m.logSettingsReload(err)
+}
+
+// logSettingsReload logs the outcome of a reload of settings that were not
+// loaded: it returns nil on success, logged at Info, and otherwise the
+// error, logged at Warn and wrapped in errSettingsNotLoaded.
+func (m *Module) logSettingsReload(err error) error {
+	if err != nil {
 		m.ctx.Logger.Warn("analytics_int settings still cannot be read", "error", err)
-		return err
+		return fmt.Errorf("%w: %w", errSettingsNotLoaded, err)
 	}
 	m.ctx.Logger.Info("analytics_int settings loaded; tracking follows them again")
 	return nil

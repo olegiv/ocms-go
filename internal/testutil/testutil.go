@@ -146,6 +146,10 @@ func MinimalThemeFuncMap() template.FuncMap {
 
 // TestMemoryDB creates an in-memory SQLite database for testing.
 // Useful for tests that don't need persistent storage or migrations.
+// It keeps a single connection: each connection to ":memory:" opens its own
+// empty database, so a second pooled connection would not see the schema.
+// With one connection, a query made while *sql.Rows or a transaction is
+// still open on the same database waits forever.
 func TestMemoryDB(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -153,5 +157,6 @@ func TestMemoryDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 	return db
 }

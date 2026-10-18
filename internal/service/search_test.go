@@ -331,6 +331,7 @@ func searchTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	// Create minimal pages table matching the columns SearchAdminPages returns
 	_, err = db.Exec(`

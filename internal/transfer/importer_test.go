@@ -546,6 +546,7 @@ func TestImporter_Integration(t *testing.T) {
 	if err != nil {
 		t.Skip("sqlite3 not available")
 	}
+	db.SetMaxOpenConns(1)
 	defer func() { _ = db.Close() }()
 
 	importer := NewImporter(nil, db, nil)

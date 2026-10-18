@@ -58,7 +58,7 @@ do not see those forms, and their requests get `403 Forbidden`.
 
 IPs in `excluded_ips` are silently dropped before any data is written — useful for internal pen-testing and monitoring traffic.
 
-If the stored settings cannot be read at startup (a database error), the module logs an error and runs on fallback values with tracking off. It does not act on those values: expiry cleanup is skipped (logged as a failed run in the Event Log; a manual trigger reports it), salt saves are skipped, and the dashboard shows a warning and disables saving; a form rendered from the fallback is refused even after the settings recover. Aggregation and the 7-day raw-data cleanup keep running. The hourly aggregation job, each dashboard view and each save retry the load, and tracking follows the stored settings again once it succeeds.
+If the stored settings cannot be read at startup (a database error), the module logs an error and runs on fallback values with tracking off. It does not act on those values: expiry cleanup is skipped (logged as a failed run in the Event Log; a manual trigger reports it), salt saves are skipped, and the dashboard shows a warning and disables saving; a form rendered from the fallback is refused even after the settings recover. Aggregation and the 7-day raw-data cleanup keep running. The hourly aggregation job and the dashboard retry the load at most once a minute, the weekly expiry cleanup retries it at once, and tracking follows the stored settings again once it succeeds; saving stays disabled until then.
 
 ### Self-referral filtering
 

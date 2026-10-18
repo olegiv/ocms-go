@@ -4,9 +4,11 @@
 package analytics_int
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -161,25 +163,7 @@ func TestModuleInit(t *testing.T) {
 // used to enable tracking and save its defaults with a fresh salt, so one
 // failed read switched tracking back on for good.
 func TestInitKeepsStoredSettingsWhenLoadFails(t *testing.T) {
-	db, cleanup := testutil.TestDB(t)
-	defer cleanup()
-	m := New()
-	moduleutil.RunMigrations(t, db, m.Migrations())
-	// Tracking off, with a timestamp that cannot be scanned, so loading fails.
-	if _, err := db.Exec(`UPDATE page_analytics_settings
-		SET enabled = 0, retention_days = 30, current_salt = '', salt_created_at = 'not a time'
-		WHERE id = 1`); err != nil {
-		t.Fatal(err)
-	}
-	ctx, _ := moduleutil.TestModuleContextWithStore(t, db)
-	m.ctx = ctx
-	if _, err := m.loadSettings(); err == nil {
-		t.Fatal("loadSettings accepted a malformed timestamp; the test no longer exercises a failed load")
-	}
-	if err := m.Init(ctx); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-	defer func() { _ = m.Shutdown() }()
+	m, db, _ := initWithUnreadableSettings(t, time.Nanosecond)
 
 	if m.IsEnabled() {
 		t.Error("tracking is on after the settings failed to load")
@@ -256,6 +240,7 @@ func TestInitKeepsStoredSettingsWhenLoadFails(t *testing.T) {
 	if retention != 30 {
 		t.Errorf("retention = %d: a form rendered from fallback values replaced the recovered settings", retention)
 	}
+	time.Sleep(time.Millisecond) // past the retry interval
 	if err := m.aggregateHourly(context.Background()); err != nil {
 		t.Fatalf("aggregateHourly: %v", err)
 	}
@@ -267,6 +252,99 @@ func TestInitKeepsStoredSettingsWhenLoadFails(t *testing.T) {
 	}
 	if countDaily() != 0 {
 		t.Error("expiry cleanup did not apply the stored retention once the settings loaded")
+	}
+}
+
+// initWithUnreadableSettings initializes the module over stored settings it
+// cannot read (tracking off, 30-day retention, a timestamp that does not
+// scan), retrying the load at most once per retry interval. It returns the
+// buffer the module logs to.
+func initWithUnreadableSettings(t *testing.T, retry time.Duration) (*Module, *sql.DB, *bytes.Buffer) {
+	t.Helper()
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	m := New()
+	m.reload.RetryInterval = retry
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	if _, err := db.Exec(`UPDATE page_analytics_settings
+		SET enabled = 0, retention_days = 30, current_salt = '', salt_created_at = 'not a time'
+		WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	ctx, _ := moduleutil.TestModuleContextWithStore(t, db)
+	logs := &bytes.Buffer{}
+	ctx.Logger = slog.New(slog.NewTextHandler(logs, nil))
+	m.ctx = ctx
+	if _, err := m.loadSettings(); err == nil {
+		t.Fatal("loadSettings accepted a malformed timestamp; the test no longer exercises a failed load")
+	}
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	t.Cleanup(func() { _ = m.Shutdown() })
+	return m, db, logs
+}
+
+// TestSettingsRetriesFollowTheirInterval checks which callers wait out the
+// retry interval for unreadable settings. The dashboard and the hourly job
+// retry at most once per interval, as hCaptcha and Privacy do; the dashboard
+// used to reload on every view, querying the database and logging a warning
+// each time. The weekly expiry cleanup reloads at once, because it starts in
+// the same scheduler tick as the hourly job and would otherwise find that
+// job's retry and skip a week. A save reloads at once too.
+//
+// Bug state: make handleDashboard or aggregateHourly call
+// ensureSettingsLoaded, or cleanupExpiredData or handleSaveSettings call
+// retrySettingsLoad, and this fails.
+func TestSettingsRetriesFollowTheirInterval(t *testing.T) {
+	m, db, logs := initWithUnreadableSettings(t, time.Hour)
+	failures := func() int { return strings.Count(logs.String(), "analytics_int settings still cannot be read") }
+	admin := store.User{ID: 1, Email: "admin@test.com", Role: model.RoleAdmin}
+	for range 3 {
+		req := httptest.NewRequest(http.MethodGet, "/admin/internal-analytics", nil)
+		req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, admin))
+		rr := httptest.NewRecorder()
+		m.handleDashboard(rr, req)
+		if !strings.Contains(rr.Body.String(), `name="from_fallback"`) {
+			t.Fatal("the dashboard does not mark its settings form while the settings are unreadable")
+		}
+	}
+	if n := failures(); n != 1 {
+		t.Errorf("three dashboard views logged %d failed reloads, want 1 within the retry interval", n)
+	}
+	if err := m.aggregateHourly(context.Background()); err != nil {
+		t.Fatalf("aggregateHourly: %v", err)
+	}
+	if n := failures(); n != 1 {
+		t.Errorf("the hourly job after the views brought the failed reloads to %d, want it to wait out the interval", n)
+	}
+
+	oldDate := time.Now().AddDate(0, 0, -400).Format(dateFormat)
+	if _, err := db.Exec(`INSERT INTO page_analytics_daily (date, path, views) VALUES (?, '/old', 1)`, oldDate); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.cleanupExpiredData(context.Background()); !errors.Is(err, errSettingsNotLoaded) {
+		t.Errorf("cleanupExpiredData = %v, want errSettingsNotLoaded", err)
+	}
+	if n := failures(); n != 2 {
+		t.Errorf("the cleanup brought the failed reloads to %d, want 2: it must reload at once", n)
+	}
+
+	// Repaired within the interval: the save reloads at once and goes through.
+	if _, err := db.Exec(`UPDATE page_analytics_settings SET salt_created_at = CURRENT_TIMESTAMP WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"retention_days": {"60"}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/internal-analytics/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, admin))
+	m.handleSaveSettings(httptest.NewRecorder(), req)
+	var retention int
+	if err := db.QueryRow(`SELECT retention_days FROM page_analytics_settings WHERE id = 1`).Scan(&retention); err != nil {
+		t.Fatal(err)
+	}
+	if retention != 60 {
+		t.Errorf("retention = %d after a save once the row was repaired, want 60: the save must reload at once", retention)
 	}
 }
 

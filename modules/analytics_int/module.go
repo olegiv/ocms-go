@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/robfig/cron/v3"
@@ -43,12 +42,14 @@ type Module struct {
 	// access takes the lock.
 	settingsMu sync.RWMutex
 
-	// settingsLoaded is false while the stored settings cannot be read. The
-	// module then runs on fallback values with tracking off, and nothing that
-	// would act on them runs (expiry cleanup, salt saves, settings saves)
-	// until ensureSettingsLoaded succeeds; the hourly job, each dashboard view
-	// and each settings save retry it.
-	settingsLoaded atomic.Bool
+	// reload tracks whether the stored settings are in effect. While they
+	// cannot be read the module runs on fallback values with tracking off,
+	// and nothing that would act on them runs (expiry cleanup, salt saves,
+	// settings saves). The hourly aggregation and the dashboard retry the
+	// load at most once per module.SettingsRetryInterval
+	// (retrySettingsLoad); the weekly expiry cleanup and a settings save
+	// reload at once (ensureSettingsLoaded).
+	reload module.SettingsReloadGate
 
 	// bgWG tracks every goroutine the module starts, so Shutdown can wait for
 	// in-flight writes before the database and GeoIP reader close. bgCancel
@@ -75,13 +76,14 @@ func (m *Module) Init(ctx *module.Context) error {
 
 	// Load settings. If they cannot be read, run with tracking off and write
 	// nothing: the defaults would switch tracking on, and saving them with the
-	// new salt below would overwrite the administrator's stored settings. The
-	// hourly job, each dashboard view and each settings save retry the load
-	// (ensureSettingsLoaded).
+	// new salt below would overwrite the administrator's stored settings.
+	// The hourly aggregation, the expiry cleanup, the dashboard and settings
+	// saves retry the load (see reload).
 	settings, err := m.loadSettings()
 	loaded := err == nil
-	m.settingsLoaded.Store(loaded)
-	if !loaded {
+	if loaded {
+		m.reload.MarkLoaded()
+	} else {
 		ctx.Logger.Error("failed to load analytics_int settings; tracking is off until they load", "error", err)
 		settings = &Settings{
 			Enabled:           false,

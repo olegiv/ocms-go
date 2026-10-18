@@ -8,11 +8,16 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSQLiteFilePathFromDSN(t *testing.T) {
@@ -267,51 +272,218 @@ func containsReturn(stmt ast.Stmt) bool {
 	return found
 }
 
-// TestRunWaitsForServerFailures fails when run stops binding the listener
-// before it serves or stops waiting through waitForStop: a port that is taken
-// would then leave the process up with nothing listening.
+// TestRunServerLifecycle fails when run stops binding the listener before
+// it serves, stops serving through serveUntilStopped, registers for stop
+// signals only after the port opens, never stops catching them, or serves
+// with a channel other than the one the signals go to. A port that is taken
+// would leave the process up with nothing listening, and a signal sent as
+// the server starts answering would kill it without a graceful shutdown.
 //
-// Bug state: replace waitForStop(quit, serveErr) with <-quit and this fails.
-func TestRunWaitsForServerFailures(t *testing.T) {
+// Bug state: make serveUntilStopped wait on <-quit instead of calling
+// waitForStop, move signal.Notify below net.Listen, or pass
+// make(chan os.Signal, 1) to serveUntilStopped, and this fails.
+func TestRunServerLifecycle(t *testing.T) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "main.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	calls := map[string]bool{}
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "run" {
-			continue
-		}
+	// firstCalls maps each function fn calls to its first call.
+	firstCalls := func(fn *ast.FuncDecl) map[string]*ast.CallExpr {
+		found := map[string]*ast.CallExpr{}
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			if call, ok := n.(*ast.CallExpr); ok {
-				switch fun := call.Fun.(type) {
-				case *ast.Ident:
-					calls[fun.Name] = true
-				case *ast.SelectorExpr:
-					if pkg, ok := fun.X.(*ast.Ident); ok {
-						calls[pkg.Name+"."+fun.Sel.Name] = true
-					}
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			name := ""
+			switch fun := call.Fun.(type) {
+			case *ast.Ident:
+				name = fun.Name
+			case *ast.SelectorExpr:
+				if pkg, ok := fun.X.(*ast.Ident); ok {
+					name = pkg.Name + "." + fun.Sel.Name
 				}
+			}
+			if _, seen := found[name]; name != "" && !seen {
+				found[name] = call
 			}
 			return true
 		})
+		return found
 	}
-	for _, want := range []string{"net.Listen", "waitForStop"} {
-		if !calls[want] {
-			t.Errorf("run does not call %s", want)
+	var calls map[string]*ast.CallExpr
+	waits := false
+	for _, decl := range file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "run" {
+			calls = firstCalls(fn)
+		} else if ok && fn.Name.Name == "serveUntilStopped" {
+			_, waits = firstCalls(fn)["waitForStop"]
+		}
+	}
+	if !waits {
+		t.Error("serveUntilStopped does not wait through waitForStop")
+	}
+	for _, want := range []string{"net.Listen", "serveUntilStopped", "signal.Notify", "signal.Stop"} {
+		if calls[want] == nil {
+			t.Fatalf("run does not call %s", want)
+		}
+	}
+	if notify, listen := calls["signal.Notify"].Pos(), calls["net.Listen"].Pos(); notify > listen {
+		t.Errorf("run registers for stop signals at %s, after it opens the port at %s",
+			fset.Position(notify), fset.Position(listen))
+	}
+	// argName returns the identifier passed as argument i, or "".
+	argName := func(call *ast.CallExpr, i int) string {
+		if len(call.Args) > i {
+			if ident, ok := call.Args[i].(*ast.Ident); ok {
+				return ident.Name
+			}
+		}
+		return ""
+	}
+	signals := argName(calls["signal.Notify"], 0)
+	if served := argName(calls["serveUntilStopped"], 2); signals == "" || served != signals {
+		t.Errorf("run catches stop signals on %q but serves until %q receives one", signals, served)
+	}
+	if stopped := argName(calls["signal.Stop"], 0); stopped != signals {
+		t.Errorf("run stops catching signals on %q, not on %q", stopped, signals)
+	}
+}
+
+// TestWaitForStop checks how serving ends: a failure is returned without a
+// shutdown, a signal shuts down cleanly, a failed shutdown is reported, and
+// a failure that arrives together with a signal is still returned. That
+// last case used to exit as a clean stop, because only the signal was read.
+//
+// Bug state: return nil after shutdown instead of reading serveErr, and the
+// "failure during the shutdown" case fails.
+func TestWaitForStop(t *testing.T) {
+	failure := errors.New("accept: too many open files")
+	// served returns a serveErr channel for a server that has ended, with
+	// its failure if there was one.
+	served := func(err error) chan error {
+		ch := make(chan error, 1)
+		if err != nil {
+			ch <- err
+		}
+		close(ch)
+		return ch
+	}
+	signaled := func() chan os.Signal {
+		ch := make(chan os.Signal, 1)
+		ch <- os.Interrupt
+		return ch
+	}
+
+	shutdowns := 0
+	if err := waitForStop(make(chan os.Signal), served(failure), func() error { shutdowns++; return nil }); !errors.Is(err, failure) || shutdowns != 0 {
+		t.Errorf("failure: err = %v after %d shutdowns, want the failure and no shutdown", err, shutdowns)
+	}
+	shutdowns = 0
+	if err := waitForStop(signaled(), served(nil), func() error { shutdowns++; return nil }); err != nil || shutdowns != 1 {
+		t.Errorf("signal: err = %v after %d shutdowns, want nil after one", err, shutdowns)
+	}
+	stuck := errors.New("context deadline exceeded")
+	if err := waitForStop(signaled(), served(nil), func() error { return stuck }); !errors.Is(err, stuck) {
+		t.Errorf("failed shutdown: err = %v, want it reported", err)
+	}
+	// Only the signal is ready at first; the failure lands during the
+	// shutdown, as when Serve fails just as the signal arrives.
+	serveErr := make(chan error, 1)
+	if err := waitForStop(signaled(), serveErr, func() error {
+		serveErr <- failure
+		close(serveErr)
+		return nil
+	}); !errors.Is(err, failure) {
+		t.Errorf("failure during the shutdown: err = %v, want the failure", err)
+	}
+	// With both ready, select picks either; repeat so both branches run.
+	for i := range 100 {
+		if err := waitForStop(signaled(), served(failure), func() error { return nil }); !errors.Is(err, failure) {
+			t.Fatalf("failure with a signal, attempt %d: err = %v, want the failure", i, err)
+		}
+	}
+}
+
+// TestServeUntilStopped runs a real server: a stop signal waits for the
+// request in flight, then returns nil and closes the port, and a server
+// that cannot accept returns its error. A hang fails the test after ten
+// seconds instead of running into the test binary's timeout.
+//
+// Bug state: shut down with srv.Close instead of srv.Shutdown, or never
+// close serveErr, and this fails.
+func TestServeUntilStopped(t *testing.T) {
+	listen := func(t *testing.T) net.Listener {
+		t.Helper()
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return listener
+	}
+	serve := func(srv *http.Server, listener net.Listener, quit <-chan os.Signal) <-chan error {
+		done := make(chan error, 1)
+		go func() { done <- serveUntilStopped(srv, listener, quit) }()
+		return done
+	}
+	within := func(t *testing.T, what string, ch <-chan error) error {
+		t.Helper()
+		select {
+		case err := <-ch:
+			return err
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s did not happen within ten seconds", what)
+			return nil
 		}
 	}
 
+	listener := listen(t)
+	started, release := make(chan error), make(chan struct{})
+	srv := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		close(started)
+		<-release
+		_, _ = io.WriteString(w, "done")
+	})}
 	quit := make(chan os.Signal, 1)
-	serveErr := make(chan error, 1)
-	serveErr <- errors.New("bind: address already in use")
-	if err := waitForStop(quit, serveErr); err == nil {
-		t.Error("waitForStop returned nil for a server failure")
-	}
+	done := serve(srv, listener, quit)
+	answered := make(chan error, 1)
+	go func() {
+		resp, err := http.Get("http://" + listener.Addr().String() + "/")
+		if err != nil {
+			answered <- err
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+		body, err := io.ReadAll(resp.Body)
+		if err == nil && string(body) != "done" {
+			err = errors.New("unexpected body " + strconv.Quote(string(body)))
+		}
+		answered <- err
+	}()
+	_ = within(t, "the request reaching the handler", started)
 	quit <- os.Interrupt
-	if err := waitForStop(quit, make(chan error)); err != nil {
-		t.Errorf("waitForStop on a signal = %v, want nil", err)
+	select {
+	case err := <-done:
+		t.Fatalf("serveUntilStopped returned %v with a request in flight", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	if err := within(t, "the response", answered); err != nil {
+		t.Errorf("the request in flight during the stop: %v", err)
+	}
+	if err := within(t, "the stop", done); err != nil {
+		t.Fatalf("serveUntilStopped after a signal = %v, want nil", err)
+	}
+	if conn, err := net.Dial("tcp", listener.Addr().String()); err == nil {
+		_ = conn.Close()
+		t.Error("the server still accepts connections after a stop signal")
+	}
+
+	// A closed listener makes Serve fail at once, like an accept error.
+	listener = listen(t)
+	_ = listener.Close()
+	if err := within(t, "the failure", serve(&http.Server{ReadHeaderTimeout: time.Second}, listener, make(chan os.Signal))); err == nil {
+		t.Fatal("serveUntilStopped returned nil for a server that cannot accept")
 	}
 }

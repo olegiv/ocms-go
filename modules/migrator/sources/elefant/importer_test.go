@@ -95,6 +95,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	// Create users table
 	_, err = db.Exec(`
@@ -288,6 +289,7 @@ func TestImportUsersDoesNotCreateAfterOperationalLookupFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceDB.SetMaxOpenConns(1)
 	defer func() { _ = sourceDB.Close() }()
 	if _, err := sourceDB.Exec(`
 		CREATE TABLE user (id INTEGER PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL);
@@ -324,6 +326,7 @@ func TestImportTagsDoesNotCreateAfterOperationalLookupFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sourceDB.Close() })
 	if _, err := sourceDB.Exec(`
 		CREATE TABLE blog_tag (id TEXT PRIMARY KEY);
@@ -404,6 +407,7 @@ func TestSkipExistingPagesDoNotCreateAfterOperationalLookupFailure(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
+			sourceDB.SetMaxOpenConns(1)
 			t.Cleanup(func() { _ = sourceDB.Close() })
 			if _, err := sourceDB.Exec(tt.schema); err != nil {
 				t.Fatal(err)
@@ -436,6 +440,7 @@ func TestImportPagesPreservesSafeLegacyAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sourceDB.Close() })
 	if _, err := sourceDB.Exec(`
 		CREATE TABLE webpage (
@@ -499,6 +504,7 @@ func TestImportPagesRefusesLegacyAliasShadowedByExistingPageSlug(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sourceDB.Close() })
 	if _, err := sourceDB.Exec(`
 		CREATE TABLE webpage (
@@ -562,6 +568,7 @@ func TestImportPagesPreservesDefaultAliasBlockedOnlyByForeignLanguageSlug(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sourceDB.Close() })
 	if _, err := sourceDB.Exec(`
 		CREATE TABLE webpage (
@@ -631,6 +638,7 @@ func TestImportPagesUsesConcreteRedirectForActiveLanguagePrefixAlias(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sourceDB.Close() })
 	if _, err := sourceDB.Exec(`
 		CREATE TABLE webpage (
@@ -810,6 +818,7 @@ func TestImportContentDoesNotCreatePagesWhenReachableSlugsAreExhausted(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sourceDB.Close() })
 	if _, err := sourceDB.Exec(`
 		CREATE TABLE blog_post (
@@ -937,6 +946,7 @@ func TestLegacyAliasInsertFailuresAreReported(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			sourceDB.SetMaxOpenConns(1)
 			t.Cleanup(func() { _ = sourceDB.Close() })
 			if _, err := sourceDB.Exec(tt.sourceSchema); err != nil {
 				t.Fatal(err)

@@ -17,9 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A startup failure is logged before the error log file and the event log
   close, so it reaches `OCMS_ERROR_LOG_PATH` and, once the database is open,
   the Event Log too, not only stdout; a server that cannot listen (the port is
-  taken) now exits instead of staying up with nothing served. REST v2 error logs carry the
-  request ID, method and route. The database's WAL and shared-memory files
-  are made owner-only along with the database file.
+  taken) now exits instead of staying up with nothing served, and a serve
+  failure that arrives together with a stop signal is no longer reported as a
+  clean stop. Stop signals are caught before the port opens, so a signal sent
+  as the server starts gets a graceful shutdown. REST v2 error logs carry the
+  request ID, method and route. The database's WAL and
+  shared-memory files are made owner-only along with the database file.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
   so a later run can no longer commit other staged changes under it.
 - Editors now land at `/admin` after login. Public users land at `/account`;
@@ -35,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   admin-only; editors keep the statistics pages. If its settings cannot be read
   at startup, Internal Analytics now runs with tracking off, skips expiry
   cleanup (logged as a failed run), refuses settings saves and retries the
-  load from the hourly job, each dashboard view and each save; it used to
+  load at most once a minute from its hourly job and dashboard; it used to
   switch tracking on and save its defaults over the stored settings.
 - hCaptcha, Privacy and Informer settings are guarded by a lock too, so saving
   or reloading them no longer races with the pages that render them.
@@ -122,8 +125,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before it reaches `git`, and `/update-wiki` asks for approval before the wiki
   commit and again before the push.
 - The shared Claude Code tooling is updated: `/fly-deploy` and `/code-quality`
-  auto-approve only the commands they run, and `/fly-deploy` reads a
+  auto-approve only the commands they run, `/code-quality` allows the
+  documented `errcheck -ignoregenerated ./...`, and `/fly-deploy` reads a
   single-quoted app name from `fly.toml` correctly.
+- Claude Code sessions in this repository run the shared Go toolchain hook
+  (`.claude/settings.json`), which blocks Go builds and tests, including
+  `scripts/test-gate.sh` and `make`, when `go` and its compiler differ. It
+  needs the `.claude/shared` submodule (`git clone --recurse-submodules`).
+  `setup-go-toolchain.sh` stays opt-in because it replaces `/usr/local/go`.
+- Drift tests check that every literal translation key passed from Go code,
+  templ components and admin templates exists in English and Russian, and
+  that in-memory SQLite test databases keep a single connection.
 
 ### Changed
 

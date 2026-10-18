@@ -85,7 +85,7 @@ func (m *Module) getCurrentSalt() string {
 
 	// Save to database (ignore errors, will retry on next request). Fallback
 	// settings are never written over stored ones.
-	if !m.settingsLoaded.Load() {
+	if !m.reload.Loaded() {
 		return newSalt
 	}
 	if err := m.saveSalt(newSalt); err != nil {

@@ -318,15 +318,49 @@ func main() {
 	}
 }
 
-// waitForStop blocks until a stop signal arrives, returning nil, or the
-// server fails, returning its error.
-func waitForStop(quit <-chan os.Signal, serveErr <-chan error) error {
+// serveUntilStopped serves on listener until quit receives a signal or the
+// server fails. On a signal it shuts the server down gracefully, waiting up
+// to 30 seconds for requests in flight, and returns nil, or the shutdown or
+// serve error. A server that fails first is returned as it is, without a
+// shutdown.
+func serveUntilStopped(srv *http.Server, listener net.Listener, quit <-chan os.Signal) error {
+	// Serve's failure, if any, is sent before the channel closes; after
+	// Shutdown, Serve returns http.ErrServerClosed and the channel closes
+	// with nothing in it.
+	serveErr := make(chan error, 1)
+	go func() {
+		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- err
+		}
+		close(serveErr)
+	}()
+	return waitForStop(quit, serveErr, func() error {
+		slog.Info("shutting down server...")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return srv.Shutdown(ctx)
+	})
+}
+
+// waitForStop blocks until a stop signal arrives or the server fails.
+// serveErr carries Serve's failure, if any, and closes once Serve returns. A
+// failure that comes first is returned as it is, without a shutdown.
+// Otherwise (a signal, or serveErr closing empty) waitForStop calls shutdown
+// and returns its error wrapped; if shutdown succeeds it waits for serveErr
+// and returns the failure it carried, so a failure that arrived together
+// with the signal never exits as a clean stop.
+func waitForStop(quit <-chan os.Signal, serveErr <-chan error, shutdown func() error) error {
 	select {
 	case <-quit:
-		return nil
 	case err := <-serveErr:
-		return err
+		if err != nil {
+			return err
+		}
 	}
+	if err := shutdown(); err != nil {
+		return fmt.Errorf("server shutdown: %w", err)
+	}
+	return <-serveErr
 }
 
 // loggedRunError marks a run failure that run has already logged.
@@ -2394,21 +2428,21 @@ func run() (runErr error) {
 		MaxHeaderBytes:    1 << 20,          // 1MB max header size
 	}
 
+	// Catch stop signals before the port opens, so a signal sent once the
+	// server answers always shuts it down gracefully. Stop catching them when
+	// run returns, so a signal during the deferred cleanup ends the process
+	// as usual.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(quit)
+
 	// Bind before serving, so a port that is taken ends run with the error
-	// instead of leaving the process up with nothing listening; a later
-	// serve failure ends it through serveErr.
+	// instead of leaving the process up with nothing listening.
 	listener, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", cfg.ServerAddr(), err)
 	}
-	serveErr := make(chan error, 1)
-	go func() {
-		slog.Info("starting server", "addr", cfg.ServerAddr(), "env", cfg.Env)
-		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serveErr <- err
-		}
-	}()
-
+	slog.Info("starting server", "addr", cfg.ServerAddr(), "env", cfg.Env)
 	_ = eventService.LogSystemEvent(context.Background(), model.EventLevelInfo,
 		"Server started", nil, "", "", map[string]any{
 			"addr":    cfg.ServerAddr(),
@@ -2416,21 +2450,8 @@ func run() (runErr error) {
 			"version": appVersion,
 		})
 
-	// Wait for an interrupt signal, or for the server to fail
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	if err := waitForStop(quit, serveErr); err != nil {
+	if err := serveUntilStopped(srv, listener, quit); err != nil {
 		return fmt.Errorf("serving on %s: %w", cfg.ServerAddr(), err)
-	}
-
-	slog.Info("shutting down server...")
-
-	// Graceful shutdown with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		return fmt.Errorf("server shutdown: %w", err)
 	}
 
 	_ = eventService.LogSystemEvent(context.Background(), model.EventLevelInfo,
