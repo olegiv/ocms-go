@@ -336,7 +336,7 @@ Tools are thin adapters over the v2 domain services; their input/output schemas 
 
 **Public (unauthenticated):** Returns only `{"status":"healthy"}` or `{"status":"degraded"}` — no internal details exposed.
 
-**Authenticated (valid API key or editor session):** Adds timestamp, uptime and version.
+**Authenticated (editor session, or an API key the REST API accepts, its key policies and source CIDR rules included):** Adds timestamp, uptime and version.
 
 **Admin session:** Full details: database and disk checks and a security summary. Add `?verbose=true` for Go runtime info (goroutines, memory, CPU count).
 

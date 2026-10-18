@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
@@ -256,21 +255,15 @@ func (h *HealthHandler) isAuthenticated(r *http.Request) bool {
 		}
 	}
 
-	// Check API key auth (Bearer token)
-	authHeader := r.Header.Get("Authorization")
-	if authHeader != "" {
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
-			rawKey := parts[1]
-			key, outcome, err := middleware.VerifyAPIKey(r.Context(), h.queries, rawKey)
-			if err == nil && outcome == middleware.APIKeyVerified && key.IsActive &&
-				(!key.ExpiresAt.Valid || !time.Now().After(key.ExpiresAt.Time)) {
-				return true
-			}
-		}
+	// API key auth (Bearer token), with every key policy the API applies:
+	// production starts while keys break a policy, so a key the API
+	// refuses must not authenticate here either. An anonymous probe skips
+	// it, as the API's checks log a warning for a client outside
+	// OCMS_API_ALLOWED_CIDRS.
+	if r.Header.Get("Authorization") == "" {
+		return false
 	}
-
-	return false
+	return middleware.ValidAPIKey(r, h.queries) != nil
 }
 
 // checkSessionAuth checks if the request has a valid admin/editor session.

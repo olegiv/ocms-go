@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -563,5 +565,69 @@ func TestHealthHandler_IsAuthenticated_MalformedAuth(t *testing.T) {
 				t.Errorf("malformed auth %q should not grant access to detailed response", tt.header)
 			}
 		})
+	}
+}
+
+// TestHealthHandler_KeyOutsidePolicyIsPublic checks that a key the API
+// refuses under a key policy, here a lifetime over OCMS_API_KEY_MAX_TTL_DAYS,
+// gets only the public health answer. Production starts while such keys
+// exist, and /health checked only that a key was active and unexpired
+// (local Codex review of the start-check change).
+//
+// Bug state: authenticate /health with VerifyAPIKey and the active and
+// expiry checks again, and this fails.
+func TestHealthHandler_KeyOutsidePolicyIsPublic(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	rawKey := createTestAPIKey(t, handler)
+	if _, err := handler.db.Exec(`UPDATE api_keys SET expires_at = ?`, time.Now().AddDate(1, 0, 0)); err != nil {
+		t.Fatal(err)
+	}
+	authenticated := func() bool {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		addAPIKeyAuth(req, rawKey)
+		w := httptest.NewRecorder()
+		handler.Health(w, req)
+		var resp HealthStatus
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+		return resp.Uptime != ""
+	}
+
+	if !authenticated() {
+		t.Fatal("a key within the policies did not authenticate; the test is vacuous")
+	}
+	middleware.SetAPIKeyMaxTTLDays(90)
+	t.Cleanup(func() { middleware.SetAPIKeyMaxTTLDays(0) })
+	if authenticated() {
+		t.Error("a key whose lifetime exceeds OCMS_API_KEY_MAX_TTL_DAYS got the authenticated health answer")
+	}
+}
+
+// TestHealthHandler_AnonymousProbeLogsNothing checks that a /health probe
+// without an Authorization header from outside OCMS_API_ALLOWED_CIDRS gets
+// the public answer without logging an API key warning: monitoring probes
+// would fill the log and the Event Log (local Codex review of the
+// start-check change).
+//
+// Bug state: drop the Authorization header check before ValidAPIKey in
+// isAuthenticated and this fails.
+func TestHealthHandler_AnonymousProbeLogsNothing(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	if err := middleware.SetAPIAllowedCIDRs([]string{"10.0.0.0/8"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = middleware.SetAPIAllowedCIDRs(nil) })
+	logs := captureLogs(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.RemoteAddr = "192.0.2.10:4321"
+	w := httptest.NewRecorder()
+	handler.Health(w, req)
+
+	assertStatus(t, w.Code, http.StatusOK)
+	if strings.Contains(logs.String(), "API key auth blocked") {
+		t.Errorf("an anonymous probe logged an API key warning:\n%s", logs.String())
 	}
 }
