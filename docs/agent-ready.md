@@ -19,7 +19,7 @@ request to the homepage. The checks are those exercised by
 | MCP Server Card | `/.well-known/mcp/server-card.json` | draft SEP-1649 while the MCP module is active |
 | Security contact | `/.well-known/security.txt` | RFC 9116 (unrelated, included for completeness) |
 
-The Link header advertises three relations:
+The `Link` header on `GET /` advertises three relations:
 
 - `rel="api-catalog"` → `/.well-known/api-catalog`
 - `rel="service-desc"` → `/api/v2/openapi.json`

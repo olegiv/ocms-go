@@ -630,11 +630,19 @@ func (r *Registry) loadModuleTranslations(m Module) error {
 	return nil
 }
 
-// ShutdownAll shuts down all modules in reverse order.
+// minShutdownWait is the least ShutdownAll waits for a module's Shutdown
+// once ShutdownTimeout is spent, so quick ones after a slow one still run.
+const minShutdownWait = 100 * time.Millisecond
+
+// ShutdownAll shuts down all modules in reverse order, within ShutdownTimeout
+// together: each Shutdown is waited for only what is left of it (at least
+// minShutdownWait). One still running then, or one that panics, is reported
+// as an error and left behind, and the next module goes ahead.
 func (r *Registry) ShutdownAll() error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	deadline := time.Now().Add(ShutdownTimeout)
 	var errs []error
 
 	// Shutdown in reverse order
@@ -648,7 +656,7 @@ func (r *Registry) ShutdownAll() error {
 
 		r.logger.Info("shutting down module", "name", name)
 
-		if err := m.Shutdown(); err != nil {
+		if err := shutdownWithin(m, max(time.Until(deadline), minShutdownWait)); err != nil {
 			errs = append(errs, fmt.Errorf("shutting down module %q: %w", name, err))
 			r.logger.Error("module shutdown error", "name", name, "error", err)
 		}
@@ -659,6 +667,28 @@ func (r *Registry) ShutdownAll() error {
 	}
 
 	return nil
+}
+
+// shutdownWithin runs m's Shutdown and waits for it for at most d, turning a
+// panic into an error.
+func shutdownWithin(m Module, d time.Duration) error {
+	done := make(chan error, 1)
+	go func() {
+		defer func() {
+			if p := recover(); p != nil {
+				done <- fmt.Errorf("shutdown panicked: %v\n%s", p, debug.Stack())
+			}
+		}()
+		done <- m.Shutdown()
+	}()
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		return fmt.Errorf("still shutting down after %s; left behind", d.Round(time.Millisecond))
+	}
 }
 
 // routeAllWithFunc registers all module routes using the provided registration function.

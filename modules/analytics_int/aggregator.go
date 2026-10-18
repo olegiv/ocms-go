@@ -35,7 +35,7 @@ func (m *Module) addCronJob(defaultSchedule string, timeout time.Duration, jobFu
 	}
 
 	cronFunc := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(m.bgCtx, timeout)
 		defer cancel()
 		if err := jobFunc(ctx); err != nil {
 			m.ctx.Logger.Error(errMsg, "error", err)
@@ -72,6 +72,9 @@ func (m *Module) addCronJob(defaultSchedule string, timeout time.Duration, jobFu
 // With fixed schedules, a machine that starts at :08 and stops at :55
 // would always miss the :05 hourly job.
 func (m *Module) StartAggregator() {
+	// Shutdown cancels bgCtx: it ends the startup catch-up and is the parent
+	// of every cron job's context.
+	m.bgCtx, m.bgCancel = context.WithCancel(context.Background())
 	m.cron = cron.New()
 
 	// Interval-based scheduling: fires N time after Start(), then every N
@@ -88,9 +91,8 @@ func (m *Module) StartAggregator() {
 	m.ctx.Logger.Info("Page Analytics aggregator started")
 
 	// Run catch-up aggregation on startup in background. Shutdown cancels it
-	// and waits, so it never writes to a database that is closing.
-	stopCtx, cancel := context.WithCancel(context.Background())
-	m.bgCancel = cancel
+	// and waits for it up to bgShutdownWait.
+	stopCtx := m.bgCtx
 	m.bgWG.Go(func() { m.runStartupCatchUp(stopCtx) })
 }
 

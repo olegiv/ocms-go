@@ -9,7 +9,7 @@ The Embed module integrates third-party embeddable widgets (currently Dify AI ch
 
 > **Not the same as [Video Embedding](video-embedding.md).** This module embeds
 > external widgets into pages and brokers requests to their APIs. The
-> separately-documented *video embedding* feature handles YouTube/Vimeo URLs
+> separately-documented *video embedding* feature handles YouTube URLs
 > pasted into the page editor and renders them inline as `<iframe>` tags at
 > render time. They are unrelated features.
 

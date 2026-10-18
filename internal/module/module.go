@@ -11,6 +11,7 @@ import (
 	"embed"
 	"html/template"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -23,11 +24,33 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// ShutdownTimeout is the longest a module's Shutdown should take. The
-// server's shutdown steps, the modules' first, share a budget only a few
-// seconds longer, and the server then closes the database and exits, so a
-// Shutdown still running past its share finds the database closed.
+// ShutdownTimeout is how long Registry.ShutdownAll gives the modules'
+// Shutdowns together, one after another. The server's shutdown steps, the
+// modules' first, share a budget only a few seconds longer, and the server
+// then closes the database and exits, so a Shutdown should take a small part
+// of it: one still running when it is spent is left behind and can find the
+// database closed.
 const ShutdownTimeout = 7 * time.Second
+
+// WaitWithin waits for wg until d has passed and reports whether it
+// finished. A Shutdown waits for its goroutines with it rather than with
+// wg.Wait, so a stuck one cannot hold it. After a timeout one goroutine of
+// WaitWithin's stays blocked until wg finishes, which is fine at exit.
+func WaitWithin(wg *sync.WaitGroup, d time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
+	}
+}
 
 // Context provides access to application services for modules.
 //

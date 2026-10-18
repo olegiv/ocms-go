@@ -182,8 +182,8 @@ checkout — so a site's `./custom` would otherwise load the *core's* themes and
 every site would share one uploads directory. A relative value in your `.env` is
 fine; it is resolved for you.
 
-The same resolution applies to the migrate targets, so `goose` and the server
-always open the same database.
+The same resolution applies to the migrate targets, so `ocms migrate` and the
+server always open the same database.
 
 Copy, do not symlink: Go's wildcards skip symlinked directories, so
 `go test ./...` would silently omit the module and report success with failing

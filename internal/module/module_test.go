@@ -5,7 +5,10 @@ package module
 
 import (
 	"database/sql"
+	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -189,4 +192,35 @@ func TestContextStruct(t *testing.T) {
 	if ctx.Hooks != nil {
 		t.Error("Hooks should be nil")
 	}
+}
+
+// TestWaitWithin checks that WaitWithin returns as soon as the goroutines
+// finish, and stops waiting for a stuck one at the limit.
+//
+// Bug state: make WaitWithin wait out the whole limit, or wait without one,
+// and this fails.
+func TestWaitWithin(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var wg sync.WaitGroup
+		wg.Go(func() { time.Sleep(time.Second) })
+		start := time.Now()
+		if !WaitWithin(&wg, time.Minute) {
+			t.Error("WaitWithin reported a goroutine that finished as still running")
+		}
+		if elapsed := time.Since(start); elapsed > time.Second {
+			t.Errorf("WaitWithin returned %v after the start, want when the goroutine finished after 1s", elapsed)
+		}
+
+		release := make(chan struct{})
+		defer close(release)
+		var stuck sync.WaitGroup
+		stuck.Go(func() { <-release })
+		start = time.Now()
+		if WaitWithin(&stuck, time.Minute) {
+			t.Error("WaitWithin reported a stuck goroutine as finished")
+		}
+		if elapsed := time.Since(start); elapsed != time.Minute {
+			t.Errorf("WaitWithin waited %v for a stuck goroutine, want its 1m limit", elapsed)
+		}
+	})
 }

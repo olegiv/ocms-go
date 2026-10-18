@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"html"
 	"html/template"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/robfig/cron/v3"
@@ -51,12 +53,21 @@ type Module struct {
 	// reload at once (ensureSettingsLoaded).
 	reload module.SettingsReloadGate
 
-	// bgWG tracks every goroutine the module starts, so Shutdown can wait for
-	// in-flight writes before the database and GeoIP reader close. bgCancel
-	// stops the startup catch-up while it is still waiting to run.
+	// bgWG tracks the goroutines the module starts, so Shutdown can wait for
+	// in-flight writes, up to bgShutdownWait, before GeoIP closes; Shutdown
+	// adds one that waits for running cron jobs. bgCancel cancels bgCtx,
+	// which ends the startup catch-up and is the parent of the cron jobs'
+	// contexts.
 	bgWG     sync.WaitGroup
+	bgCtx    context.Context
 	bgCancel context.CancelFunc
 }
+
+// bgShutdownWait is how long Shutdown waits for the module's background work
+// and running cron jobs: a small part of module.ShutdownTimeout, which the
+// modules share. A page view or read takes milliseconds, and the cron jobs'
+// queries get bgCtx, which Shutdown cancels first.
+const bgShutdownWait = 2 * time.Second
 
 // New creates a new internal analytics module.
 func New() *Module {
@@ -143,17 +154,25 @@ func (m *Module) Shutdown() error {
 		m.bgCancel()
 	}
 	if m.cron != nil {
-		m.cron.Stop()
+		// Stop returns at once; its context ends when the running jobs do.
+		jobs := m.cron.Stop()
+		m.bgWG.Go(func() { <-jobs.Done() })
 	}
-	// Wait before closing GeoIP: an in-flight page view still looks up its country.
-	m.bgWG.Wait()
+	// Wait before closing GeoIP, so an in-flight page view still gets its
+	// country. Work still running at the limit is left behind: it can find
+	// the database closed, and GeoIP closed, so a public address gets no
+	// country.
+	var err error
+	if !module.WaitWithin(&m.bgWG, bgShutdownWait) {
+		err = fmt.Errorf("background work still running after %s; left behind", bgShutdownWait)
+	}
 	if m.geoIP != nil {
 		_ = m.geoIP.Close()
 	}
 	if m.ctx != nil {
 		m.ctx.Logger.Info("Internal Analytics module shutting down")
 	}
-	return nil
+	return err
 }
 
 // scheduleGeoIPReload schedules periodic GeoIP database reloads.

@@ -1563,14 +1563,22 @@ func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *
 }
 
 // loadEnvFile loads OCMS_ENV_FILE when it is set (site instance mode),
-// otherwise .env in the working directory (standalone mode). A missing file
-// is not an error: the environment may already hold the settings.
-func loadEnvFile() {
+// otherwise .env in the working directory (standalone mode). Only a missing
+// .env is not an error, as the environment may hold the settings. A file
+// OCMS_ENV_FILE names that cannot be read, or an env file that does not
+// parse, is: the settings it holds, such as the database or production
+// mode, would otherwise be missing without a word.
+func loadEnvFile() error {
 	if envFile := os.Getenv("OCMS_ENV_FILE"); envFile != "" {
-		_ = godotenv.Load(envFile)
-		return
+		if err := godotenv.Load(envFile); err != nil {
+			return fmt.Errorf("reading OCMS_ENV_FILE %s: %w", envFile, err)
+		}
+		return nil
 	}
-	_ = godotenv.Load()
+	if err := godotenv.Load(); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("reading .env: %w", err)
+	}
+	return nil
 }
 
 // loadConfig loads the configuration and parses the embed upstream and
@@ -1720,7 +1728,9 @@ func seedDemoInformer(cfg *config.Config, db *sql.DB, registry *module.Registry,
 }
 
 func run() (runErr error) {
-	loadEnvFile()
+	if err := loadEnvFile(); err != nil {
+		return err
+	}
 	cfg, allowedEmbedUpstreamHosts, allowedWebhookHosts, err := loadConfig()
 	if err != nil {
 		return err

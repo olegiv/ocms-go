@@ -238,6 +238,14 @@ cd my-site
 Running `ocms` with no command still starts the server, so existing
 systemd/Docker setups are unaffected.
 
+The server applies pending database migrations when it starts. To run the
+core ones without starting it, use `ocms migrate [-db <path>]
+up|down|status|version`, which reads `./.env` (or the file `OCMS_ENV_FILE`
+names) like `serve`; module migrations still run when the server starts.
+`make migrate-up`, `migrate-down` and `migrate-status` run it (add
+`DB_PATH=<path>` for another database). `make migrate-create` still uses the
+goose CLI, which does not know the Go migration and cannot roll it back.
+
 Open `http://localhost:8080/admin/` and log in with
 `admin@example.com` / `changeme1234`. Change the admin email and password
 immediately. Stop the foreground process with `Ctrl+C`, set
@@ -389,9 +397,9 @@ make run
 | `make test` | Run all tests |
 | `make clean` | Remove build artifacts |
 | `make clean-db` | Remove database files |
-| `make migrate-up` | Apply pending migrations |
-| `make migrate-down` | Rollback last migration |
-| `make migrate-status` | Show migration status |
+| `make migrate-up` | Apply pending migrations (`ocms migrate up`) |
+| `make migrate-down` | Rollback last migration (`ocms migrate down`) |
+| `make migrate-status` | Show migration status (`ocms migrate status`) |
 | `make migrate-create` | Create new migration file |
 | `make assets` | Install npm deps and compile SCSS |
 | `make sqlc` | Regenerate sqlc code from SQL queries |

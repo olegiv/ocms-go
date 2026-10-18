@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -158,30 +160,25 @@ func (m *Module) Shutdown() error {
 	if m.ctx == nil {
 		return nil
 	}
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), module.ShutdownTimeout)
-	defer cancel()
+	shutdownCtx, stop := context.WithTimeout(context.Background(), module.ShutdownTimeout)
+	defer stop()
 
 	m.jobsMu.Lock()
+	running := slices.Sorted(maps.Keys(m.cancel))
 	for _, cancel := range m.cancel {
 		cancel()
 	}
 	m.jobsMu.Unlock()
 
-	done := make(chan struct{})
-	go func() {
-		m.jobsWG.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(module.ShutdownTimeout - shutdownMarkTimeout):
-		m.ctx.Logger.Warn("timed out waiting for migrator imports to stop")
+	var err error
+	if wait := module.ShutdownTimeout - shutdownMarkTimeout; !module.WaitWithin(&m.jobsWG, wait) {
+		err = fmt.Errorf("imports %v still running after %s; left behind", running, wait)
 	}
 
 	m.markJobsInterruptedForRun(shutdownCtx)
 
 	m.ctx.Logger.Info("Migrator module shutting down")
-	return nil
+	return err
 }
 
 // RegisterRoutes registers public routes for the module.

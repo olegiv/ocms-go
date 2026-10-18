@@ -13,10 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dashboard layout with account-specific navigation, independently of the active
   site theme. See `docs/login-security.md`.
 - `ocms migrate up|down|status|version` runs the database migrations without
-  starting the server. `make migrate-up`, `migrate-down` and `migrate-status`,
-  in the Makefile and in `site.mk`, use it instead of the goose CLI, which does
-  not know the Go migration that moves stored times to UTC: `goose down` failed
-  on it, and `goose up` could apply later SQL migrations first, after which the
+  starting the server, on the database `OCMS_DB_PATH` names in the
+  environment, `.env` or the file `OCMS_ENV_FILE` names, as `serve` reads
+  them, or on `-db <path>`; commands other than `up` refuse a database that
+  is not there. `make migrate-up`, `migrate-down` and `migrate-status`, in the
+  Makefile and in `site.mk`, use it instead of the goose CLI, which does not
+  know the Go migration that moves stored times to UTC: `goose down` failed on
+  it, and `goose up` could apply later SQL migrations first, after which the
   server refused to start.
 
 ### Fixed
@@ -31,10 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   including ones the 30-second request timeout has already answered, get up to
   5 more seconds to return before the cleanup closes the database. The
   shutdown steps after that (modules, webhook deliveries, scheduled jobs, the
-  cache) share a 10-second budget, of which a module's shutdown is to take at
-  most 7 (the migrator now waits 4 seconds for its imports instead of 10); a
-  step still running then, or one that panics, is logged and left behind, and
-  the Event Log writer then gets 3 seconds of its own. `fly.toml`,
+  cache) share a 10-second budget, of which the modules' shutdowns take at
+  most 7 together (the migrator now waits 4 seconds for its imports instead
+  of 10, and Internal Analytics 2 for its background work, including running
+  cron jobs it used to leave running). A module or step still running when
+  its time is spent, or one that panics, is logged and left behind, and the
+  Event Log writer then gets 3 seconds of its own. `fly.toml`,
   `docker-compose.yml`, the systemd unit and `ocmsctl` give the app 60 seconds
   to stop; Fly's default of 5 seconds,
   Docker's of 10 and the 30 the unit and `ocmsctl` allowed killed it
@@ -58,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the UTC times SQLite writes itself (`CURRENT_TIMESTAMP`), instead of
   the SQLite driver's default, Go's debug format in local time with a zone
   name and a monotonic-clock suffix (`+0200 CEST m=+0.08`).
+- The server refuses to start when its env file cannot be read: the file
+  `OCMS_ENV_FILE` names, missing or unreadable, or a `.env` that does not
+  parse. It started without the settings in it, such as the database path or
+  production mode; only a missing `.env` is still ignored.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
   so a later run can no longer commit other staged changes under it.
 - Editors now land at `/admin` after login. Public users land at `/account`;
@@ -214,6 +223,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Internal Analytics' local wall-clock times. Values that look zoned but do not
   parse are left too and logged. The rewrite cannot be undone (`ocms migrate
   down` only forgets the migration), so back up the database first.
+- A server whose `.env` does not parse, or whose `OCMS_ENV_FILE` names a file
+  it cannot read, no longer starts; fix the file (godotenv's error names the
+  line) before upgrading.
 - Times read from the database now come back in UTC, and admin and public
   pages show them as they come: on a host whose time zone is not UTC, dates
   and times that used to show in local time now show in UTC. The Docker image

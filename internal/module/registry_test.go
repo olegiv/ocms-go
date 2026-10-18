@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -31,6 +33,7 @@ type mockModule struct {
 	initCalled   bool
 	initErr      error
 	shutdownErr  error
+	shutdownFn   func() error
 	routesCalled bool
 	routeCalls   int
 	adminCalled  bool
@@ -51,7 +54,12 @@ func (m *mockModule) Description() string     { return m.description }
 func (m *mockModule) Dependencies() []string  { return m.dependencies }
 func (m *mockModule) Migrations() []Migration { return m.migrations }
 func (m *mockModule) Init(_ *Context) error   { m.initCalled = true; return m.initErr }
-func (m *mockModule) Shutdown() error         { return m.shutdownErr }
+func (m *mockModule) Shutdown() error {
+	if m.shutdownFn != nil {
+		return m.shutdownFn()
+	}
+	return m.shutdownErr
+}
 func (m *mockModule) RegisterRoutes(r chi.Router) {
 	m.routesCalled = true
 	m.routeCalls++
@@ -271,6 +279,48 @@ func TestShutdownAll(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
+}
+
+// TestShutdownAllWithinTheLimit checks that ShutdownAll gives the modules'
+// Shutdowns ShutdownTimeout together: a stuck one is reported and left
+// behind, one that panics is reported, and the modules after them still shut
+// down. Shutdowns ran one after another without a limit, so a module waiting
+// for a stuck goroutine held the module step, and the server's other
+// shutdown steps lost their time (review of the 2026-10-17 audit fixes).
+//
+// Bug state: call m.Shutdown() directly in ShutdownAll and this fails.
+func TestShutdownAllWithinTheLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := NewRegistry(testutil.TestLoggerSilent())
+		release := make(chan struct{})
+		defer close(release)
+		var lastRan atomic.Bool
+		last := newMockModule("last", "1.0.0") // registered first, shut down last
+		last.shutdownFn = func() error { lastRan.Store(true); return nil }
+		stuck := newMockModule("stuck", "1.0.0")
+		stuck.shutdownFn = func() error { <-release; return nil }
+		panics := newMockModule("panics", "1.0.0")
+		panics.shutdownFn = func() error { panic("boom") }
+		for _, m := range []*mockModule{last, stuck, panics} {
+			if err := r.Register(m); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		start := time.Now()
+		err := r.ShutdownAll()
+		if elapsed := time.Since(start); elapsed > ShutdownTimeout+minShutdownWait {
+			t.Errorf("ShutdownAll took %v, want at most ShutdownTimeout (%v) and one shortest wait", elapsed, ShutdownTimeout)
+		}
+		if !lastRan.Load() {
+			t.Error("the module after the stuck one was not shut down")
+		}
+		for _, want := range []string{`"stuck"`, "left behind", `"panics"`, "shutdown panicked: boom"} {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("ShutdownAll returned %v, want it to mention %s", err, want)
+			}
+		}
+	})
 }
 
 // testRouteRegistration tests that route registration methods call the expected module methods.
