@@ -7,16 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-10-18
+
 ### Fixed
-- A production start no longer fails over individual API keys that break a
-  key policy (`OCMS_API_KEY_MAX_TTL_DAYS`, `OCMS_REQUIRE_API_KEY_EXPIRY`,
-  `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS`). Each such key is logged by ID and
-  name at startup, in the Event Log too, and requests with it are still
-  refused. In 0.29.0 one never-used key whose lifetime exceeded the limit
-  stopped a production site from starting. `/health` now accepts an API key
-  only under the checks the REST API applies (key policies, global and
-  per-key source CIDRs, source-IP change), so such a key gets the public
-  answer there too.
+- **API keys outside a key policy no longer stop a production start**,
+  reversing the 0.29.0 breaking change. An active key that breaks
+  `OCMS_API_KEY_MAX_TTL_DAYS`, `OCMS_REQUIRE_API_KEY_EXPIRY` or
+  `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` is logged by ID and name at startup,
+  in the Event Log too, and requests with it are still refused. In 0.29.0
+  one never-used key whose lifetime exceeded the limit stopped a production
+  site from starting.
+- `/health` now accepts an API key only under the checks the REST API
+  applies (key policies, global and per-key source CIDRs, source-IP
+  change), so a key the API refuses gets the public answer there too.
 
 ## [0.29.0] - 2026-10-18
 
@@ -1975,7 +1978,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/olegiv/ocms-go/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/olegiv/ocms-go/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/olegiv/ocms-go/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/olegiv/ocms-go/compare/v0.26.0...v0.27.0
