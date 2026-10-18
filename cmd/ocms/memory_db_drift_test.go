@@ -16,15 +16,25 @@ import (
 )
 
 // TestInMemoryDatabasesKeepOneConnection fails when code opens an in-memory
-// SQLite database from a literal DSN without limiting its pool to one
-// connection. Each connection to ":memory:" (or a mode=memory URI) opens its
-// own empty database, so a query that lands on a second pooled connection
-// sees no schema, and a test can pass for the wrong reason or fail at random
+// SQLite database without limiting its pool to one connection. Each
+// connection to ":memory:" (or a mode=memory URI) opens its own empty
+// database, so a query that lands on a second pooled connection sees no
+// schema, and a test can pass for the wrong reason or fail at random
 // (review of the 2026-10-17 audit fixes). Shared-cache DSNs (cache=shared)
-// are one database and are not checked. The open must be assigned to a
-// local variable, and the limit set in the same function; an open that is
-// returned or stored in a field cannot be checked and fails. DSNs held in
-// variables or constants are not seen.
+// are one database and are not checked.
+//
+// The DSN is read, best effort, from its literal parts: a literal, a
+// concatenation, the arguments of a call (fmt.Sprintf, filepath.Join), or a
+// variable or constant defined in the function, an enclosing function or
+// the file, merged by name without regard to scope. A part it cannot read
+// is left out, so a parameter with a literal suffix, or os.Getenv("X")
+// (whose argument names the variable, not the DSN), counts as a file
+// database and is not checked. An open in a _test.go file whose DSN has no
+// literal part at all fails, since it cannot be checked; elsewhere it is
+// skipped. An in-memory open must be assigned to a local variable, and the
+// limit set in the same function; an open that is returned or stored in a
+// field cannot be checked and fails. store.NewDB keeps in-memory databases
+// on one connection itself.
 //
 // Bug state: delete db.SetMaxOpenConns(1) from testutil.TestMemoryDB and
 // this names the open it belongs to.
@@ -36,25 +46,30 @@ func TestInMemoryDatabasesKeepOneConnection(t *testing.T) {
 		return strings.HasSuffix(rel, ".go")
 	}, func(path, rel string) error {
 		src, err := os.ReadFile(path) // #nosec G304 -- repository files
-		if err != nil || !bytes.Contains(src, []byte(":memory:")) {
+		if err != nil || !bytes.Contains(src, []byte("sql.Open(")) {
 			return err
 		}
 		file, err := parser.ParseFile(fset, rel, src, 0)
 		if err != nil {
 			return err
 		}
-		ast.Inspect(file, func(n ast.Node) bool {
-			var body *ast.BlockStmt
-			switch fn := n.(type) {
-			case *ast.FuncDecl:
-				body = fn.Body
-			case *ast.FuncLit:
-				body = fn.Body
-			}
-			if body == nil {
-				return true
-			}
-			for _, open := range memoryDBOpens(body) {
+		isTest := strings.HasSuffix(rel, "_test.go")
+		fileDefs := definitions(file)
+		var check func(body *ast.BlockStmt, outer map[string][]ast.Expr)
+		check = func(body *ast.BlockStmt, outer map[string][]ast.Expr) {
+			defs := mergeDefinitions(outer, definitions(body))
+			for _, open := range sqlOpens(body) {
+				parts := dsnParts(open.dsn, defs, 0)
+				switch {
+				case len(parts) == 0:
+					if isTest {
+						t.Errorf("%s opens a database with a DSN this test cannot read; build it from literals so an in-memory one can be checked",
+							fset.Position(open.pos))
+					}
+					continue
+				case !isMemoryDSN(parts):
+					continue
+				}
 				opens++
 				switch {
 				case open.name == "":
@@ -65,8 +80,19 @@ func TestInMemoryDatabasesKeepOneConnection(t *testing.T) {
 						fset.Position(open.pos), open.name, open.name)
 				}
 			}
-			return true
-		})
+			ast.Inspect(body, func(n ast.Node) bool {
+				if lit, ok := n.(*ast.FuncLit); ok {
+					check(lit.Body, defs)
+					return false
+				}
+				return true
+			})
+		}
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil {
+				check(fn.Body, fileDefs)
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -77,16 +103,17 @@ func TestInMemoryDatabasesKeepOneConnection(t *testing.T) {
 	}
 }
 
-// memoryDBOpen is an in-memory database open: where it is, and the local
-// variable it is assigned to, or "" when it is not assigned to one.
-type memoryDBOpen struct {
+// sqlOpen is a sql.Open call: where it is, its DSN, and the local variable
+// it is assigned to, or "" when it is not assigned to one.
+type sqlOpen struct {
 	pos  token.Pos
+	dsn  ast.Expr
 	name string
 }
 
-// memoryDBOpens returns the sql.Open calls with a literal in-memory DSN that
-// does not share its cache in body, not counting nested function literals.
-func memoryDBOpens(body *ast.BlockStmt) []memoryDBOpen {
+// sqlOpens returns the sql.Open calls in body, not counting nested function
+// literals.
+func sqlOpens(body *ast.BlockStmt) []sqlOpen {
 	assigned := map[*ast.CallExpr]string{}
 	var calls []*ast.CallExpr
 	inspectOwnStatements(body, func(n ast.Node) {
@@ -102,7 +129,7 @@ func memoryDBOpens(body *ast.BlockStmt) []memoryDBOpen {
 				lhs, rhs = stmt.Names[0], stmt.Values
 			}
 		case *ast.CallExpr:
-			if isMemoryDBOpen(stmt) {
+			if isSelectorCall(stmt, "sql", "Open") && len(stmt.Args) == 2 {
 				calls = append(calls, stmt)
 			}
 		}
@@ -112,26 +139,103 @@ func memoryDBOpens(body *ast.BlockStmt) []memoryDBOpen {
 			}
 		}
 	})
-	opens := make([]memoryDBOpen, 0, len(calls))
+	opens := make([]sqlOpen, 0, len(calls))
 	for _, call := range calls {
-		opens = append(opens, memoryDBOpen{pos: call.Pos(), name: assigned[call]})
+		opens = append(opens, sqlOpen{pos: call.Pos(), dsn: call.Args[1], name: assigned[call]})
 	}
 	return opens
 }
 
-// isMemoryDBOpen reports whether call is sql.Open with a literal in-memory
-// DSN that does not share its cache.
-func isMemoryDBOpen(call *ast.CallExpr) bool {
-	if !isSelectorCall(call, "sql", "Open") || len(call.Args) != 2 {
-		return false
+// definitions maps each name node assigns or declares, not counting nested
+// function literals, to the expressions it is given.
+func definitions(node ast.Node) map[string][]ast.Expr {
+	defs := map[string][]ast.Expr{}
+	add := func(names []ast.Expr, values []ast.Expr) {
+		for i, name := range names {
+			ident, ok := name.(*ast.Ident)
+			if !ok {
+				continue
+			}
+			switch {
+			case len(values) == len(names):
+				defs[ident.Name] = append(defs[ident.Name], values[i])
+			case len(values) == 1 && i == 0: // dsn, err := build()
+				defs[ident.Name] = append(defs[ident.Name], values[0])
+			}
+		}
 	}
-	lit, ok := call.Args[1].(*ast.BasicLit)
-	if !ok || lit.Kind != token.STRING {
-		return false
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch stmt := n.(type) {
+		case *ast.FuncLit:
+			return false
+		case *ast.FuncDecl:
+			return node == n
+		case *ast.AssignStmt:
+			add(stmt.Lhs, stmt.Rhs)
+		case *ast.ValueSpec:
+			names := make([]ast.Expr, len(stmt.Names))
+			for i, name := range stmt.Names {
+				names[i] = name
+			}
+			add(names, stmt.Values)
+		}
+		return true
+	})
+	return defs
+}
+
+// mergeDefinitions returns the definitions of outer and inner together.
+func mergeDefinitions(outer, inner map[string][]ast.Expr) map[string][]ast.Expr {
+	merged := make(map[string][]ast.Expr, len(outer)+len(inner))
+	for name, exprs := range outer {
+		merged[name] = append(merged[name], exprs...)
 	}
-	dsn, err := strconv.Unquote(lit.Value)
-	return err == nil && (strings.Contains(dsn, ":memory:") || strings.Contains(dsn, "mode=memory")) &&
-		!strings.Contains(dsn, "cache=shared")
+	for name, exprs := range inner {
+		merged[name] = append(merged[name], exprs...)
+	}
+	return merged
+}
+
+// dsnParts returns the string literals a DSN expression is built from,
+// following variables and constants through defs.
+func dsnParts(expr ast.Expr, defs map[string][]ast.Expr, depth int) []string {
+	if depth > 8 {
+		return nil
+	}
+	switch e := expr.(type) {
+	case *ast.BasicLit:
+		if value, err := strconv.Unquote(e.Value); err == nil && e.Kind == token.STRING {
+			return []string{value}
+		}
+	case *ast.BinaryExpr:
+		return append(dsnParts(e.X, defs, depth+1), dsnParts(e.Y, defs, depth+1)...)
+	case *ast.ParenExpr:
+		return dsnParts(e.X, defs, depth+1)
+	case *ast.CallExpr:
+		var parts []string
+		for _, arg := range e.Args {
+			parts = append(parts, dsnParts(arg, defs, depth+1)...)
+		}
+		return parts
+	case *ast.Ident:
+		var parts []string
+		for _, def := range defs[e.Name] {
+			parts = append(parts, dsnParts(def, defs, depth+1)...)
+		}
+		return parts
+	}
+	return nil
+}
+
+// isMemoryDSN reports whether a DSN built from parts names an in-memory
+// database that does not share its cache.
+func isMemoryDSN(parts []string) bool {
+	memory, shared := false, false
+	for _, part := range parts {
+		memory = memory || strings.Contains(part, ":memory:") || strings.Contains(part, "mode=memory")
+		shared = shared || strings.Contains(part, "cache=shared")
+	}
+	return memory && !shared
 }
 
 // limitsPoolToOne reports whether body, not counting nested function

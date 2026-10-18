@@ -348,6 +348,49 @@ func TestSettingsRetriesFollowTheirInterval(t *testing.T) {
 	}
 }
 
+// TestSaltIsNotSavedOverUnreadSettings checks that a salt rotation never
+// writes over stored settings the module could not read, and saves once
+// they load. Saving the salt overwrites current_salt and salt_created_at,
+// which can overwrite the very value that made the row unreadable before
+// the administrator repairs it.
+//
+// Bug state: drop the m.reload.Loaded() check in getCurrentSalt and the
+// stored row changes while the settings are unreadable.
+func TestSaltIsNotSavedOverUnreadSettings(t *testing.T) {
+	m, db, _ := initWithUnreadableSettings(t, time.Hour)
+	stored := func() (salt, created string) {
+		t.Helper()
+		if err := db.QueryRow(`SELECT current_salt, salt_created_at FROM page_analytics_settings WHERE id = 1`).Scan(&salt, &created); err != nil {
+			t.Fatal(err)
+		}
+		return salt, created
+	}
+	// Init gives the fallback a fresh salt; expire it so the next request
+	// rotates it.
+	m.settingsMu.Lock()
+	fallbackSalt := m.settings.CurrentSalt
+	m.settings.SaltCreatedAt = time.Now().Add(-48 * time.Hour)
+	m.settingsMu.Unlock()
+	if salt := m.getCurrentSalt(); salt == "" || salt == fallbackSalt {
+		t.Fatalf("getCurrentSalt = %q on an expired fallback salt, want a new salt", salt)
+	}
+	if salt, created := stored(); salt != "" || created != "not a time" {
+		t.Errorf("a rotation on fallback settings wrote salt=%q created=%q over the unread row", salt, created)
+	}
+
+	// Repaired with an expired salt: once loaded, the rotation is saved.
+	if _, err := db.Exec(`UPDATE page_analytics_settings SET current_salt = 'old', salt_created_at = '2000-01-01 00:00:00' WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ensureSettingsLoaded(); err != nil {
+		t.Fatalf("ensureSettingsLoaded after the repair: %v", err)
+	}
+	salt := m.getCurrentSalt()
+	if got, _ := stored(); got != salt || got == "old" {
+		t.Errorf("stored salt = %q after a rotation on loaded settings, want the new salt %q", got, salt)
+	}
+}
+
 func TestModuleIsEnabled(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()

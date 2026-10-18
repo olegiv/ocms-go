@@ -1114,3 +1114,60 @@ func TestCountUnreadSubmissions(t *testing.T) {
 		t.Errorf("allCount = %d, want 3", allCount)
 	}
 }
+
+// TestNewDBKeepsInMemoryDatabasesOnOneConnection checks that an in-memory
+// database keeps a single connection that never expires. Each connection to
+// ":memory:" opens its own empty database, so with the default pool of 25 a
+// query on a second connection found no tables (review of the 2026-10-17
+// audit fixes); a file database keeps the configured pool.
+//
+// Bug state: drop the isInMemory branch in NewDBWithConfig and this fails.
+func TestNewDBKeepsInMemoryDatabasesOnOneConnection(t *testing.T) {
+	db, err := NewDB(":memory:")
+	if err != nil {
+		t.Fatalf("NewDB(:memory:): %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if got := db.Stats().MaxOpenConnections; got != 1 {
+		t.Errorf("in-memory database allows %d connections, want 1", got)
+	}
+	if _, err := db.Exec(`CREATE TABLE probe (id INTEGER)`); err != nil {
+		t.Fatal(err)
+	}
+	// Queries from many goroutines would open more connections, each with
+	// an empty database, if the pool allowed it.
+	errs := make(chan error, 8)
+	for range 8 {
+		go func() {
+			var n int
+			errs <- db.QueryRow(`SELECT COUNT(*) FROM probe`).Scan(&n)
+		}()
+	}
+	for range 8 {
+		if err := <-errs; err != nil {
+			t.Errorf("query on the in-memory database: %v", err)
+		}
+	}
+
+	file, err := NewDB(t.TempDir() + "/file.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	if got, want := file.Stats().MaxOpenConnections, DefaultDBConfig().MaxOpenConns; got != want {
+		t.Errorf("file database allows %d connections, want the configured %d", got, want)
+	}
+
+	for path, want := range map[string]bool{
+		":memory:":                        true,
+		"file::memory:":                   true,
+		"file:probe?mode=memory":          true,
+		"file::memory:?cache=shared":      false,
+		"file:x?mode=memory&cache=shared": false,
+		"./data/ocms.db":                  false,
+	} {
+		if got := isInMemory(path); got != want {
+			t.Errorf("isInMemory(%q) = %v, want %v", path, got, want)
+		}
+	}
+}

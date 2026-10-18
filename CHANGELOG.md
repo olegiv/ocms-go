@@ -20,9 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   taken) now exits instead of staying up with nothing served, and a serve
   failure that arrives together with a stop signal is no longer reported as a
   clean stop. Stop signals are caught before the port opens, so a signal sent
-  as the server starts gets a graceful shutdown. REST v2 error logs carry the
-  request ID, method and route. The database's WAL and
-  shared-memory files are made owner-only along with the database file.
+  as the server starts gets a graceful shutdown; requests still running when
+  the 30-second shutdown ends have their connections closed. The start is
+  recorded alongside serving, so a slow Event Log write delays neither the
+  first requests nor a stop, and a failed Event Log write for server or
+  seeding events is logged as a warning naming the lost event. REST v2 error
+  logs carry the request ID, method and route. The database's WAL and
+  shared-memory files are made owner-only along with the database file. An
+  in-memory database (`OCMS_DB_PATH=:memory:`) keeps a single connection; with
+  the default pool each connection opened its own empty database.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
   so a later run can no longer commit other staged changes under it.
 - Editors now land at `/admin` after login. Public users land at `/account`;
@@ -50,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disable saving; the forms refuse to save until the stored settings load
   (retried at most once a minute when next used, and at once by a save), and
   a form rendered from fallback values is refused even after they recover.
+  The retry interval is timed with the monotonic clock, so a system clock
+  change cannot delay or shorten it.
 - The Privacy settings form refuses a services list that is not valid JSON;
   it used to save it as an empty list, dropping every configured service.
 - Page slugs and single-segment aliases can no longer use the names whose
@@ -133,9 +141,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scripts/test-gate.sh` and `make`, when `go` and its compiler differ. It
   needs the `.claude/shared` submodule (`git clone --recurse-submodules`).
   `setup-go-toolchain.sh` stays opt-in because it replaces `/usr/local/go`.
-- Drift tests check that every literal translation key passed from Go code,
-  templ components and admin templates exists in English and Russian, and
-  that in-memory SQLite test databases keep a single connection.
+- Drift tests check that every literal translation key in Go code (in calls,
+  constants, struct fields and lists), templ components, admin templates and
+  theme templates exists in English and Russian, and that in-memory SQLite
+  test databases keep a single connection. CI checks out the `.claude/shared`
+  submodule so the tests that read the shared tooling run there too.
 
 ### Changed
 

@@ -23,8 +23,11 @@ type SettingsReloadGate struct {
 	// RetryInterval overrides SettingsRetryInterval when positive.
 	RetryInterval time.Duration
 
-	loaded      atomic.Bool
-	lastAttempt atomic.Int64 // unix nanoseconds of the last Retry reload
+	loaded atomic.Bool
+	// lastAttempt is when Retry last attempted a reload. It keeps the
+	// monotonic clock reading time.Now returns, so a wall-clock step does not
+	// stretch or skip the interval.
+	lastAttempt atomic.Pointer[time.Time]
 }
 
 // Loaded reports whether the stored settings are in effect.
@@ -45,9 +48,9 @@ func (g *SettingsReloadGate) Retry(reload func() error) (bool, error) {
 	if interval <= 0 {
 		interval = SettingsRetryInterval
 	}
-	now := time.Now().UnixNano()
+	now := time.Now()
 	last := g.lastAttempt.Load()
-	if (last != 0 && now-last < int64(interval)) || !g.lastAttempt.CompareAndSwap(last, now) {
+	if (last != nil && now.Sub(*last) < interval) || !g.lastAttempt.CompareAndSwap(last, &now) {
 		return false, nil
 	}
 	if err := reload(); err != nil {

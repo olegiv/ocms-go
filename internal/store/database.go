@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -42,6 +43,13 @@ func DefaultDBConfig() DBConfig {
 	}
 }
 
+// isInMemory reports whether path names an in-memory SQLite database that
+// each connection opens afresh, rather than one shared through cache=shared.
+func isInMemory(path string) bool {
+	memory := path == ":memory:" || strings.HasPrefix(path, "file::memory:") || strings.Contains(path, "mode=memory")
+	return memory && !strings.Contains(path, "cache=shared")
+}
+
 // NewDB opens a SQLite database connection and configures it for optimal performance.
 func NewDB(path string) (*sql.DB, error) {
 	return NewDBWithConfig(path, DefaultDBConfig())
@@ -69,11 +77,20 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(cfg.MaxOpenConns)
-	db.SetMaxIdleConns(cfg.MaxIdleConns)
-	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
-	db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
+	// Configure connection pool. Every connection to an in-memory database
+	// opens its own empty one, so it keeps a single connection that never
+	// expires: closing it would drop the database.
+	if isInMemory(path) {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+		db.SetConnMaxLifetime(0)
+		db.SetConnMaxIdleTime(0)
+	} else {
+		db.SetMaxOpenConns(cfg.MaxOpenConns)
+		db.SetMaxIdleConns(cfg.MaxIdleConns)
+		db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+		db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
+	}
 
 	// Run one-time optimizations on the first connection
 	if _, err := db.Exec("PRAGMA optimize"); err != nil {

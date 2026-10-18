@@ -184,34 +184,28 @@ func logSeedingSecuritySignals(ctx context.Context, cfg *config.Config, events *
 	}
 
 	if cfg.DoSeed {
-		_ = events.LogSecurityEvent(
-			ctx,
-			"warning",
-			"Database seeding is enabled",
-			nil,
-			"",
-			"",
-			map[string]any{
-				"environment":   cfg.Env,
-				"seed_enabled":  true,
-				"default_admin": store.DefaultAdminEmail,
-			},
-		)
+		const message = "Database seeding is enabled"
+		logEventWriteFailure(message, events.LogSecurityEvent(ctx, "warning", message, nil, "", "", map[string]any{
+			"environment":   cfg.Env,
+			"seed_enabled":  true,
+			"default_admin": store.DefaultAdminEmail,
+		}))
 	}
 
 	if hasDefaultAdminCreds {
-		_ = events.LogSecurityEvent(
-			ctx,
-			"warning",
-			"Default seeded admin credentials are still active",
-			nil,
-			"",
-			"",
-			map[string]any{
-				"environment":   cfg.Env,
-				"default_admin": store.DefaultAdminEmail,
-			},
-		)
+		const message = "Default seeded admin credentials are still active"
+		logEventWriteFailure(message, events.LogSecurityEvent(ctx, "warning", message, nil, "", "", map[string]any{
+			"environment":   cfg.Env,
+			"default_admin": store.DefaultAdminEmail,
+		}))
+	}
+}
+
+// logEventWriteFailure logs err when writing the named event to the Event
+// Log failed, since the event itself is then lost.
+func logEventWriteFailure(event string, err error) {
+	if err != nil {
+		slog.Warn("failed to record an event in the Event Log", "event", event, "error", err)
 	}
 }
 
@@ -318,12 +312,27 @@ func main() {
 	}
 }
 
+// shutdownTimeout is how long a stop waits for requests in flight before the
+// remaining connections are closed.
+const shutdownTimeout = 30 * time.Second
+
+// recordServerEvent writes a server lifecycle event to the Event Log,
+// logging a failed write.
+func recordServerEvent(events *service.EventService, message string, metadata map[string]any) {
+	logEventWriteFailure(message, events.LogSystemEvent(context.Background(), model.EventLevelInfo, message, nil, "", "", metadata))
+}
+
 // serveUntilStopped serves on listener until quit receives a signal or the
-// server fails. On a signal it shuts the server down gracefully, waiting up
-// to 30 seconds for requests in flight, and returns nil, or the shutdown or
-// serve error. A server that fails first is returned as it is, without a
-// shutdown.
-func serveUntilStopped(srv *http.Server, listener net.Listener, quit <-chan os.Signal) error {
+// server fails. It runs started alongside, once Serve has begun (the
+// listener is already bound, so connections made meanwhile queue), and
+// waits for it before returning; a slow started does not delay a stop. On a
+// signal it shuts the server down gracefully, waiting up to timeout for
+// requests in flight, then closes the connections still open: a handler's
+// next read or write fails, and once its request body has been read its
+// context is cancelled. It does not wait for those handlers to return. It
+// returns nil, or the shutdown or serve error. A server that fails first is
+// returned as it is, without a shutdown.
+func serveUntilStopped(srv *http.Server, listener net.Listener, quit <-chan os.Signal, timeout time.Duration, started func()) error {
 	// Serve's failure, if any, is sent before the channel closes; after
 	// Shutdown, Serve returns http.ErrServerClosed and the channel closes
 	// with nothing in it.
@@ -334,11 +343,20 @@ func serveUntilStopped(srv *http.Server, listener net.Listener, quit <-chan os.S
 		}
 		close(serveErr)
 	}()
+	startedDone := make(chan struct{})
+	go func() {
+		defer close(startedDone)
+		started()
+	}()
+	defer func() { <-startedDone }()
 	return waitForStop(quit, serveErr, func() error {
 		slog.Info("shutting down server...")
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
-		return srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			return errors.Join(err, srv.Close())
+		}
+		return nil
 	})
 }
 
@@ -2443,20 +2461,20 @@ func run() (runErr error) {
 		return fmt.Errorf("listening on %s: %w", cfg.ServerAddr(), err)
 	}
 	slog.Info("starting server", "addr", cfg.ServerAddr(), "env", cfg.Env)
-	_ = eventService.LogSystemEvent(context.Background(), model.EventLevelInfo,
-		"Server started", nil, "", "", map[string]any{
+
+	// The start is recorded alongside serving, so a slow Event Log write
+	// holds up neither the first requests nor a stop.
+	if err := serveUntilStopped(srv, listener, quit, shutdownTimeout, func() {
+		recordServerEvent(eventService, "Server started", map[string]any{
 			"addr":    cfg.ServerAddr(),
 			"env":     cfg.Env,
 			"version": appVersion,
 		})
-
-	if err := serveUntilStopped(srv, listener, quit); err != nil {
+	}); err != nil {
 		return fmt.Errorf("serving on %s: %w", cfg.ServerAddr(), err)
 	}
 
-	_ = eventService.LogSystemEvent(context.Background(), model.EventLevelInfo,
-		"Server stopped", nil, "", "", nil)
-
+	recordServerEvent(eventService, "Server stopped", nil)
 	slog.Info("server stopped")
 	return nil
 }

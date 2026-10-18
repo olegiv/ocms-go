@@ -74,9 +74,11 @@ var commandBashRule = regexp.MustCompile(`Bash\(([^)]*)\)`)
 // fixes), so following the project instructions inside /code-quality
 // triggered a permission prompt.
 //
-// The command is a link into the .claude/shared submodule. CI and exported
-// trees do not check the submodule out, so the link dangles and the test
-// skips; a missing link fails. A submodule checked out at an older commit
+// The command is a link into the .claude/shared submodule. Exported trees,
+// the release workflow and clones without --recurse-submodules do not check
+// it out, so the link dangles and the test skips, unless
+// OCMS_REQUIRE_SHARED_TOOLING=1 (set by the Go CI workflow) makes that a
+// failure; a missing link fails. A submodule checked out at an older commit
 // fails this test until its pointer is bumped.
 //
 // Bug state: change "Bash(errcheck -ignoregenerated ./...)" back to
@@ -89,6 +91,9 @@ func TestSharedCodeQualityRulesMatchProxy(t *testing.T) {
 	}
 	command, err := os.ReadFile(link)
 	if errors.Is(err, fs.ErrNotExist) {
+		if sharedToolingRequired() {
+			t.Fatal("the .claude/shared submodule is not checked out, and OCMS_REQUIRE_SHARED_TOOLING=1 requires it")
+		}
 		t.Skip("the .claude/shared submodule is not checked out")
 	}
 	if err != nil {
@@ -155,4 +160,11 @@ func rulesByTool(rules []string) map[string][]string {
 		slices.Sort(byTool[tool])
 	}
 	return byTool
+}
+
+// sharedToolingRequired reports whether the tests must find the
+// .claude/shared submodule checked out instead of skipping without it; the
+// Go CI workflow checks it out and sets OCMS_REQUIRE_SHARED_TOOLING=1.
+func sharedToolingRequired() bool {
+	return os.Getenv("OCMS_REQUIRE_SHARED_TOOLING") == "1"
 }

@@ -4,11 +4,14 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -18,6 +21,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
 func TestSQLiteFilePathFromDSN(t *testing.T) {
@@ -155,10 +163,7 @@ func TestOpenDatabase(t *testing.T) {
 // deferred call to see it, and marked so main does not log it again after
 // run's deferred closes have shut the error log file and the event log.
 func TestLogRunFailure(t *testing.T) {
-	var buf strings.Builder
-	previous := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
-	t.Cleanup(func() { slog.SetDefault(previous) })
+	buf := captureDefaultLog(t)
 
 	runErr := errors.New("running migrations: disk I/O error")
 	logRunFailure(&runErr)
@@ -175,6 +180,75 @@ func TestLogRunFailure(t *testing.T) {
 	logRunFailure(&none)
 	if none != nil || strings.Count(buf.String(), "application exited with error") != 1 {
 		t.Error("a nil error was logged or wrapped")
+	}
+}
+
+// captureDefaultLog sends the default slog logger, and the standard log
+// package it takes over, to a buffer until the test ends, then restores
+// both.
+func captureDefaultLog(t *testing.T) *strings.Builder {
+	t.Helper()
+	buf := &strings.Builder{}
+	previous, writer, flags := slog.Default(), log.Writer(), log.Flags()
+	slog.SetDefault(slog.New(slog.NewTextHandler(buf, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+		log.SetOutput(writer)
+		log.SetFlags(flags)
+	})
+	return buf
+}
+
+// TestLogEventWriteFailure checks that a failed Event Log write is logged
+// with the event it lost, and that a successful one logs nothing. The server
+// and seeding events used to drop the error, leaving only EventService's
+// generic "Failed to log event" line, which does not say which event it was.
+//
+// Bug state: make logEventWriteFailure ignore err and this fails.
+func TestLogEventWriteFailure(t *testing.T) {
+	buf := captureDefaultLog(t)
+
+	logEventWriteFailure("Server started", nil)
+	if buf.Len() != 0 {
+		t.Errorf("a successful write was logged: %s", buf.String())
+	}
+	logEventWriteFailure("Server started", errors.New("database is locked"))
+	if got := buf.String(); !strings.Contains(got, "Server started") || !strings.Contains(got, "database is locked") {
+		t.Errorf("a failed write logged %q, want the event and the error", got)
+	}
+}
+
+// TestServerEventsReachTheEventLog checks the server and seeding events end
+// to end: recordServerEvent stores a system event at info level with its
+// metadata, and when the Event Log cannot be written each lost event is
+// logged by name.
+//
+// Bug state: make recordServerEvent drop the error of LogSystemEvent, or
+// write at another level, and this fails.
+func TestServerEventsReachTheEventLog(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	events := service.NewEventService(db)
+	recordServerEvent(events, "Server started", map[string]any{"addr": "localhost:8099"})
+	var level, category string
+	var metadata sql.NullString
+	if err := db.QueryRow(`SELECT level, category, metadata FROM events WHERE message = 'Server started'`).Scan(&level, &category, &metadata); err != nil {
+		t.Fatalf("reading the start event: %v", err)
+	}
+	if level != model.EventLevelInfo || category != model.EventCategorySystem || !strings.Contains(metadata.String, "localhost:8099") {
+		t.Errorf("start event: level=%q category=%q metadata=%q, want an info system event with its address", level, category, metadata.String)
+	}
+
+	logs := captureDefaultLog(t)
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	recordServerEvent(events, "Server stopped", nil)
+	logSeedingSecuritySignals(context.Background(), &config.Config{DoSeed: true}, events, true)
+	for _, event := range []string{"Server stopped", "Database seeding is enabled", "Default seeded admin credentials are still active"} {
+		if !strings.Contains(logs.String(), `msg="failed to record an event in the Event Log" event="`+event+`"`) {
+			t.Errorf("the lost %q event was not logged by name:\n%s", event, logs.String())
+		}
 	}
 }
 
@@ -274,14 +348,19 @@ func containsReturn(stmt ast.Stmt) bool {
 
 // TestRunServerLifecycle fails when run stops binding the listener before
 // it serves, stops serving through serveUntilStopped, registers for stop
-// signals only after the port opens, never stops catching them, or serves
-// with a channel other than the one the signals go to. A port that is taken
-// would leave the process up with nothing listening, and a signal sent as
-// the server starts answering would kill it without a graceful shutdown.
+// signals only after the port opens, never stops catching them, serves with
+// a channel other than the one the signals go to, does not pass
+// shutdownTimeout, does not record "Server started" in the callback it
+// passes to serveUntilStopped, or does not record "Server stopped" after it.
+// A port that is taken would leave the process up with nothing listening,
+// and a signal sent as the server starts answering would kill it without a
+// graceful shutdown. It also fails when an Event Log write in main.go does
+// not hand its error to logEventWriteFailure, which names the lost event.
 //
 // Bug state: make serveUntilStopped wait on <-quit instead of calling
-// waitForStop, move signal.Notify below net.Listen, or pass
-// make(chan os.Signal, 1) to serveUntilStopped, and this fails.
+// waitForStop, move signal.Notify below net.Listen, pass
+// make(chan os.Signal, 1) to serveUntilStopped, or call
+// eventService.LogSystemEvent(...) as a statement, and this fails.
 func TestRunServerLifecycle(t *testing.T) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "main.go", nil, 0)
@@ -313,10 +392,11 @@ func TestRunServerLifecycle(t *testing.T) {
 		return found
 	}
 	var calls map[string]*ast.CallExpr
+	var runDecl *ast.FuncDecl
 	waits := false
 	for _, decl := range file.Decls {
 		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "run" {
-			calls = firstCalls(fn)
+			runDecl, calls = fn, firstCalls(fn)
 		} else if ok && fn.Name.Name == "serveUntilStopped" {
 			_, waits = firstCalls(fn)["waitForStop"]
 		}
@@ -349,6 +429,65 @@ func TestRunServerLifecycle(t *testing.T) {
 	if stopped := argName(calls["signal.Stop"], 0); stopped != signals {
 		t.Errorf("run stops catching signals on %q, not on %q", stopped, signals)
 	}
+
+	// The server stops with the shared timeout; the start is recorded by the
+	// callback serveUntilStopped runs, the stop after it returns.
+	serve := calls["serveUntilStopped"]
+	if len(serve.Args) != 5 {
+		t.Fatalf("serveUntilStopped takes %d arguments in run, want 5", len(serve.Args))
+	}
+	if timeout, ok := serve.Args[3].(*ast.Ident); !ok || timeout.Name != "shutdownTimeout" {
+		t.Error("run does not pass shutdownTimeout to serveUntilStopped")
+	}
+	if started, ok := serve.Args[4].(*ast.FuncLit); !ok || recordedEvent(started, "Server started") == nil {
+		t.Error(`run does not record "Server started" in the callback it passes to serveUntilStopped`)
+	}
+	if stop := recordedEvent(runDecl, "Server stopped"); stop == nil || stop.Pos() < serve.End() {
+		t.Error(`run does not record "Server stopped" after serveUntilStopped returns`)
+	}
+
+	// Every Event Log write in main.go hands its error to
+	// logEventWriteFailure, whatever form a dropped error would take.
+	handed := map[*ast.CallExpr]bool{}
+	ast.Inspect(file, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && len(call.Args) == 2 {
+			if fn, ok := call.Fun.(*ast.Ident); ok && fn.Name == "logEventWriteFailure" {
+				if write, ok := call.Args[1].(*ast.CallExpr); ok {
+					handed[write] = true
+				}
+			}
+		}
+		return true
+	})
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok && strings.HasPrefix(sel.Sel.Name, "Log") && strings.HasSuffix(sel.Sel.Name, "Event") && !handed[call] {
+			t.Errorf("%s calls %s without passing its error to logEventWriteFailure", fset.Position(call.Pos()), sel.Sel.Name)
+		}
+		return true
+	})
+}
+
+// recordedEvent returns the first recordServerEvent call in node that
+// records message, or nil.
+func recordedEvent(node ast.Node, message string) *ast.CallExpr {
+	var found *ast.CallExpr
+	ast.Inspect(node, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || found != nil || len(call.Args) < 2 {
+			return found == nil
+		}
+		if fn, ok := call.Fun.(*ast.Ident); ok && fn.Name == "recordServerEvent" {
+			if lit, ok := call.Args[1].(*ast.BasicLit); ok && lit.Value == strconv.Quote(message) {
+				found = call
+			}
+		}
+		return found == nil
+	})
+	return found
 }
 
 // TestWaitForStop checks how serving ends: a failure is returned without a
@@ -406,13 +545,19 @@ func TestWaitForStop(t *testing.T) {
 	}
 }
 
-// TestServeUntilStopped runs a real server: a stop signal waits for the
-// request in flight, then returns nil and closes the port, and a server
-// that cannot accept returns its error. A hang fails the test after ten
-// seconds instead of running into the test binary's timeout.
+// TestServeUntilStopped runs a real server: the server answers while the
+// started callback runs, a slow started holds up neither the stop nor the
+// close of the port but is waited for before returning, a stop signal waits
+// for the request in flight, then returns nil and closes the port, a
+// request still running at the shutdown timeout has its connection closed
+// and its context cancelled, and a server that cannot accept returns its
+// error. A hang fails the test after ten seconds instead of running into
+// the test binary's timeout.
 //
-// Bug state: shut down with srv.Close instead of srv.Shutdown, or never
-// close serveErr, and this fails.
+// Bug state: shut down with srv.Close instead of srv.Shutdown, never close
+// serveErr, call started before Serve starts or before waiting for the
+// signal, run it without waiting for it, or return the Shutdown error
+// without closing the server, and this fails.
 func TestServeUntilStopped(t *testing.T) {
 	listen := func(t *testing.T) net.Listener {
 		t.Helper()
@@ -421,11 +566,6 @@ func TestServeUntilStopped(t *testing.T) {
 			t.Fatal(err)
 		}
 		return listener
-	}
-	serve := func(srv *http.Server, listener net.Listener, quit <-chan os.Signal) <-chan error {
-		done := make(chan error, 1)
-		go func() { done <- serveUntilStopped(srv, listener, quit) }()
-		return done
 	}
 	within := func(t *testing.T, what string, ch <-chan error) error {
 		t.Helper()
@@ -437,21 +577,53 @@ func TestServeUntilStopped(t *testing.T) {
 			return nil
 		}
 	}
+	serve := func(srv *http.Server, listener net.Listener, quit <-chan os.Signal, timeout time.Duration, started func()) <-chan error {
+		done := make(chan error, 1)
+		go func() { done <- serveUntilStopped(srv, listener, quit, timeout, started) }()
+		return done
+	}
+	// pinging returns a started callback that requests /ping, and the
+	// channel its result arrives on.
+	pinging := func(listener net.Listener) (func(), <-chan error) {
+		answered := make(chan error, 1)
+		client := &http.Client{Timeout: 2 * time.Second}
+		return func() {
+			resp, err := client.Get("http://" + listener.Addr().String() + "/ping")
+			if err == nil {
+				err = resp.Body.Close()
+			}
+			answered <- err
+		}, answered
+	}
+	accepts := func(listener net.Listener) bool {
+		conn, err := net.Dial("tcp", listener.Addr().String())
+		if err == nil {
+			_ = conn.Close()
+		}
+		return err == nil
+	}
 
 	listener := listen(t)
 	started, release := make(chan error), make(chan struct{})
-	srv := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ping" {
+			return
+		}
 		close(started)
 		<-release
 		_, _ = io.WriteString(w, "done")
 	})}
 	quit := make(chan os.Signal, 1)
-	done := serve(srv, listener, quit)
-	answered := make(chan error, 1)
+	ping, answered := pinging(listener)
+	done := serve(srv, listener, quit, time.Minute, ping)
+	if err := within(t, "the started callback's request", answered); err != nil {
+		t.Errorf("the server did not answer while started ran: %v", err)
+	}
+	inFlight := make(chan error, 1)
 	go func() {
 		resp, err := http.Get("http://" + listener.Addr().String() + "/")
 		if err != nil {
-			answered <- err
+			inFlight <- err
 			return
 		}
 		defer func() { _ = resp.Body.Close() }()
@@ -459,7 +631,7 @@ func TestServeUntilStopped(t *testing.T) {
 		if err == nil && string(body) != "done" {
 			err = errors.New("unexpected body " + strconv.Quote(string(body)))
 		}
-		answered <- err
+		inFlight <- err
 	}()
 	_ = within(t, "the request reaching the handler", started)
 	quit <- os.Interrupt
@@ -469,21 +641,75 @@ func TestServeUntilStopped(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 	close(release)
-	if err := within(t, "the response", answered); err != nil {
+	if err := within(t, "the response", inFlight); err != nil {
 		t.Errorf("the request in flight during the stop: %v", err)
 	}
 	if err := within(t, "the stop", done); err != nil {
 		t.Fatalf("serveUntilStopped after a signal = %v, want nil", err)
 	}
-	if conn, err := net.Dial("tcp", listener.Addr().String()); err == nil {
-		_ = conn.Close()
+	if accepts(listener) {
 		t.Error("the server still accepts connections after a stop signal")
 	}
+
+	// A started callback that blocks (a locked database) does not hold up
+	// the stop, but serveUntilStopped returns only once it is done.
+	listener = listen(t)
+	unblock, entered := make(chan struct{}), make(chan error)
+	quit = make(chan os.Signal, 1)
+	done = serve(&http.Server{ReadHeaderTimeout: time.Second}, listener, quit, time.Minute, func() {
+		close(entered)
+		<-unblock
+	})
+	_ = within(t, "the started callback", entered)
+	quit <- os.Interrupt
+	closed := make(chan error, 1)
+	go func() {
+		for accepts(listener) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		closed <- nil
+	}()
+	_ = within(t, "the port closing while started blocks", closed)
+	select {
+	case err := <-done:
+		t.Fatalf("serveUntilStopped returned %v before started finished", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(unblock)
+	if err := within(t, "the stop after started finished", done); err != nil {
+		t.Fatalf("serveUntilStopped with a slow started = %v, want nil", err)
+	}
+
+	// A request that outlives the shutdown timeout has its connection closed,
+	// which cancels its context, and the timeout is reported.
+	listener = listen(t)
+	stuck, cancelled := make(chan error), make(chan error, 1)
+	srv = &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		close(stuck)
+		select {
+		case <-r.Context().Done():
+			cancelled <- nil
+		case <-time.After(10 * time.Second):
+		}
+	})}
+	quit = make(chan os.Signal, 1)
+	done = serve(srv, listener, quit, 100*time.Millisecond, func() {})
+	go func() {
+		if resp, err := http.Get("http://" + listener.Addr().String() + "/"); err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+	_ = within(t, "the stuck request reaching the handler", stuck)
+	quit <- os.Interrupt
+	if err := within(t, "the stop", done); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("serveUntilStopped past the shutdown timeout = %v, want the deadline", err)
+	}
+	_ = within(t, "the stuck request's context being cancelled", cancelled)
 
 	// A closed listener makes Serve fail at once, like an accept error.
 	listener = listen(t)
 	_ = listener.Close()
-	if err := within(t, "the failure", serve(&http.Server{ReadHeaderTimeout: time.Second}, listener, make(chan os.Signal))); err == nil {
+	if err := within(t, "the failure", serve(&http.Server{ReadHeaderTimeout: time.Second}, listener, make(chan os.Signal), time.Minute, func() {})); err == nil {
 		t.Fatal("serveUntilStopped returned nil for a server that cannot accept")
 	}
 }

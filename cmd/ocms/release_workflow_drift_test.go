@@ -19,10 +19,13 @@ type workflowFile struct {
 		// Permissions is a scope map or a shorthand such as "read-all".
 		Permissions any `yaml:"permissions"`
 		Steps       []struct {
-			Name string            `yaml:"name"`
-			Uses string            `yaml:"uses"`
-			Run  string            `yaml:"run"`
-			With map[string]string `yaml:"with"`
+			Name            string            `yaml:"name"`
+			Uses            string            `yaml:"uses"`
+			Run             string            `yaml:"run"`
+			With            map[string]string `yaml:"with"`
+			Env             map[string]string `yaml:"env"`
+			If              any               `yaml:"if"`
+			ContinueOnError any               `yaml:"continue-on-error"`
 		} `yaml:"steps"`
 	} `yaml:"jobs"`
 }
@@ -131,5 +134,48 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("no action references found; the workflow layout changed and this test is vacuous")
+	}
+}
+
+// TestCIChecksOutSharedTooling fails when the Go workflow stops checking out
+// the .claude/shared submodule before it runs the tests, makes that step
+// conditional or allowed to fail, or stops requiring the submodule in the
+// Test step. Without it the drift tests that read the shared Claude tooling
+// (the /code-quality rules, the hook targets) skip or check only links, so
+// CI never ran them (review of the 2026-10-17 audit fixes). The requirement
+// is what makes CI fail when the checkout did not happen, whatever form a
+// disabled step takes.
+//
+// Bug state: delete the "Check out the shared Claude tooling" step, or the
+// OCMS_REQUIRE_SHARED_TOOLING setting of the Test step, and this fails.
+func TestCIChecksOutSharedTooling(t *testing.T) {
+	wf := readWorkflow(t, "go.yml")
+	build, ok := wf.Jobs["build"]
+	if !ok {
+		t.Fatal("go.yml has no build job")
+	}
+	checkoutCommand := regexp.MustCompile(`(?m)^\s*git submodule update --init\b.*\.claude/shared\s*$`)
+	checkout, tests := -1, -1
+	for i, step := range build.Steps {
+		if checkout < 0 && checkoutCommand.MatchString(step.Run) {
+			checkout = i
+			if step.If != nil || step.ContinueOnError != nil {
+				t.Errorf("go.yml step %q is conditional or allowed to fail", step.Name)
+			}
+		}
+		if tests < 0 && strings.HasPrefix(strings.TrimSpace(step.Run), "go test ") {
+			tests = i
+			if step.Env["OCMS_REQUIRE_SHARED_TOOLING"] != "1" {
+				t.Error("go.yml's Test step does not set OCMS_REQUIRE_SHARED_TOOLING=1, so a missing submodule only skips tests")
+			}
+		}
+	}
+	switch {
+	case tests < 0:
+		t.Fatal("go.yml runs no go test step; the workflow changed and this test is vacuous")
+	case checkout < 0:
+		t.Error("go.yml does not check out the .claude/shared submodule")
+	case checkout > tests:
+		t.Error("go.yml checks out the .claude/shared submodule only after it runs the tests")
 	}
 }

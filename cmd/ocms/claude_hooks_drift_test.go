@@ -35,8 +35,10 @@ var optInClaudeHooks = map[string]string{
 //
 // The validate hooks are links into the .claude/shared submodule. Where the
 // submodule is checked out each wired link must resolve to an executable
-// script; CI and exported trees do not check it out, so there only the link
-// itself is checked.
+// script. Exported trees, the release workflow and clones without
+// --recurse-submodules do not check it out, so there only the link itself
+// is checked, unless OCMS_REQUIRE_SHARED_TOOLING=1 (set by the Go CI
+// workflow) requires the submodule.
 //
 // Bug state: set "hooks" to {} in .claude/settings.json and this names the
 // toolchain hook.
@@ -61,6 +63,9 @@ func TestClaudeHooksAreWired(t *testing.T) {
 	sharedCheckedOut := err == nil
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("checking for the .claude/shared submodule: %v", err)
+	}
+	if !sharedCheckedOut && sharedToolingRequired() {
+		t.Fatal("the .claude/shared submodule is not checked out, and OCMS_REQUIRE_SHARED_TOOLING=1 requires it")
 	}
 
 	const prefix = `"$CLAUDE_PROJECT_DIR"/.claude/hooks/`
