@@ -1380,15 +1380,23 @@ templ aliasesSection(pc *PageContext, data PageFormViewData) {
 	</details>
 }
 
+// aliasManagerXData returns the Alpine initializer for the alias list. The
+// aliases are JSON-encoded: a form re-rendered after a validation error shows
+// them as submitted, and a quote in one must not end the JavaScript string.
 func aliasManagerXData(aliases []PageFormAliasView) string {
-	if len(aliases) == 0 {
+	type aliasEntry struct {
+		Value string `json:"value"`
+		ID    int64  `json:"id"`
+	}
+	entries := make([]aliasEntry, 0, len(aliases))
+	for _, a := range aliases {
+		entries = append(entries, aliasEntry{Value: a.Alias, ID: a.ID})
+	}
+	data, err := json.Marshal(entries)
+	if err != nil {
 		return "aliasManager([])"
 	}
-	var parts []string
-	for _, a := range aliases {
-		parts = append(parts, fmt.Sprintf(`{value:'%s',id:%d}`, a.Alias, a.ID))
-	}
-	return fmt.Sprintf("aliasManager([%s])", strings.Join(parts, ","))
+	return "aliasManager(" + string(data) + ")"
 }
 
 templ videoSection(pc *PageContext, data PageFormViewData) {
@@ -1830,7 +1838,7 @@ templ editorImageModal(pc *PageContext) {
 templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	<!-- TinyMCE Editor Scripts -->
 	<div id="tinymce-config" data-cache-suffix={ "?v=" + utils.ScriptVersion } style="display:none"></div>
-	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js") } integrity="sha384-eoezFjUR6JziC0Lb/IuzSbkX9cjdWXs60Dc8lnQlSSAcylmabJkPDgfETPrIEp2L" crossorigin="anonymous"></script>
+	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js") } integrity="sha384-3pPvcZXivf5neWCEl4OuvTIleT8Q1bA2hphqFEVWNXaxIWVBUJda+xujUu2WWWuz" crossorigin="anonymous"></script>
 	<script nonce={ templ.GetNonce(ctx) }>
 	// Store TinyMCE editor instance
 	let tinymceEditor = null;

@@ -422,7 +422,7 @@ func (m *Module) handleDownloadSiteContent(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=\"site-content.md\"")
-	fmt.Fprint(w, content)
+	_, _ = fmt.Fprint(w, content)
 }
 
 // handleDownloadUserGuide handles GET /admin/embed/dify/kb/user-guide.md.
@@ -438,7 +438,7 @@ func (m *Module) handleDownloadUserGuide(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=\"user-guide.md\"")
-	fmt.Fprint(w, content)
+	_, _ = fmt.Fprint(w, content)
 }
 
 func embedEndpointMetadata(rawEndpoint string) (scheme string, host string) {

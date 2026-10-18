@@ -7,6 +7,7 @@ package util
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -107,14 +108,117 @@ func IsValidLangCode(s string) bool {
 	return true
 }
 
+// IsReservedRouteSegment reports whether s is the first path segment of a
+// route that the application or a built-in module registers, at that URL or
+// below it. A language URL prefix equal to one of them would collide with the
+// route. TestTopLevelRoutesAreReserved (cmd/ocms) keeps the list in step with
+// the router.
+func IsReservedRouteSegment(s string) bool {
+	switch s {
+	case "admin", "api", "blog", "uploads", "static", "themes", "health",
+		"login", "logout", "language", "forms", "search", "tag", "category",
+		"page", "session", "account", "csp-report", "analytics", "embed", "example":
+		return true
+	default:
+		return false
+	}
+}
+
+// reservedPageSlugs are the single path segments whose exact URL an
+// application or built-in module route answers on GET. chi matches those
+// routes before the page catch-all, so a page saved at one is never served.
+// Segments that own only deeper paths (forms/{slug}, uploads/...) or other
+// methods (POST /logout) stay free for pages. TestExactRoutesReservePageSlugs
+// (cmd/ocms) keeps the list equal to the router's exact routes.
+var reservedPageSlugs = []string{"account", "admin", "blog", "example", "health", "login", "search"}
+
+// IsReservedPageSlug reports whether a page slug or single-segment alias equals
+// the exact URL of an application route, which answers it instead of the page.
+func IsReservedPageSlug(s string) bool {
+	return slices.Contains(reservedPageSlugs, s)
+}
+
+// ReservedPageSlugs returns the reserved page slugs in sorted order.
+func ReservedPageSlugs() []string {
+	return slices.Clone(reservedPageSlugs)
+}
+
+// reservedRoutePaths are the multi-segment paths that application and
+// built-in module routes answer on GET without falling back to the page alias
+// lookup. A "*" segment stands for one path segment and a trailing "/**" for
+// zero or more further segments: "admin/**" covers /admin and everything below
+// it (a mounted router), while "uploads/*/**" covers only paths below
+// /uploads, because chi's /uploads/* does not answer /uploads itself.
+// Parameter routes whose handlers resolve page aliases on a miss (/page/{id},
+// /category/{slug}, /tag/{slug}, /forms/{slug}) are left out: an alias there
+// works while no such page, term or form exists. A page alias matching an
+// entry is answered by the route and never reaches the alias lookup.
+// TestRoutePathsReserveAliases (cmd/ocms) keeps the list equal to the
+// router's registrations.
+var reservedRoutePaths = []string{
+	"admin/**",
+	"api/informer/demo-credentials",
+	"api/mcp",
+	"api/v2/**",
+	"blog/tag/*",
+	"embed/dify/messages/*/suggested",
+	"embed/dify/token",
+	"health/live",
+	"health/ready",
+	"session/get",
+	"session/set",
+	"static/dist/*/**",
+	"themes/*/static/*/**",
+	"uploads/*/**",
+}
+
+// ReservedRoutePath returns the reserved route path that a slash-separated
+// path such as a page alias matches, or "" when no route answers it.
+func ReservedRoutePath(path string) string {
+	segments := strings.Split(path, "/")
+	for _, pattern := range reservedRoutePaths {
+		parts := strings.Split(pattern, "/")
+		subtree := parts[len(parts)-1] == "**"
+		if subtree {
+			parts = parts[:len(parts)-1]
+		}
+		if len(segments) < len(parts) || (!subtree && len(segments) != len(parts)) {
+			continue
+		}
+		matched := true
+		for i, part := range parts {
+			if part != "*" && part != segments[i] {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return pattern
+		}
+	}
+	return ""
+}
+
+// ReservedRoutePaths returns the reserved route paths in sorted order.
+func ReservedRoutePaths() []string {
+	return slices.Clone(reservedRoutePaths)
+}
+
 // IsReservedLanguageCode reports whether a language code conflicts with a
 // top-level route owned by the application. Reserved codes must not be used as
 // language URL prefixes, even when legacy data marks them as active.
 func IsReservedLanguageCode(s string) bool {
-	switch s {
-	case "admin", "api", "blog", "uploads", "static", "themes", "health",
-		"login", "logout", "language", "forms", "search", "tag", "category",
-		"page", "session":
+	return IsReservedRouteSegment(s)
+}
+
+// IsPrivateRoutePath reports whether path belongs to the admin UI, the API or
+// the signed-in account area. Content redirects and first-party analytics
+// leave these paths alone. TestAuthenticatedRoutesArePrivate (cmd/ocms) fails
+// when a session-authenticated top-level route is missing here.
+func IsPrivateRoutePath(path string) bool {
+	first, _, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
+	switch first {
+	case "admin", "api", "account":
 		return true
 	default:
 		return false

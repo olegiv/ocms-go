@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -272,5 +273,40 @@ func TestLookupCountryWithRealDatabase(t *testing.T) {
 	}
 	if got := g.LookupCountry("192.168.1.1"); got != "LOCAL" {
 		t.Errorf("LookupCountry(192.168.1.1) = %q, want \"LOCAL\"", got)
+	}
+}
+
+// TestLookupCountryDuringClose checks that lookups running while Close does
+// get the country or nothing, never a crash: Internal Analytics closes GeoIP
+// at shutdown while work it left behind may still look up countries, and
+// Close unmaps the database file under them.
+//
+// Bug state: drop the lock in Close and this crashes, or reports a race under
+// -race.
+func TestLookupCountryDuringClose(t *testing.T) {
+	g := NewLookup()
+	if err := g.Init(fixtureDB); err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			<-start
+			for range 200 {
+				if got := g.LookupCountry("81.2.69.142"); got != "GB" && got != "" {
+					t.Errorf("a lookup during Close got %q, want GB or nothing", got)
+					return
+				}
+			}
+		})
+	}
+	close(start)
+	if err := g.Close(); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	if got := g.LookupCountry("81.2.69.142"); got != "" {
+		t.Errorf("a lookup after Close got %q, want nothing", got)
 	}
 }

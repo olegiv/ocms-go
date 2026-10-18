@@ -60,7 +60,7 @@ func TestFormsHandlerShowScopesSameSlugToVerifiedLanguageRoute(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 	queries := store.New(db)
 	now := time.Now()
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	for _, language := range []store.CreateLanguageParams{
 		{Code: "fr", Name: "French", NativeName: "Français", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},
 		{Code: "es", Name: "Spanish", NativeName: "Español", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now},

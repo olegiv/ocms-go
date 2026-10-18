@@ -54,12 +54,12 @@ oCMS implements defense-in-depth security measures:
 ### API Security
 - **API Key Authentication**: Bearer token with Argon2id hashing
 - **Granular Permissions**: Fine-grained access control per key
-- **Per-Key Rate Limiting**: Token bucket algorithm
+- **Rate Limiting**: Token bucket per client IP on every API request, plus per-key limits on write requests
 - **Per-Key Source CIDR Allowlists**: Restrict keys to specific IP ranges
 - **API Key Maximum Lifetime**: Configurable expiry enforcement (default 90 days in production)
 - **Source IP Anomaly Detection**: Auto-revoke keys on unexpected source IP changes
 - **Global API CIDR Policy**: Restrict all API access to trusted networks
-- **Fail-Closed Forwarding**: Reject requests with malformed X-Forwarded-For chains
+- **Fail-Closed Forwarding**: Unparseable X-Forwarded-For entries are skipped, and the connecting peer's address is used when no entry parses
 
 ### MCP Server Security
 - **Opt-in Endpoint**: The MCP Server module starts inactive; `/api/mcp` returns 404 until an admin enables it
@@ -78,7 +78,7 @@ oCMS implements defense-in-depth security measures:
 
 ### Request Security
 - **CSRF Protection**: Fetch Metadata headers with Origin/Referer fallback
-- **SQL Injection Prevention**: 100% SQLC-generated parameterized queries
+- **SQL Injection Prevention**: SQLC-generated parameterized queries for core data access
 - **XSS Prevention**: Go html/template auto-escaping + bluemonday sanitization
 - **CSP Nonce Support**: Per-request nonces across the render pipeline
 - **Frame Ancestors**: CSP `frame-ancestors` directive to prevent clickjacking
@@ -87,11 +87,22 @@ oCMS implements defense-in-depth security measures:
 - **Suspicious Markup Blocking**: Reject page writes containing dangerous HTML patterns (`OCMS_BLOCK_SUSPICIOUS_PAGE_HTML`)
 
 ### HTTP Security Headers
-- Content-Security-Policy (CSP)
-- Strict-Transport-Security (HSTS)
+- Content-Security-Policy (CSP), first-party for scripts, styles, connections
+  and frames apart from Google Fonts and YouTube frames; a module adds the
+  third-party hosts it loads only while it is active
+- Strict-Transport-Security (HSTS), whenever `OCMS_ENV` is not `development`; `OCMS_HSTS_PRELOAD=true` adds `preload`
 - X-Frame-Options: SAMEORIGIN
 - X-Content-Type-Options: nosniff
+- X-XSS-Protection: 0 (legacy XSS auditor off; CSP is the protection)
 - Referrer-Policy: strict-origin-when-cross-origin
+- Cross-Origin-Opener-Policy: same-origin
+- Cross-Origin-Resource-Policy: same-origin, and cross-origin for `/uploads/`,
+  `/static/` and `/themes/` so feed readers and other sites can show media
+- CSP `report-uri /csp-report`: browsers send violation reports there, and
+  they are logged with bounded fields and a per-IP rate limit
+
+The headers are set before any middleware that can answer on its own, so bans,
+timeouts and redirects carry them too.
 
 ### Webhook Security
 - **HMAC-SHA256 Signatures**: Verify webhook payload integrity
@@ -107,7 +118,7 @@ oCMS implements defense-in-depth security measures:
 ### Trusted Proxy Hardening
 - **Trusted Proxy Configuration**: `OCMS_TRUSTED_PROXIES` for correct client IP detection
 - **No Chi RealIP**: Replaced chi's `RealIP` middleware (which blindly trusts `True-Client-IP`, `X-Real-IP`, and `X-Forwarded-For` from any source) with a trusted-proxy-aware middleware that only reads forwarding headers from configured proxies
-- **Fail-Closed Forwarding**: Reject malformed forwarding headers from untrusted sources
+- **Fail-Closed Forwarding**: Forwarding headers from untrusted sources are ignored, and an unusable X-Forwarded-For chain falls back to the peer address
 - **Production Requirement**: Configurable startup failure without trusted proxy configuration
 
 ### Content Security
@@ -116,7 +127,7 @@ oCMS implements defense-in-depth security measures:
 - **Form Captcha Requirement**: Require hCaptcha on public form submissions in production (`OCMS_REQUIRE_FORM_CAPTCHA`)
 
 ### File Upload Security
-- Size limits (20MB, 2MB in demo mode)
+- Size limit (20MB per file; the admin UI disables media uploads in demo mode; the REST API does not check demo mode)
 - MIME type validation
 - Magic number checking
 - UUID-based storage
@@ -140,7 +151,7 @@ For detailed information, see:
 
 Security patches are announced via:
 
-- **GitHub Releases**: Tagged releases with security notes
+- **GitHub Releases**: Tagged releases with security notes; archives published after v0.28.0 carry signed build provenance (`gh attestation verify <archive> --repo olegiv/ocms-go`)
 - **CHANGELOG.md**: Detailed change history
 
 Subscribe to repository releases to receive security update notifications.

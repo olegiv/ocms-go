@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -959,6 +960,153 @@ func TestPageSlugCannotClaimActiveLanguagePrefix(t *testing.T) {
 	}
 	if got := h.validatePageSlugUpdate(ctx, page.Slug, page.Slug, page.ID); got != "" {
 		t.Fatalf("validatePageSlugUpdate() rejected an unchanged slug: %q", got)
+	}
+}
+
+// TestPageSlugCannotClaimApplicationRoute covers the third namespace a page
+// route competes with: chi matches an exact application route such as /login
+// or /account before the page catch-all, so a page saved there is never
+// served (security audit 2026-10-17, L-2). Names that own only deeper paths
+// (/forms/{slug}) or other methods (POST /language) still leave the bare URL
+// to a page, and multi-segment aliases below an application route reach the
+// page through the not-found alias lookup: the Elefant migrator's
+// "blog/post/55" aliases must survive an edit, which re-saves every alias. A
+// legacy page already stored at a reserved slug stays editable while its slug
+// does not change.
+func TestPageSlugCannotClaimApplicationRoute(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	h := NewPagesHandler(db, nil, sm)
+
+	for _, slug := range []string{"login", "account", "search"} {
+		if got := h.validatePageSlugCreate(ctx, slug); got == "" {
+			t.Errorf("validatePageSlugCreate(%q) accepted a slug an application route shadows", slug)
+		}
+	}
+	for _, slug := range []string{"accounting", "forms", "analytics", "language", "uploads", "static", "themes", "api"} {
+		if got := h.validatePageSlugCreate(ctx, slug); got != "" {
+			t.Errorf("validatePageSlugCreate(%q) = %q, want a slug no exact route answers to be free", slug, got)
+		}
+	}
+
+	legacy, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Account", Slug: "account", Body: "Content", Status: "published", AuthorID: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+	if got := h.validatePageSlugUpdate(ctx, legacy.Slug, legacy.Slug, legacy.ID); got != "" {
+		t.Errorf("validatePageSlugUpdate() rejected a legacy page's unchanged slug: %q", got)
+	}
+	if got := h.validatePageSlugUpdate(ctx, "login", legacy.Slug, legacy.ID); got == "" {
+		t.Error("validatePageSlugUpdate() accepted a rename onto /login")
+	}
+
+	h.savePageAliases(ctx, legacy.ID, []string{"login", "account/settings", "about/team", "blog/post/55", "forms/contact", "blog/tag/news", "uploads/2016/report"})
+	aliases, err := queries.GetAliasesForPage(ctx, legacy.ID)
+	if err != nil {
+		t.Fatalf("GetAliasesForPage failed: %v", err)
+	}
+	var stored []string
+	for _, alias := range aliases {
+		stored = append(stored, alias.Alias)
+	}
+	slices.Sort(stored)
+	if want := []string{"about/team", "account/settings", "blog/post/55", "forms/contact"}; !slices.Equal(stored, want) {
+		t.Errorf("stored aliases = %v, want %v (/login, /blog/tag/{slug} and /uploads/* answer the others; a missing form falls back to aliases)", stored, want)
+	}
+}
+
+// TestValidatePageAliases checks that the page form names the first alias it
+// cannot store instead of dropping it silently on save, and that a failed
+// lookup is reported on the form while savePageAliases keeps the alias.
+func TestValidatePageAliases(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+	ctx := context.Background()
+	h := NewPagesHandler(db, nil, sm)
+
+	if got := h.validatePageAliases(ctx, []string{"about/team", "  ", "blog/post/55", "account/settings"}, 0); got != "" {
+		t.Errorf("validatePageAliases() = %q for aliases no route answers", got)
+	}
+	for alias, want := range map[string]string{
+		"login":               "/login",
+		"blog/tag/news":       "/blog/tag/*",
+		"uploads/2016/report": "under /uploads/",
+		"Not An Alias":        "lowercase letters",
+	} {
+		got := h.validatePageAliases(ctx, []string{"about/team", alias}, 0)
+		if !strings.Contains(got, "/"+alias) || !strings.Contains(got, want) {
+			t.Errorf("validatePageAliases(%q) = %q, want it to name the alias and %q", alias, got, want)
+		}
+	}
+
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Team", Slug: "team", Body: "Content", Status: "published", AuthorID: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+	other, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Other", Slug: "other-page", Body: "Content", Status: "published", AuthorID: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePage failed: %v", err)
+	}
+	for _, alias := range []struct {
+		pageID int64
+		path   string
+	}{{other.ID, "old/other"}, {page.ID, "old/team"}} {
+		if _, err := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{PageID: alias.pageID, Alias: alias.path, CreatedAt: time.Now()}); err != nil {
+			t.Fatalf("CreatePageAlias: %v", err)
+		}
+	}
+	// The unique index would reject these on save, after an update has
+	// already cleared the page's aliases.
+	for name, tc := range map[string]struct {
+		aliases []string
+		pageID  int64
+		want    string
+	}{
+		"another page's alias": {[]string{"old/other"}, page.ID, "already used by another page"},
+		"another page's slug":  {[]string{"other-page/x", "other-page"}, page.ID, "already used by another page"},
+		"listed twice":         {[]string{"new/path", "new/path"}, page.ID, "listed twice"},
+		"own alias kept":       {[]string{"old/team"}, page.ID, ""},
+		"own alias, new page":  {[]string{"old/team"}, 0, "already used by another page"},
+	} {
+		got := h.validatePageAliases(ctx, tc.aliases, tc.pageID)
+		if (tc.want == "") != (got == "") || !strings.Contains(got, tc.want) {
+			t.Errorf("%s: validatePageAliases(%v) = %q, want %q", name, tc.aliases, got, tc.want)
+		}
+	}
+	// A failed uniqueness lookup refuses the alias rather than letting the
+	// unique index drop it after the update cleared the page's aliases.
+	if _, err := db.ExecContext(ctx, "ALTER TABLE page_aliases RENAME TO page_aliases_away"); err != nil {
+		t.Fatalf("hiding page_aliases: %v", err)
+	}
+	if got := h.validatePageAliases(ctx, []string{"zz9/new-path"}, page.ID); !strings.Contains(got, "Error checking for alias conflicts") {
+		t.Errorf("validatePageAliases() = %q when the alias lookup fails, want the error on the form", got)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER TABLE page_aliases_away RENAME TO page_aliases"); err != nil {
+		t.Fatalf("restoring page_aliases: %v", err)
+	}
+	// "about" could be a language code, so checking it reads the languages table.
+	if _, err := db.ExecContext(ctx, "DROP TABLE languages"); err != nil {
+		t.Fatalf("dropping languages: %v", err)
+	}
+	if got := h.validatePageAliases(ctx, []string{"about/team"}, page.ID); !strings.Contains(got, "Error checking") {
+		t.Errorf("validatePageAliases() = %q on a failed lookup, want the error on the form", got)
+	}
+	h.savePageAliases(ctx, page.ID, []string{"about/team"})
+	aliases, err := queries.GetAliasesForPage(ctx, page.ID)
+	if err != nil {
+		t.Fatalf("GetAliasesForPage failed: %v", err)
+	}
+	if !slices.ContainsFunc(aliases, func(a store.PageAlias) bool { return a.Alias == "about/team" }) {
+		t.Errorf("aliases after a failed lookup = %v, want about/team kept", aliases)
 	}
 }
 

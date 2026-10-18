@@ -468,6 +468,39 @@ func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 	}
 }
 
+// TestLoad_ProductionSecureDefaultsWhenEmpty checks that a production
+// default applies when its variable is set but empty, as docker-compose.yml
+// passes a variable an .env line leaves empty. An empty value counted as set,
+// so `OCMS_REQUIRE_FORM_CAPTCHA=` in .env turned captcha enforcement off
+// (review of the 2026-10-17 audit fixes).
+//
+// Bug state: check only os.LookupEnv's ok in setBoolIfUnset and setIntIfUnset
+// and this fails.
+func TestLoad_ProductionSecureDefaultsWhenEmpty(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
+	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
+	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
+	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai")
+	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com")
+	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "")
+	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "")
+	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if !cfg.RequireFormCaptcha || !cfg.RequireAPIKeyExpiry {
+		t.Errorf("RequireFormCaptcha = %t, RequireAPIKeyExpiry = %t; want both true when set empty in production", cfg.RequireFormCaptcha, cfg.RequireAPIKeyExpiry)
+	}
+	if cfg.APIMaxTTLDays != DefaultProductionAPIMaxTTLDays {
+		t.Errorf("APIMaxTTLDays = %d, want the production default %d when set empty", cfg.APIMaxTTLDays, DefaultProductionAPIMaxTTLDays)
+	}
+}
+
 func TestLoad_ProductionSecureDefaults_ExplicitOverrideRespected(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)

@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"embed"
 	"html/template"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 
@@ -37,6 +38,50 @@ type Module struct {
 	module.BaseModule
 	ctx      *module.Context
 	settings *Settings
+	// settingsMu guards settings: the login and form pages read them on every request while
+	// the settings form and ReloadSettings replace them. Settings values are
+	// replaced, never modified, so a reader may keep using the pointer it
+	// got. TestSettingsAccessHoldsTheLock checks that every access to the
+	// field takes the lock.
+	settingsMu sync.RWMutex
+	// reload records whether the stored settings are in effect. If they fail
+	// to load, the module runs on the environment keys alone; currentSettings retries the
+	// load and the settings form refuses to save until it succeeds.
+	reload module.SettingsReloadGate
+}
+
+// currentSettings returns the settings in effect, or nil before Init. While
+// the stored settings cannot be read it first retries loading them, at most
+// once per module.SettingsRetryInterval.
+func (m *Module) currentSettings() *Settings {
+	if m.ctx != nil && !m.reload.Loaded() {
+		switch loaded, err := m.reload.Retry(m.ReloadSettings); {
+		case err != nil:
+			m.ctx.Logger.Warn("hCaptcha settings still cannot be read; using the fallback", "error", err)
+		case loaded:
+			m.ctx.Logger.Info("hCaptcha settings loaded; the stored settings apply again")
+		}
+	}
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.settings
+}
+
+// settingsForForm returns the settings to show on the settings form and
+// whether they may be fallback values. The load state is read before the
+// settings: a reload that completes in between stores its settings before
+// marking them loaded, so fallback values never appear without the warning.
+func (m *Module) settingsForForm() (*Settings, bool) {
+	m.currentSettings() // retries the load when due
+	fromFallback := !m.reload.Loaded()
+	return m.currentSettings(), fromFallback
+}
+
+// storeSettings replaces the settings in effect.
+func (m *Module) storeSettings(settings *Settings) {
+	m.settingsMu.Lock()
+	m.settings = settings
+	m.settingsMu.Unlock()
 }
 
 // New creates a new instance of the hCaptcha module.
@@ -54,27 +99,22 @@ func New() *Module {
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 
-	// Load settings from database
+	// Load settings from database. Without them, turn protection on wherever
+	// it can run, even if the stored settings had it off: the environment keys
+	// alone are enough to verify logins (OCMS_HCAPTCHA_DISABLED still wins).
 	settings, err := loadSettings(ctx.DB)
 	if err != nil {
-		ctx.Logger.Warn("failed to load hCaptcha settings, using defaults", "error", err)
-		settings = &Settings{}
+		if ctx.Config.HCaptchaEnabled() && !ctx.Config.HCaptchaDisabled {
+			ctx.Logger.Error("failed to load hCaptcha settings; using the environment keys until they load", "error", err)
+		} else {
+			ctx.Logger.Error("failed to load hCaptcha settings; login protection is off until they load", "error", err)
+		}
+		settings = &Settings{Enabled: true}
+	} else {
+		m.reload.MarkLoaded()
 	}
-
-	// Override with environment variables if set
-	if ctx.Config.HCaptchaSiteKey != "" {
-		settings.SiteKey = ctx.Config.HCaptchaSiteKey
-	}
-	if ctx.Config.HCaptchaSecretKey != "" {
-		settings.SecretKey = ctx.Config.HCaptchaSecretKey
-	}
-
-	// Force-disable when OCMS_HCAPTCHA_DISABLED=true
-	if ctx.Config.HCaptchaDisabled {
-		settings.Enabled = false
-	}
-
-	m.settings = settings
+	settings = m.withEnvOverrides(settings)
+	m.storeSettings(settings)
 
 	// Register hooks for login form integration
 	m.registerHooks()
@@ -134,6 +174,12 @@ func (m *Module) registerHooks() {
 			if !ok {
 				return data, nil
 			}
+			// A required captcha refuses while hCaptcha is off: settings that
+			// load after the startup check can disable it.
+			if m.ctx.Config != nil && m.ctx.Config.RequireFormCaptcha && !m.IsEnabled() {
+				req.Verified, req.ErrorCode = false, "hcaptcha.error_verification"
+				return req, nil
+			}
 			return m.VerifyFromRequest(req)
 		},
 	})
@@ -175,6 +221,18 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 		"hcaptchaEnabled": func() bool {
 			return m.IsEnabled()
 		},
+	}
+}
+
+// CSPSources allows the hCaptcha widget while the module is active: its
+// script, styles, challenge frame and API calls are served from hcaptcha.com.
+func (m *Module) CSPSources() map[string][]string {
+	hosts := []string{"https://hcaptcha.com", "https://*.hcaptcha.com"}
+	return map[string][]string{
+		"script-src":  hosts,
+		"style-src":   hosts,
+		"connect-src": hosts,
+		"frame-src":   hosts,
 	}
 }
 
@@ -252,33 +310,42 @@ func (m *Module) ReloadSettings() error {
 	if err != nil {
 		return err
 	}
+	m.storeSettings(m.withEnvOverrides(settings))
+	m.reload.MarkLoaded()
+	return nil
+}
 
-	// Override with environment variables if set
+// withEnvOverrides applies the OCMS_HCAPTCHA_* environment settings, which
+// take precedence over the stored ones, and returns settings.
+func (m *Module) withEnvOverrides(settings *Settings) *Settings {
 	if m.ctx.Config.HCaptchaSiteKey != "" {
 		settings.SiteKey = m.ctx.Config.HCaptchaSiteKey
 	}
 	if m.ctx.Config.HCaptchaSecretKey != "" {
 		settings.SecretKey = m.ctx.Config.HCaptchaSecretKey
 	}
-
 	// Force-disable when OCMS_HCAPTCHA_DISABLED=true
 	if m.ctx.Config.HCaptchaDisabled {
 		settings.Enabled = false
 	}
-
-	m.settings = settings
-	return nil
+	return settings
 }
 
 // IsEnabled returns whether hCaptcha protection is enabled and configured.
 func (m *Module) IsEnabled() bool {
-	return m.settings != nil && m.settings.Enabled && m.settings.SiteKey != "" && m.settings.SecretKey != ""
+	return settingsEnabled(m.currentSettings())
+}
+
+// settingsEnabled reports whether settings turn protection on with both keys set.
+func settingsEnabled(settings *Settings) bool {
+	return settings != nil && settings.Enabled && settings.SiteKey != "" && settings.SecretKey != ""
 }
 
 // GetSettings returns a copy of the current settings (for use by other packages).
 func (m *Module) GetSettings() Settings {
-	if m.settings == nil {
+	settings := m.currentSettings()
+	if settings == nil {
 		return Settings{}
 	}
-	return *m.settings
+	return *settings
 }

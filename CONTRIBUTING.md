@@ -27,7 +27,7 @@ Please be respectful and constructive in all interactions. We welcome contributo
 4. Write or update tests as needed
 5. Ensure all tests pass:
    ```bash
-   OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test ./...
+   OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test ./...
    ```
 6. Commit with a clear message describing the change
 7. Push to your fork and open a pull request
@@ -42,7 +42,7 @@ git clone https://github.com/olegiv/ocms-go.git
 cd ocms-go
 make install-hooks
 make assets
-OCMS_SESSION_SECRET=your-secret-key-32-bytes make dev
+OCMS_SESSION_SECRET="$(openssl rand -base64 32)" make dev
 ```
 
 ## Coding Standards
@@ -50,7 +50,7 @@ OCMS_SESSION_SECRET=your-secret-key-32-bytes make dev
 ### Go Code
 
 - Follow standard Go conventions
-- Run `go fmt` before committing
+- Run `go fmt ./...` before committing
 - Run `go vet ./...` to check for issues
 - Use meaningful variable and function names
 - Add comments for exported functions and complex logic
@@ -82,7 +82,7 @@ If your change requires database modifications:
 
 1. Create a migration file:
    ```bash
-   make migrate-create name=your_migration_name
+   make migrate-create   # prompts for the migration name
    ```
 2. Write both up and down migrations
 3. Update SQLC queries if needed:

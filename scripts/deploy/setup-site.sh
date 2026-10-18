@@ -57,7 +57,7 @@ usage() {
     echo "Examples:"
     echo "  sudo $0 example.com example_com"
     echo "  sudo $0 blog.example.com bloguser 8085"
-    echo "  sudo $0 app.example.com hosting --path /var/www/vhosts/example.com/ocms"
+    echo "  sudo $0 app.example.com hosting --path /var/www/vhosts/app.example.com/ocms-app"
     exit 1
 }
 

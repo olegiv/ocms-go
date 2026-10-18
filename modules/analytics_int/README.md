@@ -23,13 +23,12 @@ Configured via Admin > Internal Analytics > Settings.
 |---------|-------------|
 | **Enabled** | Toggle analytics tracking on/off |
 | **Show post statistics** | Display view/read counts on public post pages (default: on) |
-| **Retention days** | How long to keep analytics data (default: 365) |
+| **Retention days** | How long to keep aggregated stats (default: 365); raw views are deleted after 7 days, reads are not pruned |
 | **Excluded paths** | URL prefixes to skip (one per line) |
-| **Excluded IPs** | IPs or CIDRs to exclude from tracking (one per line) |
 
 ### IP Exclusion
 
-Add IPs or CIDR ranges to exclude from tracking. Useful for filtering pen testing traffic, office IPs, or monitoring services.
+The module honors the global **Excluded IPs** setting (`excluded_ips`) in Admin > Site Configuration, not a module setting. Add IPs or CIDR ranges there to exclude them from tracking. Useful for filtering pen testing traffic, office IPs, or monitoring services.
 
 ```
 # Exact IPs
@@ -51,7 +50,7 @@ For example, if `site_url` is `https://www.it-digest.info`, referrers from `it-d
 
 ### Purge Self-Referral Data
 
-A one-time purge action is available in the settings to clean up existing self-referral data from the database. This removes matching entries from both raw views and aggregated referrer statistics. Requires `site_url` to be configured.
+Module migration 9 cleaned up self-referral data once, when it ran: it blanked the matching `referrer_domain` in raw views and deleted the matching aggregated referrer rows. It did nothing when `site_url` was not yet configured, and there is no purge action in the settings.
 
 ## Routes
 
@@ -59,11 +58,14 @@ A one-time purge action is available in the settings to clean up existing self-r
 |--------|------|-------------|
 | GET | `/admin/internal-analytics` | Dashboard |
 | GET | `/admin/internal-analytics/report` | Views & Reads report |
-| GET | `/admin/internal-analytics/api/stats` | JSON stats (HTMX) |
+| GET | `/admin/internal-analytics/api/stats` | JSON stats (overview, top pages, time series) |
 | GET | `/admin/internal-analytics/api/realtime` | Real-time visitor count |
 | POST | `/admin/internal-analytics/settings` | Save settings |
 | POST | `/admin/internal-analytics/aggregate` | Trigger aggregation |
 | POST | `/analytics/read` | Read tracking beacon (public) |
+
+The GET routes are open to editors and administrators; the settings and
+aggregation POSTs are admin-only.
 
 ## Database Tables
 

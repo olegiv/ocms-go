@@ -123,6 +123,22 @@ func (d *Dispatcher) Start(ctx context.Context) {
 
 // Stop stops the dispatcher and waits for workers to finish.
 func (d *Dispatcher) Stop() {
+	d.mu.RLock()
+	running := d.running
+	d.mu.RUnlock()
+	if !running {
+		return
+	}
+
+	d.logger.Info("stopping webhook dispatcher")
+
+	// Flush the debouncer's pending events while the dispatcher still runs:
+	// Dispatch drops every event once running is false, which lost whatever
+	// was still in the debounce window at shutdown.
+	if d.debouncer != nil {
+		d.debouncer.Stop()
+	}
+
 	d.mu.Lock()
 	if !d.running {
 		d.mu.Unlock()
@@ -130,13 +146,6 @@ func (d *Dispatcher) Stop() {
 	}
 	d.running = false
 	d.mu.Unlock()
-
-	d.logger.Info("stopping webhook dispatcher")
-
-	// Stop debouncer first to flush pending events
-	if d.debouncer != nil {
-		d.debouncer.Stop()
-	}
 
 	close(d.done)
 	d.wg.Wait()

@@ -865,6 +865,7 @@ func TestTaxonomyRedirectRefusesPagesAliasesAndReservedRoutes(t *testing.T) {
 	s := &Source{}
 	paths := []string{
 		"/owned", "/legacy", "/admin/config", "/en", "/en/tag/go", "/en/existing-page",
+		"/account", "/account/settings",
 		"/sitemap.xml", "/robots.txt", "/.well-known/security.txt",
 		"/rss.xml", "/atom.xml", "/ru/rss.xml", "/ru/category/tech/atom.xml", "/tag/go/rss.xml",
 	}

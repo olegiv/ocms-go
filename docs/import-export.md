@@ -14,10 +14,10 @@ The import/export system supports:
 
 ### Accessing Export
 
-1. Navigate to **Admin > Config > Export**
+1. Navigate to **Admin > Export** (administrators only)
 2. Select content types to include
-3. Choose export format (JSON or ZIP)
-4. Click **Export**
+3. Tick **Include Media Files** (it needs **Media** ticked) to get a ZIP archive; otherwise you get a JSON file
+4. Click **Download Export** (**Download ZIP Archive** when media files are included)
 
 ### Export Options
 
@@ -30,7 +30,7 @@ The import/export system supports:
 | **Media** | Media metadata (ZIP includes files) |
 | **Menus** | Menu structures and items |
 | **Forms** | Form definitions (optionally with submissions) |
-| **Users** | User accounts (emails only, no passwords) |
+| **Users** | User accounts (passwords are never exported) |
 | **Languages** | Language configuration |
 | **Site Config** | Site settings |
 
@@ -108,7 +108,8 @@ so oCMS does not emit an archive it would refuse to restore.
     "exported_at": "2024-01-15T10:30:00Z",
     "site": {
         "name": "My Site",
-        "base_url": "https://example.com"
+        "description": "Optional site description",
+        "url": "https://example.com"
     },
     "languages": [...],
     "users": [...],
@@ -138,11 +139,12 @@ so oCMS does not emit an archive it would refuse to restore.
         "meta_title": "About Our Company",
         "meta_description": "Learn about us",
         "meta_keywords": "company,about",
-        "og_image": "media/og-image.jpg",
+        "og_image": {"uuid": "550e8400-e29b-41d4-a716-446655440000", "filename": "og-image.jpg"},
         "no_index": false,
         "no_follow": false,
         "canonical_url": ""
     },
+    "featured_image": {"uuid": "550e8400-e29b-41d4-a716-446655440001", "filename": "hero.jpg"},
     "translations": {
         "ru": 456
     },
@@ -159,11 +161,11 @@ so oCMS does not emit an archive it would refuse to restore.
 
 ### Accessing Import
 
-1. Navigate to **Admin > Config > Import**
+1. Navigate to **Admin > Import** (administrators only)
 2. Upload your export file (JSON or ZIP)
-3. Click **Validate** to preview changes
+3. Click **Validate File** to preview changes
 4. Configure import options
-5. Click **Import**
+5. Click **Start Import**
 
 ### Import Process
 
@@ -179,6 +181,7 @@ so oCMS does not emit an archive it would refuse to restore.
 |--------|-------------|
 | **Conflict Strategy** | How to handle existing content |
 | **Content Types** | Which types to import (checkboxes) |
+| **Import Media Files** | Copy the media files from a ZIP archive into the uploads directory (ZIP only; see [Media Restore Modes](#media-restore-modes)) |
 | **Dry Run** | Preview without making changes |
 
 ### Conflict Resolution
@@ -189,7 +192,9 @@ When importing content that already exists (matched by slug or email):
 |----------|----------|
 | **Skip** | Keep existing, ignore imported |
 | **Overwrite** | Replace existing with imported |
-| **Rename** | Import with modified slug (adds `-1`, `-2`, etc.) |
+| **Rename** | Import with modified slug (adds `-1`, `-2`, etc.); users are skipped instead, since the email is their identity |
+
+Users that do not exist yet are created with a random, unknown password; an administrator must set a new one under **Admin > Users** before they can sign in.
 
 ### Import Order
 
@@ -203,6 +208,7 @@ Content is imported in this order to maintain relationships:
 6. Pages
 7. Menus
 8. Forms
+9. Site config
 
 ### Validation Errors
 
@@ -337,7 +343,8 @@ Schedule regular exports:
 #!/bin/bash
 DATE=$(date +%Y-%m-%d)
 curl -X POST "https://yoursite.com/admin/export" \
-    -H "Cookie: session=..." \
+    -H "Cookie: __Host-session=..." \
+    -d "include_pages=on&include_media=on&include_media_files=on" \
     -o "backup-$DATE.zip"
 ```
 
@@ -396,20 +403,24 @@ If export file is too large:
 
 ### Export via API
 
+Export is a form post that needs an administrator session cookie (named `session` in development and `__Host-session` in production). Each content type is switched on with `include_<type>=on`; there is no `format` field, and ZIP output is chosen with `include_media=on&include_media_files=on`.
+
 ```bash
 curl -X POST "http://localhost:8080/admin/export" \
     -H "Cookie: session=your-session-cookie" \
-    -d "include_pages=true&include_media=true&format=json" \
+    -d "include_pages=on&include_media=on" \
     -o export.json
 ```
 
 ### Import via API
 
+Import is two steps in one session: upload the file to `/admin/import/validate` (multipart field `import_file`), then post the options to `/admin/import`. The upload is staged server-side for the second step, so the same session cookie must be used for both.
+
 ```bash
-curl -X POST "http://localhost:8080/admin/import" \
-    -H "Cookie: session=your-session-cookie" \
-    -F "file=@export.json" \
-    -F "conflict_strategy=skip"
+curl -c cookies.txt -b "session=your-session-cookie" -X POST "http://localhost:8080/admin/import/validate" \
+    -F "import_file=@export.json"
+curl -b cookies.txt -X POST "http://localhost:8080/admin/import" \
+    -d "conflict_strategy=skip&import_pages=on&import_categories=on&import_tags=on"
 ```
 
 ## Best Practices
@@ -432,8 +443,8 @@ curl -X POST "http://localhost:8080/admin/import" \
     "exported_at": "2024-01-15T10:30:00Z",
     "site": {
         "name": "string",
-        "base_url": "string",
-        "tagline": "string"
+        "description": "string",
+        "url": "string"
     },
     "languages": [
         {
@@ -450,8 +461,8 @@ curl -X POST "http://localhost:8080/admin/import" \
         {
             "email": "string",
             "name": "string",
-            "role": "admin|editor",
-            "is_active": "boolean"
+            "role": "string",
+            "created_at": "datetime"
         }
     ],
     "categories": [
@@ -460,15 +471,23 @@ curl -X POST "http://localhost:8080/admin/import" \
             "name": "string",
             "slug": "string",
             "description": "string",
-            "parent_id": "number|null",
-            "language_code": "string"
+            "parent_slug": "string",
+            "position": "number",
+            "language_code": "string",
+            "translations": {"lang_code": "category_id"},
+            "created_at": "datetime",
+            "updated_at": "datetime"
         }
     ],
     "tags": [
         {
+            "id": "number",
             "name": "string",
             "slug": "string",
-            "language_code": "string"
+            "language_code": "string",
+            "translations": {"lang_code": "tag_id"},
+            "created_at": "datetime",
+            "updated_at": "datetime"
         }
     ],
     "pages": [
@@ -485,18 +504,22 @@ curl -X POST "http://localhost:8080/admin/import" \
                 "meta_title": "string",
                 "meta_description": "string",
                 "meta_keywords": "string",
-                "og_image": "string",
+                "og_image": {"uuid": "string", "filename": "string"},
                 "no_index": "boolean",
                 "no_follow": "boolean",
                 "canonical_url": "string"
             },
+            "featured_image": {"uuid": "string", "filename": "string"},
             "translations": {
                 "lang_code": "page_id"
             },
             "language_code": "string",
             "created_at": "datetime",
             "updated_at": "datetime",
-            "published_at": "datetime|null"
+            "published_at": "datetime|null",
+            "scheduled_at": "datetime|null",
+            "video_url": "string",
+            "video_title": "string"
         }
     ],
     "media": [
@@ -513,6 +536,7 @@ curl -X POST "http://localhost:8080/admin/import" \
             "uploaded_by": "email",
             "language_code": "string",
             "file_path": "media/originals/<uuid>/<filename>",
+            "created_at": "datetime",
             "variants": [
                 {
                     "type": "thumbnail",
@@ -526,42 +550,63 @@ curl -X POST "http://localhost:8080/admin/import" \
     ],
     "menus": [
         {
+            "id": "number",
             "name": "string",
             "slug": "string",
             "language_code": "string",
             "items": [
                 {
+                    "id": "number",
                     "title": "string",
                     "url": "string",
-                    "page_id": "number|null",
-                    "parent_id": "number|null",
+                    "target": "string",
+                    "page_slug": "string",
+                    "css_class": "string",
+                    "is_active": "boolean",
                     "position": "number",
-                    "is_active": "boolean"
+                    "children": ["menu item, nested the same way"]
                 }
-            ]
+            ],
+            "created_at": "datetime",
+            "updated_at": "datetime"
         }
     ],
     "forms": [
         {
+            "id": "number",
             "name": "string",
             "slug": "string",
+            "title": "string",
             "description": "string",
+            "success_message": "string",
+            "email_to": "string",
+            "is_active": "boolean",
+            "language_code": "string",
+            "translations": {"lang_code": "form_id"},
             "fields": [
                 {
+                    "type": "string",
                     "name": "string",
                     "label": "string",
-                    "type": "string",
-                    "required": "boolean",
+                    "placeholder": "string",
+                    "help_text": "string",
                     "options": "string",
+                    "validation": "string",
+                    "is_required": "boolean",
                     "position": "number"
                 }
             ],
             "submissions": [
                 {
-                    "data": {"field": "value"},
-                    "submitted_at": "datetime"
+                    "data": "string (JSON-encoded field values)",
+                    "ip_address": "string",
+                    "user_agent": "string",
+                    "is_read": "boolean",
+                    "created_at": "datetime"
                 }
-            ]
+            ],
+            "created_at": "datetime",
+            "updated_at": "datetime"
         }
     ],
     "config": {

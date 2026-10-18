@@ -11,17 +11,35 @@ set -e
 # read-only mount of compiled-in modules and is left alone.
 DATA_DIRS="/app/data /app/uploads /app/custom/themes"
 
+# TMPDIR may point into a data volume (docker-compose.yml does, because the
+# image filesystem is read-only there). It is created as the user the app
+# runs as: under the compose capability set root has no DAC_OVERRIDE and
+# cannot write into the ocms-owned volume. Arguments run the mkdir, e.g.
+# through su-exec. A TMPDIR that cannot be created is dropped, so the app
+# falls back to /tmp instead of failing its first upload.
+ensure_tmpdir() {
+    if [ -n "${TMPDIR:-}" ] && ! "$@" mkdir -p "$TMPDIR"; then
+        echo "warning: could not create TMPDIR $TMPDIR; using /tmp instead" >&2
+        unset TMPDIR
+    fi
+}
+
 # If running as root, fix permissions and switch to ocms user
 if [ "$(id -u)" = "0" ]; then
     echo "Fixing volume permissions..."
     for dir in $DATA_DIRS; do
         if [ -d "$dir" ]; then
-            chown -R ocms:ocms "$dir" 2>/dev/null || echo "warning: could not change ownership of $dir (read-only mount?)"
+            # chown -R reports every file it cannot change; keep the first.
+            if ! err=$(chown -R ocms:ocms "$dir" 2>&1); then
+                echo "warning: could not change ownership of $dir: $(printf '%s\n' "$err" | head -n 1)" >&2
+            fi
         fi
     done
+    ensure_tmpdir su-exec ocms
     echo "Starting as ocms user..."
     exec su-exec ocms "$@"
 fi
 
 # Already running as non-root, just exec the command
+ensure_tmpdir
 exec "$@"

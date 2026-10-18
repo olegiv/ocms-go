@@ -48,7 +48,7 @@ func registerMeta(h *Handler) {
 	}, func(ctx context.Context, _ *struct{}) (*struct{ Body AuthBody }, error) {
 		actor := ActorFromContext(ctx)
 		if actor.APIKey == nil {
-			return nil, ToHuma(NewError(ErrUnauthorized, "API key required"))
+			return nil, ToHuma(ctx, NewError(ErrUnauthorized, "API key required"))
 		}
 		return &struct{ Body AuthBody }{Body: AuthBody{
 			KeyPrefix:   actor.APIKey.KeyPrefix,

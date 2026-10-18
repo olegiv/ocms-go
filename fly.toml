@@ -5,6 +5,13 @@
 
 app = 'ocms-demo'
 primary_region = 'fra'
+# On the stop signal the app drains requests for up to 30 seconds, waits up
+# to 5 more for handlers still running, records the stop (up to 5), and
+# gives its shutdown steps up to 10 and its Event Log writer up to 3. Fly's
+# default of 5 seconds would kill it mid-drain;
+# TestStopGracePeriodsCoverTheDrain keeps this at or above what the app
+# needs.
+kill_timeout = 60
 
 [build]
   dockerfile = 'Dockerfile'

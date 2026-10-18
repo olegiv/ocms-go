@@ -39,8 +39,8 @@ OCMS_SESSION_SECRET=$(openssl rand -hex 32) OCMS_DO_SEED=true make dev
 Or with Docker:
 
 ```bash
-OCMS_SESSION_SECRET=$(openssl rand -base64 32) OCMS_DO_SEED=true \
-  docker compose up -d
+OCMS_ENV=development OCMS_SESSION_SECRET=$(openssl rand -base64 32) \
+  OCMS_DO_SEED=true docker compose up -d
 ```
 
 Source-build prerequisites — see [Prerequisites](#prerequisites) below.
@@ -86,7 +86,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 
 ### Content Management
 - **Page Management**: Create, edit, publish, and version pages with a rich content editor
-- **Video Embedding**: Embed YouTube, Vimeo, and Dailymotion videos in pages with responsive rendering
+- **Video Embedding**: Embed YouTube videos in pages with responsive rendering (more providers planned)
 - **Scheduled Publishing**: Schedule pages to publish at a future date/time
 - **Media Library**: Upload and manage images, documents, and videos with automatic image processing
   - Automatic thumbnail and variant generation
@@ -194,8 +194,8 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 - **Dry Run Mode**: Preview import changes before applying
 
 ### Performance
-- **Multi-Level Caching**: In-memory and optional Redis caching
-- **Redis Support**: Distributed caching for multi-instance deployments
+- **Caching**: In-memory caching of site config, menus, languages, sitemaps and pages
+- **Redis Connection**: Optional (`OCMS_REDIS_URL`); shown in the cache admin and cleared with it, but the caches above stay per process, so instances do not share them
 - **Response Compression**: Gzip compression for HTML and JSON responses
 - **Graceful Shutdown**: Clean shutdown with request draining
 - **Health Check**: `/health` endpoint for monitoring
@@ -238,6 +238,14 @@ cd my-site
 Running `ocms` with no command still starts the server, so existing
 systemd/Docker setups are unaffected.
 
+The server applies pending database migrations when it starts. To run the
+core ones without starting it, use `ocms migrate [-db <path>]
+up|down|status|version`, which reads `./.env` (or the file `OCMS_ENV_FILE`
+names) like `serve`; module migrations still run when the server starts.
+`make migrate-up`, `migrate-down` and `migrate-status` run it (add
+`DB_PATH=<path>` for another database). `make migrate-create` still uses the
+goose CLI, which does not know the Go migration and cannot roll it back.
+
 Open `http://localhost:8080/admin/` and log in with
 `admin@example.com` / `changeme1234`. Change the admin email and password
 immediately. Stop the foreground process with `Ctrl+C`, set
@@ -252,6 +260,15 @@ Available release archives:
 - `ocms-linux-amd64.tar.gz`
 - `ocms-linux-arm64.tar.gz`
 - `ocms-darwin-arm64.tar.gz`
+
+Each release also ships `checksums.txt`, and every archive published after
+v0.28.0 carries a signed build-provenance attestation that ties it to the
+release workflow run, commit and tag. Verify a download before running it:
+
+```bash
+curl -LO https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz
+gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
+```
 
 `go install` is not supported for the CMS binary because Go does not run the frontend asset pipeline before evaluating `//go:embed`.
 
@@ -295,21 +312,22 @@ Available release archives:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `OCMS_SESSION_SECRET` | Server secret that keys CSRF protection; sessions are stored server-side (min 32 bytes; placeholder values from example files are refused, and the public test-suite secret is refused in production) | - | Yes |
+| `OCMS_SESSION_SECRET` | Required server secret, validated at startup; nothing is keyed with it today: sessions are stored server-side and CSRF protection checks Fetch metadata headers (min 32 bytes; placeholder values from example files are refused, and the public test-suite secret is refused in production) | - | Yes |
 | `OCMS_DB_PATH` | Path to SQLite database file | `./data/ocms.db` | No |
+| `OCMS_ENV_FILE` | Env file to read instead of `./.env` (site instance mode; `site.mk` sets it to the site's `.env`). The server and `ocms migrate` refuse to start if it is missing, unreadable or does not parse; a `./.env` that does not parse is refused too, a missing one ignored. Variables already in the environment win over the file | `./.env` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
 | `OCMS_ENV` | Environment mode (`development`/`production`) | `development` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
 | `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
-| `OCMS_CUSTOM_DIR` | Directory for custom themes and modules | `./custom` | No |
+| `OCMS_CUSTOM_DIR` | Directory for custom themes (custom modules are compiled in) | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
 | `OCMS_SITE_URL` | Full site URL written into site config on startup (overrides DB/admin setting). Required for RSS/Atom feeds, the sitemap and agent-discovery documents, which answer 503 while it is unset. Must be scheme and host only, e.g. `https://example.com` — a path, query, fragment, credentials or an out-of-range port fails startup, because routes are served from the root | - | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
-| `OCMS_CACHE_TTL` | Default cache TTL in seconds | `3600` | No |
-| `OCMS_REDIS_URL` | Redis URL for distributed caching | - | No |
+| `OCMS_CACHE_TTL` | TTL in seconds for the Redis (or fallback) cache, which the caches do not use yet; the in-memory caches have fixed TTLs | `3600` | No |
+| `OCMS_REDIS_URL` | Redis URL; the connection shows in the cache admin, but the caches stay in memory per process | - | No |
 | `OCMS_CACHE_PREFIX` | Redis key prefix | `ocms:` | No |
-| `OCMS_CACHE_MAX_SIZE` | Max entries for in-memory cache | `10000` | No |
+| `OCMS_CACHE_MAX_SIZE` | Max entries for the fallback memory cache, which the caches do not use yet | `10000` | No |
 | `OCMS_HCAPTCHA_SITE_KEY` | hCaptcha site key for login protection | - | No |
 | `OCMS_HCAPTCHA_SECRET_KEY` | hCaptcha secret key for login protection | - | No |
 | `OCMS_HCAPTCHA_DISABLED` | Force-disable hCaptcha regardless of database settings | `false` | No |
@@ -318,7 +336,7 @@ Available release archives:
 | `OCMS_TRUSTED_PROXIES` | Trusted reverse-proxy CIDRs/IPs; forwarding headers are ignored unless peer is trusted | - | No |
 | `OCMS_REQUIRE_TRUSTED_PROXIES` | Fail startup in production if trusted proxy CIDRs/IPs are not configured | `false` (`true` in production when unset) | No |
 | `OCMS_API_ALLOWED_CIDRS` | Global source CIDRs/IPs allowed to use API keys | - | No |
-| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | Fail API key auth when global API source CIDRs are not configured | `false` (`true` in production when unset) | No |
+| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | Fail startup in production, and API key auth elsewhere, when global API source CIDRs are not configured | `false` (`true` in production when unset) | No |
 | `OCMS_REQUIRE_API_KEY_EXPIRY` | Require API keys to have expiration timestamps | `false` (`true` in production when unset) | No |
 | `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | Require API keys to have per-key source CIDR restrictions | `false` (`true` in production when unset) | No |
 | `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | Deactivate API keys when source IP changes and the key has no per-key CIDRs | `false` (`true` in production when unset) | No |
@@ -337,7 +355,7 @@ Available release archives:
 | `OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS` | Fail startup in production when active webhooks exist without destination host allowlist | `false` (`true` in production when unset) | No |
 | `OCMS_MIGRATOR_ALLOWED_DB_HOSTS` | Allowed source-database hosts for the Migrator module (bare hostnames or IPs, no port). Empty = no restriction; migrator routes are admin-only regardless (see `docs/migrator-module.md`) | - | No |
 | `OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS` | Fail startup in production when the Migrator module is active without a source-database host allowlist | `false` (`true` in production when unset) | No |
-| `OCMS_MIGRATOR_ALLOWED_FILE_ROOTS` | Comma-separated absolute roots from which the Migrator may read local media. `DRUPAL_FILES` and `ELEFANT_FILES` are also trusted roots; media import fails closed when none are configured | - | No |
+| `OCMS_MIGRATOR_ALLOWED_FILE_ROOTS` | Comma-separated absolute roots from which the Migrator may read local media. `DRUPAL_FILES`, `ELEFANT_FILES` and `PHPNUKE_FILES` are also trusted roots; media import fails closed when none are configured | - | No |
 | `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` (`true` in production when unset) | No |
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` (`true` in production when unset) | No |
 | `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | Reject page writes containing suspicious HTML patterns | `false` (`true` in production when unset) | No |
@@ -380,9 +398,9 @@ make run
 | `make test` | Run all tests |
 | `make clean` | Remove build artifacts |
 | `make clean-db` | Remove database files |
-| `make migrate-up` | Apply pending migrations |
-| `make migrate-down` | Rollback last migration |
-| `make migrate-status` | Show migration status |
+| `make migrate-up` | Apply pending migrations (`ocms migrate up`) |
+| `make migrate-down` | Rollback last migration (`ocms migrate down`) |
+| `make migrate-status` | Show migration status (`ocms migrate status`) |
 | `make migrate-create` | Create new migration file |
 | `make assets` | Install npm deps and compile SCSS |
 | `make sqlc` | Regenerate sqlc code from SQL queries |
@@ -392,8 +410,8 @@ make run
 | `make commit-do` | Proxy to Claude slash command `/commit-do` |
 | `make code-quality` | Proxy to Claude slash command `/code-quality` |
 | `make security-audit` | Proxy to Claude slash command `/security-audit` |
-| `make commit-prepare-local` | Run local commit-prepare shell script |
-| `make commit-do-local` | Run local commit-do shell script |
+| `make commit-prepare-local` | Run the test gate, then draft a commit message locally |
+| `make commit-do-local` | Commit the staged files with the drafted message after the test gate |
 | `make code-quality-local` | Run local code quality shell script (`golangci-lint`, `nilaway`, `go test`) |
 | `make security-audit-local` | Run local security audit shell script (writes to `.audit/`) |
 | `make install-hooks` | Configure git to use repository-managed hooks from `.githooks` |
@@ -414,7 +432,9 @@ renamed or replaced admin is not brought back by a restart with
 
 With `OCMS_DEMO_MODE=true` (requires `OCMS_DO_SEED=true`), additional demo content is seeded including sample pages, categories, tags, media, and menu items. Two demo users are created:
 
-- **Admin**: demo@example.com / demo1234demo
+- **Admin**: demo@example.com; its password is rotated to a random value on
+  every startup and shown in the informer bar (the default admin's
+  `changeme1234` is rotated away too)
 - **Editor**: editor@example.com / demo1234demo
 
 See [docs/demo-deployment.md](docs/demo-deployment.md) for Fly.io deployment and demo configuration details.
@@ -429,7 +449,7 @@ git clone https://github.com/olegiv/ocms-go.git
 cd ocms-go
 
 # Start with Docker Compose (generates session secret automatically)
-OCMS_SESSION_SECRET=$(openssl rand -base64 32) OCMS_DO_SEED=true docker compose up -d
+OCMS_ENV=development OCMS_SESSION_SECRET=$(openssl rand -base64 32) OCMS_DO_SEED=true docker compose up -d
 
 # View logs
 docker compose logs -f ocms
@@ -439,12 +459,33 @@ Access the admin panel at http://localhost:8080/admin with:
 - **Email**: admin@example.com
 - **Password**: changeme1234
 
+The image defaults to `OCMS_ENV=production`, which refuses `OCMS_DO_SEED=true`
+and fails to start without `OCMS_TRUSTED_PROXIES` and `OCMS_API_ALLOWED_CIDRS`,
+so this first, seeded run sets `OCMS_ENV=development`. Change the admin
+credentials before starting in production: production startup refuses to run
+while the default seeded credentials are active. A production container also
+needs, in a `.env` file beside `docker-compose.yml`: `OCMS_TRUSTED_PROXIES`,
+`OCMS_API_ALLOWED_CIDRS`, `OCMS_EMBED_PROXY_TOKEN` while the Embed module is
+active (it is on a fresh install), and the hCaptcha keys or
+`OCMS_REQUIRE_FORM_CAPTCHA=false`. Compose passes the container every variable
+the app reads except the listen address, the port and the `/app` paths, which
+it fixes.
+
+The port is published on `127.0.0.1` only. Set `OCMS_PUBLISH_ADDRESS=0.0.0.0`
+when a reverse proxy on another host, or a container that uses the host's
+address, has to reach it. The container runs with `no-new-privileges` and only
+the `CHOWN`, `DAC_READ_SEARCH`, `SETUID` and `SETGID` capabilities its
+entrypoint needs to fix volume ownership and drop to the `ocms` user; the
+switch to `ocms` clears them. The image filesystem is read-only: the app
+writes only to its volumes, temporary files go to `TMPDIR=/app/data/tmp` on
+the data volume, and `/tmp` is a small tmpfs.
+
 ### Docker Commands
 
 | Command | Description |
 |---------|-------------|
 | `docker compose up -d` | Start oCMS |
-| `docker compose --profile redis up -d` | Start with Redis caching |
+| `docker compose --profile redis up -d` | Start with a Redis container |
 | `docker compose down` | Stop services |
 | `docker compose logs -f ocms` | View logs |
 | `docker compose build --pull ocms && docker compose up -d` | Rebuild local image and restart |
@@ -497,7 +538,7 @@ OCMS_WEBHOOK_ALLOWED_HOSTS=hooks.example.com,events.example.com
 OCMS_HCAPTCHA_SITE_KEY=your-site-key
 OCMS_HCAPTCHA_SECRET_KEY=your-secret-key
 
-# Optional: Redis caching
+# Optional: Redis connection (the caches stay in memory per process)
 OCMS_REDIS_URL=redis://redis:6379/0
 ```
 
@@ -844,7 +885,9 @@ see them. Things worth knowing about it:
 
 Set `OCMS_DB_PATH` in each site's `.env`; it and `OCMS_CUSTOM_DIR` /
 `OCMS_UPLOADS_DIR` are resolved against the site directory, because `dev` and
-`run` execute from this checkout.
+`run` execute from this checkout. The targets that run, stop or migrate the
+site's server (`dev`, `run`, `stop`, `restart`, `migrate-*`) stop when the site
+`.env` is missing rather than fall back to `data/ocms.db` and port 8080.
 
 See [docs/custom-modules.md](docs/custom-modules.md#modules-in-a-multi-site-deployment)
 for the full rationale.
@@ -925,11 +968,22 @@ or ask Codex in chat to run them.
 You can run slash-command equivalents through Claude CLI:
 
 ```bash
-claude -p "/commit-prepare" --dangerously-skip-permissions
-claude -p "/commit-do" --dangerously-skip-permissions
-claude -p "/code-quality" --dangerously-skip-permissions
-claude -p "/security-audit" --dangerously-skip-permissions
+./scripts/codex/proxy-claude-command.sh /commit-prepare
+./scripts/codex/proxy-claude-command.sh /commit-do
+./scripts/codex/proxy-claude-command.sh /code-quality
+./scripts/codex/proxy-claude-command.sh /security-audit
 ```
+
+The proxy runs `claude -p` with `--permission-mode dontAsk` and a per-command
+`--allowedTools` list. Rules for tools that run project or package code are
+exact (`scripts/test-gate.sh`, `go vet ./...`, `golangci-lint run ./...`,
+`npm audit`); git commands are allowed by prefix, so `git commit` runs the
+repository's hooks and `git diff --output=<file>` can write a file. Anything
+else is denied without a prompt, so a check that needs another tool is skipped
+and reported by the command rather than run. This is a best-effort fence, not
+a sandbox. Avoid `--dangerously-skip-permissions`: these
+commands read diffs, logs and scan output, and text in them could otherwise
+steer the session into any shell command.
 
 Codex wrapper commands (Claude proxy by default):
 

@@ -24,10 +24,6 @@ if $run_quality; then
     echo "- Skipping golangci-lint (not installed)."
   fi
 
-  if ! go test ./...; then
-    quality_failed=true
-  fi
-
   if $quality_failed; then
     echo
     echo "Code quality issues found. Fix them first, or rerun without 'quality'."
@@ -43,6 +39,15 @@ if [[ -z "$(git status --porcelain)" ]]; then
   echo "No changes detected. Nothing to prepare."
   exit 0
 fi
+
+# The test gate is mandatory: no message is drafted while a test fails.
+echo "== test gate (scripts/test-gate.sh) =="
+if ! "$ROOT_DIR/scripts/test-gate.sh"; then
+  echo
+  echo "Tests failed. Fix them before preparing a commit."
+  exit 2
+fi
+echo
 
 changed_files="$(git status --porcelain | sed 's/^.. //' | sed '/^$/d')"
 
@@ -75,7 +80,8 @@ EOM
 
 echo
 echo "Draft commit message saved to: $MSG_FILE"
-echo "Review/edit it, then run: ./scripts/codex/commit-do.sh"
+echo "Review/edit it, stage the files it describes (git add -- <file>...),"
+echo "then run: ./scripts/codex/commit-do.sh"
 echo
 echo "----"
 cat "$MSG_FILE"

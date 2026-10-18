@@ -19,7 +19,11 @@ When running behind a reverse proxy, configure oCMS:
 export OCMS_SERVER_HOST=127.0.0.1
 export OCMS_SERVER_PORT=8080
 export OCMS_ENV=production
+# Trust forwarding headers only from the proxy (IPs or CIDRs, comma-separated)
+export OCMS_TRUSTED_PROXIES=127.0.0.1
 ```
+
+oCMS honors the client-address headers `X-Forwarded-For` and `X-Real-IP`, and the `X-Forwarded-Host` and `X-Forwarded-Proto` headers used to resolve a page's public origin, only when the connection comes from an address in `OCMS_TRUSTED_PROXIES`. Without it every visitor appears with the proxy's address, so rate limiting, account lockout, analytics, hCaptcha and GeoIP all see the proxy instead of the client. With `OCMS_ENV=production`, startup fails while it is unset unless `OCMS_REQUIRE_TRUSTED_PROXIES=false`. See the [README](../README.md) for the other production requirements, such as `OCMS_API_ALLOWED_CIDRS`.
 
 ---
 
@@ -62,11 +66,14 @@ server {
     # Client body size for file uploads
     client_max_body_size 100M;
 
-    # Proxy headers
+    # Proxy headers (keep them all at this level: a location that sets its own
+    # proxy_set_header directives stops inheriting the ones from here)
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
 
     # Timeouts
     proxy_connect_timeout 60s;
@@ -77,8 +84,6 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
     }
 
     # Static assets caching
@@ -160,11 +165,7 @@ server {
 }
 ```
 
-**Note**: When running multiple instances, configure Redis for distributed caching:
-
-```bash
-export OCMS_REDIS_URL=redis://localhost:6379/0
-```
+**Note**: Each instance keeps its own in-memory caches (config, sitemap, pages, menus, languages, translations). Setting `OCMS_REDIS_URL` connects a Redis backend, but these caches are not stored in or shared through it, so a change made on one instance invalidates only that instance's caches (see [Caching](caching.md)).
 
 Content imports (**Admin > Import**) stage the uploaded file on the instance that received it, so route one administrator session to the same instance (for example `ip_hash` or a cookie-based `sticky` directive) or run imports against a single instance.
 
@@ -401,10 +402,12 @@ version: '3.8'
 services:
   ocms:
     build: .
+    stop_grace_period: 60s  # the app drains requests for up to 30 seconds on SIGTERM, then shuts down
     environment:
-      - OCMS_SESSION_SECRET=your-secret-key-at-least-32-bytes
+      - OCMS_SESSION_SECRET=${OCMS_SESSION_SECRET}  # e.g. from `openssl rand -base64 32`; placeholder values are rejected
       - OCMS_SERVER_HOST=0.0.0.0
       - OCMS_ENV=production
+      - OCMS_TRUSTED_PROXIES=172.16.0.0/12  # Docker's default bridge ranges; narrow to the proxy_network subnet
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
@@ -461,7 +464,9 @@ sudo certbot --apache -d example.com -d www.example.com
 
 ## Security Headers
 
-Add these security headers to your reverse proxy for improved security:
+oCMS already sends `Content-Security-Policy`, `Strict-Transport-Security` (production), `X-Frame-Options`, `X-Content-Type-Options`, `X-XSS-Protection`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy` on its responses, so the proxy does not need to add them. Avoid duplicating headers between the proxy and the application. In particular, do not add a `Content-Security-Policy` at the proxy: browsers enforce every policy they receive, so it would block the hosts that active modules (hCaptcha, analytics, ...) add to oCMS's own policy.
+
+The headers below are only useful for responses the proxy serves itself, such as static files delivered straight from disk:
 
 ### Nginx
 
@@ -469,12 +474,9 @@ Add these security headers to your reverse proxy for improved security:
 # Security headers
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
-add_header X-XSS-Protection "1; mode=block" always;
+add_header X-XSS-Protection "0" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-# Content Security Policy (adjust as needed)
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self';" always;
 ```
 
 ### Apache
@@ -482,7 +484,7 @@ add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsaf
 ```apache
 Header always set X-Frame-Options "SAMEORIGIN"
 Header always set X-Content-Type-Options "nosniff"
-Header always set X-XSS-Protection "1; mode=block"
+Header always set X-XSS-Protection "0"
 Header always set Referrer-Policy "strict-origin-when-cross-origin"
 Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 ```
@@ -524,8 +526,9 @@ The [HSTS preload list](https://hstspreload.org) closes that gap: major browsers
 - Increase the limit in proxy configuration
 
 **Mixed Content Warnings**
-- `X-Forwarded-Proto` header not set
+- `X-Forwarded-Proto` header not set, or the proxy is not listed in `OCMS_TRUSTED_PROXIES` (oCMS ignores the header from any other peer when resolving a page's origin)
 - Ensure proxy passes `https` scheme
+- Set `site_url` (or `OCMS_SITE_URL`) to the `https://` origin; without it, absolute URLs are built from the request and use the connection's scheme
 
 ### Verify Proxy Headers
 
@@ -536,7 +539,7 @@ Check that oCMS receives correct headers:
 curl -v https://example.com/health
 ```
 
-The `X-Real-IP` and `X-Forwarded-For` headers should contain the client's real IP.
+The `X-Real-IP` and `X-Forwarded-For` headers should contain the client's real IP, and the proxy's address must be listed in `OCMS_TRUSTED_PROXIES` for oCMS to use them.
 
 ### Health Check Monitoring
 

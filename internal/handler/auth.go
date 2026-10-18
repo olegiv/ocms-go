@@ -50,17 +50,13 @@ func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManage
 }
 
 // LoginForm renders the login page.
-// Redirects already-authenticated users: admin/editor → dashboard, others → homepage.
+// Redirects already-authenticated users to their role's landing page.
 func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	// Redirect already-authenticated users
 	if userID := h.sessionManager.GetInt64(r.Context(), middleware.SessionKeyUserID); userID > 0 {
 		user, err := h.queries.GetUserByID(r.Context(), userID)
 		if err == nil {
-			if user.Role == model.RoleAdmin || user.Role == model.RoleEditor {
-				http.Redirect(w, r, redirectAdmin, http.StatusSeeOther)
-				return
-			}
-			http.Redirect(w, r, RouteRoot, http.StatusSeeOther)
+			http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
 			return
 		}
 	}
@@ -73,13 +69,7 @@ func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		AdminLang: lang,
 	}
 
-	// Get language options
-	for _, opt := range h.renderer.AdminLangOptions() {
-		data.LangOptions = append(data.LangOptions, adminviews.LangOption{
-			Code: opt.Code,
-			Name: opt.Name,
-		})
-	}
+	data.LangOptions = adminLangOptions(h.renderer)
 
 	// Get hCaptcha state
 	data.HcaptchaEnabled = h.renderer.HcaptchaEnabled()
@@ -258,11 +248,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	h.renderer.SetFlash(r, i18n.T(lang, "auth.welcome_back", user.Name), "success")
 
-	// Redirect based on user role
-	if user.Role == "admin" {
-		http.Redirect(w, r, redirectAdmin, http.StatusSeeOther)
-	} else {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
+}
+
+// loginDestination keeps fresh-login and existing-session destinations consistent.
+func loginDestination(role string) string {
+	switch role {
+	case model.RoleAdmin, model.RoleEditor:
+		return redirectAdmin
+	case model.RolePublic:
+		return RouteAccount
+	default:
+		return RouteRoot
 	}
 }
 

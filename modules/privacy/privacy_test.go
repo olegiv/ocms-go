@@ -136,7 +136,7 @@ func TestBuildKlaroConfig(t *testing.T) {
 		},
 	}
 
-	config := m.buildKlaroConfig()
+	config := m.buildKlaroConfig(m.settings)
 
 	// Check essential parts of the config
 	if !strings.Contains(config, "var klaroConfig = {") {
@@ -180,7 +180,7 @@ func TestRenderGCMDefaults(t *testing.T) {
 		},
 	}
 
-	script := m.renderGCMDefaults()
+	script := m.renderGCMDefaults(m.settings)
 
 	if !strings.Contains(script, "gtag('consent', 'default'") {
 		t.Error("script should contain GCM default consent")
@@ -208,7 +208,7 @@ func TestRenderGCMDefaultsGranted(t *testing.T) {
 		},
 	}
 
-	script := m.renderGCMDefaults()
+	script := m.renderGCMDefaults(m.settings)
 
 	if !strings.Contains(script, "'analytics_storage': 'granted'") {
 		t.Error("script should have analytics_storage granted when enabled")
@@ -408,7 +408,7 @@ func TestGetPositionCSS(t *testing.T) {
 			},
 		}
 
-		css := m.getPositionCSS()
+		css := m.getPositionCSS(m.settings)
 		if !strings.Contains(css, tt.contains) {
 			t.Errorf("position %q CSS should contain %q, got %q", tt.position, tt.contains, css)
 		}

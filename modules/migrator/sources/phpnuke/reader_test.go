@@ -23,6 +23,7 @@ func newSourceStub(t *testing.T, schema ...string) *Reader {
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 	for _, statement := range schema {
 		if _, err := db.Exec(statement); err != nil {

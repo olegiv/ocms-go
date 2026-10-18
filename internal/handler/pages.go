@@ -135,34 +135,7 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 	if h.dispatcher == nil {
 		return
 	}
-
-	var languageCode *string
-	if page.LanguageCode != "" {
-		languageCode = new(page.LanguageCode)
-	}
-
-	var publishedAt *string
-	if page.PublishedAt.Valid {
-		publishedAt = new(page.PublishedAt.Time.Format(time.RFC3339))
-	}
-
-	data := webhook.PageEventData{
-		ID:           page.ID,
-		Title:        page.Title,
-		Slug:         page.Slug,
-		Status:       page.Status,
-		AuthorID:     page.AuthorID,
-		AuthorEmail:  authorEmail,
-		LanguageCode: languageCode,
-		PublishedAt:  publishedAt,
-	}
-
-	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
-		slog.Error("failed to dispatch webhook event",
-			"error", err,
-			"event_type", eventType,
-			"page_id", page.ID)
-	}
+	webhook.DispatchPageEvent(ctx, h.dispatcher, eventType, page, authorEmail)
 }
 
 // PagesListData holds data for the pages list template.
@@ -576,6 +549,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.validatePageSlugCreate(r.Context(), input.Slug); errMsg != "" {
 		validationErrors["slug"] = errMsg
 	}
+	if errMsg := h.validatePageAliases(r.Context(), r.Form["aliases[]"], 0); errMsg != "" {
+		validationErrors["aliases"] = errMsg
+	}
 
 	// Status validation
 	if input.Status == "" {
@@ -620,6 +596,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 		data := PageFormData{
 			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
+			Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
 			AllCategories: categoryTree,
 			AllLanguages:  allLanguages,
 			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
@@ -855,6 +832,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if slugErr := h.validatePageSlugUpdate(r.Context(), input.Slug, existingPage.Slug, id); slugErr != "" {
 		validationErrors["slug"] = slugErr
 	}
+	if errMsg := h.validatePageAliases(r.Context(), r.Form["aliases[]"], id); errMsg != "" {
+		validationErrors["aliases"] = errMsg
+	}
 
 	// Status validation
 	status := input.Status
@@ -901,6 +881,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Page:          &existingPage,
 			PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
 			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
+			Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
 			AllCategories: categoryTree,
 			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
 			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
@@ -1172,48 +1153,44 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	var message string
-	var eventType string
+	var updatedPage store.Page
+	action, eventType := "published", model.EventPagePublished
 
+	// Both updates apply only while the page still has the status read
+	// above, so a toggle racing the scheduler cannot publish it twice.
 	if page.Status == PageStatusPublished {
-		// Unpublish
-		_, err = h.queries.UnpublishPage(r.Context(), store.UnpublishPageParams{
+		action, eventType = "unpublished", model.EventPageUnpublished
+		updatedPage, err = h.queries.UnpublishPage(r.Context(), store.UnpublishPageParams{
 			ID:        id,
 			UpdatedAt: now,
 		})
-		message = "Page unpublished successfully"
-		eventType = model.EventPageUnpublished
-		slog.Info("page unpublished", "page_id", id, "slug", page.Slug, "unpublished_by", middleware.GetUserID(r))
-		_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page unpublished", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
 	} else {
-		// Publish
-		_, err = h.queries.PublishPage(r.Context(), store.PublishPageParams{
+		updatedPage, err = h.queries.PublishUnpublishedPage(r.Context(), store.PublishUnpublishedPageParams{
 			ID:          id,
 			UpdatedAt:   now,
 			PublishedAt: sql.NullTime{Time: now, Valid: true},
 		})
-		message = "Page published successfully"
-		eventType = model.EventPagePublished
-		slog.Info("page published", "page_id", id, "slug", page.Slug, "published_by", middleware.GetUserID(r))
-		_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page published", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
 	}
 
+	if errors.Is(err, sql.ErrNoRows) {
+		flashError(w, r, h.renderer, redirectAdminPages, "The page status changed meanwhile; check it and try again")
+		return
+	}
 	if err != nil {
 		slog.Error("failed to toggle publish status", "error", err, "page_id", id)
 		flashError(w, r, h.renderer, redirectAdminPages, "Error updating page status")
 		return
 	}
 
+	slog.Info("page "+action, "page_id", id, "slug", page.Slug, action+"_by", middleware.GetUserID(r))
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page "+action, middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
+
 	// Invalidate page cache after visibility changes.
 	h.invalidatePageCache(id)
 
-	// Get updated page for webhook event
-	updatedPage, err := h.queries.GetPageByID(r.Context(), id)
-	if err == nil {
-		h.dispatchPageEvent(r.Context(), eventType, updatedPage, middleware.GetUserEmail(r))
-	}
+	h.dispatchPageEvent(r.Context(), eventType, updatedPage, middleware.GetUserEmail(r))
 
-	flashSuccess(w, r, h.renderer, redirectAdminPages, message)
+	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page "+action+" successfully")
 }
 
 // VersionsPerPage is the number of versions to display per page.
@@ -1690,7 +1667,7 @@ func validatePageTitle(title string) string {
 // validatePageSlugCreate validates a page slug for creation.
 // Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) string {
-	if conflict := h.languagePrefixConflict(ctx, slug); conflict != "" {
+	if conflict := h.pageRouteConflict(ctx, slug); conflict != "" {
 		return conflict
 	}
 	return ValidateSlugWithChecker(slug, func() (int64, error) {
@@ -1705,7 +1682,7 @@ func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) 
 // Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, currentSlug string, pageID int64) string {
 	if slug != currentSlug {
-		if conflict := h.languagePrefixConflict(ctx, slug); conflict != "" {
+		if conflict := h.pageRouteConflict(ctx, slug); conflict != "" {
 			return conflict
 		}
 	}
@@ -1769,7 +1746,7 @@ func (h *PagesHandler) writePageGuarded(
 
 	queries := store.New(h.db).WithTx(tx)
 	if slug != currentSlug {
-		conflict, conflictErr := LanguagePrefixConflict(ctx, queries, slug)
+		conflict, conflictErr := PageRouteConflict(ctx, queries, slug)
 		if conflictErr != nil {
 			return store.Page{}, conflictErr
 		}
@@ -1787,19 +1764,37 @@ func (h *PagesHandler) writePageGuarded(
 	return page, nil
 }
 
-// LanguagePrefixConflict reports the message for a page route that an active
-// language would swallow, or an empty string when the path is free.
+// PageRouteConflict reports the message for a page slug or alias path that an
+// application route or an active language would swallow, or an empty string
+// when the path is free.
 //
-// The language middleware runs ahead of the frontend router and strips a
-// leading segment that matches an active language code, so a page saved at
-// that segment can never be reached — the language homepage answers instead.
-// Slug uniqueness is checked only against pages and aliases and would let this
-// through silently, so the two namespaces are compared here.
+// chi matches an exact application route such as /login or /account before
+// the page catch-all, so a page or single-segment alias at that URL is never
+// served (util.IsReservedPageSlug). The language middleware treats a leading
+// segment that matches an active language code as a prefix: the bare code
+// serves the language homepage, and a longer path such as "eng/team" is
+// routed without it, so the page is never reached. Slug uniqueness is checked
+// only against pages and aliases and would let both through silently, so the
+// namespaces are compared here. A multi-segment alias is reserved only where a
+// route answers it (util.ReservedRoutePath: "blog/tag/news", anything below
+// "uploads/"); other paths ("blog/post/55", or "tag/news" while no such tag
+// exists) reach the page through the not-found alias lookup.
 //
 // Exported because every path that writes a page slug owes callers the same
 // answer: the admin form, the v2 API, and anything added later. A path that
 // skips it stores a URL that resolves to something else.
-func LanguagePrefixConflict(ctx context.Context, queries *store.Queries, firstSegment string) (string, error) {
+func PageRouteConflict(ctx context.Context, queries *store.Queries, path string) (string, error) {
+	firstSegment, rest, _ := strings.Cut(path, "/")
+	if rest == "" && util.IsReservedPageSlug(firstSegment) {
+		return fmt.Sprintf("Conflicts with the application route /%s", firstSegment), nil
+	}
+	if pattern := util.ReservedRoutePath(path); pattern != "" {
+		if prefix, ok := strings.CutSuffix(pattern, "/**"); ok {
+			prefix = strings.TrimSuffix(prefix, "/*")
+			return fmt.Sprintf("Conflicts with the application routes under /%s/", prefix), nil
+		}
+		return fmt.Sprintf("Conflicts with the application route /%s", pattern), nil
+	}
 	if firstSegment == "" || !util.IsRoutableLanguageCode(firstSegment) {
 		return "", nil
 	}
@@ -1815,13 +1810,62 @@ func LanguagePrefixConflict(ctx context.Context, queries *store.Queries, firstSe
 	return "", nil
 }
 
-func (h *PagesHandler) languagePrefixConflict(ctx context.Context, firstSegment string) string {
-	conflict, err := LanguagePrefixConflict(ctx, h.queries, firstSegment)
+func (h *PagesHandler) pageRouteConflict(ctx context.Context, path string) string {
+	conflict, err := PageRouteConflict(ctx, h.queries, path)
 	if err != nil {
-		slog.Error("database error checking language prefixes", "error", err)
-		return "Error checking slug"
+		slog.Error("database error checking page route conflicts", "error", err, "path", path)
+		return "Error checking for route conflicts"
 	}
 	return conflict
+}
+
+// validatePageAliases returns the form error for the first submitted alias
+// that is malformed, listed twice, already used by another page (as its slug
+// or an alias) or answered by an application route or active language instead
+// of the page, or "" when every alias can be stored. pageID is the page being
+// edited, or 0 for a new one. It runs before any write, so an update never
+// clears aliases it cannot save again.
+func (h *PagesHandler) validatePageAliases(ctx context.Context, aliases []string, pageID int64) string {
+	seen := make(map[string]bool, len(aliases))
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		if !util.IsValidAlias(alias) {
+			return fmt.Sprintf("Alias /%s: use lowercase letters, numbers and hyphens, with / between segments", alias)
+		}
+		if seen[alias] {
+			return fmt.Sprintf("Alias /%s is listed twice", alias)
+		}
+		seen[alias] = true
+		if conflict := h.pageRouteConflict(ctx, alias); conflict != "" {
+			return fmt.Sprintf("Alias /%s: %s", alias, conflict)
+		}
+		taken, err := h.queries.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{
+			Slug: alias, ID: pageID, Alias: alias, PageID: pageID,
+		})
+		if err != nil {
+			slog.Error("database error checking page alias", "error", err, "alias", alias, "page_id", pageID)
+			return "Error checking for alias conflicts"
+		}
+		if taken != 0 {
+			return fmt.Sprintf("Alias /%s is already used by another page", alias)
+		}
+	}
+	return ""
+}
+
+// pageAliasesFromForm returns the submitted aliases, so a form re-rendered
+// after a validation error keeps them.
+func pageAliasesFromForm(values []string) []store.PageAlias {
+	var aliases []store.PageAlias
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			aliases = append(aliases, store.PageAlias{Alias: value})
+		}
+	}
+	return aliases
 }
 
 // loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is
@@ -1963,15 +2007,22 @@ func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasS
 		}
 		// An alias is matched against the path the language middleware has
 		// already stripped, so one beginning with an active language code —
-		// "eng" or "eng/team" — is dead on arrival. Storing it would only
-		// promise a URL that never resolves.
-		firstSegment, _, _ := strings.Cut(alias, "/")
-		if conflict := h.languagePrefixConflict(ctx, firstSegment); conflict != "" {
-			slog.Warn("skipping alias that a language prefix would shadow",
+		// "eng" or "eng/team" — is dead on arrival, and so is an alias that an
+		// application route answers, such as "login" or "uploads/2016/report".
+		// validatePageAliases has already refused these on the form; this
+		// catches a language activated between that check and the save. A
+		// failed lookup keeps the alias, because an update has already cleared
+		// the old ones.
+		conflict, err := PageRouteConflict(ctx, h.queries, alias)
+		if err != nil {
+			slog.Error("database error re-checking page alias; keeping it",
+				"error", err, "page_id", pageID, "alias", alias)
+		} else if conflict != "" {
+			slog.Warn("skipping alias that a language prefix or application route would shadow",
 				"page_id", pageID, "alias", alias, "reason", conflict)
 			continue
 		}
-		_, err := h.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+		_, err = h.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
 			PageID:    pageID,
 			Alias:     alias,
 			CreatedAt: now,

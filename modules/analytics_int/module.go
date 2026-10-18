@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"html"
 	"html/template"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/robfig/cron/v3"
@@ -34,14 +36,38 @@ type Module struct {
 	settings *Settings
 	geoIP    *geoip.Lookup
 	cron     *cron.Cron
-	saltMu   sync.RWMutex
 
-	// bgWG tracks every goroutine the module starts, so Shutdown can wait for
-	// in-flight writes before the database and GeoIP reader close. bgCancel
-	// stops the startup catch-up while it is still waiting to run.
+	// settingsMu guards settings: the tracker reads it on every frontend
+	// request while the settings form and salt rotation write it. The
+	// helpers in settings.go and getCurrentSalt are the only code that
+	// touches the field; TestSettingsAccessHoldsTheLock checks that every
+	// access takes the lock.
+	settingsMu sync.RWMutex
+
+	// reload tracks whether the stored settings are in effect. While they
+	// cannot be read the module runs on fallback values with tracking off,
+	// and nothing that would act on them runs (expiry cleanup, salt saves,
+	// settings saves). The hourly aggregation and the dashboard retry the
+	// load at most once per module.SettingsRetryInterval
+	// (retrySettingsLoad); the weekly expiry cleanup and a settings save
+	// reload at once (ensureSettingsLoaded).
+	reload module.SettingsReloadGate
+
+	// bgWG tracks the goroutines the module starts, so Shutdown can wait for
+	// in-flight writes, up to bgShutdownWait, before GeoIP closes; Shutdown
+	// adds one that waits for running cron jobs. bgCancel cancels bgCtx,
+	// which ends the startup catch-up and is the parent of the cron jobs'
+	// contexts.
 	bgWG     sync.WaitGroup
+	bgCtx    context.Context
 	bgCancel context.CancelFunc
 }
+
+// bgShutdownWait is how long Shutdown waits for the module's background work
+// and running cron jobs: a small part of module.ShutdownTimeout, which the
+// modules share. A page view or read takes milliseconds, and the cron jobs'
+// queries get bgCtx, which Shutdown cancels first.
+const bgShutdownWait = 2 * time.Second
 
 // New creates a new internal analytics module.
 func New() *Module {
@@ -59,27 +85,37 @@ func New() *Module {
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 
-	// Load settings
+	// Load settings. If they cannot be read, run with tracking off and write
+	// nothing: the defaults would switch tracking on, and saving them with the
+	// new salt below would overwrite the administrator's stored settings.
+	// The hourly aggregation, the expiry cleanup, the dashboard and settings
+	// saves retry the load (see reload).
 	settings, err := m.loadSettings()
-	if err != nil {
-		ctx.Logger.Warn("failed to load analytics_int settings, using defaults", "error", err)
+	loaded := err == nil
+	if loaded {
+		m.reload.MarkLoaded()
+	} else {
+		ctx.Logger.Error("failed to load analytics_int settings; tracking is off until they load", "error", err)
 		settings = &Settings{
-			Enabled:           true,
+			Enabled:           false,
 			RetentionDays:     365,
 			SaltRotationHours: 24,
 			ExcludePaths:      []string{},
 		}
 	}
-	m.settings = settings
-
 	// Ensure we have a salt
-	if m.settings.CurrentSalt == "" {
+	if settings.CurrentSalt == "" {
 		if salt := generateRandomSalt(); salt != "" {
-			m.settings.CurrentSalt = salt
-			m.settings.SaltCreatedAt = timeNow()
-			_ = m.saveSettings()
+			settings.CurrentSalt = salt
+			settings.SaltCreatedAt = timeNow()
+			if loaded {
+				if err := m.saveSettings(settings); err != nil {
+					ctx.Logger.Warn("failed to save analytics_int salt", "error", err)
+				}
+			}
 		}
 	}
+	m.storeSettings(settings)
 
 	// Initialize GeoIP lookup with path from config
 	geoIPPath := ""
@@ -118,17 +154,25 @@ func (m *Module) Shutdown() error {
 		m.bgCancel()
 	}
 	if m.cron != nil {
-		m.cron.Stop()
+		// Stop returns at once; its context ends when the running jobs do.
+		jobs := m.cron.Stop()
+		m.bgWG.Go(func() { <-jobs.Done() })
 	}
-	// Wait before closing GeoIP: an in-flight page view still looks up its country.
-	m.bgWG.Wait()
+	// Wait before closing GeoIP, so an in-flight page view still gets its
+	// country. Work still running at the limit is left behind: it can find
+	// the database closed, and GeoIP closed, so a public address gets no
+	// country.
+	var err error
+	if !module.WaitWithin(&m.bgWG, bgShutdownWait) {
+		err = fmt.Errorf("background work still running after %s; left behind", bgShutdownWait)
+	}
 	if m.geoIP != nil {
 		_ = m.geoIP.Close()
 	}
 	if m.ctx != nil {
 		m.ctx.Logger.Info("Internal Analytics module shutting down")
 	}
-	return nil
+	return err
 }
 
 // scheduleGeoIPReload schedules periodic GeoIP database reloads.
@@ -194,21 +238,19 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 func (m *Module) TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"analyticsPostStats": func(slug string) PageStats {
-			if m.ctx == nil || m.ctx.DB == nil || m.settings == nil || !m.settings.Enabled {
+			if m.ctx == nil || m.ctx.DB == nil || !m.IsEnabled() {
 				return PageStats{}
 			}
 			return m.getPageStats(context.Background(), "/"+slug)
 		},
 		"analyticsShowPostStats": func() bool {
-			if m.settings == nil {
-				return false
-			}
-			return m.settings.Enabled && m.settings.ShowPostStats
+			settings := m.settingsSnapshot()
+			return settings.Enabled && settings.ShowPostStats
 		},
 		// analyticsIntReadTracker returns static JS with a server-generated nonce.
 		// IMPORTANT: never interpolate user-controlled data — template.HTML bypasses auto-escape.
 		"analyticsIntReadTracker": func(args ...any) template.HTML {
-			if m.settings == nil || !m.settings.Enabled {
+			if !m.IsEnabled() {
 				return ""
 			}
 			nonce := ""
@@ -283,8 +325,9 @@ func (m *Module) AdminURL() string {
 }
 
 // EditorAdminRoutes opts the module in for editors: it reports first-party
-// statistics that editors use, and every handler re-checks the role through
-// requireEditorAuth.
+// statistics that editors use, and every handler re-checks the role:
+// requireEditorAuth for the statistics pages, requireAdminAuth for settings
+// and aggregation.
 func (m *Module) EditorAdminRoutes() bool { return true }
 
 // SidebarLabel returns the display label for the admin sidebar.
@@ -571,10 +614,8 @@ func (m *Module) GetTrackingMiddleware() func(next http.Handler) http.Handler {
 
 // IsEnabled returns whether analytics tracking is enabled.
 func (m *Module) IsEnabled() bool {
-	if m.settings == nil {
-		return false
-	}
-	return m.settings.Enabled
+	settings := m.settingsSnapshot()
+	return settings.Enabled
 }
 
 // getSiteDomain reads the site domain from the config table on each call.

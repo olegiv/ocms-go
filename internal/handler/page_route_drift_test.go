@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // pageRouteGuards are the identifiers that decide whether a slug can serve as
@@ -19,8 +21,8 @@ import (
 // API refuse the collision outright, the migrator suffixes around it, and the
 // transfer import rejects the archive in preflight.
 var pageRouteGuards = []string{
-	"LanguagePrefixConflict",               // internal/handler, shared with the v2 API
-	"languagePrefixConflict",               // its PagesHandler wrapper
+	"PageRouteConflict",                    // internal/handler, shared with the v2 API
+	"pageRouteConflict",                    // its PagesHandler wrapper
 	"ensureSlugAvailable",                  // internal/api/v2/pages
 	"MakeUniqueSlug",                       // modules/migrator/sources/*, covers …WithGuard
 	"validateSlugsAgainstLanguagePrefixes", // internal/transfer preflight
@@ -58,12 +60,13 @@ func TestEveryPageWriterConsultsARouteGuard(t *testing.T) {
 	writers := 0
 
 	for _, tree := range []string{"internal", "modules"} {
-		walkErr := filepath.WalkDir(filepath.Join(root, tree), func(path string, entry fs.DirEntry, err error) error {
+		treeRoot := filepath.Join(root, tree)
+		walkErr := filepath.WalkDir(treeRoot, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if entry.IsDir() {
-				if entry.Name() == "node_modules" || entry.Name() == "vendor" {
+				if repotree.Skip(treeRoot, path, entry) {
 					return filepath.SkipDir
 				}
 				return nil

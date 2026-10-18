@@ -45,6 +45,7 @@ func (b *RobotsBuilder) Build() string {
 		// Default disallow paths
 		defaultDisallow := []string{
 			"/admin",
+			"/account",
 			"/login",
 			"/logout",
 			"/session",

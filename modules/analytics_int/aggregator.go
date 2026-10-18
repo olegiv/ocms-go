@@ -5,6 +5,7 @@ package analytics_int
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -34,7 +35,7 @@ func (m *Module) addCronJob(defaultSchedule string, timeout time.Duration, jobFu
 	}
 
 	cronFunc := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(m.bgCtx, timeout)
 		defer cancel()
 		if err := jobFunc(ctx); err != nil {
 			m.ctx.Logger.Error(errMsg, "error", err)
@@ -71,6 +72,9 @@ func (m *Module) addCronJob(defaultSchedule string, timeout time.Duration, jobFu
 // With fixed schedules, a machine that starts at :08 and stops at :55
 // would always miss the :05 hourly job.
 func (m *Module) StartAggregator() {
+	// Shutdown cancels bgCtx: it ends the startup catch-up and is the parent
+	// of every cron job's context.
+	m.bgCtx, m.bgCancel = context.WithCancel(context.Background())
 	m.cron = cron.New()
 
 	// Interval-based scheduling: fires N time after Start(), then every N
@@ -87,9 +91,8 @@ func (m *Module) StartAggregator() {
 	m.ctx.Logger.Info("Page Analytics aggregator started")
 
 	// Run catch-up aggregation on startup in background. Shutdown cancels it
-	// and waits, so it never writes to a database that is closing.
-	stopCtx, cancel := context.WithCancel(context.Background())
-	m.bgCancel = cancel
+	// and waits for it up to bgShutdownWait.
+	stopCtx := m.bgCtx
 	m.bgWG.Go(func() { m.runStartupCatchUp(stopCtx) })
 }
 
@@ -109,9 +112,10 @@ func (m *Module) runStartupCatchUp(stopCtx context.Context) {
 
 	m.ctx.Logger.Info("running startup aggregation catch-up")
 
-	// Normalize any old hourly data that has timezone suffixes from
-	// the previous Go time.Time binding format (e.g., "2024-01-15 14:00:00+00:00").
-	// These will be re-created in clean "YYYY-MM-DD HH:MM:SS" format.
+	// Normalize any old hourly data that has a timezone suffix, written when
+	// the aggregator bound time.Time values (e.g., "2024-01-15 14:00:00+00:00").
+	// It now binds "YYYY-MM-DD HH:MM:SS" strings; these rows are re-created
+	// in that format.
 	if result, err := m.ctx.DB.ExecContext(ctx,
 		"DELETE FROM page_analytics_hourly WHERE LENGTH(hour_start) > 19"); err != nil {
 		m.ctx.Logger.Warn("failed to normalize hourly data", "error", err)
@@ -134,6 +138,11 @@ func (m *Module) runStartupCatchUp(stopCtx context.Context) {
 // Aggregates ALL hours within the lookback window (48h) to catch up
 // on any periods missed while the machine was stopped.
 func (m *Module) aggregateHourly(ctx context.Context) error {
+	// Retry settings that failed to load at startup; retrySettingsLoad logs
+	// a failed reload, and one skipped within the retry interval needs no
+	// log. Aggregation itself does not depend on the settings.
+	_ = m.retrySettingsLoad()
+
 	now := time.Now()
 	windowStart := now.Add(-hourlyLookback)
 	windowStartStr := windowStart.Format(datetimeFormat)
@@ -325,7 +334,15 @@ func (m *Module) cleanupOldRawData(ctx context.Context) error {
 
 // cleanupExpiredData deletes all aggregate data older than retention period.
 func (m *Module) cleanupExpiredData(ctx context.Context) error {
-	cutoff := time.Now().AddDate(0, 0, -m.settings.RetentionDays)
+	// The fallback retention is not the administrator's: never delete by it.
+	// This weekly job starts in the same scheduler tick as the hourly one,
+	// so it reloads at once instead of finding that job's retry and skipping
+	// another week.
+	if err := m.ensureSettingsLoaded(); err != nil {
+		return fmt.Errorf("skipping expired analytics data cleanup: %w", err)
+	}
+	settings := m.settingsSnapshot()
+	cutoff := time.Now().AddDate(0, 0, -settings.RetentionDays)
 	cutoffDateStr := cutoff.Format(dateFormat)
 	cutoffTimeStr := cutoff.Format(datetimeFormat)
 

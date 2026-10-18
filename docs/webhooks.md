@@ -10,14 +10,14 @@ When an event occurs (like a page being published), oCMS sends an HTTP POST requ
 
 ### Creating a Webhook
 
-1. Navigate to **Admin > Config > Webhooks**
+1. Navigate to **Admin > Webhooks** (administrators only)
 2. Click **New Webhook**
 3. Configure:
-   - **Name**: Descriptive name (e.g., "Production Deployment Hook")
-   - **URL**: Your endpoint URL (must be HTTPS in production)
+   - **Name**: Descriptive name (e.g., "Production Deployment Hook"), up to 255 characters
+   - **URL**: Your endpoint URL (HTTPS only when `OCMS_REQUIRE_HTTPS_OUTBOUND` is on, which is the default in production; see [Destination Rules](#destination-rules))
    - **Secret**: Auto-generated or custom secret for signature verification
    - **Events**: Select which events to subscribe to
-   - **Headers**: Optional custom HTTP headers
+   - **Headers**: Optional custom HTTP headers (at most 20; names up to 64 characters, values up to 1024; `Host`, `Content-Length`, `Connection` and other hop-by-hop headers are not allowed)
    - **Active**: Enable/disable the webhook
 4. Click **Save**
 
@@ -25,8 +25,8 @@ When an event occurs (like a page being published), oCMS sends an HTTP POST requ
 
 After creating a webhook:
 1. Click **Test** on the webhook row
-2. A test event is sent to your endpoint
-3. Check the delivery status in the webhook details
+2. A `test` event is queued for your endpoint (its payload carries a message and the user who triggered it); the retry worker picks it up, so it can take up to 30 seconds to arrive
+3. Check the delivery status on the webhook's delivery history page
 
 For local testing, consider using:
 - [webhook.site](https://webhook.site) - Free temporary endpoints
@@ -46,6 +46,8 @@ For local testing, consider using:
 | `form.submitted` | When a form is submitted |
 | `user.created` | When a new user is created |
 | `user.deleted` | When a user is deleted |
+
+Events are dispatched by the admin UI handlers (pages, media, users and public form submissions), by the REST API for page and media writes (`page.created`, `page.updated`, `page.deleted`, `media.uploaded`, `media.deleted`), and by scheduled publishing (`page.published`). Creating or editing a page, a status change in the edit form or the REST API included, sends only `page.created` or `page.updated`; `page.published` comes from the publish toggle and scheduled publishing, `page.unpublished` only from the publish toggle. When the toggle and scheduled publishing publish a page at the same moment, only the first sends `page.published`. `media.deleted` is sent once the media's records are deleted, even when its files could not be removed from disk; the server logs the leftover files as an error, which the Event Log also records. Restoring a page version, creating a translation and content imports send no events. `author_email` is the email of the user who made the change, which can differ from `author_id`'s user; events from the REST API and the scheduler carry none.
 
 ## Payload Format
 
@@ -79,10 +81,12 @@ For local testing, consider using:
         "status": "draft",
         "author_id": 1,
         "author_email": "admin@example.com",
-        "language_id": 1
+        "language_code": "en"
     }
 }
 ```
+
+`language_code` is omitted when the page has none, and `published_at` (RFC 3339) is included once the page has been published.
 
 ### Media Events
 
@@ -117,10 +121,13 @@ For local testing, consider using:
             "email": "john@example.com",
             "message": "Hello!"
         },
+        "data_mode": "full",
         "submitted_at": "2024-01-15T10:30:00Z"
     }
 }
 ```
+
+What `data` contains is set by `OCMS_WEBHOOK_FORM_DATA_MODE`: `redacted` (the default) sends the fields with sensitive names (password, token and similar) replaced by `[REDACTED]`, `none` omits `data`, and `full` sends every field. Values are cut at 1024 bytes. The example above shows `full` mode.
 
 ## Security
 
@@ -169,18 +176,22 @@ oCMS includes these headers with every webhook request:
 
 Plus any custom headers you configure.
 
-### HTTPS Requirement
+### Destination Rules
 
-In production, always use HTTPS endpoints. oCMS will send webhooks to HTTP endpoints, but this is not recommended as payloads may contain sensitive data.
+- **HTTPS**: when `OCMS_REQUIRE_HTTPS_OUTBOUND` is on (the default in production), only `https` URLs are accepted. Otherwise `http` URLs are accepted too, which is not recommended because payloads may contain sensitive data.
+- **No internal targets**: `localhost` and URLs that resolve to private, loopback, link-local or other reserved addresses are rejected. The check runs when the webhook is saved, again before every delivery, and on every redirect (at most 10).
+- **Host allowlist**: `OCMS_WEBHOOK_ALLOWED_HOSTS` (comma-separated exact hostnames) restricts destinations. In production, `OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS` (on by default) refuses startup when active webhooks exist and no allowlist is configured.
 
 ## Delivery and Retry
 
 ### Delivery Process
 
-1. Event occurs in oCMS
-2. Webhook delivery record is created
-3. HTTP POST is sent to your endpoint
-4. Response is recorded
+1. Event occurs in oCMS (after debouncing, see below)
+2. A delivery record is created for each active webhook subscribed to the event
+3. HTTP POST is sent to your endpoint (30-second timeout)
+4. Response is recorded (body truncated to 10 KB)
+
+A retry worker checks for deliveries that are due every 30 seconds, so a retry can run up to 30 seconds after its scheduled delay.
 
 ### Success Criteria
 
@@ -208,21 +219,23 @@ If delivery fails:
 
 ### Dead Letter Queue
 
-After 5 failed attempts, deliveries are marked as "dead". These remain in the system for 30 days and can be:
+After 5 failed attempts, deliveries are marked as "dead". Delivered and dead deliveries are deleted after 30 days; until then dead ones can be:
 - Viewed in the webhook deliveries page
 - Manually retried (resets attempt count)
+
+A pending retry whose webhook has been disabled in the meantime is marked dead with the error "webhook disabled".
 
 ## Monitoring
 
 ### Delivery History
 
 View delivery history for each webhook:
-1. Go to **Admin > Config > Webhooks**
-2. Click on a webhook name
-3. View the **Deliveries** tab
+1. Go to **Admin > Webhooks**
+2. Click the **View Deliveries** icon on the webhook row
+3. Browse the **Delivery History** page (25 deliveries per page)
 
 Each delivery shows:
-- Status (pending, delivered, failed, dead)
+- Status (pending, delivered, or dead, which the UI labels "Failed")
 - Response code
 - Response body (truncated)
 - Attempt count
@@ -232,21 +245,21 @@ Each delivery shows:
 
 The webhook list shows:
 - Last 24h deliveries
-- Success rate percentage
-- Health indicator (green/yellow/red)
+- Success rate percentage (all deliveries)
+- Health indicator: green at 95% or more, yellow from 80% up to 95%, red below 80%, unknown when there are no deliveries
 
 ### Manual Retry
 
 To retry a failed delivery:
-1. Open the webhook's Deliveries tab
+1. Open the webhook's delivery history page
 2. Find the failed delivery
-3. Click **Retry**
+3. Click **Retry** (the delivery is reset to pending and picked up by the retry worker within 30 seconds)
 
 ## Event Debouncing
 
 To prevent webhook floods from rapid updates, oCMS includes event debouncing:
 
-- Events within a 1-second window are coalesced
+- Events for the same type and entity ID within a 1-second window are coalesced
 - Only the latest event data is sent
 - Maximum 5-second wait before dispatch
 

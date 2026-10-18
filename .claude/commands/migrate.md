@@ -1,3 +1,7 @@
+---
+description: "Manage database migrations using goose"
+---
+
 Manage database migrations using goose.
 
 Steps:

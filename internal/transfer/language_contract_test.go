@@ -1689,3 +1689,51 @@ func TestImportRejectsPageSlugShadowedByLanguagePrefix(t *testing.T) {
 		})
 	}
 }
+
+// TestImportRejectsPageSlugShadowedByApplicationRoute refuses an archive page
+// stored at an application route such as /account, which the router answers
+// before the page catch-all (security audit 2026-10-17, L-2).
+func TestImportRejectsPageSlugShadowedByApplicationRoute(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	data := ExportData{Version: ExportVersion, Pages: []ExportPage{
+		{ID: 1, Title: "Account", Slug: "account", Status: "draft", LanguageCode: "en"},
+	}}
+	opts := ImportOptions{ConflictStrategy: ConflictSkip, ImportPages: true}
+
+	result, err := NewImporter(ts.Queries, ts.DB, slog.Default()).Import(ts.Ctx, &data, opts)
+	require.ErrorContains(t, err, "language contract validation failed")
+	require.NotNil(t, result)
+	require.Condition(t, func() bool {
+		for _, item := range result.Errors {
+			if strings.Contains(item.Message, `page slug "account" is the application route /account`) {
+				return true
+			}
+		}
+		return false
+	})
+	_, lookupErr := ts.Queries.GetPageBySlug(ts.Ctx, "account")
+	assert.ErrorIs(t, lookupErr, sql.ErrNoRows)
+}
+
+// TestImportAcceptsPageSlugsNoExactRouteAnswers keeps the import of a site
+// whose pages use segments that routes own only below them (forms/{slug},
+// uploads/...) or answer only on POST (language). Reserving those failed such
+// imports outright.
+func TestImportAcceptsPageSlugsNoExactRouteAnswers(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	slugs := []string{"forms", "api", "uploads", "language"}
+	data := ExportData{Version: ExportVersion}
+	for i, slug := range slugs {
+		data.Pages = append(data.Pages, ExportPage{ID: int64(i + 1), Title: slug, Slug: slug, Status: "draft", LanguageCode: "en"})
+	}
+	opts := ImportOptions{ConflictStrategy: ConflictSkip, ImportPages: true}
+
+	_, err := NewImporter(ts.Queries, ts.DB, slog.Default()).Import(ts.Ctx, &data, opts)
+	require.NoError(t, err)
+	for _, slug := range slugs {
+		_, lookupErr := ts.Queries.GetPageBySlug(ts.Ctx, slug)
+		assert.NoError(t, lookupErr, "page %q was not imported", slug)
+	}
+}

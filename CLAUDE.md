@@ -31,18 +31,18 @@ make commit-prepare       # Proxy to Claude /commit-prepare
 make commit-do            # Proxy to Claude /commit-do
 make code-quality         # Proxy to Claude /code-quality
 make security-audit       # Proxy to Claude /security-audit
-make commit-prepare-local # Run local commit-prepare shell script
-make commit-do-local      # Run local commit-do shell script
+make commit-prepare-local # Test gate, then draft a commit message locally
+make commit-do-local      # Commit staged files after the test gate
 make code-quality-local   # Run local quality checks shell script
 make security-audit-local # Run local security audit shell script
 # Codex note: /code-quality, /security-audit, /commit-prepare, and /commit-do
 # are not registered UI slash commands and may show "No commands". Use make
 # targets or ask in chat: "run code-quality", "run security-audit", etc.
-# Run Claude slash command from CLI (non-interactive):
-claude -p "/commit-prepare" --dangerously-skip-permissions
-claude -p "/commit-do" --dangerously-skip-permissions
-claude -p "/code-quality" --dangerously-skip-permissions
-claude -p "/security-audit" --dangerously-skip-permissions
+# Run Claude slash command from CLI (non-interactive, scoped tool allowlist):
+./scripts/codex/proxy-claude-command.sh /commit-prepare
+./scripts/codex/proxy-claude-command.sh /commit-do
+./scripts/codex/proxy-claude-command.sh /code-quality
+./scripts/codex/proxy-claude-command.sh /security-audit
 
 # Database migrations
 make migrate-up          # Apply migrations
@@ -147,7 +147,7 @@ The hook source is in `.claude/shared/global/hooks/`.
 
 8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management, migrations, active status toggle, and embedded i18n translations. Custom modules live in `custom/modules/` and self-register via `init()` + a per-module `custom/modules/imports_<name>.go` (never a shared list — see `custom/modules/doc.go`). They must NOT implement `TemplateFuncs()`: that is the sole extension point needing a core edit, because every module template func requires a matching no-op placeholder in `internal/render/render.go` or `TestEveryModuleTemplateFuncHasRendererPlaceholder` fails. See `custom/modules/bookmarks/` for reference implementation.
 
-9. **Caching** (`internal/cache/`): Supports both in-memory and Redis caching with automatic fallback. Caches site config, menus, languages, and sitemaps. Set `OCMS_REDIS_URL` for distributed caching across multiple instances.
+9. **Caching** (`internal/cache/`): In-memory caches of site config, menus, languages, sitemaps and pages, per process. `OCMS_REDIS_URL` opens a Redis connection the cache admin shows and clears, but no cache layer reads or writes it yet, so instances do not share caches.
 
 10. **Scheduler** (`internal/scheduler/`): Cron-based task scheduler for scheduled publishing.
 
@@ -185,14 +185,15 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OCMS_SESSION_SECRET` | Yes | - | Min 32 bytes; keys CSRF protection (sessions are stored server-side) |
+| `OCMS_SESSION_SECRET` | Yes | - | Min 32 bytes; required and validated, but nothing is keyed with it today (sessions are stored server-side; CSRF checks Fetch metadata headers) |
 | `OCMS_DB_PATH` | No | `./data/ocms.db` | SQLite database path |
+| `OCMS_ENV_FILE` | No | `./.env` | Env file to read instead of `./.env` (site instance mode); missing, unreadable or unparsable fails startup and `ocms migrate` (a missing `./.env` is ignored). Read in `cmd/ocms` (`loadEnvFile`), not `config.go` |
 | `OCMS_SERVER_HOST` | No | `localhost` | Server bind host |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
 | `OCMS_ENV` | No | `development` | Set to `production` for prod |
 | `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
-| `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes/modules |
+| `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes (custom modules are compiled in) |
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
 | `OCMS_SITE_URL` | No | - | Full site URL written into site config on startup (overrides DB/admin setting); sitemap and agent-discovery docs 503 until set. Scheme and host only (`https://example.com`) — a path, query, fragment, credentials or an out-of-range port fails startup |
@@ -203,10 +204,10 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OCMS_REDIS_URL` | No | - | Redis URL for distributed cache (e.g., `redis://localhost:6379/0`) |
+| `OCMS_REDIS_URL` | No | - | Redis URL (e.g., `redis://localhost:6379/0`); connected and shown in the cache admin, not used by the caches yet |
 | `OCMS_CACHE_PREFIX` | No | `ocms:` | Key prefix for Redis cache entries |
-| `OCMS_CACHE_TTL` | No | `3600` | Default cache TTL in seconds |
-| `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for in-memory cache |
+| `OCMS_CACHE_TTL` | No | `3600` | TTL in seconds for the Redis (or fallback) cache, not used by the caches yet |
+| `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for that fallback memory cache, not used by the caches yet |
 
 ### Auth / anti-abuse
 
@@ -230,7 +231,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OCMS_API_ALLOWED_CIDRS` | No | - | Global CIDRs/IPs allowed to use API keys |
-| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | No | `false` (effective `true` in prod) | Fail API key auth if global allowlist is unset |
+| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | No | `false` (effective `true` in prod) | Fail startup in production, and API key auth elsewhere, if the global allowlist is unset |
 | `OCMS_REQUIRE_API_KEY_EXPIRY` | No | `false` (effective `true` in prod) | Reject API keys without an expiration timestamp |
 | `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | No | `false` (effective `true` in prod) | Reject API keys without per-key source CIDR restrictions |
 | `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | No | `false` (effective `true` in prod) | Deactivate API keys when source IP changes and no per-key CIDRs are set |
@@ -273,7 +274,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 When `OCMS_DO_SEED=true`, seeds admin user: `admin@example.com` / `changeme1234`
 
-When `OCMS_DEMO_MODE=true`, also seeds demo users: `demo@example.com` / `demo1234demo` (admin) and `editor@example.com` / `demo1234demo` (editor)
+When `OCMS_DEMO_MODE=true`, also seeds demo users: `demo@example.com` (admin; its password is rotated to a random value on every startup and shown in the informer bar, and the default admin's password is rotated too while it is still `changeme1234`) and `editor@example.com` / `demo1234demo` (editor)
 
 Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 
@@ -335,17 +336,16 @@ Tools are thin adapters over the v2 domain services; their input/output schemas 
 
 **Public (unauthenticated):** Returns only `{"status":"healthy"}` or `{"status":"degraded"}` — no internal details exposed.
 
-**Authenticated (admin session or API key):** Returns full details including uptime, version, database latency, disk space. Add `?verbose=true` for Go runtime info (goroutines, memory, CPU count).
+**Authenticated (valid API key or editor session):** Adds timestamp, uptime and version.
+
+**Admin session:** Full details: database and disk checks and a security summary. Add `?verbose=true` for Go runtime info (goroutines, memory, CPU count).
 
 ```bash
 # Public — minimal status only
 curl http://localhost:8080/health
 
-# Authenticated — full details via API key
+# API key — status, timestamp, uptime, version
 curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/health
-
-# Authenticated with system info
-curl -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/health?verbose=true"
 ```
 
 ### SEO Routes
@@ -396,10 +396,11 @@ Never tell the user to "restart the server and test" - always run the tests your
 
 **Test-gate command:** `scripts/test-gate.sh`. It runs the full suite uncached (`go test -count=1 ./...`) and supplies the test session secret when `OCMS_SESSION_SECRET` is unset.
 
-It runs at two points, and a failing test blocks both:
+It runs at these points, and a failing test blocks each:
 
-1. **`/commit-prepare`**, before a commit message is drafted
-2. **`git push`**, through the `pre-push` hook (`.githooks/pre-push`), on exactly the commit being pushed. The hook refuses to push a ref that is not `HEAD`, or a tree with uncommitted or untracked files, because it tests the working tree.
+1. **`/commit-prepare`** (and `scripts/codex/commit-prepare.sh`), before a commit message is drafted
+2. **`scripts/codex/commit-do.sh`** (`make commit-do-local`), on the staged tree before it commits (gitignored files in the working tree are tested too, though not committed)
+3. **`git push`**, through the `pre-push` hook (`.githooks/pre-push`), on exactly the commit being pushed. The hook refuses to push a ref that is not `HEAD`, or a tree with uncommitted or untracked files, because it tests the working tree.
 
 Install the hook once per clone:
 
@@ -443,7 +444,7 @@ Before submitting code, verify with:
 ```bash
 go vet ./...              # Check for common issues
 staticcheck ./...         # Extended static analysis
-errcheck ./...            # Detect unhandled errors
+errcheck -ignoregenerated ./...  # Detect unhandled errors (skips sqlc/templ output)
 ```
 
 Install errcheck if needed: `go install github.com/kisielk/errcheck@latest`

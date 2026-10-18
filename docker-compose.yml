@@ -7,6 +7,10 @@
 #   docker compose --profile redis up -d    # Start with Redis caching
 #   docker compose down                     # Stop services
 #   docker compose logs -f ocms             # View logs
+#
+# The port is published on 127.0.0.1 only, for a reverse proxy on the same
+# host. Set OCMS_PUBLISH_ADDRESS=0.0.0.0 when the proxy reaches the container
+# through another address (another host, or a container using the host IP).
 
 services:
   ocms:
@@ -20,8 +24,35 @@ services:
     image: ocms:latest
     container_name: ocms
     restart: unless-stopped
+    # On SIGTERM the app drains requests for up to 30 seconds, waits up to 5
+    # more for handlers still running, records the stop (up to 5), and gives
+    # its shutdown steps up to 10 and its Event Log writer up to 3. Docker's
+    # default of 10 seconds would kill it mid-drain.
+    stop_grace_period: 60s
     ports:
-      - "${OCMS_SERVER_PORT:-8080}:8080"
+      - "${OCMS_PUBLISH_ADDRESS:-127.0.0.1}:${OCMS_SERVER_PORT:-8080}:8080"
+    # The entrypoint starts as root only to fix volume ownership, then drops
+    # to the ocms user with su-exec: it needs CHOWN for that, DAC_READ_SEARCH
+    # to walk the private directories the app creates in its volumes, and
+    # SETUID/SETGID to switch users. The switch clears all of them, and
+    # no-new-privileges blocks regaining root through a setuid binary.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_READ_SEARCH
+      - SETUID
+      - SETGID
+    # The image filesystem is read-only; the app writes only to the volumes
+    # below. Temporary files (import staging, media export archives, large
+    # upload parts) go to TMPDIR on the data volume, because they can exceed
+    # what a memory-backed tmpfs should hold; /tmp is a small tmpfs for
+    # anything that ignores TMPDIR.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
     environment:
       # Required
       - OCMS_SESSION_SECRET=${OCMS_SESSION_SECRET:?Session secret is required (min 32 bytes)}
@@ -32,8 +63,11 @@ services:
       - OCMS_LOG_LEVEL=${OCMS_LOG_LEVEL:-info}
       # Optional: separate error log file (errors also go to stdout)
       - OCMS_ERROR_LOG_PATH=${OCMS_ERROR_LOG_PATH:-}
-      # Database
+      # Database and uploads (volumes below)
       - OCMS_DB_PATH=/app/data/ocms.db
+      - OCMS_UPLOADS_DIR=/app/uploads
+      # Temporary files on the data volume (the image filesystem is read-only)
+      - TMPDIR=/app/data/tmp
       # Theme/Custom content
       - OCMS_CUSTOM_DIR=/app/custom
       - OCMS_ACTIVE_THEME=${OCMS_ACTIVE_THEME:-default}
@@ -44,13 +78,52 @@ services:
       - OCMS_CACHE_PREFIX=${OCMS_CACHE_PREFIX:-ocms:}
       - OCMS_CACHE_TTL=${OCMS_CACHE_TTL:-3600}
       - OCMS_CACHE_MAX_SIZE=${OCMS_CACHE_MAX_SIZE:-10000}
-      # Trusted proxies (set when behind a reverse proxy to prevent IP spoofing)
-      # - OCMS_TRUSTED_PROXIES=${OCMS_TRUSTED_PROXIES:-}
       # GeoIP (optional)
       - OCMS_GEOIP_DB_PATH=${OCMS_GEOIP_DB_PATH:-}
       # hCaptcha (optional)
       - OCMS_HCAPTCHA_SITE_KEY=${OCMS_HCAPTCHA_SITE_KEY:-}
       - OCMS_HCAPTCHA_SECRET_KEY=${OCMS_HCAPTCHA_SECRET_KEY:-}
+      # The entries below have no value: Compose passes each one from the shell
+      # or the .env file beside this file, and leaves it unset in the container
+      # when neither has it, so production's secure defaults still apply.
+      # TestComposeForwardsEveryVariable keeps the list complete.
+      #
+      # Required in production: startup fails without them unless the matching
+      # OCMS_REQUIRE_* flag is set to false.
+      - OCMS_TRUSTED_PROXIES
+      - OCMS_API_ALLOWED_CIDRS
+      # Site and modes
+      - OCMS_SITE_URL
+      - OCMS_DEMO_MODE
+      - OCMS_HCAPTCHA_DISABLED
+      - OCMS_HSTS_PRELOAD
+      # Allowlists and tokens for integrations
+      - OCMS_EMBED_ALLOWED_ORIGINS
+      - OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS
+      - OCMS_EMBED_PROXY_TOKEN
+      - OCMS_REQUIRE_EMBED_PROXY_TOKEN
+      - OCMS_WEBHOOK_ALLOWED_HOSTS
+      - OCMS_WEBHOOK_FORM_DATA_MODE
+      - OCMS_MIGRATOR_ALLOWED_DB_HOSTS
+      - OCMS_MIGRATOR_ALLOWED_FILE_ROOTS
+      # Security flags (production defaults apply when unset)
+      - OCMS_API_KEY_MAX_TTL_DAYS
+      - OCMS_REQUIRE_API_ALLOWED_CIDRS
+      - OCMS_REQUIRE_API_KEY_EXPIRY
+      - OCMS_REQUIRE_API_KEY_SOURCE_CIDRS
+      - OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE
+      - OCMS_REQUIRE_TRUSTED_PROXIES
+      - OCMS_REQUIRE_FORM_CAPTCHA
+      - OCMS_REQUIRE_HTTPS_OUTBOUND
+      - OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS
+      - OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS
+      - OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS
+      - OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION
+      - OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS
+      - OCMS_SANITIZE_PAGE_HTML
+      - OCMS_REQUIRE_SANITIZE_PAGE_HTML
+      - OCMS_BLOCK_SUSPICIOUS_PAGE_HTML
+      - OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML
     volumes:
       - ocms_data:/app/data
       - ocms_uploads:/app/uploads
@@ -78,6 +151,8 @@ services:
       - redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - redis_data:/data
     healthcheck:

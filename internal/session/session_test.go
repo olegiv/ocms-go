@@ -18,6 +18,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	// Create sessions table required by sqlite3store
 	_, err = db.Exec(`

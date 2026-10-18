@@ -23,6 +23,7 @@ func testDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	t.Cleanup(func() {
 		_ = db.Close()

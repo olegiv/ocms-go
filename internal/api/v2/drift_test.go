@@ -556,8 +556,8 @@ func TestSecurityDeclarationEnforcedAtRuntime(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s %s: %v", entry.method, url, err)
 			}
-			body, _ := readAll(resp)
-			resp.Body.Close()
+			body := readAll(resp)
+			_ = resp.Body.Close()
 			seen[opKey{entry.method, live}] = true
 			if resp.StatusCode != http.StatusUnauthorized {
 				t.Errorf("%s %s: op %q declares ApiKeyAuth but unauthenticated request returned %d, want 401\nbody=%s",
@@ -590,9 +590,9 @@ func operationDeclaresAPIKey(op *huma.Operation) bool {
 	return hasAPIKey
 }
 
-// readAll drains resp.Body for error-message rendering. Wraps to isolate the
-// json-unused import (pulled in for future assertions on error payload shape).
-func readAll(resp *http.Response) ([]byte, error) {
+// readAll drains resp.Body so a failing request's body can be shown in the
+// test error.
+func readAll(resp *http.Response) []byte {
 	buf := make([]byte, 0, 256)
 	chunk := make([]byte, 256)
 	for {
@@ -604,13 +604,7 @@ func readAll(resp *http.Response) ([]byte, error) {
 			break
 		}
 	}
-	// Validate response is JSON-shaped without unmarshalling — keeps the
-	// encoding/json import relevant and protects against HTML error pages.
-	if len(buf) > 0 && buf[0] == '{' {
-		var probe map[string]any
-		_ = json.Unmarshal(buf, &probe)
-	}
-	return buf, nil
+	return buf
 }
 
 // TestNullableInt64SchemaShape verifies that `UpdateMediaBody.folder_id`
@@ -840,8 +834,8 @@ func TestPermissionRequiredBeforeBodyParse(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s %s: %v", tc.method, tc.path, err)
 		}
-		_, _ = readAll(resp)
-		resp.Body.Close()
+		_ = readAll(resp)
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s %s (op %s) with read-only key: want 403, got %d", tc.method, tc.path, tc.op, resp.StatusCode)
 		}
@@ -882,7 +876,7 @@ func TestOpenAPIJSONBytesMatchesServed(t *testing.T) {
 	w := httptest.NewRecorder()
 	docs.ServeOpenAPIJSON(w, httptest.NewRequest(http.MethodGet, "/api/v2/openapi.json", nil))
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	servedBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read served body: %v", err)

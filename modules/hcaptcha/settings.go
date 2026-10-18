@@ -67,7 +67,8 @@ func saveSettings(db *sql.DB, s *Settings) error {
 // SECURITY: Output is cast to template.HTML. Admin-controlled values
 // (site key, theme, size) are escaped with template.HTMLEscapeString.
 func (m *Module) RenderWidget() template.HTML {
-	if !m.IsEnabled() {
+	settings := m.currentSettings()
+	if !settingsEnabled(settings) {
 		return ""
 	}
 
@@ -77,12 +78,12 @@ func (m *Module) RenderWidget() template.HTML {
 	html.WriteString(`<script src="https://js.hcaptcha.com/1/api.js" async defer></script>`)
 
 	// Add hCaptcha widget div
-	html.WriteString(fmt.Sprintf(
+	fmt.Fprintf(&html,
 		`<div class="h-captcha" data-sitekey="%s" data-theme="%s" data-size="%s"></div>`,
-		template.HTMLEscapeString(m.settings.SiteKey),
-		template.HTMLEscapeString(m.settings.Theme),
-		template.HTMLEscapeString(m.settings.Size),
-	))
+		template.HTMLEscapeString(settings.SiteKey),
+		template.HTMLEscapeString(settings.Theme),
+		template.HTMLEscapeString(settings.Size),
+	)
 
 	return template.HTML(html.String())
 }

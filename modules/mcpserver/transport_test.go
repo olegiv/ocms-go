@@ -364,8 +364,8 @@ func TestRejectsBatchRequests(t *testing.T) {
 }
 
 // TestEndpointRecoversPanics verifies a panic in the endpoint chain becomes a
-// JSON 500 instead of ending the process: the global timeout middleware runs
-// handlers on a goroutine chi's recoverer cannot reach.
+// JSON 500, not the timeout middleware's plain-text 500 or the end of the
+// process.
 func TestEndpointRecoversPanics(t *testing.T) {
 	env := newTestEnv(t)
 	env.module.handler.Store(&endpointHandler{Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

@@ -1,0 +1,51 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package account
+
+import (
+	"github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+)
+
+// Data contains the formatted dates displayed alongside the account identity.
+type Data struct {
+	CreatedAt   string
+	LastLoginAt string
+}
+
+// Page renders the read-only overview within the shared dashboard shell.
+templ Page(pc *admin.PageContext, d Data) {
+	@admin.AdminLayout(pc) {
+		@card.Card(card.Props{Class: "max-w-3xl"}) {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("account.title") }
+				}
+				@card.Description() {
+					{ pc.T("account.description") }
+				}
+			}
+			@card.Content() {
+				<dl class="grid gap-6 sm:grid-cols-2">
+					<div class="min-w-0">
+						<dt class="mb-1 text-sm text-muted-foreground">{ pc.T("account.name") }</dt>
+						<dd class="[overflow-wrap:anywhere]">{ pc.User.Name }</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="mb-1 text-sm text-muted-foreground">{ pc.T("account.email") }</dt>
+						<dd class="[overflow-wrap:anywhere]">{ pc.User.Email }</dd>
+					</div>
+					<div>
+						<dt class="mb-1 text-sm text-muted-foreground">{ pc.T("account.created_at") }</dt>
+						<dd>{ d.CreatedAt }</dd>
+					</div>
+					<div>
+						<dt class="mb-1 text-sm text-muted-foreground">{ pc.T("account.last_login_at") }</dt>
+						<dd>{ d.LastLoginAt }</dd>
+					</div>
+				</dl>
+			}
+		}
+	}
+}

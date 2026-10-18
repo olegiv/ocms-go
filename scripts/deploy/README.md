@@ -40,6 +40,7 @@ mkdir -p bin
 curl -L https://github.com/olegiv/ocms-go/releases/latest/download/ocms-linux-amd64.tar.gz | tar -xz ocms
 mv ocms bin/ocms-linux-amd64
 scp bin/ocms-linux-amd64 user@server:/tmp/ocms
+ssh user@server mkdir -p /tmp/ocms-setup
 scp scripts/deploy/* user@server:/tmp/ocms-setup/
 
 # On the server:
@@ -75,12 +76,12 @@ Arguments:
 - `group` (optional) — defaults to `psaserv`
 
 Options:
-- `--path PATH` — full path to instance root directory (default: `/var/www/vhosts/<domain>/ocms`)
+- `--path PATH` — full path to instance root directory (default: `/var/www/vhosts/<domain>/ocms`). It must be absolute and stay under `/var/www/vhosts/<domain>/`, and its parent directory must already exist.
 
 Use `--path` when the default path doesn't match your setup:
 
 ```bash
-sudo /opt/ocms/setup-site.sh app.example.com hosting --path /var/www/vhosts/example.com/ocms
+sudo /opt/ocms/setup-site.sh app.example.com hosting --path /var/www/vhosts/app.example.com/apps/ocms
 ```
 
 ### 2.1 Review generated `.env` (embed hardening)
@@ -103,7 +104,21 @@ OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
 OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
 ```
 
+`setup-site.sh` already writes these variables, with a random `OCMS_EMBED_PROXY_TOKEN`
+and `OCMS_EMBED_ALLOWED_ORIGINS=https://<domain>`; adjust the origins and upstream host.
+
 If you use self-hosted Dify, replace `api.dify.ai` with your API hostname.
+
+The generated file sets `OCMS_ENV=production`, and in production the application refuses to
+start unless `OCMS_TRUSTED_PROXIES` (the nginx on this host: `127.0.0.1`) and
+`OCMS_API_ALLOWED_CIDRS` are set, or the matching `OCMS_REQUIRE_TRUSTED_PROXIES` /
+`OCMS_REQUIRE_API_ALLOWED_CIDRS` is explicitly `false`. `setup-site.sh` does not write them,
+so add them before enabling the service:
+
+```bash
+OCMS_TRUSTED_PROXIES=127.0.0.1
+OCMS_API_ALLOWED_CIDRS=203.0.113.0/24
+```
 
 ### 3. Configure SSL in Plesk
 
@@ -153,6 +168,9 @@ sudo systemctl enable --now ocms@example_com
 sudo journalctl -u ocms@example_com -f
 ```
 
+The unit gives the app 60 seconds to stop (`TimeoutStopSec=60`), enough for it to drain
+in-flight requests and shut its modules down before systemd sends SIGKILL.
+
 **Running without systemd** (not recommended for production):
 ```bash
 # nohup (persists after logout)
@@ -172,15 +190,16 @@ ocmsctl <command> <site-id> [options]
 
 Commands:
   start   <site-id> [--foreground]  Start instance (nohup or foreground)
-  stop    <site-id>                 Stop instance (SIGTERM)
+  stop    <site-id>                 Stop instance (SIGTERM, SIGKILL after 60 s)
   restart <site-id>                 Restart instance
   status  <site-id>                 Show status and health
   logs    <site-id> [--follow|-f]   View logs (journal or file)
+  logs    <site-id> --errors [--follow]  View the error-only log
   list                              List all sites with status
   health  <site-id>                 Check health endpoint
 ```
 
-`ocmsctl` detects if a site is managed by systemd and will direct you to use `systemctl` instead when appropriate.
+`ocmsctl` delegates to `systemctl` itself when a site is managed by systemd: `start` when the unit is enabled or active, `stop` and `restart` when it is active (`start --foreground` is refused for systemd-managed sites); `status` and `list` report an active unit as running under systemd. Without systemd it uses a PID file (`ocms.pid`), and `stop` waits up to 60 seconds for the process to exit before sending SIGKILL.
 
 ## Deploying Updates
 
@@ -214,11 +233,17 @@ Options:
 
 The script:
 1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
-2. Backs up current binary on server
-3. Stops all listed instances via `ocmsctl`
-4. Transfers binary via `scp`
-5. Starts all instances
+2. Backs up the running binary, `/opt/ocms/bin/ocms`, to `/opt/ocms/bin/ocms.backup`; a
+   backup that fails stops the deploy
+3. Transfers the binary via `scp` to `/opt/ocms/bin/ocms-linux-amd64`
+4. Installs it as `/opt/ocms/bin/ocms`, the binary `ocmsctl` and `ocms@.service` run, by
+   copying it beside that file and renaming it over, which leaves the running binary alone,
+   so a failed upload or install stops no instance
+5. Restarts all listed instances via `ocmsctl` (stop, then start)
 6. Checks each instance status
+
+All instances share `/opt/ocms/bin/ocms`, so instances the command does not list keep
+running the old binary until they restart.
 
 ### Single Instance — With Custom Content (from local machine)
 
@@ -246,16 +271,18 @@ Options:
 - `-u, --user USER` — SSH user (default: `root`)
 - `--sync-custom` — force sync custom/ directory even if empty
 - `--skip-build` — skip `make build-linux-amd64`, use existing `bin/ocms-linux-amd64`
-- `--skip-binary` — skip binary build, backup, and transfer (deploy custom content only)
+- `--skip-binary` — skip binary build, backup, transfer and install (deploy custom content only)
 - `--dry-run` — print commands without executing
 
 Symlinked directories inside `custom/` are followed during deployment. Before syncing, symlinks outside `custom/modules/` are validated: broken symlinks or links that resolve outside `custom/` abort the deploy before the instance is stopped. Symlinks under `custom/modules/` are exempt, since that directory is never synced.
 
 The script:
 1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
-2. Backs up current binary on server
-3. Stops the instance via `ocmsctl`
-4. Transfers binary via `scp`
+2. Backs up the running binary, `/opt/ocms/bin/ocms`, to `/opt/ocms/bin/ocms.backup`; a
+   backup that fails stops the deploy
+3. Transfers the binary via `scp` and installs it as `/opt/ocms/bin/ocms` while the instance
+   still runs, as `deploy-binary.sh` does (other instances keep the old binary until they restart)
+4. Stops the instance via `ocmsctl`
 5. (If custom themes exist) Syncs `custom/` to `{vhost}/custom/` via
    `rsync -aLz --delete --exclude='/modules/'` — see [Custom Modules](#custom-modules)
    (`-v` is the instance directory created by `setup-site.sh`, not the domain root)
@@ -280,11 +307,11 @@ sudo /opt/ocms/deploy-multi.sh /tmp/ocms
 
 For development builds, replace the release download with `make build-linux-amd64`.
 
-This backs up the current binary, stops all instances, replaces the binary, restarts all instances, and runs health checks. On failure it prints rollback instructions.
+This backs up the current binary to `/opt/ocms/bin/ocms.backup`, installs the new binary as `/opt/ocms/bin/ocms` while the sites still run (renaming it into place, so a failed install stops nothing), stops every site in `sites.conf` with `ocmsctl stop` (through systemd or its PID file, whichever runs it), starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). A site that fails to stop or start is reported as failed and the others carry on; a site that did not stop is not started, because its old process may still be running. On failure it prints rollback instructions; on success it deletes the uploaded binary.
 
 Or manually:
 ```bash
-sudo cp /tmp/ocms /opt/ocms/bin/ocms
+sudo install -m 755 /tmp/ocms /opt/ocms/bin/ocms
 sudo systemctl restart 'ocms@*'
 ```
 
@@ -401,18 +428,18 @@ Required:
 
 Options:
 - `-u, --user USER` — SSH user (default: `root`)
-- `-p, --port PORT` — Local server port to stop (default: `8080`)
+- `-p, --port PORT` — Local server port to stop (default: `OCMS_SERVER_PORT` from the local `.env`, else `8080`)
 - `--no-db` — Skip database sync
 - `--no-uploads` — Skip uploads sync
 - `--no-logs` — Skip logs sync
 - `--sync-custom` — Also sync custom/ directory (themes only; `custom/modules/` is never synced)
 - `--dry-run` — Print commands without executing
 
-The script:
-1. Stops local development server (port 8080)
+The script asks for confirmation (`y/N`) before touching anything, except with `--dry-run`, then:
+1. Stops the local development server (kills whatever listens on the local port)
 2. Stops remote instance via `ocmsctl`
 3. Checkpoints SQLite WAL on server (flushes to main file)
-4. Syncs database via `rsync`
+4. Syncs the whole `data/` directory via `rsync --delete`
 5. Syncs uploads via `rsync --delete` (mirrors production exactly)
 6. Syncs logs via `rsync` (keeps local logs not on prod)
 7. (If --sync-custom) Syncs custom directory
@@ -433,7 +460,7 @@ sudo /opt/ocms/backup-multi.sh example_com
 Backups include:
 - Database (`ocms_TIMESTAMP.db.gz`)
 - Uploads (`uploads_TIMESTAMP.tar.gz`)
-- Custom content (`custom_TIMESTAMP.tar.gz`) — only if custom themes exist
+- Custom content (`custom_TIMESTAMP.tar.gz`) — only if `custom/` contains files (themes or modules)
 
 Backups are stored in each site's `backups/` directory with 30-day retention.
 
@@ -489,8 +516,8 @@ manual repair: append the two `StandardOutput`/`StandardError` lines to
 
 ### Separate Error Log
 
-Set `OCMS_ERROR_LOG_PATH=./logs/error.log` in the instance `.env` to write ERROR-level
-messages to a dedicated file. Errors are **also** written to stdout (the main log),
+`OCMS_ERROR_LOG_PATH=./logs/error.log` is set in the `.env` that `setup-site.sh` generates, so
+ERROR-level messages are written to a dedicated file. Errors are **also** written to stdout (the main log),
 so this is purely additive — it gives operators a focused file for quick triage.
 
 ```bash
@@ -526,7 +553,7 @@ All sites are tracked in `/etc/ocms/sites.conf`:
 example_com /var/www/vhosts/example.com/ocms example_com 8081
 
 # Custom path (--path override)
-app_example_com /var/www/vhosts/example.com/ocms/app hosting 8082
+app_example_com /var/www/vhosts/app.example.com/apps/ocms hosting 8082
 
 # Another server vhost
 blog_example_com /var/www/vhosts/blog.example.com/ocms bloguser 8083
@@ -603,6 +630,8 @@ WorkingDirectory=/var/www/vhosts/example.com/ocms
 EnvironmentFile=/var/www/vhosts/example.com/ocms/.env
 ReadWritePaths=/var/www/vhosts/example.com/ocms
 SyslogIdentifier=ocms-example_com
+StandardOutput=append:/var/www/vhosts/example.com/ocms/logs/ocms.log
+StandardError=append:/var/www/vhosts/example.com/ocms/logs/ocms.log
 EOF
 
 sudo systemctl daemon-reload

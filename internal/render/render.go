@@ -33,6 +33,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/internal/views/utils"
 )
@@ -489,6 +490,9 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return result
 		},
+		// checkedOption reports whether a checkbox option is among a form
+		// field's checked options, which are stored joined with ", ".
+		"checkedOption": util.JoinedValueHas,
 		"contains": func(collection, element any) bool {
 			// Handle string slice
 			if slice, ok := collection.([]string); ok {
@@ -1089,7 +1093,7 @@ func getUserRole(user any) string {
 	v := reflect.ValueOf(user)
 
 	// Handle pointer types
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return ""
 		}

@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"syscall"
@@ -15,8 +16,15 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/olegiv/ocms-go/internal/demo"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
+
+// errNoLongerDue reports a page published, unscheduled or rescheduled to a
+// later time after processScheduledPages listed it.
+var errNoLongerDue = errors.New("page no longer due for publishing")
 
 // Scheduler handles scheduled tasks like publishing pages.
 type Scheduler struct {
@@ -24,6 +32,7 @@ type Scheduler struct {
 	cron     *cron.Cron
 	logger   *slog.Logger
 	registry *Registry
+	webhooks webhook.EventDispatcher
 }
 
 // New creates a new scheduler instance.
@@ -34,6 +43,12 @@ func New(db *sql.DB, logger *slog.Logger, registry *Registry) *Scheduler {
 		logger:   logger,
 		registry: registry,
 	}
+}
+
+// SetWebhookDispatcher makes scheduled publishing send the page.published
+// webhook event the admin UI's publish toggle sends. Call it before Start.
+func (s *Scheduler) SetWebhookDispatcher(d webhook.EventDispatcher) {
+	s.webhooks = d
 }
 
 // Cron returns the cron instance.
@@ -110,6 +125,10 @@ func (s *Scheduler) processScheduledPages() error {
 
 	for _, page := range pages {
 		if err := s.publishPage(ctx, queries, page, now); err != nil {
+			if errors.Is(err, errNoLongerDue) {
+				s.logger.Info("skipped scheduled page changed since it was listed", "page_id", page.ID)
+				continue
+			}
 			s.logger.Error("failed to publish scheduled page",
 				"page_id", page.ID,
 				"page_title", page.Title,
@@ -128,14 +147,19 @@ func (s *Scheduler) processScheduledPages() error {
 	return nil
 }
 
-// publishPage publishes a single scheduled page and logs the event.
+// publishPage publishes a single scheduled page, logs the event and sends the
+// page.published webhook event. It returns errNoLongerDue, and does nothing
+// else, when the page is no longer a draft due by now.
 func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, page store.Page, now time.Time) error {
-	// Publish the page
-	_, err := queries.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
+	published, err := queries.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
 		PublishedAt: sql.NullTime{Time: now, Valid: true},
 		UpdatedAt:   now,
 		ID:          page.ID,
+		ScheduledAt: sql.NullTime{Time: now, Valid: true},
 	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return errNoLongerDue
+	}
 	if err != nil {
 		return err
 	}
@@ -150,16 +174,21 @@ func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, pag
 	}
 	metadataJSON, _ := json.Marshal(metadata)
 
+	message := "Page published automatically by scheduler: " + page.Title
 	_, err = queries.CreateEvent(ctx, store.CreateEventParams{
 		Level:     "info",
 		Category:  "page",
-		Message:   "Page published automatically by scheduler: " + page.Title,
+		Message:   message,
 		UserID:    sql.NullInt64{}, // System action, no user
 		Metadata:  string(metadataJSON),
 		CreatedAt: now,
 	})
 	if err != nil {
-		s.logger.Warn("failed to log scheduled publish event", "error", err)
+		// Kept out of the Event Log it failed to write (service.WithoutEventLog).
+		s.logger.WarnContext(service.WithoutEventLog(ctx), "failed to log scheduled publish event", "event", message, "error", err)
+	}
+	if s.webhooks != nil {
+		webhook.DispatchPageEvent(ctx, s.webhooks, model.EventPagePublished, published, "")
 	}
 
 	return nil

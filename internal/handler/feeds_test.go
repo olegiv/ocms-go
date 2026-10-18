@@ -263,23 +263,29 @@ func TestFeedsTimestampOrdering(t *testing.T) {
 	}{
 		{"newest-utc", utc},
 		{"fraction-earlier", utc.Add(-time.Nanosecond)},
-		{"same-instant-offset", utc.In(cest)},
 		{"negative-offset", "2026-10-07T06:01:00-06:30"},
 		{"legacy-iso", "2026-10-07T13:00:00+00:00"},
 		{"second-boundary", "2026-10-07T12:30:00.999999999Z"},
 		{"next-second", "2026-10-07 12:30:01"},
 		{"naive", "2026-10-07 12:32:00"},
-		{"positive-half-hour", utc.Add(-14 * time.Minute).In(time.FixedZone("NPT", 5*60*60+45*60))},
-		{"negative-go-offset", utc.Add(time.Minute - 2*time.Nanosecond).In(time.FixedZone("NST", -6*60*60-30*60))},
+		// Text the driver stored as time.Time.String() before times were
+		// stored in UTC, which the UTC migration rewrites but the feed still
+		// orders by instant: 12:30:00.000000002, 12:16:00.000000002, 12:31,
+		// 13:15:00.123456789, 12:35:00.5 and 12:20 UTC.
+		{"same-instant-offset", "2026-10-07 14:30:00.000000002 +0200 CEST"},
+		{"positive-half-hour", "2026-10-07 18:01:00.000000002 +0545 NPT"},
+		{"negative-go-offset", "2026-10-07 06:01:00 -0630 NST"},
 		{"monotonic-suffix", "2026-10-07 13:15:00.123456789 +0000 UTC m=+1.000000000"},
+		{"legacy-negative", "2026-10-07 06:05:00.5 -0630 NST"},
+		{"legacy-cest", "2026-10-07 14:20:00 +0200 CEST m=+3.500000000"},
 	} {
 		id := f.post(t, tc.slug, "en")
 		f.exec(t, `UPDATE pages SET published_at = ? WHERE id = ?`, tc.date, id)
 	}
 	id := f.post(t, "creation-fallback", "en")
 	f.exec(t, `UPDATE pages SET published_at = NULL, created_at = ? WHERE id = ?`, utc.Add(90*time.Minute), id)
-	want := []string{"creation-fallback", "monotonic-suffix", "legacy-iso", "naive", "negative-go-offset", "negative-offset", "next-second", "second-boundary",
-		"same-instant-offset", "newest-utc", "fraction-earlier", "positive-half-hour"}
+	want := []string{"creation-fallback", "monotonic-suffix", "legacy-iso", "legacy-negative", "naive", "negative-go-offset", "negative-offset", "next-second", "second-boundary",
+		"same-instant-offset", "newest-utc", "fraction-earlier", "legacy-cest", "positive-half-hour"}
 	for i := 24; len(want) < 20; i-- {
 		want = append(want, fmt.Sprintf("older-%02d", i))
 	}

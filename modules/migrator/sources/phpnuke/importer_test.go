@@ -244,7 +244,7 @@ func TestCyrillicSurvivesImport(t *testing.T) {
 	}}
 
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-		map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{}, result, tracker, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, nil, result, tracker, nil)
 
 	if result.PostsImported != 1 {
 		t.Fatalf("PostsImported = %d, want 1; errors: %v", result.PostsImported, result.Errors)
@@ -311,7 +311,7 @@ func TestImportStoriesSetsStatusTimestampsAndTaxonomy(t *testing.T) {
 
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
 		map[int64]int64{3: category.ID}, map[int64]int64{9: tag.ID}, nil, nil,
-		types.ImportOptions{}, result, tracker, nil)
+		result, tracker, nil)
 
 	if result.PostsImported != 1 {
 		t.Fatalf("PostsImported = %d, errors: %v", result.PostsImported, result.Errors)
@@ -369,7 +369,7 @@ func TestImportStoriesGivesCollidingTitlesDistinctSlugs(t *testing.T) {
 		{ID: 3, Title: title, BodyText: ns("<p>three</p>")},
 	}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-		map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, nil, result, &mockTracker{}, nil)
 
 	if result.PostsImported != 3 {
 		t.Fatalf("PostsImported = %d, want 3; errors: %v", result.PostsImported, result.Errors)
@@ -398,7 +398,7 @@ func TestImportStoriesFallsBackWhenTitleIsMissing(t *testing.T) {
 	stories := []Story{{ID: 42, Title: sql.NullString{Valid: false}, BodyText: ns("<p>body</p>")}}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
 		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil, nil,
-		types.ImportOptions{}, result, &mockTracker{}, nil)
+		result, &mockTracker{}, nil)
 
 	if result.PostsImported != 1 {
 		t.Fatalf("a title-less story was dropped; errors: %v", result.Errors)
@@ -421,7 +421,7 @@ func TestImportedUsersCannotSignIn(t *testing.T) {
 		{ID: 5, Username: ns("sveta"), Name: ns(""), Email: ns("sveta@example.com")},
 	}}
 	if err := NewSource().importUsers(ctx, queries, reader, userMap,
-		types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		result, &mockTracker{}); err != nil {
 		t.Fatalf("importUsers() error = %v", err)
 	}
 	if result.UsersImported != 2 {
@@ -468,7 +468,7 @@ func TestImportUsersReusesExistingAccountByEmail(t *testing.T) {
 		{ID: 1, Username: ns("admin"), Name: ns("Admin"), Email: ns("admin@example.com")},
 	}}
 	if err := NewSource().importUsers(ctx, queries, reader, userMap,
-		types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		result, &mockTracker{}); err != nil {
 		t.Fatalf("importUsers() error = %v", err)
 	}
 
@@ -486,7 +486,7 @@ func TestImportUsersSkipsAccountsWithoutEmail(t *testing.T) {
 
 	reader := &fakeReader{authors: []User{{ID: 3, Username: ns("ghost"), Email: ns("  ")}}}
 	if err := NewSource().importUsers(context.Background(), queries, reader,
-		map[string]int64{}, types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		map[string]int64{}, result, &mockTracker{}); err != nil {
 		t.Fatalf("importUsers() error = %v", err)
 	}
 
@@ -535,7 +535,7 @@ func TestImportStoriesAttributesToImportedAuthor(t *testing.T) {
 
 	reader := &fakeReader{authors: []User{{ID: 2, Username: ns("sveta"), Name: ns("Sveta"), Email: ns("sveta@example.com")}}}
 	source := NewSource()
-	if err := source.importUsers(ctx, queries, reader, userMap, types.ImportOptions{}, result, &mockTracker{}); err != nil {
+	if err := source.importUsers(ctx, queries, reader, userMap, result, &mockTracker{}); err != nil {
 		t.Fatalf("importUsers() error = %v", err)
 	}
 
@@ -544,7 +544,7 @@ func TestImportStoriesAttributesToImportedAuthor(t *testing.T) {
 		{ID: 2, Title: ns("By Nobody"), Informant: ns("stranger")},
 	}
 	source.importStories(ctx, queries, stories, userMap, adminID, lang,
-		map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, nil, result, &mockTracker{}, nil)
 
 	authored, err := queries.GetPageBySlug(ctx, "by-sveta")
 	if err != nil {
@@ -573,7 +573,7 @@ func TestImportStaticPagesHonorsActiveFlag(t *testing.T) {
 		{ID: 2, Title: ns("Hidden Page"), Text: ns("<p>hidden</p>"), Active: ni(0)},
 	}
 	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
-		map[int64]int64{}, nil, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, nil, nil, nil, result, &mockTracker{}, nil)
 
 	if result.PagesImported != 2 {
 		t.Fatalf("PagesImported = %d, want 2; errors: %v", result.PagesImported, result.Errors)
@@ -614,7 +614,7 @@ func TestImportStaticPagesStripsMarkupFromMetaDescription(t *testing.T) {
 		Active:   ni(1),
 	}}
 	NewSource().importStaticPages(ctx, queries, pages, adminID, defaultLang(t, queries),
-		map[int64]int64{}, nil, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, nil, nil, nil, result, &mockTracker{}, nil)
 
 	page, err := queries.GetPageBySlug(ctx, "subtitle-test")
 	if err != nil {
@@ -645,7 +645,7 @@ func TestImportEncyclopediaCreatesOnePagePerEntry(t *testing.T) {
 		},
 	}
 	NewSource().importEncyclopedia(ctx, queries, content, adminID, defaultLang(t, queries),
-		nil, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		nil, nil, nil, result, &mockTracker{}, nil)
 
 	if result.PagesImported != 1 {
 		t.Fatalf("PagesImported = %d, want 1; errors: %v", result.PagesImported, result.Errors)
@@ -681,7 +681,7 @@ func TestImportCategoriesMapsTopicsAndReusesExisting(t *testing.T) {
 		pageCats: []Category{{ID: 1, Title: ns("Информация")}},
 	}
 	if err := NewSource().importCategories(ctx, queries, reader, lang, topicMap, pageCategoryMap,
-		types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		result, &mockTracker{}); err != nil {
 		t.Fatalf("importCategories() error = %v", err)
 	}
 
@@ -701,7 +701,7 @@ func TestImportCategoriesMapsTopicsAndReusesExisting(t *testing.T) {
 	// A second run must reuse the rows rather than create "oteli-2".
 	rerun := &types.ImportResult{}
 	if err := NewSource().importCategories(ctx, queries, reader, lang,
-		make(map[int64]int64), make(map[int64]int64), types.ImportOptions{}, rerun, &mockTracker{}); err != nil {
+		make(map[int64]int64), make(map[int64]int64), rerun, &mockTracker{}); err != nil {
 		t.Fatalf("importCategories() rerun error = %v", err)
 	}
 	if rerun.CategoriesImported != 0 || rerun.CategoriesSkipped != 3 {
@@ -728,7 +728,7 @@ func TestImportCategoriesDistinguishesMissingTableFromReadFailure(t *testing.T) 
 		}
 		if err := NewSource().importCategories(context.Background(), queries, reader,
 			defaultLang(t, queries), make(map[int64]int64), make(map[int64]int64),
-			types.ImportOptions{}, result, &mockTracker{}); err != nil {
+			result, &mockTracker{}); err != nil {
 			t.Fatalf("a missing optional table must not abort the stage: %v", err)
 		}
 		if len(result.Errors) != 0 {
@@ -753,7 +753,7 @@ func TestImportCategoriesDistinguishesMissingTableFromReadFailure(t *testing.T) 
 		reader := &fakeReader{topics: topics, pageCatsErr: errors.New("Access denied for user")}
 		if err := NewSource().importCategories(context.Background(), queries, reader,
 			defaultLang(t, queries), make(map[int64]int64), make(map[int64]int64),
-			types.ImportOptions{}, result, &mockTracker{}); err != nil {
+			result, &mockTracker{}); err != nil {
 			t.Fatalf("the stage should continue with topics: %v", err)
 		}
 		if len(result.Errors) != 1 {
@@ -777,7 +777,7 @@ func TestImportStoryCategoryTagsCreatesTags(t *testing.T) {
 		{ID: 4, Title: ns("   ")},
 	}}
 	if err := NewSource().importStoryCategoryTags(ctx, queries, reader, defaultLang(t, queries),
-		storyCategoryMap, types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		storyCategoryMap, result, &mockTracker{}); err != nil {
 		t.Fatalf("importStoryCategoryTags() error = %v", err)
 	}
 
@@ -1195,7 +1195,7 @@ func TestAuthorTallyIgnoresResolvedFallbackMatches(t *testing.T) {
 		{ID: 2, Title: ns("Orphaned"), Informant: ns("stranger")},
 	}
 	NewSource().importStories(ctx, queries, stories, userMap, adminID, defaultLang(t, queries),
-		map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, nil, result, &mockTracker{}, nil)
 
 	if result.PostsImported != 2 {
 		t.Fatalf("PostsImported = %d; errors %v", result.PostsImported, result.Errors)
@@ -1235,7 +1235,7 @@ func TestSkipExistingIsIdempotentAcrossRuns(t *testing.T) {
 			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
 				map[int64]int64{}, map[int64]int64{},
 				nil, NewSource().planSkips(ctx, queries, content, opts, first),
-				opts, first, &mockTracker{}, nil)
+				first, &mockTracker{}, nil)
 			if first.PostsImported != 1 {
 				t.Fatalf("first run imported %d, want 1; errors %v", first.PostsImported, first.Errors)
 			}
@@ -1244,7 +1244,7 @@ func TestSkipExistingIsIdempotentAcrossRuns(t *testing.T) {
 			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
 				map[int64]int64{}, map[int64]int64{},
 				nil, NewSource().planSkips(ctx, queries, content, opts, second),
-				opts, second, &mockTracker{}, nil)
+				second, &mockTracker{}, nil)
 			if second.PostsImported != 0 {
 				t.Errorf("second run imported %d more copies, want 0", second.PostsImported)
 			}
@@ -1448,7 +1448,7 @@ func TestTrackingFailureRollsBackTheCreatedRow(t *testing.T) {
 	stories := []Story{{ID: 1, Title: ns("Rolled Back"), BodyText: ns("<p>x</p>")}}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
 		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil, nil,
-		types.ImportOptions{}, result, failingTracker{err: errors.New("tracker table is locked")}, nil)
+		result, failingTracker{err: errors.New("tracker table is locked")}, nil)
 
 	if result.PostsImported != 0 {
 		t.Errorf("PostsImported = %d; an untracked row must not be counted", result.PostsImported)
@@ -1485,7 +1485,7 @@ func TestSlugAllocationRefusesRoutesOwnedElsewhere(t *testing.T) {
 	}
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID,
 		defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil, nil,
-		types.ImportOptions{}, result, &mockTracker{}, nil)
+		result, &mockTracker{}, nil)
 
 	for _, taken := range []string{"news", "hotels"} {
 		if page, err := queries.GetPageBySlug(ctx, taken); err == nil {
@@ -1540,7 +1540,7 @@ func TestStoryWithoutTimestampIsPublishedNow(t *testing.T) {
 			stories := []Story{{ID: 7, Title: ns("Undated"), BodyText: ns("<p>x</p>"), Time: tc.when}}
 			NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID,
 				defaultLang(t, queries), map[int64]int64{}, map[int64]int64{}, nil, nil,
-				types.ImportOptions{}, result, &mockTracker{}, nil)
+				result, &mockTracker{}, nil)
 
 			page, err := queries.GetPageBySlug(ctx, "undated")
 			if err != nil {
@@ -1716,8 +1716,7 @@ func TestStagesReportTheProgressPhaseTheyWork(t *testing.T) {
 		tracker := &mockTracker{}
 		stories := []Story{{ID: 1, Title: ns("A")}, {ID: 2, Title: ns("B")}}
 		source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-			map[int64]int64{}, map[int64]int64{}, nil, nil, types.ImportOptions{},
-			&types.ImportResult{}, tracker, nil)
+			map[int64]int64{}, map[int64]int64{}, nil, nil, &types.ImportResult{}, tracker, nil)
 		total, ok := tracker.totalFor(types.EntityPost)
 		if !ok {
 			t.Fatal("importStories reported no post phase")
@@ -1771,7 +1770,7 @@ func TestStagesReportTheProgressPhaseTheyWork(t *testing.T) {
 			{ID: 2, Username: ns("b"), Email: ns("b@example.com")},
 		}}
 		if err := source.importUsers(ctx, queries, reader, map[string]int64{},
-			types.ImportOptions{}, &types.ImportResult{}, tracker); err != nil {
+			&types.ImportResult{}, tracker); err != nil {
 			t.Fatalf("importUsers() error = %v", err)
 		}
 		total, ok := tracker.totalFor(types.EntityUser)
@@ -1792,8 +1791,7 @@ func TestStagesReportTheProgressPhaseTheyWork(t *testing.T) {
 			pageCatsErr: &mysql.MySQLError{Number: mysqlErrNoSuchTable},
 		}
 		if err := source.importCategories(ctx, queries, reader, lang,
-			map[int64]int64{}, map[int64]int64{}, types.ImportOptions{},
-			&types.ImportResult{}, tracker); err != nil {
+			map[int64]int64{}, map[int64]int64{}, &types.ImportResult{}, tracker); err != nil {
 			t.Fatalf("importCategories() error = %v", err)
 		}
 		total, ok := tracker.totalFor(types.EntityCategory)
@@ -1844,7 +1842,7 @@ func TestAssociationFailureStillCountsThePage(t *testing.T) {
 	stories := []Story{{ID: 1, Title: ns("Hotel Review"), BodyText: ns("<p>x</p>"), TopicID: ni(3)}}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, admin.ID, lang,
 		map[int64]int64{3: category.ID}, map[int64]int64{}, nil, nil,
-		types.ImportOptions{}, result, &mockTracker{}, nil)
+		result, &mockTracker{}, nil)
 
 	if result.PostsImported != 1 {
 		t.Errorf("PostsImported = %d; the page was written, so it must be counted", result.PostsImported)
@@ -1889,7 +1887,7 @@ func TestPageWriteFailureIsReportedAndNotCounted(t *testing.T) {
 	}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, admin.ID, lang,
 		map[int64]int64{}, map[int64]int64{}, nil, nil,
-		types.ImportOptions{}, result, &mockTracker{}, nil)
+		result, &mockTracker{}, nil)
 
 	if result.PostsImported != 0 {
 		t.Errorf("PostsImported = %d, want 0 when every write fails", result.PostsImported)
@@ -1916,7 +1914,7 @@ func TestAuthorLookupIsCaseInsensitive(t *testing.T) {
 		{ID: 2, Username: ns("olegiv"), Name: ns("Oleg"), Email: ns("o@example.com")},
 	}}
 	if err := NewSource().importUsers(ctx, queries, reader, userMap,
-		types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		result, &mockTracker{}); err != nil {
 		t.Fatalf("importUsers() error = %v", err)
 	}
 	imported := userMap[authorKey("olegiv")]
@@ -1977,7 +1975,7 @@ func TestSkipExistingRerunImportsNoMedia(t *testing.T) {
 			t.Fatalf("run %d: importMedia() error = %v", run, err)
 		}
 		source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-			map[int64]int64{}, map[int64]int64{}, mediaMap, skips, opts, result, &mockTracker{}, nil)
+			map[int64]int64{}, map[int64]int64{}, mediaMap, skips, result, &mockTracker{}, nil)
 
 		wantMedia, wantPosts := 1, 1
 		if run == 2 {
@@ -2025,7 +2023,7 @@ func TestPlanSkipsKeepsDistinctRowsSharingATitle(t *testing.T) {
 
 	skips := source.planSkips(ctx, queries, content, opts, result)
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
-		map[int64]int64{}, map[int64]int64{}, nil, skips, opts, result, &mockTracker{}, nil)
+		map[int64]int64{}, map[int64]int64{}, nil, skips, result, &mockTracker{}, nil)
 
 	if result.PostsImported != 2 {
 		t.Errorf("imported %d of 2 stories; a distinct article was dropped as a "+
@@ -2036,7 +2034,7 @@ func TestPlanSkipsKeepsDistinctRowsSharingATitle(t *testing.T) {
 	rerun := &types.ImportResult{}
 	source.importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
 		map[int64]int64{}, map[int64]int64{}, nil,
-		source.planSkips(ctx, queries, content, opts, rerun), opts, rerun, &mockTracker{}, nil)
+		source.planSkips(ctx, queries, content, opts, rerun), rerun, &mockTracker{}, nil)
 	if rerun.PostsImported != 0 {
 		t.Errorf("rerun imported %d more copies, want 0", rerun.PostsImported)
 	}
@@ -2261,7 +2259,7 @@ func TestPublishingAdminReadFailuresAreClassified(t *testing.T) {
 			}
 
 			if err := NewSource().importUsers(context.Background(), queries, reader,
-				map[string]int64{}, types.ImportOptions{}, result, &mockTracker{}); err != nil {
+				map[string]int64{}, result, &mockTracker{}); err != nil {
 				t.Fatalf("importUsers() error = %v", err)
 			}
 
@@ -2293,12 +2291,11 @@ func TestCollidingTopicLabelsStayDistinct(t *testing.T) {
 		{ID: 1, Text: ns("Hello World")},
 		{ID: 2, Text: ns("Hello, World!")},
 	}}
-	opts := types.ImportOptions{ImportCategories: true}
 
 	first := &types.ImportResult{}
 	topicMap := map[int64]int64{}
 	if err := NewSource().importCategories(ctx, queries, reader, lang, topicMap,
-		map[int64]int64{}, opts, first, &mockTracker{}); err != nil {
+		map[int64]int64{}, first, &mockTracker{}); err != nil {
 		t.Fatalf("importCategories() error = %v", err)
 	}
 	if first.CategoriesImported != 2 {
@@ -2313,7 +2310,7 @@ func TestCollidingTopicLabelsStayDistinct(t *testing.T) {
 	second := &types.ImportResult{}
 	rerunMap := map[int64]int64{}
 	if err := NewSource().importCategories(ctx, queries, reader, lang, rerunMap,
-		map[int64]int64{}, opts, second, &mockTracker{}); err != nil {
+		map[int64]int64{}, second, &mockTracker{}); err != nil {
 		t.Fatalf("importCategories() error = %v", err)
 	}
 	if second.CategoriesImported != 0 {
@@ -2349,7 +2346,7 @@ func TestAdminsSharingAnEmailKeepDistinctBylines(t *testing.T) {
 		userMap := map[string]int64{}
 		result := &types.ImportResult{}
 		if err := NewSource().importUsers(ctx, queries, reader, userMap,
-			types.ImportOptions{}, result, &mockTracker{}); err != nil {
+			result, &mockTracker{}); err != nil {
 			t.Fatalf("run %d: importUsers() error = %v", run, err)
 		}
 
@@ -2512,7 +2509,7 @@ func TestSlugGuardChecksTheLanguagePrefixedPath(t *testing.T) {
 			NewSource().importStories(ctx, queries,
 				[]Story{{ID: 1, Title: ns("News"), BodyText: ns("<p>x</p>")}},
 				map[string]int64{}, adminID, tc.langCode, map[int64]int64{},
-				map[int64]int64{}, nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+				map[int64]int64{}, nil, nil, result, &mockTracker{}, nil)
 			if result.PostsImported != 1 {
 				t.Fatalf("imported %d posts, want 1; errors %v", result.PostsImported, result.Errors)
 			}
@@ -2580,7 +2577,7 @@ func TestThreeAdminsSharingAnEmailStayDistinct(t *testing.T) {
 	userMap := map[string]int64{}
 	result := &types.ImportResult{}
 	if err := NewSource().importUsers(ctx, queries, reader, userMap,
-		types.ImportOptions{}, result, &mockTracker{}); err != nil {
+		result, &mockTracker{}); err != nil {
 		t.Fatalf("importUsers() error = %v", err)
 	}
 
@@ -2644,7 +2641,7 @@ func TestPlanSkipsStillProbesOnALiveContext(t *testing.T) {
 	first := &types.ImportResult{}
 	NewSource().importStories(ctx, queries, stories, map[string]int64{}, adminID, lang,
 		map[int64]int64{}, map[int64]int64{}, nil,
-		NewSource().planSkips(ctx, queries, content, opts, first), opts, first, &mockTracker{}, nil)
+		NewSource().planSkips(ctx, queries, content, opts, first), first, &mockTracker{}, nil)
 	if first.PostsImported != 1 {
 		t.Fatalf("first run imported %d, want 1", first.PostsImported)
 	}
@@ -2983,7 +2980,7 @@ func TestAdminProfileFillsGapsInTheRegisteredRow(t *testing.T) {
 			userMap := map[string]int64{}
 			result := &types.ImportResult{}
 			if err := NewSource().importUsers(context.Background(), queries, reader,
-				userMap, types.ImportOptions{}, result, &mockTracker{}); err != nil {
+				userMap, result, &mockTracker{}); err != nil {
 				t.Fatalf("importUsers() error = %v", err)
 			}
 
@@ -3026,11 +3023,11 @@ func TestTaxonomyStagesStopOnCancellation(t *testing.T) {
 	}{
 		{"categories", func(ctx context.Context, q *store.Queries, r *types.ImportResult) error {
 			return NewSource().importCategories(ctx, q, &fakeReader{topics: topics, pageCats: pageCats},
-				"en", map[int64]int64{}, map[int64]int64{}, types.ImportOptions{}, r, &mockTracker{})
+				"en", map[int64]int64{}, map[int64]int64{}, r, &mockTracker{})
 		}},
 		{"tags", func(ctx context.Context, q *store.Queries, r *types.ImportResult) error {
 			return NewSource().importStoryCategoryTags(ctx, q, &fakeReader{storyCats: storyCats},
-				"en", map[int64]int64{}, types.ImportOptions{}, r, &mockTracker{})
+				"en", map[int64]int64{}, r, &mockTracker{})
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -3094,7 +3091,7 @@ func TestSlugGuardChecksModuleRoutesOnBothPaths(t *testing.T) {
 	source.importStories(ctx, queries,
 		[]Story{{ID: 1, Title: ns("News"), BodyText: ns("<p>x</p>")}},
 		map[string]int64{}, adminID, "ru", map[int64]int64{}, map[int64]int64{},
-		nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		nil, nil, result, &mockTracker{}, nil)
 	if result.PostsImported != 1 {
 		t.Fatalf("imported %d posts, want 1; errors %v", result.PostsImported, result.Errors)
 	}
@@ -3138,7 +3135,7 @@ func TestDefaultLanguageChecksOnlyTheBarePath(t *testing.T) {
 	source.importStories(ctx, queries,
 		[]Story{{ID: 1, Title: ns("News"), BodyText: ns("<p>x</p>")}},
 		map[string]int64{}, adminID, lang, map[int64]int64{}, map[int64]int64{},
-		nil, nil, types.ImportOptions{}, result, &mockTracker{}, nil)
+		nil, nil, result, &mockTracker{}, nil)
 
 	for _, path := range checker.asked {
 		if strings.HasPrefix(path, "/"+lang+"/") {
@@ -3169,7 +3166,7 @@ func TestEncyclopediaSummaryIsAggregated(t *testing.T) {
 
 	result := &types.ImportResult{}
 	NewSource().importEncyclopedia(ctx, queries, content, adminID, lang, nil, nil, nil,
-		types.ImportOptions{}, result, &mockTracker{}, nil)
+		result, &mockTracker{}, nil)
 
 	if result.PagesImported != containers {
 		t.Fatalf("PagesImported = %d, want %d", result.PagesImported, containers)

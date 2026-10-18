@@ -1802,9 +1802,8 @@ func (h *FrontendHandler) APICatalog(w http.ResponseWriter, r *http.Request) {
 
 // AgentSkillsIndex serves /.well-known/agent-skills/index.json per the
 // Agent Skills Discovery RFC (v0.2.0). The declared skill references the
-// live OpenAPI document; the sha256 field is currently empty because
-// computing it would require pulling in the huma spec at request time
-// (tracked as a follow-up in docs/agent-ready.md).
+// live OpenAPI document, and its sha256 is the digest of that document,
+// computed on first use and cached (openAPISHA256).
 func (h *FrontendHandler) AgentSkillsIndex(w http.ResponseWriter, r *http.Request) {
 	siteURL, ok := h.requireConfiguredSiteURL(w, r, "agent-skills index")
 	if !ok {
@@ -2015,7 +2014,8 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 
 	// Get OG image (from og_image_id or fall back to best featured image variant).
 	// Variant priority: og > large > medium > original.
-	if p.OgImageID.Valid {
+	switch {
+	case p.OgImageID.Valid:
 		ogMedia, err := h.queries.GetMediaByID(ctx, p.OgImageID.Int64)
 		if err == nil {
 			pv.OGImage = model.MediaURL(model.VariantOriginal, ogMedia.Uuid, ogMedia.Filename)
@@ -2030,7 +2030,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 				}
 			}
 		}
-	} else if len(featuredVariants) > 0 {
+	case len(featuredVariants) > 0:
 		// Fall back to featured image — pick best variant for OG
 		pv.OGImageType = featuredMediaMimeType
 		if bestOG := pickOGVariant(featuredVariants); bestOG != nil {
@@ -2040,7 +2040,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		} else {
 			pv.OGImage = pv.FeaturedImage // thumbnail as last resort
 		}
-	} else if pv.FeaturedImage != "" {
+	case pv.FeaturedImage != "":
 		pv.OGImage = pv.FeaturedImage
 	}
 
@@ -2347,8 +2347,8 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 		if desc, err := h.cacheManager.GetConfig(ctx, "site_description"); err == nil && desc != "" {
 			site.Description = desc
 		}
-		if url, err := h.cacheManager.GetConfig(ctx, "site_url"); err == nil && url != "" {
-			site.URL = strings.TrimSuffix(url, "/")
+		if siteURL, err := h.cacheManager.GetConfig(ctx, "site_url"); err == nil && siteURL != "" {
+			site.URL = strings.TrimSuffix(siteURL, "/")
 		}
 		if ogImage, err := h.cacheManager.GetConfig(ctx, "default_og_image"); err == nil && ogImage != "" {
 			site.DefaultOGImage = ogImage
@@ -2964,7 +2964,7 @@ func (h *FrontendHandler) requireConfiguredSiteURL(w http.ResponseWriter, r *htt
 
 // buildPaginationPages builds the page links with ellipsis for pagination.
 // This is extracted to avoid duplication between frontend and admin pagination.
-func buildPaginationPages[T any](currentPage, totalPages int, buildURL func(int) string, makePage func(number int, url string, isCurrent, isEllipsis bool) T) []T {
+func buildPaginationPages[T any](currentPage, totalPages int, buildURL func(int) string, makePage func(number int, pageURL string, isCurrent, isEllipsis bool) T) []T {
 	var pages []T
 
 	start := currentPage - 2

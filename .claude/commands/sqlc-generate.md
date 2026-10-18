@@ -1,3 +1,7 @@
+---
+description: "Regenerate SQLC Go code from SQL queries"
+---
+
 Regenerate SQLC Go code from SQL queries.
 
 Steps:

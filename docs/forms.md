@@ -23,7 +23,7 @@ The forms system consists of three parts:
 | `date` | Date picker (YYYY-MM-DD) | -- | Built-in date format check |
 | `select` | Dropdown menu | JSON array of options | -- |
 | `radio` | Radio button group | JSON array of options | -- |
-| `checkbox` | Checkbox group (multi-select) | JSON array of options | -- |
+| `checkbox` | Checkbox group (every checked option is stored, joined with `, `; a value that is not one of the options is refused) | JSON array of options | -- |
 | `file` | File upload input | -- | Parsed but not processed |
 | `captcha` | hCaptcha widget | -- | Verified via hook (not stored) |
 
@@ -55,7 +55,7 @@ Validation is applied server-side. Required fields use the `is_required` flag.
 
 ## Public Forms
 
-Forms are accessible at `GET /forms/{slug}` and submitted via `POST /forms/{slug}`.
+Forms in the default language are accessible at `GET /forms/{slug}` and submitted via `POST /forms/{slug}`; a form in another active language lives under that language's prefix, as `/{lang}/forms/{slug}`.
 
 ### Submission Flow
 
@@ -106,14 +106,14 @@ Forms support hCaptcha via the optional hCaptcha module.
 
 1. Enable the hCaptcha module and configure site key / secret key
 2. Add a `captcha` field to the form (only one per form)
-3. Optionally set `requireCaptcha` to mandate captcha on all forms with a captcha field
+3. Optionally set `OCMS_REQUIRE_FORM_CAPTCHA=true` (the default in production when unset) to require a captcha on every public form
 
 ### Behavior
 
 - The captcha widget is rendered via the `form.captcha_widget` hook
 - Verification uses the `form.captcha_verify` hook
 - Captcha responses are **not stored** in submission data
-- If `requireCaptcha` is enabled but the captcha field or hCaptcha module is missing, submissions return 503
+- If `OCMS_REQUIRE_FORM_CAPTCHA` is enabled but the captcha field or hCaptcha module is missing, submissions return 503
 
 ## Submissions Management
 
@@ -196,7 +196,7 @@ Forms support translations via the `language_code` field:
 | DELETE | `/admin/forms/{id}/submissions/{subId}` | Delete submission |
 | POST | `/admin/forms/{id}/submissions/bulk-delete` | Bulk delete submissions |
 | POST | `/admin/forms/{id}/submissions/export` | Export submissions as CSV |
-| POST | `/admin/forms/{id}/translate` | Create form translation |
+| POST | `/admin/forms/{id}/translate/{langCode}` | Create form translation |
 
 ## Public Routes
 
@@ -204,6 +204,8 @@ Forms support translations via the `language_code` field:
 |--------|------|-------------|-------------|
 | GET | `/forms/{slug}` | No | Display form |
 | POST | `/forms/{slug}` | Yes (1/s, burst 5) | Submit form |
+| GET | `/{lang}/forms/{slug}` | No | Display a form in a non-default language |
+| POST | `/{lang}/forms/{slug}` | Yes (1/s, burst 5) | Submit a form in a non-default language |
 
 ## Database Schema
 
@@ -261,3 +263,4 @@ Forms support translations via the `language_code` field:
 |----------|---------|-------------|
 | `OCMS_WEBHOOK_FORM_DATA_MODE` | `redacted` | Webhook payload mode: `redacted`, `none`, `full` |
 | `OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION` | `true` in prod | Block startup if mode is `full` in production |
+| `OCMS_REQUIRE_FORM_CAPTCHA` | `true` in prod | Require a captcha field on every public form; submissions to a form without one return 503, and production startup fails if hCaptcha is not configured or an active form has no captcha field |

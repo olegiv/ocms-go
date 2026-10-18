@@ -22,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
 // Service owns every media operation. Uploads delegate to service.MediaService
@@ -33,6 +34,20 @@ type Service struct {
 	events    *service.EventService
 	uploader  *service.MediaService
 	uploadDir string
+	webhooks  webhook.EventDispatcher
+}
+
+// SetWebhookDispatcher makes uploads and deletions send the media.uploaded and
+// media.deleted webhook events the admin UI sends. Call it before serving.
+func (s *Service) SetWebhookDispatcher(d webhook.EventDispatcher) {
+	s.webhooks = d
+}
+
+// dispatchMediaEvent sends a media webhook event when a dispatcher is set.
+func (s *Service) dispatchMediaEvent(ctx context.Context, eventType string, media store.Medium) {
+	if s.webhooks != nil {
+		webhook.DispatchMediaEvent(ctx, s.webhooks, eventType, media)
+	}
 }
 
 // NewService constructs a v2 media Service. The uploadDir is used when the
@@ -304,6 +319,7 @@ func (s *Service) Upload(ctx context.Context, a v2.Actor, in UploadMediaMetadata
 		"mime":     result.Media.MimeType,
 		"size":     result.Media.Size,
 	})
+	s.dispatchMediaEvent(ctx, model.EventMediaUploaded, result.Media)
 	return &dto, nil
 }
 
@@ -399,18 +415,25 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 	if err := s.requireWritePerm(a); err != nil {
 		return err
 	}
-	if _, err := s.queries.GetMediaByID(ctx, id); err != nil {
+	media, err := s.queries.GetMediaByID(ctx, id)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return v2.NewError(v2.ErrNotFound, fmt.Sprintf("media %d not found", id))
 		}
 		return v2.NewInternalError("Failed to load media", err)
 	}
-	if err := s.uploader.Delete(ctx, id); err != nil {
+	// Files left on disk do not undo the delete: the records are gone.
+	err = s.uploader.Delete(ctx, id)
+	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 		return v2.NewInternalError("Failed to delete media", err)
 	}
-	s.logMediaAudit(ctx, a, "API: Media deleted", map[string]any{
-		"media_id": id,
-	})
+	audit := map[string]any{"media_id": id}
+	if err != nil {
+		slog.Error("media deleted but its files were not removed", "error", err, "media_id", id, "uuid", media.Uuid)
+		audit["files_removed"] = false
+	}
+	s.logMediaAudit(ctx, a, "API: Media deleted", audit)
+	s.dispatchMediaEvent(ctx, model.EventMediaDeleted, media)
 	return nil
 }
 

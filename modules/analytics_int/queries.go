@@ -364,7 +364,8 @@ func (m *Module) getPageStats(ctx context.Context, path string) PageStats {
 	stats.Views = aggregatedViews + todayViews
 
 	// Count reads within retention window to stay consistent with view counts
-	retentionCutoff := time.Now().AddDate(0, 0, -m.settings.RetentionDays).Format(dateFormat)
+	settings := m.settingsSnapshot()
+	retentionCutoff := time.Now().AddDate(0, 0, -settings.RetentionDays).Format(dateFormat)
 	_ = m.ctx.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM page_analytics_reads

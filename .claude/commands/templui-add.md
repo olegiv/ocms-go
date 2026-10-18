@@ -1,3 +1,8 @@
+---
+argument-hint: '<component>... | "*"'
+description: "Add one or more templUI components to the oCMS project"
+---
+
 Add one or more templUI components to the oCMS project. Handles CLI installation, project initialization, component download, and post-install steps.
 
 Usage: /templui-add button card dialog
@@ -6,9 +11,11 @@ Usage: /templui-add button card dialog
 Steps:
 1. Check if `templui` CLI is installed (`which templui`). If not, install it:
    ```bash
-   go install github.com/templui/templui/cmd/templui@latest
+   go install github.com/templui/templui/cmd/templui@v1.5.0
    ```
-   Verify with `templui -v`.
+   Verify with `templui -v`. The pinned version matches the installed
+   components (see the first line of `internal/views/components/*/*.templ`);
+   raise it only when upgrading every component together.
 
 2. Check if `.templui.json` exists in project root. If not, create it with this oCMS-specific config:
    ```json
@@ -25,7 +32,7 @@ Steps:
    mkdir -p internal/views/components internal/views/utils web/static/js/templui
    ```
 
-3. Check if `web/static/css/admin-tw.css` has a `@source` directive for `internal/ui/`. If the line `@source "../../../internal/ui/**/*.templ";` is missing, add it after the existing `@source` lines.
+3. Check if `web/static/css/admin-tw.css` has a `@source` directive for `internal/views/components/`. If the line `@source "../../../internal/views/components/**/*.templ";` is missing, add it after the existing `@source` lines.
 
 4. Add the requested component(s) using force mode (non-interactive):
    ```bash
@@ -44,8 +51,8 @@ Steps:
    - Remind: add `@<component>.Script()` call to `internal/views/admin/layout.templ` if not already present.
 
 7. Report results:
-   - List new files created in `internal/ui/<component>/`
-   - Show the import path: `"github.com/olegiv/ocms-go/internal/ui/<component>"`
+   - List new files created in `internal/views/components/<component>/`
+   - Show the import path: `"github.com/olegiv/ocms-go/internal/views/components/<component>"`
    - Show a basic usage example
 
 Note: Use `templui -f add` (force flag) since Claude Code runs non-interactively. To update existing components, use the same command - it will overwrite with the latest version.

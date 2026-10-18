@@ -1690,7 +1690,7 @@ func (q *Queries) PublishPage(ctx context.Context, arg PublishPageParams) (Page,
 const publishScheduledPage = `-- name: PublishScheduledPage :one
 UPDATE pages
 SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
-WHERE id = ?
+WHERE id = ? AND status = 'draft' AND scheduled_at IS NOT NULL AND scheduled_at <= ?
 RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
 `
 
@@ -1698,10 +1698,67 @@ type PublishScheduledPageParams struct {
 	PublishedAt sql.NullTime `json:"published_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 	ID          int64        `json:"id"`
+	ScheduledAt sql.NullTime `json:"scheduled_at"`
 }
 
+// Publishes the page only while it is still a draft scheduled by the given
+// time, so a page published, unscheduled or rescheduled to a later time
+// after the scheduler listed it is left alone.
 func (q *Queries) PublishScheduledPage(ctx context.Context, arg PublishScheduledPageParams) (Page, error) {
-	row := q.db.QueryRowContext(ctx, publishScheduledPage, arg.PublishedAt, arg.UpdatedAt, arg.ID)
+	row := q.db.QueryRowContext(ctx, publishScheduledPage,
+		arg.PublishedAt,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.ScheduledAt,
+	)
+	var i Page
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Body,
+		&i.Status,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+		&i.FeaturedImageID,
+		&i.MetaTitle,
+		&i.MetaDescription,
+		&i.MetaKeywords,
+		&i.OgImageID,
+		&i.NoIndex,
+		&i.NoFollow,
+		&i.CanonicalUrl,
+		&i.ScheduledAt,
+		&i.LanguageCode,
+		&i.HideFeaturedImage,
+		&i.PageType,
+		&i.ExcludeFromLists,
+		&i.Summary,
+		&i.VideoUrl,
+		&i.VideoTitle,
+	)
+	return i, err
+}
+
+const publishUnpublishedPage = `-- name: PublishUnpublishedPage :one
+UPDATE pages
+SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
+WHERE id = ? AND status <> 'published'
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
+`
+
+type PublishUnpublishedPageParams struct {
+	PublishedAt sql.NullTime `json:"published_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	ID          int64        `json:"id"`
+}
+
+// Publishes the page only while it is not published, so a request that read
+// it as a draft cannot publish it a second time after the scheduler did.
+func (q *Queries) PublishUnpublishedPage(ctx context.Context, arg PublishUnpublishedPageParams) (Page, error) {
+	row := q.db.QueryRowContext(ctx, publishUnpublishedPage, arg.PublishedAt, arg.UpdatedAt, arg.ID)
 	var i Page
 	err := row.Scan(
 		&i.ID,
@@ -2028,7 +2085,7 @@ func (q *Queries) SlugOrAliasExistsExcluding(ctx context.Context, arg SlugOrAlia
 const unpublishPage = `-- name: UnpublishPage :one
 UPDATE pages
 SET status = 'draft', published_at = NULL, scheduled_at = NULL, updated_at = ?
-WHERE id = ?
+WHERE id = ? AND status = 'published'
 RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title
 `
 
@@ -2037,6 +2094,7 @@ type UnpublishPageParams struct {
 	ID        int64     `json:"id"`
 }
 
+// Unpublishes the page only while it is published.
 func (q *Queries) UnpublishPage(ctx context.Context, arg UnpublishPageParams) (Page, error) {
 	row := q.db.QueryRowContext(ctx, unpublishPage, arg.UpdatedAt, arg.ID)
 	var i Page

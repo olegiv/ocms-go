@@ -39,8 +39,8 @@ const bearerRealm = `Bearer realm="oCMS MCP"`
 // a flood from one address cannot occupy the slots other callers need. The
 // global chain (request ID, trusted-proxy RealIP, sentinel bans, logging,
 // 30 s timeout, security headers) wraps every module route; panics are
-// recovered by serveEndpoint, because the timeout middleware runs handlers
-// out of reach of the global recoverer.
+// recovered by serveEndpoint, which answers JSON rather than the timeout
+// middleware's plain-text 500.
 //
 // Init runs once per process (the registry serializes activation), so the two
 // rate limiters, each with a cleanup goroutine, are created once, like those

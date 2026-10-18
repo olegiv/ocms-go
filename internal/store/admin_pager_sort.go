@@ -90,7 +90,7 @@ FROM pages p
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := []Page{}
 	for rows.Next() {
@@ -239,7 +239,7 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []GetTagUsageCountsRow
 	for rows.Next() {
@@ -326,7 +326,7 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := []User{}
 	for rows.Next() {
@@ -393,7 +393,7 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := []ApiKey{}
 	for rows.Next() {
@@ -489,7 +489,7 @@ FROM media m
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := []Medium{}
 	for rows.Next() {
@@ -561,7 +561,7 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := []FormSubmission{}
 	for rows.Next() {

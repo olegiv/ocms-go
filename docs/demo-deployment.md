@@ -24,17 +24,17 @@ When enabled, `SeedDemo` creates:
 | Users | 2 | Admin and editor with demo credentials |
 | Categories | 4 | Blog, Portfolio, Services, Resources |
 | Tags | 7 | Tutorial, News, Featured, Go, Web Development, Design, Open Source |
-| Pages | 9 | Home, About, Contact, 3 blog posts, 2 portfolio items, 1 services page |
-| Media | 10 | Placeholder images (2400x1600) with all variants (thumbnail, small, medium, large) |
-| Menu items | 6 | Home, Blog, Portfolio, Services, About, Contact |
+| Pages | 10 | Home, About, Contact, Cookie Policy, 3 blog posts, 2 portfolio items, 1 services page |
+| Media | 10 | Placeholder images (2400x1600) with all variants (thumbnail, grid, small, medium, large, og) |
+| Menu items | 7 | Home, Blog, Portfolio, Services, About, Contact, Cookie Policy |
 
 ### Demo Credentials
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | `demo@example.com` | `demo1234demo` |
+| Admin | `demo@example.com` | Random, regenerated on every startup; shown in the informer bar at the top of the site |
 | Editor | `editor@example.com` | `demo1234demo` |
-| Default admin | `admin@example.com` | `changeme1234` |
+| Default admin | `admin@example.com` | Seeded with `changeme1234`, but rotated to a random password at startup in demo mode, so it cannot be used |
 
 ### Demo Mode Restrictions
 
@@ -43,7 +43,7 @@ In demo mode, certain actions are restricted to prevent abuse while still allowi
 | Area | Allowed | Blocked |
 |------|---------|---------|
 | Content (pages, tags, categories, menus, media, forms, widgets) | View | Create, edit, delete, unpublish |
-| Themes | View, switch active theme | Edit theme settings (colors, options) |
+| Themes | View, switch active theme | Edit theme settings (colors, options), import, delete |
 | Users | View | Create, edit, delete, change roles |
 | Site config | View | Edit |
 | Languages | View | Edit |
@@ -51,6 +51,7 @@ In demo mode, certain actions are restricted to prevent abuse while still allowi
 | Import/export | — | Export, import |
 | Modules | View | Toggle, change settings |
 | Cache | View stats | Clear cache |
+| Scheduler | View jobs | Edit schedules, reset, trigger, custom-task actions |
 | Media uploads | — | All uploads blocked |
 | DB Manager module | — | SQL execution |
 | Form submissions | View | CSV export |
@@ -109,12 +110,13 @@ archives are not required.
 The `fly.toml` in the project root configures:
 
 - **Region**: `fra` (Frankfurt, customizable)
+- **Stop timeout**: `kill_timeout = 60`, so the app can drain requests (up to 30 seconds) and shut down before Fly stops it
 - **VM**: shared-cpu-1x, 256MB RAM
 - **Volume**: 1GB persistent storage at `/app/data`
 - **Health checks**: Liveness (`/health/live`) and readiness (`/health/ready`)
 - **Auto-scaling**: Stops when idle, auto-starts on HTTP requests
 
-Environment variables are set in `fly.toml` under `[env]`:
+Environment variables are set in `fly.toml` under `[env]` (excerpt):
 
 ```toml
 [env]
@@ -124,6 +126,8 @@ Environment variables are set in `fly.toml` under `[env]`:
   OCMS_DB_PATH = '/app/data/ocms.db'
   OCMS_UPLOADS_DIR = '/app/data/uploads'
 ```
+
+The file also sets `OCMS_ACTIVE_THEME` (`developer`), `OCMS_SITE_URL`, and switches off the production `OCMS_REQUIRE_*` checks that need configuration the demo does not have (trusted proxies, API CIDRs, form captcha and so on). It sets `OCMS_MIGRATOR_ALLOWED_DB_HOSTS` to the unresolvable `db.invalid` to satisfy the Migrator startup audit.
 
 Secrets (set via `fly secrets set`):
 
@@ -143,7 +147,9 @@ Secrets (set via `fly secrets set`):
 
 ### Demo Reset
 
-To reset the demo to its initial state:
+In demo mode the application resets itself: the `demo_reset` scheduler job runs daily at 01:00 UTC, deleting the database and uploads and sending SIGTERM so the machine restarts and re-seeds, and a startup check runs the same reset when more than 24 hours have passed since the last one.
+
+To reset the demo to its initial state by hand:
 
 ```bash
 # Option 1: Run reset script
@@ -190,8 +196,12 @@ Build and run locally:
 
 ```bash
 docker build -t ocms-demo .
-docker run -p 8080:8080 \
+# --stop-timeout 60 lets the app drain requests (up to 30 seconds) and shut down on docker stop
+# The image defaults to OCMS_ENV=production, which refuses to start without
+# OCMS_TRUSTED_PROXIES and OCMS_API_ALLOWED_CIDRS; use development for a local try-out
+docker run -p 8080:8080 --stop-timeout 60 \
   -e OCMS_SESSION_SECRET="$(openssl rand -base64 32)" \
+  -e OCMS_ENV=development \
   -e OCMS_DO_SEED=true \
   -e OCMS_DEMO_MODE=true \
   -v ocms_data:/app/data \

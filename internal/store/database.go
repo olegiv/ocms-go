@@ -4,9 +4,11 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -42,6 +44,13 @@ func DefaultDBConfig() DBConfig {
 	}
 }
 
+// isInMemory reports whether path names an in-memory SQLite database that
+// each connection opens afresh, rather than one shared through cache=shared.
+func isInMemory(path string) bool {
+	memory := path == ":memory:" || strings.HasPrefix(path, "file::memory:") || strings.Contains(path, "mode=memory")
+	return memory && !strings.Contains(path, "cache=shared")
+}
+
 // NewDB opens a SQLite database connection and configures it for optimal performance.
 func NewDB(path string) (*sql.DB, error) {
 	return NewDBWithConfig(path, DefaultDBConfig())
@@ -52,6 +61,13 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 	// Pass pragmas via DSN so they apply to every connection in the pool,
 	// not just the first one. Without this, new pooled connections lack
 	// busy_timeout and journal_mode, causing SQLITE_BUSY under load.
+	// _time_format=sqlite stores time.Time values as
+	// "2006-01-02 15:04:05.999999999-07:00", which SQLite's date functions
+	// read, instead of the driver's default, time.Time.String(), with a zone
+	// name and a monotonic-clock suffix ("+0200 CEST m=+0.08").
+	// _timezone=UTC stores them in UTC, as SQLite stores CURRENT_TIMESTAMP,
+	// so the two sort together in a column, and reads times back in UTC.
+	// The migration in time_migration.go moved older rows to that text.
 	dsn := path +
 		"?_pragma=busy_timeout(5000)" +
 		"&_pragma=journal_mode(WAL)" +
@@ -62,18 +78,29 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 		"&_pragma=mmap_size(268435456)" +
 		"&_pragma=page_size(4096)" +
 		"&_pragma=wal_autocheckpoint(1000)" +
-		"&_txlock=immediate"
+		"&_txlock=immediate" +
+		"&_time_format=sqlite" +
+		"&_timezone=UTC"
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(cfg.MaxOpenConns)
-	db.SetMaxIdleConns(cfg.MaxIdleConns)
-	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
-	db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
+	// Configure connection pool. Every connection to an in-memory database
+	// opens its own empty one, so it keeps a single connection that never
+	// expires: closing it would drop the database.
+	if isInMemory(path) {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+		db.SetConnMaxLifetime(0)
+		db.SetConnMaxIdleTime(0)
+	} else {
+		db.SetMaxOpenConns(cfg.MaxOpenConns)
+		db.SetMaxIdleConns(cfg.MaxIdleConns)
+		db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+		db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
+	}
 
 	// Run one-time optimizations on the first connection
 	if _, err := db.Exec("PRAGMA optimize"); err != nil {
@@ -92,13 +119,20 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 
 // Migrate runs all pending database migrations.
 func Migrate(db *sql.DB) error {
+	return RunMigrationCommand(context.Background(), db, "up")
+}
+
+// RunMigrationCommand runs a goose command (up, down, status, version) over
+// the embedded SQL migrations and the Go migrations registered by this
+// package, which goose's own CLI does not know.
+func RunMigrationCommand(ctx context.Context, db *sql.DB, command string, args ...string) error {
 	goose.SetBaseFS(migrations)
 
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return fmt.Errorf("setting dialect: %w", err)
 	}
 
-	if err := goose.Up(db, "migrations"); err != nil {
+	if err := goose.RunContext(ctx, command, db, "migrations", args...); err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}
 

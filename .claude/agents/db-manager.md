@@ -25,15 +25,18 @@ This is a Go-based CMS with the following database characteristics:
 
 **Migration Commands:**
 
+Run migrations through `ocms migrate` (the `make` targets do): the goose CLI
+does not know the Go migrations in `internal/store/*_migration.go`.
+
 ```bash
 # Check migration status
-goose -dir internal/store/migrations sqlite3 ./data/ocms.db status
+make migrate-status    # go run ./cmd/ocms migrate -db ./data/ocms.db status
 
 # Apply all pending migrations
-goose -dir internal/store/migrations sqlite3 ./data/ocms.db up
+make migrate-up
 
 # Rollback last migration
-goose -dir internal/store/migrations sqlite3 ./data/ocms.db down
+make migrate-down
 
 # Create new migration (interactive)
 make migrate-create

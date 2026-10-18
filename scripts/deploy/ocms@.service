@@ -55,8 +55,11 @@ RestrictNamespaces=true
 # MemoryMax=512M
 # CPUQuota=100%
 
-# Graceful shutdown
-TimeoutStopSec=30
+# Graceful shutdown: the app drains requests for up to 30 seconds, waits up
+# to 5 more for handlers still running, records the stop (up to 5), and
+# gives its shutdown steps up to 10 and its Event Log writer up to 3
+# (TestStopGracePeriodsCoverTheDrain).
+TimeoutStopSec=60
 KillMode=mixed
 KillSignal=SIGTERM
 

@@ -14,7 +14,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1232,7 +1234,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		value := strings.TrimSpace(r.FormValue(field.Name))
+		value := submittedFieldValue(r.Form, field)
 		values[field.Name] = value
 		if len(value) > maxPublicFormFieldValueBytes {
 			slog.Warn("form submission blocked: field value too large",
@@ -1293,6 +1295,10 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 		// Type-specific validation
 		switch field.Type {
+		case model.FieldTypeCheckbox:
+			if !checkboxValuesValid(r.Form[field.Name], field) {
+				validationErrors[field.Name] = "Please choose from the listed options"
+			}
 		case model.FieldTypeEmail:
 			if !isValidEmail(value) {
 				validationErrors[field.Name] = "Please enter a valid email address"
@@ -1397,6 +1403,11 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 	for key, vals := range formData {
 		if len(vals) > 0 {
 			values[key] = vals[0]
+		}
+	}
+	for _, field := range fields {
+		if field.Type == model.FieldTypeCheckbox {
+			values[field.Name] = submittedFieldValue(formData, field)
 		}
 	}
 
@@ -2229,12 +2240,42 @@ func requiredAttr(isRequired bool) templ.Attributes {
 	return nil
 }
 
-// fieldValueContains checks if the comma-separated value string contains the given option.
-func fieldValueContains(value, option string) bool {
-	if value == "" {
-		return false
+// submittedFieldValue returns what was submitted for field: for a checkbox
+// field, every checked option joined with ", " (each box sends its option
+// under the field's name), and for any other field the first value, trimmed.
+func submittedFieldValue(form url.Values, field store.FormField) string {
+	if field.Type != model.FieldTypeCheckbox {
+		return strings.TrimSpace(form.Get(field.Name))
 	}
-	return strings.Contains(value, option)
+	var checked []string
+	for _, value := range form[field.Name] {
+		if value = strings.TrimSpace(value); value != "" {
+			checked = append(checked, value)
+		}
+	}
+	return strings.Join(checked, ", ")
+}
+
+// checkboxValuesValid reports whether every value submitted for a checkbox
+// field is one of its options. A field without options takes any value.
+func checkboxValuesValid(submitted []string, field store.FormField) bool {
+	options := parseFieldOptions(field.Options.String)
+	if len(options) == 0 {
+		return true
+	}
+	for _, value := range submitted {
+		if value = strings.TrimSpace(value); value != "" && !slices.Contains(options, value) {
+			return false
+		}
+	}
+	return true
+}
+
+// fieldValueContains reports whether option is one of the checked options in
+// value, the ", "-joined format submittedFieldValue stores (see
+// util.JoinedValueHas).
+func fieldValueContains(value, option string) bool {
+	return util.JoinedValueHas(value, option)
 }
 
 // getBaseTemplateData builds base template data for form rendering.

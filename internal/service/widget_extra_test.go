@@ -23,6 +23,7 @@ func widgetTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	_, err = db.Exec(`
 		CREATE TABLE widgets (
@@ -53,15 +54,15 @@ func TestToWidgetView(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name            string
-		widget          store.Widget
-		wantID          int64
-		wantType        string
-		wantTitle       string
-		wantContent     template.HTML
-		wantSettings    string
-		wantIsActive    bool
-		wantPosition    int64
+		name         string
+		widget       store.Widget
+		wantID       int64
+		wantType     string
+		wantTitle    string
+		wantContent  template.HTML
+		wantSettings string
+		wantIsActive bool
+		wantPosition int64
 	}{
 		{
 			name: "active widget with HTML content",
@@ -117,10 +118,10 @@ func TestToWidgetView(t *testing.T) {
 				CreatedAt:  now,
 				UpdatedAt:  now,
 			},
-			wantID:      3,
-			wantType:    "html",
-			wantTitle:   "XSS Widget",
-			wantContent: template.HTML("<p>Safe</p>"),
+			wantID:       3,
+			wantType:     "html",
+			wantTitle:    "XSS Widget",
+			wantContent:  template.HTML("<p>Safe</p>"),
 			wantIsActive: true,
 		},
 		{

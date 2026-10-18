@@ -44,8 +44,30 @@ jobs:
     - name: Build
       run: go build -v ./cmd/ocms
 
+    # The Claude tooling drift tests (shared /code-quality rules, hook
+    # targets) read the .claude/shared submodule; without it they skip or
+    # check only the links, so the Test step requires it.
+    - name: Check out the shared Claude tooling
+      run: git submodule update --init .claude/shared
+
     - name: Test
       run: go test -v ./...
+      env:
+        OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
+        OCMS_REQUIRE_SHARED_TOOLING: "1"
+
+    # The settings tests drive saves and request-time reads concurrently;
+    # only the race detector turns a missing lock into a failure.
+    - name: Race tests (module settings locks)
+      run: go test -race -count=1 -run 'Settings' ./modules/...
+      env:
+        OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
+
+    # The server stop, the request timeout's panic recovery and the Event Log
+    # writer run work in goroutines of their own, and concurrent requests
+    # call the settings retry gate.
+    - name: Race tests (server lifecycle, request timeout, event log, modules)
+      run: go test -race -count=1 ./cmd/ocms/ ./internal/middleware/ ./internal/logging/ ./internal/module/
       env:
         OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
 

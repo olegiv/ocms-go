@@ -46,7 +46,8 @@ func newLanguageRouteTestDB(t *testing.T) *sql.DB {
 			('abcdefghij', 'Maximum', 'Maximum', 0, 1, 3),
 			('a1-b2', 'Alphanumeric', 'Alphanumeric', 0, 1, 4),
 			('de', 'German', 'Deutsch', 0, 0, 5),
-			('blog', 'Legacy reserved', 'Legacy reserved', 0, 1, 6);
+			('blog', 'Legacy reserved', 'Legacy reserved', 0, 1, 6),
+			('account', 'Legacy account', 'Legacy account', 0, 1, 7);
 	`)
 	if err != nil {
 		t.Fatalf("create language route schema: %v", err)
@@ -88,6 +89,9 @@ func TestMountLanguageAwareFrontendRoutes(t *testing.T) {
 	root.Get("/login", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("parent-login"))
 	})
+	root.Get("/account", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("parent-account"))
+	})
 	root.Get("/forms/{slug}", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("parent-form-" + chi.URLParam(r, "slug")))
 	})
@@ -105,6 +109,7 @@ func TestMountLanguageAwareFrontendRoutes(t *testing.T) {
 		{path: "/fr/article/extra", wantStatus: http.StatusNotFound, wantBody: "frontend-notfound\n"},
 		{path: "/health", wantStatus: http.StatusOK, wantBody: "parent-health"},
 		{path: "/login", wantStatus: http.StatusOK, wantBody: "parent-login"},
+		{path: "/account", wantStatus: http.StatusOK, wantBody: "parent-account"},
 		{path: "/forms/contact", wantStatus: http.StatusOK, wantBody: "parent-form-contact"},
 		{path: "/static/dist/app.css", wantStatus: http.StatusOK, wantBody: "parent-static"},
 	}
@@ -166,6 +171,7 @@ func TestLanguageAwareFrontendRouteMatrix(t *testing.T) {
 		{name: "unknown nested prefix is unknown", path: "/zz/article", wantStatus: http.StatusNotFound},
 		{name: "legacy reserved code remains core route", path: "/blog", wantStatus: http.StatusOK, wantBody: "blog|en||"},
 		{name: "legacy reserved nested prefix is unknown", path: "/blog/article", wantStatus: http.StatusNotFound},
+		{name: "account is never a language prefix", path: "/account/article", wantStatus: http.StatusNotFound},
 	}
 
 	for _, tt := range tests {

@@ -15,9 +15,13 @@ BUILD_TIME ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 # Linker flags for version injection
 LDFLAGS_VERSION=-X main.appVersion=$(VERSION) -X main.appGitCommit=$(GIT_COMMIT) -X main.appBuildTime=$(BUILD_TIME)
 
-# Database migrations (using goose CLI)
+# Database migrations. MIGRATIONS_DIR is where migrate-create writes; the
+# other migrate targets run `ocms migrate`, on DB_PATH when it is given
+# (`make migrate-up DB_PATH=other.db`) and otherwise on the database the server
+# opens: OCMS_DB_PATH from the environment, .env or the file OCMS_ENV_FILE
+# names. `:=` keeps a DB_PATH exported in the shell from choosing it.
 MIGRATIONS_DIR := internal/store/migrations
-DB_PATH := ./data/ocms.db
+DB_PATH :=
 
 # Build assets (SCSS to CSS)
 assets:
@@ -119,14 +123,15 @@ clean:
 clean-db:
 	rm -rf data/*.db
 
+# Run through `ocms migrate`: the goose CLI does not know the Go migrations.
 migrate-up:
-	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) up
+	go run ./cmd/ocms migrate $(if $(DB_PATH),-db "$(DB_PATH)") up
 
 migrate-down:
-	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) down
+	go run ./cmd/ocms migrate $(if $(DB_PATH),-db "$(DB_PATH)") down
 
 migrate-status:
-	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) status
+	go run ./cmd/ocms migrate $(if $(DB_PATH),-db "$(DB_PATH)") status
 
 migrate-create:
 	@read -p "Migration name: " name; \

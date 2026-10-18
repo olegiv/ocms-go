@@ -421,7 +421,7 @@ func TestAPIKeyAuth_ValidKey(t *testing.T) {
 
 func TestAPIKeyAuth_VerificationConcurrencyLimit(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rawKey := insertTestAPIKey(t, db, "Test Key", []string{"pages:read"}, true, nil)
 

@@ -354,11 +354,11 @@ Other controls:
   request's cancellation and adds the 25-second cap, so abandoned calls stop
   their database work.
 - **Panics:** the SDK has no panic recovery and runs handlers on its own
-  goroutines. The global timeout middleware runs every handler on another
-  goroutine of its own, out of reach of chi's recoverer. The module therefore
-  recovers panics itself at three levels: the endpoint, every MCP method and
-  every tool. A panic becomes an internal error and is logged with its stack; it
-  does not crash the process.
+  goroutines, which neither chi's recoverer nor the global timeout
+  middleware's recovery reaches. The module therefore recovers panics itself
+  at three levels: the endpoint, every MCP method and every tool. A panic
+  becomes an internal error, in JSON rather than the timeout middleware's
+  plain-text 500, and is logged with its stack; it does not crash the process.
 - **`"arguments": null`:** in go-sdk v1.8.0, a `tools/call` whose arguments
   are JSON `null` panics while applying schema defaults. The module turns that
   into absent arguments before validation. A regression test covers it.

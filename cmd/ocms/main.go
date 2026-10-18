@@ -19,8 +19,11 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -183,35 +186,20 @@ func logSeedingSecuritySignals(ctx context.Context, cfg *config.Config, events *
 		return
 	}
 
+	// LogEvent logs a failed write itself, naming the event.
 	if cfg.DoSeed {
-		_ = events.LogSecurityEvent(
-			ctx,
-			"warning",
-			"Database seeding is enabled",
-			nil,
-			"",
-			"",
-			map[string]any{
-				"environment":   cfg.Env,
-				"seed_enabled":  true,
-				"default_admin": store.DefaultAdminEmail,
-			},
-		)
+		_ = events.LogSecurityEvent(ctx, "warning", "Database seeding is enabled", nil, "", "", map[string]any{
+			"environment":   cfg.Env,
+			"seed_enabled":  true,
+			"default_admin": store.DefaultAdminEmail,
+		})
 	}
 
 	if hasDefaultAdminCreds {
-		_ = events.LogSecurityEvent(
-			ctx,
-			"warning",
-			"Default seeded admin credentials are still active",
-			nil,
-			"",
-			"",
-			map[string]any{
-				"environment":   cfg.Env,
-				"default_admin": store.DefaultAdminEmail,
-			},
-		)
+		_ = events.LogSecurityEvent(ctx, "warning", "Default seeded admin credentials are still active", nil, "", "", map[string]any{
+			"environment":   cfg.Env,
+			"default_admin": store.DefaultAdminEmail,
+		})
 	}
 }
 
@@ -225,6 +213,8 @@ func parseCommand(args []string) (cmd string, rest []string) {
 	switch args[0] {
 	case "init":
 		return "init", args[1:]
+	case "migrate":
+		return "migrate", args[1:]
 	case "serve":
 		return "serve", args[1:]
 	default:
@@ -233,12 +223,19 @@ func parseCommand(args []string) (cmd string, rest []string) {
 }
 
 func main() {
-	// Subcommand dispatch. "init" scaffolds and exits; "serve" (the default)
-	// falls through to the normal flag parsing and run() path below.
+	// Subcommand dispatch. "init" scaffolds and "migrate" runs migrations,
+	// then both exit; "serve" (the default) falls through to the normal flag
+	// parsing and run() path below.
 	switch cmd, rest := parseCommand(os.Args[1:]); cmd {
 	case "init":
 		if err := runInit(rest); err != nil {
 			slog.Error("init failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	case "migrate":
+		if err := runMigrate(rest); err != nil {
+			slog.Error("migrate failed", "error", err)
 			os.Exit(1)
 		}
 		return
@@ -257,6 +254,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: %s [command] [options]\n\n", os.Args[0])
 		_, _ = fmt.Fprintf(os.Stderr, "Commands:\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  init <dir>    Scaffold a new site directory (.env + data dirs) and exit\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  migrate <cmd> Run database migrations (up, down, status, version) and exit\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  serve         Start the server (default when no command is given)\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
@@ -310,9 +308,200 @@ func main() {
 	}
 
 	if err := run(); err != nil {
-		slog.Error("application failed to start", "error", err)
+		var logged loggedRunError
+		if !errors.As(err, &logged) {
+			slog.Error("application exited with error", "error", err)
+		}
 		os.Exit(1)
 	}
+}
+
+// shutdownTimeout is how long a stop waits for requests in flight before the
+// remaining connections are closed.
+const shutdownTimeout = 30 * time.Second
+
+// handlerDrainTimeout is the longest a stop then waits for handlers still
+// running, which the request timeout or a forced close can leave behind, so
+// they can finish before run's deferred cleanup closes the database; any
+// still running after it are logged and the cleanup proceeds.
+const handlerDrainTimeout = 5 * time.Second
+
+// cleanupTimeout bounds the shutdown steps run's deferred cleanup takes after
+// the server has stopped (module shutdowns, the webhook dispatcher, the
+// scheduler, the cache), so the process exits within a deployment's stop
+// grace period: the modules' module.ShutdownTimeout and three seconds for
+// the other steps.
+const cleanupTimeout = module.ShutdownTimeout + 3*time.Second
+
+// eventLogCloseTimeout is how long the Event Log writer gets to write what is
+// queued at exit. It follows the shutdown steps outside their budget, so a
+// step that overran the budget cannot leave it no time.
+const eventLogCloseTimeout = 3 * time.Second
+
+// cleanupBudget shares a time limit among run's deferred shutdown steps: the
+// clock starts with the first step, and each waits only for what is left
+// (at least minCleanupWait). A step still running then, or one that panics,
+// is logged and left behind, so the steps after it and the exit go ahead.
+type cleanupBudget struct {
+	limit    time.Duration
+	once     sync.Once
+	deadline time.Time
+}
+
+// minCleanupWait is the least a shutdown step is waited for, so quick steps
+// after a spent budget still finish.
+const minCleanupWait = 100 * time.Millisecond
+
+// within runs the named step and waits for it until the budget runs out.
+func (b *cleanupBudget) within(name string, step func()) {
+	b.once.Do(func() { b.deadline = time.Now().Add(b.limit) })
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			if p := recover(); p != nil {
+				slog.Error("shutdown step panicked; continuing", "step", name, "panic", p, "stack", string(debug.Stack()))
+			}
+		}()
+		step()
+	}()
+	timer := time.NewTimer(max(time.Until(b.deadline), minCleanupWait))
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		slog.Warn("shutdown step did not finish within the cleanup budget; continuing", "step", name, "budget", b.limit)
+	}
+}
+
+// stopPolicy says how serveUntilStopped stops the server.
+type stopPolicy struct {
+	// timeout is how long Shutdown waits for connections to go idle before
+	// the remaining ones are closed.
+	timeout time.Duration
+	// drain is how long it then waits for inflight to drop to zero.
+	drain time.Duration
+	// inflight counts the running handlers. middleware.Timeout runs each
+	// handler in a goroutine of its own and stops waiting for it when the
+	// request times out or its connection closes, so the count comes from
+	// countInFlight, registered right after Timeout.
+	inflight *atomic.Int64
+}
+
+// countInFlight counts the handlers running in inflight. Registered right
+// after middleware.Timeout, it runs in the goroutine Timeout starts for the
+// work, so the count includes handlers Timeout no longer waits for.
+func countInFlight(inflight *atomic.Int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			inflight.Add(1)
+			defer inflight.Add(-1)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// recordServerEvent writes a server lifecycle event to the Event Log;
+// LogEvent logs a failed write itself, naming the event.
+func recordServerEvent(events *service.EventService, message string, metadata map[string]any) {
+	_ = events.LogSystemEvent(context.Background(), model.EventLevelInfo, message, nil, "", "", metadata)
+}
+
+// serveUntilStopped serves on listener until quit receives a signal or the
+// server fails. It runs started alongside, once Serve has begun (the
+// listener is already bound, so connections made meanwhile queue), and
+// waits for it before returning; a slow started does not delay a stop. On a
+// signal it shuts the server down gracefully, waiting up to stop.timeout
+// for connections to go idle, then closes the ones still open: a handler's
+// next read or write fails, and once its request body has been read its
+// context is cancelled. Either way it then waits up to stop.drain for the
+// handlers counted in stop.inflight to return, logging any still running.
+// It returns nil, or the shutdown or serve error. A server that fails first
+// is returned as it is, without a shutdown.
+func serveUntilStopped(srv *http.Server, listener net.Listener, quit <-chan os.Signal, stop stopPolicy, started func()) error {
+	// Serve's failure, if any, is sent before the channel closes; after
+	// Shutdown, Serve returns http.ErrServerClosed and the channel closes
+	// with nothing in it.
+	serveErr := make(chan error, 1)
+	go func() {
+		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- err
+		}
+		close(serveErr)
+	}()
+	startedDone := make(chan struct{})
+	go func() {
+		defer close(startedDone)
+		started()
+	}()
+	defer func() { <-startedDone }()
+	return waitForStop(quit, serveErr, func() error {
+		slog.Info("shutting down server...")
+		ctx, cancel := context.WithTimeout(context.Background(), stop.timeout)
+		defer cancel()
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			err = errors.Join(err, srv.Close())
+		}
+		if !waitForHandlers(stop.inflight, stop.drain) {
+			slog.Warn("requests still running after the server stopped", "requests", stop.inflight.Load())
+		}
+		return err
+	})
+}
+
+// waitForHandlers waits up to limit for active to drop to zero and reports
+// whether it did. A nil counter counts nothing.
+func waitForHandlers(active *atomic.Int64, limit time.Duration) bool {
+	if active == nil {
+		return true
+	}
+	deadline := time.Now().Add(limit)
+	for active.Load() > 0 {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return true
+}
+
+// waitForStop blocks until a stop signal arrives or the server fails.
+// serveErr carries Serve's failure, if any, and closes once Serve returns. A
+// failure that comes first is returned as it is, without a shutdown.
+// Otherwise (a signal, or serveErr closing empty) waitForStop calls shutdown
+// and returns its error wrapped; if shutdown succeeds it waits for serveErr
+// and returns the failure it carried, so a failure that arrived together
+// with the signal never exits as a clean stop.
+func waitForStop(quit <-chan os.Signal, serveErr <-chan error, shutdown func() error) error {
+	select {
+	case <-quit:
+	case err := <-serveErr:
+		if err != nil {
+			return err
+		}
+	}
+	if err := shutdown(); err != nil {
+		return fmt.Errorf("server shutdown: %w", err)
+	}
+	return <-serveErr
+}
+
+// loggedRunError marks a run failure that run has already logged.
+type loggedRunError struct{ error }
+
+func (e loggedRunError) Unwrap() error { return e.error }
+
+// logRunFailure logs *runErr once and marks it as logged. run defers it so
+// the failure is logged while the error log file and the event log are still
+// open, before run's deferred closes shut them.
+func logRunFailure(runErr *error) {
+	var logged loggedRunError
+	if *runErr == nil || errors.As(*runErr, &logged) {
+		return
+	}
+	slog.Error("application exited with error", "error", *runErr)
+	*runErr = loggedRunError{*runErr}
 }
 
 // parseLogLevel converts a log level string to slog.Level.
@@ -693,22 +882,35 @@ func auditRequiredAPIKeyExpiryPosture(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// auditRequiredAPIKeyMaxTTLPosture refuses a production start while an
+// active API key has no expiry or a lifetime longer than maxTTLDays. The
+// times are compared in Go: SQLite's date functions cannot read the
+// time.Time.String() text the driver stored before _time_format=sqlite, so
+// the check used to skip every key the app created, and the driver parses
+// both formats.
 func auditRequiredAPIKeyMaxTTLPosture(ctx context.Context, db *sql.DB, maxTTLDays int) error {
 	if maxTTLDays <= 0 {
 		return nil
 	}
 
-	var keysOutsideTTL int
-	err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*)
-		FROM api_keys
-		WHERE is_active = 1
-		  AND (
-		  	expires_at IS NULL
-		  	OR datetime(expires_at) > datetime(created_at, '+' || ? || ' days')
-		  )
-	`, maxTTLDays).Scan(&keysOutsideTTL)
+	rows, err := db.QueryContext(ctx, `SELECT created_at, expires_at FROM api_keys WHERE is_active = 1`)
 	if err != nil {
+		return fmt.Errorf("auditing API key max TTL posture: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	maxTTL := time.Duration(maxTTLDays) * 24 * time.Hour
+	keysOutsideTTL := 0
+	for rows.Next() {
+		var created time.Time
+		var expires sql.NullTime
+		if err := rows.Scan(&created, &expires); err != nil {
+			return fmt.Errorf("auditing API key max TTL posture: %w", err)
+		}
+		if !expires.Valid || expires.Time.Sub(created) > maxTTL {
+			keysOutsideTTL++
+		}
+	}
+	if err := rows.Err(); err != nil {
 		return fmt.Errorf("auditing API key max TTL posture: %w", err)
 	}
 
@@ -888,10 +1090,10 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 		return
 	}
 
-	// Security headers for static files
+	// Security headers for static files. Cache-Control is set only when a
+	// file is served, so a 404 during a deploy is not cached for a month.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	w.Header().Set("Cache-Control", "public, max-age=2592000")
 
 	// Strip the prefix to get the requested file path
 	reqPath := r.URL.Path
@@ -908,34 +1110,22 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 	// lookups that require forward slashes.
 	cleanPath := strings.TrimPrefix(path.Clean("/"+requestedPath), "/")
 
-	// Reject paths that try to escape (start with .. or are absolute)
-	if cleanPath == "" || strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
+	// Reject paths that escape the static directory, are absolute or empty
+	if !filepath.IsLocal(cleanPath) {
 		http.NotFound(w, r)
 		return
 	}
 
 	// Handle embedded vs external themes
 	if thm.IsEmbedded && thm.EmbeddedFS != nil {
-		// Serve from embedded filesystem
-		embeddedPath := "static/" + cleanPath
-		data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Set content type based on file extension
-		contentType := handler.ContentTypeByExtension(cleanPath)
-		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
-		_, _ = w.Write(data)
+		serveEmbeddedThemeFile(w, r, thm.EmbeddedFS, themeName, cleanPath)
 		return
 	}
 
 	// Serve from filesystem for external themes
 	absStaticPath, err := filepath.Abs(thm.StaticPath)
 	if err != nil {
-		http.NotFound(w, r)
+		themeStaticFileServable(w, r, nil, err, themeName, cleanPath)
 		return
 	}
 	absStaticPath = filepath.Clean(absStaticPath)
@@ -949,7 +1139,65 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 		return
 	}
 
-	http.ServeFile(w, r, absFilePath)
+	// Open the file before answering, so a file the server cannot read is a
+	// logged 500 rather than a silent 403 from the file server.
+	file, err := os.Open(absFilePath) // #nosec G304 -- contained in the theme's static directory above
+	if err != nil {
+		themeStaticFileServable(w, r, nil, err, themeName, cleanPath)
+		return
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) {
+		return
+	}
+	w.Header().Set("Cache-Control", themeStaticCacheControl)
+	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+}
+
+// themeStaticCacheControl is the Cache-Control header of a served theme file.
+const themeStaticCacheControl = "public, max-age=2592000"
+
+// serveEmbeddedThemeFile serves static/<file> from an embedded theme's file
+// system; themeStaticFileServable answers anything that cannot be served.
+func serveEmbeddedThemeFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, themeName, file string) {
+	embeddedPath := "static/" + file
+	info, err := fs.Stat(fsys, embeddedPath)
+	if !themeStaticFileServable(w, r, info, err, themeName, file) {
+		return
+	}
+	data, err := fs.ReadFile(fsys, embeddedPath)
+	if err != nil {
+		themeStaticFileServable(w, r, nil, err, themeName, file)
+		return
+	}
+	w.Header().Set("Cache-Control", themeStaticCacheControl)
+	w.Header().Set("Content-Type", handler.ContentTypeByExtension(file))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	_, _ = w.Write(data)
+}
+
+// themeStaticFileServable reports whether a theme static file whose lookup
+// returned info and err can be served, and answers the request when it
+// cannot. A missing file, a directory or a path the file system refuses
+// (invalid UTF-8, a NUL byte, an overlong name) is a 404: anyone can request
+// those. Any other error, such as a file or directory the server may not
+// read, is logged and answered with an uncached 500, so a broken deployment
+// is not mistaken for a missing asset.
+func themeStaticFileServable(w http.ResponseWriter, r *http.Request, info fs.FileInfo, err error, themeName, file string) bool {
+	switch {
+	case err == nil && !info.IsDir():
+		return true
+	case err == nil, errors.Is(err, fs.ErrNotExist), errors.Is(err, fs.ErrInvalid),
+		errors.Is(err, syscall.ENOTDIR), errors.Is(err, syscall.EINVAL),
+		errors.Is(err, syscall.ENAMETOOLONG), errors.Is(err, syscall.EILSEQ):
+		http.NotFound(w, r)
+	default:
+		slog.Error("failed to read theme static file", "error", err, "theme", themeName, "file", file)
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
+	return false
 }
 
 // runPostModulePostureAudits runs production security posture checks that depend on module state.
@@ -1314,27 +1562,178 @@ func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *
 	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
 }
 
-func run() error {
-	// Load .env: use OCMS_ENV_FILE if set (site instance mode),
-	// otherwise fall back to .env in CWD (standalone mode).
+// loadEnvFile loads OCMS_ENV_FILE when it is set (site instance mode),
+// otherwise .env in the working directory (standalone mode). Only a missing
+// .env is not an error, as the environment may hold the settings. A file
+// OCMS_ENV_FILE names that cannot be read, or an env file that does not
+// parse, is: the settings it holds, such as the database or production
+// mode, would otherwise be missing without a word.
+func loadEnvFile() error {
 	if envFile := os.Getenv("OCMS_ENV_FILE"); envFile != "" {
-		_ = godotenv.Load(envFile)
+		if err := godotenv.Load(envFile); err != nil {
+			return fmt.Errorf("reading OCMS_ENV_FILE %s: %w", envFile, err)
+		}
+		return nil
+	}
+	if err := godotenv.Load(); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("reading .env: %w", err)
+	}
+	return nil
+}
+
+// loadConfig loads the configuration and parses the embed upstream and
+// webhook destination host allowlists it names.
+func loadConfig() (cfg *config.Config, embedUpstreamHosts, webhookHosts map[string]struct{}, err error) {
+	cfg, err = config.Load()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("loading config: %w", err)
+	}
+	embedUpstreamHosts, err = parseAllowedEmbedUpstreamHosts(cfg.EmbedAllowedUpstreamHosts)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parsing OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS: %w", err)
+	}
+	webhookHosts, err = webhook.ParseAllowedHosts(cfg.WebhookAllowedHosts)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parsing OCMS_WEBHOOK_ALLOWED_HOSTS: %w", err)
+	}
+	return cfg, embedUpstreamHosts, webhookHosts, nil
+}
+
+// openErrorLog opens the optional file that receives a copy of ERROR+ logs,
+// readable by the owner only. It returns nil when filePath is empty.
+func openErrorLog(filePath string) (*os.File, error) {
+	if filePath == "" {
+		return nil, nil
+	}
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("opening error log file %s: %w", filePath, err)
+	}
+	// Enforce permissions on pre-existing files (OpenFile only sets mode on create).
+	if err := file.Chmod(0600); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("setting error log file permissions %s: %w", filePath, err)
+	}
+	return file, nil
+}
+
+// closeErrorLog closes the error log file, if one is open.
+func closeErrorLog(file *os.File) {
+	if file != nil {
+		_ = file.Close()
+	}
+}
+
+// withErrorLog returns base, teeing ERROR+ records to errorLogFile when one
+// is open.
+func withErrorLog(base slog.Handler, errorLogFile *os.File) slog.Handler {
+	if errorLogFile == nil {
+		return base
+	}
+	errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{Level: slog.LevelError})
+	return logging.NewErrorFileHandler(base, errorHandler, slog.LevelError)
+}
+
+// openDatabase opens the SQLite database, restricts its file to the owner and
+// applies the migrations. The caller closes the returned handle.
+func openDatabase(dsn string) (*sql.DB, error) {
+	slog.Info("initializing database", "path", dsn)
+	db, err := store.NewDB(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("initializing database: %w", err)
+	}
+	// Restrict database file permissions to the owner only, including the WAL
+	// and shared-memory files: SQLite creates them on open with the database
+	// file's mode, so a file that existed with a wider mode leaves them
+	// readable too, and the WAL holds recent writes. Files SQLite creates
+	// later take the database file's (now owner-only) mode. Skip non-file
+	// DSNs such as ":memory:" where no real file exists on disk.
+	if dbFilePath, isFileDSN := sqliteFilePathFromDSN(dsn); isFileDSN {
+		for _, file := range []string{dbFilePath, dbFilePath + "-wal", dbFilePath + "-shm"} {
+			if info, statErr := os.Stat(file); statErr == nil && info.Mode().IsRegular() {
+				if err := os.Chmod(file, 0600); err != nil {
+					_ = db.Close()
+					return nil, fmt.Errorf("setting database file permissions: %w", err)
+				}
+			}
+		}
 	} else {
-		_ = godotenv.Load()
+		slog.Debug("skipping database chmod for non-file sqlite dsn", "dsn", dsn)
 	}
 
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+	slog.Info("running database migrations")
+	if err := store.Migrate(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("running migrations: %w", err)
 	}
-	allowedEmbedUpstreamHosts, err := parseAllowedEmbedUpstreamHosts(cfg.EmbedAllowedUpstreamHosts)
-	if err != nil {
-		return fmt.Errorf("parsing OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS: %w", err)
+	slog.Info("database ready")
+	return db, nil
+}
+
+// seedDatabase applies the opt-in seed data and the OCMS_SITE_URL override
+// and, in demo mode, rotates the demo and default admin passwords. It returns
+// the demo admin password for this startup, or "" when there is none.
+func seedDatabase(ctx context.Context, cfg *config.Config, db *sql.DB) (string, error) {
+	if err := store.Seed(ctx, db, cfg.DoSeed); err != nil {
+		return "", fmt.Errorf("seeding database: %w", err)
 	}
-	allowedWebhookHosts, err := webhook.ParseAllowedHosts(cfg.WebhookAllowedHosts)
+	// Seed demo content if both base seeding and demo mode are enabled
+	if cfg.DoSeed {
+		if err := store.SeedDemo(ctx, db); err != nil {
+			return "", fmt.Errorf("seeding demo content: %w", err)
+		}
+	}
+	if err := applySiteURLOverride(ctx, db, cfg.SiteURL); err != nil {
+		return "", err
+	}
+	demoAdminPassword, err := store.RotateDemoAdminPassword(ctx, db)
 	if err != nil {
-		return fmt.Errorf("parsing OCMS_WEBHOOK_ALLOWED_HOSTS: %w", err)
+		return "", fmt.Errorf("rotating demo admin password: %w", err)
+	}
+	if demoAdminPassword != "" {
+		slog.Warn(
+			"demo admin password rotated for this startup",
+			"email", store.DemoAdminEmail,
+		)
+	}
+	if _, err := store.RotateDefaultAdminPassword(ctx, db); err != nil {
+		return "", fmt.Errorf("rotating default admin password: %w", err)
+	}
+	return demoAdminPassword, nil
+}
+
+// seedDemoInformer seeds the informer module's demo settings when seeding or
+// demo mode is on. It must run after module initialization has created the
+// informer's table.
+func seedDemoInformer(cfg *config.Config, db *sql.DB, registry *module.Registry, demoAdminPassword string) {
+	if !cfg.DoSeed && !middleware.IsDemoMode() {
+		return
+	}
+	if err := store.SeedDemoInformerSettings(db); err != nil {
+		slog.Warn("failed to seed demo informer settings", "error", err)
+		return
+	}
+	mod, ok := registry.Get("informer")
+	if !ok {
+		return
+	}
+	inf, ok := mod.(*informer.Module)
+	if !ok {
+		return
+	}
+	inf.SetDemoPassword(demoAdminPassword)
+	if err := inf.ReloadSettings(); err != nil {
+		slog.Warn("failed to reload informer settings after demo seed", "error", err)
+	}
+}
+
+func run() (runErr error) {
+	if err := loadEnvFile(); err != nil {
+		return err
+	}
+	cfg, allowedEmbedUpstreamHosts, allowedWebhookHosts, err := loadConfig()
+	if err != nil {
+		return err
 	}
 
 	// Create version info from build-time injected values
@@ -1351,29 +1750,18 @@ func run() error {
 	})
 
 	// Optional: tee ERROR+ logs to a separate file
-	var primaryHandler slog.Handler = stdoutHandler
-	var errorLogFile *os.File
-	if cfg.ErrorLogPath != "" {
-		var err error
-		errorLogFile, err = os.OpenFile(cfg.ErrorLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return fmt.Errorf("opening error log file %s: %w", cfg.ErrorLogPath, err)
-		}
-		// Enforce permissions on pre-existing files (OpenFile only sets mode on create).
-		if err = errorLogFile.Chmod(0600); err != nil {
-			errorLogFile.Close()
-			return fmt.Errorf("setting error log file permissions %s: %w", cfg.ErrorLogPath, err)
-		}
-		defer errorLogFile.Close()
-
-		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{
-			Level: slog.LevelError,
-		})
-		primaryHandler = logging.NewErrorFileHandler(stdoutHandler, errorHandler, slog.LevelError)
+	errorLogFile, err := openErrorLog(cfg.ErrorLogPath)
+	if err != nil {
+		return err
 	}
+	defer closeErrorLog(errorLogFile)
 
-	logger := slog.New(primaryHandler)
+	logger := slog.New(withErrorLog(stdoutHandler, errorLogFile))
 	slog.SetDefault(logger)
+	// From here on run logs its own failure, before the deferred closes of
+	// the error log file (and, below, of the database behind the event log)
+	// run; main would otherwise log it after they have closed.
+	defer logRunFailure(&runErr)
 
 	logProductionSecurityWarnings(cfg)
 
@@ -1401,22 +1789,9 @@ func run() error {
 	}
 
 	// Initialize database
-	slog.Info("initializing database", "path", cfg.DBPath)
-	db, err := store.NewDB(cfg.DBPath)
+	db, err := openDatabase(cfg.DBPath)
 	if err != nil {
-		return fmt.Errorf("initializing database: %w", err)
-	}
-	// Restrict database file permissions to the owner only.
-	// Skip non-file DSNs such as ":memory:" where no real file exists on disk.
-	if dbFilePath, isFileDSN := sqliteFilePathFromDSN(cfg.DBPath); isFileDSN {
-		if info, statErr := os.Stat(dbFilePath); statErr == nil && info.Mode().IsRegular() {
-			if err := os.Chmod(dbFilePath, 0600); err != nil {
-				_ = db.Close()
-				return fmt.Errorf("setting database file permissions: %w", err)
-			}
-		}
-	} else {
-		slog.Debug("skipping database chmod for non-file sqlite dsn", "dsn", cfg.DBPath)
+		return err
 	}
 	defer func(db *sql.DB) {
 		err = db.Close()
@@ -1424,57 +1799,34 @@ func run() error {
 			slog.Error("error closing database connection", "error", err)
 		}
 	}(db)
-
-	// Run migrations
-	slog.Info("running database migrations")
-	if err := store.Migrate(db); err != nil {
-		return fmt.Errorf("running migrations: %w", err)
-	}
-	slog.Info("database ready")
+	// The shutdown steps share one time limit (cleanupTimeout), so a slow
+	// one cannot hold the exit past a deployment's stop grace period.
+	cleanup := &cleanupBudget{limit: cleanupTimeout}
 
 	// Upgrade logger to also write WARN and ERROR logs to the Event Log database.
-	// The handler chain is: ErrorFileHandler (optional) → EventLogHandler → stdout.
+	// The handler chain is: EventLogHandler → ErrorFileHandler (optional) → stdout.
 	upgradedStdout := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
-	var upgradedPrimary slog.Handler = upgradedStdout
-	if errorLogFile != nil {
-		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{
-			Level: slog.LevelError,
-		})
-		upgradedPrimary = logging.NewErrorFileHandler(upgradedStdout, errorHandler, slog.LevelError)
-	}
-	eventLogHandler := logging.NewEventLogHandler(upgradedPrimary, db)
+	eventLogHandler := logging.NewEventLogHandler(withErrorLog(upgradedStdout, errorLogFile), db)
 	logger = slog.New(eventLogHandler)
 	slog.SetDefault(logger)
 	slog.Info("event log integration enabled", "min_level", "warn")
+	// The Event Log is written in the background: write what is queued,
+	// the failure logged below included, before the database closes.
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), eventLogCloseTimeout)
+		defer cancel()
+		if err := eventLogHandler.Close(ctx); err != nil {
+			slog.Error("the event log writer did not finish in time; continuing", "error", err, "timeout", eventLogCloseTimeout)
+		}
+	}()
+	defer logRunFailure(&runErr) // while the event log database is still open
 	eventService := service.NewEventService(db)
 
 	// Seed default data
 	ctx := context.Background()
-	if err := store.Seed(ctx, db, cfg.DoSeed); err != nil {
-		return fmt.Errorf("seeding database: %w", err)
-	}
-
-	// Seed demo content if both base seeding and demo mode are enabled
-	if cfg.DoSeed {
-		if err := store.SeedDemo(ctx, db); err != nil {
-			return fmt.Errorf("seeding demo content: %w", err)
-		}
-	}
-	if err := applySiteURLOverride(ctx, db, cfg.SiteURL); err != nil {
-		return err
-	}
-	demoAdminPassword, err := store.RotateDemoAdminPassword(ctx, db)
+	demoAdminPassword, err := seedDatabase(ctx, cfg, db)
 	if err != nil {
-		return fmt.Errorf("rotating demo admin password: %w", err)
-	}
-	if demoAdminPassword != "" {
-		slog.Warn(
-			"demo admin password rotated for this startup",
-			"email", store.DemoAdminEmail,
-		)
-	}
-	if _, err := store.RotateDefaultAdminPassword(ctx, db); err != nil {
-		return fmt.Errorf("rotating default admin password: %w", err)
+		return err
 	}
 
 	// Update i18n from database settings
@@ -1499,7 +1851,7 @@ func run() error {
 
 	// Initialize cache manager
 	cacheManager := initCacheManager(ctx, db, cfg)
-	defer cacheManager.Stop()
+	defer cleanup.within("cache", cacheManager.Stop)
 
 	// Wire excluded IPs config into all event service instances for IP filtering
 	service.SetGlobalConfigGetter(cacheManager.GetConfig)
@@ -1534,13 +1886,22 @@ func run() error {
 	// Note: Theme loading is deferred until after modules are initialized
 	// so that module template functions (like analyticsHead) are available
 
+	// Initialize and start the webhook dispatcher before the scheduler, which
+	// sends page.published for scheduled publishing. Its deferred stop then
+	// runs after the scheduler's.
+	webhookDispatcher := webhook.NewDispatcher(db, logger, webhook.DefaultConfig())
+	webhookDispatcher.Start(ctx)
+	defer cleanup.within("webhook dispatcher", webhookDispatcher.Stop)
+	slog.Info("webhook dispatcher initialized")
+
 	// Initialize scheduler registry and scheduler
 	schedulerRegistry := scheduler.NewRegistry(db, logger)
 	sched := scheduler.New(db, logger, schedulerRegistry)
+	sched.SetWebhookDispatcher(webhookDispatcher)
 	if err := sched.Start(); err != nil {
 		return fmt.Errorf("starting scheduler: %w", err)
 	}
-	defer sched.Stop()
+	defer cleanup.within("scheduler", sched.Stop)
 
 	// Initialize task executor for user-created scheduled URL tasks
 	taskExecutor := scheduler.NewTaskExecutor(db, logger, schedulerRegistry, sched.Cron())
@@ -1552,12 +1913,6 @@ func run() error {
 		}
 		slog.Info("demo reset scheduled", "schedule", "daily at 01:00 UTC")
 	}
-
-	// Initialize and start webhook dispatcher
-	webhookDispatcher := webhook.NewDispatcher(db, logger, webhook.DefaultConfig())
-	webhookDispatcher.Start(ctx)
-	defer webhookDispatcher.Stop()
-	slog.Info("webhook dispatcher initialized")
 
 	// Initialize hook registry
 	hookRegistry := module.NewHookRegistry(logger)
@@ -1595,25 +1950,14 @@ func run() error {
 	if err := moduleRegistry.InitAll(moduleCtx); err != nil {
 		return fmt.Errorf("initializing modules: %w", err)
 	}
-	defer func() {
+	defer cleanup.within("modules", func() {
 		if err := moduleRegistry.ShutdownAll(); err != nil {
 			slog.Error("error shutting down modules", "error", err)
 		}
-	}()
+	})
 
 	// Seed demo informer settings (must run after module init creates the table)
-	if cfg.DoSeed || middleware.IsDemoMode() {
-		if err := store.SeedDemoInformerSettings(db); err != nil {
-			slog.Warn("failed to seed demo informer settings", "error", err)
-		} else if mod, ok := moduleRegistry.Get("informer"); ok {
-			if inf, ok := mod.(*informer.Module); ok {
-				inf.SetDemoPassword(demoAdminPassword)
-				if err := inf.ReloadSettings(); err != nil {
-					slog.Warn("failed to reload informer settings after demo seed", "error", err)
-				}
-			}
-		}
-	}
+	seedDemoInformer(cfg, db, moduleRegistry, demoAdminPassword)
 
 	// Always initialize sentinel for middleware to work even if module is inactive.
 	// InitAll skips Init() for inactive modules, but sentinel middleware is always
@@ -1658,6 +2002,9 @@ func run() error {
 	loadActiveTheme(ctx, queries, themeManager, renderer, cfg)
 
 	// Create router
+	// inflight counts the request handlers running, so a stop can wait for
+	// them before the cleanup closes the database (serveUntilStopped).
+	var inflight atomic.Int64
 	r := chi.NewRouter()
 
 	// Middleware stack
@@ -1677,24 +2024,23 @@ func run() error {
 			next.ServeHTTP(w, r)
 		})
 	})
-	// Sentinel IP ban check (always registered, checks active status at runtime)
-	r.Use(sentinelModule.GetMiddleware())
-	slog.Info("sentinel IP ban middleware registered")
+	// Logger and Recoverer come before SecurityHeaders, so a panic in any
+	// later middleware up to Timeout, including module code that
+	// SecurityHeaders calls for the CSP, is logged and answered with a 500
+	// instead of dropping the connection. Timeout recovers the panics behind
+	// it itself.
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
-	r.Use(chimw.GetHead)                        // Handle HEAD requests for uptime monitoring
-	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
-	r.Use(middleware.StripTrailingSlash)        // Redirect /path/ to /path (301)
-
-	// Global redirects middleware (database-driven URL redirects)
-	r.Use(redirectsMiddleware.Handler)
-
-	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.)
+	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.). It runs
+	// before every middleware that can answer on its own (bans, timeouts,
+	// trailing-slash and content redirects), so those responses carry the
+	// headers too (TestSecurityHeadersPrecedeAnsweringMiddleware).
 	securityConfig := middleware.DefaultSecurityHeadersConfig(cfg.IsDevelopment())
 	if cfg.HSTSPreload && !cfg.IsDevelopment() {
 		securityConfig.HSTSPreload = true
 	}
+	// Third-party hosts join the CSP only while the module loading them is active.
+	securityConfig.CSPSources = moduleRegistry.ActiveCSPSources
 	r.Use(middleware.SecurityHeaders(securityConfig))
 	slog.Info("security headers middleware initialized",
 		"hsts", !cfg.IsDevelopment(),
@@ -1702,12 +2048,27 @@ func run() error {
 		"x_frame_options", "SAMEORIGIN",
 	)
 
+	// Sentinel IP ban check (always registered, checks active status at runtime)
+	r.Use(sentinelModule.GetMiddleware())
+	slog.Info("sentinel IP ban middleware registered")
+	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
+	r.Use(chimw.GetHead)                        // Handle HEAD requests for uptime monitoring
+	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
+	// Right after Timeout, so it counts handlers Timeout stops waiting for
+	// (see stopPolicy).
+	r.Use(countInFlight(&inflight))
+	r.Use(middleware.StripTrailingSlash) // Redirect /path/ to /path (301)
+
+	// Global redirects middleware (database-driven URL redirects)
+	r.Use(redirectsMiddleware.Handler)
+
 	// Request path middleware for logging context
 	r.Use(middleware.RequestPath)
 
 	r.Use(sessionManager.LoadAndSave)
 
-	// CSRF protection middleware (applied globally, API routes will be exempted)
+	// CSRF protection middleware, attached to the route groups that take form
+	// posts; the REST API and MCP routes are not behind it.
 	csrfConfig := middleware.DefaultCSRFConfig([]byte(cfg.SessionSecret), cfg.IsDevelopment())
 	csrfMiddleware := middleware.CSRF(csrfConfig)
 	slog.Info("CSRF protection initialized", "secure", !cfg.IsDevelopment())
@@ -1803,11 +2164,20 @@ func run() error {
 	r.Get("/health/live", healthHandler.Liveness)
 	r.Get("/health/ready", healthHandler.Readiness)
 
+	// Browsers post Content-Security-Policy violation reports here. The route
+	// is anonymous, not CSRF-protected and never reads the session, so it
+	// only logs, and a per-IP limit keeps one client from flooding the log.
+	cspReportLimiter := middleware.NewGlobalRateLimiter(1.0, 10)
+	r.With(cspReportLimiter.Middleware()).Post(handler.RouteCSPReport, handler.CSPReport)
+
 	useFrontendMiddleware := func(r chi.Router) {
 		// Optionally load user for context-aware caching (doesn't require login)
 		r.Use(middleware.OptionalLoadUser(sessionManager, db))
-		// Add internal analytics tracking middleware (if module is enabled)
-		if internalAnalyticsModule.IsEnabled() {
+		// Internal analytics tracking checks IsEnabled per request, so settings
+		// that load or change after startup take effect without a restart. It
+		// is installed for a module active, and so initialized, at startup: one
+		// activated later would run Init while requests run its middleware.
+		if moduleRegistry.IsActive(internalAnalyticsModule.Name()) {
 			r.Use(internalAnalyticsModule.GetTrackingMiddleware())
 		}
 		// RFC 8288 Link header on "/" advertising the API catalog and
@@ -1860,6 +2230,13 @@ func run() error {
 		r.Post(handler.RouteLogout, authHandler.Logout)
 		r.Post(handler.RouteLanguage, authHandler.SetLanguage)
 	})
+
+	// Account overview uses the core layout and current database permissions.
+	r.With(csrfMiddleware,
+		middleware.Auth(sessionManager),
+		middleware.LoadUser(sessionManager, db),
+		middleware.LoadSiteConfig(db, nil),
+	).Get(handler.RouteAccount, authHandler.Account)
 
 	// Session test routes (development only)
 	if cfg.IsDevelopment() {
@@ -2158,8 +2535,10 @@ func run() error {
 			BlockSuspiciousMarkup: cfg.BlockSuspiciousPageHTML,
 			SanitizeHTML:          cfg.SanitizePageHTML,
 		})
+		pagesSvc.SetWebhookDispatcher(webhookDispatcher)
 		apiv2pages.Register(apiV2.API, pagesSvc)
 		mediaSvc := apiv2media.NewService(db, v2Queries, v2Events, cfg.UploadsDir)
+		mediaSvc.SetWebhookDispatcher(webhookDispatcher)
 		apiv2media.Register(apiV2.API, mediaSvc)
 		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries, v2Events)
 		apiv2taxonomy.Register(apiV2.API, taxonomySvc)
@@ -2190,13 +2569,13 @@ func run() error {
 		return fmt.Errorf("getting static fs: %w", err)
 	}
 	// Static assets: cache for 1 year (31536000 seconds)
-	staticHandler := middleware.StaticCache(31536000)(http.StripPrefix("/static/dist/", http.FileServer(http.FS(staticFS))))
+	staticHandler := middleware.StaticCache(31536000)(http.StripPrefix("/static/dist/", http.FileServer(middleware.NoDirectoryFS(http.FS(staticFS)))))
 	r.Handle("/static/dist/*", staticHandler)
 
 	// Serve uploaded media files from uploads directory (configured via OCMS_UPLOADS_DIR)
 	// Uploads: cache for 1 week (604800 seconds)
 	uploadsDirFS := http.Dir(cfg.UploadsDir)
-	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", middleware.SecureUploads(http.FileServer(uploadsDirFS))))
+	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", middleware.SecureUploads(http.FileServer(middleware.NoDirectoryFS(uploadsDirFS)))))
 	r.Handle("/uploads/*", uploadsHandler)
 
 	// Serve theme static files with caching (1 month = 2592000 seconds)
@@ -2224,39 +2603,39 @@ func run() error {
 		MaxHeaderBytes:    1 << 20,          // 1MB max header size
 	}
 
-	// Start server in goroutine
-	go func() {
-		slog.Info("starting server", "addr", cfg.ServerAddr(), "env", cfg.Env)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server error", "error", err)
-		}
-	}()
+	// Catch stop signals before the port opens, so a signal sent once the
+	// server answers always shuts it down gracefully. Stop catching them when
+	// run returns, so a signal during the deferred cleanup ends the process
+	// as usual.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(quit)
 
-	_ = eventService.LogSystemEvent(context.Background(), model.EventLevelInfo,
-		"Server started", nil, "", "", map[string]any{
+	// Bind before serving, so a port that is taken ends run with the error
+	// instead of leaving the process up with nothing listening.
+	listener, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		return fmt.Errorf("listening on %s: %w", cfg.ServerAddr(), err)
+	}
+	slog.Info("starting server", "addr", cfg.ServerAddr(), "env", cfg.Env)
+
+	// The start is recorded alongside serving, so a slow Event Log write
+	// holds up neither the first requests nor a stop.
+	if err := serveUntilStopped(srv, listener, quit, stopPolicy{
+		timeout:  shutdownTimeout,
+		drain:    handlerDrainTimeout,
+		inflight: &inflight,
+	}, func() {
+		recordServerEvent(eventService, "Server started", map[string]any{
 			"addr":    cfg.ServerAddr(),
 			"env":     cfg.Env,
 			"version": appVersion,
 		})
-
-	// Wait for interrupt signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	slog.Info("shutting down server...")
-
-	// Graceful shutdown with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		return fmt.Errorf("server shutdown: %w", err)
+	}); err != nil {
+		return fmt.Errorf("serving on %s: %w", cfg.ServerAddr(), err)
 	}
 
-	_ = eventService.LogSystemEvent(context.Background(), model.EventLevelInfo,
-		"Server stopped", nil, "", "", nil)
-
+	recordServerEvent(eventService, "Server stopped", nil)
 	slog.Info("server stopped")
 	return nil
 }

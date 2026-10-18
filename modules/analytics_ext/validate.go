@@ -6,6 +6,9 @@ package analytics_ext
 import (
 	"net/url"
 	"regexp"
+	"strings"
+
+	"github.com/olegiv/ocms-go/internal/middleware"
 )
 
 // Tracker identifiers are rendered into inline scripts on every public page,
@@ -66,6 +69,13 @@ func validMatomoURL(raw string) bool {
 		return false
 	}
 	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return false
+	}
+	// The origin goes into the Content-Security-Policy, so it must be a host
+	// source the policy keeps: a DNS name or IPv4 address with an optional
+	// port. A "*" would allow every host, ";" or "," would end the directive
+	// or the policy, and CSP cannot name an IPv6 address at all.
+	if strings.Contains(u.Host, "*") || !middleware.IsCSPHostSource(matomoOrigin(raw)) {
 		return false
 	}
 	for _, c := range raw {

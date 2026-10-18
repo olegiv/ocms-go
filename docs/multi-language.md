@@ -12,7 +12,7 @@ The multi-language system consists of two parts:
 
 ### Adding Languages
 
-1. Navigate to **Admin > Config > Languages**
+1. Navigate to **Admin > Languages**
 2. Click **Add Language**
 3. Fill in:
    - **Code**: 2–10 lowercase ASCII letters, digits, or internal hyphens (for example `ru`, `de`, `pt-br`)
@@ -30,12 +30,12 @@ One language must be set as the default. This is the fallback language when:
 - The URL doesn't include a language prefix
 
 To set the default language:
-1. Go to **Admin > Config > Languages**
-2. Click the **Set Default** button next to the desired language
+1. Go to **Admin > Languages**
+2. Click the check-mark button (tooltip **Set as Default**) next to the desired language
 
 ### Language Order
 
-Languages appear in the language switcher in the order specified by the **Position** field. Drag and drop to reorder, or manually set position numbers.
+Languages appear in the language switcher in the order specified by the **Position** field. Set the position number when adding or editing a language.
 
 ## Translating Content
 
@@ -85,19 +85,34 @@ Languages are indicated in URLs using prefixes:
 The language is determined in this order:
 1. **URL prefix**: `/ru/page-slug` → Russian
 2. **Query preference**: `?lang=ru` when no language prefix is present
-3. **Cookie preference**: Stored from previous selection
-4. **Accept-Language header**: Browser preference
+3. **Cookie preference**: Stored from previous selection (homepage only)
+4. **Accept-Language header**: Browser preference (homepage only)
 5. **Default language**: Fallback
 
-Only active database languages are treated as URL prefixes. An inactive
+The cookie and the `Accept-Language` header apply to the homepage only: every
+other URL without a language prefix is served in the default language. Only
+active database languages are treated as URL prefixes. An inactive
 one-segment value falls through as an ordinary page slug; an unknown nested
 prefix returns 404. The URL prefix always wins over `?lang`.
 
 Core route names cannot be activated as language codes: `admin`, `api`,
 `blog`, `uploads`, `static`, `themes`, `health`, `login`, `logout`,
-`language`, `forms`, `search`, `tag`, `category`, `page`, and `session`.
+`language`, `forms`, `search`, `tag`, `category`, `page`, `session`,
+`account`, `csp-report`, and the built-in module routes `analytics`, `embed`, and `example`.
 Legacy active rows using a reserved code are ignored by routing and logged,
 but administrators can still deactivate or rename them.
+
+Page slugs and single-segment aliases cannot use the names whose exact URL a
+core route answers: `account`, `admin`, `blog`, `example`, `health`, `login`,
+and `search`, because that route answers before any page does. The admin form
+rejects them as slugs and aliases, the REST API as slugs, the Migrator suffixes
+them (`blog-2`), and content import rejects an archive that contains one. The
+other reserved names own only deeper paths (`/forms/contact`) or other
+methods, so pages may use them. The admin form also rejects a multi-segment
+alias that a route answers, such as `blog/tag/news` or anything below
+`uploads/`; other multi-segment aliases such as `blog/post/55` keep working. An existing page
+already stored at a reserved slug stays editable as long as its slug is
+unchanged.
 
 ### Feed Language
 
@@ -117,7 +132,7 @@ The frontend language switcher (if enabled in your theme) shows:
 
 Include the language switcher in your theme:
 ```html
-{{template "partials/language_switcher.html" .}}
+{{template "language-switcher.html" .}}
 ```
 
 ### RTL Support
@@ -131,10 +146,10 @@ For RTL languages (Arabic, Hebrew, etc.):
 
 ### Changing Admin Language
 
-1. Click your username in the admin header
-2. Select **Language** from the dropdown
-3. Choose your preferred language
-4. The admin interface reloads in the selected language
+1. Open the language selector (globe icon) in the admin header. It is shown only
+   when more than one active language has admin translations
+2. Choose your preferred language
+3. The admin interface reloads in the selected language
 
 ### Supported Admin Languages
 
@@ -175,17 +190,17 @@ Admin UI translations are stored in `internal/i18n/locales/`. To add a new langu
 In theme templates, you have access to:
 ```html
 <!-- Current language code -->
-{{.CurrentLanguage}}
+{{.LangCode}}
 
 <!-- Language direction (ltr/rtl) -->
-{{.LanguageDirection}}
+{{.LangDirection}}
 
 <!-- Canonical home path: "/" for the default language, "/fr" for French -->
 <a href="{{.HomeURL}}">Home</a>
 
 <!-- Available translations for current page -->
 {{range .Translations}}
-    <a href="{{.URL}}">{{.NativeName}}</a>
+    <a href="{{.URL}}">{{.Language.NativeName}}</a>
 {{end}}
 ```
 
@@ -209,38 +224,24 @@ Create separate menus for each language:
 
 ## API Access
 
-### Language Headers
+### Language of a Page
 
-API responses include language information in headers:
-- `Content-Language`: The language of the response content
-
-### Filtering by Language
-
-Filter API responses by language:
-```bash
-curl "http://localhost:8080/api/v2/pages?language=ru"
-```
-
-### Translation Data
-
-Pages include translation information:
+Every page returned by `/api/v2/pages` carries the code of its language:
 ```json
 {
     "data": {
         "id": 1,
         "title": "About Us",
-        "language_id": 1,
-        "language_code": "en",
-        "translations": [
-            {
-                "language_code": "ru",
-                "page_id": 5,
-                "slug": "o-nas"
-            }
-        ]
+        "slug": "about-us",
+        "language_code": "en"
     }
 }
 ```
+
+When creating a page, send `language_code` to choose the language. It falls back
+to the default language when omitted, and the language must be active. The v2
+API has no language filter, sends no `Content-Language` header and does not
+return page translation links.
 
 ## Best Practices
 

@@ -5,6 +5,7 @@
 package admin
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
@@ -28,6 +29,32 @@ type PageContext struct {
 	LangOptions    []LangOption
 	Breadcrumbs    []Breadcrumb
 	SidebarModules []SidebarModule
+	// AccountLayout selects account navigation within the shared dashboard shell.
+	AccountLayout bool
+}
+
+// HomeURL returns the landing page for the current layout.
+func (pc *PageContext) HomeURL() string {
+	if pc.AccountLayout {
+		return "/account"
+	}
+	return "/admin"
+}
+
+// LanguageURL returns the language preference endpoint for the current layout.
+func (pc *PageContext) LanguageURL() string {
+	if pc.AccountLayout {
+		return "/language"
+	}
+	return "/admin/language"
+}
+
+// ProfileURL returns the account page or administrative user editor.
+func (pc *PageContext) ProfileURL() string {
+	if pc.AccountLayout {
+		return "/account"
+	}
+	return fmt.Sprintf("/admin/users/%d", pc.User.ID)
 }
 
 // UserInfo holds user data for the admin views.

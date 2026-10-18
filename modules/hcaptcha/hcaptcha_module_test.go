@@ -323,7 +323,8 @@ func TestHandleSaveSettingsUnauthorized(t *testing.T) {
 // ============================================================================
 
 // requestWithUser returns an HTTP request with a user injected into the context.
-func requestWithUser(target string, body *strings.Reader, user store.User) *http.Request {
+func requestWithUser(body *strings.Reader, user store.User) *http.Request {
+	const target = "/admin/hcaptcha"
 	var req *http.Request
 	if body != nil {
 		req = httptest.NewRequest(http.MethodPost, target, body)
@@ -343,7 +344,6 @@ func TestHandleSaveSettingsWithUser_DisabledNoKeys(t *testing.T) {
 	// Post with enabled=1 but no keys — should fail validation and redirect
 	body := strings.NewReader("enabled=1&site_key=&secret_key=&theme=light&size=normal")
 	req := requestWithUser(
-		"/admin/hcaptcha",
 		body,
 		store.User{ID: 1, Email: "admin@test.com", Role: "admin"},
 	)
@@ -367,7 +367,6 @@ func TestHandleSaveSettingsWithUser_Disabled(t *testing.T) {
 	// Post with enabled=0 — disabled, no key validation needed
 	body := strings.NewReader("enabled=0&site_key=&secret_key=&theme=light&size=normal")
 	req := requestWithUser(
-		"/admin/hcaptcha",
 		body,
 		store.User{ID: 1, Email: "admin@test.com", Role: "admin"},
 	)
@@ -391,7 +390,6 @@ func TestHandleSaveSettingsWithUser_WithKeys(t *testing.T) {
 	// Post enabled=1 with valid keys
 	body := strings.NewReader("enabled=1&site_key=abc-site-key&secret_key=abc-secret-key&theme=dark&size=compact")
 	req := requestWithUser(
-		"/admin/hcaptcha",
 		body,
 		store.User{ID: 1, Email: "admin@test.com", Role: "admin"},
 	)
@@ -427,7 +425,6 @@ func TestHandleSaveSettingsWithUser_EmptyThemeAndSizeDefaults(t *testing.T) {
 	// Post without theme/size — should use defaults
 	body := strings.NewReader("enabled=0&site_key=&secret_key=&theme=&size=")
 	req := requestWithUser(
-		"/admin/hcaptcha",
 		body,
 		store.User{ID: 1, Email: "admin@test.com", Role: "admin"},
 	)
@@ -465,7 +462,6 @@ func TestHandleSaveSettingsWithUser_EnvDisabled(t *testing.T) {
 	// Post with enabled=1 and valid keys
 	body := strings.NewReader("enabled=1&site_key=abc-site-key&secret_key=abc-secret-key&theme=light&size=normal")
 	req := requestWithUser(
-		"/admin/hcaptcha",
 		body,
 		store.User{ID: 1, Email: "admin@test.com", Role: "admin"},
 	)
@@ -513,7 +509,6 @@ func TestHandleSaveSettingsWithUser_EnvOverride(t *testing.T) {
 	// Post with keys — env override should take priority in memory
 	body := strings.NewReader("enabled=1&site_key=form-site-key&secret_key=form-secret-key&theme=light&size=normal")
 	req := requestWithUser(
-		"/admin/hcaptcha",
 		body,
 		store.User{ID: 1, Email: "admin@test.com", Role: "admin"},
 	)
@@ -555,7 +550,6 @@ func TestHandleSaveSettingsWithUser_PlaceholderSecretKey(t *testing.T) {
 	// Post with a placeholder secret key — should keep original
 	body := strings.NewReader("enabled=0&site_key=new-site&secret_key=orig****cret&theme=light&size=normal")
 	req := requestWithUser(
-		"/admin/hcaptcha",
 		body,
 		store.User{ID: 1, Email: "admin@test.com", Role: "admin"},
 	)
@@ -1050,5 +1044,29 @@ func TestLoadSettingsEmptyKeysFallback(t *testing.T) {
 	}
 	if settings.SecretKey != "" {
 		t.Errorf("SecretKey = %q, want empty", settings.SecretKey)
+	}
+}
+
+// TestHookFormCaptchaVerifyFailsClosedWhenRequired checks that with
+// OCMS_REQUIRE_FORM_CAPTCHA set, the form captcha hook refuses while
+// hCaptcha is off. Settings that load after the startup check can turn it
+// off, and a disabled verifier passed every submission (Codex review of
+// PR #189). Without the requirement, a disabled verifier still passes, as
+// TestHookFormCaptchaVerify checks.
+//
+// Bug state: drop the RequireFormCaptcha check from the form verify hook and
+// this fails.
+func TestHookFormCaptchaVerifyFailsClosedWhenRequired(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	m, hooks := testModuleWithHooks(t, db)
+	m.ctx.Config.RequireFormCaptcha = true
+	m.storeSettings(&Settings{Enabled: false})
+	result, err := hooks.Call(context.Background(), HookFormCaptchaVerify, &VerifyRequest{Response: ""})
+	if err != nil {
+		t.Fatalf("Call HookFormCaptchaVerify: %v", err)
+	}
+	if vr, ok := result.(*VerifyRequest); !ok || vr.Verified || vr.ErrorCode != "hcaptcha.error_verification" {
+		t.Errorf("result = %+v, want a refusal while a required captcha is off", result)
 	}
 }

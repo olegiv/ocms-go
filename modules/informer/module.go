@@ -34,9 +34,29 @@ type Module struct {
 	module.BaseModule
 	ctx      *module.Context
 	settings *Settings
+	// settingsMu guards settings: frontend pages read them on every request while
+	// the settings form and ReloadSettings replace them. Settings values are
+	// replaced, never modified, so a reader may keep using the pointer it
+	// got. TestSettingsAccessHoldsTheLock checks that every access to the
+	// field takes the lock.
+	settingsMu sync.RWMutex
 
 	demoPasswordMu sync.RWMutex
 	demoPassword   string
+}
+
+// currentSettings returns the settings in effect, or nil before Init.
+func (m *Module) currentSettings() *Settings {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.settings
+}
+
+// storeSettings replaces the settings in effect.
+func (m *Module) storeSettings(settings *Settings) {
+	m.settingsMu.Lock()
+	m.settings = settings
+	m.settingsMu.Unlock()
 }
 
 // New creates a new instance of the informer module.
@@ -59,7 +79,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		ctx.Logger.Warn("failed to load informer settings, using defaults", "error", err)
 		settings = defaultSettings()
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 
 	m.ctx.Logger.Info("Informer module initialized",
 		"enabled", settings.Enabled,
@@ -78,7 +98,7 @@ func (m *Module) ReloadSettings() error {
 	if err != nil {
 		return fmt.Errorf("reloading informer settings: %w", err)
 	}
-	m.settings = settings
+	m.storeSettings(settings)
 	return nil
 }
 
@@ -218,21 +238,22 @@ func (m *Module) Migrations() []module.Migration {
 // SECURITY: The informer text is sanitized with bluemonday UGC policy before
 // rendering as HTML. Style/script-adjacent values remain escaped.
 func (m *Module) renderBar(nonce string) template.HTML {
-	if m.settings == nil || !m.settings.Enabled || m.settings.Text == "" {
+	settings := m.currentSettings()
+	if settings == nil || !settings.Enabled || settings.Text == "" {
 		return ""
 	}
 
-	bgColor := html.EscapeString(m.settings.BgColor)
-	textColor := html.EscapeString(m.settings.TextColor)
-	text := security.SanitizePageHTML(m.settings.Text)
+	bgColor := html.EscapeString(settings.BgColor)
+	textColor := html.EscapeString(settings.TextColor)
+	text := security.SanitizePageHTML(settings.Text)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf(`<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor))
+	fmt.Fprintf(&b, `<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor)
 	b.WriteString(`<div class="informer-bar-content">`)
 	b.WriteString(`<span class="informer-bar-spinner"></span>`)
-	b.WriteString(fmt.Sprintf(`<span class="informer-bar-text">%s</span>`, text))
+	fmt.Fprintf(&b, `<span class="informer-bar-text">%s</span>`, text)
 	b.WriteString(`</div>`)
-	b.WriteString(fmt.Sprintf(`<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;">`, textColor))
+	fmt.Fprintf(&b, `<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;">`, textColor)
 	b.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`)
 	b.WriteString(`</button>`)
 	b.WriteString(`</div>`)
@@ -249,8 +270,8 @@ func (m *Module) renderBar(nonce string) template.HTML {
 </style>`)
 
 	// JavaScript for cookie-based dismissal (version-aware: resets on settings change)
-	version := html.EscapeString(m.settings.Version)
-	b.WriteString(fmt.Sprintf(`<script>
+	version := html.EscapeString(settings.Version)
+	fmt.Fprintf(&b, `<script>
 (function(){
 var cn="%s",ver="%s";
 function getCookie(n){var m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?decodeURIComponent(m[1]):null}
@@ -260,7 +281,7 @@ window.dismissInformer=function(){var el=document.getElementById('informer-bar')
 var closeBtn=document.querySelector('#informer-bar .informer-bar-close');
 if(closeBtn){closeBtn.addEventListener('click',function(){window.dismissInformer()})}
 })();
-</script>`, cookieName, version))
+</script>`, cookieName, version)
 
 	// In demo mode, fetch the current demo admin password at runtime so the banner
 	// always shows credentials matching the live DB hash — even when the page HTML

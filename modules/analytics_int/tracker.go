@@ -50,7 +50,7 @@ func (m *Module) TrackingMiddleware() func(http.Handler) http.Handler {
 			}
 
 			// Skip if tracking is disabled
-			if m.settings == nil || !m.settings.Enabled {
+			if !m.IsEnabled() {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -121,20 +121,14 @@ func (m *Module) shouldTrack(r *http.Request) bool {
 		}
 	}
 
-	// Skip admin and API routes
-	adminAPIPrefixes := []string{
-		"/admin",
-		"/api/",
-		"/health",
-	}
-	for _, prefix := range adminAPIPrefixes {
-		if strings.HasPrefix(path, prefix) {
-			return false
-		}
+	// Skip admin, API and account routes, and health probes
+	if util.IsPrivateRoutePath(path) || strings.HasPrefix(path, "/health") {
+		return false
 	}
 
 	// Skip user-configured excluded paths
-	for _, excludePath := range m.settings.ExcludePaths {
+	settings := m.settingsSnapshot()
+	for _, excludePath := range settings.ExcludePaths {
 		if strings.HasPrefix(path, excludePath) {
 			return false
 		}
@@ -355,14 +349,17 @@ func (m *Module) insertPageRead(read *PageRead) error {
 
 // GetRealTimeVisitorCount returns the number of unique visitors in the last N minutes.
 func (m *Module) GetRealTimeVisitorCount(minutes int) int {
-	cutoff := time.Now().Add(-time.Duration(minutes) * time.Minute)
+	cutoff := timeNow().Add(-time.Duration(minutes) * time.Minute)
 
+	// Views store the wall clock of timeNow, local time, as text
+	// (datetimeFormat); a time.Time argument would be written in UTC and
+	// compare against it wrongly.
 	var count int
 	err := m.ctx.DB.QueryRow(`
 		SELECT COUNT(DISTINCT visitor_hash)
 		FROM page_analytics_views
 		WHERE created_at >= ?
-	`, cutoff).Scan(&count)
+	`, cutoff.Format(datetimeFormat)).Scan(&count)
 
 	if err != nil {
 		return 0

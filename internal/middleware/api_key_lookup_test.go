@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // insertTestAPIKeyWithLookup inserts a key the way the admin handler creates
@@ -149,14 +150,13 @@ func TestPrefixLookupOnlyInsideVerifier(t *testing.T) {
 		t.Fatal("resolve source path")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	skip := map[string]bool{".git": true, "node_modules": true, ".audit": true, "output": true, "vendor": true, "wiki": true, ".claude": true, "bin": true}
 	var offenders []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
-			if skip[d.Name()] && path != root {
+			if repotree.Skip(root, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

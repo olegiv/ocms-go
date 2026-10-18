@@ -176,6 +176,11 @@ func TestSecurityHeadersAllHeadersPresent(t *testing.T) {
 			t.Errorf("missing required header: %s", header)
 		}
 	}
+	// The legacy XSS auditor stays off; "1; mode=block" re-enables it in the
+	// browsers that still have one (security audit 2026-10-17, I-4).
+	if got := rec.Header().Get("X-XSS-Protection"); got != "0" {
+		t.Errorf("X-XSS-Protection = %q, want \"0\"", got)
+	}
 }
 
 func TestBuildCSP(t *testing.T) {
@@ -352,5 +357,135 @@ func TestCSPBuildEmitsBareDirectiveForEmptyValue(t *testing.T) {
 	}
 	if strings.Contains(csp, "upgrade-insecure-requests ;") || strings.HasSuffix(csp, "upgrade-insecure-requests ") {
 		t.Errorf("buildCSP emitted trailing space for value-less directive: %q", csp)
+	}
+}
+
+// TestAddCSPSources checks that module sources extend only the directives the
+// policy already has and may widen, and only as host sources. A Matomo URL of
+// "https://*/" or "https://a.example;sandbox/" once reached the header as a
+// source that allowed every host or ended the directive (review of the
+// 2026-10-17 audit fixes).
+func TestAddCSPSources(t *testing.T) {
+	base := "default-src 'self'; script-src 'self'; frame-src 'self'; object-src 'none'; upgrade-insecure-requests"
+	if got := addCSPSources(base, nil); got != base {
+		t.Errorf("no sources: %q, want the policy unchanged", got)
+	}
+	got := addCSPSources(base, map[string][]string{
+		"script-src": {
+			"https://a.example", "https://*.b.example", "http://c.example:8080",
+			"https://*", "https:", "'unsafe-inline'", "https://d.example;sandbox", "https://e.example,script-src",
+			"https://f.example:99999", "https://f.example:", "https://[2001:db8::1]",
+		},
+		"frame-src":  {"https://a.example"},
+		"object-src": {"https://a.example"},
+		"worker-src": {"https://a.example"},
+		// Extendable, but absent from this policy: adding it would drop its
+		// fallback to default-src 'self'.
+		"img-src": {"https://a.example"},
+	})
+	want := "default-src 'self'; script-src 'self' https://a.example https://*.b.example http://c.example:8080; frame-src 'self' https://a.example; object-src 'none'; upgrade-insecure-requests"
+	if got != want {
+		t.Errorf("addCSPSources() =\n  %q\nwant\n  %q", got, want)
+	}
+}
+
+// TestSecurityHeadersAddsCSPSourcesPerRequest checks that the sources hook is
+// consulted for every response, so toggling a module changes the policy
+// without a restart.
+func TestSecurityHeadersAddsCSPSourcesPerRequest(t *testing.T) {
+	cfg := DefaultSecurityHeadersConfig(false)
+	var sources map[string][]string
+	cfg.CSPSources = func() map[string][]string { return sources }
+	handler := SecurityHeaders(cfg)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	csp := func() string {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		return rec.Header().Get("Content-Security-Policy")
+	}
+
+	if strings.Contains(csp(), "hcaptcha.com") {
+		t.Fatal("base policy allows hcaptcha.com with no module asking for it")
+	}
+	sources = map[string][]string{"script-src": {"https://hcaptcha.com"}}
+	if !strings.Contains(csp(), "script-src 'self' 'nonce-") || !strings.Contains(csp(), "https://hcaptcha.com") {
+		t.Errorf("CSP = %q, want the module source in script-src", csp())
+	}
+	sources = nil
+	if strings.Contains(csp(), "hcaptcha.com") {
+		t.Error("source stayed in the policy after the hook stopped returning it")
+	}
+}
+
+// TestCrossOriginPolicies checks COOP on every response and CORP same-origin
+// everywhere except public media and assets, which other sites may embed
+// (security audit 2026-10-17, I-4).
+func TestCrossOriginPolicies(t *testing.T) {
+	handler := SecurityHeaders(DefaultSecurityHeadersConfig(false))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	for path, wantCORP := range map[string]string{
+		"/":                               "same-origin",
+		"/admin/pages":                    "same-origin",
+		"/api/v2/pages":                   "same-origin",
+		"/uploads/originals/photo.jpg":    "cross-origin",
+		"/static/dist/js/alpine.min.js":   "cross-origin",
+		"/themes/default/static/site.css": "cross-origin",
+	} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("Cross-Origin-Opener-Policy"); got != "same-origin" {
+			t.Errorf("%s: Cross-Origin-Opener-Policy = %q, want same-origin", path, got)
+		}
+		if got := rec.Header().Get("Cross-Origin-Resource-Policy"); got != wantCORP {
+			t.Errorf("%s: Cross-Origin-Resource-Policy = %q, want %q", path, got, wantCORP)
+		}
+	}
+}
+
+// baseCSPHosts are the only third-party host sources the base policy may
+// allow: Google Fonts used by themes and YouTube frames in page content
+// (img-src also allows the https: scheme for images). A host that a module
+// loads belongs in that module's CSPSources instead.
+var baseCSPHosts = map[string]bool{
+	"https://fonts.googleapis.com":     true,
+	"https://fonts.gstatic.com":        true,
+	"https://www.youtube.com":          true,
+	"https://www.youtube-nocookie.com": true,
+}
+
+// TestBaseCSPHostsAreFirstPartyOrContent fails when the base policy allows a
+// third-party host outside baseCSPHosts. Analytics, captcha and chat hosts
+// used to be allowed on every page whether or not their module was active
+// (security audit 2026-10-17, I-4).
+//
+// Bug state: add https://hcaptcha.com back to the production script-src and
+// this names it.
+func TestBaseCSPHostsAreFirstPartyOrContent(t *testing.T) {
+	for _, isDev := range []bool{false, true} {
+		policy := DefaultSecurityHeadersConfig(isDev).ContentSecurityPolicy
+		for _, field := range strings.Fields(strings.ReplaceAll(policy, ";", " ")) {
+			if strings.HasPrefix(field, "https://") && !baseCSPHosts[field] {
+				t.Errorf("development=%v: base CSP allows %s; declare it in the owning module's CSPSources", isDev, field)
+			}
+		}
+	}
+}
+
+// TestCSPReporting checks that violations are reported to /csp-report through
+// report-uri, and that report-to stays out of the policy: Chrome ignores
+// report-uri whenever report-to is present, and in testing it delivered
+// report-uri reports at once but sent nothing through report-to, so adding
+// it would silently drop Chrome's reports. Re-add it only with evidence that
+// its reports arrive.
+func TestCSPReporting(t *testing.T) {
+	for _, isDev := range []bool{false, true} {
+		handler := SecurityHeaders(DefaultSecurityHeadersConfig(isDev))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		csp := rec.Header().Get("Content-Security-Policy")
+		if !strings.Contains(csp, "report-uri /csp-report") {
+			t.Errorf("development=%v: CSP lacks report-uri /csp-report: %s", isDev, csp)
+		}
+		if strings.Contains(csp, "report-to") {
+			t.Errorf("development=%v: CSP has report-to, which makes Chrome drop report-uri: %s", isDev, csp)
+		}
 	}
 }

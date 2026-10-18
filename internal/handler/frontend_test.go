@@ -12,6 +12,7 @@ import (
 	"errors"
 	"html/template"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -666,7 +667,10 @@ func testThemeManager() *theme.Manager {
 	return theme.NewManager(emptyFS, "", slog.Default())
 }
 
-func loadedFrontendThemeManager(t *testing.T, activeTheme string) *theme.Manager {
+// loadedFrontendThemeManager loads the core and custom themes with test
+// template functions and activates activeTheme. overrides replace functions
+// of the test map, such as its parseJSON stub.
+func loadedFrontendThemeManager(t *testing.T, activeTheme string, overrides ...template.FuncMap) *theme.Manager {
 	t.Helper()
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -685,6 +689,9 @@ func loadedFrontendThemeManager(t *testing.T, activeTheme string) *theme.Manager
 		"analyticsExtBody", "embedBody", "analyticsIntReadTracker", "privacyFooterLink",
 	} {
 		funcs[name] = emptyModuleHTML
+	}
+	for _, override := range overrides {
+		maps.Copy(funcs, override)
 	}
 	m.SetFuncMap(funcs)
 	if err := m.LoadThemes(); err != nil {
@@ -1050,7 +1057,7 @@ func TestFrontendHandler_ListingsAllowActivePrefixedLanguageWithInactiveDefault(
 
 func TestFrontendHandler_NonDefaultHomepageMatchesTrailingSlashMiddlewareCanonical(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	createTestLanguage(t, db, "fr", true)
 	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
 	router := middleware.StripTrailingSlash(languageAwareListingTestRouter(db, h))
@@ -1509,7 +1516,7 @@ func TestFrontendHandler_PrefixedAliasesRetainLanguagePrefix(t *testing.T) {
 func TestFrontendHandler_DefaultPrefixUsesUnprefixedCanonicalURLs(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	createPublishedAliasPage(t, db, "canonical-page", "en", "old-canonical", admin.ID)
 	if _, err := db.Exec(`
 		INSERT INTO categories (name, slug, language_code) VALUES ('News', 'news', 'en');
@@ -1642,7 +1649,7 @@ func TestFrontendHandler_SearchResultPreservesNonDefaultLanguagePrefix(t *testin
 func TestFrontendHandler_Page_SEOFallbackUsesNonDefaultLanguagePrefix(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	createTestLanguage(t, db, "fr", true)
 	createTestLanguage(t, db, "de", true)
 	createPublishedLanguagePage(t, db, "french-seo-page", "fr", admin.ID)
@@ -1690,7 +1697,7 @@ func TestFrontendHandler_HTMLThemesUseComputedPageOGURL(t *testing.T) {
 		t.Run(themeName, func(t *testing.T) {
 			db, _ := testHandlerSetup(t)
 			admin := createTestAdminUser(t, db)
-			seedSiteURL(t, db, "https://example.com")
+			seedSiteURL(t, db)
 			createTestLanguage(t, db, "fr", true)
 			createTestLanguage(t, db, "de", true)
 			englishPageID := createPublishedLanguagePage(t, db, "english-themed-page", "en", admin.ID)
@@ -1771,7 +1778,7 @@ func TestFrontendHandler_HTMLThemesUseComputedPageOGURL(t *testing.T) {
 
 func TestFrontendHandler_TaxonomyTranslationsRenderCanonicalSwitchersAndHrefLangs(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-	seedSiteURL(t, db, "https://example.com")
+	seedSiteURL(t, db)
 	createTestLanguage(t, db, "fr", true)
 	createTestLanguage(t, db, "de", true)
 	ctx := context.Background()

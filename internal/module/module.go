@@ -11,6 +11,8 @@ import (
 	"embed"
 	"html/template"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -21,6 +23,34 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+// ShutdownTimeout is how long Registry.ShutdownAll gives the modules'
+// Shutdowns together, one after another. The server's shutdown steps, the
+// modules' first, share a budget only a few seconds longer, and the server
+// then closes the database and exits, so a Shutdown should take a small part
+// of it: one still running when it is spent is left behind and can find the
+// database closed.
+const ShutdownTimeout = 7 * time.Second
+
+// WaitWithin waits for wg until d has passed and reports whether it
+// finished. A Shutdown waits for its goroutines with it rather than with
+// wg.Wait, so a stuck one cannot hold it. After a timeout one goroutine of
+// WaitWithin's stays blocked until wg finishes, which is fine at exit.
+func WaitWithin(wg *sync.WaitGroup, d time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
+	}
+}
 
 // Context provides access to application services for modules.
 //
@@ -93,7 +123,8 @@ type Module interface {
 
 	// Init initializes the module with the given context.
 	Init(ctx *Context) error
-	// Shutdown performs cleanup when the module is shutting down.
+	// Shutdown performs cleanup when the module is shutting down. It should
+	// return within ShutdownTimeout.
 	Shutdown() error
 
 	// RegisterRoutes registers public routes for the module.
@@ -157,6 +188,23 @@ type EditorAccessible interface {
 	// routes. The module's own handlers remain responsible for any finer
 	// checks.
 	EditorAdminRoutes() bool
+}
+
+// CSPSourcer is an optional interface for modules that load resources from
+// third-party hosts in the browser, such as a tracking script or a captcha
+// widget. The sources it returns, keyed by Content-Security-Policy directive
+// (for example "script-src"), are added to the policy only while the module
+// is active. Only host sources (http:// or https:// with a host, a "*."
+// subdomain wildcard and an optional port allowed) for script-src, style-src,
+// img-src, font-src, connect-src and frame-src are accepted; anything else is
+// dropped and logged once.
+//
+// CSPSources is called concurrently on every response, outside the registry
+// lock, so it must be cheap and must not block; calling back into the
+// registry cannot deadlock. A panic leaves the module's hosts out of the
+// policy and is logged once.
+type CSPSourcer interface {
+	CSPSources() map[string][]string
 }
 
 // Migration represents a database migration for a module.

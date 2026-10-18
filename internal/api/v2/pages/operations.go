@@ -11,7 +11,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/olegiv/ocms-go/internal/api/v2"
+	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 )
 
 // Register wires Pages operations onto the v2 huma API. The handler layer is
@@ -46,7 +46,7 @@ type PagesListMeta struct {
 // ListPagesOutput is the paginated response envelope.
 type ListPagesOutput struct {
 	Body struct {
-		Data []Page   `json:"data"`
+		Data []Page        `json:"data"`
 		Meta PagesListMeta `json:"meta"`
 	}
 }
@@ -72,7 +72,7 @@ func registerList(api huma.API, svc *Service) {
 		f.IncludeAuthor, f.IncludeCategories, f.IncludeTags = parseIncludes(in.Include)
 		result, err := svc.List(ctx, actor, f)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &ListPagesOutput{}
 		out.Body.Data = result.Pages
@@ -113,7 +113,7 @@ func registerGet(api huma.API, svc *Service) {
 		f.IncludeAuthor, f.IncludeCategories, f.IncludeTags = parseIncludes(in.Include)
 		page, err := svc.Get(ctx, actor, in.ID, f)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &PageOutput{}
 		out.Body.Data = *page
@@ -141,7 +141,7 @@ func registerGetBySlug(api huma.API, svc *Service) {
 		f.IncludeAuthor, f.IncludeCategories, f.IncludeTags = parseIncludes(in.Include)
 		page, err := svc.GetBySlug(ctx, actor, in.Slug, f)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &PageOutput{}
 		out.Body.Data = *page
@@ -168,7 +168,7 @@ func registerCreate(api huma.API, svc *Service) {
 		actor := v2.ActorFromContext(ctx)
 		page, err := svc.Create(ctx, actor, in.Body)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &PageOutput{}
 		out.Body.Data = *page
@@ -178,7 +178,7 @@ func registerCreate(api huma.API, svc *Service) {
 
 // UpdatePageInput carries the id path param plus the partial update body.
 type UpdatePageInput struct {
-	ID   int64       `path:"id" minimum:"1"`
+	ID   int64          `path:"id" minimum:"1"`
 	Body UpdatePageBody `contentType:"application/json"`
 }
 
@@ -195,7 +195,7 @@ func registerUpdate(api huma.API, svc *Service) {
 		actor := v2.ActorFromContext(ctx)
 		page, err := svc.Update(ctx, actor, in.ID, in.Body)
 		if err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		out := &PageOutput{}
 		out.Body.Data = *page
@@ -221,7 +221,7 @@ func registerDelete(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *DeletePageInput) (*struct{}, error) {
 		actor := v2.ActorFromContext(ctx)
 		if err := svc.Delete(ctx, actor, in.ID); err != nil {
-			return nil, v2.ToHuma(err)
+			return nil, v2.ToHuma(ctx, err)
 		}
 		return nil, nil
 	})

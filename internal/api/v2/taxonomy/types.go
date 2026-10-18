@@ -22,17 +22,17 @@ type TaxonomyTag struct {
 // TaxonomyCategory is the DTO for category responses. When returned from the tree
 // list, Children is populated recursively.
 type TaxonomyCategory struct {
-	ID           int64       `json:"id"`
-	Name         string      `json:"name"`
-	Slug         string      `json:"slug"`
-	Description  string      `json:"description,omitempty"`
-	ParentID     *int64      `json:"parent_id,omitempty"`
-	Position     int64       `json:"position"`
-	LanguageCode string      `json:"language_code"`
-	PageCount    int64       `json:"page_count" doc:"Number of pages linked to this category."`
+	ID           int64               `json:"id"`
+	Name         string              `json:"name"`
+	Slug         string              `json:"slug"`
+	Description  string              `json:"description,omitempty"`
+	ParentID     *int64              `json:"parent_id,omitempty"`
+	Position     int64               `json:"position"`
+	LanguageCode string              `json:"language_code"`
+	PageCount    int64               `json:"page_count" doc:"Number of pages linked to this category."`
 	Children     []*TaxonomyCategory `json:"children,omitempty" doc:"Populated only in tree list mode."`
-	CreatedAt    time.Time   `json:"created_at"`
-	UpdatedAt    time.Time   `json:"updated_at"`
+	CreatedAt    time.Time           `json:"created_at"`
+	UpdatedAt    time.Time           `json:"updated_at"`
 }
 
 // CreateTagBody is the input for creating a tag.

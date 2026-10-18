@@ -14,13 +14,14 @@ import (
 
 // handleDashboard handles GET /admin/informer - shows the informer settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	current := m.currentSettings()
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	viewData := InformerViewData{
-		Enabled:   m.settings.Enabled,
-		Text:      m.settings.Text,
-		BgColor:   m.settings.BgColor,
-		TextColor: m.settings.TextColor,
+		Enabled:   current.Enabled,
+		Text:      current.Text,
+		BgColor:   current.BgColor,
+		TextColor: current.TextColor,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "informer.title"), []render.Breadcrumb{
@@ -79,11 +80,11 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	saved, err := loadSettings(m.ctx.DB)
 	if err != nil {
 		m.ctx.Logger.Error("failed to reload informer settings", "error", err)
-		newSettings.Version = m.settings.Version
+		newSettings.Version = m.currentSettings().Version
 	} else {
 		newSettings = saved
 	}
-	m.settings = newSettings
+	m.storeSettings(newSettings)
 
 	m.ctx.Logger.Info("Informer settings updated",
 		"user", user.Email,

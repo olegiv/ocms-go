@@ -142,7 +142,7 @@
                     <input type="checkbox"
                            name="{{$fieldName}}"
                            value="{{$opt}}"
-                           {{if contains $selectedValue $opt}}checked{{end}}>
+                           {{if checkedOption $selectedValue $opt}}checked{{end}}>
                     <span>{{$opt}}</span>
                 </label>
                 {{end}}

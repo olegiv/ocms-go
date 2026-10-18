@@ -1,8 +1,12 @@
+---
+description: "Test REST API endpoints with actual HTTP requests"
+---
+
 Test REST API endpoints with actual HTTP requests.
 
 Steps:
 1. Start the server in background:
-   `OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go run ./cmd/ocms &`
+   `OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go run ./cmd/ocms &`
 2. Wait 3 seconds for server startup
 3. Test public endpoints:
    - Health check: `curl -s http://localhost:8080/health`

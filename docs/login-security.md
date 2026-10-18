@@ -2,6 +2,55 @@
 
 OCMS includes built-in protection against brute force attacks and DDoS on the login form. This document describes the security measures and how to configure them.
 
+## Login destinations and account dashboard
+
+Successful login and authenticated visits to `/login` use the same destinations:
+
+| Role | Destination | Access |
+|------|-------------|--------|
+| Administrator (`admin`) | `/admin` | Full administration |
+| Editor (`editor`) | `/admin` | Content management; administrator-only routes remain forbidden |
+| Public (`public`) | `/account` | Own account overview; no administration access |
+| Unrecognized role | `/` | No account dashboard or administration access |
+
+The public role is intended for users without staff privileges. Core does not
+provide public self-registration; administrators or imports provision accounts.
+Redirect destinations are fixed internal paths and cannot be overridden by login
+query parameters or form fields.
+
+`GET /account` requires a valid session and shows only the current user's name,
+email, creation date and last-login date. Administrators and editors can also
+visit it directly. It includes site branding, a website link, language selection
+and the existing POST logout action. Account details are read-only: there is no
+profile editor, password-change form or account deletion. The interface uses the
+same language preference and localized dates as login and administration, with
+English and Russian translations and a fallback when no login is recorded.
+
+The dashboard shares the admin header, collapsible sidebar, cards and mobile
+navigation. Its account variant shows only My account, Visit website and Log out;
+the same account navigation is used for administrators and editors visiting
+`/account`. The profile link leads to `/account`, and language selection submits
+to `/language`. Administrative settings, content and module links are omitted.
+Themes do not need an account template. Responses containing account details use
+`Cache-Control: private, no-store` and `noindex, nofollow`. Authentication reloads
+the user and role from the database for each protected request, so demoting an
+editor to public removes admin access immediately. Deleted users and sessions
+invalidated by password changes must sign in again.
+
+### Reserved `/account` route
+
+`/account` is an unprefixed core route, alongside `/login` and `/logout`;
+language selection does not change its URL. `account` is reserved as a language
+prefix, and content redirect rules (including wildcard rules) cannot intercept
+`/account` or paths below it. Similar names such as `/accounting` remain available
+for content redirects. New pages and aliases cannot use the `account` slug,
+`robots.txt` disallows `/account`, and first-party analytics does not record it.
+
+Before upgrading, rename any page slug, alias, module route or language prefix
+that already uses `/account`. The core dashboard takes precedence at `/account`;
+existing conflicting content is not renamed or deleted automatically. No schema
+migration or site-theme changes are required.
+
 ## Overview
 
 The login protection system provides two layers of defense:
@@ -65,8 +114,8 @@ Account lockout prevents password guessing attacks by temporarily blocking login
 
 | Attempt | Message |
 |---------|---------|
-| 1-2 | "Invalid email or password" |
-| 3-4 | "Invalid email or password. N attempts remaining." |
+| 1 | "Invalid email or password" |
+| 2-4 | "Invalid email or password. N attempts remaining." |
 | 5 | "Too many failed attempts. Account locked for 15 minutes." |
 | During lockout | "Account is temporarily locked. Try again in N minutes." |
 
@@ -100,7 +149,7 @@ Login protection settings are currently defined in code. To customize:
 
 ```go
 // In cmd/ocms/main.go
-loginProtection := middleware.NewLoginProtection(middleware.LoginProtectionConfig{
+loginProtection := middleware.NewLoginProtection(db, middleware.LoginProtectionConfig{
     IPRateLimit:       0.5,              // Requests per second per IP
     IPBurst:           5,                // Burst allowance
     MaxFailedAttempts: 5,                // Lock after N failures
@@ -123,13 +172,14 @@ proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 ### Apache
 
 ```apache
-RemoteIPHeader X-Forwarded-For
+# mod_proxy_http adds X-Forwarded-For itself; also pass the connecting address
+RequestHeader set X-Real-IP "%{REMOTE_ADDR}s"
 ```
 
-The login protection middleware checks headers in this order:
-1. `X-Real-IP`
-2. `X-Forwarded-For`
-3. `RemoteAddr` (direct connection)
+The login protection middleware uses the client IP resolved by oCMS (`middleware.GetClientIP`). Forwarding headers are honored only when the direct peer is listed in `OCMS_TRUSTED_PROXIES` (see the checklist below); any other peer is identified by its connection address. For a trusted peer the order is:
+1. `X-Forwarded-For` (the first address from the right that is not a trusted proxy)
+2. `X-Real-IP`, only when `X-Forwarded-For` is absent
+3. `RemoteAddr` (direct connection, or no usable header)
 
 ## Session Invalidation on Password Change
 
@@ -154,7 +204,7 @@ Before exposing an oCMS instance to the public internet, work through this list:
 1. **Rotate the seed admin password.** When `OCMS_DO_SEED=true` is used (typically on first boot), oCMS provisions `admin@example.com` with the well-known password `changeme1234`. Log in and change both the email and password on `/admin/users` before anything else. The seed password is public knowledge — anyone who reaches the login page can try it. Production startup blocks `OCMS_DO_SEED=true` unless demo mode is also enabled, so the exposure window is limited to initial-setup runs, but the first admin session still has to replace these credentials. Once any administrator account exists, seeding no longer recreates `admin@example.com`, so renaming or replacing it is permanent even if the flag stays on.
 2. Set `OCMS_SESSION_SECRET` to a freshly generated 32-byte value (e.g. `openssl rand -base64 32`). Startup rejects known defaults, placeholder values copied from the example files or docs, and (in production) the public test-suite secret, but rotate on each environment.
 3. Set `OCMS_ENV=production` so security defaults apply (stricter CSRF, HSTS, seed-disabled, etc.).
-4. Configure `OCMS_TRUSTED_PROXIES` if running behind a reverse proxy — otherwise client IPs used by rate limiting and account lockout will be the proxy's address, collapsing every attacker into one bucket. See `docs/reverse-proxy.md`.
+4. Configure `OCMS_TRUSTED_PROXIES` if running behind a reverse proxy — otherwise client IPs used by rate limiting and account lockout will be the proxy's address, collapsing every attacker into one bucket. In production, startup fails while it is unset unless `OCMS_REQUIRE_TRUSTED_PROXIES=false`. See `docs/reverse-proxy.md`.
 5. Enable HSTS preload (`OCMS_HSTS_PRELOAD=true`) once you're certain every subdomain has a valid TLS certificate; submit the domain at <https://hstspreload.org>. Details in `docs/reverse-proxy.md`.
 
 ## Troubleshooting
@@ -164,7 +214,10 @@ Before exposing an oCMS instance to the public internet, work through this list:
 If a legitimate user is locked out:
 
 1. Wait for the lockout period to expire, OR
-2. Restart the application (clears in-memory lockout data)
+2. Delete the account's rows from the `login_protection` table. Lockout state is stored in SQLite, so restarting the application does not clear it:
+   ```bash
+   sqlite3 ./data/ocms.db "DELETE FROM login_protection WHERE email IN ('user@example.com', 'account' || char(31) || 'user@example.com') OR email GLOB 'pair' || char(31) || 'user@example.com' || char(31) || '*'"
+   ```
 
 Note: In a future version, admin users will be able to unlock accounts from the admin panel.
 

@@ -8,8 +8,14 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
+	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/testutil"
 
@@ -27,6 +33,7 @@ type mockModule struct {
 	initCalled   bool
 	initErr      error
 	shutdownErr  error
+	shutdownFn   func() error
 	routesCalled bool
 	routeCalls   int
 	adminCalled  bool
@@ -47,7 +54,12 @@ func (m *mockModule) Description() string     { return m.description }
 func (m *mockModule) Dependencies() []string  { return m.dependencies }
 func (m *mockModule) Migrations() []Migration { return m.migrations }
 func (m *mockModule) Init(_ *Context) error   { m.initCalled = true; return m.initErr }
-func (m *mockModule) Shutdown() error         { return m.shutdownErr }
+func (m *mockModule) Shutdown() error {
+	if m.shutdownFn != nil {
+		return m.shutdownFn()
+	}
+	return m.shutdownErr
+}
 func (m *mockModule) RegisterRoutes(r chi.Router) {
 	m.routesCalled = true
 	m.routeCalls++
@@ -267,6 +279,48 @@ func TestShutdownAll(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
+}
+
+// TestShutdownAllWithinTheLimit checks that ShutdownAll gives the modules'
+// Shutdowns ShutdownTimeout together: a stuck one is reported and left
+// behind, one that panics is reported, and the modules after them still shut
+// down. Shutdowns ran one after another without a limit, so a module waiting
+// for a stuck goroutine held the module step, and the server's other
+// shutdown steps lost their time (review of the 2026-10-17 audit fixes).
+//
+// Bug state: call m.Shutdown() directly in ShutdownAll and this fails.
+func TestShutdownAllWithinTheLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := NewRegistry(testutil.TestLoggerSilent())
+		release := make(chan struct{})
+		defer close(release)
+		var lastRan atomic.Bool
+		last := newMockModule("last", "1.0.0") // registered first, shut down last
+		last.shutdownFn = func() error { lastRan.Store(true); return nil }
+		stuck := newMockModule("stuck", "1.0.0")
+		stuck.shutdownFn = func() error { <-release; return nil }
+		panics := newMockModule("panics", "1.0.0")
+		panics.shutdownFn = func() error { panic("boom") }
+		for _, m := range []*mockModule{last, stuck, panics} {
+			if err := r.Register(m); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		start := time.Now()
+		err := r.ShutdownAll()
+		if elapsed := time.Since(start); elapsed > ShutdownTimeout+minShutdownWait {
+			t.Errorf("ShutdownAll took %v, want at most ShutdownTimeout (%v) and one shortest wait", elapsed, ShutdownTimeout)
+		}
+		if !lastRan.Load() {
+			t.Error("the module after the stuck one was not shut down")
+		}
+		for _, want := range []string{`"stuck"`, "left behind", `"panics"`, "shutdown panicked: boom"} {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("ShutdownAll returned %v, want it to mention %s", err, want)
+			}
+		}
+	})
 }
 
 // testRouteRegistration tests that route registration methods call the expected module methods.
@@ -1032,5 +1086,137 @@ func TestListInfoShowsInitializedStatus(t *testing.T) {
 				t.Error("expected mod-b to show as NOT initialized")
 			}
 		}
+	}
+}
+
+// cspModule is a mockModule that declares Content-Security-Policy sources.
+type cspModule struct {
+	*mockModule
+	sources map[string][]string
+}
+
+func (m cspModule) CSPSources() map[string][]string { return m.sources }
+
+// TestActiveCSPSources checks that only active modules contribute CSP
+// sources, that a module without a stored status counts as active, and that
+// a source shared by two modules is listed once.
+func TestActiveCSPSources(t *testing.T) {
+	r := NewRegistry(testutil.TestLoggerSilent())
+	modules := []Module{
+		cspModule{newMockModule("captcha", "1.0.0"), map[string][]string{
+			"script-src": {"https://captcha.example"}, "frame-src": {"https://captcha.example"},
+		}},
+		cspModule{newMockModule("tracker", "1.0.0"), map[string][]string{
+			"script-src": {"https://tracker.example", "https://captcha.example"},
+		}},
+		cspModule{newMockModule("inactive", "1.0.0"), map[string][]string{
+			"script-src": {"https://inactive.example"},
+		}},
+		newMockModule("plain", "1.0.0"),
+	}
+	for _, m := range modules {
+		if err := r.Register(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.activeStatus["captcha"] = true
+	r.activeStatus["inactive"] = false // "tracker" has no stored status
+
+	got := r.ActiveCSPSources()
+	want := map[string][]string{
+		"script-src": {"https://captcha.example", "https://tracker.example"},
+		"frame-src":  {"https://captcha.example"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ActiveCSPSources() = %v, want %v", got, want)
+	}
+}
+
+// panickingCSPModule is a mockModule whose CSPSources panics.
+// reentrantCSPModule calls a registry method that takes the write lock from
+// CSPSources, as a module that checks or changes its own status might.
+type reentrantCSPModule struct {
+	*mockModule
+	registry *Registry
+}
+
+func (m reentrantCSPModule) CSPSources() map[string][]string {
+	_ = m.registry.Register(newMockModule("late", "1.0.0"))
+	return map[string][]string{"script-src": {"https://reentrant.example"}}
+}
+
+// TestActiveCSPSourcesCallsModulesOutsideTheLock fails when ActiveCSPSources
+// calls a module's CSPSources while holding the registry lock. A module that
+// calls back into the registry would then deadlock, and since the security
+// headers middleware runs this on every response, every request would hang.
+//
+// Bug state: call r.moduleCSPSources inside the r.mu.RLock section of
+// ActiveCSPSources and this times out.
+func TestActiveCSPSourcesCallsModulesOutsideTheLock(t *testing.T) {
+	r := NewRegistry(testutil.TestLoggerSilent())
+	if err := r.Register(reentrantCSPModule{newMockModule("reentrant", "1.0.0"), r}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan map[string][]string, 1)
+	go func() { done <- r.ActiveCSPSources() }()
+	select {
+	case got := <-done:
+		if want := []string{"https://reentrant.example"}; !reflect.DeepEqual(got["script-src"], want) {
+			t.Errorf("script-src = %v, want %v", got["script-src"], want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ActiveCSPSources deadlocked: it called CSPSources under the registry lock")
+	}
+}
+
+type panickingCSPModule struct{ *mockModule }
+
+func (panickingCSPModule) CSPSources() map[string][]string { panic("broken module") }
+
+// TestActiveCSPSourcesSurvivesAPanickingModule checks that a module whose
+// CSPSources panics is left out instead of failing the response: the security
+// headers middleware calls this for every request, ahead of most of the chain.
+func TestActiveCSPSourcesSurvivesAPanickingModule(t *testing.T) {
+	var logs strings.Builder
+	r := NewRegistry(slog.New(slog.NewTextHandler(&logs, nil)))
+	for _, m := range []Module{
+		panickingCSPModule{newMockModule("broken", "1.0.0")},
+		cspModule{newMockModule("captcha", "1.0.0"), map[string][]string{"script-src": {"https://captcha.example"}}},
+	} {
+		if err := r.Register(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := r.ActiveCSPSources()
+	if want := map[string][]string{"script-src": {"https://captcha.example"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("ActiveCSPSources() = %v, want %v", got, want)
+	}
+	// Called for every response: one log entry, with the stack to find it.
+	r.ActiveCSPSources()
+	if n := strings.Count(logs.String(), "panicked"); n != 1 || !strings.Contains(logs.String(), "stack=") {
+		t.Errorf("panic logged %d times (want once, with a stack):\n%s", n, logs.String())
+	}
+}
+
+// TestActiveCSPSourcesDropsNonHostSources checks that a module's value that
+// is not a host source is dropped and logged once with the module's name, so
+// an operator can tell which module to fix.
+func TestActiveCSPSourcesDropsNonHostSources(t *testing.T) {
+	var logs strings.Builder
+	r := NewRegistry(slog.New(slog.NewTextHandler(&logs, nil)))
+	m := cspModule{newMockModule("tracker", "1.0.0"), map[string][]string{
+		"script-src": {"https://stats.example", "https://*", "'unsafe-inline'"},
+	}}
+	if err := r.Register(m); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		got := r.ActiveCSPSources()
+		if want := map[string][]string{"script-src": {"https://stats.example"}}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("ActiveCSPSources() = %v, want %v", got, want)
+		}
+	}
+	if n := strings.Count(logs.String(), "module=tracker"); n != 2 {
+		t.Errorf("rejected sources logged %d times, want once each (2) with the module name:\n%s", n, logs.String())
 	}
 }

@@ -167,7 +167,7 @@ they tell oCMS's own modules from a site's copies — and abort rather than gues
 if it is not.
 
 Because sites share one core tree, every target that touches it — `dev`, `run`,
-`build*`, `test`, `assets`, `sync-modules` and `clean-modules` — holds a lock at
+`build*`, `test`, `assets`, `migrate-*`, `sync-modules` and `clean-modules` — holds a lock at
 `$(CORE_DIR)/.site-build.lock` for its whole duration. Without it a second site
 could replace the modules after the first site's sync finished but while its
 compiler was still reading, producing a binary containing the wrong site's code;
@@ -182,8 +182,10 @@ checkout — so a site's `./custom` would otherwise load the *core's* themes and
 every site would share one uploads directory. A relative value in your `.env` is
 fine; it is resolved for you.
 
-The same resolution applies to the migrate targets, so `goose` and the server
-always open the same database.
+The same resolution applies to the migrate targets, so `ocms migrate` and the
+server always open the same database. The targets that run, stop or migrate the
+server (`dev`, `run`, `stop`, `restart`, `migrate-*`) stop when the site `.env`
+is missing, instead of falling back to `data/ocms.db` and port 8080.
 
 Copy, do not symlink: Go's wildcards skip symlinked directories, so
 `go test ./...` would silently omit the module and report success with failing
@@ -224,7 +226,7 @@ type Module interface {
     Dependencies() []string                // Other module names this depends on
 
     Init(ctx *Context) error               // Initialize with app context
-    Shutdown() error                       // Cleanup on shutdown
+    Shutdown() error                       // Cleanup on shutdown; return within module.ShutdownTimeout
 
     RegisterRoutes(r chi.Router)           // Public routes (e.g., /bookmarks)
     RegisterAdminRoutes(r chi.Router)      // Admin routes (e.g., /admin/bookmarks)
@@ -252,6 +254,8 @@ func New() *Module {
     }
 }
 ```
+
+`Registry.ShutdownAll` calls `Shutdown` on the modules in reverse order of registration and gives them all one shared budget, `module.ShutdownTimeout` (7 seconds). Each module is waited for only what is left of it, but for at least 100 ms, so a slow module cannot starve the ones after it. A `Shutdown` still running when its wait ends, or one that panics, is reported as an error and left behind, and the next module goes ahead; after that the server closes the database, so a straggler can find it closed. A `Shutdown` that waits for its own goroutines should use `module.WaitWithin(&wg, d)` instead of `wg.Wait()`, so a stuck goroutine cannot hold it.
 
 ## Module Context
 
@@ -528,6 +532,37 @@ func (m *Module) ActiveByDefault() bool {
 ```
 
 Use it for modules that open a new remote surface, such as the built-in MCP server (`modules/mcpserver`), so an upgrade never exposes one without being asked. Like `AllowedEnvs`, it only sets the status at first registration; after that the `modules` table wins. `Init` runs when the module is activated, and the registry serializes activation, so it runs once even when two admins switch the module on at the same time. Build anything that depends on it (routes' handlers, rate limiters) in `Init` and read it per request rather than capturing it in `RegisterRoutes`.
+
+## Third-Party Hosts (Content-Security-Policy)
+
+The base Content-Security-Policy allows scripts, styles, connections and frames
+only from the site itself, plus Google Fonts for themes and YouTube frames for
+page content; images may come from any `https:` host. A module that loads a
+script, stylesheet, frame or API call from another host implements
+`module.CSPSourcer`; whatever it returns is added to the policy only while the
+module is active, so a module may return a host only once it is configured.
+Only host sources (`http://` or `https://` with a host, a `*.` subdomain
+wildcard and an optional port allowed) for `script-src`, `style-src`,
+`img-src`, `font-src`, `connect-src` and `frame-src` are accepted; anything
+else is dropped and logged once with the module's name. `CSPSources` runs on
+every response, outside the registry lock, so it must be cheap and must not
+block:
+
+```go
+func (m *Module) CSPSources() map[string][]string {
+    hosts := []string{"https://widget.example.com"}
+    return map[string][]string{
+        "script-src":  hosts,
+        "connect-src": hosts,
+    }
+}
+```
+
+The policy is assembled for every response, so toggling the module in
+**Admin > Modules** takes effect without a restart. For built-in modules,
+`TestModuleThirdPartyHostsAreInCSPSources` fails when module source loads a
+host its `CSPSources` does not allow, and `TestBaseCSPHostsAreFirstPartyOrContent`
+fails when a module host is added to the base policy instead.
 
 ## Reference Implementation
 

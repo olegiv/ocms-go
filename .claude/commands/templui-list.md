@@ -1,3 +1,8 @@
+---
+argument-hint: "[component]"
+description: "List available templUI components or show documentation for one"
+---
+
 List available templUI components or show documentation for a specific component.
 
 Usage: /templui-list
@@ -6,12 +11,12 @@ Usage: /templui-list
 Steps:
 1. Check if `templui` CLI is installed (`which templui`). If not, install it:
    ```bash
-   go install github.com/templui/templui/cmd/templui@latest
+   go install github.com/templui/templui/cmd/templui@v1.5.0
    ```
 
 2. Check which components are already installed locally:
    ```bash
-   ls internal/ui/ 2>/dev/null
+   ls internal/views/components/ 2>/dev/null
    ```
 
 3. If no specific component name was provided, list all available components:
@@ -31,7 +36,7 @@ Steps:
 4. If a specific component name was provided:
    - Fetch its documentation from `https://templui.io/docs/components/<name>` using WebFetch
    - Show key props, variants, and usage examples
-   - Show the oCMS import path: `"github.com/olegiv/ocms-go/internal/ui/<name>"`
+   - Show the oCMS import path: `"github.com/olegiv/ocms-go/internal/views/components/<name>"`
    - Note whether it requires JavaScript (carousel, datepicker, timepicker, chart, code, etc.)
 
 Note: Run `/templui-add <name>` to install a component after looking it up.

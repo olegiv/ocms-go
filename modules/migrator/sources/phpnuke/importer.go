@@ -277,7 +277,7 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 	// cannot reference an author row that does not exist yet.
 	userMap := make(map[string]int64)
 	if opts.ImportUsers {
-		if err := s.importUsers(ctx, queries, reader, userMap, opts, result, tracker); err != nil {
+		if err := s.importUsers(ctx, queries, reader, userMap, result, tracker); err != nil {
 			result.AddError("Users import error: %v", err)
 		}
 	}
@@ -287,14 +287,14 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 	pageCategoryMap := make(map[int64]int64)
 	if opts.ImportCategories {
 		if err := s.importCategories(ctx, queries, reader, langCode, topicMap, pageCategoryMap,
-			opts, result, tracker); err != nil {
+			result, tracker); err != nil {
 			result.AddError("Categories import error: %v", err)
 		}
 	}
 	storyCategoryMap := make(map[int64]int64)
 	if opts.ImportTags {
 		if err := s.importStoryCategoryTags(ctx, queries, reader, langCode, storyCategoryMap,
-			opts, result, tracker); err != nil {
+			result, tracker); err != nil {
 			result.AddError("Tags import error: %v", err)
 		}
 	}
@@ -341,7 +341,7 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 	bodiesAltered := 0
 	if opts.ImportPosts {
 		s.importStories(ctx, queries, content.stories, userMap, fallbackAuthorID, langCode,
-			topicMap, storyCategoryMap, mediaMap, skips, opts, result, tracker, &bodiesAltered)
+			topicMap, storyCategoryMap, mediaMap, skips, result, tracker, &bodiesAltered)
 	}
 	if opts.ImportPages {
 		// Both stages write pages, so the phase total is reported here rather
@@ -351,9 +351,9 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 		pageProgress := newPhaseProgress(ctx, tracker, s.Name(), types.EntityPage,
 			len(content.staticPages)+len(content.encEntries))
 		s.importStaticPages(ctx, queries, content.staticPages, fallbackAuthorID, langCode,
-			pageCategoryMap, mediaMap, skips, pageProgress, opts, result, tracker, &bodiesAltered)
+			pageCategoryMap, mediaMap, skips, pageProgress, result, tracker, &bodiesAltered)
 		s.importEncyclopedia(ctx, queries, content, fallbackAuthorID, langCode, mediaMap,
-			skips, pageProgress, opts, result, tracker, &bodiesAltered)
+			skips, pageProgress, result, tracker, &bodiesAltered)
 	}
 	if bodiesAltered > 0 {
 		result.AddSummary("%d imported bodies contained markup the oCMS page HTML policy does "+

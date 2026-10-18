@@ -4,7 +4,8 @@
 #
 # Not wired into .claude/settings.json on purpose: it replaces /usr/local/go,
 # which is a machine-wide change that an operator should opt into. Add it to
-# the SessionStart hooks of a checkout where that is wanted.
+# SessionStart in .claude/settings.local.json (gitignored) on a machine where
+# that is wanted; TestClaudeHooksAreWired keeps it out of settings.json.
 set -euo pipefail
 
 # Extract required version from go.mod

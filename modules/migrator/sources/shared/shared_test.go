@@ -1094,3 +1094,26 @@ func TestMakeUniqueSlugAvoidsActiveLanguagePrefixes(t *testing.T) {
 		t.Errorf("MakeUniqueSlug(%q) = %q, want an unrelated slug untouched", "engineering", got)
 	}
 }
+
+// TestMakeUniqueSlugAvoidsApplicationRoutes keeps an imported "login" or
+// "blog" page reachable: application routes answer those URLs before the page
+// catch-all does (security audit 2026-10-17, L-2).
+func TestMakeUniqueSlugAvoidsApplicationRoutes(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	queries := store.New(db)
+	ctx := context.Background()
+
+	for _, slug := range []string{"login", "blog", "account"} {
+		if got := MakeUniqueSlug(ctx, queries, slug); got != slug+"-2" {
+			t.Errorf("MakeUniqueSlug(%q) = %q, want %q", slug, got, slug+"-2")
+		}
+	}
+	// Segments that own only deeper paths or other methods leave the bare
+	// slug free; renaming these broke imported links.
+	for _, slug := range []string{"blogroll", "forms", "api", "uploads", "language"} {
+		if got := MakeUniqueSlug(ctx, queries, slug); got != slug {
+			t.Errorf("MakeUniqueSlug(%q) = %q, want a slug no exact route answers untouched", slug, got)
+		}
+	}
+}

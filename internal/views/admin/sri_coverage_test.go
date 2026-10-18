@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
 // firstPartyScripts ship with the repository rather than with an npm upgrade,
@@ -81,8 +83,7 @@ func TestEveryVendoredScriptIsProtected(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", "bin", "data", "uploads", "wiki", "dist":
+			if repotree.Skip(root, path, d) {
 				return filepath.SkipDir
 			}
 			return nil

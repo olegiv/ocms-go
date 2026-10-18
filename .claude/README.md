@@ -212,11 +212,22 @@ run commit-do
 You can also run the Claude slash-command workflow directly from shell:
 
 ```bash
-claude -p "/commit-prepare" --dangerously-skip-permissions
-claude -p "/commit-do" --dangerously-skip-permissions
-claude -p "/code-quality" --dangerously-skip-permissions
-claude -p "/security-audit" --dangerously-skip-permissions
+./scripts/codex/proxy-claude-command.sh /commit-prepare
+./scripts/codex/proxy-claude-command.sh /commit-do
+./scripts/codex/proxy-claude-command.sh /code-quality
+./scripts/codex/proxy-claude-command.sh /security-audit
 ```
+
+The proxy runs `claude -p` with `--permission-mode dontAsk` and a per-command
+`--allowedTools` list. Rules for tools that run project or package code are
+exact (`scripts/test-gate.sh`, `go vet ./...`, `golangci-lint run ./...`,
+`npm audit`); git commands are allowed by prefix, so `git commit` runs the
+repository's hooks and `git diff --output=<file>` can write a file. Anything
+else is denied without a prompt, so a check that needs another tool is skipped
+and reported by the command rather than run. This is a best-effort fence, not
+a sandbox. Avoid `--dangerously-skip-permissions`: these
+commands read diffs, logs and scan output, and text in them could otherwise
+steer the session into any shell command.
 
 ## When to Use Which
 

@@ -16,32 +16,34 @@ import (
 
 // handleDashboard handles GET /admin/privacy - shows the privacy settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	current, fromFallback := m.settingsForForm()
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Serialize services to JSON
 	servicesJSON := "[]"
-	if len(m.settings.Services) > 0 {
-		if data, err := json.Marshal(m.settings.Services); err == nil {
+	if len(current.Services) > 0 {
+		if data, err := json.Marshal(current.Services); err == nil {
 			servicesJSON = string(data)
 		}
 	}
 
 	viewData := PrivacyViewData{
-		Enabled:                     m.settings.Enabled,
-		Debug:                       m.settings.Debug,
-		PrivacyPolicyURL:            m.settings.PrivacyPolicyURL,
-		CookieName:                  m.settings.CookieName,
-		CookieExpiresDays:           m.settings.CookieExpiresDays,
-		Theme:                       m.settings.Theme,
-		Position:                    m.settings.Position,
-		GCMEnabled:                  m.settings.GCMEnabled,
-		GCMDefaultAnalytics:         m.settings.GCMDefaultAnalytics,
-		GCMDefaultAdStorage:         m.settings.GCMDefaultAdStorage,
-		GCMDefaultAdUserData:        m.settings.GCMDefaultAdUserData,
-		GCMDefaultAdPersonalization: m.settings.GCMDefaultAdPersonalization,
-		GCMWaitForUpdate:            m.settings.GCMWaitForUpdate,
+		Enabled:                     current.Enabled,
+		Debug:                       current.Debug,
+		PrivacyPolicyURL:            current.PrivacyPolicyURL,
+		CookieName:                  current.CookieName,
+		CookieExpiresDays:           current.CookieExpiresDays,
+		Theme:                       current.Theme,
+		Position:                    current.Position,
+		GCMEnabled:                  current.GCMEnabled,
+		GCMDefaultAnalytics:         current.GCMDefaultAnalytics,
+		GCMDefaultAdStorage:         current.GCMDefaultAdStorage,
+		GCMDefaultAdUserData:        current.GCMDefaultAdUserData,
+		GCMDefaultAdPersonalization: current.GCMDefaultAdPersonalization,
+		GCMWaitForUpdate:            current.GCMWaitForUpdate,
 		ServicesJSON:                servicesJSON,
 		PredefinedServices:          PredefinedServices,
+		SettingsUnavailable:         fromFallback,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "privacy.title"), []render.Breadcrumb{
@@ -74,6 +76,25 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "privacy.error_parse_form"), "error")
 		http.Redirect(w, r, "/admin/privacy", http.StatusSeeOther)
 		return
+	}
+	// A form rendered from fallback values must not replace the stored
+	// settings, even once they can be read again.
+	if r.FormValue("from_fallback") == "1" {
+		m.ctx.Logger.Warn("refusing to save privacy settings: the form showed fallback values")
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "privacy.error_form_from_fallback"), "error")
+		http.Redirect(w, r, "/admin/privacy", http.StatusSeeOther)
+		return
+	}
+	// The form shows fallback values while the stored settings cannot be
+	// read; saving them would replace the administrator's settings. Reload
+	// directly here rather than waiting out the retry interval.
+	if !m.reload.Loaded() {
+		if err := m.ReloadSettings(); err != nil {
+			m.ctx.Logger.Error("refusing to save privacy settings: the stored settings cannot be read", "error", err)
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "privacy.error_settings_unreadable"), "error")
+			http.Redirect(w, r, "/admin/privacy", http.StatusSeeOther)
+			return
+		}
 	}
 
 	// Build new settings from form
@@ -119,11 +140,14 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	servicesJSON := r.FormValue("services")
 	if servicesJSON != "" && servicesJSON != "[]" {
 		var services []Service
-		if err := json.Unmarshal([]byte(servicesJSON), &services); err == nil {
-			newSettings.Services = services
-		} else {
-			m.ctx.Logger.Warn("failed to parse services JSON", "error", err)
+		if err := json.Unmarshal([]byte(servicesJSON), &services); err != nil {
+			// Saving would replace the stored services with none.
+			m.ctx.Logger.Warn("refusing to save privacy settings: invalid services JSON", "error", err)
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "privacy.error_services_invalid"), "error")
+			http.Redirect(w, r, "/admin/privacy", http.StatusSeeOther)
+			return
 		}
+		newSettings.Services = services
 	}
 
 	// Save to database
@@ -135,7 +159,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update in-memory settings
-	m.settings = newSettings
+	m.storeSettings(newSettings)
 
 	m.ctx.Logger.Info("Privacy settings updated",
 		"user", user.Email,

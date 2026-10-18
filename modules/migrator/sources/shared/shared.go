@@ -234,7 +234,7 @@ func MakeUniqueSlugWithGuard(
 	languagePrefixes := routableLanguagePrefixes(ctx, queries)
 	isAvailable := func(slug string) bool {
 		return slugIsFree(ctx, queries, slug) && !languagePrefixes[slug] &&
-			(available == nil || available(slug))
+			!util.IsReservedPageSlug(slug) && (available == nil || available(slug))
 	}
 	if isAvailable(baseSlug) {
 		return baseSlug

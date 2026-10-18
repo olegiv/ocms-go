@@ -377,7 +377,7 @@ func sanitizeEmailDomain(host string) string {
 // access, and the password hash is a random secret nobody holds, so the
 // account cannot be signed into until its owner completes a password reset.
 func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader sourceReader,
-	userMap map[string]int64, opts types.ImportOptions, result *types.ImportResult,
+	userMap map[string]int64, result *types.ImportResult,
 	tracker types.ImportTracker) error {
 	users, err := s.creditedAuthors(ctx, reader, result)
 	if err != nil {
@@ -489,7 +489,7 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 // PHP-Nuke has no category nesting: topics and page categories are both flat
 // lists, so every imported category is a root.
 func (s *Source) importCategories(ctx context.Context, queries *store.Queries, reader sourceReader,
-	langCode string, topicMap, pageCategoryMap map[int64]int64, opts types.ImportOptions,
+	langCode string, topicMap, pageCategoryMap map[int64]int64,
 	result *types.ImportResult, tracker types.ImportTracker) error {
 	topics, err := reader.GetTopics(ctx)
 	if err != nil {
@@ -527,7 +527,7 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 			continue
 		}
 		if id, ok := s.createCategory(ctx, queries, label, fmt.Sprintf("topic-%d", topic.ID),
-			langCode, int64(i), opts, result, tracker); ok {
+			langCode, int64(i), result, tracker); ok {
 			topicMap[topic.ID] = id
 		}
 	}
@@ -545,7 +545,7 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 			continue
 		}
 		if id, ok := s.createCategory(ctx, queries, title, fmt.Sprintf("section-%d", category.ID),
-			langCode, int64(len(topics)+i), opts, result, tracker); ok {
+			langCode, int64(len(topics)+i), result, tracker); ok {
 			pageCategoryMap[category.ID] = id
 		}
 	}
@@ -555,7 +555,7 @@ func (s *Source) importCategories(ctx context.Context, queries *store.Queries, r
 // createCategory creates one category, reusing an existing row when the slug
 // is already taken. It reports the resulting category ID.
 func (s *Source) createCategory(ctx context.Context, queries *store.Queries, name, fallbackSlug,
-	langCode string, position int64, opts types.ImportOptions, result *types.ImportResult,
+	langCode string, position int64, result *types.ImportResult,
 	tracker types.ImportTracker) (int64, bool) {
 	base := util.Slugify(name)
 	if base == "" {
@@ -607,7 +607,7 @@ func (s *Source) createCategory(ctx context.Context, queries *store.Queries, nam
 // editorial taxonomy and become categories; the far smaller category table
 // becomes tags, so both survive without one shadowing the other.
 func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Queries, reader sourceReader,
-	langCode string, storyCategoryMap map[int64]int64, opts types.ImportOptions,
+	langCode string, storyCategoryMap map[int64]int64,
 	result *types.ImportResult, tracker types.ImportTracker) error {
 	categories, err := reader.GetStoryCategories(ctx)
 	if err != nil {
@@ -1092,7 +1092,7 @@ func (s *Source) cleanupMediaFiles(ctx context.Context, tracker types.ImportTrac
 func (s *Source) importStories(ctx context.Context, queries *store.Queries, stories []Story,
 	userMap map[string]int64, fallbackAuthorID int64, langCode string,
 	topicMap, storyCategoryMap map[int64]int64, mediaMap map[string]string,
-	skips *plannedSkips, opts types.ImportOptions, result *types.ImportResult,
+	skips *plannedSkips, result *types.ImportResult,
 	tracker types.ImportTracker, bodiesAltered *int) {
 	progress := newPhaseProgress(ctx, tracker, s.Name(), types.EntityPost, len(stories))
 	now := time.Now()
@@ -1185,7 +1185,7 @@ func namesAnAuthor(story *Story) bool {
 // importStaticPages imports the PHP-Nuke static pages module.
 func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, pages []StaticPage,
 	authorID int64, langCode string, pageCategoryMap map[int64]int64, mediaMap map[string]string,
-	skips *plannedSkips, progress *phaseProgress, opts types.ImportOptions,
+	skips *plannedSkips, progress *phaseProgress,
 	result *types.ImportResult, tracker types.ImportTracker, bodiesAltered *int) {
 	now := time.Now()
 
@@ -1260,7 +1260,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 // its terms.
 func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries, content *importContent,
 	authorID int64, langCode string, mediaMap map[string]string, skips *plannedSkips,
-	progress *phaseProgress, opts types.ImportOptions, result *types.ImportResult,
+	progress *phaseProgress, result *types.ImportResult,
 	tracker types.ImportTracker, bodiesAltered *int) {
 	if len(content.encEntries) == 0 {
 		return

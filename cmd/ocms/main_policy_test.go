@@ -26,6 +26,7 @@ func newPolicyTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("opening sqlite db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 
 	_, err = db.Exec(`

@@ -146,7 +146,7 @@ VALUES (:page_id, (SELECT id FROM tags WHERE slug = 'tag-slug'));
 
 3. Read `.env` to get `OCMS_DB_PATH`
 4. Query active languages: `sqlite3 "$db_path" "SELECT code, name FROM languages WHERE is_active = 1;"`
-5. Query first author: `sqlite3 "$db_path" "SELECT id, display_name FROM users LIMIT 1;"`
+5. Query first author: `sqlite3 "$db_path" "SELECT id, name FROM users LIMIT 1;"`
 6. Check for slug conflicts: `sqlite3 "$db_path" "SELECT slug FROM pages WHERE slug IN ('slug1','slug2');"`
 7. Also check aliases: `sqlite3 "$db_path" "SELECT alias FROM page_aliases WHERE alias IN ('slug1','slug2');"`
 8. Insert each page using `sqlite3` with a heredoc:

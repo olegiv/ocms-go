@@ -24,7 +24,9 @@ Read-only/history pagers are unchanged:
 - Selection is reset naturally when navigating to another page.
 - Bulk operations use **partial success**:
   - valid IDs are processed;
-  - missing/protected/invalid IDs are returned in `failed`.
+  - missing/protected IDs, and IDs that could not be processed, are returned in `failed`.
+- A request with no IDs, a non-positive ID or more than 200 unique IDs is rejected
+  as a whole with the error response below.
 - A confirmation dialog is shown before bulk delete/revoke.
 - After success or partial success, the current page is reloaded to refresh counts and rows.
 - Delete-capable views include an **items-per-page selector**.

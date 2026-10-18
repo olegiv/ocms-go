@@ -26,6 +26,7 @@ fi
 # Configuration
 BINARY_PATH="/opt/ocms/bin/ocms"
 BACKUP_PATH="/opt/ocms/bin/ocms.backup"
+OCMSCTL="/opt/ocms/bin/ocmsctl"
 SITES_CONF="/etc/ocms/sites.conf"
 HEALTH_RETRIES=10
 HEALTH_INTERVAL=2
@@ -100,34 +101,58 @@ if [ -f "$BINARY_PATH" ]; then
     cp "$BINARY_PATH" "$BACKUP_PATH"
 fi
 
-# --- Stop all instances ---
-
-echo_info "Stopping all instances..."
-for site_id in "${SITE_IDS[@]}"; do
-    if systemctl is-active --quiet "ocms@${site_id}" 2>/dev/null; then
-        echo "  Stopping ocms@$site_id..."
-        systemctl stop "ocms@${site_id}" || true
-    fi
-done
-sleep 2
-
-# --- Replace binary ---
+# --- Install the new binary while the sites still run ---
 
 echo_info "Installing new binary..."
-cp "$NEW_BINARY" "$BINARY_PATH"
-chmod 755 "$BINARY_PATH"
+# Copy beside the old binary and rename over it: the rename leaves the running
+# binary alone, so this happens before any site stops, and a failed install
+# stops nothing.
+cp "$NEW_BINARY" "${BINARY_PATH}.new"
+chmod 755 "${BINARY_PATH}.new"
+mv -f "${BINARY_PATH}.new" "$BINARY_PATH"
+
+# --- Stop all instances ---
+
+# ocmsctl stops a site whichever way it runs: through systemd when its unit
+# is active, otherwise through its PID file. Stopping only the systemd units
+# left a site started with `ocmsctl start` serving on its port: copying onto
+# its binary failed ("Text file busy"), and with the rename above the new
+# binary would migrate its database, fail to listen and restart-loop while
+# the health check reached the old process.
+# A site that fails to stop or start is reported and the loop goes on: with
+# set -e alone, one failure ended the script, leaving every site it had
+# stopped but not yet started down. A site that did not stop is not started,
+# because its old process may still answer the health check.
+echo_info "Stopping all instances..."
+declare -a FAILED_SITES
+declare -a STOP_FAILED
+for i in "${!SITE_IDS[@]}"; do
+    site_id="${SITE_IDS[$i]}"
+    echo "  Stopping $site_id..."
+    if ! "$OCMSCTL" stop "$site_id"; then
+        echo_error "Could not stop $site_id; not starting it. Check it with: $OCMSCTL status $site_id"
+        STOP_FAILED[i]=1
+        FAILED_SITES+=("$site_id")
+    fi
+done
 
 # --- Start all instances and health check ---
 
 echo_info "Starting all instances..."
-declare -a FAILED_SITES
 
 for i in "${!SITE_IDS[@]}"; do
     site_id="${SITE_IDS[$i]}"
     port="${SITE_PORTS[$i]}"
+    if [ -n "${STOP_FAILED[$i]:-}" ]; then
+        continue
+    fi
 
     echo -n "  Starting ocms@$site_id (port $port)... "
-    systemctl start "ocms@${site_id}"
+    if ! systemctl start "ocms@${site_id}"; then
+        echo -e "${RED}FAILED${NC} (systemctl start)"
+        FAILED_SITES+=("$site_id")
+        continue
+    fi
     sleep 2
 
     if health_check "$port"; then
@@ -149,7 +174,7 @@ if [ ${#FAILED_SITES[@]} -gt 0 ]; then
     done
     echo ""
     echo "To rollback:"
-    echo "  sudo cp $BACKUP_PATH $BINARY_PATH"
+    echo "  sudo cp $BACKUP_PATH $BINARY_PATH.new && sudo mv -f $BINARY_PATH.new $BINARY_PATH"
     echo "  sudo systemctl restart 'ocms@*'"
     exit 1
 else

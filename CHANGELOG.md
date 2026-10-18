@@ -7,6 +7,293 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A read-only account dashboard at `/account` for signed-in users, with account
+  details, English/Russian interface languages and logout. It shares the admin
+  dashboard layout with account-specific navigation, independently of the active
+  site theme. See `docs/login-security.md`.
+- `ocms migrate up|down|status|version` runs the database migrations without
+  starting the server, on the database `OCMS_DB_PATH` names in the
+  environment, `.env` or the file `OCMS_ENV_FILE` names, as `serve` reads
+  them, or on `-db <path>`; commands other than `up` refuse a database that
+  is not there. `make migrate-up`, `migrate-down` and `migrate-status`, in the
+  Makefile and in `site.mk` (with the site's env file), use it instead of the
+  goose CLI, which does not know the Go migration that moves stored times to
+  UTC: `goose down` failed on it, and `goose up` could apply later SQL
+  migrations first, after which the server refused to start.
+
+### Fixed
+- A startup failure is logged before the error log file and the event log
+  close, so it reaches `OCMS_ERROR_LOG_PATH` and, once the database is open,
+  the Event Log too, not only stdout; a server that cannot listen (the port is
+  taken) now exits instead of staying up with nothing served, and a serve
+  failure that arrives together with a stop signal is no longer reported as a
+  clean stop. Stop signals are caught before the port opens, so a signal sent
+  as the server starts gets a graceful shutdown; connections still open when
+  the 30-second shutdown ends are closed, and handlers still running,
+  including ones the 30-second request timeout has already answered, get up to
+  5 more seconds to return before the cleanup closes the database. The
+  shutdown steps after that (modules, scheduled jobs, webhook deliveries, the
+  cache) share a 10-second budget, of which the modules' shutdowns take at
+  most 7 together (the migrator now waits 4 seconds for its imports instead
+  of 10, and Internal Analytics 2 for its background work, including running
+  cron jobs it used to leave running). A module or step still running when
+  its time is spent, or one that panics, is logged and left behind, and the
+  Event Log writer then gets 3 seconds of its own. `fly.toml`,
+  `docker-compose.yml`, the systemd unit and `ocmsctl` give the app 60 seconds
+  to stop; Fly's default of 5 seconds,
+  Docker's of 10 and the 30 the unit and `ocmsctl` allowed killed it
+  mid-drain. The start is recorded alongside serving, so a slow Event Log
+  write delays neither the first requests nor a stop, and a failed write
+  through the event service is logged at error level naming the lost event;
+  that record, and those of the other code that logs a failed Event Log write,
+  stay out of the Event Log (writing them there on a locked database waited
+  out the busy timeout a second time), and a log entry the Event Log handler
+  cannot store is reported in the log instead of dropped. The Event Log is
+  written in the background, so a log call no longer waits for the database
+  (on a locked one it waited up to 5 seconds); queued entries are written at
+  shutdown within those 3 seconds, and entries dropped because the queue was
+  full or left unwritten at shutdown are counted in the log. REST v2 error logs carry the request ID, method and route. The
+  database's WAL and shared-memory files are made owner-only along with the
+  database file. An in-memory database (`OCMS_DB_PATH=:memory:`) keeps a
+  single connection; with the default pool each connection opened its own
+  empty database. Times the app passes as `time.Time` are stored in UTC as
+  `2006-01-02 15:04:05.999999999+00:00` (e.g. `2026-10-18
+  03:41:31.179863+00:00`), which SQLite's date functions read and which sorts
+  with the UTC times SQLite writes itself (`CURRENT_TIMESTAMP`), instead of
+  the SQLite driver's default, Go's debug format in local time with a zone
+  name and a monotonic-clock suffix (`+0200 CEST m=+0.08`).
+- The server refuses to start when its env file cannot be read: the file
+  `OCMS_ENV_FILE` names, missing or unreadable, or a `.env` that does not
+  parse. It started without the settings in it, such as the database path or
+  production mode; only a missing `.env` is still ignored.
+- A checkbox form field stores every checked option, joined with `, `, and
+  a form re-rendered for a validation error keeps exactly those checked (a
+  box is no longer checked because its option is part of another's, such as
+  `Post` in `Postcard`); only the first was kept. A value that is not one of
+  the field's options is refused. Themes get `checkedOption` for their form
+  templates.
+- The category form saves its Position field; categories were created at 0
+  and kept their position on save. A negative or non-numeric value is
+  refused.
+- The REST API sends the `page.created`, `page.updated`, `page.deleted`,
+  `media.uploaded` and `media.deleted` webhook events, and scheduled
+  publishing sends `page.published`; only the admin UI sent them, so
+  integrations missed those changes. Events still in the one-second debounce
+  window when the server stops are now delivered; the dispatcher stopped
+  before flushing them and dropped them.
+- `docker-compose.yml` passes every variable the app reads into the container,
+  apart from the listen address, port and paths it fixes;
+  `OCMS_TRUSTED_PROXIES` was commented out and `OCMS_API_ALLOWED_CIDRS` missing,
+  so a production container could not start whatever `.env` said. Variables
+  with a production default are passed without a value, so leaving them unset
+  keeps that default, and an empty value (`OCMS_REQUIRE_FORM_CAPTCHA=` in
+  `.env`) now counts as unset too instead of turning the default off.
+- `deploy.sh` and `deploy-binary.sh` install the uploaded binary as
+  `/opt/ocms/bin/ocms`, the one `ocmsctl` and `ocms@.service` run, and back that
+  one up; they restarted the instances on the old binary. All three deploy
+  scripts install before stopping any instance, so a failed upload or install
+  leaves them running, and a failed backup stops the deploy instead of being
+  reported as complete. `deploy-multi.sh`
+  stops every site with `ocmsctl stop`, which also reaches a site started
+  with `ocmsctl` rather than systemd; that site kept serving on its port, so
+  the copy onto its binary failed ("Text file busy") after the units were
+  stopped. The binary is now renamed into place. An upload whose name is a
+  file the deploy itself uses (`REMOTE_BINARY=ocms`, say) goes to
+  `ocms.upload` instead, so it neither overwrites the running binary nor
+  the backup.
+  The `setup-site.sh` usage example passes its own path check.
+- `deploy-multi.sh` reports a site that fails to stop or start and carries on
+  with the others; one failure ended the script, leaving every site it had
+  stopped but not yet started down. A site that did not stop is not started.
+- A page published by the publish toggle and by scheduled publishing at the
+  same moment sends `page.published` once; both published it and sent the
+  event. Scheduled publishing also skips a page unscheduled or rescheduled
+  to a later time after it was listed, and the toggle no longer logs "Page
+  published" when its update failed.
+- Deleting media whose files cannot be removed from disk completes the
+  delete: the records were already gone, but the admin UI and the REST API
+  answered 500 (bulk delete counted a failure) and sent no `media.deleted`
+  event. The admin UI now warns
+  that the files stayed on disk, where they are still served, and the server
+  logs them as an error, which the Event Log also records.
+- The Developer module's generate and delete descriptions now say what it
+  does: 3-7 menu items in every menu, not 5-20 in the main menu.
+- `scripts/codex/commit-do.sh` removes the prepared message after committing,
+  so a later run can no longer commit other staged changes under it.
+- Tests that walk the repository skip the same directories, listed once in
+  `internal/testutil/repotree`, including the gitignored `.audit/` and
+  `output/`; local copies of older trees there failed some of them on a
+  developer's checkout and blocked its pushes.
+- Editors now land at `/admin` after login. Public users land at `/account`;
+  visiting `/login` with an existing session uses the same role-based destination.
+  Resolves [#188](https://github.com/olegiv/ocms-go/issues/188).
+
+### Security
+- A panic in a request handler no longer stops the server. The request timeout
+  runs each handler in a goroutine of its own, which chi's panic recovery in
+  front of it cannot reach, so any panic ended the process; the timeout now
+  recovers it and logs it with its stack and request ID. It answers 500,
+  without the headers the handler had set, or, if the response had already
+  started, drops the connection so a partial page is not taken for a whole
+  one. Handlers also set their headers apart from the timeout's 503: a handler
+  setting headers as the timeout answered could end the process with
+  concurrent map writes. What a handler writes after the timeout has answered
+  is dropped instead of reaching a response that is already finished.
+- The production start check for API key lifetimes
+  (`OCMS_API_KEY_MAX_TTL_DAYS`, 90 days by default in production) now compares
+  the stored times in Go. It compared them with SQLite's `datetime()`, which
+  could not read the times the app stored, so it only ever caught keys without
+  an expiry; a production instance with an active key whose lifetime exceeds
+  the limit now refuses to start until the key is revoked or the limit raised.
+- The language switch no longer redirects to another site when the Referer is
+  a same-host URL whose path starts with `//`. It now uses the same Referer
+  check as demo mode.
+- Internal Analytics settings are guarded by a lock, so saving them no longer
+  races with the tracker. Saving settings and running aggregation are now
+  admin-only; editors keep the statistics pages. If its settings cannot be read
+  at startup, Internal Analytics now runs with tracking off, skips expiry
+  cleanup (logged as a failed run), refuses settings saves and retries the
+  load at most once a minute from its hourly job and dashboard; it used to
+  switch tracking on and save its defaults over the stored settings.
+- hCaptcha, Privacy and Informer settings are guarded by a lock too, so saving
+  or reloading them no longer races with the pages that render them.
+- If its settings cannot be read at startup, the Privacy module now turns the
+  consent banner on with Google Consent Mode denying ad and analytics storage
+  (it used to switch off while other modules' trackers kept loading), and
+  hCaptcha turns on wherever environment keys are set (it used to switch off).
+  Their settings pages warn while they show these fallback values and disable
+  saving; the forms refuse to save until the stored settings load (retried at
+  most once a minute when next used, and at once by saving a form opened
+  before the restart), and a form rendered from fallback values is refused
+  even after they recover. The retry interval is timed with the monotonic
+  clock, so a system clock change cannot delay or shorten it.
+- The Privacy settings form refuses a services list that is not valid JSON;
+  it used to save it as an empty list, dropping every configured service.
+- Page slugs and single-segment aliases can no longer use the names whose
+  exact URL a core route answers (`account`, `admin`, `blog`, `example`,
+  `health`, `login`, `search`), since that route answers first. The admin form
+  rejects them as slugs and aliases, the REST API as slugs, the Migrator
+  suffixes them (`blog-2`), and content import rejects an archive containing
+  one. The form also rejects multi-segment aliases that a route answers
+  (`blog/tag/news`, anything below `uploads/`), aliases another page already
+  uses and repeated aliases, and names the alias instead of dropping it on
+  save. Existing pages stay editable while their slug is
+  unchanged, and other multi-segment aliases such as `blog/post/55` are
+  unaffected. `account`, `csp-report` and the built-in
+  module routes `analytics`, `embed` and `example` are now also reserved
+  language codes. Drift tests keep both lists in step with the router.
+- `/account` is disallowed in `robots.txt`, and content redirects and
+  first-party analytics now share one list of private paths (`/admin`, `/api`,
+  `/account`). Pages whose slug merely starts with `admin` are now tracked.
+- `/uploads`, `/static/dist` and custom theme static routes answer a directory
+  URL with 404 instead of a file listing. A theme file the server cannot read
+  is now a logged 500, and a missing one is no longer cached for a month.
+- `X-XSS-Protection` is now `0`, which turns off the legacy browser XSS
+  auditor; CSP remains the enforced protection. The reverse-proxy examples
+  in `docs/reverse-proxy.md` match.
+- The Content-Security-Policy is first-party by default for scripts, styles,
+  connections and frames, apart from Google Fonts and YouTube frames (images
+  may still come from any `https:` host).
+  Google Tag Manager and Google Analytics hosts are allowed only while
+  External Analytics is active, and hCaptcha hosts only while the hCaptcha
+  module is active, whether or not they are configured; toggling a module
+  takes effect without a restart. Module sources are accepted only as host
+  sources for directives the base policy already has, so a bad value cannot
+  widen or break the header. Custom modules declare
+  their hosts with `module.CSPSourcer` (see `docs/custom-modules.md`). The
+  unused `*.dify.ai` and `udify.app` entries are gone: the Dify widget talks
+  only to the same-origin `/embed/dify` proxy.
+- Every response carries `Cross-Origin-Opener-Policy: same-origin`, and
+  `Cross-Origin-Resource-Policy: same-origin` except under `/uploads/`,
+  `/static/` and `/themes/`, which stay embeddable (`cross-origin`) for feed
+  readers and other sites.
+- `docker-compose.yml` publishes the port on `127.0.0.1` by default (set
+  `OCMS_PUBLISH_ADDRESS=0.0.0.0` when a proxy reaches it through another
+  address) and runs the container with `no-new-privileges`, only the `CHOWN`,
+  `DAC_READ_SEARCH`, `SETUID` and `SETGID` capabilities its entrypoint needs,
+  and a read-only image filesystem. Temporary files go to
+  `TMPDIR=/app/data/tmp` on the data volume, which the entrypoint creates.
+- External Analytics settings are guarded by a lock, so saving them no longer
+  races with page rendering, and an enabled Matomo server is now allowed by
+  the CSP; before, the policy blocked `matomo.js` from its configured host.
+  The Matomo URL must name a plain host or IPv4 address with an optional
+  numeric port, so it cannot inject CSP sources or save a tracker the CSP
+  would block. The GTM `<noscript>` iframe
+  is allowed in `frame-src`.
+- Security headers are set before every middleware that can answer on its
+  own, so trailing-slash and content redirects, sentinel bans and timeouts
+  carry the CSP, HSTS and COOP headers too.
+- Browsers report CSP violations to `/csp-report` through `report-uri`.
+  Reports are logged with bounded, sanitized fields and a per-IP rate limit.
+  `report-to` is left out on purpose: Chrome ignores `report-uri` when it is
+  present and did not deliver Reporting API reports in testing.
+- Release archives published after v0.28.0 carry signed build-provenance
+  attestations; verify one with
+  `gh attestation verify <archive> --repo olegiv/ocms-go`.
+
+#### Developer Tooling
+- `make commit-do-local` commits only the staged files, after the test gate
+  passes on exactly that tree; `make commit-prepare-local` always runs the
+  test gate before drafting a message.
+- The Claude command proxy (`make commit-prepare`, `make code-quality`, …)
+  runs with `--permission-mode dontAsk` and a per-command tool allowlist
+  instead of `--dangerously-skip-permissions`.
+- `/release-gh-prepare` validates a version argument against a semver pattern
+  before it reaches `git`, and `/update-wiki` asks for approval before the wiki
+  commit and again before the push.
+- The shared Claude Code tooling is updated: `/fly-deploy` and `/code-quality`
+  auto-approve only the commands they run, `/code-quality` allows the
+  documented `errcheck -ignoregenerated ./...`, and `/fly-deploy` reads a
+  single-quoted app name from `fly.toml` correctly.
+- Claude Code sessions in this repository run the shared Go toolchain hook
+  (`.claude/settings.json`), which blocks Go builds and tests, including
+  `scripts/test-gate.sh` and `make`, when `go` and its compiler differ. It
+  needs the `.claude/shared` submodule (`git clone --recurse-submodules`).
+  `setup-go-toolchain.sh` stays opt-in because it replaces `/usr/local/go`.
+- Drift tests check that every literal translation key in Go code (in calls,
+  constants, struct fields and lists), templ components, admin templates and
+  theme templates exists in English and Russian, and that in-memory SQLite
+  test databases keep a single connection. CI checks out the `.claude/shared`
+  submodule so the tests that read the shared tooling run there too. CI also
+  runs the race detector over the server stop, the request timeout, the Event
+  Log writer and the module registry with its settings retry gate.
+- `site.mk`'s `dev`, `run`, `stop`, `restart` and `migrate-*` targets stop
+  when the site `.env` is missing; read with errors hidden, it left the
+  database at `data/ocms.db` and the port at 8080, which `make stop` could
+  kill in another server. `make test` warns.
+- A drift test checks that module `Shutdown` methods, and the methods they
+  call on their receiver, wait for their goroutines with `module.WaitWithin`
+  rather than `Wait()` or a bare channel receive.
+
+### Changed
+
+#### Dependencies
+- Update go-chi/chi 5.3.2 → 5.5.0, maxminddb-golang 2.7.0 → 2.8.0,
+  golang.org/x/crypto 0.57.0 → 0.58.0, x/image 0.46.0 → 0.47.0, x/net
+  0.60.0 → 0.61.0, x/text 0.42.0 → 0.43.0. goose stays at 3.28.0: 3.29.0
+  requires a modernc libc newer than the one modernc.org/sqlite 1.60.1 is
+  built against.
+- Update tinymce 8.9.3 → 8.10.0 and swagger-ui-dist 5.33.1 → 5.33.3, with
+  refreshed integrity hashes.
+
+### Upgrade notes
+- A one-off migration rewrites the timestamps stored with a zone in every
+  table, module tables included, to UTC: values in Go's debug format
+  (`2026-10-18 05:41:31.17 +0200 CEST m=+0.08`) and values with a non-UTC
+  offset become `2026-10-18 03:41:31.17+00:00`. Times stored without a zone
+  are left as they are: SQLite's `CURRENT_TIMESTAMP` text, already UTC, and
+  Internal Analytics' local wall-clock times. Values that look zoned but do not
+  parse are left too and logged. The rewrite cannot be undone (`ocms migrate
+  down` only forgets the migration), so back up the database first.
+- A server whose `.env` does not parse, or whose `OCMS_ENV_FILE` names a file
+  it cannot read, no longer starts; fix the file (godotenv's error names the
+  line) before upgrading.
+- Times read from the database now come back in UTC, and admin and public
+  pages show them as they come: on a host whose time zone is not UTC, dates
+  and times that used to show in local time now show in UTC. The Docker image
+  runs in UTC unless `TZ` is set.
+
 ## [0.28.0] - 2026-10-12
 
 ### Added

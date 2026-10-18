@@ -73,10 +73,10 @@ func TestWildcardMatcherIsStableUnderSlashNormalization(t *testing.T) {
 }
 
 func trimSlashes(s string) string {
-	for len(s) > 0 && s[0] == '/' {
+	for s != "" && s[0] == '/' {
 		s = s[1:]
 	}
-	for len(s) > 0 && s[len(s)-1] == '/' {
+	for s != "" && s[len(s)-1] == '/' {
 		s = s[:len(s)-1]
 	}
 	return s

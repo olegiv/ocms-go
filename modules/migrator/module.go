@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -31,11 +33,12 @@ import (
 //go:embed locales
 var localesFS embed.FS
 
-// shutdownDrainTimeout bounds how long Shutdown waits for in-flight imports to
-// notice cancellation before the process moves on.
+// shutdownMarkTimeout is the part of module.ShutdownTimeout that Shutdown
+// keeps for marking the jobs still running interrupted; it waits the rest
+// for in-flight imports to notice cancellation.
 const (
-	shutdownDrainTimeout = 10 * time.Second
-	cleanupDrainTimeout  = 30 * time.Second
+	shutdownMarkTimeout = 3 * time.Second
+	cleanupDrainTimeout = 30 * time.Second
 )
 
 // Module implements the module.Module interface for the migrator module.
@@ -151,35 +154,31 @@ func (m *Module) CheckActivation(ctx *module.Context) error {
 	return nil
 }
 
-// Shutdown cancels in-flight imports and waits briefly for them to unwind.
+// Shutdown cancels in-flight imports and waits briefly for them to unwind,
+// within module.ShutdownTimeout.
 func (m *Module) Shutdown() error {
 	if m.ctx == nil {
 		return nil
 	}
+	shutdownCtx, stop := context.WithTimeout(context.Background(), module.ShutdownTimeout)
+	defer stop()
 
 	m.jobsMu.Lock()
+	running := slices.Sorted(maps.Keys(m.cancel))
 	for _, cancel := range m.cancel {
 		cancel()
 	}
 	m.jobsMu.Unlock()
 
-	done := make(chan struct{})
-	go func() {
-		m.jobsWG.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(shutdownDrainTimeout):
-		m.ctx.Logger.Warn("timed out waiting for migrator imports to stop")
+	var err error
+	if wait := module.ShutdownTimeout - shutdownMarkTimeout; !module.WaitWithin(&m.jobsWG, wait) {
+		err = fmt.Errorf("imports %v still running after %s; left behind", running, wait)
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), finishJobTimeout)
-	defer cancel()
 	m.markJobsInterruptedForRun(shutdownCtx)
 
 	m.ctx.Logger.Info("Migrator module shutting down")
-	return nil
+	return err
 }
 
 // RegisterRoutes registers public routes for the module.

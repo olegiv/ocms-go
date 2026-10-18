@@ -142,7 +142,7 @@ func BlockInDemoMode(restriction DemoRestriction) func(http.Handler) http.Handle
 			})
 
 			// Redirect back to referrer or admin dashboard
-			safeRefererRedirect(w, r, "/admin/")
+			SafeRefererRedirect(w, r, "/admin/")
 		})
 	}
 }
@@ -176,7 +176,7 @@ func BlockDeleteInDemoMode(restriction DemoRestriction) func(http.Handler) http.
 					SameSite: http.SameSiteLaxMode,
 				})
 
-				safeRefererRedirect(w, r, "/admin/")
+				SafeRefererRedirect(w, r, "/admin/")
 				return
 			}
 
@@ -217,18 +217,20 @@ func BlockWriteInDemoMode(restriction DemoRestriction) func(http.Handler) http.H
 				Secure:   true,
 			})
 
-			safeRefererRedirect(w, r, "/admin/")
+			SafeRefererRedirect(w, r, "/admin/")
 		})
 	}
 }
 
-// safeRefererRedirect issues a 303 to the Referer header when it is same-origin
+// SafeRefererRedirect issues a 303 to the Referer header when it is same-origin
 // (relative path or absolute URL on r.Host with http(s) scheme), or to the
 // fallback path otherwise. Without this guard the bare Referer would be a
-// phishing pivot — an attacker can plant a link that triggers a blocked
-// demo-mode action, and the response forwards the admin's browser to an
-// arbitrary URL the attacker controls.
-func safeRefererRedirect(w http.ResponseWriter, r *http.Request, fallback string) {
+// phishing pivot: an attacker can plant a link to an action that redirects
+// back (a blocked demo-mode action, the language switch), and the response
+// forwards the visitor's browser to an arbitrary URL the attacker controls.
+// Every redirect to the Referer must go through it
+// (TestRefererRedirectsUseSafeHelper).
+func SafeRefererRedirect(w http.ResponseWriter, r *http.Request, fallback string) {
 	target := fallback
 	if raw := r.Header.Get("Referer"); raw != "" {
 		if u, err := url.Parse(raw); err == nil {

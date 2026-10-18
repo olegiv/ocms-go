@@ -9,7 +9,7 @@ The Embed module integrates third-party embeddable widgets (currently Dify AI ch
 
 > **Not the same as [Video Embedding](video-embedding.md).** This module embeds
 > external widgets into pages and brokers requests to their APIs. The
-> separately-documented *video embedding* feature handles YouTube/Vimeo URLs
+> separately-documented *video embedding* feature handles YouTube URLs
 > pasted into the page editor and renders them inline as `<iframe>` tags at
 > render time. They are unrelated features.
 
@@ -54,7 +54,7 @@ Admin (admin-only):
 | POST | `/admin/embed/{provider}` | Save provider settings |
 | POST | `/admin/embed/{provider}/toggle` | Enable/disable provider |
 | GET | `/admin/embed/dify/kb/site-content.md` | Download site content as Markdown |
-| GET | `/admin/embed/dify/kb/user-guide.md` | Download the packaged user guide |
+| GET | `/admin/embed/dify/kb/user-guide.md` | Download a user guide generated from the site's current content |
 
 Public (rate-limited, origin-pinned):
 
@@ -102,10 +102,10 @@ Dify (and similar RAG providers) expect a Markdown corpus. Two admin endpoints
 export such corpora:
 
 - `/admin/embed/dify/kb/site-content.md` — all published pages/posts/tags/categories as a single Markdown document (capped at 10000 pages).
-- `/admin/embed/dify/kb/user-guide.md` — the packaged user-guide Markdown bundled with the module.
+- `/admin/embed/dify/kb/user-guide.md` — a user-guide Markdown document generated on each request from the site's menus, categories, tags, languages and forms.
 
-Upload these to your Dify knowledge base; the exports are static and can be
-re-downloaded after content updates.
+Upload these to your Dify knowledge base; each file is generated when it is
+downloaded, so re-download it after content updates.
 
 ## Database
 
