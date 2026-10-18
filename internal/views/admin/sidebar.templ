@@ -18,11 +18,18 @@ templ Sidebar(pc *PageContext) {
 				@iconX()
 			</button>
 			<button
+				type="button"
 				class="sidebar-collapse-btn"
 				@click="sidebarCollapsed = !sidebarCollapsed; localStorage.setItem('sidebarCollapsed', sidebarCollapsed)"
 				title={ pc.T("nav.collapse_sidebar") }
+				aria-label={ pc.T("nav.collapse_sidebar") }
+				data-collapse-label={ pc.T("nav.collapse_sidebar") }
+				data-expand-label={ pc.T("nav.expand_sidebar") }
+				:title="sidebarCollapsed ? $el.dataset.expandLabel : $el.dataset.collapseLabel"
+				:aria-label="sidebarCollapsed ? $el.dataset.expandLabel : $el.dataset.collapseLabel"
+				:aria-expanded="!sidebarCollapsed"
 			>
-				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="collapse-icon" :class="{ 'rotate-180': sidebarCollapsed }">
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="collapse-icon" :class="{ 'flipped': sidebarCollapsed }" aria-hidden="true">
 					<polyline points="11 17 6 12 11 7"></polyline>
 					<polyline points="18 17 13 12 18 7"></polyline>
 				</svg>
