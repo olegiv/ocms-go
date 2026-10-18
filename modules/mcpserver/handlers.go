@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -230,7 +231,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	if m.ctx.Events != nil {
 		if err := m.ctx.Events.LogConfigEvent(r.Context(), model.EventLevelInfo, "MCP settings updated",
 			&user.ID, middleware.GetClientIP(r), r.URL.Path, meta); err != nil {
-			m.logger.Warn("failed to record MCP settings event", "error", err)
+			m.logger.WarnContext(service.WithoutEventLog(r.Context()), "failed to record MCP settings event", "error", err)
 		}
 	}
 

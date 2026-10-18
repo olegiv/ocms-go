@@ -109,6 +109,7 @@ archives are not required.
 The `fly.toml` in the project root configures:
 
 - **Region**: `fra` (Frankfurt, customizable)
+- **Stop timeout**: `kill_timeout = 45`, so the app can drain requests (up to 30 seconds) before Fly stops it
 - **VM**: shared-cpu-1x, 256MB RAM
 - **Volume**: 1GB persistent storage at `/app/data`
 - **Health checks**: Liveness (`/health/live`) and readiness (`/health/ready`)
@@ -190,7 +191,8 @@ Build and run locally:
 
 ```bash
 docker build -t ocms-demo .
-docker run -p 8080:8080 \
+# --stop-timeout 45 lets the app drain requests (up to 30 seconds) on docker stop
+docker run -p 8080:8080 --stop-timeout 45 \
   -e OCMS_SESSION_SECRET="$(openssl rand -base64 32)" \
   -e OCMS_DO_SEED=true \
   -e OCMS_DEMO_MODE=true \

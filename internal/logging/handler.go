@@ -15,11 +15,15 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // EventLogHandler is a slog.Handler that wraps another handler and also writes
-// WARN and ERROR level logs to the Event Log database.
+// WARN and ERROR level logs to the Event Log database. It skips records
+// logged with a service.WithoutEventLog context, writes a given WARN message
+// at most once per 30 seconds, and reports a record it cannot write to the
+// wrapped handler.
 type EventLogHandler struct {
 	inner   slog.Handler
 	queries *store.Queries
@@ -75,8 +79,9 @@ func (h *EventLogHandler) Handle(ctx context.Context, r slog.Record) error {
 		return err
 	}
 
-	// Only write to Event Log if the level is at or above our threshold
-	if r.Level >= h.level && h.shouldWriteToEventLog(r) {
+	// Only write to Event Log if the level is at or above our threshold, and
+	// not records logged with a service.WithoutEventLog context.
+	if r.Level >= h.level && !service.SkipsEventLog(ctx) && h.shouldWriteToEventLog(r) {
 		h.writeToEventLog(ctx, r)
 	}
 
@@ -134,7 +139,7 @@ func (h *EventLogHandler) writeToEventLog(ctx context.Context, r slog.Record) {
 
 	// Create the event in the database
 	// We use a background context to ensure the event is logged even if the request context is cancelled
-	_, _ = h.queries.CreateEvent(context.Background(), store.CreateEventParams{
+	_, err := h.queries.CreateEvent(context.Background(), store.CreateEventParams{
 		Level:     level,
 		Category:  category,
 		Message:   r.Message,
@@ -142,6 +147,13 @@ func (h *EventLogHandler) writeToEventLog(ctx context.Context, r slog.Record) {
 		Metadata:  metadata,
 		CreatedAt: r.Time,
 	})
+	if err != nil {
+		// Report the gap in the audit trail to the wrapped handler only:
+		// writing it to the Event Log would fail the same way.
+		failure := slog.NewRecord(time.Now(), slog.LevelError, "failed to record a log entry in the Event Log", 0)
+		failure.AddAttrs(slog.String("event", r.Message), slog.Any("error", err))
+		_ = h.inner.Handle(ctx, failure)
+	}
 }
 
 // slogLevelToEventLevel converts a slog.Level to an Event Log level.

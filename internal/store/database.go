@@ -60,6 +60,13 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 	// Pass pragmas via DSN so they apply to every connection in the pool,
 	// not just the first one. Without this, new pooled connections lack
 	// busy_timeout and journal_mode, causing SQLITE_BUSY under load.
+	// _time_format=sqlite stores time.Time values as
+	// "2006-01-02 15:04:05.999999999-07:00", which SQLite's date functions
+	// read; the driver's default is time.Time.String(), with a zone name and
+	// a monotonic-clock suffix ("+0200 CEST m=+0.08"). Rows written before
+	// keep that text: the driver still parses it for DATETIME columns, and
+	// it sorts with the new text by instant, but SQLite's date functions
+	// return NULL for it.
 	dsn := path +
 		"?_pragma=busy_timeout(5000)" +
 		"&_pragma=journal_mode(WAL)" +
@@ -70,7 +77,8 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 		"&_pragma=mmap_size(268435456)" +
 		"&_pragma=page_size(4096)" +
 		"&_pragma=wal_autocheckpoint(1000)" +
-		"&_txlock=immediate"
+		"&_txlock=immediate" +
+		"&_time_format=sqlite"
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

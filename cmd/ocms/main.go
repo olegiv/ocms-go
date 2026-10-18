@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -183,29 +184,20 @@ func logSeedingSecuritySignals(ctx context.Context, cfg *config.Config, events *
 		return
 	}
 
+	// LogEvent logs a failed write itself, naming the event.
 	if cfg.DoSeed {
-		const message = "Database seeding is enabled"
-		logEventWriteFailure(message, events.LogSecurityEvent(ctx, "warning", message, nil, "", "", map[string]any{
+		_ = events.LogSecurityEvent(ctx, "warning", "Database seeding is enabled", nil, "", "", map[string]any{
 			"environment":   cfg.Env,
 			"seed_enabled":  true,
 			"default_admin": store.DefaultAdminEmail,
-		}))
+		})
 	}
 
 	if hasDefaultAdminCreds {
-		const message = "Default seeded admin credentials are still active"
-		logEventWriteFailure(message, events.LogSecurityEvent(ctx, "warning", message, nil, "", "", map[string]any{
+		_ = events.LogSecurityEvent(ctx, "warning", "Default seeded admin credentials are still active", nil, "", "", map[string]any{
 			"environment":   cfg.Env,
 			"default_admin": store.DefaultAdminEmail,
-		}))
-	}
-}
-
-// logEventWriteFailure logs err when writing the named event to the Event
-// Log failed, since the event itself is then lost.
-func logEventWriteFailure(event string, err error) {
-	if err != nil {
-		slog.Warn("failed to record an event in the Event Log", "event", event, "error", err)
+		})
 	}
 }
 
@@ -316,23 +308,57 @@ func main() {
 // remaining connections are closed.
 const shutdownTimeout = 30 * time.Second
 
-// recordServerEvent writes a server lifecycle event to the Event Log,
-// logging a failed write.
+// handlerDrainTimeout is the longest a stop then waits for handlers still
+// running, which the request timeout or a forced close can leave behind, so
+// they can finish before run's deferred cleanup closes the database; any
+// still running after it are logged and the cleanup proceeds.
+const handlerDrainTimeout = 5 * time.Second
+
+// stopPolicy says how serveUntilStopped stops the server.
+type stopPolicy struct {
+	// timeout is how long Shutdown waits for connections to go idle before
+	// the remaining ones are closed.
+	timeout time.Duration
+	// drain is how long it then waits for inflight to drop to zero.
+	drain time.Duration
+	// inflight counts the running handlers. middleware.Timeout runs each
+	// handler in a goroutine of its own and stops waiting for it when the
+	// request times out or its connection closes, so the count comes from
+	// countInFlight, registered right after Timeout.
+	inflight *atomic.Int64
+}
+
+// countInFlight counts the handlers running in inflight. Registered right
+// after middleware.Timeout, it runs in the goroutine Timeout starts for the
+// work, so the count includes handlers Timeout no longer waits for.
+func countInFlight(inflight *atomic.Int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			inflight.Add(1)
+			defer inflight.Add(-1)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// recordServerEvent writes a server lifecycle event to the Event Log;
+// LogEvent logs a failed write itself, naming the event.
 func recordServerEvent(events *service.EventService, message string, metadata map[string]any) {
-	logEventWriteFailure(message, events.LogSystemEvent(context.Background(), model.EventLevelInfo, message, nil, "", "", metadata))
+	_ = events.LogSystemEvent(context.Background(), model.EventLevelInfo, message, nil, "", "", metadata)
 }
 
 // serveUntilStopped serves on listener until quit receives a signal or the
 // server fails. It runs started alongside, once Serve has begun (the
 // listener is already bound, so connections made meanwhile queue), and
 // waits for it before returning; a slow started does not delay a stop. On a
-// signal it shuts the server down gracefully, waiting up to timeout for
-// requests in flight, then closes the connections still open: a handler's
+// signal it shuts the server down gracefully, waiting up to stop.timeout
+// for connections to go idle, then closes the ones still open: a handler's
 // next read or write fails, and once its request body has been read its
-// context is cancelled. It does not wait for those handlers to return. It
-// returns nil, or the shutdown or serve error. A server that fails first is
-// returned as it is, without a shutdown.
-func serveUntilStopped(srv *http.Server, listener net.Listener, quit <-chan os.Signal, timeout time.Duration, started func()) error {
+// context is cancelled. Either way it then waits up to stop.drain for the
+// handlers counted in stop.inflight to return, logging any still running.
+// It returns nil, or the shutdown or serve error. A server that fails first
+// is returned as it is, without a shutdown.
+func serveUntilStopped(srv *http.Server, listener net.Listener, quit <-chan os.Signal, stop stopPolicy, started func()) error {
 	// Serve's failure, if any, is sent before the channel closes; after
 	// Shutdown, Serve returns http.ErrServerClosed and the channel closes
 	// with nothing in it.
@@ -351,13 +377,33 @@ func serveUntilStopped(srv *http.Server, listener net.Listener, quit <-chan os.S
 	defer func() { <-startedDone }()
 	return waitForStop(quit, serveErr, func() error {
 		slog.Info("shutting down server...")
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), stop.timeout)
 		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			return errors.Join(err, srv.Close())
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			err = errors.Join(err, srv.Close())
 		}
-		return nil
+		if !waitForHandlers(stop.inflight, stop.drain) {
+			slog.Warn("requests still running after the server stopped", "requests", stop.inflight.Load())
+		}
+		return err
 	})
+}
+
+// waitForHandlers waits up to limit for active to drop to zero and reports
+// whether it did. A nil counter counts nothing.
+func waitForHandlers(active *atomic.Int64, limit time.Duration) bool {
+	if active == nil {
+		return true
+	}
+	deadline := time.Now().Add(limit)
+	for active.Load() > 0 {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return true
 }
 
 // waitForStop blocks until a stop signal arrives or the server fails.
@@ -776,22 +822,35 @@ func auditRequiredAPIKeyExpiryPosture(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// auditRequiredAPIKeyMaxTTLPosture refuses a production start while an
+// active API key has no expiry or a lifetime longer than maxTTLDays. The
+// times are compared in Go: SQLite's date functions cannot read the
+// time.Time.String() text the driver stored before _time_format=sqlite, so
+// the check used to skip every key the app created, and the driver parses
+// both formats.
 func auditRequiredAPIKeyMaxTTLPosture(ctx context.Context, db *sql.DB, maxTTLDays int) error {
 	if maxTTLDays <= 0 {
 		return nil
 	}
 
-	var keysOutsideTTL int
-	err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*)
-		FROM api_keys
-		WHERE is_active = 1
-		  AND (
-		  	expires_at IS NULL
-		  	OR datetime(expires_at) > datetime(created_at, '+' || ? || ' days')
-		  )
-	`, maxTTLDays).Scan(&keysOutsideTTL)
+	rows, err := db.QueryContext(ctx, `SELECT created_at, expires_at FROM api_keys WHERE is_active = 1`)
 	if err != nil {
+		return fmt.Errorf("auditing API key max TTL posture: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	maxTTL := time.Duration(maxTTLDays) * 24 * time.Hour
+	keysOutsideTTL := 0
+	for rows.Next() {
+		var created time.Time
+		var expires sql.NullTime
+		if err := rows.Scan(&created, &expires); err != nil {
+			return fmt.Errorf("auditing API key max TTL posture: %w", err)
+		}
+		if !expires.Valid || expires.Time.Sub(created) > maxTTL {
+			keysOutsideTTL++
+		}
+	}
+	if err := rows.Err(); err != nil {
 		return fmt.Errorf("auditing API key max TTL posture: %w", err)
 	}
 
@@ -1858,6 +1917,9 @@ func run() (runErr error) {
 	loadActiveTheme(ctx, queries, themeManager, renderer, cfg)
 
 	// Create router
+	// inflight counts the request handlers running, so a stop can wait for
+	// them before the cleanup closes the database (serveUntilStopped).
+	var inflight atomic.Int64
 	r := chi.NewRouter()
 
 	// Middleware stack
@@ -1906,7 +1968,10 @@ func run() (runErr error) {
 	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
 	r.Use(chimw.GetHead)                        // Handle HEAD requests for uptime monitoring
 	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
-	r.Use(middleware.StripTrailingSlash)        // Redirect /path/ to /path (301)
+	// Right after Timeout, so it counts handlers Timeout stops waiting for
+	// (see stopPolicy).
+	r.Use(countInFlight(&inflight))
+	r.Use(middleware.StripTrailingSlash) // Redirect /path/ to /path (301)
 
 	// Global redirects middleware (database-driven URL redirects)
 	r.Use(redirectsMiddleware.Handler)
@@ -2464,7 +2529,11 @@ func run() (runErr error) {
 
 	// The start is recorded alongside serving, so a slow Event Log write
 	// holds up neither the first requests nor a stop.
-	if err := serveUntilStopped(srv, listener, quit, shutdownTimeout, func() {
+	if err := serveUntilStopped(srv, listener, quit, stopPolicy{
+		timeout:  shutdownTimeout,
+		drain:    handlerDrainTimeout,
+		inflight: &inflight,
+	}, func() {
 		recordServerEvent(eventService, "Server started", map[string]any{
 			"addr":    cfg.ServerAddr(),
 			"env":     cfg.Env,

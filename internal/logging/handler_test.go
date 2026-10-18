@@ -6,12 +6,14 @@ package logging
 import (
 	"context"
 	"database/sql"
+	"log"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
@@ -367,4 +369,97 @@ func TestSlogLevelToEventLevel(t *testing.T) {
 // contains is a simple wrapper for strings.Contains.
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+// useDefaultLogger makes logger the default slog logger until the test ends,
+// then restores it and the standard log package it takes over.
+func useDefaultLogger(t *testing.T, logger *slog.Logger) {
+	t.Helper()
+	previous, writer, flags := slog.Default(), log.Writer(), log.Flags()
+	slog.SetDefault(logger)
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+		log.SetOutput(writer)
+		log.SetFlags(flags)
+	})
+}
+
+// TestFailedEventWriteStaysOutOfTheEventLog checks that a failed event write
+// is logged at error level with the event it lost, and that this record is
+// not itself written to the Event Log. The failure used to be logged through
+// the Event Log handler like any other record, so on a locked database it
+// waited out the busy timeout a second time (review of the 2026-10-17 audit
+// fixes).
+//
+// Bug state: drop the service.SkipsEventLog check in Handle, or log the
+// failure in EventService.LogEvent without service.WithoutEventLog, and
+// this fails.
+func TestFailedEventWriteStaysOutOfTheEventLog(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	var out strings.Builder
+	useDefaultLogger(t, slog.New(NewEventLogHandler(slog.NewTextHandler(&out, nil), db)))
+
+	// An EventService whose database is closed fails every write.
+	broken, brokenCleanup := testutil.TestDB(t)
+	brokenCleanup()
+	if err := service.NewEventService(broken).LogSystemEvent(context.Background(), model.EventLevelInfo, "Server stopped", nil, "", "", nil); err == nil {
+		t.Fatal("LogSystemEvent on a closed database returned nil")
+	}
+	for _, want := range []string{`level=ERROR`, `msg="failed to record an event in the Event Log"`, `event="Server stopped"`} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the failed write was logged without %s:\n%s", want, out.String())
+		}
+	}
+	for _, event := range fetchEvents(t, db, 10) {
+		if strings.Contains(event.Message, "failed to record an event") {
+			t.Errorf("the failed-write record was written to the Event Log: %q", event.Message)
+		}
+	}
+
+	// A fresh handler writes the same record without the marker, as it does
+	// any error, so the check above is not vacuous.
+	control, controlCleanup := testutil.TestDB(t)
+	defer controlCleanup()
+	slog.New(NewEventLogHandler(discardHandler{}, control)).Error("failed to record an event in the Event Log", "event", "probe")
+	if len(fetchEvents(t, control, 10)) != 1 {
+		t.Error("an unmarked error was not written to the Event Log; the check above proves nothing")
+	}
+}
+
+// recordingHandler keeps the records it handles.
+type recordingHandler struct{ records *[]slog.Record }
+
+func (h recordingHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h recordingHandler) Handle(_ context.Context, r slog.Record) error {
+	*h.records = append(*h.records, r)
+	return nil
+}
+func (h recordingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h recordingHandler) WithGroup(string) slog.Handler      { return h }
+
+// TestEventLogHandlerReportsItsOwnWriteFailures checks that a record the
+// Event Log handler cannot write to the database is reported to the wrapped
+// handler, so a gap in the audit trail shows in the log. The write error
+// used to be dropped.
+//
+// Bug state: drop the err != nil branch in writeToEventLog and this fails.
+func TestEventLogHandlerReportsItsOwnWriteFailures(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	cleanup() // closed: every write fails
+	var records []slog.Record
+	slog.New(NewEventLogHandler(recordingHandler{records: &records}, db)).Warn("disk almost full")
+	var messages []string
+	for _, r := range records {
+		messages = append(messages, r.Message)
+	}
+	if len(records) != 2 || records[1].Message != "failed to record a log entry in the Event Log" || records[1].Level != slog.LevelError {
+		t.Fatalf("the wrapped handler got %q, want the record and then an error about the failed write", messages)
+	}
+	records[1].Attrs(func(a slog.Attr) bool {
+		if a.Key == "event" && a.Value.String() != "disk almost full" {
+			t.Errorf("the failure names %q, want the lost record's message", a.Value.String())
+		}
+		return true
+	})
 }

@@ -62,7 +62,7 @@ func (h *ThemesHandler) logSecurityEvent(r *http.Request, level, message string,
 	}
 	if err := h.eventService.LogEvent(r.Context(), level, model.EventCategorySecurity, message,
 		middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), metadata); err != nil {
-		slog.Error("failed to log theme event", "error", err, "message", message, "user_id", middleware.GetUserID(r))
+		slog.ErrorContext(service.WithoutEventLog(r.Context()), "failed to log theme event", "error", err, "message", message, "user_id", middleware.GetUserID(r))
 	}
 }
 

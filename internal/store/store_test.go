@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -1169,5 +1171,135 @@ func TestNewDBKeepsInMemoryDatabasesOnOneConnection(t *testing.T) {
 		if got := isInMemory(path); got != want {
 			t.Errorf("isInMemory(%q) = %v, want %v", path, got, want)
 		}
+	}
+}
+
+// TestNewDBStoresTimesInSQLiteFormat checks the text a time.Time is stored
+// as: "2006-01-02 15:04:05.999999999-07:00", which SQLite's date functions
+// read, round-trips to the same instant, and leaves rows written in the
+// driver's old default, time.Time.String() with a monotonic suffix,
+// readable, for file and in-memory databases. Every time.Time the app bound
+// used to be stored in that old default (review of the 2026-10-17 audit
+// fixes).
+//
+// Bug state: drop _time_format=sqlite from the DSN in NewDBWithConfig and
+// this fails.
+func TestNewDBStoresTimesInSQLiteFormat(t *testing.T) {
+	for name, path := range map[string]string{"file": t.TempDir() + "/times.db", "memory": ":memory:"} {
+		t.Run(name, func(t *testing.T) { checkStoredTimeFormat(t, path) })
+	}
+}
+
+// checkStoredTimeFormat runs TestNewDBStoresTimesInSQLiteFormat on the
+// database at path.
+func checkStoredTimeFormat(t *testing.T, path string) {
+	db, err := NewDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`CREATE TABLE probe (id INTEGER PRIMARY KEY, at DATETIME)`); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if _, err := db.Exec(`INSERT INTO probe (id, at) VALUES (1, ?)`, now); err != nil {
+		t.Fatal(err)
+	}
+	var raw string
+	var normalized sql.NullString
+	if err := db.QueryRow(`SELECT CAST(at AS TEXT), datetime(at) FROM probe WHERE id = 1`).Scan(&raw, &normalized); err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?[+-]\d{2}:\d{2}$`).MatchString(raw) {
+		t.Errorf("a time is stored as %q, want 2006-01-02 15:04:05.999999999-07:00", raw)
+	}
+	if !normalized.Valid {
+		t.Errorf("SQLite's datetime() cannot read the stored time %q", raw)
+	}
+	var back time.Time
+	if err := db.QueryRow(`SELECT at FROM probe WHERE id = 1`).Scan(&back); err != nil {
+		t.Fatal(err)
+	}
+	if !back.Equal(now) {
+		t.Errorf("the stored time reads back as %v, want %v", back, now)
+	}
+
+	// A row written in the old default is still read.
+	old := "2026-10-18 05:41:31.179863 +0200 CEST m=+0.088685751"
+	if _, err := db.Exec(`INSERT INTO probe (id, at) VALUES (2, ?)`, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT at FROM probe WHERE id = 2`).Scan(&back); err != nil {
+		t.Fatalf("reading a time stored in the old format: %v", err)
+	}
+	if want := time.Date(2026, 10, 18, 3, 41, 31, 179863000, time.UTC); !back.Equal(want) {
+		t.Errorf("the old-format time reads back as %v, want %v", back, want)
+	}
+}
+
+// TestOldAndNewTimeFormatsOrderTogether checks that rows stored in the old
+// time format (time.Time.String()) and the new one sort and filter together
+// by the instant they hold, within the same second too, so a column holding
+// both still orders correctly and a cutoff passed as a time.Time (written in
+// the new format) deletes the right rows. Old rows are not rewritten.
+//
+// Bug state: set _time_format=datetime in NewDBWithConfig, which drops the
+// fraction and the offset, and this fails.
+func TestOldAndNewTimeFormatsOrderTogether(t *testing.T) {
+	db, err := NewDB(t.TempDir() + "/order.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`CREATE TABLE probe (label TEXT, at DATETIME)`); err != nil {
+		t.Fatal(err)
+	}
+	zone := time.FixedZone("CEST", 2*3600)
+	base := time.Date(2026, 10, 18, 5, 41, 31, 0, zone)
+	rows := []struct {
+		label string
+		at    any
+	}{
+		{"a-old", "2026-10-18 05:41:30.9 +0200 CEST m=+1.0"},
+		{"b-new", base},
+		{"c-old", "2026-10-18 05:41:31.25 +0200 CEST m=+2.0"},
+		{"d-new", base.Add(500 * time.Millisecond)},
+		{"e-old", "2026-10-18 05:41:31.75 +0200 CEST"},
+		{"f-new", base.Add(time.Second)},
+	}
+	for i := len(rows) - 1; i >= 0; i-- { // insert out of order
+		if _, err := db.Exec(`INSERT INTO probe (label, at) VALUES (?, ?)`, rows[i].label, rows[i].at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := db.Query(`SELECT label FROM probe ORDER BY at`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = got.Close() }()
+	var order []string
+	for got.Next() {
+		var label string
+		if err := got.Scan(&label); err != nil {
+			t.Fatal(err)
+		}
+		order = append(order, label)
+	}
+	if err := got.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "a-old b-new c-old d-new e-old f-new"; strings.Join(order, " ") != want {
+		t.Errorf("rows sort as %q, want %q", strings.Join(order, " "), want)
+	}
+	// Cut off between c-old (.25) and d-new (.5).
+	if _, err := db.Exec(`DELETE FROM probe WHERE at < ?`, base.Add(400*time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM probe`).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 3 {
+		t.Errorf("a cutoff at .4 left %d rows, want d-new, e-old and f-new", left)
 	}
 }

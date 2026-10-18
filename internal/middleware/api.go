@@ -22,6 +22,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -494,7 +495,7 @@ func logAPIKeySourceAnomalyEvent(
 		if isMissingEventsTable(err) {
 			return
 		}
-		slog.Warn("failed to persist API key source anomaly event", "error", err, "key_id", keyID, "status", status)
+		slog.WarnContext(service.WithoutEventLog(ctx), "failed to persist API key source anomaly event", "error", err, "key_id", keyID, "status", status)
 	}
 }
 

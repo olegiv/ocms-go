@@ -20,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
@@ -615,7 +616,7 @@ func (m *Module) finalizeJob(ctx context.Context, run jobRun, status JobStatus, 
 		// to write it must be visible in the log, not swallowed.
 		if err := m.ctx.Events.LogMigratorEvent(finishCtx, "info",
 			"Content imported from "+run.SourceName, &userID, run.ClientIP, run.RequestURL, metadata); err != nil {
-			m.ctx.Logger.Error("failed to record import audit event",
+			m.ctx.Logger.ErrorContext(service.WithoutEventLog(finishCtx), "failed to record import audit event",
 				"source", run.SourceName, "job_id", run.ID, "error", err)
 		}
 	}
@@ -790,7 +791,7 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 		if err := m.ctx.Events.LogMigratorEvent(r.Context(), "info",
 			"Imported content deleted from "+ctx.SourceName, &ctx.User.ID, clientIP,
 			middleware.GetRequestURL(r), metadata); err != nil {
-			m.ctx.Logger.Error("failed to record delete audit event",
+			m.ctx.Logger.ErrorContext(service.WithoutEventLog(r.Context()), "failed to record delete audit event",
 				"source", ctx.SourceName, "error", err)
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/olegiv/ocms-go/internal/demo"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -150,16 +151,18 @@ func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, pag
 	}
 	metadataJSON, _ := json.Marshal(metadata)
 
+	message := "Page published automatically by scheduler: " + page.Title
 	_, err = queries.CreateEvent(ctx, store.CreateEventParams{
 		Level:     "info",
 		Category:  "page",
-		Message:   "Page published automatically by scheduler: " + page.Title,
+		Message:   message,
 		UserID:    sql.NullInt64{}, // System action, no user
 		Metadata:  string(metadataJSON),
 		CreatedAt: now,
 	})
 	if err != nil {
-		s.logger.Warn("failed to log scheduled publish event", "error", err)
+		// Kept out of the Event Log it failed to write (service.WithoutEventLog).
+		s.logger.WarnContext(service.WithoutEventLog(ctx), "failed to log scheduled publish event", "event", message, "error", err)
 	}
 
 	return nil

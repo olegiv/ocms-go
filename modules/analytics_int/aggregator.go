@@ -110,9 +110,10 @@ func (m *Module) runStartupCatchUp(stopCtx context.Context) {
 
 	m.ctx.Logger.Info("running startup aggregation catch-up")
 
-	// Normalize any old hourly data that has timezone suffixes from
-	// the previous Go time.Time binding format (e.g., "2024-01-15 14:00:00+00:00").
-	// These will be re-created in clean "YYYY-MM-DD HH:MM:SS" format.
+	// Normalize any old hourly data that has a timezone suffix, written when
+	// the aggregator bound time.Time values (e.g., "2024-01-15 14:00:00+00:00").
+	// It now binds "YYYY-MM-DD HH:MM:SS" strings; these rows are re-created
+	// in that format.
 	if result, err := m.ctx.DB.ExecContext(ctx,
 		"DELETE FROM page_analytics_hourly WHERE LENGTH(hour_start) > 19"); err != nil {
 		m.ctx.Logger.Warn("failed to normalize hourly data", "error", err)

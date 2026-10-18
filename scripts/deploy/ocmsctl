@@ -204,9 +204,10 @@ cmd_stop() {
     echo_info "Stopping site '$site_id' (PID: $pid)..."
     kill -SIGTERM "$pid"
 
-    # Wait for graceful shutdown (up to 30 seconds)
+    # Wait for graceful shutdown (up to 45 seconds: the app drains requests
+    # for up to 30, then waits up to 5 more for handlers still running)
     local waited=0
-    while is_pid_running "$pid" && [ $waited -lt 30 ]; do
+    while is_pid_running "$pid" && [ $waited -lt 45 ]; do
         sleep 1
         waited=$((waited + 1))
     done

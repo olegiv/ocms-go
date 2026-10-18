@@ -20,15 +20,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   taken) now exits instead of staying up with nothing served, and a serve
   failure that arrives together with a stop signal is no longer reported as a
   clean stop. Stop signals are caught before the port opens, so a signal sent
-  as the server starts gets a graceful shutdown; requests still running when
-  the 30-second shutdown ends have their connections closed. The start is
-  recorded alongside serving, so a slow Event Log write delays neither the
-  first requests nor a stop, and a failed Event Log write for server or
-  seeding events is logged as a warning naming the lost event. REST v2 error
-  logs carry the request ID, method and route. The database's WAL and
-  shared-memory files are made owner-only along with the database file. An
-  in-memory database (`OCMS_DB_PATH=:memory:`) keeps a single connection; with
-  the default pool each connection opened its own empty database.
+  as the server starts gets a graceful shutdown; connections still open when
+  the 30-second shutdown ends are closed, and handlers still running,
+  including ones the 30-second request timeout has already answered, get up to
+  5 more seconds to return before the cleanup closes the database. `fly.toml`,
+  `docker-compose.yml`, the systemd unit and `ocmsctl` give the app 45 seconds
+  to stop; Fly's default of 5 seconds, Docker's of 10 and the 30 the unit and
+  `ocmsctl` allowed killed it mid-drain. The start is recorded alongside
+  serving, so a slow Event Log write delays neither the first requests nor a
+  stop, and a failed write through the event service is logged at error level
+  naming the lost event; that record, and those of the other code that logs a
+  failed Event Log write, stay out of the Event Log (writing them there on a
+  locked database waited out the busy timeout a second time), and a log entry
+  the Event Log handler cannot store is reported in the log instead of
+  dropped. REST v2 error logs carry the request ID, method and route. The
+  database's WAL and shared-memory files are made owner-only along with the
+  database file. An in-memory database (`OCMS_DB_PATH=:memory:`) keeps a
+  single connection; with the default pool each connection opened its own
+  empty database. Times the app passes as `time.Time` are stored as
+  `2006-01-02 15:04:05.999999999-07:00` (e.g. `2026-10-18
+  05:41:31.179863+02:00`), which SQLite's date functions read, instead of the
+  SQLite driver's default, Go's debug format with a zone name and a
+  monotonic-clock suffix (`+0200 CEST m=+0.08`). Rows written before are not
+  rewritten: they still load and sort with the new ones, but SQLite's date
+  functions cannot read them.
 - `scripts/codex/commit-do.sh` removes the prepared message after committing,
   so a later run can no longer commit other staged changes under it.
 - Editors now land at `/admin` after login. Public users land at `/account`;
@@ -36,6 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Resolves [#188](https://github.com/olegiv/ocms-go/issues/188).
 
 ### Security
+- The production start check for API key lifetimes
+  (`OCMS_API_KEY_MAX_TTL_DAYS`, 90 days by default in production) now compares
+  the stored times in Go. It compared them with SQLite's `datetime()`, which
+  could not read the times the app stored, so it only ever caught keys without
+  an expiry; a production instance with an active key whose lifetime exceeds
+  the limit now refuses to start until the key is revoked or the limit raised.
 - The language switch no longer redirects to another site when the Referer is
   a same-host URL whose path starts with `//`. It now uses the same Referer
   check as demo mode.
@@ -51,13 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - If its settings cannot be read at startup, the Privacy module now turns the
   consent banner on with Google Consent Mode denying ad and analytics storage
   (it used to switch off while other modules' trackers kept loading), and
-  hCaptcha turns on wherever environment keys are set (it used to switch
-  off). Their settings pages warn while they show these fallback values and
-  disable saving; the forms refuse to save until the stored settings load
-  (retried at most once a minute when next used, and at once by a save), and
-  a form rendered from fallback values is refused even after they recover.
-  The retry interval is timed with the monotonic clock, so a system clock
-  change cannot delay or shorten it.
+  hCaptcha turns on wherever environment keys are set (it used to switch off).
+  Their settings pages warn while they show these fallback values and disable
+  saving; the forms refuse to save until the stored settings load (retried at
+  most once a minute when next used, and at once by saving a form opened
+  before the restart), and a form rendered from fallback values is refused
+  even after they recover. The retry interval is timed with the monotonic
+  clock, so a system clock change cannot delay or shorten it.
 - The Privacy settings form refuses a services list that is not valid JSON;
   it used to save it as an empty list, dropping every configured service.
 - Page slugs and single-segment aliases can no longer use the names whose

@@ -9,7 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -94,11 +94,36 @@ func (s *EventService) LogEvent(ctx context.Context, level, category, message st
 		CreatedAt:  time.Now(),
 	})
 	if err != nil {
-		log.Printf("Failed to log event: %v", err)
+		// Callers usually drop this error, so the failure is logged here with
+		// the event it lost, and kept out of the Event Log it failed to write.
+		// A caller that logs it again must also use WithoutEventLog
+		// (TestEventWriteFailuresStayOutOfTheEventLog).
+		slog.ErrorContext(WithoutEventLog(ctx), "failed to record an event in the Event Log",
+			"event", message, "category", category, "error", err)
 		return err
 	}
 
 	return nil
+}
+
+// eventLogSkipKey marks a context whose log records stay out of the Event
+// Log; see WithoutEventLog.
+type eventLogSkipKey struct{}
+
+// WithoutEventLog returns a context whose log records the Event Log handler
+// (internal/logging) passes on to its output but does not write to the
+// Event Log. Code that logs a failed Event Log write uses it, LogEvent among
+// them: writing that record to the same failing database would wait out its
+// busy timeout again. Use it only as the context of that one log call.
+func WithoutEventLog(ctx context.Context) context.Context {
+	return context.WithValue(ctx, eventLogSkipKey{}, true)
+}
+
+// SkipsEventLog reports whether ctx, or a context derived from it, was
+// marked by WithoutEventLog.
+func SkipsEventLog(ctx context.Context) bool {
+	skip, _ := ctx.Value(eventLogSkipKey{}).(bool)
+	return skip
 }
 
 // LogInfo logs an info-level event.
