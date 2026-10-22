@@ -8,12 +8,14 @@ import (
 	"go/ast"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
@@ -54,7 +56,7 @@ func TestModuleActivationNeedsPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := NewModulesHandler(env.db, env.h.renderer, env.sm, registry, module.NewHookRegistry(logger))
-	h.SetPasswordConfirmation(lp, nil)
+	h.SetPasswordConfirmation(lp, service.NewEventService(env.db))
 
 	toggle := func(name string, active bool, password string) (int, string) {
 		body, err := json.Marshal(map[string]any{"active": active, "password": password})
@@ -69,7 +71,9 @@ func TestModuleActivationNeedsPassword(t *testing.T) {
 		var resp struct {
 			Error string `json:"error"`
 		}
-		_ = json.Unmarshal(rr.Body.Bytes(), &resp)
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("toggle %s: response %q is not JSON: %v", name, rr.Body.String(), err)
+		}
 		return rr.Code, resp.Error
 	}
 
@@ -99,8 +103,8 @@ func TestModuleActivationNeedsPassword(t *testing.T) {
 
 	// The earlier wrong password still counts after the right one: a second
 	// wrong one locks the account, and then even the right one is refused.
-	if code, _ := toggle("sqlconsole2", true, "Not-the-password-2!"); code != http.StatusForbidden {
-		t.Fatalf("second wrong password = %d", code)
+	if code, msg := toggle("sqlconsole2", true, "Not-the-password-2!"); code != http.StatusForbidden || msg != "Too many failed attempts; try again later." {
+		t.Fatalf("second wrong password = %d %q, want the lock message", code, msg)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	if locked, _ := lp.IsAccountLocked(admin.Email, middleware.GetClientIP(req)); !locked {
@@ -109,12 +113,24 @@ func TestModuleActivationNeedsPassword(t *testing.T) {
 	if code, msg := toggle("sqlconsole2", true, mfaTestPassword); code != http.StatusForbidden || msg != "Too many failed attempts; try again later." || registry.IsActive("sqlconsole2") {
 		t.Fatalf("right password while locked = %d %q, active %t", code, msg, registry.IsActive("sqlconsole2"))
 	}
+	for message, want := range map[string]int{
+		"Module activation refused: no password":            1,
+		"Module activation refused: wrong current password": 2,
+		"Module activated with password confirmation":       1,
+		"Module activation refused: account locked":         1,
+	} {
+		var got int
+		if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = ? AND category = ?`, message, model.EventCategorySecurity).Scan(&got); err != nil || got != want {
+			t.Errorf("security events %q = %d, %v; want %d", message, got, err, want)
+		}
+	}
 }
 
 // TestActivateConfirmedOnlyAfterPassword fails when code other than
-// ModulesHandler.ToggleActive, which checks the administrator's password
-// first, calls Registry.ActivateConfirmed: that would switch on DB Manager
-// without the password its activation needs.
+// ModulesHandler.ToggleActive calls Registry.ActivateConfirmed: that would
+// switch on DB Manager without the password its activation needs. That
+// ToggleActive checks the password before the call is
+// TestModuleActivationNeedsPassword's job.
 //
 // Bug state: call registry.ActivateConfirmed from ToggleSidebar, and this
 // names it.
@@ -124,4 +140,64 @@ func TestActivateConfirmedOnlyAfterPassword(t *testing.T) {
 	}, func(file *ast.File) []gatedCall {
 		return gatedCalls(file, map[string]bool{"ActivateConfirmed": true}, nil)
 	}, "activates a password-gated module; confirm the administrator's password first like ModulesHandler.ToggleActive")
+}
+
+// moduleActiveWriteSQL matches SQL that can set a module's active flag:
+// an UPDATE of modules that sets is_active, or any INSERT into modules.
+var moduleActiveWriteSQL = regexp.MustCompile(`(?is)\bupdate\s+modules\s+set\b[^;]*\bis_active\b|\binsert\s+(or\s+\w+\s+)?into\s+modules\b`)
+
+// moduleActiveWriteSites are where a module's active flag may be written,
+// with what keeps each from switching a password-gated module on.
+var moduleActiveWriteSites = map[string]string{
+	"internal/module/registry.go (*Registry).setActive":         "refuses a password-gated module unless ActivateConfirmed called it",
+	"internal/module/registry.go (*Registry).loadActiveStatus":  "inserts a module's first row, inactive for a password-gated module",
+	"internal/store/modules.sql.go a package-level declaration": "sqlc's UpsertModule, whose callers this test checks too",
+}
+
+// TestModuleActiveFlagWritesAreGated fails when code outside
+// moduleActiveWriteSites writes a module's active flag, through the store
+// (UpsertModule overwrites it on conflict) or in raw SQL: either would
+// switch DB Manager on without the password Registry.SetActive asks for.
+//
+// Bug state: add store.New(db).UpsertModule(ctx, {Name: "dbmanager",
+// IsActive: true}) to any handler, and this names it.
+func TestModuleActiveFlagWritesAreGated(t *testing.T) {
+	for query, want := range map[string]bool{
+		"UPDATE modules SET is_active = ?, updated_at = ? WHERE name = ?": true,
+		"update modules\nset updated_at = now, is_active = 1":             true,
+		"INSERT INTO modules (name, is_active) VALUES (?, ?)":             true,
+		"INSERT OR REPLACE INTO modules (name) VALUES (?)":                true,
+		"UPDATE modules SET show_in_sidebar = ? WHERE name = ?":           false,
+		"SELECT is_active FROM modules WHERE name = ?":                    false,
+	} {
+		if moduleActiveWriteSQL.MatchString(query) != want {
+			t.Errorf("moduleActiveWriteSQL on %q = %t, want %t", query, !want, want)
+		}
+	}
+	checkGatedCalls(t, moduleActiveWriteSites, func(file *ast.File) []gatedCall {
+		calls := gatedCalls(file, map[string]bool{"UpsertModule": true}, nil)
+		return append(calls, sqlLiterals(file, moduleActiveWriteSQL)...)
+	}, "writes a module's active flag; switch modules through Registry.SetActive")
+}
+
+// sqlLiterals returns the string literals in file that pattern matches.
+func sqlLiterals(file *ast.File, pattern *regexp.Regexp) []gatedCall {
+	var found []gatedCall
+	for _, decl := range file.Decls {
+		where := "a package-level declaration"
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			where = funcName(fn)
+		}
+		ast.Inspect(decl, func(n ast.Node) bool {
+			lit, ok := n.(*ast.BasicLit)
+			if !ok {
+				return true
+			}
+			if value, ok := stringValue(lit); ok && pattern.MatchString(value) {
+				found = append(found, gatedCall{pos: lit.Pos(), where: where})
+			}
+			return true
+		})
+	}
+	return found
 }

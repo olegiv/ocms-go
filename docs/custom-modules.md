@@ -548,8 +548,11 @@ Switching it on in **Admin > Modules** then opens a dialog asking for the
 administrator's current password; wrong passwords count toward the login
 lockout. `Registry.SetActive` refuses to activate such a module with
 `module.ErrActivationNeedsPassword`; only `Registry.ActivateConfirmed` does,
-and `TestActivateConfirmedOnlyAfterPassword` allows that call only behind the
-password check. Switching it off needs no password.
+and `TestActivateConfirmedOnlyAfterPassword` allows that call only from
+`ModulesHandler.ToggleActive`, which checks the password first. The module is
+registered inactive on first start, and `TestModuleActiveFlagWritesAreGated`
+fails on any other code that writes a module's active flag. Switching it off
+needs no password.
 
 ## Third-Party Hosts (Content-Security-Policy)
 

@@ -200,26 +200,27 @@ func (h *ModulesHandler) confirmActivation(r *http.Request, name, password strin
 	case passwordOK:
 		return ""
 	case passwordMissing:
+		// Not counted toward the lockout, but logged like the other refusals.
+		logRefusal("Module activation refused: no password")
 		return i18n.T(lang, "modules.activation_password_required")
 	case passwordLocked:
 		logRefusal("Module activation refused: account locked")
 		return i18n.T(lang, "modules.activation_locked")
 	case passwordUnverified:
 		slog.Error("password check error", "error", c.Err, "user_id", user.ID)
+		h.logModuleEvent(r, model.EventLevelError, "Module activation refused: password could not be verified", name)
 		return i18n.T(lang, "modules.activation_password_unverified")
+	}
+	if c.LockedFor > 0 {
+		// This wrong password locked the account.
+		return i18n.T(lang, "modules.activation_locked")
 	}
 	return i18n.T(lang, "modules.activation_password_invalid")
 }
 
 // logModuleEvent logs message about module name as a security event.
 func (h *ModulesHandler) logModuleEvent(r *http.Request, level, message, name string) {
-	if h.eventService == nil {
-		return
-	}
-	if err := h.eventService.LogEvent(r.Context(), level, model.EventCategorySecurity, message,
-		middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"module": name}); err != nil {
-		slog.ErrorContext(service.WithoutEventLog(r.Context()), "failed to log module event", "error", err, "message", message, "module", name)
-	}
+	logSecurityEvent(r, h.eventService, level, message, map[string]any{"module": name})
 }
 
 // ToggleSidebar handles POST /admin/modules/{name}/toggle-sidebar - toggles module sidebar visibility.

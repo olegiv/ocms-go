@@ -56,13 +56,7 @@ func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMana
 // Installing a theme installs code that runs with the site's privileges, so
 // these entries use the security category, which excluded IPs cannot mute.
 func (h *ThemesHandler) logSecurityEvent(r *http.Request, level, message string, metadata map[string]any) {
-	if h.eventService == nil {
-		return
-	}
-	if err := h.eventService.LogEvent(r.Context(), level, model.EventCategorySecurity, message,
-		middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), metadata); err != nil {
-		slog.ErrorContext(service.WithoutEventLog(r.Context()), "failed to log theme event", "error", err, "message", message, "user_id", middleware.GetUserID(r))
-	}
+	logSecurityEvent(r, h.eventService, level, message, metadata)
 }
 
 // ThemeListData holds data for the theme list template.

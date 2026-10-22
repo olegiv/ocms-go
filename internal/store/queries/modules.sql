@@ -19,12 +19,6 @@ ON CONFLICT(name) DO UPDATE SET
     updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
--- name: SetModuleActive :one
-UPDATE modules
-SET is_active = ?, updated_at = CURRENT_TIMESTAMP
-WHERE name = ?
-RETURNING *;
-
 -- name: SetModuleShowInSidebar :one
 UPDATE modules
 SET show_in_sidebar = ?, updated_at = CURRENT_TIMESTAMP

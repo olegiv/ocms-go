@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -86,4 +87,17 @@ func countFailedAttempt(r *http.Request, lp *middleware.LoginProtection, events 
 		_ = events.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": user.Email, "duration": lockDuration.String()})
 	}
 	return lockDuration
+}
+
+// logSecurityEvent logs message in the security category, which excluded
+// IPs cannot mute, for the signed-in user. es may be nil (tests); a failure
+// to log goes to the server log only.
+func logSecurityEvent(r *http.Request, es *service.EventService, level, message string, metadata map[string]any) {
+	if es == nil {
+		return
+	}
+	if err := es.LogEvent(r.Context(), level, model.EventCategorySecurity, message,
+		middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), metadata); err != nil {
+		slog.ErrorContext(service.WithoutEventLog(r.Context()), "failed to log security event", "error", err, "message", message, "user_id", middleware.GetUserID(r))
+	}
 }

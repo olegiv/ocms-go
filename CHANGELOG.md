@@ -49,8 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stolen session cannot switch on its raw SQL to read sessions or rewrite
   users. Once active, its queries need no password: switch it off when done.
   Modules declare this with the new `module.PasswordGatedActivation`
-  interface; `Registry.SetActive` refuses to activate them, and only
-  `Registry.ActivateConfirmed`, behind the password check, does.
+  interface; they are registered inactive, `Registry.SetActive` refuses to
+  activate them, and only `Registry.ActivateConfirmed`, behind the password
+  check, does. The unused `SetModuleActive` store query is removed.
 
 ### Fixed
 - `/health` decided "signed in" from the session's user ID alone, so a

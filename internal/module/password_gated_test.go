@@ -10,10 +10,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
-// gatedModule is a module whose activation needs a password.
+// gatedModule is a module whose activation needs a password. It does not
+// declare ActiveByDefault: being gated alone must register it inactive.
 type gatedModule struct{ *mockModule }
 
-func (gatedModule) ActiveByDefault() bool         { return false }
 func (gatedModule) ActivationNeedsPassword() bool { return true }
 
 // TestSetActiveRefusesPasswordGatedModule fails when a module whose
@@ -34,6 +34,9 @@ func TestSetActiveRefusesPasswordGatedModule(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if r.IsActive("sql") {
+		t.Fatal("a password-gated module was registered active")
+	}
 	if !r.ActivationNeedsPassword("sql") || r.ActivationNeedsPassword("plain") || r.ActivationNeedsPassword("missing") {
 		t.Fatal("ActivationNeedsPassword does not follow PasswordGatedActivation")
 	}

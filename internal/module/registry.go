@@ -337,7 +337,8 @@ func (r *Registry) recordMigration(db *sql.DB, module string, version int64) err
 }
 
 // loadActiveStatus loads the active and sidebar status for all registered modules from the database.
-// Modules not in the database are considered active by default (sidebar=false) and will be inserted.
+// Modules not in the database are considered active by default (sidebar=false) and will be inserted;
+// opt-in, password-gated and environment-restricted modules are inserted inactive.
 func (r *Registry) loadActiveStatus(db *sql.DB) error {
 	queries := store.New(db)
 	ctx := context.Background()
@@ -351,6 +352,11 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 			if defaulter, ok := r.modules[name].(ActivationDefaulter); ok && !defaulter.ActiveByDefault() {
 				defaultActive = false
 				r.logger.Info("opt-in module registered inactive", "module", name)
+			}
+			// Switching a password-gated module on must go through
+			// ActivateConfirmed, so it never starts active either.
+			if activationNeedsPassword(r.modules[name]) {
+				defaultActive = false
 			}
 			if checker, ok := r.modules[name].(EnvironmentChecker); ok && r.ctx != nil {
 				allowed := false
