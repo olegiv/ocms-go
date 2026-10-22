@@ -39,6 +39,9 @@ func TestImportOverwriteNeverChangesAdminRole(t *testing.T) {
 	if len(result.Errors) > 0 {
 		t.Fatalf("import errors: %v", result.Errors)
 	}
+	if len(result.Notices) != 2 {
+		t.Errorf("notices = %v, want one for each kept role", result.Notices)
+	}
 	for email, want := range map[string]struct{ role, name string }{
 		"editor@example.com": {model.RoleEditor, "Promoted"},
 		ts.User.Email:        {model.RoleAdmin, "Demoted"},
@@ -67,5 +70,36 @@ func TestImportRejectsUnknownUserRole(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("validation errors %v do not name the role", errs)
+	}
+}
+
+// TestImportLegacyViewerRole fails when an archive from before the viewer
+// role was renamed to public stops importing: its users become public, and
+// an import that leaves users out is not refused over their roles at all.
+func TestImportLegacyViewerRole(t *testing.T) {
+	ts := setupTest(t)
+	defer ts.Cleanup()
+	importer := NewImporter(ts.Queries, ts.DB, slog.Default())
+	data := func() *ExportData {
+		return &ExportData{Version: "1.0", Users: []ExportUser{
+			{Email: "reader@example.com", Name: "Reader", Role: legacyRoleViewer},
+			{Email: "odd@example.com", Name: "Odd", Role: "superuser"},
+		}}
+	}
+
+	result, err := importer.Import(ts.Ctx, data(), ImportOptions{ImportTags: true, ConflictStrategy: ConflictSkip})
+	if err != nil || len(result.Errors) > 0 {
+		t.Fatalf("import without users = %v, %v; want the users' roles ignored", result.Errors, err)
+	}
+
+	withViewer := data()
+	withViewer.Users = withViewer.Users[:1]
+	result, err = importer.Import(ts.Ctx, withViewer, ImportOptions{ImportUsers: true, ConflictStrategy: ConflictSkip})
+	if err != nil || len(result.Errors) > 0 {
+		t.Fatalf("import of a viewer = %v, %v", result.Errors, err)
+	}
+	got, err := ts.Queries.GetUserByEmail(ts.Ctx, "reader@example.com")
+	if err != nil || got.Role != model.RolePublic {
+		t.Fatalf("viewer imported as %q, %v; want %q", got.Role, err, model.RolePublic)
 	}
 }

@@ -467,11 +467,13 @@ func TestThemeEventLogCarriesMetadata(t *testing.T) {
 	}
 }
 
-// TestThemeImportPasswordConfirmationResetsLockout fails when a valid
-// password confirmation leaves earlier failed confirmations counted: with a
-// limit of two, a typo, a correct confirmation and another typo must not
-// lock the account, because the correct confirmation proved identity.
-func TestThemeImportPasswordConfirmationResetsLockout(t *testing.T) {
+// TestThemeImportPasswordConfirmationKeepsLockoutCount fails when a valid
+// password confirmation clears earlier failures: with a limit of two, a
+// typo, a correct confirmation and another typo lock the account. Only a
+// full sign-in clears the counters, so a password alone cannot wipe out
+// wrong second-factor codes counted against the same account. A missing
+// password, from a form without the field, is not counted.
+func TestThemeImportPasswordConfirmationKeepsLockoutCount(t *testing.T) {
 	h := themeManagementHandler(t)
 	lockoutDB, cleanup := testutil.TestDB(t)
 	defer cleanup()
@@ -484,13 +486,14 @@ func TestThemeImportPasswordConfirmationResetsLockout(t *testing.T) {
 	if h.themeManager.ThemeCount() != 1 {
 		t.Fatal("import with the correct password did not succeed")
 	}
-	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, "wrong-"+themeImportPassword)
+	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, "")
 	h.Import(httptest.NewRecorder(), r)
-
 	if locked, _ := h.loginProtection.IsAccountLocked(user.Email, middleware.GetClientIP(r)); locked {
-		t.Fatal("account locked after one failure on each side of a valid confirmation")
+		t.Fatal("a missing password counted as a wrong one")
 	}
-	if remaining := h.loginProtection.GetRemainingAttempts(user.Email, middleware.GetClientIP(r)); remaining != 1 {
-		t.Fatalf("remaining attempts = %d, want 1 (only the failure after the reset counts)", remaining)
+	r = themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, "wrong-"+themeImportPassword)
+	h.Import(httptest.NewRecorder(), r)
+	if locked, _ := h.loginProtection.IsAccountLocked(user.Email, middleware.GetClientIP(r)); !locked {
+		t.Fatal("a correct confirmation cleared the earlier failure")
 	}
 }

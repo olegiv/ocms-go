@@ -72,8 +72,8 @@ func (h *UsersHandler) SetDispatcher(d *webhook.Dispatcher) {
 	h.dispatcher = d
 }
 
-// SetLoginProtection makes wrong current passwords on an administrator's own
-// password change count toward the login lockout.
+// SetLoginProtection makes wrong current passwords, given to confirm a user
+// change that could hand an account over, count toward the login lockout.
 func (h *UsersHandler) SetLoginProtection(lp *middleware.LoginProtection) {
 	h.loginProtection = lp
 }
@@ -391,18 +391,19 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // actorPasswordNeeded reports whether a user edit needs the acting
 // administrator's current password: one that could hand an account to
-// whoever holds the session. That is a new password for any user, a new
-// email for any user (the email keys the login lockout, so a new one would
-// give a stolen session fresh password guesses against that account), and
-// the admin role for an account that does not have it, which would let a
-// stolen session mint an administrator it controls and use that one to take
-// over the others.
+// whoever holds the session, or take an administrator's away. That is a new
+// password for any user, a new email for any user (the email keys the login
+// lockout, so a new one would give a stolen session fresh password guesses
+// against that account), and giving or taking away the admin role: given,
+// it would let a stolen session mint an administrator it controls and use
+// that one to take over the others; taken, it would lock the real
+// administrators out.
 func actorPasswordNeeded(target store.User, email, password, role string) bool {
 	switch {
 	case password != "", email != target.Email:
 		return true
 	default:
-		return role == model.RoleAdmin && target.Role != model.RoleAdmin
+		return (role == model.RoleAdmin) != (target.Role == model.RoleAdmin)
 	}
 }
 
@@ -411,7 +412,9 @@ func actorPasswordNeeded(target store.User, email, password, role string) bool {
 // or "" when it matches. Wrong passwords count toward the login lockout like
 // failed sign-ins.
 func (h *UsersHandler) checkActorPassword(r *http.Request, actor store.User, given string) string {
-	c := confirmPassword(r, h.loginProtection, h.eventService, actor, given)
+	c := confirmPassword(r, h.loginProtection, h.eventService, actor, given, func() {
+		h.logActorRefusal(r, actor, "User change refused: wrong current password")
+	})
 	switch c.Outcome {
 	case passwordOK:
 		return ""
@@ -424,7 +427,6 @@ func (h *UsersHandler) checkActorPassword(r *http.Request, actor store.User, giv
 		h.logActorRefusal(r, actor, "User change refused: account locked")
 		return "Too many failed attempts; try again later"
 	}
-	h.logActorRefusal(r, actor, "User change refused: wrong current password")
 	return "Your current password is incorrect"
 }
 

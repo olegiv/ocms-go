@@ -42,26 +42,75 @@ var accountWriteSites = map[string]string{
 // check, so a stolen session could create an editor it knew the password of
 // and import it as an administrator (pre-PR review of the two-factor
 // branch). A new path that writes these fields needs the same protection,
-// and an entry here saying what it is.
+// and an entry here saying what it is. What an allowed site does with its
+// write is the job of that site's tests (the import's role rule is
+// TestImportOverwriteNeverChangesAdminRole).
 //
-// Bug state: have importUsers write the archive's role on overwrite again
-// and drop its entry here, and this names it.
+// The scan sees direct method calls only: a method value
+// (f := q.UpdateUser) or raw SQL that updates users outside internal/store
+// is out of its reach, and so are lockout counters and session versions.
+//
+// Bug state: add a q.UpdateUser call to any handler not listed here, and
+// this names it.
 func TestAccountWritesAreGated(t *testing.T) {
+	checkGatedCalls(t, accountWriteSites, func(file *ast.File) []gatedCall {
+		return gatedCalls(file, accountWriteMethods, func(call *ast.CallExpr, method string) bool {
+			return method == "CreateUser" && len(call.Args) == 2 && createsPublicUser(call.Args[1])
+		})
+	}, "sets a user's email, role or password; ask for the acting administrator's password like UsersHandler.Update")
+}
+
+// secondFactorRemovalMethods remove a user's second factor: the
+// mfa.Service method and the store methods behind it.
+var secondFactorRemovalMethods = map[string]bool{
+	"Disable":             true,
+	"DeleteUserTOTP":      true,
+	"DeleteRecoveryCodes": true,
+}
+
+// secondFactorRemovalSites are the functions allowed to call
+// secondFactorRemovalMethods, with what guards each.
+var secondFactorRemovalSites = map[string]string{
+	"internal/handler/users.go (*UsersHandler).ResetMFA": "asks for the acting administrator's password (checkActorPassword)",
+	"internal/handler/mfa.go (*AuthHandler).DisableTOTP": "asks for a current code from the user's own second factor",
+	"cmd/ocms/mfa.go runMFAReset":                        "ocms mfa-reset, run on the server",
+	"internal/mfa/service.go (*Service).Disable":         "the service method the sites above call",
+	"internal/mfa/service.go replaceRecoveryCodes":       "replaces recovery codes with new ones, behind a current code or enrollment",
+}
+
+// TestSecondFactorRemovalIsGated fails when code outside
+// secondFactorRemovalSites removes a user's second factor. Removing it
+// leaves an account to whoever has its password, so an administrator's
+// reset asks for that administrator's password (pre-PR review of the
+// two-factor branch), and any new path needs a guard and an entry here.
+//
+// Bug state: call h.mfa.Disable from another UsersHandler method, and this
+// names it.
+func TestSecondFactorRemovalIsGated(t *testing.T) {
+	checkGatedCalls(t, secondFactorRemovalSites, func(file *ast.File) []gatedCall {
+		return gatedCalls(file, secondFactorRemovalMethods, nil)
+	}, "removes a user's second factor; ask for the acting administrator's password like UsersHandler.ResetMFA")
+}
+
+// checkGatedCalls fails for every call scan finds outside sites, and for
+// every entry of sites that no longer makes one.
+func checkGatedCalls(t *testing.T, sites map[string]string, scan func(*ast.File) []gatedCall, problem string) {
+	t.Helper()
 	fset, files := parseRepoGoFiles(t)
 	used := map[string]bool{}
 	for rel, file := range files {
-		for _, w := range accountWrites(file) {
-			key := rel + " " + w.where
-			if _, ok := accountWriteSites[key]; ok {
+		for _, c := range scan(file) {
+			key := rel + " " + c.where
+			if _, ok := sites[key]; ok {
 				used[key] = true
 				continue
 			}
-			t.Errorf("%s: %s sets a user's email, role or password; ask for the acting administrator's password like UsersHandler.Update, then list it in accountWriteSites", fset.Position(w.pos), w.where)
+			t.Errorf("%s: %s %s, then list it with its guard", fset.Position(c.pos), c.where, problem)
 		}
 	}
-	for key := range accountWriteSites {
+	for key := range sites {
 		if !used[key] {
-			t.Errorf("accountWriteSites lists %s, which no longer writes user accounts; drop the entry", key)
+			t.Errorf("the allowed sites list %s, which no longer makes such a call; drop the entry", key)
 		}
 	}
 }
@@ -87,7 +136,10 @@ func f() {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := accountWrites(file); len(got) != 5 {
+	got := gatedCalls(file, accountWriteMethods, func(call *ast.CallExpr, method string) bool {
+		return method == "CreateUser" && len(call.Args) == 2 && createsPublicUser(call.Args[1])
+	})
+	if len(got) != 5 {
 		for _, w := range got {
 			t.Logf("found %s", fset.Position(w.pos))
 		}
@@ -95,16 +147,16 @@ func f() {
 	}
 }
 
-// accountWrite is a call to one of accountWriteMethods.
-type accountWrite struct {
+// gatedCall is a call to a method a gated-call test watches.
+type gatedCall struct {
 	pos   token.Pos
 	where string
 }
 
-// accountWrites returns the calls in file to accountWriteMethods, except a
-// CreateUser whose parameters set the public role.
-func accountWrites(file *ast.File) []accountWrite {
-	var writes []accountWrite
+// gatedCalls returns the calls in file to methods, except those allowed
+// reports true for (allowed may be nil).
+func gatedCalls(file *ast.File, methods map[string]bool, allowed func(call *ast.CallExpr, method string) bool) []gatedCall {
+	var calls []gatedCall
 	for _, decl := range file.Decls {
 		where := "a package-level declaration"
 		if fn, ok := decl.(*ast.FuncDecl); ok {
@@ -116,17 +168,17 @@ func accountWrites(file *ast.File) []accountWrite {
 				return true
 			}
 			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || !accountWriteMethods[sel.Sel.Name] {
+			if !ok || !methods[sel.Sel.Name] {
 				return true
 			}
-			if sel.Sel.Name == "CreateUser" && len(call.Args) == 2 && createsPublicUser(call.Args[1]) {
+			if allowed != nil && allowed(call, sel.Sel.Name) {
 				return true
 			}
-			writes = append(writes, accountWrite{pos: call.Pos(), where: where})
+			calls = append(calls, gatedCall{pos: call.Pos(), where: where})
 			return true
 		})
 	}
-	return writes
+	return calls
 }
 
 // createsPublicUser reports whether params is a composite literal whose Role

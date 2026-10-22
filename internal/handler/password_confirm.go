@@ -44,10 +44,12 @@ type passwordConfirmation struct {
 // confirmPassword checks the current password a signed-in user gives to
 // confirm a sensitive change, under the login lockout, so a stolen session
 // cannot guess it any faster than at the login form. A locked account is
-// refused before the check; a wrong password counts as a failed sign-in, and
-// the lock it causes is logged; the right one clears the counters like a
-// sign-in. Callers log their own refusal. lp and events may be nil (tests).
-func confirmPassword(r *http.Request, lp *middleware.LoginProtection, events *service.EventService, user store.User, password string) passwordConfirmation {
+// refused before the check. A wrong password runs refuse, which logs the
+// caller's refusal, then counts as a failed sign-in and logs the lock it
+// causes. The right one leaves the counters alone: only a full sign-in
+// clears them, so a password alone cannot wipe out wrong second-factor
+// codes. lp and events may be nil (tests).
+func confirmPassword(r *http.Request, lp *middleware.LoginProtection, events *service.EventService, user store.User, password string, refuse func()) passwordConfirmation {
 	clientIP := middleware.GetClientIP(r)
 	if lp != nil {
 		if locked, remaining := lp.IsAccountLocked(user.Email, clientIP); locked {
@@ -62,11 +64,9 @@ func confirmPassword(r *http.Request, lp *middleware.LoginProtection, events *se
 	case err != nil:
 		return passwordConfirmation{Outcome: passwordUnverified, Err: err}
 	case valid:
-		if lp != nil {
-			lp.RecordSuccessfulLogin(user.Email, clientIP)
-		}
 		return passwordConfirmation{Outcome: passwordOK}
 	}
+	refuse()
 	return passwordConfirmation{Outcome: passwordWrong, LockedFor: countFailedAttempt(r, lp, events, user)}
 }
 

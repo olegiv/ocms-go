@@ -621,7 +621,9 @@ func (h *AuthHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
 // answers the request itself and reports false on failure.
 func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, user store.User, back string) bool {
 	lang := middleware.GetAdminLang(r)
-	c := confirmPassword(r, h.loginProtection, h.eventService, user, r.FormValue("password"))
+	c := confirmPassword(r, h.loginProtection, h.eventService, user, r.FormValue("password"), func() {
+		h.logRefusal(r, user, "Two-factor change refused: invalid password")
+	})
 	switch c.Outcome {
 	case passwordOK:
 		return true
@@ -634,7 +636,6 @@ func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, use
 	case passwordUnverified:
 		logAndInternalError(w, "password check error", "error", c.Err, "user_id", user.ID)
 	default:
-		h.logRefusal(r, user, "Two-factor change refused: invalid password")
 		if c.LockedFor > 0 {
 			flashError(w, r, h.renderer, back, i18n.T(lang, "auth.too_many_attempts", formatDuration(c.LockedFor)))
 		} else {

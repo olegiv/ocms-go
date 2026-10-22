@@ -796,11 +796,12 @@ func TestFirstSetupWithoutPasswordIsNotCounted(t *testing.T) {
 
 // TestSensitiveUserChangesNeedActorPassword checks that the user edits that
 // could hand an account to whoever holds an administrator's session need
-// that administrator's current password: a new password for anyone, a new
-// email for one's own account, and the admin role, on create or edit. Other
+// that administrator's current password: a new password or email for
+// anyone, and giving or taking away the admin role, on create or edit. Other
 // edits do not. A stolen session therefore cannot set a password of its own,
-// reset the lockout by changing the email, or mint an administrator it
-// controls and use that one to take the others over.
+// reset an account's lockout by changing its email, mint an administrator
+// it controls and use that one to take the others over, or demote the real
+// administrators.
 //
 // Bug state: drop the actorPasswordNeeded check from UsersHandler.Update, or
 // the admin-role check from Create, and this fails.
@@ -835,6 +836,7 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 		}
 		return form
 	}
+	other := createTestUser(t, env.db, testUser{Email: "other-admin@example.com", Name: "Other admin", Role: model.RoleAdmin, PasswordHash: mustPasswordHash(t, env.db, admin.ID)})
 	newPassword := url.Values{"password": {"Brand-new-password!"}, "password_confirm": {"Brand-new-password!"}}
 	with := func(form url.Values, current string) url.Values {
 		out := url.Values{"current_password": {current}}
@@ -867,6 +869,7 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 			{"another user's password", &editor, edit(editor, newPassword)},
 			{"another user's email", &editor, edit(editor, url.Values{"email": {"new-editor-email@example.com"}})},
 			{"promotion to admin", &editor, edit(editor, url.Values{"role": {model.RoleAdmin}})},
+			{"demotion of another admin", &other, edit(other, url.Values{"role": {model.RoleEditor}})},
 			{"new administrator", nil, url.Values{"name": {"Second admin"}, "email": {"second@example.com"}, "role": {model.RoleAdmin},
 				"password": {"Second-admin-pass!"}, "password_confirm": {"Second-admin-pass!"}}},
 		} {
@@ -882,7 +885,6 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 
 	// Other edits never needed it: an unchanged form, a new name, keeping
 	// another administrator's role, an email differing only by spaces.
-	other := createTestUser(t, env.db, testUser{Email: "other-admin@example.com", Name: "Other admin", Role: model.RoleAdmin, PasswordHash: mustPasswordHash(t, env.db, admin.ID)})
 	accepted(t, send(&admin, edit(admin, nil)))
 	accepted(t, send(&admin, edit(admin, url.Values{"name": {"Renamed admin"}})))
 	accepted(t, send(&other, edit(other, url.Values{"name": {"Renamed other admin"}})))
@@ -899,6 +901,7 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 	accepted(t, send(&editor, with(edit(editor, url.Values{"email": {"moved-editor@example.com"}}), mfaTestPassword)))
 	editor.Email = "moved-editor@example.com"
 	accepted(t, send(&editor, with(edit(editor, url.Values{"role": {model.RoleAdmin}}), mfaTestPassword)))
+	accepted(t, send(&other, with(edit(other, url.Values{"role": {model.RoleEditor}}), mfaTestPassword)))
 	accepted(t, send(&admin, with(edit(admin, url.Values{"email": {"moved-admin@example.com"}}), mfaTestPassword)))
 	admin.Email = "moved-admin@example.com"
 	accepted(t, send(&admin, with(edit(admin, newPassword), mfaTestPassword)))
@@ -934,6 +937,48 @@ func TestActorPasswordLockout(t *testing.T) {
 	var locks int
 	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Account locked due to failed attempts' AND user_id = ?`, admin.ID).Scan(&locks); err != nil || locks != 1 {
 		t.Errorf("lock events = %d, %v; want the lockout logged once", locks, err)
+	}
+}
+
+// TestActorPasswordCountsAcrossConfirmations checks that a correct
+// confirmation does not clear earlier failures (only a full sign-in does,
+// so a password alone cannot wipe out wrong second-factor codes), and that
+// a wrong password for a second-factor reset counts too.
+func TestActorPasswordCountsAcrossConfirmations(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	lp := env.withLockout(t, 2)
+	admin := env.createUser(t, model.RoleAdmin)
+	editor := env.createUser(t, model.RoleEditor)
+	env.enroll(t, editor)
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	h.SetMFAService(env.svc)
+	h.SetLoginProtection(lp)
+	update := func(current string) int {
+		form := url.Values{"name": {editor.Name}, "email": {editor.Email}, "role": {editor.Role},
+			"password": {"Brand-new-password!"}, "password_confirm": {"Brand-new-password!"}, "current_password": {current}}
+		req := httptest.NewRequest(http.MethodPost, "/admin/users/2", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(editor.ID, 10)})), &admin)
+		rr := httptest.NewRecorder()
+		h.Update(rr, req)
+		return rr.Code
+	}
+	if code := update("Wrong-password-1!"); code != http.StatusOK {
+		t.Fatalf("wrong password = %d, want it refused", code)
+	}
+	if code := update(mfaTestPassword); code != http.StatusSeeOther {
+		t.Fatalf("right password = %d, want it accepted", code)
+	}
+	form := url.Values{"current_password": {"Wrong-password-2!"}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/2/mfa/reset", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(editor.ID, 10)})), &admin)
+	h.ResetMFA(httptest.NewRecorder(), req)
+	if locked, _ := lp.IsAccountLocked(admin.Email, middleware.GetClientIP(req)); !locked {
+		t.Error("a wrong reset password after a correct confirmation did not lock the account at two failures")
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), editor.ID); err != nil || !enrolled {
+		t.Errorf("a reset with a wrong password removed the second factor: %t, %v", enrolled, err)
 	}
 }
 

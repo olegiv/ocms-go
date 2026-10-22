@@ -34,13 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   account out of its other sessions.
 - User changes that could hand an account to whoever holds an administrator's
   session now ask for that administrator's current password: a new password
-  or email for any user, the admin role when creating or editing a user, and
+  or email for any user, giving or taking away the admin role, and
   resetting another user's second factor. Wrong attempts count toward the
-  login lockout. A content import no longer grants or removes the admin role
-  when it overwrites a user, and rejects unknown roles. A stolen session can
-  no longer set a password of its own, reset an account's lockout by
-  changing its email, or create an administrator it controls to take the
-  others over. The DB Manager module, which runs raw SQL, is outside this
+  login lockout, and a correct confirmation no longer clears earlier
+  failures (theme import used to): only a full sign-in does. A content
+  import no longer grants or removes the admin role when it overwrites a
+  user, and lists the users it kept a role for. An import that brings in
+  users rejects unknown roles and reads the old `viewer` role as `public`.
+  A stolen session can no longer set a password of its own, reset an
+  account's lockout by changing its email, create an administrator it
+  controls to take the others over, or demote the real ones. The DB Manager module, which runs raw SQL, is outside this
   check: keep it inactive where it is not needed.
 
 ### Fixed

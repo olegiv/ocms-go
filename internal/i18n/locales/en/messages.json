@@ -3074,8 +3074,8 @@
         },
         {
             "id": "users.current_password_hint",
-            "message": "Needed to change your own email or password, set another user's password, or give an account the admin role.",
-            "translation": "Needed to change your own email or password, set another user's password, or give an account the admin role."
+            "message": "Needed to change a user's email or password, or to give or take away the admin role.",
+            "translation": "Needed to change a user's email or password, or to give or take away the admin role."
         },
         {
             "id": "users.password_keep_hint",
@@ -6016,6 +6016,11 @@
             "id": "import.errors",
             "message": "Errors",
             "translation": "Errors"
+        },
+        {
+            "id": "import.notices",
+            "message": "Notes",
+            "translation": "Notes"
         },
         {
             "id": "import.import_another",
