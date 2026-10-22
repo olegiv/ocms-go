@@ -207,7 +207,8 @@ ones at three or fewer.
 
 - **Administrator reset**: on `/admin/users/{id}`, **Reset two-factor
   authentication** removes the user's authenticator and recovery codes and
-  signs them out everywhere. Where a second factor is required they set up a
+  signs them out everywhere. It asks for the acting administrator's current
+  password. Where a second factor is required they set up a
   new one at their next sign-in. Administrators cannot reset their own here;
   they use the account security page, which asks for a current code.
 - **Command line**, for an administrator with no other administrator to
@@ -243,8 +244,11 @@ All login-related events are logged to the events system:
 | Two-factor authentication enabled | Info | Authenticator set up or replaced |
 | Two-factor authentication disabled | Warning | Turned off on the account security page |
 | Two-factor change refused: invalid code | Warning | Wrong current code on the account security page |
+| Two-factor change refused: invalid password | Warning | Wrong password for the first authenticator setup on the account security page |
 | Recovery codes regenerated | Info | New recovery codes issued |
 | Two-factor authentication reset by an administrator | Warning | Reset from the user page (User category) |
+| User change refused: wrong current password | Warning | Wrong acting-administrator password on the user form or a second-factor reset (User category) |
+| User change refused: account locked | Warning | The same, while the administrator's account is locked (User category) |
 | Two-factor authentication reset from the command line | Warning | `ocms mfa-reset` |
 | User logged in | Info | Successful login; metadata `second_factor` names `totp` or `recovery_code` when one was used |
 
@@ -290,7 +294,7 @@ The login protection middleware uses the client IP resolved by oCMS (`middleware
 
 ## Session Invalidation on Password Change
 
-Sessions are bound to a per-user `session_version` counter that bumps on every password change, and on every change of the second factor (setup, replacement, turning it off, an administrator or command-line reset) — admin reset, self-service edit, and the demo's automatic admin rotation all go through the same SQL UPDATE that increments it. The login flow snapshots the live value into the session; the auth middleware (`LoadUser`) compares the snapshot against the live row on every protected request and destroys any session whose snapshot is older. The actor's own password change re-snapshots the new value into their current session so they remain logged in; sibling devices/browsers for the same account become unauthenticated on their next request. User changes that could hand an account to whoever holds an administrator's session ask for that administrator's current password on the user form: a new password for any user, a new email for one's own account, and the admin role when creating or editing a user. Wrong attempts count toward the login lockout. A stolen administrator session therefore cannot set a password of its own and pass the check that guards adding a second factor, reset the lockout by changing its email, or create an administrator it controls to take the others over. The DB Manager module runs raw SQL and is outside this check, so keep it inactive where it is not needed.
+Sessions are bound to a per-user `session_version` counter that bumps on every password change, and on every change of the second factor (setup, replacement, turning it off, an administrator or command-line reset) — admin reset, self-service edit, and the demo's automatic admin rotation all go through the same SQL UPDATE that increments it. The login flow snapshots the live value into the session; the auth middleware (`LoadUser`) compares the snapshot against the live row on every protected request and destroys any session whose snapshot is older. The actor's own password change re-snapshots the new value into their current session so they remain logged in; sibling devices/browsers for the same account become unauthenticated on their next request. User changes that could hand an account to whoever holds an administrator's session ask for that administrator's current password: a new password or email for any user (the email keys the login lockout, so a new one would bring fresh password guesses), the admin role when creating or editing a user, and resetting another user's second factor. Wrong attempts count toward the login lockout. A content import that overwrites users never grants or removes the admin role. A stolen administrator session therefore cannot set a password of its own and pass the check that guards adding a second factor, reset an account's lockout by changing its email, or create an administrator it controls to take the others over. The DB Manager module runs raw SQL and is outside this check, so keep it inactive where it is not needed.
 
 The Argon2 parameter-upgrade rehash that runs on a successful login uses a separate query that does **not** bump `session_version`, because the credential is unchanged — only its hash representation. Without this distinction, every login that triggered a rehash would also log the user out.
 

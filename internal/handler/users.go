@@ -392,15 +392,14 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // actorPasswordNeeded reports whether a user edit needs the acting
 // administrator's current password: one that could hand an account to
 // whoever holds the session. That is a new password for any user, a new
-// email for one's own account (the key of the login lockout and of password
-// resets), and the admin role for an account that does not have it, which
-// would let a stolen session mint an administrator it controls and use that
-// one to take over the others.
-func actorPasswordNeeded(actorID int64, target store.User, email, password, role string) bool {
+// email for any user (the email keys the login lockout, so a new one would
+// give a stolen session fresh password guesses against that account), and
+// the admin role for an account that does not have it, which would let a
+// stolen session mint an administrator it controls and use that one to take
+// over the others.
+func actorPasswordNeeded(target store.User, email, password, role string) bool {
 	switch {
-	case password != "":
-		return true
-	case actorID == target.ID && email != target.Email:
+	case password != "", email != target.Email:
 		return true
 	default:
 		return role == model.RoleAdmin && target.Role != model.RoleAdmin
@@ -412,30 +411,27 @@ func actorPasswordNeeded(actorID int64, target store.User, email, password, role
 // or "" when it matches. Wrong passwords count toward the login lockout like
 // failed sign-ins.
 func (h *UsersHandler) checkActorPassword(r *http.Request, actor store.User, given string) string {
-	clientIP := middleware.GetClientIP(r)
-	if h.loginProtection != nil {
-		if locked, _ := h.loginProtection.IsAccountLocked(actor.Email, clientIP); locked {
-			return "Too many failed attempts; try again later"
-		}
-	}
-	if given == "" {
-		return "Enter your current password to make this change"
-	}
-	valid, err := auth.CheckPassword(given, actor.PasswordHash)
-	if err != nil {
-		slog.Error("password check error", "error", err, "user_id", actor.ID)
-		return "Error checking your current password"
-	}
-	if valid {
+	c := confirmPassword(r, h.loginProtection, h.eventService, actor, given)
+	switch c.Outcome {
+	case passwordOK:
 		return ""
+	case passwordMissing:
+		return "Enter your current password to make this change"
+	case passwordUnverified:
+		slog.Error("password check error", "error", c.Err, "user_id", actor.ID)
+		return "Error checking your current password"
+	case passwordLocked:
+		h.logActorRefusal(r, actor, "User change refused: account locked")
+		return "Too many failed attempts; try again later"
 	}
-	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelWarning, "User change refused: wrong current password", &actor.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"user_id": actor.ID})
-	if h.loginProtection != nil {
-		if locked, lockDuration := h.loginProtection.RecordFailedAttempt(actor.Email, clientIP); locked {
-			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &actor.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": actor.Email, "duration": lockDuration.String()})
-		}
-	}
+	h.logActorRefusal(r, actor, "User change refused: wrong current password")
 	return "Your current password is incorrect"
+}
+
+// logActorRefusal logs message, a user change refused because the acting
+// administrator's password did not confirm it, as a warning user event.
+func (h *UsersHandler) logActorRefusal(r *http.Request, actor store.User, message string) {
+	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelWarning, message, &actor.ID, middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": actor.ID})
 }
 
 // userMFAStatus is the edit page's view of userID's second factor: nil
@@ -460,7 +456,9 @@ func (h *UsersHandler) userMFAStatus(w http.ResponseWriter, r *http.Request, use
 // ResetMFA handles POST /admin/users/{id}/mfa/reset - removes another user's
 // second factor and signs them out everywhere, for a user who lost their
 // authenticator and recovery codes. Where a second factor is required, they
-// set up a new one at their next sign-in. Administrators change their own on
+// set up a new one at their next sign-in. It needs the acting
+// administrator's current password, like the other user changes that could
+// hand an account over. Administrators change their own second factor on
 // the account security page, which asks for a current code.
 func (h *UsersHandler) ResetMFA(w http.ResponseWriter, r *http.Request) {
 	if demoGuard(w, r, h.renderer, middleware.RestrictionTwoFactor, redirectAdminUsers) {
@@ -492,6 +490,15 @@ func (h *UsersHandler) ResetMFA(w http.ResponseWriter, r *http.Request) {
 	}
 	if !enrolled {
 		flashError(w, r, h.renderer, back, i18n.T(lang, "users.mfa_not_enabled"))
+		return
+	}
+	actor := middleware.GetUser(r)
+	if actor == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if msg := h.checkActorPassword(r, *actor, r.FormValue("current_password")); msg != "" {
+		flashError(w, r, h.renderer, back, msg)
 		return
 	}
 	if _, err := h.mfa.Disable(r.Context(), target.ID); err != nil {
@@ -592,7 +599,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			validationErrors["password_confirm"] = "Passwords do not match"
 		}
 	}
-	if actorPasswordNeeded(currentUser.ID, editUser, email, password, role) {
+	if actorPasswordNeeded(editUser, email, password, role) {
 		if msg := h.checkActorPassword(r, *currentUser, r.FormValue("current_password")); msg != "" {
 			validationErrors["current_password"] = msg
 		}

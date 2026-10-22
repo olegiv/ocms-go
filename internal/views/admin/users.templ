@@ -503,6 +503,7 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							Attributes: templ.Attributes{
 								"minlength": "12",
 								"required": !data.IsEdit,
+								"autocomplete": "new-password",
 								"x-model": "password",
 								"@input": "checkStrength()",
 							},
@@ -537,6 +538,7 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							Attributes: templ.Attributes{
 								"minlength": "12",
 								"required": !data.IsEdit,
+								"autocomplete": "new-password",
 							},
 						})
 						if data.Errors["password_confirm"] != "" {
@@ -617,6 +619,20 @@ templ userMFACard(pc *PageContext, userID int64, status UserMFAStatus) {
 				>
 					@csrfField()
 					<p class="form-help mb-4">{ pc.T("users.mfa_reset_help") }</p>
+					<div class="form-group mb-4">
+						@label.Label(label.Props{For: "mfa_reset_current_password", Class: "block mb-1"}) {
+							{ pc.T("users.current_password") }
+						}
+						@input.Input(input.Props{
+							Type: input.TypePassword,
+							ID: "mfa_reset_current_password",
+							Name: "current_password",
+							Attributes: templ.Attributes{
+								"autocomplete": "current-password",
+								"required": true,
+							},
+						})
+					</div>
 					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDestructive}) {
 						{ pc.T("users.mfa_reset") }
 					}

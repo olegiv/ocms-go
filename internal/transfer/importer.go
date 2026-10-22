@@ -19,6 +19,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -2467,6 +2468,15 @@ func (i *Importer) validate(data *ExportData, importLanguages, importMedia bool)
 	errs = validateEntities(errs, data.Users, "user", "email",
 		func(u ExportUser) string { return u.Email }, "role",
 		func(u ExportUser) string { return u.Role })
+	for _, u := range data.Users {
+		if u.Role != "" && !slices.Contains(model.ValidRoles, u.Role) {
+			errs = append(errs, ImportError{
+				Entity:  "user",
+				ID:      u.Email,
+				Message: fmt.Sprintf("invalid user role %q", u.Role),
+			})
+		}
+	}
 
 	errs = validateEntities(errs, data.Categories, "category", "slug",
 		func(c ExportCategory) string { return c.Slug }, "name",
@@ -3748,6 +3758,18 @@ func (i *Importer) importLanguages(ctx context.Context, queries *store.Queries, 
 	return nil
 }
 
+// importRole is the role an import overwrite gives an existing user with
+// role existing whose archive entry has role archived. An import never
+// grants or removes the admin role: otherwise a stolen administrator
+// session could create an editor whose password it knows and import it as
+// an administrator, without the password the user form asks for.
+func importRole(existing, archived string) string {
+	if existing == model.RoleAdmin || archived == model.RoleAdmin {
+		return existing
+	}
+	return archived
+}
+
 func (i *Importer) importUsers(ctx context.Context, queries *store.Queries, users []ExportUser, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
@@ -3762,10 +3784,14 @@ func (i *Importer) importUsers(ctx context.Context, queries *store.Queries, user
 				result.IncrementSkipped("users")
 				continue
 			case ConflictOverwrite:
+				role := importRole(existing.Role, user.Role)
+				if role != user.Role {
+					slog.Warn("import kept a user's role", "user_id", existing.ID, "role", existing.Role, "archive_role", user.Role)
+				}
 				_, err = queries.UpdateUser(ctx, store.UpdateUserParams{
 					ID:        existing.ID,
 					Email:     user.Email,
-					Role:      user.Role,
+					Role:      role,
 					Name:      user.Name,
 					UpdatedAt: now,
 				})

@@ -53,9 +53,9 @@ func TestOnlyGrantSessionSignsIn(t *testing.T) {
 	}
 }
 
-// sessionUserReadExceptions are the functions outside internal/middleware
-// allowed to read the session's user ID directly, with why they need not
-// know whether the session is stale.
+// sessionUserReadExceptions are the functions allowed to read the session's
+// user ID directly: the middleware that judges sessions, and callers that
+// need not know whether the session is stale, with why.
 var sessionUserReadExceptions = map[string]string{
 	"internal/middleware/auth.go Auth":               "the authentication gate itself",
 	"internal/middleware/auth.go LoadUser":           "applies isSessionStale",
@@ -134,8 +134,8 @@ func parseRepoGoFiles(t *testing.T) (*token.FileSet, map[string]*ast.File) {
 // TestUserIDPutScanMatchesByValue checks the scan behind
 // TestOnlyGrantSessionSignsIn on a fixture: the key is found however a
 // constant or variable spells it (its own literal, a raw string, a
-// concatenation, an alias of another key name, one declared inside a function
-// or with :=) and however
+// concatenation, an alias of another key name, one declared inside a function,
+// with := or assigned with =) and however
 // the call writes it (the literal, a constant, a qualified constant, in
 // parentheses), in functions and package-level func literals, while other
 // keys are not. A key reaching Put through a helper's parameter needs type
@@ -149,6 +149,7 @@ const raw = ` + "`user_id`" + `
 const joined = "user_" + "id"
 var held = "user_id"
 func g() { k := middleware.SessionKeyUserID; sm.Put(ctx, k, 1) }
+func h() { var assigned string; assigned = middleware.SessionKeyUserID; sm.Put(ctx, assigned, 1) }
 var signIn = func() { sm.Put(ctx, sessionKeyUserID, 1) }
 func f() {
 	const local = "user_id"
@@ -171,17 +172,18 @@ func f() {
 	}
 	files := map[string]*ast.File{"p.go": file}
 	puts := userIDPuts(file, userIDKeyNames(files))
-	if len(puts) != 10 {
+	if len(puts) != 11 {
 		for _, put := range puts {
 			t.Logf("found %s in %s", fset.Position(put.pos), put.where)
 		}
-		t.Fatalf("found %d user ID writes, want 10", len(puts))
+		t.Fatalf("found %d user ID writes, want 11", len(puts))
 	}
 }
 
 // userIDKeyNames returns the names of the constants and variables, at any
-// level and declared with const, var or :=, that hold the session's user ID
-// key "user_id", directly or as an alias of another such name.
+// level and bound with const, var, := or =, that hold the session's user ID
+// key "user_id", directly or as an alias of another such name. Names are
+// matched across the repository, not per scope, which errs toward flagging.
 func userIDKeyNames(files map[string]*ast.File) map[string]bool {
 	type binding struct {
 		name  string
@@ -204,7 +206,7 @@ func userIDKeyNames(files map[string]*ast.File) map[string]bool {
 					}
 				}
 			case *ast.AssignStmt:
-				if decl.Tok != token.DEFINE || len(decl.Lhs) != len(decl.Rhs) {
+				if (decl.Tok != token.DEFINE && decl.Tok != token.ASSIGN) || len(decl.Lhs) != len(decl.Rhs) {
 					break
 				}
 				for i, lhs := range decl.Lhs {

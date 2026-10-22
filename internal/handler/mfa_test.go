@@ -490,8 +490,13 @@ func TestUsersHandlerResetMFA(t *testing.T) {
 	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
 	h.SetMFAService(env.svc)
 
-	request := func(method, target string, id int64) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(method, target, nil)
+	request := func(method, target string, id int64, current ...string) *httptest.ResponseRecorder {
+		form := url.Values{"current_password": {mfaTestPassword}}
+		if len(current) > 0 {
+			form.Set("current_password", current[0])
+		}
+		req := httptest.NewRequest(method, target, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(id, 10)})
 		req = requestWithSession(env.sm, req)
 		req = addUserToContext(req, &admin)
@@ -515,6 +520,18 @@ func TestUsersHandlerResetMFA(t *testing.T) {
 	}
 	if enrolled, err := env.svc.Enrolled(t.Context(), admin.ID); err != nil || !enrolled {
 		t.Fatalf("an administrator reset their own second factor: %t, %v", enrolled, err)
+	}
+
+	// The reset needs the acting administrator's password, like the other
+	// changes that could hand an account over.
+	for _, current := range []string{"", "Not-the-password!"} {
+		rr := request(http.MethodPost, "/admin/users/2/mfa/reset", editor.ID, current)
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("reset with current password %q = %d", current, rr.Code)
+		}
+		if enrolled, err := env.svc.Enrolled(t.Context(), editor.ID); err != nil || !enrolled {
+			t.Fatalf("reset with current password %q removed the second factor: %t, %v", current, enrolled, err)
+		}
 	}
 
 	rr := request(http.MethodPost, "/admin/users/2/mfa/reset", editor.ID)
@@ -826,10 +843,10 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 		}
 		return out
 	}
-	refused := func(t *testing.T, rr *httptest.ResponseRecorder) {
+	refused := func(t *testing.T, rr *httptest.ResponseRecorder, message string) {
 		t.Helper()
-		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "current password") {
-			t.Errorf("got %d %q, want the form again with a current-password error", rr.Code, rr.Header().Get("Location"))
+		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), message) {
+			t.Errorf("got %d %q, want the form again saying %q", rr.Code, rr.Header().Get("Location"), message)
 		}
 	}
 	accepted := func(t *testing.T, rr *httptest.ResponseRecorder) {
@@ -848,13 +865,14 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 			{"own password", &admin, edit(admin, newPassword)},
 			{"own email", &admin, edit(admin, url.Values{"email": {"new-admin@example.com"}})},
 			{"another user's password", &editor, edit(editor, newPassword)},
+			{"another user's email", &editor, edit(editor, url.Values{"email": {"new-editor-email@example.com"}})},
 			{"promotion to admin", &editor, edit(editor, url.Values{"role": {model.RoleAdmin}})},
 			{"new administrator", nil, url.Values{"name": {"Second admin"}, "email": {"second@example.com"}, "role": {model.RoleAdmin},
 				"password": {"Second-admin-pass!"}, "password_confirm": {"Second-admin-pass!"}}},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				refused(t, send(tc.target, tc.form))
-				refused(t, send(tc.target, with(tc.form, "Not-the-password!")))
+				refused(t, send(tc.target, tc.form), "Enter your current password to make this change")
+				refused(t, send(tc.target, with(tc.form, "Not-the-password!")), "Your current password is incorrect")
 			})
 		}
 	})
@@ -862,8 +880,13 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 		t.Fatal("another user's password changed without the actor's password")
 	}
 
-	// With the actor's password each change goes through; other edits never
-	// needed it.
+	// Other edits never needed it: an unchanged form, a new name, keeping
+	// another administrator's role, an email differing only by spaces.
+	other := createTestUser(t, env.db, testUser{Email: "other-admin@example.com", Name: "Other admin", Role: model.RoleAdmin, PasswordHash: mustPasswordHash(t, env.db, admin.ID)})
+	accepted(t, send(&admin, edit(admin, nil)))
+	accepted(t, send(&admin, edit(admin, url.Values{"name": {"Renamed admin"}})))
+	accepted(t, send(&other, edit(other, url.Values{"name": {"Renamed other admin"}})))
+	accepted(t, send(&editor, edit(editor, url.Values{"email": {"  " + editor.Email + " "}})))
 	accepted(t, send(&editor, edit(editor, url.Values{"name": {"Renamed editor"}})))
 	accepted(t, send(nil, url.Values{"name": {"New editor"}, "email": {"new-editor@example.com"}, "role": {model.RoleEditor},
 		"password": {"New-editor-pass-1!"}, "password_confirm": {"New-editor-pass-1!"}}))
@@ -873,6 +896,11 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 	}
 	accepted(t, send(nil, with(url.Values{"name": {"Second admin"}, "email": {"second@example.com"}, "role": {model.RoleAdmin},
 		"password": {"Second-admin-pass!"}, "password_confirm": {"Second-admin-pass!"}}, mfaTestPassword)))
+	accepted(t, send(&editor, with(edit(editor, url.Values{"email": {"moved-editor@example.com"}}), mfaTestPassword)))
+	editor.Email = "moved-editor@example.com"
+	accepted(t, send(&editor, with(edit(editor, url.Values{"role": {model.RoleAdmin}}), mfaTestPassword)))
+	accepted(t, send(&admin, with(edit(admin, url.Values{"email": {"moved-admin@example.com"}}), mfaTestPassword)))
+	admin.Email = "moved-admin@example.com"
 	accepted(t, send(&admin, with(edit(admin, newPassword), mfaTestPassword)))
 }
 
@@ -902,6 +930,10 @@ func TestActorPasswordLockout(t *testing.T) {
 	}
 	if ok, _ := auth.CheckPassword(mfaTestPassword, mustPasswordHash(t, env.db, admin.ID)); !ok {
 		t.Error("the password changed while the account was locked")
+	}
+	var locks int
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Account locked due to failed attempts' AND user_id = ?`, admin.ID).Scan(&locks); err != nil || locks != 1 {
+		t.Errorf("lock events = %d, %v; want the lockout logged once", locks, err)
 	}
 }
 

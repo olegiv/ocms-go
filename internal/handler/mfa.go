@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -271,20 +270,18 @@ func (h *AuthHandler) refuseLockedAccount(w http.ResponseWriter, r *http.Request
 	return true
 }
 
-// recordWrongCode counts a wrong second-factor code, or a wrong password given
-// to change the second factor, against the account lockout and logs message.
-// It reports the lockout duration when it locked the account.
-func (h *AuthHandler) recordWrongCode(r *http.Request, user store.User, message string) (bool, time.Duration) {
-	clientIP := hcaptcha.GetRemoteIP(r)
-	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, message, &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": user.Email})
-	if h.loginProtection == nil {
-		return false, 0
-	}
-	locked, lockDuration := h.loginProtection.RecordFailedAttempt(user.Email, clientIP)
-	if locked {
-		_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": user.Email, "duration": lockDuration.String()})
-	}
-	return locked, lockDuration
+// logRefusal logs message, a refused sign-in step or second-factor change,
+// as a warning auth event for user.
+func (h *AuthHandler) logRefusal(r *http.Request, user store.User, message string) {
+	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, message, &user.ID, hcaptcha.GetRemoteIP(r), middleware.GetRequestURL(r), map[string]any{"email": user.Email})
+}
+
+// recordWrongCode logs message for a wrong second-factor code and counts it
+// against the account lockout. It returns the lockout duration when it
+// locked the account, or 0.
+func (h *AuthHandler) recordWrongCode(r *http.Request, user store.User, message string) time.Duration {
+	h.logRefusal(r, user, message)
+	return countFailedAttempt(r, h.loginProtection, h.eventService, user)
 }
 
 // rejectSignInCode answers a second-factor code the pending sign-in could
@@ -303,7 +300,7 @@ func (h *AuthHandler) rejectSignInCode(w http.ResponseWriter, r *http.Request, u
 	}
 
 	ctx := r.Context()
-	if locked, lockDuration := h.recordWrongCode(r, user, "Login failed: invalid two-factor code"); locked {
+	if lockDuration := h.recordWrongCode(r, user, "Login failed: invalid two-factor code"); lockDuration > 0 {
 		h.clearPendingSignIn(ctx)
 		flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
 		return
@@ -623,30 +620,27 @@ func (h *AuthHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
 // lock the owner out. Wrong passwords count against the login lockout. It
 // answers the request itself and reports false on failure.
 func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, user store.User, back string) bool {
-	if h.refuseLockedAccount(w, r, user, nil, back) {
-		return false
-	}
 	lang := middleware.GetAdminLang(r)
-	password := r.FormValue("password")
-	if password == "" {
-		// A form from before the account's status changed has no password
-		// field: ask again, without counting it as a wrong password.
-		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.password_required"))
-		return false
-	}
-	valid, err := auth.CheckPassword(password, user.PasswordHash)
-	if err != nil {
-		logAndInternalError(w, "password check error", "error", err, "user_id", user.ID)
-		return false
-	}
-	if valid {
+	c := confirmPassword(r, h.loginProtection, h.eventService, user, r.FormValue("password"))
+	switch c.Outcome {
+	case passwordOK:
 		return true
+	case passwordLocked:
+		flashError(w, r, h.renderer, back, i18n.T(lang, "auth.account_locked", formatDuration(c.LockedFor)))
+	case passwordMissing:
+		// A form from before the account's status changed has no password
+		// field: ask again.
+		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.password_required"))
+	case passwordUnverified:
+		logAndInternalError(w, "password check error", "error", c.Err, "user_id", user.ID)
+	default:
+		h.logRefusal(r, user, "Two-factor change refused: invalid password")
+		if c.LockedFor > 0 {
+			flashError(w, r, h.renderer, back, i18n.T(lang, "auth.too_many_attempts", formatDuration(c.LockedFor)))
+		} else {
+			flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.invalid_password"))
+		}
 	}
-	if locked, lockDuration := h.recordWrongCode(r, user, "Two-factor change refused: invalid password"); locked {
-		flashError(w, r, h.renderer, back, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
-		return false
-	}
-	flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.invalid_password"))
 	return false
 }
 
@@ -667,7 +661,7 @@ func (h *AuthHandler) verifyCurrentCode(w http.ResponseWriter, r *http.Request, 
 		slog.Error("authenticator codes cannot be verified", "error", err, "user_id", user.ID)
 		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.totp_unavailable"))
 	case errors.Is(err, mfa.ErrInvalidCode), errors.Is(err, mfa.ErrNotEnrolled):
-		if locked, lockDuration := h.recordWrongCode(r, user, "Two-factor change refused: invalid code"); locked {
+		if lockDuration := h.recordWrongCode(r, user, "Two-factor change refused: invalid code"); lockDuration > 0 {
 			flashError(w, r, h.renderer, back, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
 			return false
 		}

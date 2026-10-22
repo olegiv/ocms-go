@@ -194,7 +194,7 @@ When importing content that already exists (matched by slug or email):
 | **Overwrite** | Replace existing with imported |
 | **Rename** | Import with modified slug (adds `-1`, `-2`, etc.); users are skipped instead, since the email is their identity |
 
-Users that do not exist yet are created with a random, unknown password; an administrator must set a new one under **Admin > Users** before they can sign in.
+Users that do not exist yet are created with a random, unknown password; an administrator must set a new one under **Admin > Users** before they can sign in. Overwriting an existing user updates the name and role, but never grants or removes the admin role: that is changed on the user form, which asks for the acting administrator's password. An archive with a role other than `admin`, `editor` or `public` fails validation.
 
 ### Import Order
 
