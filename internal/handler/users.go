@@ -20,6 +20,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
@@ -50,6 +51,7 @@ type UsersHandler struct {
 	sessionManager *scs.SessionManager
 	dispatcher     *webhook.Dispatcher
 	eventService   *service.EventService
+	mfa            *mfa.Service
 }
 
 // NewUsersHandler creates a new UsersHandler.
@@ -65,6 +67,12 @@ func NewUsersHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 // SetDispatcher sets the webhook dispatcher for event dispatching.
 func (h *UsersHandler) SetDispatcher(d *webhook.Dispatcher) {
 	h.dispatcher = d
+}
+
+// SetMFAService sets the two-factor service the edit page reads the user's
+// status from and the reset action uses. Without it neither is shown.
+func (h *UsersHandler) SetMFAService(s *mfa.Service) {
+	h.mfa = s
 }
 
 // dispatchUserEvent dispatches a user-related webhook event.
@@ -351,9 +359,69 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		},
 		IsEdit: true,
 	}
+	if h.mfa != nil {
+		status, err := h.mfa.Status(r.Context(), editUser.ID)
+		if err != nil {
+			logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", editUser.ID)
+			return
+		}
+		data.MFA = &adminviews.UserMFAStatus{
+			Enrolled: status.Enrolled,
+			IsSelf:   editUser.ID == middleware.GetUserID(r),
+		}
+		if status.Enrolled {
+			data.MFA.EnrolledAt = h.renderer.FormatDateTimeLocale(status.EnrolledAt, lang)
+		}
+	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.edit"), userEditBreadcrumbs(lang, editUser.Name, editUser.ID))
 	renderTempl(w, r, adminviews.UserFormPage(pc, data))
+}
+
+// ResetMFA handles POST /admin/users/{id}/mfa/reset - removes another user's
+// second factor and signs them out everywhere, for a user who lost their
+// authenticator and recovery codes. Where a second factor is required, they
+// set up a new one at their next sign-in. Administrators change their own on
+// the account security page, which asks for a current code.
+func (h *UsersHandler) ResetMFA(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionTwoFactor, redirectAdminUsers) {
+		return
+	}
+	lang := h.renderer.GetAdminLang(r)
+	id, err := ParseIDParam(r)
+	if err != nil {
+		flashError(w, r, h.renderer, redirectAdminUsers, "Invalid user ID")
+		return
+	}
+	target, ok := h.requireUserWithRedirect(w, r, id)
+	if !ok {
+		return
+	}
+	back := fmt.Sprintf(redirectAdminUsersID, target.ID)
+	if h.mfa == nil {
+		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.not_configured"))
+		return
+	}
+	if target.ID == middleware.GetUserID(r) {
+		flashError(w, r, h.renderer, back, i18n.T(lang, "users.mfa_reset_self"))
+		return
+	}
+	enrolled, err := h.mfa.Enrolled(r.Context(), target.ID)
+	if err != nil {
+		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", target.ID)
+		return
+	}
+	if !enrolled {
+		flashError(w, r, h.renderer, back, i18n.T(lang, "users.mfa_not_enabled"))
+		return
+	}
+	if _, err := h.mfa.Disable(r.Context(), target.ID); err != nil {
+		logAndInternalError(w, "failed to reset two-factor authentication", "error", err, "user_id", target.ID)
+		return
+	}
+	slog.Info("two-factor authentication reset", "user_id", target.ID, "reset_by", middleware.GetUserID(r))
+	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelWarning, "Two-factor authentication reset by an administrator", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": target.ID, "email": target.Email})
+	flashAndRedirect(w, r, h.renderer, back, i18n.T(lang, "users.mfa_reset_done"), "success")
 }
 
 // Update handles PUT /admin/users/{id} - updates an existing user.

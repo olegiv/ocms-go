@@ -238,6 +238,7 @@ mkdir -p "$INSTANCE_DIR"/{data,uploads,custom/themes,backups,logs}
 
 # Generate session secret
 SESSION_SECRET=$(openssl rand -base64 32)
+MFA_KEY=$(openssl rand -base64 32)
 EMBED_PROXY_TOKEN=$(openssl rand -base64 32)
 
 # Create .env file
@@ -248,6 +249,12 @@ cat > "$INSTANCE_DIR/.env" << EOF
 
 # Session encryption secret (unique per site)
 OCMS_SESSION_SECRET=$SESSION_SECRET
+
+# Seals the authenticator-app secrets of two-factor authentication, which
+# production requires for every account (OCMS_REQUIRE_MFA). Keep it with the
+# database backups: without it, enrolled users can sign in only with
+# recovery codes.
+OCMS_MFA_KEY=$MFA_KEY
 
 # Server configuration
 OCMS_SERVER_HOST=127.0.0.1

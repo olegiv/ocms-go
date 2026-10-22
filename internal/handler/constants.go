@@ -52,8 +52,21 @@ const (
 
 	// RouteLogin is the login route.
 	RouteLogin = "/login"
+	// RouteLoginMFA is the second step of a sign-in: the two-factor code.
+	RouteLoginMFA = RouteLogin + "/mfa"
+	// RouteLoginMFASetup enrolls an authenticator during sign-in when the
+	// site requires two-factor authentication.
+	RouteLoginMFASetup = RouteLoginMFA + "/setup"
 	// RouteAccount is the authenticated account overview route.
 	RouteAccount = "/account"
+	// RouteAccountSecurity is the two-factor authentication overview.
+	RouteAccountSecurity = RouteAccount + "/security"
+	// RouteAccountSecurityTOTP enrolls or replaces an authenticator app.
+	RouteAccountSecurityTOTP = RouteAccountSecurity + "/totp"
+	// RouteAccountSecurityRecoveryCodes issues new recovery codes.
+	RouteAccountSecurityRecoveryCodes = RouteAccountSecurity + "/recovery-codes"
+	// RouteAccountSecurityDisable turns two-factor authentication off.
+	RouteAccountSecurityDisable = RouteAccountSecurity + "/disable"
 	// RouteCSPReport receives Content-Security-Policy violation reports.
 	RouteCSPReport = "/csp-report"
 	// RouteLogout is the logout route.
@@ -126,6 +139,8 @@ const (
 	RouteWebhooksID = RouteWebhooks + RouteParamID
 	// RouteRedirectsID is the redirects ID route pattern.
 	RouteRedirectsID = RouteRedirects + RouteParamID
+	// RouteSuffixMFAReset is the suffix that resets a user's second factor.
+	RouteSuffixMFAReset = "/mfa/reset"
 )
 
 const (

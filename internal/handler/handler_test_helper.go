@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -50,6 +51,23 @@ func testDB(t *testing.T) *sql.DB {
 		);
 		CREATE INDEX idx_users_email ON users(email);
 		CREATE INDEX idx_users_role ON users(role);
+
+		CREATE TABLE user_totp (
+			user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			secret_enc BLOB NOT NULL,
+			last_step INTEGER NOT NULL DEFAULT 0,
+			enrolled_at DATETIME NOT NULL,
+			last_used_at DATETIME
+		);
+
+		CREATE TABLE user_recovery_codes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			code_hash TEXT NOT NULL,
+			created_at DATETIME NOT NULL,
+			used_at DATETIME,
+			UNIQUE (user_id, code_hash)
+		);
 
 		CREATE TABLE sessions (
 			token TEXT PRIMARY KEY,
@@ -390,6 +408,20 @@ func testDB(t *testing.T) *sql.DB {
 	})
 
 	return db
+}
+
+// testMFAKey is the OCMS_MFA_KEY of handler tests.
+const testMFAKey = "Zp8Lq3Wn6Rx1Tc9Vb4Ym7Kd2Hf5Gj0Sa8Ne3Ux6Qi="
+
+// testMFAService returns a two-factor service over db that can enroll
+// authenticators and does not require them.
+func testMFAService(t *testing.T, db *sql.DB) *mfa.Service {
+	t.Helper()
+	svc, err := mfa.NewService(db, testMFAKey, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc
 }
 
 // testSessionManager creates a session manager for testing.

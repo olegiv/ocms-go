@@ -45,6 +45,7 @@ oCMS implements defense-in-depth security measures:
 - **Password Hashing**: Argon2id with secure parameters
 - **Session Management**: SCS with SQLite persistence, 24-hour lifetime
 - **Role-Based Access Control**: Admin, Editor, and Public roles
+- **Two-Factor Authentication**: Authenticator apps (TOTP) with single-use recovery codes; required for every account in production (`OCMS_REQUIRE_MFA`), with secrets sealed under `OCMS_MFA_KEY`. A session is signed in only after the second factor, codes cannot be replayed, and changes to the second factor need a current code
 
 ### Login Protection
 - **IP Rate Limiting**: Prevents brute-force attacks
@@ -142,7 +143,7 @@ timeouts and redirects carry them too.
 
 For detailed information, see:
 
-- [Login Security](docs/login-security.md) - Rate limiting and account lockout
+- [Login Security](docs/login-security.md) - Rate limiting, account lockout and two-factor authentication
 - [CSRF Protection](docs/csrf.md) - CSRF configuration and trusted origins
 - [hCaptcha Integration](docs/hcaptcha.md) - Bot protection setup
 - [MCP Server](docs/mcp-module.md) - AI agent access, visibility rules, limits and threat model

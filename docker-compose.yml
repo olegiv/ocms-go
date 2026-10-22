@@ -97,6 +97,8 @@ services:
       - OCMS_DEMO_MODE
       - OCMS_HCAPTCHA_DISABLED
       - OCMS_HSTS_PRELOAD
+      # Two-factor authentication: OCMS_MFA_KEY seals authenticator secrets
+      - OCMS_MFA_KEY
       # Allowlists and tokens for integrations
       - OCMS_EMBED_ALLOWED_ORIGINS
       - OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS
@@ -124,6 +126,7 @@ services:
       - OCMS_REQUIRE_SANITIZE_PAGE_HTML
       - OCMS_BLOCK_SUSPICIOUS_PAGE_HTML
       - OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML
+      - OCMS_REQUIRE_MFA
     volumes:
       - ocms_data:/app/data
       - ocms_uploads:/app/uploads

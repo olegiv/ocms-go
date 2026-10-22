@@ -1,0 +1,159 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package account
+
+import (
+	"strconv"
+
+	"github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+)
+
+// LowRecoveryCodes is the count at which the page suggests new codes.
+const LowRecoveryCodes = 3
+
+// SecurityData describes the user's two-factor authentication.
+type SecurityData struct {
+	Enrolled          bool
+	EnrolledAt        string
+	RecoveryCodesLeft int64
+	// Available is false when the server has no OCMS_MFA_KEY.
+	Available bool
+	// Required means the site makes every account use a second factor, so
+	// the user may replace the authenticator but not turn it off.
+	Required bool
+	DemoMode bool
+}
+
+// SecurityPage shows the user's two-factor status and its actions.
+templ SecurityPage(pc *admin.PageContext, d SecurityData) {
+	@admin.AdminLayout(pc) {
+		@card.Card(card.Props{Class: "max-w-3xl"}) {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("mfa.title") }
+				}
+				@card.Description() {
+					{ pc.T("mfa.description") }
+				}
+			}
+			@card.Content() {
+				if d.DemoMode {
+					@alert.Alert(alert.Props{Class: "alert-info mb-4"}) {
+						{ pc.T("mfa.demo_mode") }
+					}
+				} else if !d.Available && !d.Enrolled {
+					@alert.Alert(alert.Props{Class: "alert-info mb-4"}) {
+						{ pc.T("mfa.not_configured") }
+					}
+				}
+				<div class="mb-6 flex flex-wrap items-center gap-3">
+					<span class="text-sm text-muted-foreground">{ pc.T("mfa.status") }</span>
+					if d.Enrolled {
+						@badge.Badge(badge.Props{Class: "badge-success"}) {
+							{ pc.T("mfa.enabled") }
+						}
+						<span class="text-sm">{ pc.T("mfa.enabled_since", d.EnrolledAt) }</span>
+					} else {
+						@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+							{ pc.T("mfa.disabled") }
+						}
+					}
+				</div>
+				if d.Enrolled {
+					@enrolledActions(pc, d)
+				} else if d.Available && !d.DemoMode {
+					@button.Button(button.Props{Href: "/account/security/totp"}) {
+						@icon.ShieldCheck(icon.Props{Size: 16})
+						{ pc.T("mfa.enable") }
+					}
+				}
+			}
+		}
+	}
+}
+
+// enrolledActions lets an enrolled user replace the authenticator, renew the
+// recovery codes and, unless the site requires it, turn two-factor off.
+templ enrolledActions(pc *admin.PageContext, d SecurityData) {
+	<p class="mb-2 text-sm">{ pc.T("mfa.recovery_codes_left", strconv.FormatInt(d.RecoveryCodesLeft, 10)) }</p>
+	if d.RecoveryCodesLeft <= LowRecoveryCodes {
+		@alert.Alert(alert.Props{Class: "alert-warning mb-4"}) {
+			@icon.TriangleAlert(icon.Props{Size: 20})
+			<div>{ pc.T("mfa.recovery_codes_low") }</div>
+		}
+	}
+	if d.Available && !d.DemoMode {
+		<div class="mb-6">
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/account/security/totp"}) {
+				{ pc.T("mfa.replace") }
+			}
+		</div>
+	}
+	@confirmCodeForm(pc, "/account/security/recovery-codes", "recovery-current-code", pc.T("mfa.regenerate_codes"), button.VariantOutline)
+	if d.Required {
+		<p class="mt-6 text-sm text-muted-foreground">{ pc.T("mfa.required_note") }</p>
+	} else {
+		@confirmCodeForm(pc, "/account/security/disable", "disable-current-code", pc.T("mfa.disable"), button.VariantDestructive)
+	}
+}
+
+// confirmCodeForm posts an action that needs a current code to confirm it.
+templ confirmCodeForm(pc *admin.PageContext, action, id, submit string, variant button.Variant) {
+	<form method="POST" action={ templ.SafeURL(action) } class="mt-6 max-w-md">
+		@admin.CSRFField()
+		<div class="form-group">
+			@label.Label(label.Props{For: id, Class: "block mb-1"}) {
+				{ pc.T("mfa.current_code_label") }
+			}
+			@admin.CurrentCodeInput(id)
+			<p class="form-help">{ pc.T("mfa.current_code_help") }</p>
+		</div>
+		@button.Button(button.Props{Type: button.TypeSubmit, Variant: variant}) {
+			{ submit }
+		}
+	</form>
+}
+
+// TOTPSetupPage enrolls an authenticator app, or replaces the enrolled one.
+templ TOTPSetupPage(pc *admin.PageContext, setup admin.TOTPSetup) {
+	@admin.AdminLayout(pc) {
+		@card.Card(card.Props{Class: "max-w-xl"}) {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("mfa.setup_title") }
+				}
+			}
+			@card.Content() {
+				@admin.TOTPSetupForm(pc.T, setup)
+			}
+		}
+	}
+}
+
+// RecoveryCodesPage shows newly issued recovery codes once.
+templ RecoveryCodesPage(pc *admin.PageContext, codes []string) {
+	@admin.AdminLayout(pc) {
+		@card.Card(card.Props{Class: "max-w-xl"}) {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("mfa.recovery_codes_title") }
+				}
+			}
+			@card.Content() {
+				@admin.RecoveryCodesList(pc.T, codes)
+				<div class="form-actions mt-6">
+					@button.Button(button.Props{Href: "/account/security"}) {
+						{ pc.T("mfa.recovery_codes_saved") }
+					}
+				</div>
+			}
+		}
+	}
+}

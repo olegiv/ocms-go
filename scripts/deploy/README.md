@@ -107,6 +107,11 @@ OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
 `setup-site.sh` already writes these variables, with a random `OCMS_EMBED_PROXY_TOKEN`
 and `OCMS_EMBED_ALLOWED_ORIGINS=https://<domain>`; adjust the origins and upstream host.
 
+It also writes a random `OCMS_MFA_KEY`. Production requires two-factor authentication
+for every account (`OCMS_REQUIRE_MFA`), and the key seals the authenticator-app secrets:
+back it up with the database, because enrolled users can sign in only with recovery
+codes without it.
+
 If you use self-hosted Dify, replace `api.dify.ai` with your API hostname.
 
 The generated file sets `OCMS_ENV=production`, and in production the application refuses to
@@ -746,6 +751,7 @@ sudo ocmsctl start example_com
 
 - [ ] Changed default admin password
 - [ ] Set strong `OCMS_SESSION_SECRET` (32+ bytes)
+- [ ] Set `OCMS_MFA_KEY` (32+ bytes, distinct from the session secret) and back it up
 - [ ] Set `OCMS_ENV=production`
 - [ ] Configure `OCMS_EMBED_PROXY_TOKEN` when embed proxy is enabled
 - [ ] Configure `OCMS_EMBED_ALLOWED_ORIGINS` for all public hostnames

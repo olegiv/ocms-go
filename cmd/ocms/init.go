@@ -30,7 +30,7 @@ func generateSessionSecret() (string, error) {
 
 // runInit scaffolds a ready-to-run oCMS site directory: it creates the data,
 // uploads, and custom subdirectories and writes a .env file with a freshly
-// generated session secret. The directory can then be started with
+// generated session secret and OCMS_MFA_KEY. The directory can then be started with
 // `ocms serve` from inside it.
 func runInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
@@ -87,9 +87,13 @@ func runInit(args []string) error {
 	if err != nil {
 		return err
 	}
+	mfaKey, err := generateSessionSecret()
+	if err != nil {
+		return err
+	}
 
 	envPath := filepath.Join(dir, ".env")
-	createdEnv, err := writeEnvFile(envPath, secret, host, port)
+	createdEnv, err := writeEnvFile(envPath, secret, mfaKey, host, port)
 	if err != nil {
 		return err
 	}
@@ -99,18 +103,20 @@ func runInit(args []string) error {
 }
 
 // writeEnvFile writes a starter .env at path with owner-only (0600)
-// permissions because it holds the session secret. It never overwrites an
-// existing .env (the secret it holds must be preserved); in that case it
-// returns created=false without error.
-func writeEnvFile(path, secret, host string, port int) (created bool, err error) {
+// permissions because it holds the session secret and the OCMS_MFA_KEY that
+// seals authenticator secrets. It never overwrites an existing .env (the
+// secrets it holds must be preserved); in that case it returns created=false
+// without error.
+func writeEnvFile(path, secret, mfaKey, host string, port int) (created bool, err error) {
 	content := fmt.Sprintf(`OCMS_SESSION_SECRET=%s
+OCMS_MFA_KEY=%s
 OCMS_DB_PATH=./data/ocms.db
 OCMS_UPLOADS_DIR=./uploads
 OCMS_CUSTOM_DIR=./custom
 OCMS_SERVER_HOST=%s
 OCMS_SERVER_PORT=%d
 OCMS_DO_SEED=true
-`, secret, host, port)
+`, secret, mfaKey, host, port)
 
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {

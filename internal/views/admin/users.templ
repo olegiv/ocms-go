@@ -42,6 +42,17 @@ type UserFormData struct {
 	Roles      []string
 	FormValues map[string]string
 	Errors     map[string]string
+	// MFA is the edited user's two-factor status; nil hides the section.
+	MFA *UserMFAStatus
+}
+
+// UserMFAStatus is a user's two-factor status on the edit page.
+type UserMFAStatus struct {
+	Enrolled   bool
+	EnrolledAt string
+	// IsSelf hides the reset: an administrator changes their own second
+	// factor on the account security page, which asks for a current code.
+	IsSelf bool
 }
 
 // UserItem holds individual user data.
@@ -548,6 +559,48 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 					}
 				</div>
 			</form>
+		}
+		if data.IsEdit && data.User != nil && data.MFA != nil {
+			@userMFACard(pc, data.User.ID, *data.MFA)
+		}
+	}
+}
+
+// userMFACard shows the edited user's two-factor status and its reset.
+templ userMFACard(pc *PageContext, userID int64, status UserMFAStatus) {
+	@card.Card(card.Props{Class: "mt-6"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mfa.title") }
+			}
+		}
+		@card.Content() {
+			<p class="mb-4 text-sm">
+				if status.Enrolled {
+					{ pc.T("mfa.enabled_since", status.EnrolledAt) }
+				} else {
+					{ pc.T("users.mfa_not_enabled") }
+				}
+			</p>
+			if status.IsSelf {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/account/security"}) {
+					{ pc.T("users.mfa_manage_own") }
+				}
+			} else if status.Enrolled {
+				<form
+					method="POST"
+					action={ templ.SafeURL(fmt.Sprintf("/admin/users/%d/mfa/reset", userID)) }
+					x-data
+					data-confirm={ pc.T("users.mfa_reset_confirm") }
+					@submit="if (!confirm($el.dataset.confirm)) $event.preventDefault()"
+				>
+					@csrfField()
+					<p class="form-help mb-4">{ pc.T("users.mfa_reset_help") }</p>
+					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDestructive}) {
+						{ pc.T("users.mfa_reset") }
+					}
+				</form>
+			}
 		}
 	}
 }

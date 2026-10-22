@@ -79,7 +79,7 @@ func newAuthTestHandler(t *testing.T) (*AuthHandler, *sql.DB, *scs.SessionManage
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewAuthHandler(db, renderer, sm, nil, nil), db, sm
+	return NewAuthHandler(db, renderer, sm, nil, nil, testMFAService(t, db)), db, sm
 }
 
 func authTestRouter(h *AuthHandler, db *sql.DB, sm *scs.SessionManager) http.Handler {

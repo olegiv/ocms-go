@@ -70,6 +70,11 @@ const (
 
 	// RestrictionScheduler blocks scheduler management in demo mode.
 	RestrictionScheduler DemoRestriction = "scheduler"
+
+	// RestrictionTwoFactor blocks two-factor enrollment in demo mode: the
+	// seeded accounts are shared, so one visitor's authenticator would lock
+	// every other visitor out.
+	RestrictionTwoFactor DemoRestriction = "two_factor"
 )
 
 // DemoModeMessage is the user-friendly message shown when an action is blocked.
@@ -105,6 +110,7 @@ func DemoModeMessageDetailed(restriction DemoRestriction) string {
 		RestrictionClearCache:       "Clearing cache is disabled in demo mode",
 		RestrictionSQLExecution:     "SQL execution is disabled in demo mode",
 		RestrictionScheduler:        "Scheduler management is disabled in demo mode",
+		RestrictionTwoFactor:        "Two-factor authentication is disabled in demo mode",
 	}
 
 	if msg, ok := messages[restriction]; ok {

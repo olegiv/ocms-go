@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/alexedwards/scs/v2"
 
@@ -36,7 +37,21 @@ const (
 	SessionKeyUserID             = "user_id"
 	SessionKeyUserSessionVersion = "user_session_version"
 	SessionKeyAdminLang          = "admin_lang"
+	// SessionKeyMFAVerified is true on a session whose sign-in passed a
+	// second factor.
+	SessionKeyMFAVerified = "mfa_verified"
 )
+
+// mfaRequired mirrors OCMS_REQUIRE_MFA for isSessionStale.
+var mfaRequired atomic.Bool
+
+// SetMFARequired tells the session checks whether every sign-in must pass a
+// second factor. When it must, a session without SessionKeyMFAVerified is
+// stale, so turning the requirement on also signs out the sessions that
+// started before it. Call it once at startup.
+func SetMFARequired(required bool) {
+	mfaRequired.Store(required)
+}
 
 // Auth creates middleware that requires authentication.
 // It checks for a valid user session and redirects to login if not authenticated.
@@ -78,7 +93,7 @@ func LoadUser(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.Handle
 			}
 
 			if isSessionStale(sm, r, user) {
-				slog.Info("session invalidated by password change", "user_id", user.ID)
+				slog.Info("session invalidated by a credential change or the two-factor requirement", "user_id", user.ID)
 				_ = sm.Destroy(r.Context())
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
@@ -128,13 +143,17 @@ func OptionalLoadUser(sm *scs.SessionManager, db *sql.DB) func(http.Handler) htt
 
 // isSessionStale reports whether the session's recorded user_session_version
 // is older than the user's current session_version (which is bumped on every
-// real credential change). Sessions issued before the session_version column
-// existed have no recorded value (zero), which matches the column's default
-// for never-rotated users — so they remain valid until the first password
-// change for that user.
+// real credential change, the second factor included). Sessions issued before
+// the session_version column existed have no recorded value (zero), which
+// matches the column's default for never-rotated users — so they remain valid
+// until the first password change for that user. While a second factor is
+// required, a session whose sign-in did not pass one is stale as well.
 func isSessionStale(sm *scs.SessionManager, r *http.Request, user store.User) bool {
 	sessionVersion := sm.GetInt64(r.Context(), SessionKeyUserSessionVersion)
-	return sessionVersion < user.SessionVersion
+	if sessionVersion < user.SessionVersion {
+		return true
+	}
+	return mfaRequired.Load() && !sm.GetBool(r.Context(), SessionKeyMFAVerified)
 }
 
 // GetUser retrieves the current user from the request context.

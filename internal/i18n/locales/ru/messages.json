@@ -3103,6 +3103,41 @@
             "translation": "Создать пользователя"
         },
         {
+            "id": "users.mfa_not_enabled",
+            "message": "Two-factor authentication is not enabled for this user.",
+            "translation": "У этого пользователя двухфакторная аутентификация не включена."
+        },
+        {
+            "id": "users.mfa_manage_own",
+            "message": "Manage your two-factor authentication",
+            "translation": "Управление вашей двухфакторной аутентификацией"
+        },
+        {
+            "id": "users.mfa_reset",
+            "message": "Reset two-factor authentication",
+            "translation": "Сбросить двухфакторную аутентификацию"
+        },
+        {
+            "id": "users.mfa_reset_help",
+            "message": "Removes the user's authenticator and recovery codes and signs them out everywhere. If the site requires two-factor authentication, they set it up again at their next sign-in.",
+            "translation": "Удаляет аутентификатор и коды восстановления пользователя и завершает все его сеансы. Если на сайте двухфакторная аутентификация обязательна, пользователь настроит её заново при следующем входе."
+        },
+        {
+            "id": "users.mfa_reset_confirm",
+            "message": "Reset this user's two-factor authentication?",
+            "translation": "Сбросить двухфакторную аутентификацию этого пользователя?"
+        },
+        {
+            "id": "users.mfa_reset_done",
+            "message": "Two-factor authentication was reset. The user has been signed out.",
+            "translation": "Двухфакторная аутентификация сброшена. Сеансы пользователя завершены."
+        },
+        {
+            "id": "users.mfa_reset_self",
+            "message": "Change your own two-factor authentication on your account security page.",
+            "translation": "Свою двухфакторную аутентификацию меняйте на странице безопасности аккаунта."
+        },
+        {
             "id": "widgets.title",
             "message": "Widgets",
             "translation": "Виджеты"
@@ -4736,6 +4771,221 @@
             "id": "auth.logged_out",
             "message": "You have been logged out",
             "translation": "Вы вышли из системы"
+        },
+        {
+            "id": "mfa.title",
+            "message": "Two-factor authentication",
+            "translation": "Двухфакторная аутентификация"
+        },
+        {
+            "id": "mfa.description",
+            "message": "Protect your account with a code from an authenticator app in addition to your password.",
+            "translation": "Защитите аккаунт кодом из приложения-аутентификатора в дополнение к паролю."
+        },
+        {
+            "id": "mfa.status",
+            "message": "Status:",
+            "translation": "Статус:"
+        },
+        {
+            "id": "mfa.enabled",
+            "message": "Enabled",
+            "translation": "Включена"
+        },
+        {
+            "id": "mfa.disabled",
+            "message": "Not enabled",
+            "translation": "Не включена"
+        },
+        {
+            "id": "mfa.enabled_since",
+            "message": "Enabled since %s",
+            "translation": "Включена с %s"
+        },
+        {
+            "id": "mfa.enable",
+            "message": "Set up authenticator app",
+            "translation": "Настроить приложение-аутентификатор"
+        },
+        {
+            "id": "mfa.replace",
+            "message": "Replace authenticator",
+            "translation": "Заменить аутентификатор"
+        },
+        {
+            "id": "mfa.disable",
+            "message": "Turn off two-factor authentication",
+            "translation": "Отключить двухфакторную аутентификацию"
+        },
+        {
+            "id": "mfa.disabled_done",
+            "message": "Two-factor authentication is turned off.",
+            "translation": "Двухфакторная аутентификация отключена."
+        },
+        {
+            "id": "mfa.regenerate_codes",
+            "message": "Generate new recovery codes",
+            "translation": "Создать новые коды восстановления"
+        },
+        {
+            "id": "mfa.required_note",
+            "message": "This site requires two-factor authentication, so it cannot be turned off. You can replace your authenticator instead.",
+            "translation": "На этом сайте двухфакторная аутентификация обязательна, поэтому её нельзя отключить. Вместо этого можно заменить аутентификатор."
+        },
+        {
+            "id": "mfa.not_configured",
+            "message": "Authenticator apps are not available on this site. Ask an administrator to configure OCMS_MFA_KEY.",
+            "translation": "Приложения-аутентификаторы на этом сайте недоступны. Попросите администратора настроить OCMS_MFA_KEY."
+        },
+        {
+            "id": "mfa.demo_mode",
+            "message": "Two-factor authentication is disabled in demo mode.",
+            "translation": "В демо-режиме двухфакторная аутентификация отключена."
+        },
+        {
+            "id": "mfa.challenge_title",
+            "message": "Two-factor authentication",
+            "translation": "Двухфакторная аутентификация"
+        },
+        {
+            "id": "mfa.challenge_help",
+            "message": "Enter the 6-digit code from your authenticator app.",
+            "translation": "Введите 6-значный код из приложения-аутентификатора."
+        },
+        {
+            "id": "mfa.code_label",
+            "message": "Authentication code",
+            "translation": "Код аутентификации"
+        },
+        {
+            "id": "mfa.verify",
+            "message": "Verify",
+            "translation": "Подтвердить"
+        },
+        {
+            "id": "mfa.use_recovery_code",
+            "message": "Lost your device? Use a recovery code",
+            "translation": "Нет доступа к устройству? Используйте код восстановления"
+        },
+        {
+            "id": "mfa.recovery_code_label",
+            "message": "Recovery code",
+            "translation": "Код восстановления"
+        },
+        {
+            "id": "mfa.sign_in_again",
+            "message": "Sign in with a different account",
+            "translation": "Войти под другим аккаунтом"
+        },
+        {
+            "id": "mfa.sign_in_expired",
+            "message": "Your sign-in expired. Please sign in again.",
+            "translation": "Время входа истекло. Войдите снова."
+        },
+        {
+            "id": "mfa.invalid_code",
+            "message": "Invalid or already used code. Try again.",
+            "translation": "Неверный или уже использованный код. Попробуйте ещё раз."
+        },
+        {
+            "id": "mfa.too_many_codes",
+            "message": "Too many invalid codes. Please sign in again.",
+            "translation": "Слишком много неверных кодов. Войдите снова."
+        },
+        {
+            "id": "mfa.totp_unavailable",
+            "message": "Authenticator codes cannot be checked right now. Use a recovery code or ask an administrator.",
+            "translation": "Сейчас коды аутентификатора проверить нельзя. Используйте код восстановления или обратитесь к администратору."
+        },
+        {
+            "id": "mfa.signed_in_with_recovery_code",
+            "message": "You signed in with a recovery code. %d codes are left; generate new ones on the security page if you are running low.",
+            "translation": "Вы вошли с кодом восстановления. Осталось кодов: %d. Если их мало, создайте новые на странице безопасности."
+        },
+        {
+            "id": "mfa.setup_title",
+            "message": "Set up an authenticator app",
+            "translation": "Настройка приложения-аутентификатора"
+        },
+        {
+            "id": "mfa.setup_required",
+            "message": "This site requires two-factor authentication. Set up an authenticator app to finish signing in.",
+            "translation": "На этом сайте обязательна двухфакторная аутентификация. Настройте приложение-аутентификатор, чтобы завершить вход."
+        },
+        {
+            "id": "mfa.setup_step_install",
+            "message": "Install an authenticator app such as 1Password, Bitwarden, Google Authenticator or Microsoft Authenticator.",
+            "translation": "Установите приложение-аутентификатор, например 1Password, Bitwarden, Google Authenticator или Microsoft Authenticator."
+        },
+        {
+            "id": "mfa.setup_step_scan",
+            "message": "Scan the QR code with the app, then enter the 6-digit code it shows.",
+            "translation": "Отсканируйте QR-код в приложении и введите показанный 6-значный код."
+        },
+        {
+            "id": "mfa.qr_alt",
+            "message": "QR code for your authenticator app",
+            "translation": "QR-код для приложения-аутентификатора"
+        },
+        {
+            "id": "mfa.setup_manual",
+            "message": "Can't scan it? Enter this key in the app instead:",
+            "translation": "Не получается отсканировать? Введите в приложении этот ключ:"
+        },
+        {
+            "id": "mfa.setup_code_label",
+            "message": "Code from the app",
+            "translation": "Код из приложения"
+        },
+        {
+            "id": "mfa.setup_confirm",
+            "message": "Turn on two-factor authentication",
+            "translation": "Включить двухфакторную аутентификацию"
+        },
+        {
+            "id": "mfa.setup_expired",
+            "message": "The setup expired. Scan the new QR code and try again.",
+            "translation": "Время настройки истекло. Отсканируйте новый QR-код и попробуйте ещё раз."
+        },
+        {
+            "id": "mfa.current_code_label",
+            "message": "Current code",
+            "translation": "Текущий код"
+        },
+        {
+            "id": "mfa.current_code_help",
+            "message": "A code from your current authenticator app, or a recovery code.",
+            "translation": "Код из текущего приложения-аутентификатора или код восстановления."
+        },
+        {
+            "id": "mfa.recovery_codes_title",
+            "message": "Recovery codes",
+            "translation": "Коды восстановления"
+        },
+        {
+            "id": "mfa.recovery_codes_warning",
+            "message": "Save these codes now: they are shown only once. Each code signs you in once if you lose your authenticator.",
+            "translation": "Сохраните эти коды сейчас: они показываются только один раз. Каждый код позволяет войти один раз, если вы потеряете аутентификатор."
+        },
+        {
+            "id": "mfa.recovery_codes_help",
+            "message": "Keep them in a password manager or print them. Generating new codes invalidates these.",
+            "translation": "Храните их в менеджере паролей или распечатайте. Создание новых кодов делает эти недействительными."
+        },
+        {
+            "id": "mfa.recovery_codes_saved",
+            "message": "I have saved my recovery codes",
+            "translation": "Коды восстановления сохранены"
+        },
+        {
+            "id": "mfa.recovery_codes_left",
+            "message": "Recovery codes left: %s",
+            "translation": "Осталось кодов восстановления: %s"
+        },
+        {
+            "id": "mfa.recovery_codes_low",
+            "message": "You are running low on recovery codes. Generate new ones.",
+            "translation": "Коды восстановления заканчиваются. Создайте новые."
         },
         {
             "id": "validation.required",

@@ -215,6 +215,8 @@ func parseCommand(args []string) (cmd string, rest []string) {
 		return "init", args[1:]
 	case "migrate":
 		return "migrate", args[1:]
+	case "mfa-reset":
+		return "mfa-reset", args[1:]
 	case "serve":
 		return "serve", args[1:]
 	default:
@@ -223,8 +225,8 @@ func parseCommand(args []string) (cmd string, rest []string) {
 }
 
 func main() {
-	// Subcommand dispatch. "init" scaffolds and "migrate" runs migrations,
-	// then both exit; "serve" (the default) falls through to the normal flag
+	// Subcommand dispatch. "init" scaffolds, "migrate" runs migrations and
+	// "mfa-reset" removes an account's second factor, then each exits; "serve" (the default) falls through to the normal flag
 	// parsing and run() path below.
 	switch cmd, rest := parseCommand(os.Args[1:]); cmd {
 	case "init":
@@ -236,6 +238,12 @@ func main() {
 	case "migrate":
 		if err := runMigrate(rest); err != nil {
 			slog.Error("migrate failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	case "mfa-reset":
+		if err := runMFAReset(rest); err != nil {
+			slog.Error("mfa-reset failed", "error", err)
 			os.Exit(1)
 		}
 		return
@@ -255,11 +263,14 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "Commands:\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  init <dir>    Scaffold a new site directory (.env + data dirs) and exit\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  migrate <cmd> Run database migrations (up, down, status, version) and exit\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  mfa-reset <email>  Remove an account's two-factor authentication and exit\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  serve         Start the server (default when no command is given)\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 		_, _ = fmt.Fprintf(os.Stderr, "\nEnvironment Variables:\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SESSION_SECRET    Session encryption key (required, min 32 bytes)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_MFA_KEY           Secret that seals authenticator-app secrets (min 32 bytes; unset disables authenticator apps)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_MFA       Require a second factor for every account (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
@@ -2101,10 +2112,16 @@ func run() (runErr error) {
 	formSubmitRateLimiter := middleware.NewGlobalRateLimiter(1.0, 5)
 	slog.Info("form submission rate limiter initialized", "rate", "1 req/s", "burst", 5)
 
+	mfaService, err := newMFAService(db, cfg)
+	if err != nil {
+		return err
+	}
+
 	// Initialize handlers
-	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection, hookRegistry)
+	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection, hookRegistry, mfaService)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
+	usersHandler.SetMFAService(mfaService)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
 	pagesHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
 	pagesHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
@@ -2237,16 +2254,29 @@ func run() (runErr error) {
 		r.Use(csrfMiddleware)
 		r.Get(handler.RouteLogin, authHandler.LoginForm)
 		r.With(loginProtection.Middleware()).Post(handler.RouteLogin, authHandler.Login)
+		r.Get(handler.RouteLoginMFA, authHandler.LoginMFAForm)
+		r.With(loginProtection.Middleware()).Post(handler.RouteLoginMFA, authHandler.LoginMFA)
+		r.Get(handler.RouteLoginMFASetup, authHandler.LoginMFASetupForm)
+		r.With(loginProtection.Middleware()).Post(handler.RouteLoginMFASetup, authHandler.LoginMFASetup)
 		r.Post(handler.RouteLogout, authHandler.Logout)
 		r.Post(handler.RouteLanguage, authHandler.SetLanguage)
 	})
 
-	// Account overview uses the core layout and current database permissions.
-	r.With(csrfMiddleware,
-		middleware.Auth(sessionManager),
-		middleware.LoadUser(sessionManager, db),
-		middleware.LoadSiteConfig(db, nil),
-	).Get(handler.RouteAccount, authHandler.Account)
+	// Account pages use the core layout and current database permissions.
+	// The two-factor changes that check a code share the login rate limit.
+	r.Group(func(r chi.Router) {
+		r.Use(csrfMiddleware,
+			middleware.Auth(sessionManager),
+			middleware.LoadUser(sessionManager, db),
+			middleware.LoadSiteConfig(db, nil),
+		)
+		r.Get(handler.RouteAccount, authHandler.Account)
+		r.Get(handler.RouteAccountSecurity, authHandler.Security)
+		r.Get(handler.RouteAccountSecurityTOTP, authHandler.TOTPSetupForm)
+		r.With(loginProtection.Middleware()).Post(handler.RouteAccountSecurityTOTP, authHandler.TOTPSetup)
+		r.With(loginProtection.Middleware()).Post(handler.RouteAccountSecurityRecoveryCodes, authHandler.RegenerateRecoveryCodes)
+		r.With(loginProtection.Middleware()).Post(handler.RouteAccountSecurityDisable, authHandler.DisableTOTP)
+	})
 
 	// Session test routes (development only)
 	if cfg.IsDevelopment() {
@@ -2392,6 +2422,7 @@ func run() (runErr error) {
 				EditForm: usersHandler.EditForm, Update: usersHandler.Update, Delete: usersHandler.Delete,
 			})
 			r.Post(handler.RouteUsers+handler.RouteSuffixBulkDelete, usersHandler.BulkDelete)
+			r.Post(handler.RouteUsersID+handler.RouteSuffixMFAReset, usersHandler.ResetMFA)
 
 			// Language management routes
 			registerCRUD(r, handler.RouteLanguages, handler.RouteLanguagesID, crudHandlers{

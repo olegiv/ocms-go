@@ -14,6 +14,10 @@ import (
 // public test-suite secret.
 const testSessionSecret = "k9Qw2xZt7Lp4Vn8sRb3Yh6Mc1Ud5Ef0Gj2Hx4Nz8Tq="
 
+// testMFAKey is a strong OCMS_MFA_KEY distinct from testSessionSecret, for
+// production tests that must get past the two-factor requirement.
+const testMFAKey = "Zp8Lq3Wn6Rx1Tc9Vb4Ym7Kd2Hf5Gj0Sa8Ne3Ux6Qi="
+
 func setEnv(t *testing.T, key, value string) {
 	t.Helper()
 	t.Setenv(key, value)
@@ -152,10 +156,15 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
 	setEnv(t, "OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
 	setEnv(t, "OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
+	setEnv(t, "OCMS_MFA_KEY", testMFAKey)
+	setEnv(t, "OCMS_REQUIRE_MFA", "true")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.MFAKey != testMFAKey || !cfg.RequireMFA {
+		t.Errorf("MFAKey set = %t, RequireMFA = %t; want both", cfg.MFAKey == testMFAKey, cfg.RequireMFA)
 	}
 
 	if cfg.SessionSecret != customSecret {
@@ -288,6 +297,7 @@ func setProductionRequiredEnv(t *testing.T) {
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
 	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai")
 	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com")
+	setEnv(t, "OCMS_MFA_KEY", testMFAKey)
 }
 
 // TestLoad_RejectsLowEntropySecretInProduction covers finding L-06: a
@@ -412,6 +422,7 @@ func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
 	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai")
 	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com")
+	setEnv(t, "OCMS_MFA_KEY", testMFAKey)
 
 	cfg, err := Load()
 	if err != nil {
@@ -463,6 +474,9 @@ func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
 	if !cfg.RequireBlockSuspiciousPageHTML {
 		t.Error("RequireBlockSuspiciousPageHTML = false, want true in production when unset")
 	}
+	if !cfg.RequireMFA {
+		t.Error("RequireMFA = false, want true in production when unset")
+	}
 	if cfg.APIMaxTTLDays != DefaultProductionAPIMaxTTLDays {
 		t.Errorf("APIMaxTTLDays = %d, want %d", cfg.APIMaxTTLDays, DefaultProductionAPIMaxTTLDays)
 	}
@@ -485,6 +499,7 @@ func TestLoad_ProductionSecureDefaultsWhenEmpty(t *testing.T) {
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
 	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai")
 	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com")
+	setEnv(t, "OCMS_MFA_KEY", testMFAKey)
 	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "")
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "")
@@ -511,6 +526,7 @@ func TestLoad_ProductionSecureDefaults_ExplicitOverrideRespected(t *testing.T) {
 	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai")
 	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "false")
+	setEnv(t, "OCMS_REQUIRE_MFA", "false")
 	setEnv(t, "OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS", "false")
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "0")
 
@@ -524,6 +540,9 @@ func TestLoad_ProductionSecureDefaults_ExplicitOverrideRespected(t *testing.T) {
 	}
 	if cfg.RequireWebhookAllowedHosts {
 		t.Error("RequireWebhookAllowedHosts = true, want false due to explicit override")
+	}
+	if cfg.RequireMFA {
+		t.Error("RequireMFA = true, want false due to explicit override")
 	}
 	if cfg.APIMaxTTLDays != 0 {
 		t.Errorf("APIMaxTTLDays = %d, want 0 due to explicit override", cfg.APIMaxTTLDays)
@@ -970,6 +989,82 @@ func TestLoad_CustomDir(t *testing.T) {
 
 		if cfg.CustomDir != "/var/www/custom" {
 			t.Errorf("CustomDir = %q, want %q", cfg.CustomDir, "/var/www/custom")
+		}
+	})
+}
+
+// TestLoad_RequireMFAWithoutKey checks that a two-factor requirement nobody
+// could meet stops startup: in production by default, and anywhere it is set.
+//
+// Bug state: drop the RequireMFA check from validateMFAConfig and this fails.
+func TestLoad_RequireMFAWithoutKey(t *testing.T) {
+	t.Run("production default", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+		setProductionRequiredEnv(t)
+		setEnv(t, "OCMS_MFA_KEY", "")
+		_, err := Load()
+		if err == nil || !strings.Contains(err.Error(), "OCMS_MFA_KEY") {
+			t.Fatalf("Load() = %v, want an OCMS_MFA_KEY error", err)
+		}
+	})
+	t.Run("development opt-in", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+		setEnv(t, "OCMS_REQUIRE_MFA", "true")
+		if _, err := Load(); err == nil {
+			t.Fatal("Load() accepted OCMS_REQUIRE_MFA=true without OCMS_MFA_KEY")
+		}
+	})
+	t.Run("demo mode", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+		setEnv(t, "OCMS_REQUIRE_MFA", "true")
+		setEnv(t, "OCMS_DEMO_MODE", "true")
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load() in demo mode = %v; demo mode never requires a second factor", err)
+		}
+	})
+	t.Run("explicitly off in production", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+		setProductionRequiredEnv(t)
+		setEnv(t, "OCMS_MFA_KEY", "")
+		setEnv(t, "OCMS_REQUIRE_MFA", "false")
+		cfg, err := Load()
+		if err != nil || cfg.RequireMFA {
+			t.Fatalf("Load() = %v, RequireMFA %t; want it off without error", err, cfg != nil && cfg.RequireMFA)
+		}
+	})
+}
+
+// TestLoad_ValidatesMFAKey checks that OCMS_MFA_KEY gets the session secret's
+// checks and is not the session secret itself.
+func TestLoad_ValidatesMFAKey(t *testing.T) {
+	for name, key := range map[string]string{
+		"short":          "too-short",
+		"placeholder":    "replace-with-strong-random-mfa-key-now",
+		"session secret": testSessionSecret,
+		"low entropy":    "abababababababababababababababab",
+	} {
+		t.Run(name, func(t *testing.T) {
+			os.Clearenv()
+			setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+			setProductionRequiredEnv(t)
+			setEnv(t, "OCMS_MFA_KEY", key)
+			_, err := Load()
+			if err == nil || !strings.Contains(err.Error(), "OCMS_MFA_KEY") {
+				t.Fatalf("Load() = %v, want an OCMS_MFA_KEY error", err)
+			}
+		})
+	}
+	t.Run("blank is unset", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+		setEnv(t, "OCMS_MFA_KEY", "   ")
+		cfg, err := Load()
+		if err != nil || cfg.MFAKey != "" {
+			t.Fatalf("Load() = %v, MFAKey %q; want a blank key treated as unset", err, cfg.MFAKey)
 		}
 	})
 }

@@ -90,6 +90,10 @@ type Config struct {
 	MigratorAllowedDBHosts        string `env:"OCMS_MIGRATOR_ALLOWED_DB_HOSTS"`                            // Comma-separated hosts a migrator source may connect to; empty = no restriction
 	RequireMigratorAllowedDBHosts bool   `env:"OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS" envDefault:"false"` // Reject startup in production when the migrator module is active without a source DB host allowlist
 
+	// Two-factor authentication
+	MFAKey     string `env:"OCMS_MFA_KEY"`                        // Secret that seals TOTP secrets at rest (min 32 bytes); unset disables authenticator apps
+	RequireMFA bool   `env:"OCMS_REQUIRE_MFA" envDefault:"false"` // Require every account to pass a second factor at login
+
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
 
@@ -215,52 +219,89 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("OCMS_API_KEY_MAX_TTL_DAYS must be <= %d", MaxAPITTLDays)
 	}
 
-	// Validate session secret length
-	if len(cfg.SessionSecret) < MinSessionSecretLength {
-		return nil, fmt.Errorf("OCMS_SESSION_SECRET must be at least %d bytes long, got %d bytes; "+
-			"generate a secure secret with: openssl rand -base64 32",
-			MinSessionSecretLength, len(cfg.SessionSecret))
-	}
-
-	// Reject known default/placeholder secrets
-	if isPlaceholderSecret(cfg.SessionSecret) {
-		return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default or placeholder value and must not be used; " +
-			"generate a secure secret with: openssl rand -base64 32")
-	}
-	if cfg.Env == "production" && hasAnyPrefixFold(strings.TrimSpace(cfg.SessionSecret), publicTestSecretPrefixes) {
-		return nil, fmt.Errorf("OCMS_SESSION_SECRET is the public test-suite secret and must not be used in production; " +
-			"generate a secure secret with: openssl rand -base64 32")
+	if err := validateSecret("OCMS_SESSION_SECRET", cfg.SessionSecret, cfg.Env == "production"); err != nil {
+		return nil, err
 	}
 	if token := strings.TrimSpace(cfg.EmbedProxyToken); token != "" && isPlaceholderSecret(token) {
 		return nil, fmt.Errorf("OCMS_EMBED_PROXY_TOKEN is a placeholder value and must not be used; " +
 			"generate a token with: openssl rand -base64 32")
+	}
+	if err := validateMFAConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// validateMFAConfig checks the two-factor settings. OCMS_MFA_KEY seals every
+// enrolled TOTP secret, so it gets the session secret's checks and must not
+// be the session secret itself. A requirement nobody can meet is refused at
+// startup instead of at the first login; demo mode never requires a second
+// factor, because its seeded accounts are shared by every visitor.
+func validateMFAConfig(cfg *Config) error {
+	if strings.TrimSpace(cfg.MFAKey) == "" {
+		cfg.MFAKey = ""
+	}
+	if cfg.MFAKey != "" {
+		if err := validateSecret("OCMS_MFA_KEY", cfg.MFAKey, cfg.Env == "production"); err != nil {
+			return err
+		}
+		if cfg.MFAKey == cfg.SessionSecret {
+			return fmt.Errorf("OCMS_MFA_KEY must differ from OCMS_SESSION_SECRET; " +
+				"generate a separate secret with: openssl rand -base64 32")
+		}
+	}
+	if cfg.RequireMFA && cfg.MFAKey == "" && os.Getenv("OCMS_DEMO_MODE") != "true" {
+		return fmt.Errorf("OCMS_MFA_KEY must be configured when OCMS_REQUIRE_MFA is enabled " +
+			"(the production default); generate one with: openssl rand -base64 32, " +
+			"or set OCMS_REQUIRE_MFA=false")
+	}
+	return nil
+}
+
+// validateSecret applies the length, placeholder and entropy checks every
+// server-side secret must pass. name is the variable the error names.
+func validateSecret(name, secret string, production bool) error {
+	if len(secret) < MinSessionSecretLength {
+		return fmt.Errorf("%s must be at least %d bytes long, got %d bytes; "+
+			"generate a secure secret with: openssl rand -base64 32",
+			name, MinSessionSecretLength, len(secret))
+	}
+
+	// Reject known default/placeholder secrets
+	if isPlaceholderSecret(secret) {
+		return fmt.Errorf("%s is a known default or placeholder value and must not be used; "+
+			"generate a secure secret with: openssl rand -base64 32", name)
+	}
+	if production && hasAnyPrefixFold(strings.TrimSpace(secret), publicTestSecretPrefixes) {
+		return fmt.Errorf("%s is the public test-suite secret and must not be used in production; "+
+			"generate a secure secret with: openssl rand -base64 32", name)
 	}
 
 	// Low-entropy secrets: advisory in development, enforced in production.
 	// The dev warning uses character-class diversity (which nudges toward a
 	// base64 secret); production enforcement uses distinct-character count,
 	// which does not false-positive on a strong all-lowercase hex secret.
-	if !hasMinimumEntropy(cfg.SessionSecret) {
-		slog.Warn("OCMS_SESSION_SECRET has low character diversity; " +
+	if !hasMinimumEntropy(secret) {
+		slog.Warn(name + " has low character diversity; " +
 			"consider generating a random secret with: openssl rand -base64 32")
 	}
-	if cfg.Env == "production" {
-		if distinct := countDistinctChars(cfg.SessionSecret); distinct < MinProductionSessionSecretDistinctChars {
-			return nil, fmt.Errorf("OCMS_SESSION_SECRET has insufficient entropy for production "+
+	if production {
+		if distinct := countDistinctChars(secret); distinct < MinProductionSessionSecretDistinctChars {
+			return fmt.Errorf("%s has insufficient entropy for production "+
 				"(only %d distinct characters, need at least %d); "+
 				"generate a secure secret with: openssl rand -base64 32",
-				distinct, MinProductionSessionSecretDistinctChars)
+				name, distinct, MinProductionSessionSecretDistinctChars)
 		}
 		// A short block repeated to fill the length (e.g. "abcdefgh"×4) can clear
 		// the distinct-character floor while remaining trivially guessable.
-		if isRepeatedPattern(cfg.SessionSecret) {
-			return nil, fmt.Errorf("OCMS_SESSION_SECRET has insufficient entropy for production " +
-				"(it is a short repeating pattern); " +
-				"generate a secure secret with: openssl rand -base64 32")
+		if isRepeatedPattern(secret) {
+			return fmt.Errorf("%s has insufficient entropy for production "+
+				"(it is a short repeating pattern); "+
+				"generate a secure secret with: openssl rand -base64 32", name)
 		}
 	}
-
-	return cfg, nil
+	return nil
 }
 
 // isPlaceholderSecret reports whether a secret still carries one of the
@@ -348,6 +389,7 @@ func applyProductionSecurityDefaults(cfg *Config) {
 	setBoolIfUnset("OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.RequireBlockSuspiciousPageHTML)
 	setBoolIfUnset("OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS", &cfg.RequireWebhookAllowedHosts)
 	setBoolIfUnset("OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS", &cfg.RequireMigratorAllowedDBHosts)
+	setBoolIfUnset("OCMS_REQUIRE_MFA", &cfg.RequireMFA)
 	setIntIfUnset("OCMS_API_KEY_MAX_TTL_DAYS", &cfg.APIMaxTTLDays, DefaultProductionAPIMaxTTLDays)
 }
 

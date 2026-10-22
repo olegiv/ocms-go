@@ -187,6 +187,7 @@ func TestRequireMigratorAllowedDBHostsDefaultsOnInProduction(t *testing.T) {
 	t.Setenv("OCMS_API_ALLOWED_CIDRS", "127.0.0.1/32")
 	t.Setenv("OCMS_SANITIZE_PAGE_HTML", "true")
 	t.Setenv("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
+	t.Setenv("OCMS_MFA_KEY", "Zp8Lq3Wn6Rx1Tc9Vb4Ym7Kd2Hf5Gj0Sa8Ne3Ux6Qi=")
 
 	cfg, err := config.Load()
 	if err != nil {

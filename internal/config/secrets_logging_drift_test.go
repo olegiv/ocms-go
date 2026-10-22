@@ -27,6 +27,7 @@ var secretConfigFields = map[string]bool{
 	"SessionSecret":     true,
 	"HCaptchaSecretKey": true,
 	"EmbedProxyToken":   true,
+	"MFAKey":            true,
 }
 
 // nonSecretConfigFields are fields whose names match secretNamePattern but hold

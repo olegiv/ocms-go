@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+- **Production requires two-factor authentication for every account.**
+  `OCMS_REQUIRE_MFA` defaults to `true` in production, and startup fails
+  until `OCMS_MFA_KEY` is set (32+ bytes, distinct from
+  `OCMS_SESSION_SECRET`; `openssl rand -base64 32`) or `OCMS_REQUIRE_MFA=false`
+  is set explicitly. After the upgrade, each user sets up an authenticator app
+  at their next sign-in, and sessions that started without a second factor are
+  signed out. Back `OCMS_MFA_KEY` up with the database. `ocms init` and
+  `scripts/deploy/setup-site.sh` now write one; demo mode and the Fly demo
+  leave two-factor authentication off.
+
+### Added
+- **Two-factor authentication** with authenticator apps (TOTP, RFC 6238) and
+  ten single-use recovery codes, for admin, editor and public accounts. After
+  the password, `/login/mfa` asks for the code; the session holds no user until
+  it passes, codes cannot be replayed, and wrong codes count toward the account
+  lockout. Accounts that must use a second factor and have none set it up at
+  `/login/mfa/setup`. `/account/security` sets up, replaces or turns off the
+  authenticator and issues new recovery codes, each change confirmed with a
+  current code. TOTP secrets are sealed with AES-256-GCM under a key derived
+  from `OCMS_MFA_KEY`.
+- Administrators reset another user's second factor on the user edit page;
+  `ocms mfa-reset <email>` does it from the command line for an administrator
+  with nobody to reset them. Changing or resetting a second factor signs the
+  account out of its other sessions.
+
 ## [0.29.1] - 2026-10-18
 
 ### Fixed

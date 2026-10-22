@@ -39,6 +39,7 @@ templ Sidebar(pc *PageContext) {
 			if pc.AccountLayout {
 				<div class="nav-section">
 					@navLink(pc, "/account", pc.T("account.title"), pc.IsActive("/account"), iconDashboard())
+					@navLinkPrefix(pc, "/account/security", pc.T("mfa.title"), pc.HasPrefix("/account/security"), iconShield())
 					@navLink(pc, "/", pc.T("account.visit_website"), false, iconGlobe())
 				</div>
 			} else {
