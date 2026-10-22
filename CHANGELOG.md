@@ -43,8 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   users rejects unknown roles and reads the old `viewer` role as `public`.
   A stolen session can no longer set a password of its own, reset an
   account's lockout by changing its email, create an administrator it
-  controls to take the others over, or demote the real ones. The DB Manager module, which runs raw SQL, is outside this
-  check: keep it inactive where it is not needed.
+  controls to take the others over, or demote the real ones.
+- Activating the DB Manager module asks for the administrator's current
+  password in a dialog (wrong attempts count toward the lockout), so a
+  stolen session cannot switch on its raw SQL to read sessions or rewrite
+  users. Once active, its queries need no password: switch it off when done.
+  Modules declare this with the new `module.PasswordGatedActivation`
+  interface; `Registry.SetActive` refuses to activate them, and only
+  `Registry.ActivateConfirmed`, behind the password check, does.
 
 ### Fixed
 - `/health` decided "signed in" from the session's user ID alone, so a

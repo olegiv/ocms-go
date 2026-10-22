@@ -533,6 +533,24 @@ func (m *Module) ActiveByDefault() bool {
 
 Use it for modules that open a new remote surface, such as the built-in MCP server (`modules/mcpserver`), so an upgrade never exposes one without being asked. Like `AllowedEnvs`, it only sets the status at first registration; after that the `modules` table wins. `Init` runs when the module is activated, and the registry serializes activation, so it runs once even when two admins switch the module on at the same time. Build anything that depends on it (routes' handlers, rate limiters) in `Init` and read it per request rather than capturing it in `RegisterRoutes`.
 
+## Password-Confirmed Activation
+
+Implement `PasswordGatedActivation` for a module that, once active, can do
+what no admin form lets a stolen session do, such as DB Manager's raw SQL:
+
+```go
+func (m *Module) ActivationNeedsPassword() bool {
+    return true
+}
+```
+
+Switching it on in **Admin > Modules** then opens a dialog asking for the
+administrator's current password; wrong passwords count toward the login
+lockout. `Registry.SetActive` refuses to activate such a module with
+`module.ErrActivationNeedsPassword`; only `Registry.ActivateConfirmed` does,
+and `TestActivateConfirmedOnlyAfterPassword` allows that call only behind the
+password check. Switching it off needs no password.
+
 ## Third-Party Hosts (Content-Security-Policy)
 
 The base Content-Security-Policy allows scripts, styles, connections and frames

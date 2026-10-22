@@ -8,6 +8,9 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/dialog"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -24,6 +27,9 @@ type ModuleViewItem struct {
 	MigrationCount    int
 	MigrationsPending int
 	IsEmbedded        bool
+	// ActivationNeedsPassword makes switching the module on ask for the
+	// administrator's current password in a dialog.
+	ActivationNeedsPassword bool
 }
 
 // HookViewItem holds data for a hook in the list view.
@@ -59,6 +65,7 @@ templ ModulesPage(pc *PageContext, data ModulesViewData) {
 						@moduleCard(pc, mod)
 					}
 				</div>
+				@dialog.Script()
 			} else {
 				@card.Card(card.Props{}) {
 					@card.Content() {
@@ -113,79 +120,141 @@ templ ModulesPage(pc *PageContext, data ModulesViewData) {
 	}
 }
 
-// moduleCard renders a single module card with toggle switches.
+// moduleCard renders a single module card with toggle switches. The
+// wrapper holds the Alpine component, so the activation dialog can sit
+// beside the card rather than inside it, where the inactive card's opacity
+// and stacking would show through.
 templ moduleCard(pc *PageContext, mod ModuleViewItem) {
 	<div
-		class={ "module-card", templ.KV("module-inactive", !mod.Active) }
-		data-module={ mod.Name }
+		class="contents"
 		data-activate-title={ pc.T("modules.activate_to_access") }
 		data-deactivate-title={ pc.T("modules.click_to_deactivate") }
 		x-data={ moduleToggleData(mod) }
 	>
-		<div class="module-icon">
-			@iconModules()
-		</div>
-		<div class="module-info">
-			<h3 class="module-name">{ mod.Name }</h3>
-			<p class="module-version">v{ mod.Version }</p>
-			<p class="module-description">{ mod.Description }</p>
-			if mod.HasMigrations {
-				<div class="module-migrations">
-					@iconDatabase()
-					<span class="migrations-count">
-						{ fmt.Sprintf("%d", mod.MigrationsApplied) }/{ fmt.Sprintf("%d", mod.MigrationCount) } { pc.T("modules.migrations") }
-					</span>
-					if mod.MigrationsPending > 0 {
-						@badge.Badge(badge.Props{Class: "badge-warning badge-sm"}) {
-							{ fmt.Sprintf("%d", mod.MigrationsPending) } { pc.T("modules.migrations_pending") }
-						}
-					} else {
-						@badge.Badge(badge.Props{Class: "badge-info badge-sm"}) {
-							{ pc.T("modules.up_to_date") }
-						}
-					}
-				</div>
-			}
-			if mod.AdminURL != "" {
-				<div class="module-actions">
-					@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: mod.AdminURL, Class: "module-dashboard-link", Attributes: templ.Attributes{":class": "{ 'disabled': !isActive }", "x-bind:title": "!isActive ? activateTitle : ''"}}) {
-						@iconDashboard()
-						{ pc.T("modules.dashboard") }
-					}
-				</div>
-			}
-		</div>
-		<div class="module-status">
-			<div class="module-toggle-row">
-				<span class="toggle-label">{ pc.T("modules.enabled") }</span>
-				<label
-					class="toggle-switch"
-					x-bind:title="isActive ? deactivateTitle : activateTitle"
-				>
-					<input
-						type="checkbox"
-						x-model="isActive"
-						@change="toggleActive()"
-					/>
-					<span class="toggle-slider"></span>
-				</label>
+		<div
+			class={ "module-card", templ.KV("module-inactive", !mod.Active) }
+			data-module={ mod.Name }
+			x-ref="card"
+		>
+			<div class="module-icon">
+				@iconModules()
 			</div>
-			if mod.AdminURL != "" {
+			<div class="module-info">
+				<h3 class="module-name">{ mod.Name }</h3>
+				<p class="module-version">v{ mod.Version }</p>
+				<p class="module-description">{ mod.Description }</p>
+				if mod.HasMigrations {
+					<div class="module-migrations">
+						@iconDatabase()
+						<span class="migrations-count">
+							{ fmt.Sprintf("%d", mod.MigrationsApplied) }/{ fmt.Sprintf("%d", mod.MigrationCount) } { pc.T("modules.migrations") }
+						</span>
+						if mod.MigrationsPending > 0 {
+							@badge.Badge(badge.Props{Class: "badge-warning badge-sm"}) {
+								{ fmt.Sprintf("%d", mod.MigrationsPending) } { pc.T("modules.migrations_pending") }
+							}
+						} else {
+							@badge.Badge(badge.Props{Class: "badge-info badge-sm"}) {
+								{ pc.T("modules.up_to_date") }
+							}
+						}
+					</div>
+				}
+				if mod.AdminURL != "" {
+					<div class="module-actions">
+						@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: mod.AdminURL, Class: "module-dashboard-link", Attributes: templ.Attributes{":class": "{ 'disabled': !isActive }", "x-bind:title": "!isActive ? activateTitle : ''"}}) {
+							@iconDashboard()
+							{ pc.T("modules.dashboard") }
+						}
+					</div>
+				}
+			</div>
+			<div class="module-status">
 				<div class="module-toggle-row">
-					<span class="toggle-label">{ pc.T("modules.show_in_sidebar") }</span>
-					<label class="toggle-switch toggle-switch-sm" title={ pc.T("modules.toggle_sidebar") }>
+					<span class="toggle-label">{ pc.T("modules.enabled") }</span>
+					<label
+						class="toggle-switch"
+						x-bind:title="isActive ? deactivateTitle : activateTitle"
+					>
 						<input
 							type="checkbox"
-							x-model="showInSidebar"
-							@change="toggleSidebar()"
-							x-bind:disabled="!isActive"
+							x-model="isActive"
+							@change="toggleActive()"
 						/>
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
-			}
+				if mod.AdminURL != "" {
+					<div class="module-toggle-row">
+						<span class="toggle-label">{ pc.T("modules.show_in_sidebar") }</span>
+						<label class="toggle-switch toggle-switch-sm" title={ pc.T("modules.toggle_sidebar") }>
+							<input
+								type="checkbox"
+								x-model="showInSidebar"
+								@change="toggleSidebar()"
+								x-bind:disabled="!isActive"
+							/>
+							<span class="toggle-slider"></span>
+						</label>
+					</div>
+				}
+			</div>
 		</div>
+		if mod.ActivationNeedsPassword {
+			@activationPasswordDialog(pc, mod)
+		}
 	</div>
+}
+
+// activationPasswordDialog asks for the administrator's current password
+// before a module whose activation needs one is switched on. It sits beside
+// the card, in the scope of its Alpine component.
+templ activationPasswordDialog(pc *PageContext, mod ModuleViewItem) {
+	@dialog.Dialog(dialog.Props{ID: activationDialogID(mod), Class: "contents"}) {
+		@dialog.Content(dialog.ContentProps{Attributes: templ.Attributes{"role": "dialog", "aria-modal": "true", "aria-labelledby": activationDialogID(mod) + "-title"}}) {
+			<form @submit.prevent="confirmActivation()">
+				@dialog.Header() {
+					@dialog.Title(dialog.TitleProps{ID: activationDialogID(mod) + "-title"}) {
+						{ pc.T("modules.activation_password_title", mod.Name) }
+					}
+					@dialog.Description() {
+						{ pc.T("modules.activation_password_description") }
+					}
+				}
+				<div class="form-group my-4">
+					@label.Label(label.Props{For: activationDialogID(mod) + "-password", Class: "block mb-1"}) {
+						{ pc.T("users.current_password") }
+					}
+					@input.Input(input.Props{
+						Type: input.TypePassword,
+						ID:   activationDialogID(mod) + "-password",
+						Name: "current_password",
+						Attributes: templ.Attributes{
+							"autocomplete": "current-password",
+							"required":     true,
+							"x-model":      "password",
+						},
+					})
+					<span class="form-error" x-show="passwordError" x-text="passwordError"></span>
+				</div>
+				@dialog.Footer() {
+					@dialog.Close() {
+						@button.Button(button.Props{Variant: button.VariantOutline}) {
+							{ pc.T("btn.cancel") }
+						}
+					}
+					@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{"x-bind:disabled": "pending"}}) {
+						{ pc.T("modules.activate") }
+					}
+				}
+			</form>
+		}
+	}
+}
+
+// activationDialogID is the ID of mod's activation password dialog.
+func activationDialogID(mod ModuleViewItem) string {
+	return "activate-module-" + mod.Name
 }
 
 // hookRow renders a single hook row in the hooks table.
@@ -218,6 +287,11 @@ func moduleToggleData(mod ModuleViewItem) string {
 		isActive: %t,
 		showInSidebar: %t,
 		moduleName: '%s',
+		needsPassword: %t,
+		dialogID: '%s',
+		password: '',
+		passwordError: '',
+		pending: false,
 		activateTitle: '',
 		deactivateTitle: '',
 		init() {
@@ -225,30 +299,58 @@ func moduleToggleData(mod ModuleViewItem) string {
 			this.deactivateTitle = this.$el.dataset.deactivateTitle || '';
 		},
 		toggleActive() {
-			const card = this.$el;
+			if (this.isActive && this.needsPassword) {
+				// Stays off until the password is confirmed.
+				this.isActive = false;
+				this.password = '';
+				this.passwordError = '';
+				window.tui.dialog.open(this.dialogID);
+				return;
+			}
+			this.sendActive(this.isActive, '');
+		},
+		confirmActivation() {
+			this.sendActive(true, this.password);
+		},
+		sendActive(active, password) {
+			const card = this.$refs.card;
+			const confirming = password !== '';
+			this.pending = true;
 			fetch('/admin/modules/' + encodeURIComponent(this.moduleName) + '/toggle', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ active: this.isActive })
+				body: JSON.stringify({ active: active, password: password })
 			})
 			.then(r => r.json())
 			.then(data => {
 				if (data.success) {
+					this.isActive = data.active;
 					if (data.active) {
 						card.classList.remove('module-inactive');
 					} else {
 						card.classList.add('module-inactive');
 						this.showInSidebar = false;
 					}
+					if (confirming) {
+						this.password = '';
+						window.tui.dialog.close(this.dialogID);
+					}
+				} else if (confirming) {
+					this.passwordError = data.error || data.message || 'Failed to toggle module';
 				} else {
-					this.isActive = !this.isActive;
-					alert('Error: ' + (data.message || 'Failed to toggle module'));
+					this.isActive = !active;
+					alert('Error: ' + (data.error || data.message || 'Failed to toggle module'));
 				}
 			})
 			.catch(() => {
-				this.isActive = !this.isActive;
-				alert('Error toggling module');
-			});
+				if (confirming) {
+					this.passwordError = 'Error toggling module';
+				} else {
+					this.isActive = !active;
+					alert('Error toggling module');
+				}
+			})
+			.finally(() => { this.pending = false; });
 		},
 		toggleSidebar() {
 			fetch('/admin/modules/' + encodeURIComponent(this.moduleName) + '/toggle-sidebar', {
@@ -260,7 +362,7 @@ func moduleToggleData(mod ModuleViewItem) string {
 			.then(data => {
 				if (!data.success) {
 					this.showInSidebar = !this.showInSidebar;
-					alert('Error: ' + (data.message || 'Failed to toggle sidebar visibility'));
+					alert('Error: ' + (data.error || data.message || 'Failed to toggle sidebar visibility'));
 				}
 			})
 			.catch(() => {
@@ -268,5 +370,5 @@ func moduleToggleData(mod ModuleViewItem) string {
 				alert('Error toggling sidebar visibility');
 			});
 		}
-	}`, mod.Active, mod.ShowInSidebar, mod.Name)
+	}`, mod.Active, mod.ShowInSidebar, mod.Name, mod.ActivationNeedsPassword, activationDialogID(mod))
 }

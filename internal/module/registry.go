@@ -482,7 +482,34 @@ func (r *Registry) moduleCSPSources(name string, sourcer CSPSourcer) (sources ma
 // SetActive sets a module's active status and persists it to the database.
 // When activating a module that was never initialized (e.g., it was inactive
 // at server startup), Init() and translation loading are performed first.
+// Activating a module whose activation needs a password fails with
+// ErrActivationNeedsPassword; use ActivateConfirmed.
 func (r *Registry) SetActive(name string, active bool) error {
+	return r.setActive(name, active, false)
+}
+
+// ActivateConfirmed activates name, including a module whose activation
+// needs a password. Call it only once the acting administrator's current
+// password has been checked (TestActivateConfirmedOnlyAfterPassword).
+func (r *Registry) ActivateConfirmed(name string) error {
+	return r.setActive(name, true, true)
+}
+
+// ActivationNeedsPassword reports whether activating name needs the acting
+// administrator's current password.
+func (r *Registry) ActivationNeedsPassword(name string) bool {
+	r.mu.RLock()
+	m, ok := r.modules[name]
+	r.mu.RUnlock()
+	return ok && activationNeedsPassword(m)
+}
+
+func activationNeedsPassword(m Module) bool {
+	gated, ok := m.(PasswordGatedActivation)
+	return ok && gated.ActivationNeedsPassword()
+}
+
+func (r *Registry) setActive(name string, active, passwordConfirmed bool) error {
 	r.activationMu.Lock()
 	defer r.activationMu.Unlock()
 
@@ -502,6 +529,10 @@ func (r *Registry) SetActive(name string, active bool) error {
 	needsInit := active && !r.initStatus[name]
 	ctx := r.ctx
 	r.mu.Unlock()
+
+	if active && !passwordConfirmed && activationNeedsPassword(m) {
+		return fmt.Errorf("activating module %q: %w", name, ErrActivationNeedsPassword)
+	}
 
 	// A module may veto its own activation. Startup posture audits cannot cover
 	// this path: they ran before the operator flipped the switch.
@@ -816,6 +847,9 @@ type Info struct {
 	MigrationsPending int    // Number of pending migrations
 	HasMigrations     bool   // Whether the module has any migrations
 	AdminURL          string // URL to module's admin dashboard (empty if none)
+	// ActivationNeedsPassword reports that activating the module asks for
+	// the administrator's current password (PasswordGatedActivation).
+	ActivationNeedsPassword bool
 }
 
 // MigrationInfo contains information about a module migration.
@@ -871,6 +905,8 @@ func (r *Registry) ListInfo() []Info {
 			MigrationsPending: migrationCount - appliedCount,
 			HasMigrations:     migrationCount > 0,
 			AdminURL:          m.AdminURL(),
+
+			ActivationNeedsPassword: activationNeedsPassword(m),
 		})
 	}
 	return infos

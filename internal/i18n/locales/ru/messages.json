@@ -2913,6 +2913,41 @@
             "translation": "Переключить отображение в меню"
         },
         {
+            "id": "modules.activate",
+            "message": "Activate",
+            "translation": "Включить"
+        },
+        {
+            "id": "modules.activation_password_title",
+            "message": "Activate %s",
+            "translation": "Включить %s"
+        },
+        {
+            "id": "modules.activation_password_description",
+            "message": "This module can read and change every table, user accounts and sessions included. Enter your current password to activate it.",
+            "translation": "Этот модуль может читать и менять любые таблицы, включая учётные записи и сессии. Введите текущий пароль, чтобы включить его."
+        },
+        {
+            "id": "modules.activation_password_required",
+            "message": "Enter your current password to activate this module.",
+            "translation": "Введите текущий пароль, чтобы включить этот модуль."
+        },
+        {
+            "id": "modules.activation_password_invalid",
+            "message": "Your current password is incorrect.",
+            "translation": "Текущий пароль указан неверно."
+        },
+        {
+            "id": "modules.activation_locked",
+            "message": "Too many failed attempts; try again later.",
+            "translation": "Слишком много неудачных попыток; попробуйте позже."
+        },
+        {
+            "id": "modules.activation_password_unverified",
+            "message": "Your password could not be checked; the module stays off.",
+            "translation": "Не удалось проверить пароль; модуль остаётся выключенным."
+        },
+        {
             "id": "users.title",
             "message": "Users",
             "translation": "Пользователи"

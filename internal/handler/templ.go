@@ -883,6 +883,8 @@ func convertModuleViewItems(modules []module.Info) []adminviews.ModuleViewItem {
 			MigrationsApplied: m.MigrationsApplied,
 			MigrationCount:    m.MigrationCount,
 			MigrationsPending: m.MigrationsPending,
+
+			ActivationNeedsPassword: m.ActivationNeedsPassword,
 		}
 	}
 	return items
