@@ -787,6 +787,10 @@ func TestFirstSetupWithoutPasswordIsNotCounted(t *testing.T) {
 	if rr.Header().Get("Location") != RouteAccountSecurityTOTP || env.session(t, cookie)("flash") != i18n.T("en", "mfa.password_required") {
 		t.Fatalf("setup without a password field = %d %q", rr.Code, rr.Header().Get("Location"))
 	}
+	var refusals int
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Two-factor change refused: no password' AND user_id = ?`, user.ID).Scan(&refusals); err != nil || refusals != 1 {
+		t.Errorf("refusal events = %d, %v; want the missing password logged", refusals, err)
+	}
 	// With a lockout after one failure, a counted attempt would refuse this.
 	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, secret, 0)}}, cookie)
 	if rr.Code != http.StatusOK {
@@ -882,6 +886,10 @@ func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
 	if ok, _ := auth.CheckPassword(mfaTestPassword, mustPasswordHash(t, env.db, editor.ID)); !ok {
 		t.Fatal("another user's password changed without the actor's password")
 	}
+	var missing int
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'User change refused: no current password' AND user_id = ?`, admin.ID).Scan(&missing); err != nil || missing == 0 {
+		t.Errorf("refusals for a missing current password = %d, %v; want them logged", missing, err)
+	}
 
 	// Other edits never needed it: an unchanged form, a new name, keeping
 	// another administrator's role, an email differing only by spaces.
@@ -926,7 +934,9 @@ func TestActorPasswordLockout(t *testing.T) {
 		return rr
 	}
 	change("Wrong-password-1!")
-	change("Wrong-password-2!")
+	if locking := change("Wrong-password-2!"); !strings.Contains(locking.Body.String(), "Too many failed attempts") {
+		t.Error("the wrong password that locked the account was answered as merely incorrect")
+	}
 	rr := change(mfaTestPassword)
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Too many failed attempts") {
 		t.Fatalf("right password after the lockout = %d, want it refused", rr.Code)

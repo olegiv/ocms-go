@@ -419,12 +419,17 @@ func (h *UsersHandler) checkActorPassword(r *http.Request, actor store.User, giv
 	case passwordOK:
 		return ""
 	case passwordMissing:
+		h.logActorRefusal(r, actor, "User change refused: no current password")
 		return "Enter your current password to make this change"
 	case passwordUnverified:
 		slog.Error("password check error", "error", c.Err, "user_id", actor.ID)
 		return "Error checking your current password"
 	case passwordLocked:
 		h.logActorRefusal(r, actor, "User change refused: account locked")
+		return "Too many failed attempts; try again later"
+	}
+	if c.LockedFor > 0 {
+		// This wrong password locked the account.
 		return "Too many failed attempts; try again later"
 	}
 	return "Your current password is incorrect"

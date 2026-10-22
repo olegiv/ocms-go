@@ -631,7 +631,8 @@ func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, use
 		flashError(w, r, h.renderer, back, i18n.T(lang, "auth.account_locked", formatDuration(c.LockedFor)))
 	case passwordMissing:
 		// A form from before the account's status changed has no password
-		// field: ask again.
+		// field: ask again, without counting it.
+		h.logRefusal(r, user, "Two-factor change refused: no password")
 		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.password_required"))
 	case passwordUnverified:
 		logAndInternalError(w, "password check error", "error", c.Err, "user_id", user.ID)

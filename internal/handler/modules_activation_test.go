@@ -6,8 +6,12 @@ package handler
 import (
 	"encoding/json"
 	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
@@ -58,6 +63,7 @@ func TestModuleActivationNeedsPassword(t *testing.T) {
 	h := NewModulesHandler(env.db, env.h.renderer, env.sm, registry, module.NewHookRegistry(logger))
 	h.SetPasswordConfirmation(lp, service.NewEventService(env.db))
 
+	actor := &admin
 	toggle := func(name string, active bool, password string) (int, string) {
 		body, err := json.Marshal(map[string]any{"active": active, "password": password})
 		if err != nil {
@@ -65,7 +71,7 @@ func TestModuleActivationNeedsPassword(t *testing.T) {
 		}
 		req := httptest.NewRequest(http.MethodPost, "/admin/modules/"+name+"/toggle", strings.NewReader(string(body)))
 		req.Header.Set("Content-Type", "application/json")
-		req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"name": name})), &admin)
+		req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"name": name})), actor)
 		rr := httptest.NewRecorder()
 		h.ToggleActive(rr, req)
 		var resp struct {
@@ -113,11 +119,19 @@ func TestModuleActivationNeedsPassword(t *testing.T) {
 	if code, msg := toggle("sqlconsole2", true, mfaTestPassword); code != http.StatusForbidden || msg != "Too many failed attempts; try again later." || registry.IsActive("sqlconsole2") {
 		t.Fatalf("right password while locked = %d %q, active %t", code, msg, registry.IsActive("sqlconsole2"))
 	}
+	// A stored hash that cannot be checked refuses the activation without
+	// counting it, and says so.
+	actor = &store.User{ID: admin.ID, Email: "unverifiable@example.com", Role: model.RoleAdmin, PasswordHash: "not-a-hash"}
+	if code, msg := toggle("sqlconsole2", true, mfaTestPassword); code != http.StatusForbidden || msg != "Your password could not be checked; the module stays off." || registry.IsActive("sqlconsole2") {
+		t.Fatalf("activation with an unverifiable hash = %d %q, active %t", code, msg, registry.IsActive("sqlconsole2"))
+	}
+
 	for message, want := range map[string]int{
-		"Module activation refused: no password":            1,
-		"Module activation refused: wrong current password": 2,
-		"Module activated with password confirmation":       1,
-		"Module activation refused: account locked":         1,
+		"Module activation refused: password could not be verified": 1,
+		"Module activation refused: no password":                    1,
+		"Module activation refused: wrong current password":         2,
+		"Module activated with password confirmation":               1,
+		"Module activation refused: account locked":                 1,
 	} {
 		var got int
 		if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = ? AND category = ?`, message, model.EventCategorySecurity).Scan(&got); err != nil || got != want {
@@ -143,61 +157,190 @@ func TestActivateConfirmedOnlyAfterPassword(t *testing.T) {
 }
 
 // moduleActiveWriteSQL matches SQL that can set a module's active flag:
-// an UPDATE of modules that sets is_active, or any INSERT into modules.
-var moduleActiveWriteSQL = regexp.MustCompile(`(?is)\bupdate\s+modules\s+set\b[^;]*\bis_active\b|\binsert\s+(or\s+\w+\s+)?into\s+modules\b`)
+// an UPDATE of modules that assigns is_active (one that only returns or
+// filters on it may be flagged too, which errs on the safe side), or any
+// INSERT or REPLACE into modules, whatever the conflict clause, quoting or
+// schema prefix.
+var moduleActiveWriteSQL = regexp.MustCompile(`(?is)\bupdate(?:\s+or\s+\w+)?\s+(?:[\x60"\[]?\w+[\x60"\]]?\.)?[\x60"\[]?modules[\x60"\]]?\s+set\b[^;]*\bis_active\s*=` +
+	`|\b(?:replace|insert(?:\s+or\s+\w+)?)\s+into\s+(?:[\x60"\[]?\w+[\x60"\]]?\.)?[\x60"\[]?modules\b`)
 
 // moduleActiveWriteSites are where a module's active flag may be written,
-// with what keeps each from switching a password-gated module on.
+// with what keeps each from switching a password-gated module on: Go
+// functions and package-level constants, and named sqlc queries.
 var moduleActiveWriteSites = map[string]string{
-	"internal/module/registry.go (*Registry).setActive":         "refuses a password-gated module unless ActivateConfirmed called it",
-	"internal/module/registry.go (*Registry).loadActiveStatus":  "inserts a module's first row, inactive for a password-gated module",
-	"internal/store/modules.sql.go a package-level declaration": "sqlc's UpsertModule, whose callers this test checks too",
+	"internal/module/registry.go (*Registry).setActive":        "refuses a password-gated module unless ActivateConfirmed called it",
+	"internal/module/registry.go (*Registry).loadActiveStatus": "inserts a module's first row, inactive for a password-gated module",
+	"internal/store/modules.sql.go const upsertModule":         "sqlc's UpsertModule, whose callers this test checks too",
+	"internal/store/queries/modules.sql UpsertModule":          "the query behind upsertModule",
 }
 
 // TestModuleActiveFlagWritesAreGated fails when code outside
-// moduleActiveWriteSites writes a module's active flag, through the store
-// (UpsertModule overwrites it on conflict) or in raw SQL: either would
-// switch DB Manager on without the password Registry.SetActive asks for.
+// moduleActiveWriteSites writes a module's active flag: a call to the
+// store's UpsertModule (which overwrites it on conflict), a Go string or
+// constant holding such SQL (literals joined with + included), or a named
+// sqlc query or migration doing so. Any of these would switch DB Manager on
+// without the password Registry.SetActive asks for. SQL assembled at run
+// time from variables or fmt is out of its reach.
 //
-// Bug state: add store.New(db).UpsertModule(ctx, {Name: "dbmanager",
-// IsActive: true}) to any handler, and this names it.
+// Bug state: restore the SetModuleActive query removed from
+// internal/store/queries/modules.sql (and regenerate), and this names both
+// the query and its constant; or call UpsertModule from a handler.
 func TestModuleActiveFlagWritesAreGated(t *testing.T) {
 	for query, want := range map[string]bool{
-		"UPDATE modules SET is_active = ?, updated_at = ? WHERE name = ?": true,
-		"update modules\nset updated_at = now, is_active = 1":             true,
-		"INSERT INTO modules (name, is_active) VALUES (?, ?)":             true,
-		"INSERT OR REPLACE INTO modules (name) VALUES (?)":                true,
-		"UPDATE modules SET show_in_sidebar = ? WHERE name = ?":           false,
-		"SELECT is_active FROM modules WHERE name = ?":                    false,
+		"UPDATE modules SET is_active = ?, updated_at = ? WHERE name = ?":                                true,
+		"update modules\nset updated_at = now, is_active = 1":                                            true,
+		"UPDATE OR IGNORE modules SET is_active = 1":                                                     true,
+		`UPDATE "modules" SET is_active = 1`:                                                             true,
+		"UPDATE main.modules SET is_active = 1":                                                          true,
+		"INSERT INTO modules (name, is_active) VALUES (?, ?)":                                            true,
+		"INSERT OR REPLACE INTO modules (name) VALUES (?)":                                               true,
+		"REPLACE INTO modules (name, is_active) VALUES (?, 1)":                                           true,
+		"INSERT INTO `modules` (name) VALUES (?)":                                                        true,
+		"UPDATE modules SET show_in_sidebar = ? WHERE name = ?":                                          false,
+		"UPDATE modules SET show_in_sidebar = ? WHERE name = ? RETURNING id, is_active, show_in_sidebar": false,
+		"SELECT is_active FROM modules WHERE name = ?":                                                   false,
+		"INSERT INTO modules_migrations (module, version) VALUES (?, ?)":                                 false,
+		"UPDATE modules_migrations SET is_active = 1":                                                    false,
 	} {
 		if moduleActiveWriteSQL.MatchString(query) != want {
 			t.Errorf("moduleActiveWriteSQL on %q = %t, want %t", query, !want, want)
 		}
 	}
-	checkGatedCalls(t, moduleActiveWriteSites, func(file *ast.File) []gatedCall {
+
+	used := scanGatedCalls(t, moduleActiveWriteSites, func(file *ast.File) []gatedCall {
 		calls := gatedCalls(file, map[string]bool{"UpsertModule": true}, nil)
 		return append(calls, sqlLiterals(file, moduleActiveWriteSQL)...)
 	}, "writes a module's active flag; switch modules through Registry.SetActive")
+	for _, dir := range []string{"internal/store/queries", "internal/store/migrations"} {
+		for _, q := range sqlFileStatements(t, dir) {
+			if !moduleActiveWriteSQL.MatchString(q.sql) {
+				continue
+			}
+			if _, ok := moduleActiveWriteSites[q.where]; ok {
+				used[q.where] = true
+				continue
+			}
+			t.Errorf("%s writes a module's active flag; switch modules through Registry.SetActive, then list it with its guard", q.where)
+		}
+	}
+	for key := range moduleActiveWriteSites {
+		if !used[key] {
+			t.Errorf("moduleActiveWriteSites lists %s, which no longer writes a module's active flag; drop the entry", key)
+		}
+	}
 }
 
-// sqlLiterals returns the string literals in file that pattern matches.
+// TestSQLLiteralScan checks the scan behind TestModuleActiveFlagWritesAreGated
+// on a fixture: it names package-level constants and variables, joins
+// literals split with +, and leaves other SQL alone.
+func TestSQLLiteralScan(t *testing.T) {
+	const src = `package p
+const setActive = "UPDATE modules SET is_active = ? WHERE name = ?"
+var split = "UPDATE modules SET " + "is_active = 1"
+const sidebar = "UPDATE modules SET show_in_sidebar = ?"
+func f() { db.Exec("REPLACE INTO modules (name) VALUES (?)"); db.Exec("SELECT 1") }
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "p.go", src, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, w := range sqlLiterals(file, moduleActiveWriteSQL) {
+		got = append(got, w.where)
+	}
+	want := []string{"const setActive", "var split", "f"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("found %v, want %v", got, want)
+	}
+}
+
+// sqlLiterals returns the string expressions in file that pattern matches:
+// literals, and literals joined with +. A match in a package-level constant
+// or variable is named after it ("const upsertModule").
 func sqlLiterals(file *ast.File, pattern *regexp.Regexp) []gatedCall {
 	var found []gatedCall
-	for _, decl := range file.Decls {
-		where := "a package-level declaration"
-		if fn, ok := decl.(*ast.FuncDecl); ok {
-			where = funcName(fn)
-		}
-		ast.Inspect(decl, func(n ast.Node) bool {
-			lit, ok := n.(*ast.BasicLit)
+	scan := func(node ast.Node, where string) {
+		ast.Inspect(node, func(n ast.Node) bool {
+			expr, ok := n.(ast.Expr)
 			if !ok {
 				return true
 			}
-			if value, ok := stringValue(lit); ok && pattern.MatchString(value) {
-				found = append(found, gatedCall{pos: lit.Pos(), where: where})
+			switch expr.(type) {
+			case *ast.BasicLit, *ast.BinaryExpr:
+			default:
+				return true
 			}
-			return true
+			value, ok := stringValue(expr)
+			if !ok {
+				return true // not a constant string: look at its parts
+			}
+			if pattern.MatchString(value) {
+				found = append(found, gatedCall{pos: expr.Pos(), where: where})
+			}
+			return false
 		})
+	}
+	for _, decl := range file.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			scan(d, funcName(d))
+		case *ast.GenDecl:
+			for _, spec := range d.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for i, value := range vs.Values {
+					where := "a package-level declaration"
+					if i < len(vs.Names) {
+						where = d.Tok.String() + " " + vs.Names[i].Name
+					}
+					scan(value, where)
+				}
+			}
+		}
 	}
 	return found
 }
+
+// sqlStatement is a named sqlc query, or a whole migration file.
+type sqlStatement struct {
+	where string // "internal/store/queries/modules.sql UpsertModule"
+	sql   string
+}
+
+// sqlFileStatements reads the .sql files in dir, a directory relative to
+// the repository root: a file with "-- name:" headers yields one statement
+// per query, any other file one statement.
+func sqlFileStatements(t *testing.T, dir string) []sqlStatement {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join("..", "..", dir, "*.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("no .sql files in %s; the scan no longer sees them", dir)
+	}
+	var statements []sqlStatement
+	for _, sqlPath := range paths {
+		src, err := os.ReadFile(sqlPath) // #nosec G304 -- repository files
+		if err != nil {
+			t.Fatal(err)
+		}
+		rel := dir + "/" + filepath.Base(sqlPath)
+		parts := sqlcQueryName.Split(string(src), -1)
+		names := sqlcQueryName.FindAllStringSubmatch(string(src), -1)
+		if len(names) == 0 {
+			statements = append(statements, sqlStatement{where: rel, sql: string(src)})
+			continue
+		}
+		for i, name := range names {
+			statements = append(statements, sqlStatement{where: rel + " " + name[1], sql: parts[i+1]})
+		}
+	}
+	return statements
+}
+
+// sqlcQueryName matches an sqlc query header, "-- name: GetModule :one".
+var sqlcQueryName = regexp.MustCompile(`(?m)^--\s*name:\s*(\w+)`)

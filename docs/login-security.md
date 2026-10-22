@@ -245,10 +245,15 @@ All login-related events are logged to the events system:
 | Two-factor authentication disabled | Warning | Turned off on the account security page |
 | Two-factor change refused: invalid code | Warning | Wrong current code on the account security page |
 | Two-factor change refused: invalid password | Warning | Wrong password for the first authenticator setup on the account security page |
+| Two-factor change refused: no password | Warning | First setup sent without a password (a form from before the account's status changed); not counted toward the lockout |
 | Recovery codes regenerated | Info | New recovery codes issued |
 | Two-factor authentication reset by an administrator | Warning | Reset from the user page (User category) |
 | User change refused: wrong current password | Warning | Wrong acting-administrator password on the user form or a second-factor reset (User category) |
 | User change refused: account locked | Warning | The same, while the administrator's account is locked (User category) |
+| User change refused: no current password | Warning | The same change sent without the password; not counted toward the lockout (User category) |
+| Module activation refused: wrong current password / account locked / no password | Warning | Activating DB Manager without the administrator's password (Security category; only a wrong one is counted) |
+| Module activation refused: password could not be verified | Error | The stored password hash could not be checked (Security category) |
+| Module activated with password confirmation | Info | DB Manager switched on after the password check (Security category) |
 | Two-factor authentication reset from the command line | Warning | `ocms mfa-reset` |
 | User logged in | Info | Successful login; metadata `second_factor` names `totp` or `recovery_code` when one was used |
 

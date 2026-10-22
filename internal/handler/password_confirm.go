@@ -98,6 +98,6 @@ func logSecurityEvent(r *http.Request, es *service.EventService, level, message 
 	}
 	if err := es.LogEvent(r.Context(), level, model.EventCategorySecurity, message,
 		middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), metadata); err != nil {
-		slog.ErrorContext(service.WithoutEventLog(r.Context()), "failed to log security event", "error", err, "message", message, "user_id", middleware.GetUserID(r))
+		slog.ErrorContext(service.WithoutEventLog(r.Context()), "failed to log security event", "error", err, "message", message, "metadata", metadata, "user_id", middleware.GetUserID(r))
 	}
 }

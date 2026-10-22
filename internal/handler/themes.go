@@ -133,7 +133,12 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
 		return
 	default:
-		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
+		message := "themes.import_password_invalid"
+		if c.LockedFor > 0 {
+			// This wrong password locked the account.
+			message = "themes.import_locked"
+		}
+		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, message))
 		return
 	}
 	file, header, err := r.FormFile("archive")

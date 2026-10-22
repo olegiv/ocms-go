@@ -436,8 +436,11 @@ func TestThemeImportPasswordConfirmationIsThrottled(t *testing.T) {
 	h.loginProtection = middleware.NewLoginProtection(lockoutDB, middleware.LoginProtectionConfig{MaxFailedAttempts: 2, LockoutDuration: time.Minute, AttemptWindow: time.Minute})
 	archive := starterThemeArchive(t)
 
-	for range 2 {
-		h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword))
+	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword))
+	locking := themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword)
+	h.Import(httptest.NewRecorder(), locking)
+	if got := h.sessionManager.GetString(locking.Context(), "flash"); got != i18n.T("en", "themes.import_locked") {
+		t.Errorf("flash after the locking attempt = %q, want the lockout message", got)
 	}
 	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), themeImportPassword)
 	h.Import(httptest.NewRecorder(), r)

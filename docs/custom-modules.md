@@ -551,8 +551,10 @@ lockout. `Registry.SetActive` refuses to activate such a module with
 and `TestActivateConfirmedOnlyAfterPassword` allows that call only from
 `ModulesHandler.ToggleActive`, which checks the password first. The module is
 registered inactive on first start, and `TestModuleActiveFlagWritesAreGated`
-fails on any other code that writes a module's active flag. Switching it off
-needs no password.
+fails on any other code that writes a module's active flag: an `UpsertModule`
+call, SQL in a Go string or constant, or an sqlc query or migration (SQL
+assembled at run time is out of its reach). Switching it off needs no
+password.
 
 ## Third-Party Hosts (Content-Security-Policy)
 

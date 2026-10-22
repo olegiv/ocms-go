@@ -96,6 +96,18 @@ func TestSecondFactorRemovalIsGated(t *testing.T) {
 // every entry of sites that no longer makes one.
 func checkGatedCalls(t *testing.T, sites map[string]string, scan func(*ast.File) []gatedCall, problem string) {
 	t.Helper()
+	used := scanGatedCalls(t, sites, scan, problem)
+	for key := range sites {
+		if !used[key] {
+			t.Errorf("the allowed sites list %s, which no longer makes such a call; drop the entry", key)
+		}
+	}
+}
+
+// scanGatedCalls fails for every call scan finds outside sites, and returns
+// the entries of sites it found calls in.
+func scanGatedCalls(t *testing.T, sites map[string]string, scan func(*ast.File) []gatedCall, problem string) map[string]bool {
+	t.Helper()
 	fset, files := parseRepoGoFiles(t)
 	used := map[string]bool{}
 	for rel, file := range files {
@@ -108,11 +120,7 @@ func checkGatedCalls(t *testing.T, sites map[string]string, scan func(*ast.File)
 			t.Errorf("%s: %s %s, then list it with its guard", fset.Position(c.pos), c.where, problem)
 		}
 	}
-	for key := range sites {
-		if !used[key] {
-			t.Errorf("the allowed sites list %s, which no longer makes such a call; drop the entry", key)
-		}
-	}
+	return used
 }
 
 // TestAccountWriteScan checks the scan behind TestAccountWritesAreGated on a
