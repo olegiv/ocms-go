@@ -4963,6 +4963,21 @@
             "translation": "Код из текущего приложения-аутентификатора или код восстановления."
         },
         {
+            "id": "mfa.password_label",
+            "message": "Your password",
+            "translation": "Ваш пароль"
+        },
+        {
+            "id": "mfa.password_help",
+            "message": "Confirm it is you before adding a second factor.",
+            "translation": "Подтвердите, что это вы, прежде чем добавлять второй фактор."
+        },
+        {
+            "id": "mfa.invalid_password",
+            "message": "Incorrect password.",
+            "translation": "Неверный пароль."
+        },
+        {
             "id": "mfa.recovery_codes_title",
             "message": "Recovery codes",
             "translation": "Коды восстановления"

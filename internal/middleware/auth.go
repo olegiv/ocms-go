@@ -8,6 +8,7 @@ package middleware
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"sync/atomic"
@@ -92,7 +93,7 @@ func LoadUser(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.Handle
 				return
 			}
 
-			if isSessionStale(sm, r, user) {
+			if isSessionStale(r.Context(), sm, user) {
 				slog.Info("session invalidated by a credential change or the two-factor requirement", "user_id", user.ID)
 				_ = sm.Destroy(r.Context())
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -128,7 +129,7 @@ func OptionalLoadUser(sm *scs.SessionManager, db *sql.DB) func(http.Handler) htt
 				return
 			}
 
-			if isSessionStale(sm, r, user) {
+			if isSessionStale(r.Context(), sm, user) {
 				_ = sm.Destroy(r.Context())
 				next.ServeHTTP(w, r)
 				return
@@ -148,12 +149,37 @@ func OptionalLoadUser(sm *scs.SessionManager, db *sql.DB) func(http.Handler) htt
 // matches the column's default for never-rotated users — so they remain valid
 // until the first password change for that user. While a second factor is
 // required, a session whose sign-in did not pass one is stale as well.
-func isSessionStale(sm *scs.SessionManager, r *http.Request, user store.User) bool {
-	sessionVersion := sm.GetInt64(r.Context(), SessionKeyUserSessionVersion)
+func isSessionStale(ctx context.Context, sm *scs.SessionManager, user store.User) bool {
+	sessionVersion := sm.GetInt64(ctx, SessionKeyUserSessionVersion)
 	if sessionVersion < user.SessionVersion {
 		return true
 	}
-	return mfaRequired.Load() && !sm.GetBool(r.Context(), SessionKeyMFAVerified)
+	return mfaRequired.Load() && !sm.GetBool(ctx, SessionKeyMFAVerified)
+}
+
+// SessionUser returns the user this session is signed in as, after the
+// checks LoadUser applies on every protected route: the user still exists
+// and the session is not stale (an older session_version, or no second
+// factor while one is required). It reports false for an anonymous, stale or
+// orphaned session and changes nothing. Code outside this package that asks
+// "is this request signed in" uses it rather than reading SessionKeyUserID
+// (TestSessionUserReadsGoThroughMiddleware).
+func SessionUser(ctx context.Context, sm *scs.SessionManager, queries *store.Queries) (store.User, bool) {
+	userID := sm.GetInt64(ctx, SessionKeyUserID)
+	if userID <= 0 {
+		return store.User{}, false
+	}
+	user, err := queries.GetUserByID(ctx, userID)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			slog.Error("failed to load the session user", "error", err, "user_id", userID)
+		}
+		return store.User{}, false
+	}
+	if isSessionStale(ctx, sm, user) {
+		return store.User{}, false
+	}
+	return user, true
 }
 
 // GetUser retrieves the current user from the request context.

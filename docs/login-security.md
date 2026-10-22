@@ -189,8 +189,9 @@ left. From there a user can:
 - **Generate new recovery codes**, which voids the old ones.
 - **Turn it off**, unless the site requires it.
 
-Every change except the first setup asks for a current code, so a stolen
-session cannot change the second factor; wrong codes count toward the lockout.
+The first setup asks for the account password and every later change for a
+current code, so a stolen session cannot add or change the second factor;
+wrong passwords and codes count toward the lockout.
 Setting up, replacing and turning off sign out the user's other sessions.
 
 ### Recovery codes

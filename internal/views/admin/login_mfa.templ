@@ -33,7 +33,11 @@ type TOTPSetup struct {
 	// RequireCurrentCode asks for a code from the authenticator being
 	// replaced, or a recovery code, before the new one is enrolled.
 	RequireCurrentCode bool
-	CancelURL          string
+	// RequirePassword asks for the account password before a first
+	// authenticator is added outside sign-in, so a stolen session cannot
+	// enroll one of its own.
+	RequirePassword bool
+	CancelURL       string
 }
 
 // CSRFField exposes the CSRF form field to views outside this package.
@@ -126,6 +130,24 @@ templ TOTPSetupForm(t func(string, ...any) string, setup TOTPSetup) {
 	<p class="mb-6 select-all break-all text-center font-mono text-sm"><code>{ setup.Secret }</code></p>
 	<form method="POST" action={ templ.SafeURL(setup.Action) } class="auth-form">
 		@csrfField()
+		if setup.RequirePassword {
+			<div class="form-group">
+				@label.Label(label.Props{For: "password", Class: "block mb-1"}) {
+					{ t("mfa.password_label") }
+				}
+				@input.Input(input.Props{
+					Type: input.TypePassword,
+					ID:   "password",
+					Name: "password",
+					Attributes: templ.Attributes{
+						"autocomplete": "current-password",
+						"required":     true,
+						"autofocus":    true,
+					},
+				})
+				<p class="form-help">{ t("mfa.password_help") }</p>
+			</div>
+		}
 		if setup.RequireCurrentCode {
 			<div class="form-group">
 				@label.Label(label.Props{For: "current_code", Class: "block mb-1"}) {
@@ -139,7 +161,7 @@ templ TOTPSetupForm(t func(string, ...any) string, setup TOTPSetup) {
 			@label.Label(label.Props{For: "code", Class: "block mb-1"}) {
 				{ t("mfa.setup_code_label") }
 			}
-			@TOTPCodeInput("code", "code", !setup.RequireCurrentCode)
+			@TOTPCodeInput("code", "code", !setup.RequireCurrentCode && !setup.RequirePassword)
 		</div>
 		<div class="form-actions">
 			@button.Button(button.Props{Type: button.TypeSubmit}) {

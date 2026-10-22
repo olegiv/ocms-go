@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -495,6 +496,7 @@ func (h *AuthHandler) TOTPSetupForm(w http.ResponseWriter, r *http.Request) {
 	}
 	setup := totpSetup(enrollment, RouteAccountSecurityTOTP)
 	setup.RequireCurrentCode = enrolled
+	setup.RequirePassword = !enrolled
 	setup.CancelURL = RouteAccountSecurity
 	renderTempl(w, r, accountviews.TOTPSetupPage(h.accountPageContext(r, user, "mfa.setup_title"), setup))
 }
@@ -517,6 +519,9 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var checkedAt time.Time
+	if !enrolled && !h.verifyPassword(w, r, *user, RouteAccountSecurityTOTP) {
+		return
+	}
 	if enrolled {
 		// Check the new code before the current one is spent, so a mistake
 		// in it does not use up a recovery code or this period's code, and
@@ -610,6 +615,31 @@ func (h *AuthHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	flashAndRedirect(w, r, h.renderer, RouteAccountSecurity, i18n.T(lang, "mfa.disabled_done"), "success")
+}
+
+// verifyPassword checks the password a signed-in user gives before adding a
+// first authenticator, so a stolen session cannot enroll one of its own and
+// lock the owner out. Wrong passwords count against the login lockout. It
+// answers the request itself and reports false on failure.
+func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, user store.User, back string) bool {
+	if h.refuseLockedAccount(w, r, user, nil, back) {
+		return false
+	}
+	lang := middleware.GetAdminLang(r)
+	valid, err := auth.CheckPassword(r.FormValue("password"), user.PasswordHash)
+	if err != nil {
+		logAndInternalError(w, "password check error", "error", err, "user_id", user.ID)
+		return false
+	}
+	if valid {
+		return true
+	}
+	if locked, lockDuration := h.recordWrongCode(r, user, "Two-factor change refused: invalid password"); locked {
+		flashError(w, r, h.renderer, back, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
+		return false
+	}
+	flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.invalid_password"))
+	return false
 }
 
 // verifyCurrentCode checks the current_code a signed-in user gives to confirm

@@ -253,15 +253,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // signedInDestination returns the landing page of the user this session is
 // signed in as, and false when it is not signed in.
 func (h *AuthHandler) signedInDestination(ctx context.Context) (string, bool) {
-	userID := h.sessionManager.GetInt64(ctx, middleware.SessionKeyUserID)
-	if userID <= 0 {
-		return "", false
-	}
-	user, err := h.queries.GetUserByID(ctx, userID)
-	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			slog.Error("failed to load the signed-in user", "error", err, "user_id", userID)
-		}
+	user, ok := middleware.SessionUser(ctx, h.sessionManager, h.queries)
+	if !ok {
 		return "", false
 	}
 	return loginDestination(user.Role), true

@@ -32,6 +32,74 @@ import (
 // Bug state: put SessionKeyUserID in Login before the two-factor check, or in
 // any other function, and this names the call.
 func TestOnlyGrantSessionSignsIn(t *testing.T) {
+	fset, files := parseRepoGoFiles(t)
+	keys := userIDKeyNames(files)
+	if !keys["SessionKeyUserID"] {
+		t.Fatal(`no constant named SessionKeyUserID holds "user_id"; the scan no longer knows the session key`)
+	}
+	var allowed int
+	for rel, file := range files {
+		for _, put := range userIDPuts(file, keys) {
+			if rel == "internal/handler/mfa.go" && put.fn != nil && isAuthHandlerMethod(put.fn, "grantSession") {
+				allowed++
+				continue
+			}
+			t.Errorf("%s: %s puts the user ID key into a session; sign in through AuthHandler.grantSession so the second factor cannot be skipped",
+				fset.Position(put.pos), put.where)
+		}
+	}
+	if allowed != 1 {
+		t.Errorf("found %d user ID writes in AuthHandler.grantSession, want 1; the scan no longer sees the sign-in", allowed)
+	}
+}
+
+// sessionUserReadExceptions are the functions outside internal/middleware
+// allowed to read the session's user ID directly, with why they need not
+// know whether the session is stale.
+var sessionUserReadExceptions = map[string]string{
+	"(*AuthHandler).Logout": "names the user in the logout event; the session is destroyed either way",
+}
+
+// TestSessionUserReadsGoThroughMiddleware fails when code outside
+// internal/middleware reads the session's user ID to decide whether a
+// request is signed in, instead of calling middleware.SessionUser.
+//
+// The ID alone is not a sign-in: LoadUser also refuses a session whose user
+// changed their password or second factor since, and one without a second
+// factor while OCMS_REQUIRE_MFA is on. /health and the Sentinel module read
+// the ID directly, so such a session still got the admin health details and
+// the ban exemption (pre-PR review of the two-factor branch).
+//
+// Bug state: have HealthHandler.checkSessionRole read SessionKeyUserID and
+// load the user itself, and this names it.
+func TestSessionUserReadsGoThroughMiddleware(t *testing.T) {
+	fset, files := parseRepoGoFiles(t)
+	keys := userIDKeyNames(files)
+	used := map[string]bool{}
+	for rel, file := range files {
+		if strings.HasPrefix(rel, "internal/middleware/") {
+			continue
+		}
+		for _, read := range userIDReads(file, keys) {
+			if _, ok := sessionUserReadExceptions[read.where]; ok {
+				used[read.where] = true
+				continue
+			}
+			t.Errorf("%s: %s reads the session's user ID; call middleware.SessionUser, which also refuses stale sessions",
+				fset.Position(read.pos), read.where)
+		}
+	}
+	for where := range sessionUserReadExceptions {
+		if !used[where] {
+			t.Errorf("sessionUserReadExceptions lists %s, which no longer reads the user ID; drop the entry", where)
+		}
+	}
+}
+
+// parseRepoGoFiles parses the repository's non-test Go files, keyed by their
+// slash-separated path from the repository root.
+func parseRepoGoFiles(t *testing.T) (*token.FileSet, map[string]*ast.File) {
+	t.Helper()
 	root := filepath.Join("..", "..")
 	fset := token.NewFileSet()
 	files := map[string]*ast.File{}
@@ -59,25 +127,7 @@ func TestOnlyGrantSessionSignsIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	keys := userIDKeyNames(files)
-	if !keys["SessionKeyUserID"] {
-		t.Fatal(`no constant named SessionKeyUserID holds "user_id"; the scan no longer knows the session key`)
-	}
-	var allowed int
-	for rel, file := range files {
-		for _, put := range userIDPuts(file, keys) {
-			if rel == "internal/handler/mfa.go" && put.fn != nil && isAuthHandlerMethod(put.fn, "grantSession") {
-				allowed++
-				continue
-			}
-			t.Errorf("%s: %s puts the user ID key into a session; sign in through AuthHandler.grantSession so the second factor cannot be skipped",
-				fset.Position(put.pos), put.where)
-		}
-	}
-	if allowed != 1 {
-		t.Errorf("found %d user ID writes in AuthHandler.grantSession, want 1; the scan no longer sees the sign-in", allowed)
-	}
+	return fset, files
 }
 
 // TestUserIDPutScanMatchesByValue checks the scan behind
@@ -158,8 +208,8 @@ func userIDKeyNames(files map[string]*ast.File) map[string]bool {
 	return names
 }
 
-// userIDPut is a call that puts the user ID key into a session.
-type userIDPut struct {
+// userIDCall is a session call whose key is the user ID key.
+type userIDCall struct {
 	pos   token.Pos
 	fn    *ast.FuncDecl // nil for a package-level declaration
 	where string
@@ -167,8 +217,22 @@ type userIDPut struct {
 
 // userIDPuts returns every x.Put(ctx, key, v) in file whose key is the user
 // ID key.
-func userIDPuts(file *ast.File, keys map[string]bool) []userIDPut {
-	var puts []userIDPut
+func userIDPuts(file *ast.File, keys map[string]bool) []userIDCall {
+	return userIDCalls(file, keys, func(method string) bool { return method == "Put" })
+}
+
+// userIDReads returns every session read in file, x.Get*(ctx, key),
+// x.Pop*(ctx, key) or x.Exists(ctx, key), whose key is the user ID key.
+func userIDReads(file *ast.File, keys map[string]bool) []userIDCall {
+	return userIDCalls(file, keys, func(method string) bool {
+		return strings.HasPrefix(method, "Get") || strings.HasPrefix(method, "Pop") || method == "Exists"
+	})
+}
+
+// userIDCalls returns every x.M(ctx, key, ...) in file, for a method M that
+// method accepts, whose key is the user ID key.
+func userIDCalls(file *ast.File, keys map[string]bool, method func(string) bool) []userIDCall {
+	var calls []userIDCall
 	for _, decl := range file.Decls {
 		fn, _ := decl.(*ast.FuncDecl)
 		where := "a package-level declaration"
@@ -176,23 +240,17 @@ func userIDPuts(file *ast.File, keys map[string]bool) []userIDPut {
 			where = funcName(fn)
 		}
 		ast.Inspect(decl, func(n ast.Node) bool {
-			if call, ok := n.(*ast.CallExpr); ok && isPutOfUserID(call, keys) {
-				puts = append(puts, userIDPut{pos: call.Pos(), fn: fn, where: where})
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) < 2 {
+				return true
+			}
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && method(sel.Sel.Name) && isUserIDKey(call.Args[1], keys) {
+				calls = append(calls, userIDCall{pos: call.Pos(), fn: fn, where: where})
 			}
 			return true
 		})
 	}
-	return puts
-}
-
-// isPutOfUserID reports whether call is x.Put(ctx, key, v) with the user ID
-// key.
-func isPutOfUserID(call *ast.CallExpr, keys map[string]bool) bool {
-	sel, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || sel.Sel.Name != "Put" || len(call.Args) < 2 {
-		return false
-	}
-	return isUserIDKey(call.Args[1], keys)
+	return calls
 }
 
 // isUserIDKey reports whether expr is the user ID key: a constant named in

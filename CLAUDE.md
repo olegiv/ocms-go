@@ -350,7 +350,7 @@ Tools are thin adapters over the v2 domain services; their input/output schemas 
 
 **Public (unauthenticated):** Returns only `{"status":"healthy"}` or `{"status":"degraded"}` — no internal details exposed.
 
-**Authenticated (editor session, or an API key the REST API accepts, its key policies and source CIDR rules included):** Adds timestamp, uptime and version.
+**Authenticated (editor session, or an API key the REST API accepts, its key policies and source CIDR rules included):** Adds timestamp, uptime and version. Sessions are judged by `middleware.SessionUser`, which applies `LoadUser`'s staleness checks; code outside `internal/middleware` must not read `SessionKeyUserID` itself (`TestSessionUserReadsGoThroughMiddleware`).
 
 **Admin session:** Full details: database and disk checks and a security summary. Add `?verbose=true` for Go runtime info (goroutines, memory, CPU count).
 

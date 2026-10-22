@@ -71,11 +71,10 @@ type EventLogger interface {
 	LogEvent(ctx context.Context, level, category, message string, userID *int64, ipAddress, requestURL string, metadata map[string]any) error
 }
 
-// Session keys for authentication check.
+// Roles exempt from bans.
 const (
-	sessionKeyUserID = "user_id"
-	roleAdmin        = "admin"
-	roleEditor       = "editor"
+	roleAdmin  = "admin"
+	roleEditor = "editor"
 )
 
 // Settings keys.
@@ -292,18 +291,7 @@ func (m *Module) isAdminOrEditor(r *http.Request) (isAdmin bool) {
 		}
 	}()
 
-	userID := m.sessionManager.GetInt64(r.Context(), sessionKeyUserID)
-	if userID == 0 {
-		return false
-	}
-
-	queries := store.New(m.ctx.DB)
-	user, err := queries.GetUserByID(r.Context(), userID)
-	if err != nil {
-		return false
-	}
-
-	return user.Role == roleAdmin || user.Role == roleEditor
+	return m.isAdminOrEditorCtx(r.Context())
 }
 
 // isAdminOrEditorCtx checks if the context belongs to an authenticated admin or editor.
@@ -315,18 +303,11 @@ func (m *Module) isAdminOrEditorCtx(ctx context.Context) bool {
 		return false
 	}
 
-	userID := m.sessionManager.GetInt64(ctx, sessionKeyUserID)
-	if userID == 0 {
-		return false
-	}
-
-	queries := store.New(m.ctx.DB)
-	user, err := queries.GetUserByID(ctx, userID)
-	if err != nil {
-		return false
-	}
-
-	return user.Role == roleAdmin || user.Role == roleEditor
+	// SessionUser applies the checks of every protected route, so a stale
+	// session (a changed password or second factor, or no second factor
+	// while one is required) is not exempt from bans.
+	user, ok := middleware.SessionUser(ctx, m.sessionManager, store.New(m.ctx.DB))
+	return ok && (user.Role == roleAdmin || user.Role == roleEditor)
 }
 
 // Shutdown performs cleanup when the module is shutting down.

@@ -445,11 +445,27 @@ func TestAccountEnrollsAuthenticator(t *testing.T) {
 	if page.Code != http.StatusOK || m == nil {
 		t.Fatalf("setup page = %d", page.Code)
 	}
-	if strings.Contains(page.Body.String(), `name="current_code"`) {
-		t.Error("a first enrollment asked for a current code")
+	if strings.Contains(page.Body.String(), `name="current_code"`) || !strings.Contains(page.Body.String(), `name="password"`) {
+		t.Error("a first enrollment did not ask for the password, or asked for a current code")
 	}
 	secret := strings.ReplaceAll(m[1], " ", "")
-	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+
+	// A stolen session cannot add its own authenticator without the password.
+	// Bug state: drop the verifyPassword call from TOTPSetup.
+	for name, form := range map[string]url.Values{
+		"no password":    {"code": {totpCode(t, secret, 0)}},
+		"wrong password": {"password": {"Not-the-password!"}, "code": {totpCode(t, secret, 0)}},
+	} {
+		rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, form, cookie)
+		if rr.Header().Get("Location") != RouteAccountSecurityTOTP {
+			t.Errorf("enroll with %s = %d %q, want it refused", name, rr.Code, rr.Header().Get("Location"))
+		}
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || enrolled {
+		t.Fatalf("enrolled without the password: %t, %v", enrolled, err)
+	}
+
+	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, secret, 0)}}, cookie)
 	if rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
 		t.Fatalf("enroll = %d %q", rr.Code, rr.Header().Get("Location"))
 	}

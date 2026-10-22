@@ -5478,6 +5478,21 @@
             "translation": "A code from your current authenticator app, or a recovery code."
         },
         {
+            "id": "mfa.password_label",
+            "message": "Your password",
+            "translation": "Your password"
+        },
+        {
+            "id": "mfa.password_help",
+            "message": "Confirm it is you before adding a second factor.",
+            "translation": "Confirm it is you before adding a second factor."
+        },
+        {
+            "id": "mfa.invalid_password",
+            "message": "Incorrect password.",
+            "translation": "Incorrect password."
+        },
+        {
             "id": "mfa.recovery_codes_title",
             "message": "Recovery codes",
             "translation": "Recovery codes"

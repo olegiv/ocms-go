@@ -45,7 +45,7 @@ oCMS implements defense-in-depth security measures:
 - **Password Hashing**: Argon2id with secure parameters
 - **Session Management**: SCS with SQLite persistence, 24-hour lifetime
 - **Role-Based Access Control**: Admin, Editor, and Public roles
-- **Two-Factor Authentication**: Authenticator apps (TOTP) with single-use recovery codes; required for every account in production (`OCMS_REQUIRE_MFA`), with secrets sealed under `OCMS_MFA_KEY`. A session is signed in only after the second factor, codes cannot be replayed, and changes to the second factor need a current code
+- **Two-Factor Authentication**: Authenticator apps (TOTP) with single-use recovery codes; required for every account in production (`OCMS_REQUIRE_MFA`), with secrets sealed under `OCMS_MFA_KEY`. A session is signed in only after the second factor, codes cannot be replayed, adding a second factor outside sign-in needs the password and changing it a current code, and `/health` and Sentinel treat a stale session as signed out
 
 ### Login Protection
 - **IP Rate Limiting**: Prevents brute-force attacks
