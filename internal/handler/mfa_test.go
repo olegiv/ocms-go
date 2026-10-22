@@ -5,10 +5,13 @@ package handler
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,6 +31,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
 const mfaTestPassword = "Mfa-test-password!"
@@ -498,4 +502,202 @@ func TestUsersHandlerResetMFA(t *testing.T) {
 	if err := env.db.QueryRow(`SELECT session_version FROM users WHERE id = ?`, editor.ID).Scan(&version); err != nil || version < 2 {
 		t.Errorf("session_version after reset = %d, %v; want the editor signed out", version, err)
 	}
+
+	// A second reset finds nothing to remove and signs nobody out.
+	if rr := request(http.MethodPost, "/admin/users/2/mfa/reset", editor.ID); rr.Code != http.StatusSeeOther {
+		t.Fatalf("reset without a second factor = %d", rr.Code)
+	}
+	var again int64
+	if err := env.db.QueryRow(`SELECT session_version FROM users WHERE id = ?`, editor.ID).Scan(&again); err != nil || again != version {
+		t.Errorf("session_version after a no-op reset = %d, %v; want %d", again, err, version)
+	}
+}
+
+// withLockout gives the environment's handler a login protection that locks
+// an email + address pair after attempts failures.
+func (env *mfaTestEnv) withLockout(t *testing.T, attempts int) *middleware.LoginProtection {
+	t.Helper()
+	lockoutDB, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	lp := middleware.NewLoginProtection(lockoutDB, middleware.LoginProtectionConfig{
+		MaxFailedAttempts: attempts, LockoutDuration: time.Minute, AttemptWindow: time.Minute,
+	})
+	env.h.loginProtection = lp
+	return lp
+}
+
+// TestLoginMFALockout checks that wrong second-factor codes count toward the
+// account lockout, and that a locked account cannot finish a pending
+// sign-in, even with the right code.
+func TestLoginMFALockout(t *testing.T) {
+	t.Run("wrong codes lock the account", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+
+		authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {wrongCode(t, secret)}}, cookie)
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {wrongCode(t, secret)}}, cookie)
+		if rr.Header().Get("Location") != RouteLogin {
+			t.Fatalf("locking code = %d %q, want the sign-in to end", rr.Code, rr.Header().Get("Location"))
+		}
+		rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		if got := env.session(t, cookie)(middleware.SessionKeyUserID); got != nil || rr.Header().Get("Location") != RouteLogin {
+			t.Errorf("right code after the lockout signed in: user %v, %q", got, rr.Header().Get("Location"))
+		}
+	})
+	t.Run("a locked account cannot finish", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		lp := env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		for range 2 {
+			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
+		}
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		if rr.Header().Get("Location") != RouteLogin {
+			t.Fatalf("code on a locked account = %d %q, want %s", rr.Code, rr.Header().Get("Location"), RouteLogin)
+		}
+		get := env.session(t, cookie)
+		if get(middleware.SessionKeyUserID) != nil || get(sessionKeyMFAPendingUserID) != nil {
+			t.Errorf("locked account: user %v, pending %v; want neither", get(middleware.SessionKeyUserID), get(sessionKeyMFAPendingUserID))
+		}
+	})
+}
+
+// TestLoginMFAWithChangedKey covers OCMS_MFA_KEY being lost or rotated: an
+// authenticator code cannot be checked, which the user is told and which
+// does not count as a wrong code, and a recovery code still signs in.
+func TestLoginMFAWithChangedKey(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	secret, codes := env.enroll(t, user)
+	other, err := mfa.NewService(env.db, "Qm4Tx8Lc2Wv6Rn1Zp9Hb3Jd7Kf5Gs0Ye8Ua2Ni6Ow=", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.h.mfa = other
+
+	cookie, _ := env.signInWithPassword(t, user)
+	rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+	get := env.session(t, cookie)
+	if rr.Header().Get("Location") != RouteLoginMFA || get("flash") != i18n.T("en", "mfa.totp_unavailable") {
+		t.Fatalf("code under another key = %q, flash %v", rr.Header().Get("Location"), get("flash"))
+	}
+	if tries := get(sessionKeyMFAPendingTries); tries != 0 {
+		t.Errorf("an uncheckable code counted as attempt %v", tries)
+	}
+	rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {codes[0]}}, cookie)
+	if rr.Header().Get("Location") != "/admin" {
+		t.Errorf("recovery code under another key = %d %q, want /admin", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
+func TestAccountReplacesAuthenticator(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	oldSecret, codes := env.enroll(t, user)
+	cookie := env.signedInCookie(t, user, oldSecret)
+
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie)
+	m := setupSecret.FindStringSubmatch(page.Body.String())
+	if m == nil {
+		t.Fatalf("replace page = %d, shows no secret", page.Code)
+	}
+	newSecret := strings.ReplaceAll(m[1], " ", "")
+
+	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP,
+		url.Values{"current_code": {wrongCode(t, oldSecret)}, "code": {totpCode(t, newSecret, 0)}}, cookie)
+	if rr.Header().Get("Location") != RouteAccountSecurityTOTP {
+		t.Fatalf("replace with a wrong current code = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if _, err := env.svc.Verify(t.Context(), user.ID, totpCode(t, newSecret, 1)); !errors.Is(err, mfa.ErrInvalidCode) {
+		t.Fatalf("the new authenticator was enrolled without the current code: %v", err)
+	}
+
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP,
+		url.Values{"current_code": {codes[0]}, "code": {totpCode(t, newSecret, 0)}}, cookie)
+	if rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("replace = %d %q, want new recovery codes", rr.Code, rr.Header().Get("Location"))
+	}
+	if _, err := env.svc.Verify(t.Context(), user.ID, totpCode(t, oldSecret, 1)); !errors.Is(err, mfa.ErrInvalidCode) {
+		t.Errorf("the replaced authenticator still verifies: %v", err)
+	}
+	if _, err := env.svc.Verify(t.Context(), user.ID, totpCode(t, newSecret, 1)); err != nil {
+		t.Errorf("the new authenticator does not verify: %v", err)
+	}
+	if _, err := env.svc.Verify(t.Context(), user.ID, codes[1]); !errors.Is(err, mfa.ErrInvalidCode) {
+		t.Errorf("an old recovery code survived the replacement: %v", err)
+	}
+}
+
+func TestAccountSetupWithoutKey(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	noKey, err := mfa.NewService(env.db, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.h.mfa = noKey
+	cookie, _ := env.signInWithPassword(t, user)
+
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie)
+	if page.Code != http.StatusOK || strings.Contains(page.Body.String(), `href="`+RouteAccountSecurityTOTP) {
+		t.Fatalf("security page without a key = %d, offers setup", page.Code)
+	}
+	if !strings.Contains(page.Body.String(), "OCMS_MFA_KEY") {
+		t.Error("security page does not say the server lacks OCMS_MFA_KEY")
+	}
+	if rr := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie); rr.Header().Get("Location") != RouteAccountSecurity {
+		t.Errorf("setup without a key = %d %q, want a redirect to %s", rr.Code, rr.Header().Get("Location"), RouteAccountSecurity)
+	}
+}
+
+// mfaDemoChildMarker proves the demo-mode child process ran the scenario.
+const mfaDemoChildMarker = "two-factor demo scenario verified"
+
+// TestTwoFactorDemoMode checks that demo mode refuses every two-factor
+// change: the seeded demo accounts are shared, so one visitor's
+// authenticator would lock the others out.
+func TestTwoFactorDemoMode(t *testing.T) {
+	// Demo mode is cached globally; run this scenario in a fresh test process.
+	if os.Getenv("OCMS_MFA_DEMO_CHILD") != "1" {
+		command := exec.Command(os.Args[0], "-test.run=^TestTwoFactorDemoMode$", "-test.v")
+		command.Env = append(os.Environ(), "OCMS_DEMO_MODE=true", "OCMS_MFA_DEMO_CHILD=1")
+		out, err := command.CombinedOutput()
+		if err != nil || !strings.Contains(string(out), mfaDemoChildMarker) {
+			t.Fatalf("demo scenario: %v\n%s", err, out)
+		}
+		return
+	}
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleAdmin)
+	cookie, _ := env.signInWithPassword(t, user)
+
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie)
+	if !strings.Contains(page.Body.String(), i18n.T("en", "mfa.demo_mode")) || strings.Contains(page.Body.String(), `href="`+RouteAccountSecurityTOTP) {
+		t.Fatalf("demo security page = %d, missing the demo notice or offering setup", page.Code)
+	}
+	for _, rr := range []*httptest.ResponseRecorder{
+		authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie),
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"code": {"123456"}}, cookie),
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityRecoveryCodes, url.Values{"current_code": {"123456"}}, cookie),
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityDisable, url.Values{"current_code": {"123456"}}, cookie),
+	} {
+		if rr.Header().Get("Location") != RouteAccountSecurity {
+			t.Errorf("demo-mode change = %d %q, want a redirect to %s", rr.Code, rr.Header().Get("Location"), RouteAccountSecurity)
+		}
+	}
+
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	h.SetMFAService(env.svc)
+	req := requestWithURLParams(httptest.NewRequest(http.MethodPost, "/admin/users/1/mfa/reset", nil), map[string]string{"id": strconv.FormatInt(user.ID, 10)})
+	rr := httptest.NewRecorder()
+	h.ResetMFA(rr, addUserToContext(requestWithSession(env.sm, req), &user))
+	if rr.Header().Get("Location") != redirectAdminUsers {
+		t.Errorf("demo-mode reset = %d %q, want a redirect to %s", rr.Code, rr.Header().Get("Location"), redirectAdminUsers)
+	}
+	t.Log(mfaDemoChildMarker)
 }

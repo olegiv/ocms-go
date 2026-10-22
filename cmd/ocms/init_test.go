@@ -84,6 +84,11 @@ func TestRunInitCreatesScaffold(t *testing.T) {
 	if len(secret) < config.MinSessionSecretLength {
 		t.Errorf("secret length %d < %d", len(secret), config.MinSessionSecretLength)
 	}
+	// The scaffold can enroll authenticators, and stays valid when the site
+	// later turns OCMS_REQUIRE_MFA on.
+	if mfaKey := readEnvValue(t, envPath, "OCMS_MFA_KEY"); len(mfaKey) < config.MinSessionSecretLength || mfaKey == secret {
+		t.Errorf("OCMS_MFA_KEY has %d bytes or equals the session secret; want a separate key of at least %d", len(mfaKey), config.MinSessionSecretLength)
+	}
 }
 
 // TestRunInitRefusesNonEmptyDir verifies init will not scaffold over an

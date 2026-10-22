@@ -234,7 +234,8 @@ cd my-site
 ```
 
 `ocms init` creates `my-site/` with a `.env` (including a freshly generated
-`OCMS_SESSION_SECRET`) plus `data/`, `uploads/`, and `custom/` directories.
+`OCMS_SESSION_SECRET` and `OCMS_MFA_KEY`) plus `data/`, `uploads/`, and
+`custom/` directories.
 `ocms serve` starts the server, reading `./.env` from the current directory.
 Running `ocms` with no command still starts the server, so existing
 systemd/Docker setups are unaffected.
@@ -253,6 +254,12 @@ immediately. Stop the foreground process with `Ctrl+C`, set
 `OCMS_DO_SEED=false` in `my-site/.env`, then run `serve` again for normal runs.
 
 Keep `OCMS_SESSION_SECRET` stable; regenerating it invalidates active sessions.
+Keep `OCMS_MFA_KEY` stable too, and back it up with the database: it seals the
+authenticator-app secrets of two-factor authentication, and without it enrolled
+users can sign in only with recovery codes. Someone who lost both their
+authenticator and recovery codes is reset by an administrator on the user page,
+or with `ocms mfa-reset [-db <path>] <email>`, which reads `./.env` like
+`ocms migrate`.
 Do not set `OCMS_ENV=production` for this seeded bootstrap run. Production
 startup rejects default seeded credentials.
 
