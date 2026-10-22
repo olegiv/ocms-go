@@ -271,8 +271,9 @@ func (h *AuthHandler) refuseLockedAccount(w http.ResponseWriter, r *http.Request
 	return true
 }
 
-// recordWrongCode counts a wrong second-factor code against the account
-// lockout. It reports the lockout duration when the code locked the account.
+// recordWrongCode counts a wrong second-factor code, or a wrong password given
+// to change the second factor, against the account lockout and logs message.
+// It reports the lockout duration when it locked the account.
 func (h *AuthHandler) recordWrongCode(r *http.Request, user store.User, message string) (bool, time.Duration) {
 	clientIP := hcaptcha.GetRemoteIP(r)
 	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, message, &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": user.Email})
@@ -626,7 +627,14 @@ func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, use
 		return false
 	}
 	lang := middleware.GetAdminLang(r)
-	valid, err := auth.CheckPassword(r.FormValue("password"), user.PasswordHash)
+	password := r.FormValue("password")
+	if password == "" {
+		// A form from before the account's status changed has no password
+		// field: ask again, without counting it as a wrong password.
+		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.password_required"))
+		return false
+	}
+	valid, err := auth.CheckPassword(password, user.PasswordHash)
 	if err != nil {
 		logAndInternalError(w, "password check error", "error", err, "user_id", user.ID)
 		return false

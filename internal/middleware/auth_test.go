@@ -450,3 +450,49 @@ func TestSessionsNeedSecondFactorWhenRequired(t *testing.T) {
 		}
 	}
 }
+
+// TestSessionUser checks the helper /health, Sentinel and the login redirect
+// use to tell whether a request is signed in: it applies LoadUser's checks and
+// never changes the session.
+func TestSessionUser(t *testing.T) {
+	db, sm, user := newLoadUserTestSetup(t, 2)
+	queries := store.New(db)
+	SetMFARequired(false)
+	t.Cleanup(func() { SetMFARequired(false) })
+
+	for _, tc := range []struct {
+		name     string
+		userID   int64
+		version  int64
+		verified bool
+		required bool
+		want     bool
+	}{
+		{"anonymous", 0, 0, false, false, false},
+		{"deleted user", user.ID + 100, 2, true, false, false},
+		{"stale version", user.ID, 1, true, false, false},
+		{"current", user.ID, 2, false, false, true},
+		{"no second factor while required", user.ID, 2, false, true, false},
+		{"second factor while required", user.ID, 2, true, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			SetMFARequired(tc.required)
+			ctx, err := sm.Load(context.Background(), "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.userID != 0 {
+				sm.Put(ctx, SessionKeyUserID, tc.userID)
+			}
+			sm.Put(ctx, SessionKeyUserSessionVersion, tc.version)
+			sm.Put(ctx, SessionKeyMFAVerified, tc.verified)
+			got, ok := SessionUser(ctx, sm, queries)
+			if ok != tc.want || (ok && got.ID != user.ID) {
+				t.Errorf("SessionUser = user %d, %t; want %t", got.ID, ok, tc.want)
+			}
+			if tc.userID != 0 && sm.GetInt64(ctx, SessionKeyUserID) != tc.userID {
+				t.Error("SessionUser changed the session")
+			}
+		})
+	}
+}

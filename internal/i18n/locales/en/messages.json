@@ -3068,6 +3068,16 @@
             "translation": "Change Password"
         },
         {
+            "id": "users.current_password",
+            "message": "Current password",
+            "translation": "Current password"
+        },
+        {
+            "id": "users.current_password_hint",
+            "message": "Needed to change your own password.",
+            "translation": "Needed to change your own password."
+        },
+        {
             "id": "users.password_keep_hint",
             "message": "Leave blank to keep the current password.",
             "translation": "Leave blank to keep the current password."
@@ -5491,6 +5501,11 @@
             "id": "mfa.invalid_password",
             "message": "Incorrect password.",
             "translation": "Incorrect password."
+        },
+        {
+            "id": "mfa.password_required",
+            "message": "Enter your password to set up an authenticator.",
+            "translation": "Enter your password to set up an authenticator."
         },
         {
             "id": "mfa.recovery_codes_title",

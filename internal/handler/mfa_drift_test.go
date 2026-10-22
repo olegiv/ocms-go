@@ -57,7 +57,7 @@ func TestOnlyGrantSessionSignsIn(t *testing.T) {
 // allowed to read the session's user ID directly, with why they need not
 // know whether the session is stale.
 var sessionUserReadExceptions = map[string]string{
-	"(*AuthHandler).Logout": "names the user in the logout event; the session is destroyed either way",
+	"internal/handler/auth.go (*AuthHandler).Logout": "names the user in the logout event; the session is destroyed either way",
 }
 
 // TestSessionUserReadsGoThroughMiddleware fails when code outside
@@ -77,12 +77,12 @@ func TestSessionUserReadsGoThroughMiddleware(t *testing.T) {
 	keys := userIDKeyNames(files)
 	used := map[string]bool{}
 	for rel, file := range files {
-		if strings.HasPrefix(rel, "internal/middleware/") {
+		if rel == "internal/middleware/auth.go" { // Auth, LoadUser, SessionUser
 			continue
 		}
 		for _, read := range userIDReads(file, keys) {
-			if _, ok := sessionUserReadExceptions[read.where]; ok {
-				used[read.where] = true
+			if _, ok := sessionUserReadExceptions[rel+" "+read.where]; ok {
+				used[rel+" "+read.where] = true
 				continue
 			}
 			t.Errorf("%s: %s reads the session's user ID; call middleware.SessionUser, which also refuses stale sessions",
@@ -132,12 +132,13 @@ func parseRepoGoFiles(t *testing.T) (*token.FileSet, map[string]*ast.File) {
 
 // TestUserIDPutScanMatchesByValue checks the scan behind
 // TestOnlyGrantSessionSignsIn on a fixture: the key is found however a
-// constant spells it (its own literal, a raw string, a concatenation, an
-// alias of another key constant, one declared inside a function) and however
+// constant or variable spells it (its own literal, a raw string, a
+// concatenation, an alias of another key constant, one declared inside a
+// function) and however
 // the call writes it (the literal, a constant, a qualified constant, in
 // parentheses), in functions and package-level func literals, while other
-// keys are not. A key reaching Put through a variable or a helper's
-// parameter needs type information and is out of its reach.
+// keys are not. A key reaching Put through a helper's parameter needs type
+// information and is out of its reach.
 func TestUserIDPutScanMatchesByValue(t *testing.T) {
 	const src = `package p
 const SessionKeyUserID = "user_id"
@@ -145,6 +146,7 @@ const sessionKeyUserID = "user_id"
 const alias = middleware.SessionKeyUserID
 const raw = ` + "`user_id`" + `
 const joined = "user_" + "id"
+var held = "user_id"
 var signIn = func() { sm.Put(ctx, sessionKeyUserID, 1) }
 func f() {
 	const local = "user_id"
@@ -155,6 +157,7 @@ func f() {
 	sm.Put(ctx, joined, 1)
 	sm.Put(ctx, local, 1)
 	sm.Put(ctx, (middleware.SessionKeyUserID), 1)
+	sm.Put(ctx, held, 1)
 	sm.Put(ctx, "admin_lang", "en")
 	sm.Put(ctx, unrelated, 1)
 }
@@ -166,23 +169,23 @@ func f() {
 	}
 	files := map[string]*ast.File{"p.go": file}
 	puts := userIDPuts(file, userIDKeyNames(files))
-	if len(puts) != 8 {
+	if len(puts) != 9 {
 		for _, put := range puts {
 			t.Logf("found %s in %s", fset.Position(put.pos), put.where)
 		}
-		t.Fatalf("found %d user ID writes, want 8", len(puts))
+		t.Fatalf("found %d user ID writes, want 9", len(puts))
 	}
 }
 
-// userIDKeyNames returns the names of the constants, at any level, that hold
-// the session's user ID key "user_id", directly or as an alias of another
-// such constant.
+// userIDKeyNames returns the names of the constants and variables, at any
+// level, that hold the session's user ID key "user_id", directly or as an
+// alias of another such name.
 func userIDKeyNames(files map[string]*ast.File) map[string]bool {
 	names := map[string]bool{}
 	var specs []*ast.ValueSpec
 	for _, file := range files {
 		ast.Inspect(file, func(n ast.Node) bool {
-			if gen, ok := n.(*ast.GenDecl); ok && gen.Tok == token.CONST {
+			if gen, ok := n.(*ast.GenDecl); ok && (gen.Tok == token.CONST || gen.Tok == token.VAR) {
 				for _, spec := range gen.Specs {
 					specs = append(specs, spec.(*ast.ValueSpec))
 				}

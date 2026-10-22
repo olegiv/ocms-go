@@ -52,6 +52,9 @@ type UsersHandler struct {
 	dispatcher     *webhook.Dispatcher
 	eventService   *service.EventService
 	mfa            *mfa.Service
+	// loginProtection counts wrong current passwords toward the login
+	// lockout; nil leaves them uncounted.
+	loginProtection *middleware.LoginProtection
 }
 
 // NewUsersHandler creates a new UsersHandler.
@@ -67,6 +70,12 @@ func NewUsersHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 // SetDispatcher sets the webhook dispatcher for event dispatching.
 func (h *UsersHandler) SetDispatcher(d *webhook.Dispatcher) {
 	h.dispatcher = d
+}
+
+// SetLoginProtection makes wrong current passwords on an administrator's own
+// password change count toward the login lockout.
+func (h *UsersHandler) SetLoginProtection(lp *middleware.LoginProtection) {
+	h.loginProtection = lp
 }
 
 // SetMFAService sets the two-factor service the edit page reads the user's
@@ -358,6 +367,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			"telegram_url": editUser.TelegramUrl,
 		},
 		IsEdit: true,
+		IsSelf: editUser.ID == middleware.GetUserID(r),
 	}
 	if data.MFA, ok = h.userMFAStatus(w, r, editUser.ID, lang); !ok {
 		return
@@ -365,6 +375,34 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.edit"), userEditBreadcrumbs(lang, editUser.Name, editUser.ID))
 	renderTempl(w, r, adminviews.UserFormPage(pc, data))
+}
+
+// checkCurrentPassword verifies the current password administrators give to
+// change their own. It returns a validation message, or "" when it matches.
+// Wrong passwords count toward the login lockout like failed sign-ins.
+func (h *UsersHandler) checkCurrentPassword(r *http.Request, user store.User, current string) string {
+	clientIP := middleware.GetClientIP(r)
+	if h.loginProtection != nil {
+		if locked, _ := h.loginProtection.IsAccountLocked(user.Email, clientIP); locked {
+			return "Too many failed attempts; try again later"
+		}
+	}
+	if current == "" {
+		return "Enter your current password to change it"
+	}
+	valid, err := auth.CheckPassword(current, user.PasswordHash)
+	if err != nil {
+		slog.Error("password check error", "error", err, "user_id", user.ID)
+		return "Error checking the current password"
+	}
+	if valid {
+		return ""
+	}
+	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelWarning, "Password change refused: wrong current password", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"user_id": user.ID})
+	if h.loginProtection != nil {
+		h.loginProtection.RecordFailedAttempt(user.Email, clientIP)
+	}
+	return "Current password is incorrect"
 }
 
 // userMFAStatus is the edit page's view of userID's second factor: nil
@@ -520,6 +558,13 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		} else if password != passwordConfirm {
 			validationErrors["password_confirm"] = "Passwords do not match"
 		}
+		// Changing your own password needs the current one, so a stolen
+		// session cannot take the account over, second factor included.
+		if id == currentUser.ID {
+			if msg := h.checkCurrentPassword(r, editUser, r.FormValue("current_password")); msg != "" {
+				validationErrors["current_password"] = msg
+			}
+		}
 	}
 
 	// Role validation
@@ -562,6 +607,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
+			IsSelf:     id == currentUser.ID,
 		}
 		if data.MFA, ok = h.userMFAStatus(w, r, editUser.ID, lang); !ok {
 			return

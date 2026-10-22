@@ -26,19 +26,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lockout. Accounts that must use a second factor and have none set it up at
   `/login/mfa/setup`. `/account/security` sets up, replaces or turns off the
   authenticator and issues new recovery codes; the first setup asks for the
-  password and every later change for a current code. TOTP secrets are sealed with AES-256-GCM under a key derived
-  from `OCMS_MFA_KEY`.
+  password and every later change for a current code. TOTP secrets are
+  sealed with AES-256-GCM under a key derived from `OCMS_MFA_KEY`.
 - Administrators reset another user's second factor on the user edit page;
   `ocms mfa-reset <email>` does it from the command line for an administrator
   with nobody to reset them. Changing or resetting a second factor signs the
   account out of its other sessions.
+- Administrators changing their own password on the user edit page enter the
+  current one; wrong attempts count toward the login lockout. A stolen session
+  can no longer set a password of its own and use it to add a second factor.
 
 ### Fixed
-- `/health` and the Sentinel module decided "signed in" from the session's
-  user ID alone, so a session invalidated by a password change still got the
-  admin health details and Sentinel's ban exemption until it expired. They now
-  use `middleware.SessionUser`, which applies the same staleness checks as
-  every protected route, including the two-factor requirement.
+- `/health` decided "signed in" from the session's user ID alone, so a
+  session invalidated by a password change still got the authenticated, and
+  for an administrator the full, health details until it expired. It now uses
+  `middleware.SessionUser`, which applies the same staleness checks as every
+  protected route, including the two-factor requirement. Sentinel's honeypot
+  check uses it too. (Sentinel's middleware runs before sessions are loaded,
+  so its admin and editor exemption from auto-ban paths has never applied
+  there; that is unchanged.)
 
 ## [0.29.1] - 2026-10-18
 

@@ -2122,6 +2122,7 @@ func run() (runErr error) {
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	usersHandler.SetMFAService(mfaService)
+	usersHandler.SetLoginProtection(loginProtection)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
 	pagesHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
 	pagesHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)

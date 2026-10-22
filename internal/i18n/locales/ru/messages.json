@@ -3068,6 +3068,16 @@
             "translation": "Изменить пароль"
         },
         {
+            "id": "users.current_password",
+            "message": "Current password",
+            "translation": "Текущий пароль"
+        },
+        {
+            "id": "users.current_password_hint",
+            "message": "Needed to change your own password.",
+            "translation": "Нужен, чтобы сменить свой пароль."
+        },
+        {
             "id": "users.password_keep_hint",
             "message": "Leave blank to keep the current password.",
             "translation": "Оставьте пустым, чтобы сохранить текущий пароль."
@@ -4976,6 +4986,11 @@
             "id": "mfa.invalid_password",
             "message": "Incorrect password.",
             "translation": "Неверный пароль."
+        },
+        {
+            "id": "mfa.password_required",
+            "message": "Enter your password to set up an authenticator.",
+            "translation": "Введите пароль, чтобы настроить аутентификатор."
         },
         {
             "id": "mfa.recovery_codes_title",

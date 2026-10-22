@@ -750,3 +750,86 @@ func TestTwoFactorDemoMode(t *testing.T) {
 	}
 	t.Log(mfaDemoChildMarker)
 }
+
+// TestFirstSetupWithoutPasswordIsNotCounted covers a setup form opened while
+// the account had a second factor and sent after it was turned off: it has
+// no password field, which is asked for again without counting as a wrong
+// password.
+func TestFirstSetupWithoutPasswordIsNotCounted(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	env.withLockout(t, 1)
+	user := env.createUser(t, model.RoleEditor)
+	cookie, _ := env.signInWithPassword(t, user)
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie)
+	m := setupSecret.FindStringSubmatch(page.Body.String())
+	if m == nil {
+		t.Fatalf("setup page = %d", page.Code)
+	}
+	secret := strings.ReplaceAll(m[1], " ", "")
+	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"current_code": {"123456"}, "code": {totpCode(t, secret, 0)}}, cookie)
+	if rr.Header().Get("Location") != RouteAccountSecurityTOTP || env.session(t, cookie)("flash") != i18n.T("en", "mfa.password_required") {
+		t.Fatalf("setup without a password field = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	// With a lockout after one failure, a counted attempt would refuse this.
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, secret, 0)}}, cookie)
+	if rr.Code != http.StatusOK {
+		t.Errorf("setup after a missing password = %d %q, want it to succeed", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
+// TestAdminOwnPasswordChangeNeedsCurrentPassword checks that administrators
+// changing their own password give the current one, so a stolen session
+// cannot set a password of its own and then pass the first-setup check.
+// Changing another user's password does not ask for it.
+//
+// Bug state: drop the checkCurrentPassword call from UsersHandler.Update.
+func TestAdminOwnPasswordChangeNeedsCurrentPassword(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	admin := env.createUser(t, model.RoleAdmin)
+	editor := env.createUser(t, model.RoleEditor)
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	h.SetMFAService(env.svc)
+
+	update := func(target store.User, extra url.Values) *httptest.ResponseRecorder {
+		form := url.Values{"name": {target.Name}, "email": {target.Email}, "role": {target.Role},
+			"password": {"Brand-new-password!"}, "password_confirm": {"Brand-new-password!"}}
+		for k, v := range extra {
+			form[k] = v
+		}
+		req := httptest.NewRequest(http.MethodPost, "/admin/users/x", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(target.ID, 10)})), &admin)
+		rr := httptest.NewRecorder()
+		h.Update(rr, req)
+		return rr
+	}
+	passwordIs := func(id int64, password string) bool {
+		var hash string
+		if err := env.db.QueryRow(`SELECT password_hash FROM users WHERE id = ?`, id).Scan(&hash); err != nil {
+			t.Fatal(err)
+		}
+		ok, err := auth.CheckPassword(password, hash)
+		return err == nil && ok
+	}
+
+	for name, extra := range map[string]url.Values{
+		"no current password":    nil,
+		"wrong current password": {"current_password": {"Not-the-password!"}},
+	} {
+		if rr := update(admin, extra); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `name="current_password"`) {
+			t.Errorf("own change with %s = %d, want the form again", name, rr.Code)
+		}
+	}
+	if !passwordIs(admin.ID, mfaTestPassword) {
+		t.Fatal("an own password change went through without the current password")
+	}
+	if rr := update(admin, url.Values{"current_password": {mfaTestPassword}}); rr.Code != http.StatusSeeOther {
+		t.Fatalf("own change with the current password = %d", rr.Code)
+	}
+	if !passwordIs(admin.ID, "Brand-new-password!") {
+		t.Error("the own password change with the current password did not apply")
+	}
+	if rr := update(editor, nil); rr.Code != http.StatusSeeOther || !passwordIs(editor.ID, "Brand-new-password!") {
+		t.Errorf("changing another user's password = %d, want it applied without a current password", rr.Code)
+	}
+}
