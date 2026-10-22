@@ -649,12 +649,23 @@ func TestLoginMFALockout(t *testing.T) {
 		cookie, _ := env.signInWithPassword(t, user)
 		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
 		cookie = sessionCookie(t, rr, env.sm) // signing in renews the token
+		page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie)
+		m := setupSecret.FindStringSubmatch(page.Body.String())
+		if m == nil {
+			t.Fatalf("setup page = %d", page.Code)
+		}
+		newSecret := strings.ReplaceAll(m[1], " ", "")
 		for range 2 {
 			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
 		}
-		rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"code": {"000000"}, "current_code": {totpCode(t, secret, 1)}}, cookie)
-		if got, _ := env.session(t, cookie)("flash").(string); rr.Header().Get("Location") != RouteAccountSecurityTOTP || !strings.Contains(got, "locked") {
+		// A wrong new code: before the fix, this answered "invalid code".
+		rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"code": {wrongCode(t, newSecret)}, "current_code": {totpCode(t, secret, 1)}}, cookie)
+		get := env.session(t, cookie)
+		if got, _ := get("flash").(string); rr.Header().Get("Location") != RouteAccountSecurityTOTP || !strings.Contains(got, "locked") {
 			t.Fatalf("replacement on a locked account = %d %q, flash %q; want the lockout message", rr.Code, rr.Header().Get("Location"), got)
+		}
+		if get(sessionKeyMFASetupSecret) == nil {
+			t.Error("the refusal dropped the new authenticator's secret; the user could not retry with the same QR code")
 		}
 		assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
 	})
@@ -666,13 +677,23 @@ func TestLoginMFALockout(t *testing.T) {
 		if next != RouteLoginMFASetup {
 			t.Fatalf("password step went to %q, want %s", next, RouteLoginMFASetup)
 		}
+		page := authRequest(env.router, http.MethodGet, RouteLoginMFASetup, nil, cookie)
+		m := setupSecret.FindStringSubmatch(page.Body.String())
+		if m == nil {
+			t.Fatalf("setup page = %d", page.Code)
+		}
+		secret := strings.ReplaceAll(m[1], " ", "")
 		for range 2 {
 			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
 		}
-		rr := authRequest(env.router, http.MethodPost, RouteLoginMFASetup, url.Values{"code": {"123456"}}, cookie)
+		// The right code: the lockout alone must stop it.
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFASetup, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
 		get := env.session(t, cookie)
-		if rr.Header().Get("Location") != RouteLogin || get(middleware.SessionKeyUserID) != nil || get(sessionKeyMFAPendingUserID) != nil {
-			t.Fatalf("setup on a locked account = %d %q; want the sign-in to end", rr.Code, rr.Header().Get("Location"))
+		if rr.Header().Get("Location") != RouteLogin || get(middleware.SessionKeyUserID) != nil || get(sessionKeyMFAPendingUserID) != nil || get(sessionKeyMFASetupSecret) != nil {
+			t.Fatalf("setup on a locked account = %d %q; want the sign-in and its setup to end", rr.Code, rr.Header().Get("Location"))
+		}
+		if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || enrolled {
+			t.Fatalf("a locked account enrolled an authenticator: %t, %v", enrolled, err)
 		}
 		assertEventCount(t, env, "Login attempt on locked account", user.ID, 1)
 	})
