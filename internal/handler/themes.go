@@ -111,15 +111,16 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	refuse := func() {
-		slog.Warn("theme import refused: password confirmation failed", "user_id", user.ID)
-		h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: password confirmation failed", nil)
+	refuse := func(message string) {
+		slog.Warn(strings.ToLower(message[:1])+message[1:], "user_id", user.ID)
+		h.logSecurityEvent(r, model.EventLevelWarning, message, nil)
 	}
-	switch c := confirmPassword(r, h.loginProtection, h.eventService, *user, r.FormValue("confirm_password"), refuse); c.Outcome {
+	switch c := confirmPassword(r, h.loginProtection, h.eventService, *user, r.FormValue("confirm_password"), func() {
+		refuse("Theme import refused: password confirmation failed")
+	}); c.Outcome {
 	case passwordOK:
 	case passwordLocked:
-		slog.Warn("theme import refused: account locked", "user_id", user.ID)
-		h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: too many failed password confirmations", nil)
+		refuse("Theme import refused: too many failed password confirmations")
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_locked"))
 		return
 	case passwordUnverified:
@@ -129,8 +130,7 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	case passwordMissing:
 		// Refused like a wrong password, but not counted toward the lockout.
-		slog.Warn("theme import refused: no password", "user_id", user.ID)
-		h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: no password", nil)
+		refuse("Theme import refused: no password")
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
 		return
 	default:

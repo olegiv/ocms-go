@@ -628,6 +628,7 @@ func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, use
 	case passwordOK:
 		return true
 	case passwordLocked:
+		h.logRefusal(r, user, model.EventLevelWarning, "Two-factor change refused: account locked")
 		flashError(w, r, h.renderer, back, i18n.T(lang, "auth.account_locked", formatDuration(c.LockedFor)))
 	case passwordMissing:
 		// A form from before the account's status changed has no password

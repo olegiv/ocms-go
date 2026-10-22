@@ -167,14 +167,18 @@ func TestActivateConfirmedOnlyAfterPassword(t *testing.T) {
 //
 // The table name may be quoted or schema-qualified.
 var moduleActiveWriteSQL = regexp.MustCompile(`(?is)` +
-	`\bupdate(?:\s+or\s+\w+)?\s+` + modulesTableSQL + `[^;]*?\bset\b(?:[^;]*?[\x60"\[]?\bis_active[\x60"\]]?\s*=|\s*\([^;)]*\bis_active\b)` +
+	`\bupdate(?:\s+or\s+\w+)?\s+` + modulesTableName + `(?:[^\w;])[^;]*?\bset\b(?:[^;]*?[\x60"\[]?\bis_active[\x60"\]]?\s*=|\s*\([^;)]*\bis_active\b)` +
 	`|\b(?:replace|insert(?:\s+or\s+\w+)?)\s+into\s+` + modulesTableSQL +
 	`|\bcreate\s+(?:temp\w*\s+)?table\s+(?:if\s+not\s+exists\s+)?` + modulesTableSQL +
 	`|\brename\s+to\s+` + modulesTableSQL)
 
-// modulesTableSQL matches the table name modules, quoted or not, with an
-// optional schema prefix, and not as the start of a longer name.
-const modulesTableSQL = `(?:[\x60"\[]?\w+[\x60"\]]?\s*\.\s*)?[\x60"\[]?modules[\x60"\]]?(?:[^\w]|$)`
+// modulesTableName matches the table name modules, quoted or not, with an
+// optional schema prefix; modulesTableSQL also requires that it is not the
+// start of a longer name.
+const (
+	modulesTableName = `(?:[\x60"\[]?\w+[\x60"\]]?\s*\.\s*)?[\x60"\[]?modules[\x60"\]]?`
+	modulesTableSQL  = modulesTableName + `(?:[^\w]|$)`
+)
 
 // moduleActiveWriteSites are where a module's active flag may be written,
 // with what keeps each from switching a password-gated module on: Go
@@ -222,6 +226,7 @@ func TestModuleActiveFlagWritesAreGated(t *testing.T) {
 		"CREATE TABLE IF NOT EXISTS modules (name TEXT PRIMARY KEY)":                                                                                         true,
 		"CREATE TABLE modules_new (name TEXT)":                                                           false,
 		"ALTER TABLE modules ADD COLUMN extra TEXT":                                                      false,
+		"UPDATE modules; UPDATE other SET is_active = 1":                                                 false,
 		"UPDATE modules SET show_in_sidebar = ? WHERE name = ?":                                          false,
 		"UPDATE modules SET show_in_sidebar = ? WHERE name = ? RETURNING id, is_active, show_in_sidebar": false,
 		"SELECT is_active FROM modules WHERE name = ?":                                                   false,

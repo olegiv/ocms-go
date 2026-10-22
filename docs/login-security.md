@@ -246,6 +246,7 @@ All login-related events are logged to the events system:
 | Two-factor change refused: invalid code | Warning | Wrong current code on the account security page |
 | Two-factor change refused: invalid password | Warning | Wrong password for the first authenticator setup on the account security page |
 | Two-factor change refused: no password | Warning | First setup sent without a password (a form from before the account's status changed); not counted toward the lockout |
+| Two-factor change refused: account locked | Warning | First setup tried while the account is locked |
 | Two-factor change refused: password could not be verified | Error | The stored password hash could not be checked |
 | Recovery codes regenerated | Info | New recovery codes issued |
 | Two-factor authentication reset by an administrator | Warning | Reset from the user page (User category) |

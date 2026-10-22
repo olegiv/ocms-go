@@ -1041,3 +1041,23 @@ func TestUnverifiablePasswordIsLogged(t *testing.T) {
 		}
 	}
 }
+
+// TestLockedFirstSetupIsLogged checks that the first authenticator setup,
+// like the other password gates, logs a refusal while the account is
+// locked, so attempts on a locked account show in the event log.
+func TestLockedFirstSetupIsLogged(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	env.withLockout(t, 2)
+	user := env.createUser(t, model.RoleEditor)
+	cookie, _ := env.signInWithPassword(t, user)
+	for _, password := range []string{"Not-the-password-1!", "Not-the-password-2!", mfaTestPassword} {
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {password}, "code": {"123456"}}, cookie)
+	}
+	if got := env.session(t, cookie)("flash"); got == nil || !strings.Contains(got.(string), "locked") {
+		t.Fatalf("flash after the right password on a locked account = %v, want the lockout message", got)
+	}
+	var refusals int
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Two-factor change refused: account locked' AND user_id = ?`, user.ID).Scan(&refusals); err != nil || refusals != 1 {
+		t.Errorf("locked refusal events = %d, %v; want the attempt on the locked account logged", refusals, err)
+	}
+}

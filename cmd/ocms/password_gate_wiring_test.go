@@ -19,7 +19,7 @@ var lockoutSetters = map[string]bool{
 	"SetPasswordConfirmation": true,
 }
 
-// TestPasswordGatesGetTheLockout fails when main.go builds a handler whose
+// TestPasswordGatesGetTheLockout fails when cmd/ocms builds a handler whose
 // password gate takes the login lockout without giving it one: a nil
 // *middleware.LoginProtection passed to its constructor, or a lockout setter
 // (SetLoginProtection, SetPasswordConfirmation) never called with a non-nil
@@ -29,8 +29,8 @@ var lockoutSetters = map[string]bool{
 //
 // It reads every non-test file of cmd/ocms. Handlers are matched to
 // variables through their constructors (usersHandler :=
-// handler.NewUsersHandler(...)), and every constructor that takes the
-// lockout must be called somewhere.
+// handler.NewUsersHandler(...)) within the same file, and every constructor
+// that takes the lockout must be called somewhere.
 //
 // Bug state: drop modulesHandler.SetPasswordConfirmation from main.go, or
 // pass nil for NewThemesHandler's lockout (in main.go or a helper file),
@@ -42,10 +42,11 @@ func TestPasswordGatesGetTheLockout(t *testing.T) {
 	}
 	files := parseNonTestGoFiles(t, ".")
 
-	varType := map[string]string{} // usersHandler -> UsersHandler
-	called := map[string]bool{}    // NewUsersHandler
-	wired := map[string]bool{}     // "UsersHandler.SetLoginProtection"
+	varType := map[string]map[string]string{} // file -> usersHandler -> UsersHandler
+	called := map[string]bool{}               // NewUsersHandler
+	wired := map[string]bool{}                // "UsersHandler.SetLoginProtection"
 	for name, file := range files {
+		varType[name] = map[string]string{}
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch node := n.(type) {
 			case *ast.AssignStmt:
@@ -55,7 +56,7 @@ func TestPasswordGatesGetTheLockout(t *testing.T) {
 						continue
 					}
 					if ident, ok := node.Lhs[i].(*ast.Ident); ok {
-						varType[ident.Name] = strings.TrimPrefix(constructor, "New")
+						varType[name][ident.Name] = strings.TrimPrefix(constructor, "New")
 					}
 				}
 			case *ast.CallExpr:
@@ -69,7 +70,7 @@ func TestPasswordGatesGetTheLockout(t *testing.T) {
 			return true
 		})
 	}
-	for _, file := range files {
+	for name, file := range files {
 		ast.Inspect(file, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok || len(call.Args) == 0 || isNil(call.Args[0]) {
@@ -80,7 +81,7 @@ func TestPasswordGatesGetTheLockout(t *testing.T) {
 				return true
 			}
 			if recv, ok := sel.X.(*ast.Ident); ok {
-				wired[varType[recv.Name]+"."+sel.Sel.Name] = true
+				wired[varType[name][recv.Name]+"."+sel.Sel.Name] = true
 			}
 			return true
 		})
