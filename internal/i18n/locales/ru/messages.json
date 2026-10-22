@@ -3069,13 +3069,13 @@
         },
         {
             "id": "users.current_password",
-            "message": "Current password",
-            "translation": "Текущий пароль"
+            "message": "Your current password",
+            "translation": "Ваш текущий пароль"
         },
         {
             "id": "users.current_password_hint",
-            "message": "Needed to change your own password.",
-            "translation": "Нужен, чтобы сменить свой пароль."
+            "message": "Needed to change your own email or password, set another user's password, or give an account the admin role.",
+            "translation": "Нужен, чтобы сменить свой email или пароль, задать пароль другому пользователю или выдать роль администратора."
         },
         {
             "id": "users.password_keep_hint",

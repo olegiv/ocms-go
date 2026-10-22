@@ -32,9 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ocms mfa-reset <email>` does it from the command line for an administrator
   with nobody to reset them. Changing or resetting a second factor signs the
   account out of its other sessions.
-- Administrators changing their own password on the user edit page enter the
-  current one; wrong attempts count toward the login lockout. A stolen session
-  can no longer set a password of its own and use it to add a second factor.
+- User changes that could hand an account to whoever holds an administrator's
+  session now ask for that administrator's current password: a new password
+  for any user, a new email for one's own account, and the admin role when
+  creating or editing a user. Wrong attempts count toward the login lockout.
+  A stolen session can no longer set a password of its own, reset the lockout
+  by changing its email, or create an administrator it controls to take the
+  others over. The DB Manager module, which runs raw SQL, is outside this
+  check: keep it inactive where it is not needed.
 
 ### Fixed
 - `/health` decided "signed in" from the session's user ID alone, so a

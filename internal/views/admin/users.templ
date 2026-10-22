@@ -44,9 +44,6 @@ type UserFormData struct {
 	Errors     map[string]string
 	// MFA is the edited user's two-factor status; nil hides the section.
 	MFA *UserMFAStatus
-	// IsSelf is set when administrators edit their own account: a new
-	// password then needs the current one.
-	IsSelf bool
 }
 
 // UserMFAStatus is a user's two-factor status on the edit page.
@@ -488,28 +485,6 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							<p class="form-help">{ pc.T("users.password_keep_hint") }</p>
 						}
 					</div>
-					if data.IsSelf {
-						<!-- Current password, required to change your own -->
-						<div class="form-group">
-							@label.Label(label.Props{For: "current_password", Class: "block mb-1"}) {
-								{ pc.T("users.current_password") }
-							}
-							@input.Input(input.Props{
-								Type: input.TypePassword,
-								ID: "current_password",
-								Name: "current_password",
-								HasError: data.Errors["current_password"] != "",
-								Attributes: templ.Attributes{
-									"autocomplete": "current-password",
-								},
-							})
-							if data.Errors["current_password"] != "" {
-								<span class="form-error">{ data.Errors["current_password"] }</span>
-							} else {
-								<span class="form-hint">{ pc.T("users.current_password_hint") }</span>
-							}
-						</div>
-					}
 					<!-- Password -->
 					<div class="form-group" x-data="passwordStrength()">
 						@label.Label(label.Props{For: "password", Class: "block mb-1"}) {
@@ -568,6 +543,27 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							<span class="form-error">{ data.Errors["password_confirm"] }</span>
 						}
 					</div>
+				</div>
+				<!-- The acting administrator's password, for changes that could hand
+				     over an account: see UsersHandler.actorPasswordNeeded. -->
+				<div class="form-group mt-6">
+					@label.Label(label.Props{For: "current_password", Class: "block mb-1"}) {
+						{ pc.T("users.current_password") }
+					}
+					@input.Input(input.Props{
+						Type: input.TypePassword,
+						ID: "current_password",
+						Name: "current_password",
+						HasError: data.Errors["current_password"] != "",
+						Attributes: templ.Attributes{
+							"autocomplete": "current-password",
+						},
+					})
+					if data.Errors["current_password"] != "" {
+						<span class="form-error">{ data.Errors["current_password"] }</span>
+					} else {
+						<span class="form-hint">{ pc.T("users.current_password_hint") }</span>
+					}
 				</div>
 				<div class="form-actions">
 					@button.Button(button.Props{Type: button.TypeSubmit}) {

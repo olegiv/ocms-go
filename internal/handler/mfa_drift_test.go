@@ -57,6 +57,10 @@ func TestOnlyGrantSessionSignsIn(t *testing.T) {
 // allowed to read the session's user ID directly, with why they need not
 // know whether the session is stale.
 var sessionUserReadExceptions = map[string]string{
+	"internal/middleware/auth.go Auth":               "the authentication gate itself",
+	"internal/middleware/auth.go LoadUser":           "applies isSessionStale",
+	"internal/middleware/auth.go OptionalLoadUser":   "applies isSessionStale",
+	"internal/middleware/auth.go SessionUser":        "applies isSessionStale; the helper everything else calls",
 	"internal/handler/auth.go (*AuthHandler).Logout": "names the user in the logout event; the session is destroyed either way",
 }
 
@@ -77,9 +81,6 @@ func TestSessionUserReadsGoThroughMiddleware(t *testing.T) {
 	keys := userIDKeyNames(files)
 	used := map[string]bool{}
 	for rel, file := range files {
-		if rel == "internal/middleware/auth.go" { // Auth, LoadUser, SessionUser
-			continue
-		}
 		for _, read := range userIDReads(file, keys) {
 			if _, ok := sessionUserReadExceptions[rel+" "+read.where]; ok {
 				used[rel+" "+read.where] = true
@@ -133,8 +134,8 @@ func parseRepoGoFiles(t *testing.T) (*token.FileSet, map[string]*ast.File) {
 // TestUserIDPutScanMatchesByValue checks the scan behind
 // TestOnlyGrantSessionSignsIn on a fixture: the key is found however a
 // constant or variable spells it (its own literal, a raw string, a
-// concatenation, an alias of another key constant, one declared inside a
-// function) and however
+// concatenation, an alias of another key name, one declared inside a function
+// or with :=) and however
 // the call writes it (the literal, a constant, a qualified constant, in
 // parentheses), in functions and package-level func literals, while other
 // keys are not. A key reaching Put through a helper's parameter needs type
@@ -147,6 +148,7 @@ const alias = middleware.SessionKeyUserID
 const raw = ` + "`user_id`" + `
 const joined = "user_" + "id"
 var held = "user_id"
+func g() { k := middleware.SessionKeyUserID; sm.Put(ctx, k, 1) }
 var signIn = func() { sm.Put(ctx, sessionKeyUserID, 1) }
 func f() {
 	const local = "user_id"
@@ -169,42 +171,59 @@ func f() {
 	}
 	files := map[string]*ast.File{"p.go": file}
 	puts := userIDPuts(file, userIDKeyNames(files))
-	if len(puts) != 9 {
+	if len(puts) != 10 {
 		for _, put := range puts {
 			t.Logf("found %s in %s", fset.Position(put.pos), put.where)
 		}
-		t.Fatalf("found %d user ID writes, want 9", len(puts))
+		t.Fatalf("found %d user ID writes, want 10", len(puts))
 	}
 }
 
 // userIDKeyNames returns the names of the constants and variables, at any
-// level, that hold the session's user ID key "user_id", directly or as an
-// alias of another such name.
+// level and declared with const, var or :=, that hold the session's user ID
+// key "user_id", directly or as an alias of another such name.
 func userIDKeyNames(files map[string]*ast.File) map[string]bool {
-	names := map[string]bool{}
-	var specs []*ast.ValueSpec
+	type binding struct {
+		name  string
+		value ast.Expr
+	}
+	var bindings []binding
 	for _, file := range files {
 		ast.Inspect(file, func(n ast.Node) bool {
-			if gen, ok := n.(*ast.GenDecl); ok && (gen.Tok == token.CONST || gen.Tok == token.VAR) {
-				for _, spec := range gen.Specs {
-					specs = append(specs, spec.(*ast.ValueSpec))
+			switch decl := n.(type) {
+			case *ast.GenDecl:
+				if decl.Tok != token.CONST && decl.Tok != token.VAR {
+					break
+				}
+				for _, spec := range decl.Specs {
+					vs := spec.(*ast.ValueSpec)
+					for i, name := range vs.Names {
+						if i < len(vs.Values) {
+							bindings = append(bindings, binding{name.Name, vs.Values[i]})
+						}
+					}
+				}
+			case *ast.AssignStmt:
+				if decl.Tok != token.DEFINE || len(decl.Lhs) != len(decl.Rhs) {
+					break
+				}
+				for i, lhs := range decl.Lhs {
+					if ident, ok := lhs.(*ast.Ident); ok {
+						bindings = append(bindings, binding{ident.Name, decl.Rhs[i]})
+					}
 				}
 			}
 			return true
 		})
 	}
-	// Aliases resolve once the constant they name is known.
+	// Aliases resolve once the name they refer to is known.
+	names := map[string]bool{}
 	for changed := true; changed; {
 		changed = false
-		for _, vs := range specs {
-			for i, name := range vs.Names {
-				if names[name.Name] || i >= len(vs.Values) {
-					continue
-				}
-				if isUserIDKey(vs.Values[i], names) {
-					names[name.Name] = true
-					changed = true
-				}
+		for _, b := range bindings {
+			if !names[b.name] && isUserIDKey(b.value, names) {
+				names[b.name] = true
+				changed = true
 			}
 		}
 	}
