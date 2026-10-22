@@ -216,7 +216,7 @@ func (h *AuthHandler) LoginMFA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := pending.user
-	if h.refuseLockedAccount(w, r, user, func() { h.clearPendingSignIn(r.Context()) }, redirectLogin) {
+	if h.refuseLockedAccount(w, r, user, "Login attempt on locked account", func() { h.clearPendingSignIn(r.Context()) }, redirectLogin) {
 		return
 	}
 
@@ -253,9 +253,10 @@ func (h *AuthHandler) flashRecoveryCodeUsed(r *http.Request, user store.User) {
 	h.renderer.SetFlash(r, message, "warning")
 }
 
-// refuseLockedAccount answers a locked account and reports true. onLocked
-// runs first, to drop state the lockout ends.
-func (h *AuthHandler) refuseLockedAccount(w http.ResponseWriter, r *http.Request, user store.User, onLocked func(), redirectURL string) bool {
+// refuseLockedAccount answers a locked account, logs message as the
+// refusal, and reports true. onLocked runs first, to drop state the lockout
+// ends.
+func (h *AuthHandler) refuseLockedAccount(w http.ResponseWriter, r *http.Request, user store.User, message string, onLocked func(), redirectURL string) bool {
 	if h.loginProtection == nil {
 		return false
 	}
@@ -263,6 +264,7 @@ func (h *AuthHandler) refuseLockedAccount(w http.ResponseWriter, r *http.Request
 	if !locked {
 		return false
 	}
+	h.logRefusal(r, user, model.EventLevelWarning, message)
 	if onLocked != nil {
 		onLocked()
 	}
@@ -653,7 +655,7 @@ func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, use
 // Wrong codes count against the login lockout, so a stolen session cannot
 // guess one. It answers the request itself and reports false on failure.
 func (h *AuthHandler) verifyCurrentCode(w http.ResponseWriter, r *http.Request, user store.User, back string) bool {
-	if h.refuseLockedAccount(w, r, user, nil, back) {
+	if h.refuseLockedAccount(w, r, user, "Two-factor change refused: account locked", nil, back) {
 		return false
 	}
 	lang := middleware.GetAdminLang(r)

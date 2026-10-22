@@ -237,7 +237,7 @@ All login-related events are logged to the events system:
 |-------|-------|-------------|
 | Login failed: user not found | Warning | Attempt with non-existent email |
 | Login failed: invalid password | Warning | Wrong password for existing user |
-| Login attempt on locked account | Warning | Attempt during lockout period |
+| Login attempt on locked account | Warning | Attempt during lockout period, at the password or the code step |
 | Account locked due to failed attempts | Warning | Account just got locked |
 | Login failed: invalid two-factor code | Warning | Wrong, expired or reused code at `/login/mfa` |
 | Recovery code used to sign in | Warning | Sign-in with a recovery code |
@@ -246,7 +246,7 @@ All login-related events are logged to the events system:
 | Two-factor change refused: invalid code | Warning | Wrong current code on the account security page |
 | Two-factor change refused: invalid password | Warning | Wrong password for the first authenticator setup on the account security page |
 | Two-factor change refused: no password | Warning | First setup sent without a password (a form from before the account's status changed); not counted toward the lockout |
-| Two-factor change refused: account locked | Warning | First setup tried while the account is locked |
+| Two-factor change refused: account locked | Warning | A second-factor change (first setup, replacement, new recovery codes, turning it off) tried while the account is locked |
 | Two-factor change refused: password could not be verified | Error | The stored password hash could not be checked |
 | Recovery codes regenerated | Info | New recovery codes issued |
 | Two-factor authentication reset by an administrator | Warning | Reset from the user page (User category) |

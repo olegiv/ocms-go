@@ -452,6 +452,19 @@ func TestThemeImportPasswordConfirmationIsThrottled(t *testing.T) {
 	if got := h.sessionManager.GetString(r.Context(), "flash"); got != i18n.T("en", "themes.import_locked") {
 		t.Fatalf("flash = %q, want the lockout message", got)
 	}
+	events, err := h.queries.ListEventsByCategory(t.Context(), store.ListEventsByCategoryParams{Category: model.EventCategorySecurity, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := 0
+	for _, e := range events {
+		if e.Message == "Theme import refused: too many failed password confirmations" {
+			locked++
+		}
+	}
+	if locked != 1 {
+		t.Errorf("locked refusal events = %d, want the attempt on the locked account logged once", locked)
+	}
 }
 
 // TestThemeEventLogCarriesMetadata fails when the import event loses the

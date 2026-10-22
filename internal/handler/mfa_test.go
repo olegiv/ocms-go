@@ -618,7 +618,38 @@ func TestLoginMFALockout(t *testing.T) {
 		if get(middleware.SessionKeyUserID) != nil || get(sessionKeyMFAPendingUserID) != nil {
 			t.Errorf("locked account: user %v, pending %v; want neither", get(middleware.SessionKeyUserID), get(sessionKeyMFAPendingUserID))
 		}
+		assertEventCount(t, env, "Login attempt on locked account", user.ID, 1)
 	})
+	t.Run("a locked account cannot change its second factor", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		lp := env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("second factor = %d", rr.Code)
+		}
+		cookie = sessionCookie(t, rr, env.sm) // signing in renews the token
+		for range 2 {
+			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
+		}
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityDisable, url.Values{"current_code": {totpCode(t, secret, 1)}}, cookie)
+		if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || !enrolled {
+			t.Fatalf("a locked account turned its second factor off: %t, %v", enrolled, err)
+		}
+		assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+	})
+}
+
+// assertEventCount fails unless exactly want events with message were
+// logged for userID.
+func assertEventCount(t *testing.T, env *mfaTestEnv, message string, userID int64, want int) {
+	t.Helper()
+	var got int
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = ? AND user_id = ?`, message, userID).Scan(&got); err != nil || got != want {
+		t.Errorf("events %q = %d, %v; want %d", message, got, err, want)
+	}
 }
 
 // TestLoginMFAWithChangedKey covers OCMS_MFA_KEY being lost or rotated: an
