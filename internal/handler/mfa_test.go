@@ -581,8 +581,9 @@ func (env *mfaTestEnv) withLockout(t *testing.T, attempts int) *middleware.Login
 }
 
 // TestLoginMFALockout checks that wrong second-factor codes count toward the
-// account lockout, and that a locked account cannot finish a pending
-// sign-in, even with the right code.
+// account lockout, that a locked account cannot finish a pending sign-in,
+// even with the right code, nor change its second factor, and that each
+// attempt on a locked account is logged.
 func TestLoginMFALockout(t *testing.T) {
 	t.Run("wrong codes lock the account", func(t *testing.T) {
 		env := newMFATestEnv(t, false)
@@ -639,6 +640,41 @@ func TestLoginMFALockout(t *testing.T) {
 			t.Fatalf("a locked account turned its second factor off: %t, %v", enrolled, err)
 		}
 		assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+	})
+	t.Run("a locked account hears the lockout when replacing its authenticator", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		lp := env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		cookie = sessionCookie(t, rr, env.sm) // signing in renews the token
+		for range 2 {
+			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
+		}
+		rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"code": {"000000"}, "current_code": {totpCode(t, secret, 1)}}, cookie)
+		if got, _ := env.session(t, cookie)("flash").(string); rr.Header().Get("Location") != RouteAccountSecurityTOTP || !strings.Contains(got, "locked") {
+			t.Fatalf("replacement on a locked account = %d %q, flash %q; want the lockout message", rr.Code, rr.Header().Get("Location"), got)
+		}
+		assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+	})
+	t.Run("a locked account cannot finish setup at sign-in", func(t *testing.T) {
+		env := newMFATestEnv(t, true)
+		lp := env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		cookie, next := env.signInWithPassword(t, user)
+		if next != RouteLoginMFASetup {
+			t.Fatalf("password step went to %q, want %s", next, RouteLoginMFASetup)
+		}
+		for range 2 {
+			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
+		}
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFASetup, url.Values{"code": {"123456"}}, cookie)
+		get := env.session(t, cookie)
+		if rr.Header().Get("Location") != RouteLogin || get(middleware.SessionKeyUserID) != nil || get(sessionKeyMFAPendingUserID) != nil {
+			t.Fatalf("setup on a locked account = %d %q; want the sign-in to end", rr.Code, rr.Header().Get("Location"))
+		}
+		assertEventCount(t, env, "Login attempt on locked account", user.ID, 1)
 	})
 }
 
@@ -818,10 +854,7 @@ func TestFirstSetupWithoutPasswordIsNotCounted(t *testing.T) {
 	if rr.Header().Get("Location") != RouteAccountSecurityTOTP || env.session(t, cookie)("flash") != i18n.T("en", "mfa.password_required") {
 		t.Fatalf("setup without a password field = %d %q", rr.Code, rr.Header().Get("Location"))
 	}
-	var refusals int
-	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Two-factor change refused: no password' AND user_id = ?`, user.ID).Scan(&refusals); err != nil || refusals != 1 {
-		t.Errorf("refusal events = %d, %v; want the missing password logged", refusals, err)
-	}
+	assertEventCount(t, env, "Two-factor change refused: no password", user.ID, 1)
 	// With a lockout after one failure, a counted attempt would refuse this.
 	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, secret, 0)}}, cookie)
 	if rr.Code != http.StatusOK {
@@ -975,10 +1008,7 @@ func TestActorPasswordLockout(t *testing.T) {
 	if ok, _ := auth.CheckPassword(mfaTestPassword, mustPasswordHash(t, env.db, admin.ID)); !ok {
 		t.Error("the password changed while the account was locked")
 	}
-	var locks int
-	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Account locked due to failed attempts' AND user_id = ?`, admin.ID).Scan(&locks); err != nil || locks != 1 {
-		t.Errorf("lock events = %d, %v; want the lockout logged once", locks, err)
-	}
+	assertEventCount(t, env, "Account locked due to failed attempts", admin.ID, 1)
 }
 
 // TestActorPasswordCountsAcrossConfirmations checks that a correct
@@ -1087,8 +1117,5 @@ func TestLockedFirstSetupIsLogged(t *testing.T) {
 	if got := env.session(t, cookie)("flash"); got == nil || !strings.Contains(got.(string), "locked") {
 		t.Fatalf("flash after the right password on a locked account = %v, want the lockout message", got)
 	}
-	var refusals int
-	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Two-factor change refused: account locked' AND user_id = ?`, user.ID).Scan(&refusals); err != nil || refusals != 1 {
-		t.Errorf("locked refusal events = %d, %v; want the attempt on the locked account logged", refusals, err)
-	}
+	assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
 }

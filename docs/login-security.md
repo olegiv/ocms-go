@@ -237,7 +237,7 @@ All login-related events are logged to the events system:
 |-------|-------|-------------|
 | Login failed: user not found | Warning | Attempt with non-existent email |
 | Login failed: invalid password | Warning | Wrong password for existing user |
-| Login attempt on locked account | Warning | Attempt during lockout period, at the password or the code step |
+| Login attempt on locked account | Warning | Attempt during lockout period, at the password step, the code step or authenticator setup during sign-in |
 | Account locked due to failed attempts | Warning | Account just got locked |
 | Login failed: invalid two-factor code | Warning | Wrong, expired or reused code at `/login/mfa` |
 | Recovery code used to sign in | Warning | Sign-in with a recovery code |

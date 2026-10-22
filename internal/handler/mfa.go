@@ -400,6 +400,11 @@ func (h *AuthHandler) LoginMFASetup(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, RouteLoginMFASetup, i18n.T(middleware.GetAdminLang(r), "auth.invalid_form_data"))
 		return
 	}
+	// As at the code step: an account locked since its password was
+	// accepted cannot finish signing in.
+	if h.refuseLockedAccount(w, r, pending.user, "Login attempt on locked account", func() { h.clearPendingSignIn(r.Context()) }, redirectLogin) {
+		return
+	}
 	enrolled, ok := h.confirmEnrollment(w, r, pending.user, RouteLoginMFASetup, time.Time{})
 	if !ok {
 		return
@@ -523,6 +528,12 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if enrolled {
+		// A locked account is answered before the new code is checked, so
+		// the lockout, not a wrong new code, is what it hears and what is
+		// logged.
+		if h.refuseLockedAccount(w, r, *user, "Two-factor change refused: account locked", nil, RouteAccountSecurityTOTP) {
+			return
+		}
 		// Check the new code before the current one is spent, so a mistake
 		// in it does not use up a recovery code or this period's code, and
 		// confirm it at the same moment, so it cannot expire in between.
