@@ -27,76 +27,84 @@ var lockoutSetters = map[string]bool{
 // would stop counting toward the lockout, so a stolen session could guess
 // it there without limit.
 //
-// Handlers are matched to main's variables through their constructors
-// (usersHandler := handler.NewUsersHandler(...)).
+// It reads every non-test file of cmd/ocms. Handlers are matched to
+// variables through their constructors (usersHandler :=
+// handler.NewUsersHandler(...)), and every constructor that takes the
+// lockout must be called somewhere.
 //
 // Bug state: drop modulesHandler.SetPasswordConfirmation from main.go, or
-// pass nil for NewThemesHandler's lockout, and this names the handler.
+// pass nil for NewThemesHandler's lockout (in main.go or a helper file),
+// and this names the handler.
 func TestPasswordGatesGetTheLockout(t *testing.T) {
 	setters, lockoutParams := handlerLockoutAPI(t)
 	if len(setters) == 0 || len(lockoutParams) == 0 {
 		t.Fatalf("found %d lockout setters and %d constructors taking the lockout in internal/handler; the scan no longer sees them", len(setters), len(lockoutParams))
 	}
+	files := parseNonTestGoFiles(t, ".")
 
-	mainFile, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, parser.SkipObjectResolution)
-	if err != nil {
-		t.Fatal(err)
-	}
 	varType := map[string]string{} // usersHandler -> UsersHandler
+	called := map[string]bool{}    // NewUsersHandler
 	wired := map[string]bool{}     // "UsersHandler.SetLoginProtection"
-	ast.Inspect(mainFile, func(n ast.Node) bool {
-		switch node := n.(type) {
-		case *ast.AssignStmt:
-			for i, rhs := range node.Rhs {
-				name, ok := handlerConstructor(rhs)
-				if !ok || i >= len(node.Lhs) {
-					continue
+	for name, file := range files {
+		ast.Inspect(file, func(n ast.Node) bool {
+			switch node := n.(type) {
+			case *ast.AssignStmt:
+				for i, rhs := range node.Rhs {
+					constructor, ok := handlerConstructor(rhs)
+					if !ok || i >= len(node.Lhs) {
+						continue
+					}
+					if ident, ok := node.Lhs[i].(*ast.Ident); ok {
+						varType[ident.Name] = strings.TrimPrefix(constructor, "New")
+					}
 				}
-				if ident, ok := node.Lhs[i].(*ast.Ident); ok {
-					varType[ident.Name] = strings.TrimPrefix(name, "New")
+			case *ast.CallExpr:
+				if constructor, ok := handlerConstructor(node); ok {
+					called[constructor] = true
+					if idx, gated := lockoutParams[constructor]; gated && (idx >= len(node.Args) || isNil(node.Args[idx])) {
+						t.Errorf("%s calls handler.%s without the login lockout, so wrong passwords at its password gate are not counted", name, constructor)
+					}
 				}
 			}
-		case *ast.CallExpr:
-			if name, ok := handlerConstructor(node); ok {
-				if idx, gated := lockoutParams[name]; gated && (idx >= len(node.Args) || isNil(node.Args[idx])) {
-					t.Errorf("main.go calls handler.%s without the login lockout, so wrong passwords at its password gate are not counted", name)
-				}
+			return true
+		})
+	}
+	for _, file := range files {
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 || isNil(call.Args[0]) {
+				return true
 			}
-		}
-		return true
-	})
-	ast.Inspect(mainFile, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok || len(call.Args) == 0 || isNil(call.Args[0]) {
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || !lockoutSetters[sel.Sel.Name] {
+				return true
+			}
+			if recv, ok := sel.X.(*ast.Ident); ok {
+				wired[varType[recv.Name]+"."+sel.Sel.Name] = true
+			}
 			return true
+		})
+	}
+	for constructor := range lockoutParams {
+		if !called[constructor] {
+			t.Errorf("cmd/ocms never calls handler.%s, which takes the login lockout; the scan no longer sees how that handler is built", constructor)
 		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || !lockoutSetters[sel.Sel.Name] {
-			return true
-		}
-		if recv, ok := sel.X.(*ast.Ident); ok {
-			wired[varType[recv.Name]+"."+sel.Sel.Name] = true
-		}
-		return true
-	})
+	}
 	for setter := range setters {
 		if !wired[setter] {
-			t.Errorf("main.go never calls %s with the login lockout, so wrong passwords at that handler's password gate are not counted", setter)
+			t.Errorf("cmd/ocms never calls %s with the login lockout, so wrong passwords at that handler's password gate are not counted", setter)
 		}
 	}
 }
 
-// handlerLockoutAPI reads internal/handler and returns its lockout setters
-// ("UsersHandler.SetLoginProtection") and, for each constructor taking a
-// *middleware.LoginProtection, that parameter's index.
-func handlerLockoutAPI(t *testing.T) (setters map[string]bool, lockoutParams map[string]int) {
+// parseNonTestGoFiles parses the non-test Go files in dir, keyed by name.
+func parseNonTestGoFiles(t *testing.T, dir string) map[string]*ast.File {
 	t.Helper()
-	goFiles, err := filepath.Glob(filepath.Join("..", "..", "internal", "handler", "*.go"))
+	goFiles, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	setters = map[string]bool{}
-	lockoutParams = map[string]int{}
+	files := map[string]*ast.File{}
 	for _, goFile := range goFiles {
 		if strings.HasSuffix(goFile, "_test.go") {
 			continue
@@ -105,6 +113,19 @@ func handlerLockoutAPI(t *testing.T) (setters map[string]bool, lockoutParams map
 		if err != nil {
 			t.Fatal(err)
 		}
+		files[goFile] = file
+	}
+	return files
+}
+
+// handlerLockoutAPI reads internal/handler and returns its lockout setters
+// ("UsersHandler.SetLoginProtection") and, for each constructor taking a
+// *middleware.LoginProtection, that parameter's index.
+func handlerLockoutAPI(t *testing.T) (setters map[string]bool, lockoutParams map[string]int) {
+	t.Helper()
+	setters = map[string]bool{}
+	lockoutParams = map[string]int{}
+	for _, file := range parseNonTestGoFiles(t, filepath.Join("..", "..", "internal", "handler")) {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok {

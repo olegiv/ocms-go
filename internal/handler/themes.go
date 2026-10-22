@@ -129,7 +129,8 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	case passwordMissing:
 		// Refused like a wrong password, but not counted toward the lockout.
-		refuse()
+		slog.Warn("theme import refused: no password", "user_id", user.ID)
+		h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: no password", nil)
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
 		return
 	default:

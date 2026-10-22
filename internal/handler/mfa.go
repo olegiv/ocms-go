@@ -271,16 +271,16 @@ func (h *AuthHandler) refuseLockedAccount(w http.ResponseWriter, r *http.Request
 }
 
 // logRefusal logs message, a refused sign-in step or second-factor change,
-// as a warning auth event for user.
-func (h *AuthHandler) logRefusal(r *http.Request, user store.User, message string) {
-	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, message, &user.ID, hcaptcha.GetRemoteIP(r), middleware.GetRequestURL(r), map[string]any{"email": user.Email})
+// as an auth event at level for user.
+func (h *AuthHandler) logRefusal(r *http.Request, user store.User, level, message string) {
+	_ = h.eventService.LogAuthEvent(r.Context(), level, message, &user.ID, hcaptcha.GetRemoteIP(r), middleware.GetRequestURL(r), map[string]any{"email": user.Email})
 }
 
 // recordWrongCode logs message for a wrong second-factor code and counts it
 // against the account lockout. It returns the lockout duration when it
 // locked the account, or 0.
 func (h *AuthHandler) recordWrongCode(r *http.Request, user store.User, message string) time.Duration {
-	h.logRefusal(r, user, message)
+	h.logRefusal(r, user, model.EventLevelWarning, message)
 	return countFailedAttempt(r, h.loginProtection, h.eventService, user)
 }
 
@@ -622,7 +622,7 @@ func (h *AuthHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, user store.User, back string) bool {
 	lang := middleware.GetAdminLang(r)
 	c := confirmPassword(r, h.loginProtection, h.eventService, user, r.FormValue("password"), func() {
-		h.logRefusal(r, user, "Two-factor change refused: invalid password")
+		h.logRefusal(r, user, model.EventLevelWarning, "Two-factor change refused: invalid password")
 	})
 	switch c.Outcome {
 	case passwordOK:
@@ -632,9 +632,10 @@ func (h *AuthHandler) verifyPassword(w http.ResponseWriter, r *http.Request, use
 	case passwordMissing:
 		// A form from before the account's status changed has no password
 		// field: ask again, without counting it.
-		h.logRefusal(r, user, "Two-factor change refused: no password")
+		h.logRefusal(r, user, model.EventLevelWarning, "Two-factor change refused: no password")
 		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.password_required"))
 	case passwordUnverified:
+		h.logRefusal(r, user, model.EventLevelError, "Two-factor change refused: password could not be verified")
 		logAndInternalError(w, "password check error", "error", c.Err, "user_id", user.ID)
 	default:
 		if c.LockedFor > 0 {

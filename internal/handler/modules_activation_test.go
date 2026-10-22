@@ -157,45 +157,71 @@ func TestActivateConfirmedOnlyAfterPassword(t *testing.T) {
 }
 
 // moduleActiveWriteSQL matches SQL that can set a module's active flag:
-// an UPDATE of modules that assigns is_active (one that only returns or
-// filters on it may be flagged too, which errs on the safe side), or any
-// INSERT or REPLACE into modules, whatever the conflict clause, quoting or
-// schema prefix.
-var moduleActiveWriteSQL = regexp.MustCompile(`(?is)\bupdate(?:\s+or\s+\w+)?\s+(?:[\x60"\[]?\w+[\x60"\]]?\.)?[\x60"\[]?modules[\x60"\]]?\s+set\b[^;]*\bis_active\s*=` +
-	`|\b(?:replace|insert(?:\s+or\s+\w+)?)\s+into\s+(?:[\x60"\[]?\w+[\x60"\]]?\.)?[\x60"\[]?modules\b`)
+//   - an UPDATE of modules that assigns is_active, alone or in a row value,
+//     with any conflict clause, alias, index hint or comment before SET (one
+//     that only filters on is_active may be flagged too, erring on the safe
+//     side);
+//   - any INSERT or REPLACE into modules;
+//   - creating a table named modules, or renaming one to it, as the table
+//     rebuild of a migration does, since that sets every row's flag.
+//
+// The table name may be quoted or schema-qualified.
+var moduleActiveWriteSQL = regexp.MustCompile(`(?is)` +
+	`\bupdate(?:\s+or\s+\w+)?\s+` + modulesTableSQL + `[^;]*?\bset\b(?:[^;]*?[\x60"\[]?\bis_active[\x60"\]]?\s*=|\s*\([^;)]*\bis_active\b)` +
+	`|\b(?:replace|insert(?:\s+or\s+\w+)?)\s+into\s+` + modulesTableSQL +
+	`|\bcreate\s+(?:temp\w*\s+)?table\s+(?:if\s+not\s+exists\s+)?` + modulesTableSQL +
+	`|\brename\s+to\s+` + modulesTableSQL)
+
+// modulesTableSQL matches the table name modules, quoted or not, with an
+// optional schema prefix, and not as the start of a longer name.
+const modulesTableSQL = `(?:[\x60"\[]?\w+[\x60"\]]?\s*\.\s*)?[\x60"\[]?modules[\x60"\]]?(?:[^\w]|$)`
 
 // moduleActiveWriteSites are where a module's active flag may be written,
 // with what keeps each from switching a password-gated module on: Go
 // functions and package-level constants, and named sqlc queries.
 var moduleActiveWriteSites = map[string]string{
-	"internal/module/registry.go (*Registry).setActive":        "refuses a password-gated module unless ActivateConfirmed called it",
-	"internal/module/registry.go (*Registry).loadActiveStatus": "inserts a module's first row, inactive for a password-gated module",
-	"internal/store/modules.sql.go const upsertModule":         "sqlc's UpsertModule, whose callers this test checks too",
-	"internal/store/queries/modules.sql UpsertModule":          "the query behind upsertModule",
+	"internal/module/registry.go (*Registry).setActive":             "refuses a password-gated module unless ActivateConfirmed called it",
+	"internal/module/registry.go (*Registry).loadActiveStatus":      "inserts a module's first row, inactive for a password-gated module",
+	"internal/store/modules.sql.go const upsertModule":              "sqlc's UpsertModule, whose callers this test checks too",
+	"internal/store/queries/modules.sql UpsertModule":               "the query behind upsertModule",
+	"internal/store/migrations/00027_create_modules.sql":            "creates the table, empty",
+	"internal/module/registry.go (*Registry).ensureMigrationsTable": "creates the table if missing, empty",
 }
 
 // TestModuleActiveFlagWritesAreGated fails when code outside
 // moduleActiveWriteSites writes a module's active flag: a call to the
 // store's UpsertModule (which overwrites it on conflict), a Go string or
 // constant holding such SQL (literals joined with + included), or a named
-// sqlc query or migration doing so. Any of these would switch DB Manager on
-// without the password Registry.SetActive asks for. SQL assembled at run
-// time from variables or fmt is out of its reach.
+// sqlc query or migration doing so, a table rebuild included. Any of these
+// would switch DB Manager on without the password Registry.SetActive asks
+// for. SQL assembled from variables, other constants or fmt is out of its
+// reach: it sees each piece on its own.
 //
 // Bug state: restore the SetModuleActive query removed from
 // internal/store/queries/modules.sql (and regenerate), and this names both
 // the query and its constant; or call UpsertModule from a handler.
 func TestModuleActiveFlagWritesAreGated(t *testing.T) {
 	for query, want := range map[string]bool{
-		"UPDATE modules SET is_active = ?, updated_at = ? WHERE name = ?":                                true,
-		"update modules\nset updated_at = now, is_active = 1":                                            true,
-		"UPDATE OR IGNORE modules SET is_active = 1":                                                     true,
-		`UPDATE "modules" SET is_active = 1`:                                                             true,
-		"UPDATE main.modules SET is_active = 1":                                                          true,
-		"INSERT INTO modules (name, is_active) VALUES (?, ?)":                                            true,
-		"INSERT OR REPLACE INTO modules (name) VALUES (?)":                                               true,
-		"REPLACE INTO modules (name, is_active) VALUES (?, 1)":                                           true,
-		"INSERT INTO `modules` (name) VALUES (?)":                                                        true,
+		"UPDATE modules SET is_active = ?, updated_at = ? WHERE name = ?": true,
+		"update modules\nset updated_at = now, is_active = 1":             true,
+		"UPDATE OR IGNORE modules SET is_active = 1":                      true,
+		`UPDATE "modules" SET is_active = 1`:                              true,
+		"UPDATE main.modules SET is_active = 1":                           true,
+		"INSERT INTO modules (name, is_active) VALUES (?, ?)":             true,
+		"INSERT OR REPLACE INTO modules (name) VALUES (?)":                true,
+		"REPLACE INTO modules (name, is_active) VALUES (?, 1)":            true,
+		"INSERT INTO `modules` (name) VALUES (?)":                         true,
+		`UPDATE modules SET "is_active" = 1`:                              true,
+		"UPDATE modules SET `is_active` = 1":                              true,
+		"UPDATE modules AS m SET is_active = 1":                           true,
+		"UPDATE modules INDEXED BY idx_modules_active SET is_active = 1":  true,
+		"UPDATE modules /* all */ SET is_active = 1":                      true,
+		"UPDATE modules SET (is_active, show_in_sidebar) = (1, 0)":        true,
+		"UPDATE main . modules SET is_active = 1":                         true,
+		"CREATE TABLE modules_new (name TEXT); INSERT INTO modules_new SELECT * FROM modules; DROP TABLE modules; ALTER TABLE modules_new RENAME TO modules": true,
+		"CREATE TABLE IF NOT EXISTS modules (name TEXT PRIMARY KEY)":                                                                                         true,
+		"CREATE TABLE modules_new (name TEXT)":                                                           false,
+		"ALTER TABLE modules ADD COLUMN extra TEXT":                                                      false,
 		"UPDATE modules SET show_in_sidebar = ? WHERE name = ?":                                          false,
 		"UPDATE modules SET show_in_sidebar = ? WHERE name = ? RETURNING id, is_active, show_in_sidebar": false,
 		"SELECT is_active FROM modules WHERE name = ?":                                                   false,

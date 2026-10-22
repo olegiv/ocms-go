@@ -398,6 +398,7 @@ func TestThemeManagementWritesEventLog(t *testing.T) {
 	archive := starterThemeArchive(t)
 
 	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword))
+	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), ""))
 	h.Import(httptest.NewRecorder(), themeUploadRequest(t, h, "starter.tar.gz", archive))
 	r := requestWithURLParams(httptest.NewRequest(http.MethodPost, "/admin/themes/starter/delete", nil), map[string]string{"name": "starter"})
 	h.Delete(httptest.NewRecorder(), addUserToContext(requestWithSession(h.sessionManager, r), themeImportUser(t)))
@@ -412,6 +413,7 @@ func TestThemeManagementWritesEventLog(t *testing.T) {
 	}
 	for message, level := range map[string]string{
 		"Theme import refused: password confirmation failed": model.EventLevelWarning,
+		"Theme import refused: no password":                  model.EventLevelWarning,
 		"Theme imported: starter":                            model.EventLevelInfo,
 		"Theme deleted: starter":                             model.EventLevelInfo,
 	} {

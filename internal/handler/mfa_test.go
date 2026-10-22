@@ -1000,3 +1000,44 @@ func mustPasswordHash(t *testing.T, db *sql.DB, id int64) string {
 	}
 	return hash
 }
+
+// TestUnverifiablePasswordIsLogged checks that a stored password hash that
+// cannot be checked refuses the change and leaves an error event, at the
+// user form and at the first authenticator setup, as at theme import and
+// module activation.
+func TestUnverifiablePasswordIsLogged(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	admin := env.createUser(t, model.RoleAdmin)
+	editor := env.createUser(t, model.RoleEditor)
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	broken := admin
+	broken.PasswordHash = "not-a-hash"
+	form := url.Values{"name": {editor.Name}, "email": {editor.Email}, "role": {editor.Role},
+		"password": {"Brand-new-password!"}, "password_confirm": {"Brand-new-password!"}, "current_password": {mfaTestPassword}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/2", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(editor.ID, 10)})), &broken)
+	rr := httptest.NewRecorder()
+	h.Update(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Error checking your current password") {
+		t.Fatalf("user change with an unverifiable hash = %d", rr.Code)
+	}
+
+	cookie, _ := env.signInWithPassword(t, editor)
+	if _, err := env.db.Exec(`UPDATE users SET password_hash = 'not-a-hash' WHERE id = ?`, editor.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {"123456"}}, cookie); rr.Code != http.StatusInternalServerError {
+		t.Fatalf("first setup with an unverifiable hash = %d", rr.Code)
+	}
+
+	for message, userID := range map[string]int64{
+		"User change refused: password could not be verified":       admin.ID,
+		"Two-factor change refused: password could not be verified": editor.ID,
+	} {
+		var level string
+		if err := env.db.QueryRow(`SELECT level FROM events WHERE message = ? AND user_id = ?`, message, userID).Scan(&level); err != nil || level != model.EventLevelError {
+			t.Errorf("event %q = %q, %v; want an error event", message, level, err)
+		}
+	}
+}

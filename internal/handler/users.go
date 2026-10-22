@@ -413,19 +413,20 @@ func actorPasswordNeeded(target store.User, email, password, role string) bool {
 // failed sign-ins.
 func (h *UsersHandler) checkActorPassword(r *http.Request, actor store.User, given string) string {
 	c := confirmPassword(r, h.loginProtection, h.eventService, actor, given, func() {
-		h.logActorRefusal(r, actor, "User change refused: wrong current password")
+		h.logActorRefusal(r, actor, model.EventLevelWarning, "User change refused: wrong current password")
 	})
 	switch c.Outcome {
 	case passwordOK:
 		return ""
 	case passwordMissing:
-		h.logActorRefusal(r, actor, "User change refused: no current password")
+		h.logActorRefusal(r, actor, model.EventLevelWarning, "User change refused: no current password")
 		return "Enter your current password to make this change"
 	case passwordUnverified:
 		slog.Error("password check error", "error", c.Err, "user_id", actor.ID)
+		h.logActorRefusal(r, actor, model.EventLevelError, "User change refused: password could not be verified")
 		return "Error checking your current password"
 	case passwordLocked:
-		h.logActorRefusal(r, actor, "User change refused: account locked")
+		h.logActorRefusal(r, actor, model.EventLevelWarning, "User change refused: account locked")
 		return "Too many failed attempts; try again later"
 	}
 	if c.LockedFor > 0 {
@@ -436,9 +437,9 @@ func (h *UsersHandler) checkActorPassword(r *http.Request, actor store.User, giv
 }
 
 // logActorRefusal logs message, a user change refused because the acting
-// administrator's password did not confirm it, as a warning user event.
-func (h *UsersHandler) logActorRefusal(r *http.Request, actor store.User, message string) {
-	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelWarning, message, &actor.ID, middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": actor.ID})
+// administrator's password did not confirm it, as a user event at level.
+func (h *UsersHandler) logActorRefusal(r *http.Request, actor store.User, level, message string) {
+	_ = h.eventService.LogUserEvent(r.Context(), level, message, &actor.ID, middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": actor.ID})
 }
 
 // userMFAStatus is the edit page's view of userID's second factor: nil
