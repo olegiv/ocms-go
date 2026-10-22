@@ -183,13 +183,13 @@ func TestServiceEnrollVerifyAndDisable(t *testing.T) {
 		wrong = "111111"
 	}
 	// CheckEnrollmentCode answers like ConfirmEnrollment but writes nothing.
-	if err := s.CheckEnrollmentCode(userID, first.Sealed, wrong); !errors.Is(err, ErrInvalidCode) {
+	if _, err := s.CheckEnrollmentCode(userID, first.Sealed, wrong); !errors.Is(err, ErrInvalidCode) {
 		t.Fatalf("CheckEnrollmentCode(wrong) = %v, want ErrInvalidCode", err)
 	}
-	if err := s.CheckEnrollmentCode(userID, nil, code); !errors.Is(err, ErrNoEnrollment) {
+	if _, err := s.CheckEnrollmentCode(userID, nil, code); !errors.Is(err, ErrNoEnrollment) {
 		t.Fatalf("CheckEnrollmentCode(no pending secret) = %v, want ErrNoEnrollment", err)
 	}
-	if err := s.CheckEnrollmentCode(userID, first.Sealed, code); err != nil {
+	if checkedAt, err := s.CheckEnrollmentCode(userID, first.Sealed, code); err != nil || !checkedAt.Equal(now) {
 		t.Fatalf("CheckEnrollmentCode(right) = %v", err)
 	}
 	if ok, err := s.Enrolled(ctx, userID); err != nil || ok {
@@ -305,5 +305,34 @@ func TestNewServiceRefusesRequirementWithoutKey(t *testing.T) {
 func TestGroupSecret(t *testing.T) {
 	if got := GroupSecret("ABCDEFGHIJ"); got != "ABCD EFGH IJ" {
 		t.Errorf("GroupSecret = %q", got)
+	}
+}
+
+// TestConfirmEnrollmentAtTheCheckedMoment covers a code from the previous
+// period that passes CheckEnrollmentCode just before a period boundary: at
+// the checked moment it still confirms, while checking it again after the
+// boundary would refuse it.
+//
+// Bug state: have ConfirmEnrollmentAt use s.now() instead of at.
+func TestConfirmEnrollmentAtTheCheckedMoment(t *testing.T) {
+	s, db := newTestService(t, testKey)
+	userID := createUser(t, db, "user@example.com")
+	checked := time.Unix(1_800_000_000/totpPeriod*totpPeriod+totpPeriod-1, 0) // last second of a period
+	s.now = func() time.Time { return checked }
+	e, err := s.BeginEnrollment(userID, nil, "Test site", "user@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := codeAt(t, e.Secret, checked.Add(-totpPeriod*time.Second))
+	at, err := s.CheckEnrollmentCode(userID, e.Sealed, previous)
+	if err != nil {
+		t.Fatalf("CheckEnrollmentCode(previous period) = %v", err)
+	}
+	s.now = func() time.Time { return checked.Add(time.Second) } // next period: previous is now two steps old
+	if _, err := s.CheckEnrollmentCode(userID, e.Sealed, previous); !errors.Is(err, ErrInvalidCode) {
+		t.Fatalf("the code still checks after the boundary (%v); the test does not cross one", err)
+	}
+	if _, err := s.ConfirmEnrollmentAt(context.Background(), userID, e.Sealed, previous, at); err != nil {
+		t.Errorf("ConfirmEnrollmentAt(checked moment) = %v, want the checked code enrolled", err)
 	}
 }

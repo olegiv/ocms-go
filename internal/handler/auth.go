@@ -259,6 +259,9 @@ func (h *AuthHandler) signedInDestination(ctx context.Context) (string, bool) {
 	}
 	user, err := h.queries.GetUserByID(ctx, userID)
 	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			slog.Error("failed to load the signed-in user", "error", err, "user_id", userID)
+		}
 		return "", false
 	}
 	return loginDestination(user.Role), true

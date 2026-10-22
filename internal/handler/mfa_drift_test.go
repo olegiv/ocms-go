@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -80,17 +81,32 @@ func TestOnlyGrantSessionSignsIn(t *testing.T) {
 }
 
 // TestUserIDPutScanMatchesByValue checks the scan behind
-// TestOnlyGrantSessionSignsIn on a fixture: a local constant with the key's
-// value, the bare literal and a package-level func literal are all found,
-// and other keys are not.
+// TestOnlyGrantSessionSignsIn on a fixture: the key is found however a
+// constant spells it (its own literal, a raw string, a concatenation, an
+// alias of another key constant, one declared inside a function) and however
+// the call writes it (the literal, a constant, a qualified constant, in
+// parentheses), in functions and package-level func literals, while other
+// keys are not. A key reaching Put through a variable or a helper's
+// parameter needs type information and is out of its reach.
 func TestUserIDPutScanMatchesByValue(t *testing.T) {
 	const src = `package p
+const SessionKeyUserID = "user_id"
 const sessionKeyUserID = "user_id"
+const alias = middleware.SessionKeyUserID
+const raw = ` + "`user_id`" + `
+const joined = "user_" + "id"
 var signIn = func() { sm.Put(ctx, sessionKeyUserID, 1) }
 func f() {
+	const local = "user_id"
 	sm.Put(ctx, "user_id", 1)
 	sm.Put(ctx, other.sessionKeyUserID, 1)
+	sm.Put(ctx, alias, 1)
+	sm.Put(ctx, raw, 1)
+	sm.Put(ctx, joined, 1)
+	sm.Put(ctx, local, 1)
+	sm.Put(ctx, (middleware.SessionKeyUserID), 1)
 	sm.Put(ctx, "admin_lang", "en")
+	sm.Put(ctx, unrelated, 1)
 }
 `
 	fset := token.NewFileSet()
@@ -100,27 +116,41 @@ func f() {
 	}
 	files := map[string]*ast.File{"p.go": file}
 	puts := userIDPuts(file, userIDKeyNames(files))
-	if len(puts) != 3 {
-		t.Fatalf("found %d user ID writes, want 3: %+v", len(puts), puts)
+	if len(puts) != 8 {
+		for _, put := range puts {
+			t.Logf("found %s in %s", fset.Position(put.pos), put.where)
+		}
+		t.Fatalf("found %d user ID writes, want 8", len(puts))
 	}
 }
 
-// userIDKeyNames returns the names of the constants whose value is the
-// session's user ID key, "user_id".
+// userIDKeyNames returns the names of the constants, at any level, that hold
+// the session's user ID key "user_id", directly or as an alias of another
+// such constant.
 func userIDKeyNames(files map[string]*ast.File) map[string]bool {
 	names := map[string]bool{}
+	var specs []*ast.ValueSpec
 	for _, file := range files {
-		for _, decl := range file.Decls {
-			gen, ok := decl.(*ast.GenDecl)
-			if !ok || gen.Tok != token.CONST {
-				continue
+		ast.Inspect(file, func(n ast.Node) bool {
+			if gen, ok := n.(*ast.GenDecl); ok && gen.Tok == token.CONST {
+				for _, spec := range gen.Specs {
+					specs = append(specs, spec.(*ast.ValueSpec))
+				}
 			}
-			for _, spec := range gen.Specs {
-				vs := spec.(*ast.ValueSpec)
-				for i, name := range vs.Names {
-					if i < len(vs.Values) && isUserIDLiteral(vs.Values[i]) {
-						names[name.Name] = true
-					}
+			return true
+		})
+	}
+	// Aliases resolve once the constant they name is known.
+	for changed := true; changed; {
+		changed = false
+		for _, vs := range specs {
+			for i, name := range vs.Names {
+				if names[name.Name] || i >= len(vs.Values) {
+					continue
+				}
+				if isUserIDKey(vs.Values[i], names) {
+					names[name.Name] = true
+					changed = true
 				}
 			}
 		}
@@ -136,7 +166,7 @@ type userIDPut struct {
 }
 
 // userIDPuts returns every x.Put(ctx, key, v) in file whose key is the user
-// ID literal or one of keys.
+// ID key.
 func userIDPuts(file *ast.File, keys map[string]bool) []userIDPut {
 	var puts []userIDPut
 	for _, decl := range file.Decls {
@@ -156,24 +186,50 @@ func userIDPuts(file *ast.File, keys map[string]bool) []userIDPut {
 }
 
 // isPutOfUserID reports whether call is x.Put(ctx, key, v) with the user ID
-// key: the literal, or a constant named in keys.
+// key.
 func isPutOfUserID(call *ast.CallExpr, keys map[string]bool) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok || sel.Sel.Name != "Put" || len(call.Args) < 2 {
 		return false
 	}
-	switch key := call.Args[1].(type) {
-	case *ast.Ident:
-		return keys[key.Name]
-	case *ast.SelectorExpr:
-		return keys[key.Sel.Name]
-	}
-	return isUserIDLiteral(call.Args[1])
+	return isUserIDKey(call.Args[1], keys)
 }
 
-func isUserIDLiteral(expr ast.Expr) bool {
-	lit, ok := expr.(*ast.BasicLit)
-	return ok && lit.Kind == token.STRING && lit.Value == `"user_id"`
+// isUserIDKey reports whether expr is the user ID key: a constant named in
+// keys, or a string expression whose value is "user_id".
+func isUserIDKey(expr ast.Expr, keys map[string]bool) bool {
+	switch e := ast.Unparen(expr).(type) {
+	case *ast.Ident:
+		return keys[e.Name]
+	case *ast.SelectorExpr:
+		return keys[e.Sel.Name]
+	}
+	value, ok := stringValue(expr)
+	return ok && value == "user_id"
+}
+
+// stringValue folds a string literal, or a + of string literals, to its
+// value.
+func stringValue(expr ast.Expr) (string, bool) {
+	switch e := ast.Unparen(expr).(type) {
+	case *ast.BasicLit:
+		if e.Kind != token.STRING {
+			return "", false
+		}
+		value, err := strconv.Unquote(e.Value)
+		return value, err == nil
+	case *ast.BinaryExpr:
+		if e.Op != token.ADD {
+			return "", false
+		}
+		left, ok := stringValue(e.X)
+		if !ok {
+			return "", false
+		}
+		right, ok := stringValue(e.Y)
+		return left + right, ok
+	}
+	return "", false
 }
 
 func isAuthHandlerMethod(fn *ast.FuncDecl, name string) bool {

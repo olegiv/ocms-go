@@ -334,12 +334,20 @@ func totpSetup(e mfa.Enrollment, action string) adminviews.TOTPSetup {
 	return adminviews.TOTPSetup{QRCode: e.QRCode, Secret: mfa.GroupSecret(e.Secret), Action: action}
 }
 
-// confirmEnrollment enrolls the authenticator this session set up. It
+// confirmEnrollment enrolls the authenticator this session set up. checkedAt
+// is when CheckEnrollmentCode accepted the code, or zero to check it now. It
 // answers a wrong or expired code itself, redirecting to back, and reports
 // false when it did.
-func (h *AuthHandler) confirmEnrollment(w http.ResponseWriter, r *http.Request, user store.User, back string) (mfa.Enrolled, bool) {
+func (h *AuthHandler) confirmEnrollment(w http.ResponseWriter, r *http.Request, user store.User, back string, checkedAt time.Time) (mfa.Enrolled, bool) {
 	ctx := r.Context()
-	enrolled, err := h.mfa.ConfirmEnrollment(ctx, user.ID, h.sessionManager.GetBytes(ctx, sessionKeyMFASetupSecret), r.FormValue("code"))
+	pending, code := h.sessionManager.GetBytes(ctx, sessionKeyMFASetupSecret), r.FormValue("code")
+	var enrolled mfa.Enrolled
+	var err error
+	if checkedAt.IsZero() {
+		enrolled, err = h.mfa.ConfirmEnrollment(ctx, user.ID, pending, code)
+	} else {
+		enrolled, err = h.mfa.ConfirmEnrollmentAt(ctx, user.ID, pending, code, checkedAt)
+	}
 	if err != nil {
 		h.refuseEnrollmentCode(w, r, user, err, back)
 		return mfa.Enrolled{}, false
@@ -391,7 +399,7 @@ func (h *AuthHandler) LoginMFASetup(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, RouteLoginMFASetup, i18n.T(middleware.GetAdminLang(r), "auth.invalid_form_data"))
 		return
 	}
-	enrolled, ok := h.confirmEnrollment(w, r, pending.user, RouteLoginMFASetup)
+	enrolled, ok := h.confirmEnrollment(w, r, pending.user, RouteLoginMFASetup, time.Time{})
 	if !ok {
 		return
 	}
@@ -508,11 +516,13 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", user.ID)
 		return
 	}
+	var checkedAt time.Time
 	if enrolled {
 		// Check the new code before the current one is spent, so a mistake
-		// in it does not use up a recovery code or this period's code.
+		// in it does not use up a recovery code or this period's code, and
+		// confirm it at the same moment, so it cannot expire in between.
 		pending := h.sessionManager.GetBytes(r.Context(), sessionKeyMFASetupSecret)
-		if err := h.mfa.CheckEnrollmentCode(user.ID, pending, r.FormValue("code")); err != nil {
+		if checkedAt, err = h.mfa.CheckEnrollmentCode(user.ID, pending, r.FormValue("code")); err != nil {
 			h.refuseEnrollmentCode(w, r, *user, err, RouteAccountSecurityTOTP)
 			return
 		}
@@ -520,7 +530,7 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	result, ok := h.confirmEnrollment(w, r, *user, RouteAccountSecurityTOTP)
+	result, ok := h.confirmEnrollment(w, r, *user, RouteAccountSecurityTOTP, checkedAt)
 	if !ok {
 		return
 	}

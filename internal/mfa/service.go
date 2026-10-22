@@ -154,7 +154,13 @@ type Enrolled struct {
 // ConfirmEnrollment enrolls the pending secret once code proves the user's
 // app produces it. It replaces any earlier authenticator and recovery codes.
 func (s *Service) ConfirmEnrollment(ctx context.Context, userID int64, pending []byte, code string) (Enrolled, error) {
-	now := s.now()
+	return s.ConfirmEnrollmentAt(ctx, userID, pending, code, s.now())
+}
+
+// ConfirmEnrollmentAt is ConfirmEnrollment with code checked at the moment
+// CheckEnrollmentCode returned, so a code that passed the check cannot drop
+// out of the accepted window while the current code is being verified.
+func (s *Service) ConfirmEnrollmentAt(ctx context.Context, userID int64, pending []byte, code string, now time.Time) (Enrolled, error) {
 	step, err := s.pendingStep(userID, pending, code, now)
 	if err != nil {
 		return Enrolled{}, err
@@ -185,12 +191,14 @@ func (s *Service) ConfirmEnrollment(ctx context.Context, userID int64, pending [
 }
 
 // CheckEnrollmentCode reports whether code proves the pending secret, the way
-// ConfirmEnrollment would, without enrolling it or recording anything.
-// Replacing an authenticator checks the new code first, so a mistake in it
-// does not spend the current code that confirms the change.
-func (s *Service) CheckEnrollmentCode(userID int64, pending []byte, code string) error {
-	_, err := s.pendingStep(userID, pending, code, s.now())
-	return err
+// ConfirmEnrollment would, without enrolling it or recording anything, and
+// returns the moment it checked for ConfirmEnrollmentAt. Replacing an
+// authenticator checks the new code first, so a mistake in it does not spend
+// the current code that confirms the change.
+func (s *Service) CheckEnrollmentCode(userID int64, pending []byte, code string) (time.Time, error) {
+	now := s.now()
+	_, err := s.pendingStep(userID, pending, code, now)
+	return now, err
 }
 
 // pendingStep opens userID's pending secret and returns the time step code
