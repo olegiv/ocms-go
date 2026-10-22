@@ -93,6 +93,15 @@ func runMFAReset(args []string) error {
 	if err != nil {
 		return err
 	}
+	enrolled, err := svc.Enrolled(ctx, user.ID)
+	if err != nil {
+		return fmt.Errorf("checking two-factor authentication for %s: %w", email, err)
+	}
+	if !enrolled {
+		// Nothing to remove: leave the sessions and the Event Log alone.
+		_, _ = fmt.Fprintf(os.Stdout, "Two-factor authentication is not enabled for %s; nothing changed.\n", user.Email)
+		return nil
+	}
 	if _, err := svc.Disable(ctx, user.ID); err != nil {
 		return fmt.Errorf("resetting two-factor authentication for %s: %w", email, err)
 	}

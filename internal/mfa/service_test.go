@@ -182,6 +182,19 @@ func TestServiceEnrollVerifyAndDisable(t *testing.T) {
 	if code == wrong {
 		wrong = "111111"
 	}
+	// CheckEnrollmentCode answers like ConfirmEnrollment but writes nothing.
+	if err := s.CheckEnrollmentCode(userID, first.Sealed, wrong); !errors.Is(err, ErrInvalidCode) {
+		t.Fatalf("CheckEnrollmentCode(wrong) = %v, want ErrInvalidCode", err)
+	}
+	if err := s.CheckEnrollmentCode(userID, nil, code); !errors.Is(err, ErrNoEnrollment) {
+		t.Fatalf("CheckEnrollmentCode(no pending secret) = %v, want ErrNoEnrollment", err)
+	}
+	if err := s.CheckEnrollmentCode(userID, first.Sealed, code); err != nil {
+		t.Fatalf("CheckEnrollmentCode(right) = %v", err)
+	}
+	if ok, err := s.Enrolled(ctx, userID); err != nil || ok {
+		t.Fatalf("CheckEnrollmentCode enrolled the authenticator: %t, %v", ok, err)
+	}
 	if _, err := s.ConfirmEnrollment(ctx, userID, first.Sealed, wrong); !errors.Is(err, ErrInvalidCode) {
 		t.Fatalf("wrong confirmation code: %v, want ErrInvalidCode", err)
 	}

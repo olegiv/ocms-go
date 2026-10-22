@@ -87,4 +87,17 @@ func TestRunMFAReset(t *testing.T) {
 	if err := db.QueryRow(`SELECT session_version FROM users WHERE id = ?`, userID).Scan(&version); err != nil || version != 2 {
 		t.Errorf("session_version = %d, %v; want 2 (enrollment and reset each sign out)", version, err)
 	}
+
+	// Without a second factor there is nothing to reset: the account keeps
+	// its sessions and the Event Log gets no reset record.
+	if err := runMFAReset([]string{"admin@example.com"}); err != nil {
+		t.Fatalf("ocms mfa-reset without a second factor: %v", err)
+	}
+	if err := db.QueryRow(`SELECT session_version FROM users WHERE id = ?`, userID).Scan(&version); err != nil || version != 2 {
+		t.Errorf("session_version after a no-op reset = %d, %v; want 2", version, err)
+	}
+	var resets int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Two-factor authentication reset from the command line'`).Scan(&resets); err != nil || resets != 1 {
+		t.Errorf("reset events = %d, %v; want 1", resets, err)
+	}
 }

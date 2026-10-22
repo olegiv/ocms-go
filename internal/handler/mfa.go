@@ -118,6 +118,12 @@ func (h *AuthHandler) requirePendingSignIn(w http.ResponseWriter, r *http.Reques
 		return pendingSignIn{}, false
 	}
 	if !ok || pending.enroll != wantEnroll {
+		// A user who goes Back to a sign-in step after signing in has nothing
+		// pending and nothing expired.
+		if dest, signedIn := h.signedInDestination(r.Context()); signedIn && !ok {
+			http.Redirect(w, r, dest, http.StatusSeeOther)
+			return pendingSignIn{}, false
+		}
 		flashError(w, r, h.renderer, redirectLogin, i18n.T(middleware.GetAdminLang(r), "mfa.sign_in_expired"))
 		return pendingSignIn{}, false
 	}
@@ -235,12 +241,16 @@ func (h *AuthHandler) LoginMFA(w http.ResponseWriter, r *http.Request) {
 // user how many are left.
 func (h *AuthHandler) flashRecoveryCodeUsed(r *http.Request, user store.User) {
 	lang := middleware.GetAdminLang(r)
-	status, err := h.mfa.Status(r.Context(), user.ID)
-	if err != nil {
+	metadata := map[string]any{"email": user.Email}
+	message := i18n.T(lang, "mfa.signed_in_with_recovery_code_uncounted")
+	if status, err := h.mfa.Status(r.Context(), user.ID); err != nil {
 		slog.Error("failed to count recovery codes", "error", err, "user_id", user.ID)
+	} else {
+		metadata["recovery_codes_left"] = status.RecoveryCodesLeft
+		message = i18n.T(lang, "mfa.signed_in_with_recovery_code", status.RecoveryCodesLeft)
 	}
-	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Recovery code used to sign in", &user.ID, hcaptcha.GetRemoteIP(r), middleware.GetRequestURL(r), map[string]any{"email": user.Email, "recovery_codes_left": status.RecoveryCodesLeft})
-	h.renderer.SetFlash(r, i18n.T(lang, "mfa.signed_in_with_recovery_code", status.RecoveryCodesLeft), "warning")
+	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Recovery code used to sign in", &user.ID, hcaptcha.GetRemoteIP(r), middleware.GetRequestURL(r), metadata)
+	h.renderer.SetFlash(r, message, "warning")
 }
 
 // refuseLockedAccount answers a locked account and reports true. onLocked
@@ -329,23 +339,29 @@ func totpSetup(e mfa.Enrollment, action string) adminviews.TOTPSetup {
 // false when it did.
 func (h *AuthHandler) confirmEnrollment(w http.ResponseWriter, r *http.Request, user store.User, back string) (mfa.Enrolled, bool) {
 	ctx := r.Context()
-	lang := middleware.GetAdminLang(r)
 	enrolled, err := h.mfa.ConfirmEnrollment(ctx, user.ID, h.sessionManager.GetBytes(ctx, sessionKeyMFASetupSecret), r.FormValue("code"))
-	switch {
-	case errors.Is(err, mfa.ErrInvalidCode):
-		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.invalid_code"))
-		return mfa.Enrolled{}, false
-	case errors.Is(err, mfa.ErrNoEnrollment):
-		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.setup_expired"))
-		return mfa.Enrolled{}, false
-	case err != nil:
-		logAndInternalError(w, "failed to enroll an authenticator", "error", err, "user_id", user.ID)
+	if err != nil {
+		h.refuseEnrollmentCode(w, r, user, err, back)
 		return mfa.Enrolled{}, false
 	}
 	h.sessionManager.Remove(ctx, sessionKeyMFASetupSecret)
 	slog.Info("two-factor authentication enabled", "user_id", user.ID)
 	_ = h.eventService.LogAuthEvent(ctx, model.EventLevelInfo, "Two-factor authentication enabled", &user.ID, hcaptcha.GetRemoteIP(r), middleware.GetRequestURL(r), map[string]any{"email": user.Email})
 	return enrolled, true
+}
+
+// refuseEnrollmentCode answers a code that did not confirm the authenticator
+// this session set up, redirecting to back.
+func (h *AuthHandler) refuseEnrollmentCode(w http.ResponseWriter, r *http.Request, user store.User, err error, back string) {
+	lang := middleware.GetAdminLang(r)
+	switch {
+	case errors.Is(err, mfa.ErrInvalidCode):
+		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.invalid_code"))
+	case errors.Is(err, mfa.ErrNoEnrollment):
+		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.setup_expired"))
+	default:
+		logAndInternalError(w, "failed to enroll an authenticator", "error", err, "user_id", user.ID)
+	}
 }
 
 // LoginMFASetupForm handles GET /login/mfa/setup - enrolls an authenticator
@@ -492,8 +508,17 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", user.ID)
 		return
 	}
-	if enrolled && !h.verifyCurrentCode(w, r, *user, RouteAccountSecurityTOTP) {
-		return
+	if enrolled {
+		// Check the new code before the current one is spent, so a mistake
+		// in it does not use up a recovery code or this period's code.
+		pending := h.sessionManager.GetBytes(r.Context(), sessionKeyMFASetupSecret)
+		if err := h.mfa.CheckEnrollmentCode(user.ID, pending, r.FormValue("code")); err != nil {
+			h.refuseEnrollmentCode(w, r, *user, err, RouteAccountSecurityTOTP)
+			return
+		}
+		if !h.verifyCurrentCode(w, r, *user, RouteAccountSecurityTOTP) {
+			return
+		}
 	}
 	result, ok := h.confirmEnrollment(w, r, *user, RouteAccountSecurityTOTP)
 	if !ok {
@@ -567,12 +592,13 @@ func (h *AuthHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
 		logAndInternalError(w, "failed to disable two-factor authentication", "error", err, "user_id", user.ID)
 		return
 	}
+	// Record the change before the session update, which can still fail.
+	slog.Info("two-factor authentication disabled", "user_id", user.ID)
+	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Two-factor authentication disabled", &user.ID, hcaptcha.GetRemoteIP(r), middleware.GetRequestURL(r), map[string]any{"email": user.Email})
 	if err := h.adoptSessionVersion(r.Context(), version, false); err != nil {
 		logAndInternalError(w, "session renewal error", "error", err)
 		return
 	}
-	slog.Info("two-factor authentication disabled", "user_id", user.ID)
-	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Two-factor authentication disabled", &user.ID, hcaptcha.GetRemoteIP(r), middleware.GetRequestURL(r), map[string]any{"email": user.Email})
 	flashAndRedirect(w, r, h.renderer, RouteAccountSecurity, i18n.T(lang, "mfa.disabled_done"), "success")
 }
 

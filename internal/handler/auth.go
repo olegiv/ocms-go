@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -56,13 +57,9 @@ func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManage
 // LoginForm renders the login page.
 // Redirects already-authenticated users to their role's landing page.
 func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
-	// Redirect already-authenticated users
-	if userID := h.sessionManager.GetInt64(r.Context(), middleware.SessionKeyUserID); userID > 0 {
-		user, err := h.queries.GetUserByID(r.Context(), userID)
-		if err == nil {
-			http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
-			return
-		}
+	if dest, signedIn := h.signedInDestination(r.Context()); signedIn {
+		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
 	}
 
 	lang := middleware.GetAdminLang(r)
@@ -251,6 +248,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	h.renderer.SetFlash(r, i18n.T(lang, "auth.welcome_back", user.Name), "success")
 
 	http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
+}
+
+// signedInDestination returns the landing page of the user this session is
+// signed in as, and false when it is not signed in.
+func (h *AuthHandler) signedInDestination(ctx context.Context) (string, bool) {
+	userID := h.sessionManager.GetInt64(ctx, middleware.SessionKeyUserID)
+	if userID <= 0 {
+		return "", false
+	}
+	user, err := h.queries.GetUserByID(ctx, userID)
+	if err != nil {
+		return "", false
+	}
+	return loginDestination(user.Role), true
 }
 
 // loginDestination keeps fresh-login and existing-session destinations consistent.

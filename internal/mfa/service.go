@@ -154,17 +154,10 @@ type Enrolled struct {
 // ConfirmEnrollment enrolls the pending secret once code proves the user's
 // app produces it. It replaces any earlier authenticator and recovery codes.
 func (s *Service) ConfirmEnrollment(ctx context.Context, userID int64, pending []byte, code string) (Enrolled, error) {
-	if s.sealer == nil {
-		return Enrolled{}, ErrUnavailable
-	}
-	raw, err := s.sealer.open(userID, pending)
-	if err != nil {
-		return Enrolled{}, ErrNoEnrollment
-	}
 	now := s.now()
-	step, ok := matchTOTP(raw, compactCode(code), now, 0)
-	if !ok {
-		return Enrolled{}, ErrInvalidCode
+	step, err := s.pendingStep(userID, pending, code, now)
+	if err != nil {
+		return Enrolled{}, err
 	}
 	codes, err := newRecoveryCodes()
 	if err != nil {
@@ -189,6 +182,32 @@ func (s *Service) ConfirmEnrollment(ctx context.Context, userID int64, pending [
 		return Enrolled{}, txErr
 	}
 	return Enrolled{RecoveryCodes: codes, SessionVersion: version}, nil
+}
+
+// CheckEnrollmentCode reports whether code proves the pending secret, the way
+// ConfirmEnrollment would, without enrolling it or recording anything.
+// Replacing an authenticator checks the new code first, so a mistake in it
+// does not spend the current code that confirms the change.
+func (s *Service) CheckEnrollmentCode(userID int64, pending []byte, code string) error {
+	_, err := s.pendingStep(userID, pending, code, s.now())
+	return err
+}
+
+// pendingStep opens userID's pending secret and returns the time step code
+// is valid for.
+func (s *Service) pendingStep(userID int64, pending []byte, code string, now time.Time) (int64, error) {
+	if s.sealer == nil {
+		return 0, ErrUnavailable
+	}
+	raw, err := s.sealer.open(userID, pending)
+	if err != nil {
+		return 0, ErrNoEnrollment
+	}
+	step, ok := matchTOTP(raw, compactCode(code), now, 0)
+	if !ok {
+		return 0, ErrInvalidCode
+	}
+	return step, nil
 }
 
 // Verify checks a second-factor code for userID: six digits are an

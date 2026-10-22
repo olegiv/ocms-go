@@ -5418,6 +5418,11 @@
             "translation": "You signed in with a recovery code. %d codes are left; generate new ones on the security page if you are running low."
         },
         {
+            "id": "mfa.signed_in_with_recovery_code_uncounted",
+            "message": "You signed in with a recovery code. Check how many are left on the security page and generate new ones if you are running low.",
+            "translation": "You signed in with a recovery code. Check how many are left on the security page and generate new ones if you are running low."
+        },
+        {
             "id": "mfa.setup_title",
             "message": "Set up an authenticator app",
             "translation": "Set up an authenticator app"

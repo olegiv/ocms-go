@@ -359,23 +359,31 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		},
 		IsEdit: true,
 	}
-	if h.mfa != nil {
-		status, err := h.mfa.Status(r.Context(), editUser.ID)
-		if err != nil {
-			logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", editUser.ID)
-			return
-		}
-		data.MFA = &adminviews.UserMFAStatus{
-			Enrolled: status.Enrolled,
-			IsSelf:   editUser.ID == middleware.GetUserID(r),
-		}
-		if status.Enrolled {
-			data.MFA.EnrolledAt = h.renderer.FormatDateTimeLocale(status.EnrolledAt, lang)
-		}
+	if data.MFA, ok = h.userMFAStatus(w, r, editUser.ID, lang); !ok {
+		return
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.edit"), userEditBreadcrumbs(lang, editUser.Name, editUser.ID))
 	renderTempl(w, r, adminviews.UserFormPage(pc, data))
+}
+
+// userMFAStatus is the edit page's view of userID's second factor: nil
+// without a two-factor service. It answers a lookup failure itself and
+// reports false.
+func (h *UsersHandler) userMFAStatus(w http.ResponseWriter, r *http.Request, userID int64, lang string) (*adminviews.UserMFAStatus, bool) {
+	if h.mfa == nil {
+		return nil, true
+	}
+	status, err := h.mfa.Status(r.Context(), userID)
+	if err != nil {
+		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", userID)
+		return nil, false
+	}
+	view := &adminviews.UserMFAStatus{Enrolled: status.Enrolled, IsSelf: userID == middleware.GetUserID(r)}
+	if status.Enrolled {
+		view.EnrolledAt = h.renderer.FormatDateTimeLocale(status.EnrolledAt, lang)
+	}
+	return view, true
 }
 
 // ResetMFA handles POST /admin/users/{id}/mfa/reset - removes another user's
@@ -554,6 +562,9 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
+		}
+		if data.MFA, ok = h.userMFAStatus(w, r, editUser.ID, lang); !ok {
+			return
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.edit"), userEditBreadcrumbs(lang, editUser.Name, id))

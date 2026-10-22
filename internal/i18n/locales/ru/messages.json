@@ -4903,6 +4903,11 @@
             "translation": "Вы вошли с кодом восстановления. Осталось кодов: %d. Если их мало, создайте новые на странице безопасности."
         },
         {
+            "id": "mfa.signed_in_with_recovery_code_uncounted",
+            "message": "You signed in with a recovery code. Check how many are left on the security page and generate new ones if you are running low.",
+            "translation": "Вы вошли с кодом восстановления. Проверьте на странице безопасности, сколько кодов осталось, и при необходимости создайте новые."
+        },
+        {
             "id": "mfa.setup_title",
             "message": "Set up an authenticator app",
             "translation": "Настройка приложения-аутентификатора"

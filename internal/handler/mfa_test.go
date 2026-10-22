@@ -203,6 +203,16 @@ func TestLoginWithAuthenticatorNeedsSecondFactor(t *testing.T) {
 	if rr := authRequest(env.router, http.MethodGet, "/admin", nil, signedIn); rr.Code != http.StatusNoContent {
 		t.Errorf("/admin after sign-in = %d", rr.Code)
 	}
+
+	// Going Back to the code page after signing in returns to the dashboard
+	// without a false "sign-in expired" message.
+	rr = authRequest(env.router, http.MethodGet, RouteLoginMFA, nil, signedIn)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/admin" {
+		t.Errorf("code page after sign-in = %d %q, want 303 /admin", rr.Code, rr.Header().Get("Location"))
+	}
+	if flash := env.session(t, signedIn)("flash"); flash == i18n.T("en", "mfa.sign_in_expired") {
+		t.Errorf("code page after sign-in set flash %v", flash)
+	}
 }
 
 func TestLoginWithRecoveryCode(t *testing.T) {
@@ -503,6 +513,17 @@ func TestUsersHandlerResetMFA(t *testing.T) {
 		t.Errorf("session_version after reset = %d, %v; want the editor signed out", version, err)
 	}
 
+	// A form that fails validation is shown again with the two-factor card.
+	form := url.Values{"name": {""}, "email": {editor.Email}, "role": {model.RoleEditor}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/2", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(editor.ID, 10)})), &admin)
+	update := httptest.NewRecorder()
+	h.Update(update, req)
+	if update.Code != http.StatusOK || !strings.Contains(update.Body.String(), i18n.T("en", "users.mfa_not_enabled")) {
+		t.Errorf("re-rendered edit form = %d, without the two-factor card", update.Code)
+	}
+
 	// A second reset finds nothing to remove and signs nobody out.
 	if rr := request(http.MethodPost, "/admin/users/2/mfa/reset", editor.ID); rr.Code != http.StatusSeeOther {
 		t.Fatalf("reset without a second factor = %d", rr.Code)
@@ -608,7 +629,19 @@ func TestAccountReplacesAuthenticator(t *testing.T) {
 	}
 	newSecret := strings.ReplaceAll(m[1], " ", "")
 
+	// A mistake in the new code must not spend the current code: codes[0]
+	// still confirms the replacement below.
+	// Bug state: verify current_code before checking the new code.
 	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP,
+		url.Values{"current_code": {codes[0]}, "code": {wrongCode(t, newSecret)}}, cookie)
+	if rr.Header().Get("Location") != RouteAccountSecurityTOTP {
+		t.Fatalf("replace with a wrong new code = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if status, err := env.svc.Status(t.Context(), user.ID); err != nil || status.RecoveryCodesLeft != mfa.RecoveryCodeCount {
+		t.Fatalf("recovery codes left after a wrong new code = %d, %v; want %d, none spent", status.RecoveryCodesLeft, err, mfa.RecoveryCodeCount)
+	}
+
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP,
 		url.Values{"current_code": {wrongCode(t, oldSecret)}, "code": {totpCode(t, newSecret, 0)}}, cookie)
 	if rr.Header().Get("Location") != RouteAccountSecurityTOTP {
 		t.Fatalf("replace with a wrong current code = %d %q", rr.Code, rr.Header().Get("Location"))
