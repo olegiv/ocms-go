@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-24
+
 ### Breaking Changes
 - **Production requires two-factor authentication for every account.**
   `OCMS_REQUIRE_MFA` defaults to `true` in production, and startup fails
@@ -88,6 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as Google's CSP guide lists for GA4.
 - The notices on the two-factor page (`/account/security`) and the form
   builder's captcha notice wrapped one word per line.
+- The collapsed admin sidebar gave no hint that it could be expanded: its
+  toggle kept the "Collapse sidebar" title and its chevron never flipped. It
+  now reads "Expand sidebar", exposes `aria-expanded`, and the chevron points
+  the right way.
 - **`sync-prod-to-dev.sh` no longer leaves the production site down.** It
   stops the production instance while it copies the data, and a failed or
   interrupted step ended the script with the instance stopped. It now starts
@@ -2081,7 +2087,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.29.1...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/olegiv/ocms-go/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/olegiv/ocms-go/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/olegiv/ocms-go/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/olegiv/ocms-go/compare/v0.27.0...v0.28.0
