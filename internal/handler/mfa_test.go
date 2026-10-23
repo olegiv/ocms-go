@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,6 +33,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 const mfaTestPassword = "Mfa-test-password!"
@@ -374,6 +376,64 @@ func (env *mfaTestEnv) signedInCookie(t *testing.T, user store.User, secret stri
 		t.Fatalf("sign-in = %d %q", rr.Code, rr.Header().Get("Location"))
 	}
 	return sessionCookie(t, rr, env.sm)
+}
+
+// TestAccountSecurityFormsSubmitWhatHandlersRead posts the account security
+// page's own forms back as a browser would: with the field names the page
+// renders, not ones the test picks. The forms for new recovery codes and for
+// turning two-factor off named their code field after its HTML ID, so the
+// handlers, reading current_code, always got an empty code and refused
+// (Codex review of the two-factor PR); tests that built the request by hand
+// did not notice.
+//
+// Bug state: name CurrentCodeInput's field after its id again, and this
+// fails.
+func TestAccountSecurityFormsSubmitWhatHandlersRead(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RolePublic)
+	secret, codes := env.enroll(t, user)
+	cookie := env.signedInCookie(t, user, secret)
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie).Body.String()
+
+	// Each form's fields get a code that confirms the change.
+	submit := func(action, code string) *httptest.ResponseRecorder {
+		t.Helper()
+		fields := renderedFormFields(t, page, action)
+		form := url.Values{}
+		for _, name := range fields {
+			form.Set(name, code)
+		}
+		return authRequest(env.router, http.MethodPost, action, form, cookie)
+	}
+	if rr := submit(RouteAccountSecurityRecoveryCodes, codes[0]); rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("new recovery codes from the page's form = %d %q, want the new codes", rr.Code, rr.Header().Get("Location"))
+	}
+	if rr := submit(RouteAccountSecurityDisable, totpCode(t, secret, 1)); rr.Header().Get("Location") != RouteAccountSecurity {
+		t.Fatalf("turning off from the page's form = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || enrolled {
+		t.Fatalf("the page's form did not turn two-factor off: %t, %v", enrolled, err)
+	}
+}
+
+// renderedFormFields returns the names of the fields, other than the CSRF
+// token, of the form in page that posts to action.
+func renderedFormFields(t *testing.T, page, action string) []string {
+	t.Helper()
+	form := regexp.MustCompile(`(?s)<form[^>]*action="` + regexp.QuoteMeta(action) + `"[^>]*>(.*?)</form>`).FindStringSubmatch(page)
+	if form == nil {
+		t.Fatalf("no form posting to %s on the page", action)
+	}
+	var names []string
+	for _, m := range regexp.MustCompile(`<(?:input|textarea|select)[^>]*\sname="([^"]+)"`).FindAllStringSubmatch(form[1], -1) {
+		if m[1] != "csrf_token" {
+			names = append(names, m[1])
+		}
+	}
+	if len(names) == 0 {
+		t.Fatalf("the form posting to %s has no fields", action)
+	}
+	return names
 }
 
 func TestAccountSecurityChangesNeedCurrentCode(t *testing.T) {
@@ -1139,4 +1199,73 @@ func TestLockedFirstSetupIsLogged(t *testing.T) {
 		t.Fatalf("flash after the right password on a locked account = %v, want the lockout message", got)
 	}
 	assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+}
+
+// TestOffServiceSignsInWithoutSecondFactor checks sign-in in demo mode: an
+// account with an authenticator enrolled before the switch signs in with
+// its password alone, rather than at a code step whose codes cannot be
+// checked without OCMS_MFA_KEY (Codex review of the two-factor PR).
+//
+// Bug state: have newMFAService clear only the key and the requirement in
+// demo mode, keeping enrollments, and the sign-in goes to /login/mfa.
+func TestOffServiceSignsInWithoutSecondFactor(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleAdmin)
+	env.enroll(t, user)
+	env.h.mfa = mfa.NewOffService(env.db)
+
+	cookie, next := env.signInWithPassword(t, user)
+	if next == RouteLoginMFA || next == RouteLoginMFASetup {
+		t.Fatalf("password step went to %s; demo mode asked for a second factor", next)
+	}
+	if got := env.session(t, cookie)(middleware.SessionKeyUserID); got == nil {
+		t.Fatal("the password did not sign the account in")
+	}
+}
+
+// TestReplacementAfterKeyChangeWithLastRecoveryCode follows the documented
+// way back after OCMS_MFA_KEY changes: sign in with a recovery code, then
+// set up the app again. With only one code left, signing in spends it, and
+// the replacement asked for a current code nobody could give anymore: the
+// old authenticator cannot be checked under the new key (Codex review of
+// the two-factor PR). Without a current code it now asks for the account
+// password, as a first setup does.
+//
+// Bug state: decide between the current code and the password by
+// Enrolled alone again, and the setup page asks for a current code.
+func TestReplacementAfterKeyChangeWithLastRecoveryCode(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	_, codes := env.enroll(t, user)
+	for _, code := range codes[1:] {
+		if _, err := env.svc.Verify(t.Context(), user.ID, code); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rotated, err := mfa.NewService(env.db, "Rq7Mx2Vk9Lp4Wn8Zt3Yb6Hc1Sd5Fg0Ja2Ke4Nu8Pq=", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.h.mfa = rotated
+
+	cookie, _ := env.signInWithPassword(t, user)
+	rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {codes[0]}}, cookie)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") == RouteLoginMFA {
+		t.Fatalf("sign-in with the last recovery code = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	cookie = sessionCookie(t, rr, env.sm)
+
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie).Body.String()
+	fields := renderedFormFields(t, page, RouteAccountSecurityTOTP)
+	if !slices.Contains(fields, "password") || slices.Contains(fields, adminviews.CurrentCodeField) {
+		t.Fatalf("setup form fields = %v; want the password and no current code", fields)
+	}
+	m := setupSecret.FindStringSubmatch(page)
+	if m == nil {
+		t.Fatal("setup page shows no secret")
+	}
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, strings.ReplaceAll(m[1], " ", ""), 0)}}, cookie)
+	if rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("replacement with the password = %d %q, want the new recovery codes", rr.Code, rr.Header().Get("Location"))
+	}
 }

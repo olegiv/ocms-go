@@ -22,16 +22,18 @@ import (
 
 // newMFAService builds the two-factor service from the configuration and
 // tells the session checks whether a second factor is required. Demo mode
-// turns two-factor authentication off: its seeded accounts are shared by
-// every visitor, so one visitor's authenticator would lock the rest out.
+// turns two-factor authentication off, enrollments already in the database
+// included: its seeded accounts are shared by every visitor, so one
+// visitor's authenticator would lock the rest out.
 func newMFAService(db *sql.DB, cfg *config.Config) (*mfa.Service, error) {
-	key, required := cfg.MFAKey, cfg.RequireMFA
-	if middleware.IsDemoMode() {
-		key, required = "", false
-	}
-	svc, err := mfa.NewService(db, key, required)
-	if err != nil {
-		return nil, fmt.Errorf("initializing two-factor authentication: %w", err)
+	svc := mfa.NewOffService(db)
+	required := false
+	if !middleware.IsDemoMode() {
+		var err error
+		required = cfg.RequireMFA
+		if svc, err = mfa.NewService(db, cfg.MFAKey, required); err != nil {
+			return nil, fmt.Errorf("initializing two-factor authentication: %w", err)
+		}
 	}
 	middleware.SetMFARequired(required)
 	slog.Info("two-factor authentication initialized",

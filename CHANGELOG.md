@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at their next sign-in, and sessions that started without a second factor are
   signed out. Back `OCMS_MFA_KEY` up with the database. `ocms init` and
   `scripts/deploy/setup-site.sh` now write one; demo mode and the Fly demo
-  leave two-factor authentication off.
+  leave two-factor authentication off, authenticators enrolled before the
+  switch included.
 
 ### Added
 - **Two-factor authentication** with authenticator apps (TOTP, RFC 6238) and

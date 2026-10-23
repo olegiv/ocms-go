@@ -146,12 +146,16 @@ service is involved.
 Back the key up with the database: it is the only way to read the enrolled
 secrets. If it is lost or changed, authenticator codes stop working (the
 sign-in page says so) and enrolled users sign in with a recovery code, then
-set up their app again; nothing else about the account changes. Without
+set up their app again; nothing else about the account changes. When that
+recovery code was their last, setting up the app again asks for the account
+password instead of a current code, since none is left to give. Without
 `OCMS_MFA_KEY` (development, or `OCMS_REQUIRE_MFA=false`), users cannot
 enroll an authenticator app.
 
 Demo mode turns two-factor authentication off: the seeded demo accounts are
-shared, so one visitor's authenticator would lock the others out. The Fly demo
+shared, so one visitor's authenticator would lock the others out. Accounts
+with an authenticator enrolled before the switch to demo mode sign in with
+their password alone. The Fly demo
 sets `OCMS_REQUIRE_MFA=false`.
 
 ### Sign-in

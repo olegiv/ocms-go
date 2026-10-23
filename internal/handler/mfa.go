@@ -489,7 +489,7 @@ func (h *AuthHandler) TOTPSetupForm(w http.ResponseWriter, r *http.Request) {
 	if user == nil || h.refuseTOTPSetup(w, r) {
 		return
 	}
-	enrolled, err := h.mfa.Enrolled(r.Context(), user.ID)
+	byCode, err := h.mfa.HasCurrentCode(r.Context(), user.ID)
 	if err != nil {
 		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", user.ID)
 		return
@@ -500,8 +500,8 @@ func (h *AuthHandler) TOTPSetupForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setup := totpSetup(enrollment, RouteAccountSecurityTOTP)
-	setup.RequireCurrentCode = enrolled
-	setup.RequirePassword = !enrolled
+	setup.RequireCurrentCode = byCode
+	setup.RequirePassword = !byCode
 	setup.CancelURL = RouteAccountSecurity
 	renderTempl(w, r, accountviews.TOTPSetupPage(h.accountPageContext(r, user, "mfa.setup_title"), setup))
 }
@@ -518,16 +518,20 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, RouteAccountSecurityTOTP, i18n.T(middleware.GetAdminLang(r), "auth.invalid_form_data"))
 		return
 	}
-	enrolled, err := h.mfa.Enrolled(r.Context(), user.ID)
+	// A replacement is confirmed with a current code. Without one to give
+	// (no authenticator yet, or one that cannot be checked after
+	// OCMS_MFA_KEY changed and no recovery code left), the account password
+	// confirms it instead.
+	byCode, err := h.mfa.HasCurrentCode(r.Context(), user.ID)
 	if err != nil {
 		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", user.ID)
 		return
 	}
 	var checkedAt time.Time
-	if !enrolled && !h.verifyPassword(w, r, *user, RouteAccountSecurityTOTP) {
+	if !byCode && !h.verifyPassword(w, r, *user, RouteAccountSecurityTOTP) {
 		return
 	}
-	if enrolled {
+	if byCode {
 		// A locked account is answered before the new code is checked, so
 		// the lockout, not a wrong new code, is what it hears and what is
 		// logged.
@@ -670,7 +674,7 @@ func (h *AuthHandler) verifyCurrentCode(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 	lang := middleware.GetAdminLang(r)
-	_, err := h.mfa.Verify(r.Context(), user.ID, r.FormValue("current_code"))
+	_, err := h.mfa.Verify(r.Context(), user.ID, r.FormValue(adminviews.CurrentCodeField))
 	switch {
 	case err == nil:
 		return true

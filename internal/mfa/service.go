@@ -47,6 +47,7 @@ type Service struct {
 	queries  *store.Queries
 	sealer   *sealer
 	required bool
+	off      bool // NewOffService: no account counts as enrolled
 	now      func() time.Time
 }
 
@@ -68,6 +69,15 @@ func NewService(db *sql.DB, key string, required bool) (*Service, error) {
 	return s, nil
 }
 
+// NewOffService returns the service with two-factor authentication turned
+// off, as demo mode needs: no account counts as enrolled, so nobody is asked
+// for a second factor, even one enrolled before the site switched to demo
+// mode, whose codes could not be checked without OCMS_MFA_KEY; and nothing
+// can be enrolled.
+func NewOffService(db *sql.DB) *Service {
+	return &Service{db: db, queries: store.New(db), off: true, now: time.Now}
+}
+
 // Available reports whether authenticator apps can be enrolled.
 func (s *Service) Available() bool {
 	return s.sealer != nil
@@ -85,8 +95,12 @@ type Status struct {
 	RecoveryCodesLeft int64
 }
 
-// Status returns the second-factor state of userID.
+// Status returns the second-factor state of userID; nothing is enrolled
+// while the service is off.
 func (s *Service) Status(ctx context.Context, userID int64) (Status, error) {
+	if s.off {
+		return Status{}, nil
+	}
 	row, err := s.queries.GetUserTOTP(ctx, userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Status{}, nil
@@ -99,6 +113,31 @@ func (s *Service) Status(ctx context.Context, userID int64) (Status, error) {
 		return Status{}, fmt.Errorf("counting recovery codes for user %d: %w", userID, err)
 	}
 	return Status{Enrolled: true, EnrolledAt: row.EnrolledAt, RecoveryCodesLeft: left}, nil
+}
+
+// HasCurrentCode reports whether userID can give a current code to confirm
+// a change to their second factor: from an authenticator whose secret opens
+// under the current OCMS_MFA_KEY, or an unused recovery code. After the key
+// is lost or changed and the last recovery code is spent signing in, they
+// cannot, and only the account password is left to confirm a new
+// authenticator.
+func (s *Service) HasCurrentCode(ctx context.Context, userID int64) (bool, error) {
+	status, err := s.Status(ctx, userID)
+	if err != nil || !status.Enrolled {
+		return false, err
+	}
+	if status.RecoveryCodesLeft > 0 {
+		return true, nil
+	}
+	if s.sealer == nil {
+		return false, nil
+	}
+	row, err := s.queries.GetUserTOTP(ctx, userID)
+	if err != nil {
+		return false, fmt.Errorf("loading the authenticator for user %d: %w", userID, err)
+	}
+	_, openErr := s.sealer.open(userID, row.SecretEnc)
+	return openErr == nil, nil
 }
 
 // Enrolled reports whether userID has an authenticator app enrolled.

@@ -12,6 +12,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/label"
 )
 
+// CurrentCodeField is the form field that carries the current code
+// confirming a change to a second factor; the handlers read it by this name.
+const CurrentCodeField = "current_code"
+
 // AuthPageData holds the data every standalone sign-in step shares.
 type AuthPageData struct {
 	Title     string
@@ -33,9 +37,11 @@ type TOTPSetup struct {
 	// RequireCurrentCode asks for a code from the authenticator being
 	// replaced, or a recovery code, before the new one is enrolled.
 	RequireCurrentCode bool
-	// RequirePassword asks for the account password before a first
-	// authenticator is added outside sign-in, so a stolen session cannot
-	// enroll one of its own.
+	// RequirePassword asks for the account password before an
+	// authenticator is added outside sign-in without a current code to
+	// confirm it (a first one, or a replacement after OCMS_MFA_KEY changed
+	// and the recovery codes ran out), so a stolen session cannot enroll one
+	// of its own.
 	RequirePassword bool
 	CancelURL       string
 }
@@ -231,11 +237,13 @@ templ RecoveryCodeInput(id, name string) {
 }
 
 // CurrentCodeInput is the field confirming a change to a second factor: a
-// code from the enrolled authenticator, or a recovery code.
+// code from the enrolled authenticator, or a recovery code. id tells apart
+// several such fields on one page; every one is submitted as
+// CurrentCodeField.
 templ CurrentCodeInput(id string) {
 	@input.Input(input.Props{
 		ID:   id,
-		Name: id,
+		Name: CurrentCodeField,
 		Attributes: templ.Attributes{
 			"autocomplete":   "one-time-code",
 			"maxlength":      "32",

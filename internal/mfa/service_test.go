@@ -336,3 +336,57 @@ func TestConfirmEnrollmentAtTheCheckedMoment(t *testing.T) {
 		t.Errorf("ConfirmEnrollmentAt(checked moment) = %v, want the checked code enrolled", err)
 	}
 }
+
+// TestOffServiceIgnoresEnrollments checks the service demo mode uses: an
+// authenticator enrolled before the site switched to demo mode does not
+// count, so its account is not sent to a code nobody can check, and
+// nothing can be enrolled.
+func TestOffServiceIgnoresEnrollments(t *testing.T) {
+	s, db := newTestService(t, testKey)
+	userID := createUser(t, db, "enrolled@example.com")
+	enroll(t, s, userID, time.Now())
+
+	off := NewOffService(db)
+	if enrolled, err := off.Enrolled(t.Context(), userID); err != nil || enrolled {
+		t.Errorf("Enrolled = %t, %v; want no account enrolled while off", enrolled, err)
+	}
+	if off.Available() || off.Required() {
+		t.Errorf("off service: available %t, required %t; want neither", off.Available(), off.Required())
+	}
+	if _, err := off.BeginEnrollment(userID, nil, "Test", "enrolled@example.com"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("BeginEnrollment = %v, want ErrUnavailable", err)
+	}
+}
+
+// TestHasCurrentCode checks when a change to the second factor can still be
+// confirmed with a current code: with recovery codes left, or with an
+// authenticator that opens under the current key. After the key changes
+// and the last recovery code is spent, no current code exists.
+func TestHasCurrentCode(t *testing.T) {
+	s, db := newTestService(t, testKey)
+	userID := createUser(t, db, "current@example.com")
+	if has, err := s.HasCurrentCode(t.Context(), userID); err != nil || has {
+		t.Fatalf("without an authenticator = %t, %v; want false", has, err)
+	}
+	_, codes := enroll(t, s, userID, time.Now())
+	rotated, err := NewService(db, otherTestKey, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, svc := range []*Service{s, rotated} {
+		if has, err := svc.HasCurrentCode(t.Context(), userID); err != nil || !has {
+			t.Fatalf("with recovery codes left = %t, %v; want true", has, err)
+		}
+	}
+	for _, code := range codes {
+		if _, err := s.Verify(t.Context(), userID, code); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if has, err := s.HasCurrentCode(t.Context(), userID); err != nil || !has {
+		t.Errorf("readable authenticator, no codes = %t, %v; want true", has, err)
+	}
+	if has, err := rotated.HasCurrentCode(t.Context(), userID); err != nil || has {
+		t.Errorf("changed key, no codes = %t, %v; want false", has, err)
+	}
+}
