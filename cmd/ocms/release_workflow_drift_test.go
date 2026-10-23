@@ -5,6 +5,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -94,6 +95,90 @@ func TestReleaseArchivesAreAttested(t *testing.T) {
 	if !published {
 		t.Errorf("publish job does not upload the attested archives %q", attested)
 	}
+}
+
+// TestReleaseNotesAreUnwrapped fails when the release workflow publishes
+// CHANGELOG.md's wrapped lines as they are, or when scripts/release-notes.sh
+// stops joining them. GitHub renders every newline of a release description
+// as a line break, so the v0.30.0 notes showed 83 sentences broken mid-line.
+// The script must join each paragraph and list item onto one line, keep
+// headings, nested list items, table rows and fenced code as they are, stop
+// at the next version, and change nothing but line breaks in the newest
+// CHANGELOG.md section.
+//
+// Bug state: put the plain awk extraction back into the "Prepare release
+// notes" step, or let the script print continuation lines as they are, and
+// this fails.
+func TestReleaseNotesAreUnwrapped(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf := readWorkflow(t, "release.yml")
+	prepared := false
+	for _, step := range wf.Jobs["build"].Steps {
+		if step.Name == "Prepare release notes" {
+			prepared = strings.Contains(step.Run, `scripts/release-notes.sh "$version_no_v"`) && strings.Contains(step.Run, "> release/notes.md")
+		}
+	}
+	if !prepared {
+		t.Error(`the build job's "Prepare release notes" step does not write release/notes.md with scripts/release-notes.sh`)
+	}
+
+	notes := func(t *testing.T, version, changelog string) string {
+		t.Helper()
+		out, err := exec.Command(bash, filepath.Join(root, "scripts", "release-notes.sh"), version, changelog).CombinedOutput() // #nosec G204 -- fixed repository script, test arguments
+		if err != nil {
+			t.Fatalf("release-notes.sh %s: %v\n%s", version, err, out)
+		}
+		return string(out)
+	}
+
+	t.Run("fixture", func(t *testing.T) {
+		changelog := filepath.Join(t.TempDir(), "CHANGELOG.md")
+		fixture := "## [Unreleased]\n\n## [1.2.30] - 2026-01-02\n\n- not this one\n\n" +
+			"## [1.2.3] - 2026-01-01\n\nA paragraph that is\nwrapped twice\nhere.\n\n### Fixed\n" +
+			"- **An item** wrapped\n  over two lines.\n  - A nested item,\n    wrapped too.\n- A short item.\n\n" +
+			"| a | b |\n|---|---|\n\n```sh\nkeep this\n  as it is\n```\n\n## [1.2.2] - 2025-12-31\n\n- older\n"
+		if err := os.WriteFile(changelog, []byte(fixture), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		want := "\nA paragraph that is wrapped twice here.\n\n### Fixed\n" +
+			"- **An item** wrapped over two lines.\n  - A nested item, wrapped too.\n- A short item.\n\n" +
+			"| a | b |\n|---|---|\n\n```sh\nkeep this\n  as it is\n```\n\n"
+		if got := notes(t, "1.2.3", changelog); got != want {
+			t.Errorf("release notes for 1.2.3 =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("newest CHANGELOG section", func(t *testing.T) {
+		changelog, err := os.ReadFile(filepath.Join(root, "CHANGELOG.md")) // #nosec G304 -- fixed repository path
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := regexp.MustCompile(`(?m)^## \[(\d+\.\d+\.\d+)\]`).FindSubmatch(changelog)
+		if m == nil {
+			t.Fatal("CHANGELOG.md has no released version")
+		}
+		version := string(m[1])
+		got := notes(t, version, filepath.Join(root, "CHANGELOG.md"))
+		section := regexp.MustCompile(`(?s)## \[` + regexp.QuoteMeta(version) + `\][^\n]*\n(.*?)(\n## \[|$)`).FindSubmatch(changelog)
+		if section == nil {
+			t.Fatalf("CHANGELOG.md has no %s section", version)
+		}
+		if strings.Join(strings.Fields(got), " ") != strings.Join(strings.Fields(string(section[1])), " ") {
+			t.Errorf("the %s notes do not have the same words as the CHANGELOG.md section", version)
+		}
+		for i, line := range strings.Split(got, "\n") {
+			if strings.HasPrefix(line, "  ") && !regexp.MustCompile(`^\s+([-*+]|\d+\.)\s`).MatchString(line) {
+				t.Errorf("line %d of the %s notes is a wrapped continuation: %q", i+1, version, line)
+			}
+		}
+	})
 }
 
 // pinnedAction matches an action reference pinned to a full commit SHA.

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Release notes on GitHub broke sentences mid-line: the release workflow
+  published `CHANGELOG.md`'s wrapped lines as they are, and GitHub renders
+  each newline of a release description as a line break. The new
+  `scripts/release-notes.sh` joins each paragraph and list item onto one line.
+
 ## [0.30.0] - 2026-10-24
 
 ### Breaking Changes
