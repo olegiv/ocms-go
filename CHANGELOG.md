@@ -54,6 +54,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   activate them, and only `Registry.ActivateConfirmed`, behind the password
   check, does. The unused `SetModuleActive` store query is removed.
 
+### Changed
+- **Go 1.27.3** is now required for source builds; the Docker builder uses
+  `golang:1.27.3-alpine`. It fixes GO-2026-6809 (compromised intermediate
+  certificates trusted by `crypto/x509`), which `govulncheck` reports for
+  Go 1.27.2. Prebuilt binaries must be rebuilt to pick it up.
+
 ### Fixed
 - `/health` decided "signed in" from the session's user ID alone, so a
   session invalidated by a password change still got the authenticated, and
