@@ -455,7 +455,9 @@ The script asks for confirmation (`y/N`) before touching anything, except with `
 5. Syncs uploads via `rsync --delete` (mirrors production exactly)
 6. Syncs logs via `rsync` (keeps local logs not on prod)
 7. (If --sync-custom) Syncs custom directory
-8. Restarts remote instance
+8. Restarts remote instance and waits for it to report healthy (`ocmsctl health`, as `deploy.sh` does; `HEALTH_RETRIES` and `HEALTH_INTERVAL` set how long), exiting 1 when it does not
+
+If a step fails, or the sync is interrupted, while the remote instance is stopped, the script starts it again and waits for it before exiting with a non-zero status, so a failed sync does not leave the production site down; another Ctrl-C does not cut that start short. If the stop itself fails, the script exits before copying anything: copying the database of a running instance gives a torn copy.
 
 **WARNING:** This overwrites your local `data/`, `uploads/`, and `logs/` directories with production data!
 
@@ -486,9 +488,18 @@ sudo /opt/ocms/healthcheck-multi.sh
 sudo /opt/ocms/healthcheck-multi.sh example_com
 ```
 
-Auto-restarts failed systemd-managed instances (max 3 attempts, 5-min cooldown). Supports optional Slack and email alerting — edit the script to configure.
+The script exits with the number of sites that are down, and alerts once per outage: when a site goes down, when its restarts run out, and when it is healthy again. Optional Slack and email alerting — edit the script to configure.
 
-**Limitation:** the healthcheck only acts on sites currently reporting `systemctl is-active` with a failing `/health/ready`. It **skips** `inactive`/`failed` units — so it does not recover sites that never started (e.g., after a reboot with `disabled` units). For reboot recovery, `systemctl enable` is the only safety net; see the Troubleshooting section.
+| systemd state | Meaning | What the check does |
+|---------------|---------|---------------------|
+| `active`, failing `/health/ready` | Running but unhealthy | Reports it and restarts it, at most 3 times per outage; the count resets once the site is healthy |
+| `activating` | Crash-looping: `ocms@.service` restarts a binary that exits, and systemd reports `activating` between attempts | Reports it; no restart, since systemd keeps restarting it and the cause needs fixing (see `ocmsctl logs <site>`) |
+| `failed` | A stop that did not end cleanly (the binary exits 1 when requests outlast its shutdown timeout) or a start systemd gave up on | Reports it; no restart, since it may have been stopped on purpose. `systemctl reset-failed ocms@<site>` clears it |
+| `inactive` | Stopped cleanly, never started, or not managed by systemd | Skips it |
+
+Run it as root: it keeps the restart count and the "already reported" marker of each site in `/run/ocms-health/` (mode `0700`, cleared on reboot) and refuses to run when that is not a directory it owns, because state any local user can write, as the older `/tmp/ocms-health-*` files were, can silence a site's alerts. Those old files can be deleted.
+
+**Limitation:** a site that never started (e.g., after a reboot with `disabled` units) is `inactive` and skipped. For reboot recovery, `systemctl enable` is the only safety net; see the Troubleshooting section.
 
 ## Cron Jobs
 
@@ -737,7 +748,7 @@ sudo awk '!/^#/ && NF>0 {print $1}' /etc/ocms/sites.conf \
 
 After this, all sites auto-start on every future reboot.
 
-**Note:** `healthcheck-multi.sh` does **not** revive this class of failure. It only restarts sites that are currently `active` but unhealthy; it skips `inactive`/`failed` units. `systemctl enable` is the only safety net that survives a reboot.
+**Note:** `healthcheck-multi.sh` does **not** revive this class of failure. It restarts only sites that are `active` but unhealthy; it reports crash-looping (`activating`) and `failed` units without restarting them and skips `inactive` ones. `systemctl enable` is the only safety net that survives a reboot.
 
 ### Database Corruption
 

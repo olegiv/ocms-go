@@ -313,15 +313,64 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 	}
 }
 
+// sshStub stands in for ssh in the deploy and sync script tests. It appends
+// the remote command to $SSH_LOG and succeeds, except for the failures the
+// instance names call for: site_bad never reports healthy, site_flaky fails
+// the check after the status, site_nostart fails to start and site_nostop to
+// stop, and the connection drops (exit 255) while waiting for site_lost,
+// while checking site_lostcheck again and while stopping site_loststop. With
+// $SIGNAL_ON set, the first `ocmsctl start` ("start", which then fails, or
+// "start-ok") or health wait ("wait") sends SIGTERM to the calling script.
+const sshStub = `#!/bin/sh
+printf '%s\n' "$2" >> "$SSH_LOG"
+case "$SIGNAL_ON:$2" in
+  "start:/opt/ocms/bin/ocmsctl start "* | "start-ok:/opt/ocms/bin/ocmsctl start "* | "wait:"*"' health '"*)
+    if [ ! -e "$SSH_LOG.signalled" ]; then
+      : > "$SSH_LOG.signalled"
+      kill -TERM "$PPID"
+      [ "$SIGNAL_ON" = start ] && exit 1
+      exit 0
+    fi ;;
+esac
+case "$2" in
+  *"health 'site_bad'"*) echo "FAILED (HTTP 503)"; exit 1 ;;
+  *"health 'site_lost'"*) exit 255 ;;
+  "/opt/ocms/bin/ocmsctl health site_flaky" | "/opt/ocms/bin/ocmsctl start site_nostart" | "/opt/ocms/bin/ocmsctl stop site_nostop") exit 1 ;;
+  "/opt/ocms/bin/ocmsctl health site_lostcheck" | "/opt/ocms/bin/ocmsctl stop site_loststop") exit 255 ;;
+esac
+`
+
+// ctl is the remote ocmsctl command the scripts run for verb and instance.
+func ctl(verb, instance string) string { return "/opt/ocms/bin/ocmsctl " + verb + " " + instance }
+
+// waitFor is in the health wait for instance, and in no other command.
+func waitFor(instance string) string { return "'/opt/ocms/bin/ocmsctl' health '" + instance + "'" }
+
+// writeStubs writes each script to dir as an executable named by its key.
+func writeStubs(t *testing.T, dir string, scripts map[string]string) {
+	t.Helper()
+	for name, script := range scripts {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil { // #nosec G306 -- executable test stub
+			t.Fatal(err)
+		}
+	}
+}
+
+// remoteCommands returns what sshStub logged to path, and its lines; none
+// when the script never ran a remote command.
+func remoteCommands(t *testing.T, path string) (string, []string) {
+	t.Helper()
+	logged, err := os.ReadFile(path) // #nosec G304 -- test path
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	return string(logged), strings.Split(strings.TrimSuffix(string(logged), "\n"), "\n")
+}
+
 // TestDeployScriptsFailOnUnhealthyInstance runs deploy.sh and deploy-binary.sh
-// against stubs for ssh and scp. Every remote command succeeds except those
-// the instance names call for: site_bad never reports healthy, site_flaky
-// fails the check after the status, site_nostart fails to start and
-// site_nostop to stop, and ssh drops the connection (exit 255) while waiting
-// for site_lost, while checking site_lostcheck again and while stopping
-// site_loststop. A deploy of healthy instances must report success; any other
-// must still start, check and report on every instance it could, then exit 1
-// and say why. Both scripts only printed `ocmsctl status` and reported
+// against sshStub and a stub scp. A deploy of healthy instances must report
+// success; any other must still start, check and report on every instance it
+// could, then exit 1 and say why. Both scripts only printed `ocmsctl status` and reported
 // success, so on 2026-10-23 a binary that every instance refused to run
 // (OCMS_MFA_KEY unset) deployed "successfully".
 //
@@ -338,18 +387,6 @@ func TestDeployScriptsFailOnUnhealthyInstance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctl := func(verb, instance string) string { return "/opt/ocms/bin/ocmsctl " + verb + " " + instance }
-	// waitFor is in the health wait for instance, and in no other command.
-	waitFor := func(instance string) string { return "'/opt/ocms/bin/ocmsctl' health '" + instance + "'" }
-	const stub = `#!/bin/sh
-printf '%s\n' "$2" >> "$SSH_LOG"
-case "$2" in
-  *"health 'site_bad'"*) echo "FAILED (HTTP 503)"; exit 1 ;;
-  *"health 'site_lost'"*) exit 255 ;;
-  "/opt/ocms/bin/ocmsctl health site_flaky" | "/opt/ocms/bin/ocmsctl start site_nostart" | "/opt/ocms/bin/ocmsctl stop site_nostop") exit 1 ;;
-  "/opt/ocms/bin/ocmsctl health site_lostcheck" | "/opt/ocms/bin/ocmsctl stop site_loststop") exit 255 ;;
-esac
-`
 	cases := []struct {
 		name      string
 		script    string
@@ -423,11 +460,7 @@ esac
 			if err := os.WriteFile(filepath.Join(work, "bin", "ocms-linux-amd64"), []byte("binary"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			for name, script := range map[string]string{"ssh": stub, "scp": "#!/bin/sh\nexit 0\n"} {
-				if err := os.WriteFile(filepath.Join(stubs, name), []byte(script), 0o755); err != nil { // #nosec G306 -- executable test stub
-					t.Fatal(err)
-				}
-			}
+			writeStubs(t, stubs, map[string]string{"ssh": sshStub, "scp": "#!/bin/sh\nexit 0\n"})
 			sshLog := filepath.Join(work, "ssh.log")
 
 			args := append([]string{filepath.Join(root, "scripts", "deploy", tc.script), "server.example.com"}, tc.args...)
@@ -436,11 +469,7 @@ esac
 			cmd.Env = append([]string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + work,
 				"SSH_LOG=" + sshLog, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}, tc.env...)
 			out, err := cmd.CombinedOutput()
-			logged, readErr := os.ReadFile(sshLog) // #nosec G304 -- test path
-			if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
-				t.Fatal(readErr)
-			}
-			commands := strings.Split(strings.TrimSuffix(string(logged), "\n"), "\n")
+			logged, commands := remoteCommands(t, sshLog)
 
 			if tc.ok {
 				if err != nil {
@@ -591,5 +620,309 @@ echo "ocmsctl $*" >> "`+calls+`"
 	}
 	if installed, err := os.ReadFile(filepath.Join(bin, "ocms")); err != nil || string(installed) != "new" {
 		t.Errorf("installed binary = %q, %v; want the new one", installed, err)
+	}
+}
+
+// TestSyncProdToDevRestartsProduction runs sync-prod-to-dev.sh against
+// sshStub and stubs for rsync (which logs to $SSH_LOG too) and lsof,
+// answering its prompt. The script stops the production instance while it
+// copies the data. Whether the copy works, fails or is interrupted, it must
+// start the instance again exactly once, wait for it to report healthy, and
+// exit non-zero unless the copy worked and the instance came back. A stop
+// that ocmsctl refuses must end the script before anything is copied, and
+// without starting an instance that is still running. It used to start
+// production only after every step had worked, so a failed copy ended the
+// script under set -e with the site down, it never checked that the site
+// came up, and it copied the database of an instance it had not stopped
+// (issue #194).
+//
+// A second interrupt must not cut the trap's start short, an interrupt
+// before step 5's start succeeded must still make the trap start the
+// instance, and one during the health wait must not start it twice.
+//
+// Bug state: drop the EXIT trap, the trap's `trap ” INT TERM HUP`, the health
+// check in start_remote_server, or the exit after a failed stop, or clear
+// REMOTE_STOPPED before step 5's start, and this fails.
+func TestSyncProdToDevRestartsProduction(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "deploy", "sync-prod-to-dev.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const anyFailure = -1
+	cases := []struct {
+		name     string
+		instance string
+		answer   string
+		rsync    string // the stub's exit status, or "term" to send SIGTERM to the script
+		signalOn string // sshStub's $SIGNAL_ON
+		exit     int    // 0, an exit status, or anyFailure
+		starts   int
+		copied   bool
+		out      []string
+		notOut   []string
+	}{
+		{name: "synced", instance: "site_ok", answer: "y", rsync: "0", exit: 0, starts: 1, copied: true,
+			out: []string{"Sync complete!"}},
+		{name: "answered no", instance: "site_ok", answer: "n", rsync: "0", exit: 0,
+			out: []string{"Aborted."}, notOut: []string{"Sync complete!"}},
+		{name: "copy failed", instance: "site_ok", answer: "y", rsync: "23", exit: 23, starts: 1, copied: true,
+			out:    []string{"The sync stopped before it finished (status 23) while the remote instance was stopped; starting it again", "Instance 'site_ok' is healthy"},
+			notOut: []string{"Sync complete!"}},
+		{name: "interrupted", instance: "site_ok", answer: "y", rsync: "term", exit: anyFailure, starts: 1, copied: true,
+			out:    []string{"The sync stopped before it finished", "Instance 'site_ok' is healthy"},
+			notOut: []string{"Sync complete!"}},
+		{name: "unhealthy after the sync", instance: "site_bad", answer: "y", rsync: "0", exit: 1, starts: 1, copied: true,
+			out:    []string{"FAILED (HTTP 503)", "The data was synced, but the remote instance 'site_bad' is not healthy"},
+			notOut: []string{"Sync complete!", "stopped before it finished"}},
+		{name: "copy failed, then unhealthy", instance: "site_bad", answer: "y", rsync: "23", exit: 23, starts: 1, copied: true,
+			out:    []string{"The sync stopped before it finished (status 23)", "The remote instance 'site_bad' did not come back"},
+			notOut: []string{"Sync complete!"}},
+		{name: "stop refused", instance: "site_nostop", answer: "y", rsync: "0", exit: 1,
+			out:    []string{"Could not stop remote instance 'site_nostop'; nothing was synced"},
+			notOut: []string{"Sync complete!", "stopped before it finished"}},
+		{name: "connection lost while stopping", instance: "site_loststop", answer: "y", rsync: "0", exit: 1, starts: 1,
+			out:    []string{"Lost the connection to the server while stopping 'site_loststop'", "Instance 'site_loststop' is healthy"},
+			notOut: []string{"Sync complete!"}},
+		{name: "interrupted during the restart", instance: "site_ok", answer: "y", rsync: "23", signalOn: "start-ok", exit: 23, starts: 1, copied: true,
+			out:    []string{"The sync stopped before it finished (status 23)", "Instance 'site_ok' is healthy"},
+			notOut: []string{"Sync complete!"}},
+		{name: "interrupted during the start", instance: "site_ok", answer: "y", rsync: "0", signalOn: "start", exit: anyFailure, starts: 2, copied: true,
+			out:    []string{"The sync stopped before it finished", "Instance 'site_ok' is healthy"},
+			notOut: []string{"Sync complete!"}},
+		{name: "interrupted during the health wait", instance: "site_ok", answer: "y", rsync: "0", signalOn: "wait", exit: anyFailure, starts: 1, copied: true,
+			out:    []string{"The remote instance 'site_ok' was started, but its health check was cut short"},
+			notOut: []string{"Sync complete!", "stopped before it finished"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			work, stubs := t.TempDir(), t.TempDir()
+			writeStubs(t, stubs, map[string]string{
+				"ssh":   sshStub,
+				"rsync": "#!/bin/sh\necho rsync >> \"$SSH_LOG\"\nif [ \"$RSYNC_EXIT\" = term ]; then kill -TERM \"$PPID\"; exit 0; fi\nexit \"$RSYNC_EXIT\"\n",
+				"lsof":  "#!/bin/sh\nexit 1\n",
+			})
+			sshLog := filepath.Join(work, "ssh.log")
+
+			cmd := exec.Command(bash, script, "server.example.com", tc.instance, "-v", "/srv/site") // #nosec G204 -- fixed repository script, test arguments
+			cmd.Dir = work
+			cmd.Stdin = strings.NewReader(tc.answer)
+			cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + work,
+				"SSH_LOG=" + sshLog, "RSYNC_EXIT=" + tc.rsync, "SIGNAL_ON=" + tc.signalOn, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}
+			out, err := cmd.CombinedOutput()
+			logged, commands := remoteCommands(t, sshLog)
+
+			var exitErr *exec.ExitError
+			switch {
+			case tc.exit == 0 && err != nil:
+				t.Fatalf("sync: %v, want success\n%s", err, out)
+			case tc.exit == anyFailure && err == nil:
+				t.Fatalf("sync succeeded, want a failure\n%s", out)
+			case tc.exit > 0 && (!errors.As(err, &exitErr) || exitErr.ExitCode() != tc.exit):
+				t.Fatalf("sync: %v, want exit status %d\n%s", err, tc.exit, out)
+			}
+			for _, want := range tc.out {
+				if !strings.Contains(string(out), want) {
+					t.Errorf("the output does not say %q:\n%s", want, out)
+				}
+			}
+			for _, unwanted := range tc.notOut {
+				if strings.Contains(string(out), unwanted) {
+					t.Errorf("the output says %q:\n%s", unwanted, out)
+				}
+			}
+			if copied := slices.Contains(commands, "rsync"); copied != tc.copied {
+				t.Errorf("the sync copied data: %v, want %v; it ran:\n%s", copied, tc.copied, logged)
+			}
+			if starts := strings.Count(logged, ctl("start", tc.instance)+"\n"); starts != tc.starts {
+				t.Fatalf("the sync started %s %d times, want %d:\n%s", tc.instance, starts, tc.starts, logged)
+			}
+			if tc.starts == 0 {
+				return
+			}
+			stop, start := slices.Index(commands, ctl("stop", tc.instance)), slices.Index(commands, ctl("start", tc.instance))
+			if stop < 0 || start < stop {
+				t.Fatalf("the sync did not stop and then start %s; it ran:\n%s", tc.instance, logged)
+			}
+			if !slices.ContainsFunc(commands[start:], func(c string) bool { return strings.Contains(c, waitFor(tc.instance)) }) {
+				t.Errorf("the sync never waited for %s after starting it; it ran:\n%s", tc.instance, logged)
+			}
+		})
+	}
+}
+
+// TestHealthcheckMultiReportsCrashLoopingUnits runs healthcheck-multi.sh, with
+// its paths moved to a temporary directory and stubs for systemctl, curl,
+// mail, sleep and hostname, five times over five sites, then twice more once
+// site_sick answers again. site_ok is active and healthy, site_sick active but
+// failing /health/ready, site_loop crash-looping (systemd reports
+// "activating" between restarts), site_failed "failed", and site_stopped
+// "inactive". The three that are down must count in the exit status, each
+// alerting once per outage. Only site_sick may be restarted, at most
+// MAX_RESTART_ATTEMPTS times, with one CRITICAL alert when they run out and
+// one "recovered" alert when it answers again. The script skipped every unit
+// that was not active, so a crash loop passed the cron check, and its restart
+// cooldown, as long as the cron interval, let a dead site be restarted and
+// alerted on every run for ever (issue #194).
+//
+// Bug state: skip units that are not active again, restart activating or
+// failed units, alert on every run, or let the restart count reset while the
+// site is still down, and this fails.
+func TestHealthcheckMultiReportsCrashLoopingUnits(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	scripts, stubs := filepath.Join(tmp, "scripts"), filepath.Join(tmp, "stubs")
+	for _, dir := range []string{scripts, stubs} {
+		if err := os.Mkdir(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func(name string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(root, "scripts", "deploy", name)) // #nosec G304 -- fixed repository paths
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	sitesConf, stateDir := filepath.Join(tmp, "sites.conf"), filepath.Join(tmp, "state")
+	// redirect copies healthcheck-multi.sh with its paths in tmp.
+	redirect := func(stateDir string) string {
+		t.Helper()
+		script := read("healthcheck-multi.sh")
+		for old, replacement := range map[string]string{
+			`SITES_CONF="/etc/ocms/sites.conf"`: `SITES_CONF="` + sitesConf + `"`,
+			`STATE_DIR="/run/ocms-health"`:      `STATE_DIR="` + stateDir + `"`,
+		} {
+			if strings.Count(script, old) != 1 {
+				t.Fatalf("healthcheck-multi.sh no longer has exactly one %q to redirect for the test", old)
+			}
+			script = strings.Replace(script, old, replacement, 1)
+		}
+		return script
+	}
+	writeStubs(t, scripts, map[string]string{"healthcheck-multi.sh": redirect(stateDir), "helper.sh": read("helper.sh")})
+
+	calls := filepath.Join(tmp, "calls.log")
+	// systemctl takes the unit from its last argument, so `is-active --quiet
+	// <unit>` works too, and prints the state unless --quiet is given. curl
+	// answers 200 for the ports in $HEALTHY. mail logs the subject.
+	writeStubs(t, stubs, map[string]string{
+		"systemctl": `#!/bin/sh
+echo "systemctl $*" >> "` + calls + `"
+for unit; do :; done
+case "$unit" in
+  ocms@site_ok|ocms@site_sick) state=active ;;
+  ocms@site_loop) state=activating ;;
+  ocms@site_failed) state=failed ;;
+  *) state=inactive ;;
+esac
+if [ "$1" = is-active ]; then
+  [ "$2" = --quiet ] || echo "$state"
+  [ "$state" = active ]
+fi
+`,
+		"curl":     "#!/bin/sh\nfor port in $HEALTHY; do case \"$*\" in *:$port/*) printf 200; exit 0 ;; esac; done\nprintf 503\n",
+		"mail":     "#!/bin/sh\necho \"mail $2\" >> \"" + calls + "\"\ncat > /dev/null\n",
+		"sleep":    "#!/bin/sh\nexit 0\n",
+		"hostname": "#!/bin/sh\necho testhost\n",
+	})
+	if err := os.WriteFile(sitesConf, []byte("site_ok /srv/ok ocms 8001\nsite_sick /srv/sick ocms 8002\n"+
+		"site_loop /srv/loop ocms 8003\nsite_failed /srv/failed ocms 8004\nsite_stopped /srv/stopped ocms 8005\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	check := func(healthy string, wantDown int) string {
+		t.Helper()
+		cmd := exec.Command(bash, filepath.Join(scripts, "healthcheck-multi.sh")) // #nosec G204 -- copy of a repository script
+		cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + tmp,
+			"ALERT_EMAIL=ops@example.com", "HEALTHY=" + healthy}
+		out, err := cmd.CombinedOutput()
+		got := 0
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			got = exitErr.ExitCode()
+		} else if err != nil {
+			t.Fatalf("healthcheck-multi.sh: %v\n%s", err, out)
+		}
+		if got != wantDown {
+			t.Fatalf("healthcheck-multi.sh exited %d, want %d (sites down)\n%s", got, wantDown, out)
+		}
+		return string(out)
+	}
+	first := check("8001", 3)
+	for _, want := range []string{"[site_sick] Health check failed (port 8002)",
+		"[site_loop] systemd reports ocms@site_loop as activating",
+		"[site_failed] systemd reports ocms@site_failed as failed"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("the first check does not say %q:\n%s", want, first)
+		}
+	}
+	for range 4 {
+		check("8001", 3)
+	}
+	logged, commands := remoteCommands(t, calls)
+	count := func(line string) int {
+		n := 0
+		for _, c := range commands {
+			if c == line {
+				n++
+			}
+		}
+		return n
+	}
+	for line, want := range map[string]int{
+		"systemctl restart ocms@site_sick":                                3, // MAX_RESTART_ATTEMPTS, however many runs
+		"systemctl restart ocms@site_loop":                                0,
+		"systemctl restart ocms@site_failed":                              0,
+		"systemctl restart ocms@site_ok":                                  0,
+		"systemctl restart ocms@site_stopped":                             0,
+		"mail ALERT: oCMS site site_sick is down":                         1,
+		"mail ALERT: oCMS site site_loop is down":                         1,
+		"mail ALERT: oCMS site site_failed is down":                       1,
+		"mail CRITICAL: oCMS site site_sick requires manual intervention": 1,
+		"mail ALERT: oCMS site site_ok is down":                           0,
+		"mail ALERT: oCMS site site_stopped is down":                      0,
+	} {
+		if got := count(line); got != want {
+			t.Errorf("after five checks, %q ran %d times, want %d:\n%s", line, got, want, logged)
+		}
+	}
+
+	// site_sick answers again: one "recovered" alert, and its state is reset.
+	check("8001 8002", 2)
+	check("8001 8002", 2)
+	logged, commands = remoteCommands(t, calls)
+	if got := count("mail oCMS site site_sick recovered"); got != 1 {
+		t.Errorf("site_sick's recovery was alerted %d times, want once:\n%s", got, logged)
+	}
+	if _, err := os.Stat(filepath.Join(stateDir, "site_sick")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("site_sick's restart count was kept after it recovered: %v", err)
+	}
+
+	// Other users must not reach the state: in /tmp, a planted .down marker
+	// or count silenced a site's alerts and restarts.
+	if info, err := os.Stat(stateDir); err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("state directory mode = %v, %v; want 0700", info.Mode().Perm(), err)
+	}
+	linked := filepath.Join(tmp, "linked-state")
+	if err := os.Symlink(stateDir, linked); err != nil {
+		t.Fatal(err)
+	}
+	writeStubs(t, scripts, map[string]string{"healthcheck-multi.sh": redirect(linked)})
+	cmd := exec.Command(bash, filepath.Join(scripts, "healthcheck-multi.sh")) // #nosec G204 -- copy of a repository script
+	cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + tmp, "HEALTHY=8001"}
+	if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "Cannot use "+linked+" for the health state") {
+		t.Errorf("a symlinked state directory was used: %v\n%s", err, out)
 	}
 }
