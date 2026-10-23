@@ -20,6 +20,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
@@ -50,6 +51,10 @@ type UsersHandler struct {
 	sessionManager *scs.SessionManager
 	dispatcher     *webhook.Dispatcher
 	eventService   *service.EventService
+	mfa            *mfa.Service
+	// loginProtection counts wrong current passwords toward the login
+	// lockout; nil leaves them uncounted.
+	loginProtection *middleware.LoginProtection
 }
 
 // NewUsersHandler creates a new UsersHandler.
@@ -65,6 +70,18 @@ func NewUsersHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 // SetDispatcher sets the webhook dispatcher for event dispatching.
 func (h *UsersHandler) SetDispatcher(d *webhook.Dispatcher) {
 	h.dispatcher = d
+}
+
+// SetLoginProtection makes wrong current passwords, given to confirm a user
+// change that could hand an account over, count toward the login lockout.
+func (h *UsersHandler) SetLoginProtection(lp *middleware.LoginProtection) {
+	h.loginProtection = lp
+}
+
+// SetMFAService sets the two-factor service the edit page reads the user's
+// status from and the reset action uses. Without it neither is shown.
+func (h *UsersHandler) SetMFAService(s *mfa.Service) {
+	h.mfa = s
 }
 
 // dispatchUserEvent dispatches a user-related webhook event.
@@ -255,6 +272,19 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Profile field validation
 	validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL, telegramURL, validationErrors)
 
+	// A new administrator needs the acting administrator's password, so a
+	// stolen session cannot mint one it controls.
+	if role == model.RoleAdmin {
+		actor := middleware.GetUser(r)
+		if actor == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if msg := h.checkActorPassword(r, *actor, r.FormValue("current_password")); msg != "" {
+			validationErrors["current_password"] = msg
+		}
+	}
+
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		lang := h.renderer.GetAdminLang(r)
@@ -351,9 +381,141 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		},
 		IsEdit: true,
 	}
+	if data.MFA, ok = h.userMFAStatus(w, r, editUser.ID, lang); !ok {
+		return
+	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.edit"), userEditBreadcrumbs(lang, editUser.Name, editUser.ID))
 	renderTempl(w, r, adminviews.UserFormPage(pc, data))
+}
+
+// actorPasswordNeeded reports whether a user edit needs the acting
+// administrator's current password: one that could hand an account to
+// whoever holds the session, or take an administrator's away. That is a new
+// password for any user, a new email for any user (the email keys the login
+// lockout, so a new one would give a stolen session fresh password guesses
+// against that account), and giving or taking away the admin role: given,
+// it would let a stolen session mint an administrator it controls and use
+// that one to take over the others; taken, it would lock the real
+// administrators out.
+func actorPasswordNeeded(target store.User, email, password, role string) bool {
+	switch {
+	case password != "", email != target.Email:
+		return true
+	default:
+		return (role == model.RoleAdmin) != (target.Role == model.RoleAdmin)
+	}
+}
+
+// checkActorPassword verifies the current password the acting administrator
+// gives to confirm a sensitive user change. It returns a validation message,
+// or "" when it matches. Wrong passwords count toward the login lockout like
+// failed sign-ins.
+func (h *UsersHandler) checkActorPassword(r *http.Request, actor store.User, given string) string {
+	c := confirmPassword(r, h.loginProtection, h.eventService, actor, given, func() {
+		h.logActorRefusal(r, actor, model.EventLevelWarning, "User change refused: wrong current password")
+	})
+	switch c.Outcome {
+	case passwordOK:
+		return ""
+	case passwordMissing:
+		h.logActorRefusal(r, actor, model.EventLevelWarning, "User change refused: no current password")
+		return "Enter your current password to make this change"
+	case passwordUnverified:
+		slog.Error("password check error", "error", c.Err, "user_id", actor.ID)
+		h.logActorRefusal(r, actor, model.EventLevelError, "User change refused: password could not be verified")
+		return "Error checking your current password"
+	case passwordLocked:
+		h.logActorRefusal(r, actor, model.EventLevelWarning, "User change refused: account locked")
+		return "Too many failed attempts; try again later"
+	}
+	if c.LockedFor > 0 {
+		// This wrong password locked the account.
+		return "Too many failed attempts; try again later"
+	}
+	return "Your current password is incorrect"
+}
+
+// logActorRefusal logs message, a user change refused because the acting
+// administrator's password did not confirm it, as a user event at level.
+func (h *UsersHandler) logActorRefusal(r *http.Request, actor store.User, level, message string) {
+	_ = h.eventService.LogUserEvent(r.Context(), level, message, &actor.ID, middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": actor.ID})
+}
+
+// userMFAStatus is the edit page's view of userID's second factor: nil
+// without a two-factor service. It answers a lookup failure itself and
+// reports false.
+func (h *UsersHandler) userMFAStatus(w http.ResponseWriter, r *http.Request, userID int64, lang string) (*adminviews.UserMFAStatus, bool) {
+	if h.mfa == nil {
+		return nil, true
+	}
+	status, err := h.mfa.Status(r.Context(), userID)
+	if err != nil {
+		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", userID)
+		return nil, false
+	}
+	view := &adminviews.UserMFAStatus{Enrolled: status.Enrolled, IsSelf: userID == middleware.GetUserID(r)}
+	if status.Enrolled {
+		view.EnrolledAt = h.renderer.FormatDateTimeLocale(status.EnrolledAt, lang)
+	}
+	return view, true
+}
+
+// ResetMFA handles POST /admin/users/{id}/mfa/reset - removes another user's
+// second factor and signs them out everywhere, for a user who lost their
+// authenticator and recovery codes. Where a second factor is required, they
+// set up a new one at their next sign-in. It needs the acting
+// administrator's current password, like the other user changes that could
+// hand an account over. Administrators change their own second factor on
+// the account security page, which asks for a current code.
+func (h *UsersHandler) ResetMFA(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionTwoFactor, redirectAdminUsers) {
+		return
+	}
+	lang := h.renderer.GetAdminLang(r)
+	id, err := ParseIDParam(r)
+	if err != nil {
+		flashError(w, r, h.renderer, redirectAdminUsers, "Invalid user ID")
+		return
+	}
+	target, ok := h.requireUserWithRedirect(w, r, id)
+	if !ok {
+		return
+	}
+	back := fmt.Sprintf(redirectAdminUsersID, target.ID)
+	if h.mfa == nil {
+		flashError(w, r, h.renderer, back, i18n.T(lang, "mfa.not_configured"))
+		return
+	}
+	if target.ID == middleware.GetUserID(r) {
+		flashError(w, r, h.renderer, back, i18n.T(lang, "users.mfa_reset_self"))
+		return
+	}
+	enrolled, err := h.mfa.Enrolled(r.Context(), target.ID)
+	if err != nil {
+		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", target.ID)
+		return
+	}
+	if !enrolled {
+		flashError(w, r, h.renderer, back, i18n.T(lang, "users.mfa_not_enabled"))
+		return
+	}
+	actor := middleware.GetUser(r)
+	if actor == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if msg := h.checkActorPassword(r, *actor, r.FormValue("current_password")); msg != "" {
+		flashError(w, r, h.renderer, back, msg)
+		return
+	}
+	if _, err := h.mfa.Disable(r.Context(), target.ID); err != nil {
+		logAndInternalError(w, "failed to reset two-factor authentication", "error", err, "user_id", target.ID)
+		return
+	}
+	slog.Info("two-factor authentication reset", "user_id", target.ID, "reset_by", middleware.GetUserID(r))
+	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelWarning, "Two-factor authentication reset by an administrator", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": target.ID, "email": target.Email})
+	flashAndRedirect(w, r, h.renderer, back, i18n.T(lang, "users.mfa_reset_done"), "success")
 }
 
 // Update handles PUT /admin/users/{id} - updates an existing user.
@@ -445,6 +607,11 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			validationErrors["password_confirm"] = "Passwords do not match"
 		}
 	}
+	if actorPasswordNeeded(editUser, email, password, role) {
+		if msg := h.checkActorPassword(r, *currentUser, r.FormValue("current_password")); msg != "" {
+			validationErrors["current_password"] = msg
+		}
+	}
 
 	// Role validation
 	if role == "" {
@@ -486,6 +653,9 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
+		}
+		if data.MFA, ok = h.userMFAStatus(w, r, editUser.ID, lang); !ok {
+			return
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.edit"), userEditBreadcrumbs(lang, editUser.Name, id))

@@ -1,0 +1,256 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+)
+
+// CurrentCodeField is the form field that carries the current code
+// confirming a change to a second factor; the handlers read it by this name.
+const CurrentCodeField = "current_code"
+
+// AuthPageData holds the data every standalone sign-in step shares.
+type AuthPageData struct {
+	Title     string
+	AdminLang string
+	Flash     string
+	FlashType string
+}
+
+// T translates a key using the admin language.
+func (d AuthPageData) T(key string, args ...any) string {
+	return i18n.T(d.AdminLang, key, args...)
+}
+
+// TOTPSetup is an authenticator app being enrolled.
+type TOTPSetup struct {
+	QRCode string // data: URI of the otpauth QR code
+	Secret string // base32 secret grouped for manual entry
+	Action string // form action that confirms the code
+	// RequireCurrentCode asks for a code from the authenticator being
+	// replaced, or a recovery code, before the new one is enrolled.
+	RequireCurrentCode bool
+	// RequirePassword asks for the account password before an
+	// authenticator is added outside sign-in without a current code to
+	// confirm it (a first one, or a replacement after OCMS_MFA_KEY changed
+	// and the recovery codes ran out), so a stolen session cannot enroll one
+	// of its own.
+	RequirePassword bool
+	CancelURL       string
+}
+
+// CSRFField exposes the CSRF form field to views outside this package.
+templ CSRFField() {
+	@csrfField()
+}
+
+// MFAChallengePage asks for the second factor of a sign-in.
+templ MFAChallengePage(d AuthPageData) {
+	@authShell(d.Title, d.AdminLang) {
+		@authCard(d.T("mfa.challenge_title"), d.Flash, d.FlashType) {
+			<p class="mb-4 text-sm text-muted-foreground">{ d.T("mfa.challenge_help") }</p>
+			<form method="POST" action="/login/mfa" class="auth-form">
+				@csrfField()
+				<div class="form-group">
+					@label.Label(label.Props{For: "code", Class: "block mb-1"}) {
+						{ d.T("mfa.code_label") }
+					}
+					@TOTPCodeInput("code", "code", true)
+				</div>
+				@button.Button(button.Props{Type: button.TypeSubmit, FullWidth: true}) {
+					{ d.T("mfa.verify") }
+				}
+			</form>
+			<details class="mt-6">
+				<summary class="cursor-pointer text-sm">{ d.T("mfa.use_recovery_code") }</summary>
+				<form method="POST" action="/login/mfa" class="auth-form mt-3">
+					@csrfField()
+					<div class="form-group">
+						@label.Label(label.Props{For: "recovery_code", Class: "block mb-1"}) {
+							{ d.T("mfa.recovery_code_label") }
+						}
+						@RecoveryCodeInput("recovery_code", "code")
+					</div>
+					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, FullWidth: true}) {
+						{ d.T("mfa.verify") }
+					}
+				</form>
+			</details>
+			@signInAgainForm(d)
+		}
+	}
+}
+
+// MFASetupPage enrolls an authenticator app during sign-in, for an account
+// that must use two-factor authentication and has not set it up yet.
+templ MFASetupPage(d AuthPageData, setup TOTPSetup) {
+	@authShell(d.Title, d.AdminLang) {
+		@authCard(d.T("mfa.setup_title"), d.Flash, d.FlashType) {
+			<p class="mb-4 text-sm text-muted-foreground">{ d.T("mfa.setup_required") }</p>
+			@TOTPSetupForm(d.T, setup)
+			@signInAgainForm(d)
+		}
+	}
+}
+
+// RecoveryCodesPage shows the recovery codes issued during sign-in once.
+templ RecoveryCodesPage(d AuthPageData, codes []string, continueURL string) {
+	@authShell(d.Title, d.AdminLang) {
+		@authCard(d.T("mfa.recovery_codes_title"), d.Flash, d.FlashType) {
+			@RecoveryCodesList(d.T, codes)
+			@button.Button(button.Props{Href: continueURL, FullWidth: true, Class: "mt-6"}) {
+				{ d.T("mfa.recovery_codes_saved") }
+			}
+		}
+	}
+}
+
+// signInAgainForm abandons a pending sign-in for another account.
+templ signInAgainForm(d AuthPageData) {
+	<form method="POST" action="/logout" class="mt-6 text-center">
+		@csrfField()
+		@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantLink, Size: button.SizeSm}) {
+			{ d.T("mfa.sign_in_again") }
+		}
+	</form>
+}
+
+// TOTPSetupForm shows the QR code and secret of a new authenticator and the
+// form that confirms its first code.
+templ TOTPSetupForm(t func(string, ...any) string, setup TOTPSetup) {
+	<ol class="mb-4 list-decimal space-y-2 pl-5 text-sm">
+		<li>{ t("mfa.setup_step_install") }</li>
+		<li>{ t("mfa.setup_step_scan") }</li>
+	</ol>
+	<div class="mb-4 flex justify-center">
+		<img src={ setup.QRCode } width="200" height="200" alt={ t("mfa.qr_alt") } class="rounded-md bg-white p-2"/>
+	</div>
+	<p class="mb-1 text-sm text-muted-foreground">{ t("mfa.setup_manual") }</p>
+	<p class="mb-6 select-all break-all text-center font-mono text-sm"><code>{ setup.Secret }</code></p>
+	<form method="POST" action={ templ.SafeURL(setup.Action) } class="auth-form">
+		@csrfField()
+		if setup.RequirePassword {
+			<div class="form-group">
+				@label.Label(label.Props{For: "password", Class: "block mb-1"}) {
+					{ t("mfa.password_label") }
+				}
+				@input.Input(input.Props{
+					Type: input.TypePassword,
+					ID:   "password",
+					Name: "password",
+					Attributes: templ.Attributes{
+						"autocomplete": "current-password",
+						"required":     true,
+						"autofocus":    true,
+					},
+				})
+				<p class="form-help">{ t("mfa.password_help") }</p>
+			</div>
+		}
+		if setup.RequireCurrentCode {
+			<div class="form-group">
+				@label.Label(label.Props{For: "current_code", Class: "block mb-1"}) {
+					{ t("mfa.current_code_label") }
+				}
+				@CurrentCodeInput("current_code")
+				<p class="form-help">{ t("mfa.current_code_help") }</p>
+			</div>
+		}
+		<div class="form-group">
+			@label.Label(label.Props{For: "code", Class: "block mb-1"}) {
+				{ t("mfa.setup_code_label") }
+			}
+			@TOTPCodeInput("code", "code", !setup.RequireCurrentCode && !setup.RequirePassword)
+		</div>
+		<div class="form-actions">
+			@button.Button(button.Props{Type: button.TypeSubmit}) {
+				{ t("mfa.setup_confirm") }
+			}
+			if setup.CancelURL != "" {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: setup.CancelURL}) {
+					{ t("btn.cancel") }
+				}
+			}
+		</div>
+	</form>
+}
+
+// RecoveryCodesList shows recovery codes with the warning that they are
+// displayed only once.
+templ RecoveryCodesList(t func(string, ...any) string, codes []string) {
+	@alert.Alert(alert.Props{Class: "alert-warning mb-4"}) {
+		@icon.TriangleAlert(icon.Props{Size: 20})
+		<div>{ t("mfa.recovery_codes_warning") }</div>
+	}
+	<ul class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-4 gap-y-2 whitespace-nowrap rounded-md border p-4 font-mono text-sm select-all" aria-label={ t("mfa.recovery_codes_title") }>
+		for _, code := range codes {
+			<li><code>{ code }</code></li>
+		}
+	</ul>
+	<p class="mt-3 text-sm text-muted-foreground">{ t("mfa.recovery_codes_help") }</p>
+}
+
+// TOTPCodeInput is the field for a six-digit authenticator code. It is one
+// text field rather than six boxes so that paste, password-manager autofill
+// and the platform one-time-code suggestion all fill it.
+templ TOTPCodeInput(id, name string, autofocus bool) {
+	@input.Input(input.Props{
+		ID:          id,
+		Name:        name,
+		Placeholder: "123 456",
+		Class:       "text-center font-mono text-lg tracking-widest",
+		Attributes: templ.Attributes{
+			"inputmode":      "numeric",
+			"autocomplete":   "one-time-code",
+			"pattern":        "[0-9 ]{6,7}",
+			"maxlength":      "7",
+			"required":       true,
+			"autofocus":      autofocus,
+			"autocapitalize": "off",
+			"spellcheck":     "false",
+		},
+	})
+}
+
+// RecoveryCodeInput is the field for a recovery code.
+templ RecoveryCodeInput(id, name string) {
+	@input.Input(input.Props{
+		ID:          id,
+		Name:        name,
+		Placeholder: "xxxx-xxxx-xxxx-xxxx",
+		Class:       "font-mono",
+		Attributes: templ.Attributes{
+			"autocomplete":   "off",
+			"maxlength":      "32",
+			"required":       true,
+			"autocapitalize": "off",
+			"spellcheck":     "false",
+		},
+	})
+}
+
+// CurrentCodeInput is the field confirming a change to a second factor: a
+// code from the enrolled authenticator, or a recovery code. id tells apart
+// several such fields on one page; every one is submitted as
+// CurrentCodeField.
+templ CurrentCodeInput(id string) {
+	@input.Input(input.Props{
+		ID:   id,
+		Name: CurrentCodeField,
+		Attributes: templ.Attributes{
+			"autocomplete":   "one-time-code",
+			"maxlength":      "32",
+			"required":       true,
+			"autofocus":      true,
+			"autocapitalize": "off",
+			"spellcheck":     "false",
+		},
+	})
+}

@@ -51,7 +51,7 @@ func TestFormatDuration(t *testing.T) {
 func TestNewAuthHandler(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 
-	handler := NewAuthHandler(db, nil, sm, nil, nil)
+	handler := NewAuthHandler(db, nil, sm, nil, nil, testMFAService(t, db))
 
 	if handler == nil {
 		t.Fatal("NewAuthHandler returned nil")
@@ -71,7 +71,7 @@ func TestAuthHandler_LoginProtectionNil(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 
 	// Create handler without login protection
-	handler := NewAuthHandler(db, nil, sm, nil, nil)
+	handler := NewAuthHandler(db, nil, sm, nil, nil, testMFAService(t, db))
 
 	// Verify handler is created with nil login protection
 	if handler.loginProtection != nil {

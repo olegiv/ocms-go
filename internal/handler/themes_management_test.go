@@ -398,6 +398,7 @@ func TestThemeManagementWritesEventLog(t *testing.T) {
 	archive := starterThemeArchive(t)
 
 	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword))
+	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), ""))
 	h.Import(httptest.NewRecorder(), themeUploadRequest(t, h, "starter.tar.gz", archive))
 	r := requestWithURLParams(httptest.NewRequest(http.MethodPost, "/admin/themes/starter/delete", nil), map[string]string{"name": "starter"})
 	h.Delete(httptest.NewRecorder(), addUserToContext(requestWithSession(h.sessionManager, r), themeImportUser(t)))
@@ -412,6 +413,7 @@ func TestThemeManagementWritesEventLog(t *testing.T) {
 	}
 	for message, level := range map[string]string{
 		"Theme import refused: password confirmation failed": model.EventLevelWarning,
+		"Theme import refused: no password":                  model.EventLevelWarning,
 		"Theme imported: starter":                            model.EventLevelInfo,
 		"Theme deleted: starter":                             model.EventLevelInfo,
 	} {
@@ -436,8 +438,11 @@ func TestThemeImportPasswordConfirmationIsThrottled(t *testing.T) {
 	h.loginProtection = middleware.NewLoginProtection(lockoutDB, middleware.LoginProtectionConfig{MaxFailedAttempts: 2, LockoutDuration: time.Minute, AttemptWindow: time.Minute})
 	archive := starterThemeArchive(t)
 
-	for range 2 {
-		h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword))
+	h.Import(httptest.NewRecorder(), themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword))
+	locking := themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), "wrong-"+themeImportPassword)
+	h.Import(httptest.NewRecorder(), locking)
+	if got := h.sessionManager.GetString(locking.Context(), "flash"); got != i18n.T("en", "themes.import_locked") {
+		t.Errorf("flash after the locking attempt = %q, want the lockout message", got)
 	}
 	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, themeImportUser(t), themeImportPassword)
 	h.Import(httptest.NewRecorder(), r)
@@ -446,6 +451,19 @@ func TestThemeImportPasswordConfirmationIsThrottled(t *testing.T) {
 	}
 	if got := h.sessionManager.GetString(r.Context(), "flash"); got != i18n.T("en", "themes.import_locked") {
 		t.Fatalf("flash = %q, want the lockout message", got)
+	}
+	events, err := h.queries.ListEventsByCategory(t.Context(), store.ListEventsByCategoryParams{Category: model.EventCategorySecurity, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := 0
+	for _, e := range events {
+		if e.Message == "Theme import refused: too many failed password confirmations" {
+			locked++
+		}
+	}
+	if locked != 1 {
+		t.Errorf("locked refusal events = %d, want the attempt on the locked account logged once", locked)
 	}
 }
 
@@ -467,11 +485,13 @@ func TestThemeEventLogCarriesMetadata(t *testing.T) {
 	}
 }
 
-// TestThemeImportPasswordConfirmationResetsLockout fails when a valid
-// password confirmation leaves earlier failed confirmations counted: with a
-// limit of two, a typo, a correct confirmation and another typo must not
-// lock the account, because the correct confirmation proved identity.
-func TestThemeImportPasswordConfirmationResetsLockout(t *testing.T) {
+// TestThemeImportPasswordConfirmationKeepsLockoutCount fails when a valid
+// password confirmation clears earlier failures: with a limit of two, a
+// typo, a correct confirmation and another typo lock the account. Only a
+// full sign-in clears the counters, so a password alone cannot wipe out
+// wrong second-factor codes counted against the same account. A missing
+// password, from a form without the field, is not counted.
+func TestThemeImportPasswordConfirmationKeepsLockoutCount(t *testing.T) {
 	h := themeManagementHandler(t)
 	lockoutDB, cleanup := testutil.TestDB(t)
 	defer cleanup()
@@ -484,13 +504,14 @@ func TestThemeImportPasswordConfirmationResetsLockout(t *testing.T) {
 	if h.themeManager.ThemeCount() != 1 {
 		t.Fatal("import with the correct password did not succeed")
 	}
-	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, "wrong-"+themeImportPassword)
+	r := themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, "")
 	h.Import(httptest.NewRecorder(), r)
-
 	if locked, _ := h.loginProtection.IsAccountLocked(user.Email, middleware.GetClientIP(r)); locked {
-		t.Fatal("account locked after one failure on each side of a valid confirmation")
+		t.Fatal("a missing password counted as a wrong one")
 	}
-	if remaining := h.loginProtection.GetRemainingAttempts(user.Email, middleware.GetClientIP(r)); remaining != 1 {
-		t.Fatalf("remaining attempts = %d, want 1 (only the failure after the reset counts)", remaining)
+	r = themeUploadRequestAs(t, h, "starter.tar.gz", archive, user, "wrong-"+themeImportPassword)
+	h.Import(httptest.NewRecorder(), r)
+	if locked, _ := h.loginProtection.IsAccountLocked(user.Email, middleware.GetClientIP(r)); !locked {
+		t.Fatal("a correct confirmation cleared the earlier failure")
 	}
 }

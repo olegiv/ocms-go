@@ -42,6 +42,17 @@ type UserFormData struct {
 	Roles      []string
 	FormValues map[string]string
 	Errors     map[string]string
+	// MFA is the edited user's two-factor status; nil hides the section.
+	MFA *UserMFAStatus
+}
+
+// UserMFAStatus is a user's two-factor status on the edit page.
+type UserMFAStatus struct {
+	Enrolled   bool
+	EnrolledAt string
+	// IsSelf hides the reset: an administrator changes their own second
+	// factor on the account security page, which asks for a current code.
+	IsSelf bool
 }
 
 // UserItem holds individual user data.
@@ -492,6 +503,7 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							Attributes: templ.Attributes{
 								"minlength": "12",
 								"required": !data.IsEdit,
+								"autocomplete": "new-password",
 								"x-model": "password",
 								"@input": "checkStrength()",
 							},
@@ -526,12 +538,34 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							Attributes: templ.Attributes{
 								"minlength": "12",
 								"required": !data.IsEdit,
+								"autocomplete": "new-password",
 							},
 						})
 						if data.Errors["password_confirm"] != "" {
 							<span class="form-error">{ data.Errors["password_confirm"] }</span>
 						}
 					</div>
+				</div>
+				<!-- The acting administrator's password, for changes that could hand
+				     over an account: see UsersHandler.actorPasswordNeeded. -->
+				<div class="form-group mt-6">
+					@label.Label(label.Props{For: "current_password", Class: "block mb-1"}) {
+						{ pc.T("users.current_password") }
+					}
+					@input.Input(input.Props{
+						Type: input.TypePassword,
+						ID: "current_password",
+						Name: "current_password",
+						HasError: data.Errors["current_password"] != "",
+						Attributes: templ.Attributes{
+							"autocomplete": "current-password",
+						},
+					})
+					if data.Errors["current_password"] != "" {
+						<span class="form-error">{ data.Errors["current_password"] }</span>
+					} else {
+						<span class="form-hint">{ pc.T("users.current_password_hint") }</span>
+					}
 				</div>
 				<div class="form-actions">
 					@button.Button(button.Props{Type: button.TypeSubmit}) {
@@ -548,6 +582,62 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 					}
 				</div>
 			</form>
+		}
+		if data.IsEdit && data.User != nil && data.MFA != nil {
+			@userMFACard(pc, data.User.ID, *data.MFA)
+		}
+	}
+}
+
+// userMFACard shows the edited user's two-factor status and its reset.
+templ userMFACard(pc *PageContext, userID int64, status UserMFAStatus) {
+	@card.Card(card.Props{Class: "mt-6"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mfa.title") }
+			}
+		}
+		@card.Content() {
+			<p class="mb-4 text-sm">
+				if status.Enrolled {
+					{ pc.T("mfa.enabled_since", status.EnrolledAt) }
+				} else {
+					{ pc.T("users.mfa_not_enabled") }
+				}
+			</p>
+			if status.IsSelf {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/account/security"}) {
+					{ pc.T("users.mfa_manage_own") }
+				}
+			} else if status.Enrolled {
+				<form
+					method="POST"
+					action={ templ.SafeURL(fmt.Sprintf("/admin/users/%d/mfa/reset", userID)) }
+					x-data
+					data-confirm={ pc.T("users.mfa_reset_confirm") }
+					@submit="if (!confirm($el.dataset.confirm)) $event.preventDefault()"
+				>
+					@csrfField()
+					<p class="form-help mb-4">{ pc.T("users.mfa_reset_help") }</p>
+					<div class="form-group mb-4">
+						@label.Label(label.Props{For: "mfa_reset_current_password", Class: "block mb-1"}) {
+							{ pc.T("users.current_password") }
+						}
+						@input.Input(input.Props{
+							Type: input.TypePassword,
+							ID: "mfa_reset_current_password",
+							Name: "current_password",
+							Attributes: templ.Attributes{
+								"autocomplete": "current-password",
+								"required": true,
+							},
+						})
+					</div>
+					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDestructive}) {
+						{ pc.T("users.mfa_reset") }
+					}
+				</form>
+			}
 		}
 	}
 }

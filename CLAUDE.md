@@ -48,6 +48,9 @@ make security-audit-local # Run local security audit shell script
 make migrate-up          # Apply migrations
 make migrate-down        # Rollback
 make migrate-create      # Create new migration
+
+# Remove an account's second factor (lost authenticator, no other admin)
+go run ./cmd/ocms mfa-reset [-db ./data/ocms.db] admin@example.com
 ```
 
 ## Go Toolchain Requirements
@@ -164,6 +167,7 @@ cmd/ocms/main.go
     │   └── internal/service (business logic)
     ├── internal/views/admin (templ admin UI components)
     ├── internal/middleware  (auth, API auth, rate limiting)
+    ├── internal/mfa         (two-factor: TOTP sealing/verification, recovery codes)
     ├── internal/module      (module system, hooks)
     ├── internal/scheduler   (cron scheduler + admin registry)
     ├── internal/seo         (sitemap, robots.txt, meta)
@@ -218,6 +222,8 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_HCAPTCHA_DISABLED` | No | `false` | Force-disable hCaptcha regardless of database settings |
 | `OCMS_GEOIP_DB_PATH` | No | - | Path to GeoLite2-Country.mmdb for country detection |
 | `OCMS_HSTS_PRELOAD` | No | `false` | Add `; preload` to HSTS header in production (see `docs/reverse-proxy.md` for submission process) |
+| `OCMS_MFA_KEY` | In prod, unless `OCMS_REQUIRE_MFA=false` | - | Min 32 bytes, distinct from the session secret; seals TOTP secrets (AES-256-GCM, HKDF-derived, bound to user ID). Unset: no authenticator enrollment; recovery codes still verify |
+| `OCMS_REQUIRE_MFA` | No | `false` (effective `true` in prod) | Every account (admin, editor, public) must pass a second factor; sessions without one are stale. Needs `OCMS_MFA_KEY`; forced off in demo mode |
 
 ### Reverse-proxy trust
 
@@ -282,6 +288,14 @@ Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 
 ### Admin Routes
 
+**Sign-in and account routes (any role):**
+- `/login/mfa` - Second-factor code (TOTP or recovery code) after the password
+- `/login/mfa/setup` - Authenticator enrollment during sign-in when `OCMS_REQUIRE_MFA` is on
+- `/account` - Account overview
+- `/account/security` - Two-factor status; `/totp` (set up/replace), `/recovery-codes`, `/disable`
+
+Only `AuthHandler.grantSession` may put `SessionKeyUserID` into a session (`TestOnlyGrantSessionSignsIn`): a pending sign-in holds `mfa_pending_*` keys and no user, so every route behind `middleware.Auth` treats it as anonymous.
+
 **Editor Routes (editor + admin access):**
 - `/admin/` - Dashboard
 - `/admin/events` - Event log
@@ -295,7 +309,7 @@ Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 - `/admin/themes/settings` - Theme settings (for active theme)
 
 **Admin-Only Routes:**
-- `/admin/users` - User management (list, new, edit)
+- `/admin/users` - User management (list, new, edit; `POST /admin/users/{id}/mfa/reset` resets another user's second factor)
 - `/admin/languages` - Language management (list, new, edit)
 - `/admin/config` - Site configuration
 - `/admin/themes` - Theme list and activation
@@ -336,7 +350,7 @@ Tools are thin adapters over the v2 domain services; their input/output schemas 
 
 **Public (unauthenticated):** Returns only `{"status":"healthy"}` or `{"status":"degraded"}` — no internal details exposed.
 
-**Authenticated (editor session, or an API key the REST API accepts, its key policies and source CIDR rules included):** Adds timestamp, uptime and version.
+**Authenticated (editor session, or an API key the REST API accepts, its key policies and source CIDR rules included):** Adds timestamp, uptime and version. Sessions are judged by `middleware.SessionUser`, which applies `LoadUser`'s staleness checks; code outside `internal/middleware` must not read `SessionKeyUserID` itself (`TestSessionUserReadsGoThroughMiddleware`).
 
 **Admin session:** Full details: database and disk checks and a security summary. Add `?verbose=true` for Go runtime info (goroutines, memory, CPU count).
 
@@ -658,7 +672,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/webhooks.md` - Webhook configuration and event handling
 - `docs/import-export.md` - Content backup, export, and import guide
 - `docs/reverse-proxy.md` - Nginx, Apache, and Nginx Proxy Manager configuration
-- `docs/login-security.md` - Login protection, rate limiting, and account lockout
+- `docs/login-security.md` - Login protection, rate limiting, account lockout, and two-factor authentication (TOTP, recovery codes, resets)
 - `docs/developer-module.md` - Developer module for test data generation and i18n
 - `docs/dbmanager-module.md` - DB Manager module for direct SQL query execution
 - `docs/forms.md` - Form builder, public forms, submissions, webhooks, captcha, multi-language

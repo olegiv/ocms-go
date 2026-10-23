@@ -275,14 +275,8 @@ func (h *HealthHandler) checkSessionAuth(r *http.Request) (authenticated bool) {
 		}
 	}()
 
-	userID := h.sm.GetInt64(r.Context(), middleware.SessionKeyUserID)
-	if userID > 0 {
-		user, err := h.queries.GetUserByID(r.Context(), userID)
-		if err == nil && (user.Role == model.RoleAdmin || user.Role == model.RoleEditor) {
-			return true
-		}
-	}
-	return false
+	user, ok := middleware.SessionUser(r.Context(), h.sm, h.queries)
+	return ok && (user.Role == model.RoleAdmin || user.Role == model.RoleEditor)
 }
 
 // isAdmin checks if the request comes from an authenticated admin user.
@@ -303,14 +297,8 @@ func (h *HealthHandler) checkSessionRole(r *http.Request, role string) (hasRole 
 		}
 	}()
 
-	userID := h.sm.GetInt64(r.Context(), middleware.SessionKeyUserID)
-	if userID > 0 {
-		user, err := h.queries.GetUserByID(r.Context(), userID)
-		if err == nil && user.Role == role {
-			return true
-		}
-	}
-	return false
+	user, ok := middleware.SessionUser(r.Context(), h.sm, h.queries)
+	return ok && user.Role == role
 }
 
 // checkDatabase verifies database connectivity.

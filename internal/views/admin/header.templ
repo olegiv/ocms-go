@@ -60,6 +60,7 @@ templ Header(pc *PageContext) {
 							{ pc.T("nav.profile") }
 						}
 					</a>
+					<a href="/account/security" class="dropdown-item">{ pc.T("mfa.title") }</a>
 					if !pc.AccountLayout {
 						<a href="/admin/config" class="dropdown-item">{ pc.T("nav.settings") }</a>
 					}

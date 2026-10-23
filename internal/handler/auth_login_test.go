@@ -79,7 +79,7 @@ func newAuthTestHandler(t *testing.T) (*AuthHandler, *sql.DB, *scs.SessionManage
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewAuthHandler(db, renderer, sm, nil, nil), db, sm
+	return NewAuthHandler(db, renderer, sm, nil, nil, testMFAService(t, db)), db, sm
 }
 
 func authTestRouter(h *AuthHandler, db *sql.DB, sm *scs.SessionManager) http.Handler {
@@ -330,5 +330,33 @@ func TestAccountLanguagePreference(t *testing.T) {
 	h.Account(rr, req)
 	if !strings.Contains(rr.Body.String(), `lang="ru"`) || !strings.Contains(rr.Body.String(), "Моя учётная запись") {
 		t.Error("saved language preference did not override Accept-Language")
+	}
+}
+
+// TestLoginFormShowsFormToStaleSession checks that a session the protected
+// routes would refuse, here one from before a password change, gets the
+// login form rather than a redirect to a dashboard that signs it out.
+func TestLoginFormShowsFormToStaleSession(t *testing.T) {
+	h, db, sm := newAuthTestHandler(t)
+	user := createTestUser(t, db, testUser{Email: "editor@example.com", Name: "Editor", Role: model.RoleEditor})
+	if _, err := db.Exec(`UPDATE users SET session_version = 1 WHERE id = ?`, user.ID); err != nil {
+		t.Fatal(err)
+	}
+	router := authTestRouter(h, db, sm)
+	for version, want := range map[int64]int{0: http.StatusOK, 1: http.StatusSeeOther} {
+		ctx, err := sm.Load(t.Context(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		sm.Put(ctx, middleware.SessionKeyUserID, user.ID)
+		sm.Put(ctx, middleware.SessionKeyUserSessionVersion, version)
+		token, _, err := sm.Commit(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rr := authRequest(router, http.MethodGet, "/login", nil, &http.Cookie{Name: sm.Cookie.Name, Value: token})
+		if rr.Code != want {
+			t.Errorf("GET /login with session version %d = %d %q, want %d", version, rr.Code, rr.Header().Get("Location"), want)
+		}
 	}
 }

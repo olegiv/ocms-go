@@ -9,6 +9,7 @@ package module
 import (
 	"database/sql"
 	"embed"
+	"errors"
 	"html/template"
 	"log/slog"
 	"sync"
@@ -109,6 +110,20 @@ type ActivationGuard interface {
 	// startup.
 	CheckActivation(ctx *Context) error
 }
+
+// PasswordGatedActivation is an optional interface for modules that, once
+// active, can change what no admin form lets a stolen session change: DB
+// Manager runs raw SQL against every table, users and sessions included.
+// When ActivationNeedsPassword returns true, SetActive refuses to activate
+// the module; only ActivateConfirmed does, which the module admin calls
+// after checking the acting administrator's current password.
+type PasswordGatedActivation interface {
+	ActivationNeedsPassword() bool
+}
+
+// ErrActivationNeedsPassword is returned by SetActive for a module whose
+// activation must be confirmed with the administrator's password.
+var ErrActivationNeedsPassword = errors.New("activating this module needs the administrator's current password")
 
 // Module defines the interface that all modules must implement.
 type Module interface {

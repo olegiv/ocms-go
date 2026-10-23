@@ -15,7 +15,6 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -57,13 +56,7 @@ func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMana
 // Installing a theme installs code that runs with the site's privileges, so
 // these entries use the security category, which excluded IPs cannot mute.
 func (h *ThemesHandler) logSecurityEvent(r *http.Request, level, message string, metadata map[string]any) {
-	if h.eventService == nil {
-		return
-	}
-	if err := h.eventService.LogEvent(r.Context(), level, model.EventCategorySecurity, message,
-		middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), metadata); err != nil {
-		slog.ErrorContext(service.WithoutEventLog(r.Context()), "failed to log theme event", "error", err, "message", message, "user_id", middleware.GetUserID(r))
-	}
+	logSecurityEvent(r, h.eventService, level, message, metadata)
 }
 
 // ThemeListData holds data for the theme list template.
@@ -118,33 +111,36 @@ func (h *ThemesHandler) Import(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	clientIP := middleware.GetClientIP(r)
-	if h.loginProtection != nil {
-		if locked, _ := h.loginProtection.IsAccountLocked(user.Email, clientIP); locked {
-			slog.Warn("theme import refused: account locked", "user_id", user.ID)
-			h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: too many failed password confirmations", nil)
-			flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_locked"))
-			return
-		}
+	refuse := func(message string) {
+		slog.Warn(strings.ToLower(message[:1])+message[1:], "user_id", user.ID)
+		h.logSecurityEvent(r, model.EventLevelWarning, message, nil)
 	}
-	confirmed, err := passwordConfirmed(r.FormValue("confirm_password"), user)
-	if err != nil {
-		slog.Error("theme import: password could not be verified", "error", err, "user_id", user.ID)
+	switch c := confirmPassword(r, h.loginProtection, h.eventService, *user, r.FormValue("confirm_password"), func() {
+		refuse("Theme import refused: password confirmation failed")
+	}); c.Outcome {
+	case passwordOK:
+	case passwordLocked:
+		refuse("Theme import refused: too many failed password confirmations")
+		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_locked"))
+		return
+	case passwordUnverified:
+		slog.Error("theme import: password could not be verified", "error", c.Err, "user_id", user.ID)
 		h.logSecurityEvent(r, model.EventLevelError, "Theme import refused: password could not be verified", nil)
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_unverified"))
 		return
-	}
-	if !confirmed {
-		if h.loginProtection != nil {
-			h.loginProtection.RecordFailedAttempt(user.Email, clientIP)
-		}
-		slog.Warn("theme import refused: password confirmation failed", "user_id", user.ID)
-		h.logSecurityEvent(r, model.EventLevelWarning, "Theme import refused: password confirmation failed", nil)
+	case passwordMissing:
+		// Refused like a wrong password, but not counted toward the lockout.
+		refuse("Theme import refused: no password")
 		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.import_password_invalid"))
 		return
-	}
-	if h.loginProtection != nil {
-		h.loginProtection.RecordSuccessfulLogin(user.Email, clientIP)
+	default:
+		message := "themes.import_password_invalid"
+		if c.LockedFor > 0 {
+			// This wrong password locked the account.
+			message = "themes.import_locked"
+		}
+		flashError(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, message))
+		return
 	}
 	file, header, err := r.FormFile("archive")
 	if err != nil {
@@ -184,16 +180,6 @@ func (h *ThemesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	slog.Info("admin deleted theme", "theme", name, "user_id", middleware.GetUserID(r))
 	h.logSecurityEvent(r, model.EventLevelInfo, "Theme deleted: "+name, map[string]any{"theme": name})
 	flashSuccess(w, r, h.renderer, redirectAdminThemes, i18n.T(lang, "themes.delete_success"))
-}
-
-// passwordConfirmed reports whether password is the current password of
-// user. An empty submission never confirms; an error means the stored hash
-// could not be checked, which is distinct from a wrong password.
-func passwordConfirmed(password string, user *store.User) (bool, error) {
-	if password == "" {
-		return false, nil
-	}
-	return auth.CheckPassword(password, user.PasswordHash)
 }
 
 // themeErrorMessage returns the flash text for a failed theme operation.

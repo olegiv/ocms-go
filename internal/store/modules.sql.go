@@ -127,30 +127,6 @@ func (q *Queries) ListSidebarModules(ctx context.Context) ([]Module, error) {
 	return items, nil
 }
 
-const setModuleActive = `-- name: SetModuleActive :one
-UPDATE modules
-SET is_active = ?, updated_at = CURRENT_TIMESTAMP
-WHERE name = ?
-RETURNING name, is_active, updated_at, show_in_sidebar
-`
-
-type SetModuleActiveParams struct {
-	IsActive bool   `json:"is_active"`
-	Name     string `json:"name"`
-}
-
-func (q *Queries) SetModuleActive(ctx context.Context, arg SetModuleActiveParams) (Module, error) {
-	row := q.db.QueryRowContext(ctx, setModuleActive, arg.IsActive, arg.Name)
-	var i Module
-	err := row.Scan(
-		&i.Name,
-		&i.IsActive,
-		&i.UpdatedAt,
-		&i.ShowInSidebar,
-	)
-	return i, err
-}
-
 const setModuleShowInSidebar = `-- name: SetModuleShowInSidebar :one
 UPDATE modules
 SET show_in_sidebar = ?, updated_at = CURRENT_TIMESTAMP

@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/transfer"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
@@ -882,6 +883,8 @@ func convertModuleViewItems(modules []module.Info) []adminviews.ModuleViewItem {
 			MigrationsApplied: m.MigrationsApplied,
 			MigrationCount:    m.MigrationCount,
 			MigrationsPending: m.MigrationsPending,
+
+			ActivationNeedsPassword: m.ActivationNeedsPassword,
 		}
 	}
 	return items
@@ -1025,13 +1028,8 @@ func convertImportViewData(data ImportFormData) adminviews.ImportViewData {
 			Created:      data.ImportResult.Created,
 			Updated:      data.ImportResult.Updated,
 			Skipped:      data.ImportResult.Skipped,
-		}
-		for _, e := range data.ImportResult.Errors {
-			ir.Errors = append(ir.Errors, adminviews.ImportErrorView{
-				Entity:  e.Entity,
-				ID:      e.ID,
-				Message: e.Message,
-			})
+			Errors:       importErrorViews(data.ImportResult.Errors),
+			Notices:      importErrorViews(data.ImportResult.Notices),
 		}
 		viewData.ImportResult = ir
 	}
@@ -2082,4 +2080,17 @@ func convertMediaEditViewData(data MediaEditData, lang string) adminviews.MediaE
 		Errors:           data.Errors,
 		FormValues:       data.FormValues,
 	}
+}
+
+// importErrorViews converts import errors or notices for the result page.
+func importErrorViews(items []transfer.ImportError) []adminviews.ImportErrorView {
+	var views []adminviews.ImportErrorView
+	for _, e := range items {
+		views = append(views, adminviews.ImportErrorView{
+			Entity:  e.Entity,
+			ID:      e.ID,
+			Message: e.Message,
+		})
+	}
+	return views
 }

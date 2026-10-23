@@ -374,6 +374,22 @@ type User struct {
 	SessionVersion int64        `json:"session_version"`
 }
 
+type UserRecoveryCode struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	CodeHash  string       `json:"code_hash"`
+	CreatedAt time.Time    `json:"created_at"`
+	UsedAt    sql.NullTime `json:"used_at"`
+}
+
+type UserTotp struct {
+	UserID     int64        `json:"user_id"`
+	SecretEnc  []byte       `json:"secret_enc"`
+	LastStep   int64        `json:"last_step"`
+	EnrolledAt time.Time    `json:"enrolled_at"`
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+}
+
 type Webhook struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`

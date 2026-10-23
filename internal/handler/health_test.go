@@ -631,3 +631,49 @@ func TestHealthHandler_AnonymousProbeLogsNothing(t *testing.T) {
 		t.Errorf("an anonymous probe logged an API key warning:\n%s", logs.String())
 	}
 }
+
+// TestHealthDetailsNeedAFreshSession checks that /health gives its admin
+// details only to a session every protected route would accept: one whose
+// password and second factor have not changed since sign-in, and that
+// passed a second factor while one is required.
+//
+// Bug state: have checkSessionAuth read SessionKeyUserID and load the user
+// itself instead of calling middleware.SessionUser, and this fails.
+func TestHealthDetailsNeedAFreshSession(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	handler := NewHealthHandler(db, sm, t.TempDir())
+	admin := createTestAdminUser(t, db)
+	if _, err := db.Exec(`UPDATE users SET session_version = 1 WHERE id = ?`, admin.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	health := func(t *testing.T, version int64, verified bool) HealthStatus {
+		t.Helper()
+		req := requestWithSession(sm, httptest.NewRequest(http.MethodGet, "/health", nil))
+		sm.Put(req.Context(), middleware.SessionKeyUserID, admin.ID)
+		sm.Put(req.Context(), middleware.SessionKeyUserSessionVersion, version)
+		sm.Put(req.Context(), middleware.SessionKeyMFAVerified, verified)
+		w := httptest.NewRecorder()
+		handler.Health(w, req)
+		var resp HealthStatus
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decoding /health: %v", err)
+		}
+		return resp
+	}
+
+	if resp := health(t, 1, false); resp.Security == nil {
+		t.Fatal("a fresh admin session got no admin details; the test cannot tell stale from fresh")
+	}
+	if resp := health(t, 0, true); resp.Security != nil || !resp.Timestamp.IsZero() {
+		t.Error("a session from before a credential change got authenticated /health details")
+	}
+	middleware.SetMFARequired(true)
+	t.Cleanup(func() { middleware.SetMFARequired(false) })
+	if resp := health(t, 1, false); resp.Security != nil || !resp.Timestamp.IsZero() {
+		t.Error("a session without a second factor got authenticated /health details while one is required")
+	}
+	if resp := health(t, 1, true); resp.Security == nil {
+		t.Error("an admin session that passed the second factor got no admin details")
+	}
+}

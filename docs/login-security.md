@@ -22,12 +22,14 @@ query parameters or form fields.
 email, creation date and last-login date. Administrators and editors can also
 visit it directly. It includes site branding, a website link, language selection
 and the existing POST logout action. Account details are read-only: there is no
-profile editor, password-change form or account deletion. The interface uses the
+profile editor, password-change form or account deletion; the second factor is
+managed on `/account/security`. The interface uses the
 same language preference and localized dates as login and administration, with
 English and Russian translations and a fallback when no login is recorded.
 
 The dashboard shares the admin header, collapsible sidebar, cards and mobile
-navigation. Its account variant shows only My account, Visit website and Log out;
+navigation. Its account variant shows only My account, Two-factor authentication
+(see below), Visit website and Log out;
 the same account navigation is used for administrators and editors visiting
 `/account`. The profile link leads to `/account`, and language selection submits
 to `/language`. Administrative settings, content and module links are omitted.
@@ -122,8 +124,110 @@ Account lockout prevents password guessing attacks by temporarily blocking login
 ### Security Features
 
 - **Non-existent email protection**: Failed attempts are tracked even for non-existent email addresses to prevent user enumeration attacks
-- **Successful login reset**: A successful login clears the failed attempt counters in both scopes
+- **Successful login reset**: A successful login clears the failed attempt counters in both scopes. Confirming the password for a sensitive change (a user change, a theme import, the first authenticator setup) does not: a password alone must not wipe out wrong second-factor codes
 - **Automatic cleanup**: Stale tracking entries are automatically removed
+
+## Two-Factor Authentication
+
+oCMS supports a second factor at sign-in: a six-digit code from an
+authenticator app (TOTP, RFC 6238: SHA-1, 30-second period, as 1Password,
+Bitwarden, Google Authenticator and Microsoft Authenticator use), with ten
+single-use recovery codes for a lost device. It is built in; no external
+service is involved.
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OCMS_MFA_KEY` | - | Seals the TOTP secrets at rest (AES-256-GCM under a key HKDF derives from it, bound to the user ID). Minimum 32 bytes, distinct from `OCMS_SESSION_SECRET`, with the same placeholder and entropy checks. Generate with `openssl rand -base64 32` |
+| `OCMS_REQUIRE_MFA` | `false` (`true` in production when unset) | Every account, admin, editor and public alike, must pass a second factor. Startup fails while it is on and `OCMS_MFA_KEY` is unset |
+
+`ocms init` and `scripts/deploy/setup-site.sh` write a random `OCMS_MFA_KEY`.
+Back the key up with the database: it is the only way to read the enrolled
+secrets. If it is lost or changed, authenticator codes stop working (the
+sign-in page says so) and enrolled users sign in with a recovery code, then
+set up their app again; nothing else about the account changes. When that
+recovery code was their last, setting up the app again asks for the account
+password instead of a current code, since none is left to give. Without
+`OCMS_MFA_KEY` (development, or `OCMS_REQUIRE_MFA=false`), users cannot
+enroll an authenticator app.
+
+Demo mode turns two-factor authentication off: the seeded demo accounts are
+shared, so one visitor's authenticator would lock the others out. Accounts
+with an authenticator enrolled before the switch to demo mode sign in with
+their password alone. The Fly demo
+sets `OCMS_REQUIRE_MFA=false`.
+
+### Sign-in
+
+1. The password is checked as before, with the same rate limit and lockout.
+2. An account with an authenticator goes to `/login/mfa` for its code. An
+   account without one, where `OCMS_REQUIRE_MFA` is on, goes to
+   `/login/mfa/setup`: it scans a QR code (or types the key), confirms one
+   code, and is shown its recovery codes once. Accounts without an
+   authenticator on a site that does not require one sign in as before.
+3. Only then is the session signed in: until the second factor passes, the
+   session holds no user, so `/admin`, `/account` and every module route treat
+   it as anonymous. The session token is rotated at both steps.
+
+The pending sign-in lasts 10 minutes and ends after 5 wrong codes, or when
+the account's password or second factor changes in the meantime. Wrong codes
+also count toward the account lockout described above. Each code is accepted
+once: the server records the last accepted time step, so a code read over
+someone's shoulder cannot be replayed, and codes within one period either
+side of the server's clock are accepted. **Sign in with a different
+account** abandons the pending sign-in.
+
+When `OCMS_REQUIRE_MFA` is switched on, sessions that signed in without a
+second factor are signed out at their next request.
+
+### Account security page
+
+`/account/security` (linked from the user menu and the account sidebar) shows
+whether two-factor authentication is on and how many recovery codes are
+left. From there a user can:
+
+- **Set up** an authenticator app, which also issues recovery codes.
+- **Replace** the authenticator (new phone): it asks for a code from the old
+  one, or a recovery code, and issues new recovery codes.
+- **Generate new recovery codes**, which voids the old ones.
+- **Turn it off**, unless the site requires it.
+
+The first setup asks for the account password and every later change for a
+current code, so a stolen session cannot add or change the second factor;
+wrong passwords and codes count toward the lockout.
+Setting up, replacing and turning off sign out the user's other sessions.
+
+### Recovery codes
+
+Each code is 16 characters (`xxxx-xxxx-xxxx-xxxx`, 80 random bits) from
+Crockford's base32 alphabet, stored as a SHA-256 hash and accepted once.
+Upper or lower case and the dashes do not matter, and `o`, `i` and `l` read
+as `0`, `1` and `1`. A sign-in with a recovery code is logged at warning level
+and tells the user how many codes are left; the security page suggests new
+ones at three or fewer.
+
+### Lost authenticator and recovery codes
+
+- **Administrator reset**: on `/admin/users/{id}`, **Reset two-factor
+  authentication** removes the user's authenticator and recovery codes and
+  signs them out everywhere. It asks for the acting administrator's current
+  password. Where a second factor is required they set up a
+  new one at their next sign-in. Administrators cannot reset their own here;
+  they use the account security page, which asks for a current code.
+- **Command line**, for an administrator with no other administrator to
+  reset them:
+  ```bash
+  ocms mfa-reset admin@example.com            # reads .env / OCMS_ENV_FILE like ocms migrate
+  ocms mfa-reset -db ./data/ocms.db admin@example.com
+  ```
+  It needs no `OCMS_MFA_KEY` and records the reset in the Event Log.
+
+### What it does not cover
+
+API keys (REST API, MCP server, `/health`) authenticate with a bearer token,
+not a session, and are not affected; restrict them with their own expiry and
+source-CIDR policies. Passkeys (WebAuthn) as a second factor are planned.
 
 ## Session Lifetime
 
@@ -137,9 +241,30 @@ All login-related events are logged to the events system:
 |-------|-------|-------------|
 | Login failed: user not found | Warning | Attempt with non-existent email |
 | Login failed: invalid password | Warning | Wrong password for existing user |
-| Login attempt on locked account | Warning | Attempt during lockout period |
+| Login attempt on locked account | Warning | Attempt during lockout period, at the password step, the code step or authenticator setup during sign-in |
 | Account locked due to failed attempts | Warning | Account just got locked |
-| User logged in | Info | Successful login |
+| Login failed: invalid two-factor code | Warning | Wrong, expired or reused code at `/login/mfa` |
+| Recovery code used to sign in | Warning | Sign-in with a recovery code |
+| Two-factor authentication enabled | Info | Authenticator set up or replaced |
+| Two-factor authentication disabled | Warning | Turned off on the account security page |
+| Two-factor change refused: invalid code | Warning | Wrong current code on the account security page |
+| Two-factor change refused: invalid password | Warning | Wrong password for the first authenticator setup on the account security page |
+| Two-factor change refused: no password | Warning | First setup sent without a password (a form from before the account's status changed); not counted toward the lockout |
+| Two-factor change refused: account locked | Warning | A second-factor change (first setup, replacement, new recovery codes, turning it off) tried while the account is locked |
+| Two-factor change refused: password could not be verified | Error | The stored password hash could not be checked |
+| Recovery codes regenerated | Info | New recovery codes issued |
+| Two-factor authentication reset by an administrator | Warning | Reset from the user page (User category) |
+| User change refused: wrong current password | Warning | Wrong acting-administrator password on the user form or a second-factor reset (User category) |
+| User change refused: account locked | Warning | The same, while the administrator's account is locked (User category) |
+| User change refused: no current password | Warning | The same change sent without the password; not counted toward the lockout (User category) |
+| User change refused: password could not be verified | Error | The administrator's stored password hash could not be checked (User category) |
+| Theme import refused: password confirmation failed / no password / too many failed password confirmations | Warning | Theme import without the administrator's current password (Security category; only a wrong one is counted) |
+| Theme import refused: password could not be verified | Error | The stored password hash could not be checked (Security category) |
+| Module activation refused: wrong current password / account locked / no password | Warning | Activating DB Manager without the administrator's password (Security category; only a wrong one is counted) |
+| Module activation refused: password could not be verified | Error | The stored password hash could not be checked (Security category) |
+| Module activated with password confirmation | Info | DB Manager switched on after the password check (Security category) |
+| Two-factor authentication reset from the command line | Warning | `ocms mfa-reset` |
+| User logged in | Info | Successful login; metadata `second_factor` names `totp` or `recovery_code` when one was used |
 
 View these events in the admin panel under **Admin > Events**.
 
@@ -183,7 +308,7 @@ The login protection middleware uses the client IP resolved by oCMS (`middleware
 
 ## Session Invalidation on Password Change
 
-Sessions are bound to a per-user `session_version` counter that bumps on every password change — admin reset, self-service edit, and the demo's automatic admin rotation all go through the same SQL UPDATE that increments it. The login flow snapshots the live value into the session; the auth middleware (`LoadUser`) compares the snapshot against the live row on every protected request and destroys any session whose snapshot is older. The actor's own password change re-snapshots the new value into their current session so they remain logged in; sibling devices/browsers for the same account become unauthenticated on their next request.
+Sessions are bound to a per-user `session_version` counter that bumps on every password change, and on every change of the second factor (setup, replacement, turning it off, an administrator or command-line reset) — admin reset, self-service edit, and the demo's automatic admin rotation all go through the same SQL UPDATE that increments it. The login flow snapshots the live value into the session; the auth middleware (`LoadUser`) compares the snapshot against the live row on every protected request and destroys any session whose snapshot is older. The actor's own password change re-snapshots the new value into their current session so they remain logged in; sibling devices/browsers for the same account become unauthenticated on their next request. User changes that could hand an account to whoever holds an administrator's session ask for that administrator's current password: a new password or email for any user (the email keys the login lockout, so a new one would bring fresh password guesses), giving or taking away the admin role, and resetting another user's second factor. Wrong attempts count toward the login lockout. A content import that overwrites users never grants or removes the admin role. A stolen administrator session therefore cannot set a password of its own and pass the check that guards adding a second factor, reset an account's lockout by changing its email, create an administrator it controls to take the others over, or demote the real ones. Activating the DB Manager module asks for the administrator's current password too, since its raw SQL reaches every table, users and sessions included; once active, its queries need none, so switch it off when it is not needed.
 
 The Argon2 parameter-upgrade rehash that runs on a successful login uses a separate query that does **not** bump `session_version`, because the credential is unchanged — only its hash representation. Without this distinction, every login that triggered a rehash would also log the user out.
 
@@ -192,9 +317,9 @@ The Argon2 parameter-upgrade rehash that runs on a successful login uses a separ
 1. **Use strong passwords**: Enforce minimum password requirements
 2. **Monitor events**: Regularly check the events log for suspicious activity
 3. **Use HTTPS**: Always run behind HTTPS in production
-4. **Consider additional measures**: For high-security deployments, consider:
+4. **Keep two-factor authentication required**: production requires it by default; keep `OCMS_MFA_KEY` backed up with the database
+5. **Consider additional measures**: For high-security deployments, consider:
    - CAPTCHA after N failed attempts
-   - Two-factor authentication
    - IP allowlisting for admin access
 
 ## Production Deployment Checklist
@@ -203,9 +328,10 @@ Before exposing an oCMS instance to the public internet, work through this list:
 
 1. **Rotate the seed admin password.** When `OCMS_DO_SEED=true` is used (typically on first boot), oCMS provisions `admin@example.com` with the well-known password `changeme1234`. Log in and change both the email and password on `/admin/users` before anything else. The seed password is public knowledge — anyone who reaches the login page can try it. Production startup blocks `OCMS_DO_SEED=true` unless demo mode is also enabled, so the exposure window is limited to initial-setup runs, but the first admin session still has to replace these credentials. Once any administrator account exists, seeding no longer recreates `admin@example.com`, so renaming or replacing it is permanent even if the flag stays on.
 2. Set `OCMS_SESSION_SECRET` to a freshly generated 32-byte value (e.g. `openssl rand -base64 32`). Startup rejects known defaults, placeholder values copied from the example files or docs, and (in production) the public test-suite secret, but rotate on each environment.
-3. Set `OCMS_ENV=production` so security defaults apply (stricter CSRF, HSTS, seed-disabled, etc.).
-4. Configure `OCMS_TRUSTED_PROXIES` if running behind a reverse proxy — otherwise client IPs used by rate limiting and account lockout will be the proxy's address, collapsing every attacker into one bucket. In production, startup fails while it is unset unless `OCMS_REQUIRE_TRUSTED_PROXIES=false`. See `docs/reverse-proxy.md`.
-5. Enable HSTS preload (`OCMS_HSTS_PRELOAD=true`) once you're certain every subdomain has a valid TLS certificate; submit the domain at <https://hstspreload.org>. Details in `docs/reverse-proxy.md`.
+3. Set `OCMS_ENV=production` so security defaults apply (stricter CSRF, HSTS, seed-disabled, two-factor authentication for every account, etc.).
+4. Set `OCMS_MFA_KEY` to another freshly generated 32-byte value and back it up with the database. Production requires a second factor for every account and refuses to start without the key unless `OCMS_REQUIRE_MFA=false`; each user sets up an authenticator app at their next sign-in.
+5. Configure `OCMS_TRUSTED_PROXIES` if running behind a reverse proxy — otherwise client IPs used by rate limiting and account lockout will be the proxy's address, collapsing every attacker into one bucket. In production, startup fails while it is unset unless `OCMS_REQUIRE_TRUSTED_PROXIES=false`. See `docs/reverse-proxy.md`.
+6. Enable HSTS preload (`OCMS_HSTS_PRELOAD=true`) once you're certain every subdomain has a valid TLS certificate; submit the domain at <https://hstspreload.org>. Details in `docs/reverse-proxy.md`.
 
 ## Troubleshooting
 

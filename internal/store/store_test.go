@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1463,7 +1464,8 @@ func TestMigrateTimesToUTC(t *testing.T) {
 	if !applied() {
 		t.Fatalf("Migrate did not record the UTC time migration (%s)", timeMigrationName)
 	}
-	if err := RunMigrationCommand(context.Background(), db, "down"); err != nil {
+	// Later migrations roll back with it.
+	if err := RunMigrationCommand(context.Background(), db, "down-to", strconv.FormatInt(version-1, 10)); err != nil {
 		t.Fatalf("rolling back the UTC time migration: %v", err)
 	}
 	if applied() {

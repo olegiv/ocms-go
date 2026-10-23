@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+- **Production requires two-factor authentication for every account.**
+  `OCMS_REQUIRE_MFA` defaults to `true` in production, and startup fails
+  until `OCMS_MFA_KEY` is set (32+ bytes, distinct from
+  `OCMS_SESSION_SECRET`; `openssl rand -base64 32`) or `OCMS_REQUIRE_MFA=false`
+  is set explicitly. After the upgrade, each user sets up an authenticator app
+  at their next sign-in, and sessions that started without a second factor are
+  signed out. Back `OCMS_MFA_KEY` up with the database. `ocms init` and
+  `scripts/deploy/setup-site.sh` now write one; demo mode and the Fly demo
+  leave two-factor authentication off, authenticators enrolled before the
+  switch included.
+
+### Added
+- **Two-factor authentication** with authenticator apps (TOTP, RFC 6238) and
+  ten single-use recovery codes, for admin, editor and public accounts. After
+  the password, `/login/mfa` asks for the code; the session holds no user until
+  it passes, codes cannot be replayed, and wrong codes count toward the account
+  lockout. Accounts that must use a second factor and have none set it up at
+  `/login/mfa/setup`. `/account/security` sets up, replaces or turns off the
+  authenticator and issues new recovery codes; the first setup asks for the
+  password and every later change for a current code. TOTP secrets are
+  sealed with AES-256-GCM under a key derived from `OCMS_MFA_KEY`.
+- Administrators reset another user's second factor on the user edit page;
+  `ocms mfa-reset <email>` does it from the command line for an administrator
+  with nobody to reset them. Changing or resetting a second factor signs the
+  account out of its other sessions.
+- User changes that could hand an account to whoever holds an administrator's
+  session now ask for that administrator's current password: a new password
+  or email for any user, giving or taking away the admin role, and
+  resetting another user's second factor. Wrong attempts count toward the
+  login lockout, and a correct confirmation no longer clears earlier
+  failures (theme import used to): only a full sign-in does. A content
+  import no longer grants or removes the admin role when it overwrites a
+  user, and lists the users it kept a role for. An import that brings in
+  users rejects unknown roles and reads the old `viewer` role as `public`.
+  A stolen session can no longer set a password of its own, reset an
+  account's lockout by changing its email, create an administrator it
+  controls to take the others over, or demote the real ones.
+- Activating the DB Manager module asks for the administrator's current
+  password in a dialog (wrong attempts count toward the lockout), so a
+  stolen session cannot switch on its raw SQL to read sessions or rewrite
+  users. Once active, its queries need no password: switch it off when done.
+  Modules declare this with the new `module.PasswordGatedActivation`
+  interface; they are registered inactive, `Registry.SetActive` refuses to
+  activate them, and only `Registry.ActivateConfirmed`, behind the password
+  check, does. The unused `SetModuleActive` store query is removed.
+
+### Changed
+- **Go 1.27.3** is now required for source builds; the Docker builder uses
+  `golang:1.27.3-alpine`. It fixes GO-2026-6809 (compromised intermediate
+  certificates trusted by `crypto/x509`), which `govulncheck` reports for
+  Go 1.27.2. Prebuilt binaries must be rebuilt to pick it up.
+
+### Fixed
+- `/health` decided "signed in" from the session's user ID alone, so a
+  session invalidated by a password change still got the authenticated, and
+  for an administrator the full, health details until it expired. It now uses
+  `middleware.SessionUser`, which applies the same staleness checks as every
+  protected route, including the two-factor requirement. Sentinel's honeypot
+  check uses it too. (Sentinel's middleware runs before sessions are loaded,
+  so its admin and editor exemption from auto-ban paths has never applied
+  there; that is unchanged.)
+
 ## [0.29.1] - 2026-10-18
 
 ### Fixed

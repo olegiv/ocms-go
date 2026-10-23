@@ -55,6 +55,7 @@ In demo mode, certain actions are restricted to prevent abuse while still allowi
 | Media uploads | — | All uploads blocked |
 | DB Manager module | — | SQL execution |
 | Form submissions | View | CSV export |
+| Two-factor authentication | View status | Set up, replace, turn off, reset (off in demo mode: the demo accounts are shared, so `OCMS_REQUIRE_MFA` is ignored) |
 
 ### Idempotent Seeding
 

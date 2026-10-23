@@ -33,11 +33,7 @@ func runMigrate(args []string) error {
 		return err
 	}
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
-	defaultPath := os.Getenv("OCMS_DB_PATH")
-	if defaultPath == "" {
-		defaultPath = "./data/ocms.db"
-	}
-	dbPath := fs.String("db", defaultPath, "SQLite database path; OCMS_DB_PATH from the environment or env file, else ./data/ocms.db")
+	dbPath := dbPathFlag(fs)
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: ocms migrate [options] %s\n\n", strings.Join(migrateCommands, "|"))
 		_, _ = fmt.Fprintf(os.Stderr, "Run the database migrations without starting the server.\n\n")
@@ -56,12 +52,8 @@ func runMigrate(args []string) error {
 	}
 	command := fs.Arg(0)
 	if command != "up" {
-		target := *dbPath
-		if path, ok := sqliteFilePathFromDSN(target); ok {
-			target = path // a file: URI names its file without the scheme and query
-		}
-		if _, err := os.Stat(target); err != nil {
-			return fmt.Errorf("no database to %s at %s: %w", command, *dbPath, err)
+		if err := requireDatabase(*dbPath, command); err != nil {
+			return err
 		}
 	}
 	slog.Info("running migrations", "command", command, "db", *dbPath)
@@ -71,4 +63,27 @@ func runMigrate(args []string) error {
 	}
 	defer func() { _ = db.Close() }()
 	return store.RunMigrationCommand(context.Background(), db, command)
+}
+
+// dbPathFlag registers the -db flag of a command that works on the server's
+// database without starting it.
+func dbPathFlag(fs *flag.FlagSet) *string {
+	defaultPath := os.Getenv("OCMS_DB_PATH")
+	if defaultPath == "" {
+		defaultPath = "./data/ocms.db"
+	}
+	return fs.String("db", defaultPath, "SQLite database path; OCMS_DB_PATH from the environment or env file, else ./data/ocms.db")
+}
+
+// requireDatabase refuses a path where there is no database, which a
+// mistyped path would otherwise become. purpose names what was to be done.
+func requireDatabase(dbPath, purpose string) error {
+	target := dbPath
+	if path, ok := sqliteFilePathFromDSN(target); ok {
+		target = path // a file: URI names its file without the scheme and query
+	}
+	if _, err := os.Stat(target); err != nil {
+		return fmt.Errorf("no database to %s at %s: %w", purpose, dbPath, err)
+	}
+	return nil
 }

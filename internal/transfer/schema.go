@@ -292,7 +292,8 @@ type ImportResult struct {
 	Updated map[string]int       `json:"updated"`
 	Skipped map[string]int       `json:"skipped"`
 	Errors  []ImportError        `json:"errors,omitempty"`
-	IDMaps  map[string]IDMapping `json:"-"` // Internal: maps old IDs to new IDs
+	Notices []ImportError        `json:"notices,omitempty"` // Applied with a change the operator should know about
+	IDMaps  map[string]IDMapping `json:"-"`                 // Internal: maps old IDs to new IDs
 }
 
 // IDMapping maps old export IDs to new database IDs.
@@ -326,6 +327,16 @@ func (r *ImportResult) AddError(entity, id, message string) {
 		Message: message,
 	})
 	r.Success = false
+}
+
+// AddNotice records an item that was imported, but not exactly as the
+// archive gives it. Unlike AddError it does not fail the import.
+func (r *ImportResult) AddNotice(entity, id, message string) {
+	r.Notices = append(r.Notices, ImportError{
+		Entity:  entity,
+		ID:      id,
+		Message: message,
+	})
 }
 
 // IncrementCreated increments the created count for an entity type.

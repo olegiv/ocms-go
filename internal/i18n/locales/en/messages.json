@@ -2913,6 +2913,41 @@
             "translation": "Toggle sidebar visibility"
         },
         {
+            "id": "modules.activate",
+            "message": "Activate",
+            "translation": "Activate"
+        },
+        {
+            "id": "modules.activation_password_title",
+            "message": "Activate %s",
+            "translation": "Activate %s"
+        },
+        {
+            "id": "modules.activation_password_description",
+            "message": "This module can read and change every table, user accounts and sessions included. Enter your current password to activate it.",
+            "translation": "This module can read and change every table, user accounts and sessions included. Enter your current password to activate it."
+        },
+        {
+            "id": "modules.activation_password_required",
+            "message": "Enter your current password to activate this module.",
+            "translation": "Enter your current password to activate this module."
+        },
+        {
+            "id": "modules.activation_password_invalid",
+            "message": "Your current password is incorrect.",
+            "translation": "Your current password is incorrect."
+        },
+        {
+            "id": "modules.activation_locked",
+            "message": "Too many failed attempts; try again later.",
+            "translation": "Too many failed attempts; try again later."
+        },
+        {
+            "id": "modules.activation_password_unverified",
+            "message": "Your password could not be checked; the module stays off.",
+            "translation": "Your password could not be checked; the module stays off."
+        },
+        {
             "id": "users.title",
             "message": "Users",
             "translation": "Users"
@@ -3068,6 +3103,16 @@
             "translation": "Change Password"
         },
         {
+            "id": "users.current_password",
+            "message": "Your current password",
+            "translation": "Your current password"
+        },
+        {
+            "id": "users.current_password_hint",
+            "message": "Needed to change a user's email or password, or to give or take away the admin role.",
+            "translation": "Needed to change a user's email or password, or to give or take away the admin role."
+        },
+        {
             "id": "users.password_keep_hint",
             "message": "Leave blank to keep the current password.",
             "translation": "Leave blank to keep the current password."
@@ -3101,6 +3146,41 @@
             "id": "users.create",
             "message": "Create User",
             "translation": "Create User"
+        },
+        {
+            "id": "users.mfa_not_enabled",
+            "message": "Two-factor authentication is not enabled for this user.",
+            "translation": "Two-factor authentication is not enabled for this user."
+        },
+        {
+            "id": "users.mfa_manage_own",
+            "message": "Manage your two-factor authentication",
+            "translation": "Manage your two-factor authentication"
+        },
+        {
+            "id": "users.mfa_reset",
+            "message": "Reset two-factor authentication",
+            "translation": "Reset two-factor authentication"
+        },
+        {
+            "id": "users.mfa_reset_help",
+            "message": "Removes the user's authenticator and recovery codes and signs them out everywhere. If the site requires two-factor authentication, they set it up again at their next sign-in.",
+            "translation": "Removes the user's authenticator and recovery codes and signs them out everywhere. If the site requires two-factor authentication, they set it up again at their next sign-in."
+        },
+        {
+            "id": "users.mfa_reset_confirm",
+            "message": "Reset this user's two-factor authentication?",
+            "translation": "Reset this user's two-factor authentication?"
+        },
+        {
+            "id": "users.mfa_reset_done",
+            "message": "Two-factor authentication was reset. The user has been signed out.",
+            "translation": "Two-factor authentication was reset. The user has been signed out."
+        },
+        {
+            "id": "users.mfa_reset_self",
+            "message": "Change your own two-factor authentication on your account security page.",
+            "translation": "Change your own two-factor authentication on your account security page."
         },
         {
             "id": "widgets.title",
@@ -5253,6 +5333,246 @@
             "translation": "You have been logged out"
         },
         {
+            "id": "mfa.title",
+            "message": "Two-factor authentication",
+            "translation": "Two-factor authentication"
+        },
+        {
+            "id": "mfa.description",
+            "message": "Protect your account with a code from an authenticator app in addition to your password.",
+            "translation": "Protect your account with a code from an authenticator app in addition to your password."
+        },
+        {
+            "id": "mfa.status",
+            "message": "Status:",
+            "translation": "Status:"
+        },
+        {
+            "id": "mfa.enabled",
+            "message": "Enabled",
+            "translation": "Enabled"
+        },
+        {
+            "id": "mfa.disabled",
+            "message": "Not enabled",
+            "translation": "Not enabled"
+        },
+        {
+            "id": "mfa.enabled_since",
+            "message": "Enabled since %s",
+            "translation": "Enabled since %s"
+        },
+        {
+            "id": "mfa.enable",
+            "message": "Set up authenticator app",
+            "translation": "Set up authenticator app"
+        },
+        {
+            "id": "mfa.replace",
+            "message": "Replace authenticator",
+            "translation": "Replace authenticator"
+        },
+        {
+            "id": "mfa.disable",
+            "message": "Turn off two-factor authentication",
+            "translation": "Turn off two-factor authentication"
+        },
+        {
+            "id": "mfa.disabled_done",
+            "message": "Two-factor authentication is turned off.",
+            "translation": "Two-factor authentication is turned off."
+        },
+        {
+            "id": "mfa.regenerate_codes",
+            "message": "Generate new recovery codes",
+            "translation": "Generate new recovery codes"
+        },
+        {
+            "id": "mfa.required_note",
+            "message": "This site requires two-factor authentication, so it cannot be turned off. You can replace your authenticator instead.",
+            "translation": "This site requires two-factor authentication, so it cannot be turned off. You can replace your authenticator instead."
+        },
+        {
+            "id": "mfa.not_configured",
+            "message": "Authenticator apps are not available on this site. Ask an administrator to configure OCMS_MFA_KEY.",
+            "translation": "Authenticator apps are not available on this site. Ask an administrator to configure OCMS_MFA_KEY."
+        },
+        {
+            "id": "mfa.demo_mode",
+            "message": "Two-factor authentication is disabled in demo mode.",
+            "translation": "Two-factor authentication is disabled in demo mode."
+        },
+        {
+            "id": "mfa.challenge_title",
+            "message": "Two-factor authentication",
+            "translation": "Two-factor authentication"
+        },
+        {
+            "id": "mfa.challenge_help",
+            "message": "Enter the 6-digit code from your authenticator app.",
+            "translation": "Enter the 6-digit code from your authenticator app."
+        },
+        {
+            "id": "mfa.code_label",
+            "message": "Authentication code",
+            "translation": "Authentication code"
+        },
+        {
+            "id": "mfa.verify",
+            "message": "Verify",
+            "translation": "Verify"
+        },
+        {
+            "id": "mfa.use_recovery_code",
+            "message": "Lost your device? Use a recovery code",
+            "translation": "Lost your device? Use a recovery code"
+        },
+        {
+            "id": "mfa.recovery_code_label",
+            "message": "Recovery code",
+            "translation": "Recovery code"
+        },
+        {
+            "id": "mfa.sign_in_again",
+            "message": "Sign in with a different account",
+            "translation": "Sign in with a different account"
+        },
+        {
+            "id": "mfa.sign_in_expired",
+            "message": "Your sign-in expired. Please sign in again.",
+            "translation": "Your sign-in expired. Please sign in again."
+        },
+        {
+            "id": "mfa.invalid_code",
+            "message": "Invalid or already used code. Try again.",
+            "translation": "Invalid or already used code. Try again."
+        },
+        {
+            "id": "mfa.too_many_codes",
+            "message": "Too many invalid codes. Please sign in again.",
+            "translation": "Too many invalid codes. Please sign in again."
+        },
+        {
+            "id": "mfa.totp_unavailable",
+            "message": "Authenticator codes cannot be checked right now. Use a recovery code or ask an administrator.",
+            "translation": "Authenticator codes cannot be checked right now. Use a recovery code or ask an administrator."
+        },
+        {
+            "id": "mfa.signed_in_with_recovery_code",
+            "message": "You signed in with a recovery code. %d codes are left; generate new ones on the security page if you are running low.",
+            "translation": "You signed in with a recovery code. %d codes are left; generate new ones on the security page if you are running low."
+        },
+        {
+            "id": "mfa.signed_in_with_recovery_code_uncounted",
+            "message": "You signed in with a recovery code. Check how many are left on the security page and generate new ones if you are running low.",
+            "translation": "You signed in with a recovery code. Check how many are left on the security page and generate new ones if you are running low."
+        },
+        {
+            "id": "mfa.setup_title",
+            "message": "Set up an authenticator app",
+            "translation": "Set up an authenticator app"
+        },
+        {
+            "id": "mfa.setup_required",
+            "message": "This site requires two-factor authentication. Set up an authenticator app to finish signing in.",
+            "translation": "This site requires two-factor authentication. Set up an authenticator app to finish signing in."
+        },
+        {
+            "id": "mfa.setup_step_install",
+            "message": "Install an authenticator app such as 1Password, Bitwarden, Google Authenticator or Microsoft Authenticator.",
+            "translation": "Install an authenticator app such as 1Password, Bitwarden, Google Authenticator or Microsoft Authenticator."
+        },
+        {
+            "id": "mfa.setup_step_scan",
+            "message": "Scan the QR code with the app, then enter the 6-digit code it shows.",
+            "translation": "Scan the QR code with the app, then enter the 6-digit code it shows."
+        },
+        {
+            "id": "mfa.qr_alt",
+            "message": "QR code for your authenticator app",
+            "translation": "QR code for your authenticator app"
+        },
+        {
+            "id": "mfa.setup_manual",
+            "message": "Can't scan it? Enter this key in the app instead:",
+            "translation": "Can't scan it? Enter this key in the app instead:"
+        },
+        {
+            "id": "mfa.setup_code_label",
+            "message": "Code from the app",
+            "translation": "Code from the app"
+        },
+        {
+            "id": "mfa.setup_confirm",
+            "message": "Turn on two-factor authentication",
+            "translation": "Turn on two-factor authentication"
+        },
+        {
+            "id": "mfa.setup_expired",
+            "message": "The setup expired. Scan the new QR code and try again.",
+            "translation": "The setup expired. Scan the new QR code and try again."
+        },
+        {
+            "id": "mfa.current_code_label",
+            "message": "Current code",
+            "translation": "Current code"
+        },
+        {
+            "id": "mfa.current_code_help",
+            "message": "A code from your current authenticator app, or a recovery code.",
+            "translation": "A code from your current authenticator app, or a recovery code."
+        },
+        {
+            "id": "mfa.password_label",
+            "message": "Your password",
+            "translation": "Your password"
+        },
+        {
+            "id": "mfa.password_help",
+            "message": "Confirm it is you before adding a second factor.",
+            "translation": "Confirm it is you before adding a second factor."
+        },
+        {
+            "id": "mfa.invalid_password",
+            "message": "Incorrect password.",
+            "translation": "Incorrect password."
+        },
+        {
+            "id": "mfa.password_required",
+            "message": "Enter your password to set up an authenticator.",
+            "translation": "Enter your password to set up an authenticator."
+        },
+        {
+            "id": "mfa.recovery_codes_title",
+            "message": "Recovery codes",
+            "translation": "Recovery codes"
+        },
+        {
+            "id": "mfa.recovery_codes_warning",
+            "message": "Save these codes now: they are shown only once. Each code signs you in once if you lose your authenticator.",
+            "translation": "Save these codes now: they are shown only once. Each code signs you in once if you lose your authenticator."
+        },
+        {
+            "id": "mfa.recovery_codes_help",
+            "message": "Keep them in a password manager or print them. Generating new codes invalidates these.",
+            "translation": "Keep them in a password manager or print them. Generating new codes invalidates these."
+        },
+        {
+            "id": "mfa.recovery_codes_saved",
+            "message": "I have saved my recovery codes",
+            "translation": "I have saved my recovery codes"
+        },
+        {
+            "id": "mfa.recovery_codes_left",
+            "message": "Recovery codes left: %s",
+            "translation": "Recovery codes left: %s"
+        },
+        {
+            "id": "mfa.recovery_codes_low",
+            "message": "You are running low on recovery codes. Generate new ones.",
+            "translation": "You are running low on recovery codes. Generate new ones."
+        },
+        {
             "id": "validation.required",
             "message": "Please fill out this field.",
             "translation": "Please fill out this field."
@@ -5731,6 +6051,11 @@
             "id": "import.errors",
             "message": "Errors",
             "translation": "Errors"
+        },
+        {
+            "id": "import.notices",
+            "message": "Notes",
+            "translation": "Notes"
         },
         {
             "id": "import.import_another",

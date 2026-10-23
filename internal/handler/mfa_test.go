@@ -1,0 +1,1271 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package handler
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"os/exec"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"testing/fstest"
+	"time"
+
+	"github.com/alexedwards/scs/v2"
+	"github.com/go-chi/chi/v5"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
+
+	"github.com/olegiv/ocms-go/internal/auth"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/mfa"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/testutil"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+)
+
+const mfaTestPassword = "Mfa-test-password!"
+
+// mfaTestEnv is an auth handler wired to the two-factor routes the way
+// cmd/ocms registers them.
+type mfaTestEnv struct {
+	h      *AuthHandler
+	db     *sql.DB
+	sm     *scs.SessionManager
+	svc    *mfa.Service
+	router http.Handler
+}
+
+func newMFATestEnv(t *testing.T, required bool) *mfaTestEnv {
+	t.Helper()
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	db, sm := testHandlerSetup(t)
+	middleware.SetSessionManager(sm)
+	middleware.SetMFARequired(required)
+	t.Cleanup(func() {
+		middleware.SetSessionManager(nil)
+		middleware.SetMFARequired(false)
+	})
+	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := mfa.NewService(db, testMFAKey, required)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := &mfaTestEnv{h: NewAuthHandler(db, renderer, sm, nil, nil, svc), db: db, sm: sm, svc: svc}
+
+	r := chi.NewRouter()
+	r.Use(sm.LoadAndSave)
+	r.Use(middleware.CSRF(middleware.DefaultCSRFConfig([]byte("test-secret-key-32-bytes-long!!!"), true)))
+	r.Post(RouteLogin, env.h.Login)
+	r.Post(RouteLogout, env.h.Logout)
+	r.Get(RouteLoginMFA, env.h.LoginMFAForm)
+	r.Post(RouteLoginMFA, env.h.LoginMFA)
+	r.Get(RouteLoginMFASetup, env.h.LoginMFASetupForm)
+	r.Post(RouteLoginMFASetup, env.h.LoginMFASetup)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Auth(sm), middleware.LoadUser(sm, db), middleware.LoadSiteConfig(db, nil))
+		r.Get(RouteAccountSecurity, env.h.Security)
+		r.Get(RouteAccountSecurityTOTP, env.h.TOTPSetupForm)
+		r.Post(RouteAccountSecurityTOTP, env.h.TOTPSetup)
+		r.Post(RouteAccountSecurityRecoveryCodes, env.h.RegenerateRecoveryCodes)
+		r.Post(RouteAccountSecurityDisable, env.h.DisableTOTP)
+		r.With(middleware.RequireEditor()).Get("/admin", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		})
+	})
+	env.router = r
+	return env
+}
+
+func (env *mfaTestEnv) createUser(t *testing.T, role string) store.User {
+	t.Helper()
+	hash, err := auth.HashPassword(mfaTestPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return createTestUser(t, env.db, testUser{Email: role + "@example.com", Name: "MFA " + role, Role: role, PasswordHash: hash})
+}
+
+// enroll gives user an authenticator through the service and returns its
+// secret and recovery codes. It spends the previous period's code, so the
+// current and next period's codes remain for the test.
+func (env *mfaTestEnv) enroll(t *testing.T, user store.User) (string, []string) {
+	t.Helper()
+	e, err := env.svc.BeginEnrollment(user.ID, nil, "Test", user.Email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := env.svc.ConfirmEnrollment(t.Context(), user.ID, e.Sealed, totpCode(t, e.Secret, -1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e.Secret, got.RecoveryCodes
+}
+
+// totpCode is secret's code periods 30-second periods from now.
+func totpCode(t *testing.T, secret string, periods int) string {
+	t.Helper()
+	code, err := totp.GenerateCodeCustom(secret, time.Now().Add(time.Duration(periods)*30*time.Second),
+		totp.ValidateOpts{Period: 30, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return code
+}
+
+// wrongCode is a six-digit code that differs from secret's current codes.
+func wrongCode(t *testing.T, secret string) string {
+	t.Helper()
+	for _, candidate := range []string{"000000", "111111", "222222", "333333"} {
+		if candidate != totpCode(t, secret, -1) && candidate != totpCode(t, secret, 0) && candidate != totpCode(t, secret, 1) {
+			return candidate
+		}
+	}
+	t.Fatal("no wrong code found")
+	return ""
+}
+
+// signInWithPassword posts the password and returns the response and its
+// session cookie.
+func (env *mfaTestEnv) signInWithPassword(t *testing.T, user store.User) (*http.Cookie, string) {
+	t.Helper()
+	rr := authRequest(env.router, http.MethodPost, RouteLogin, url.Values{"email": {user.Email}, "password": {mfaTestPassword}})
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("password step = %d", rr.Code)
+	}
+	return sessionCookie(t, rr, env.sm), rr.Header().Get("Location")
+}
+
+// sessionValue reads key from the session behind cookie.
+func (env *mfaTestEnv) session(t *testing.T, cookie *http.Cookie) func(key string) any {
+	t.Helper()
+	ctx, err := env.sm.Load(t.Context(), cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func(key string) any { return env.sm.Get(ctx, key) }
+}
+
+func TestLoginWithAuthenticatorNeedsSecondFactor(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	secret, _ := env.enroll(t, user)
+
+	cookie, next := env.signInWithPassword(t, user)
+	if next != RouteLoginMFA {
+		t.Fatalf("password step redirected to %q, want %s", next, RouteLoginMFA)
+	}
+	if got := env.session(t, cookie)(middleware.SessionKeyUserID); got != nil {
+		t.Fatalf("password alone put user %v in the session", got)
+	}
+	if rr := authRequest(env.router, http.MethodGet, "/admin", nil, cookie); rr.Header().Get("Location") != RouteLogin {
+		t.Fatalf("pending sign-in reached /admin: %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if rr := authRequest(env.router, http.MethodGet, RouteLoginMFA, nil, cookie); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `name="code"`) {
+		t.Fatalf("challenge page = %d", rr.Code)
+	}
+
+	rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {wrongCode(t, secret)}}, cookie)
+	if rr.Header().Get("Location") != RouteLoginMFA {
+		t.Fatalf("wrong code = %d %q, want a redirect back to the challenge", rr.Code, rr.Header().Get("Location"))
+	}
+	if got := env.session(t, cookie)(middleware.SessionKeyUserID); got != nil {
+		t.Fatal("a wrong code signed in")
+	}
+
+	rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/admin" {
+		t.Fatalf("right code = %d %q, want 303 /admin", rr.Code, rr.Header().Get("Location"))
+	}
+	signedIn := sessionCookie(t, rr, env.sm)
+	if signedIn.Value == cookie.Value {
+		t.Error("the second factor did not rotate the session token")
+	}
+	get := env.session(t, signedIn)
+	if get(middleware.SessionKeyUserID) != user.ID || get(middleware.SessionKeyMFAVerified) != true || get(sessionKeyMFAPendingUserID) != nil {
+		t.Errorf("session after sign-in: user %v, mfa %v, pending %v", get(middleware.SessionKeyUserID), get(middleware.SessionKeyMFAVerified), get(sessionKeyMFAPendingUserID))
+	}
+	if rr := authRequest(env.router, http.MethodGet, "/admin", nil, signedIn); rr.Code != http.StatusNoContent {
+		t.Errorf("/admin after sign-in = %d", rr.Code)
+	}
+
+	// Going Back to the code page after signing in returns to the dashboard
+	// without a false "sign-in expired" message.
+	rr = authRequest(env.router, http.MethodGet, RouteLoginMFA, nil, signedIn)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/admin" {
+		t.Errorf("code page after sign-in = %d %q, want 303 /admin", rr.Code, rr.Header().Get("Location"))
+	}
+	if flash := env.session(t, signedIn)("flash"); flash == i18n.T("en", "mfa.sign_in_expired") {
+		t.Errorf("code page after sign-in set flash %v", flash)
+	}
+}
+
+func TestLoginWithRecoveryCode(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RolePublic)
+	_, codes := env.enroll(t, user)
+	cookie, _ := env.signInWithPassword(t, user)
+
+	rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {strings.ToUpper(codes[0])}}, cookie)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != RouteAccount {
+		t.Fatalf("recovery code = %d %q, want 303 %s", rr.Code, rr.Header().Get("Location"), RouteAccount)
+	}
+	get := env.session(t, sessionCookie(t, rr, env.sm))
+	if get(middleware.SessionKeyUserID) != user.ID || get("flash_type") != "warning" {
+		t.Errorf("session after recovery sign-in: user %v, flash %v", get(middleware.SessionKeyUserID), get("flash_type"))
+	}
+
+	cookie, _ = env.signInWithPassword(t, user)
+	rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {codes[0]}}, cookie)
+	if rr.Header().Get("Location") != RouteLoginMFA {
+		t.Errorf("reused recovery code = %d %q, want it refused", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
+func TestPendingSignInEnds(t *testing.T) {
+	t.Run("after too many wrong codes", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		var rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {wrongCode(t, secret)}}, cookie)
+		for i := 1; i < mfaMaxAttempts; i++ {
+			rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {wrongCode(t, secret)}}, cookie)
+		}
+		if rr.Header().Get("Location") != RouteLogin {
+			t.Fatalf("attempt %d = %q, want the sign-in to end", mfaMaxAttempts, rr.Header().Get("Location"))
+		}
+		rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		if rr.Header().Get("Location") != RouteLogin {
+			t.Errorf("right code after the sign-in ended = %q, want %s", rr.Header().Get("Location"), RouteLogin)
+		}
+	})
+	t.Run("when the password changes", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		if _, err := env.db.Exec(`UPDATE users SET session_version = session_version + 1 WHERE id = ?`, user.ID); err != nil {
+			t.Fatal(err)
+		}
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		if rr.Header().Get("Location") != RouteLogin {
+			t.Errorf("code after a credential change = %q, want %s", rr.Header().Get("Location"), RouteLogin)
+		}
+	})
+	t.Run("after the time limit", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		user := env.createUser(t, model.RoleEditor)
+		env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		ctx, err := env.sm.Load(t.Context(), cookie.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		env.sm.Put(ctx, sessionKeyMFAPendingSince, time.Now().Add(-mfaPendingTTL-time.Minute).Unix())
+		token, _, err := env.sm.Commit(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rr := authRequest(env.router, http.MethodGet, RouteLoginMFA, nil, &http.Cookie{Name: env.sm.Cookie.Name, Value: token})
+		if rr.Header().Get("Location") != RouteLogin {
+			t.Errorf("expired challenge = %d %q, want %s", rr.Code, rr.Header().Get("Location"), RouteLogin)
+		}
+	})
+}
+
+var setupSecret = regexp.MustCompile(`<code>([A-Z2-7 ]{16,})</code>`)
+
+// TestRequiredMFAEnrollsAtSignIn covers an account that must use a second
+// factor and has none: the password leads to setup, never to a session, and
+// confirming a code signs in and shows the recovery codes.
+func TestRequiredMFAEnrollsAtSignIn(t *testing.T) {
+	env := newMFATestEnv(t, true)
+	user := env.createUser(t, model.RoleAdmin)
+
+	cookie, next := env.signInWithPassword(t, user)
+	if next != RouteLoginMFASetup {
+		t.Fatalf("password step redirected to %q, want %s", next, RouteLoginMFASetup)
+	}
+	if rr := authRequest(env.router, http.MethodGet, RouteLoginMFA, nil, cookie); rr.Header().Get("Location") != RouteLogin {
+		t.Errorf("the challenge served an enrollment sign-in: %d", rr.Code)
+	}
+	page := authRequest(env.router, http.MethodGet, RouteLoginMFASetup, nil, cookie)
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "data:image/png;base64,") {
+		t.Fatalf("setup page = %d", page.Code)
+	}
+	if page.Header().Get("Cache-Control") != "private, no-store" {
+		t.Errorf("setup page Cache-Control = %q", page.Header().Get("Cache-Control"))
+	}
+	m := setupSecret.FindStringSubmatch(page.Body.String())
+	if m == nil {
+		t.Fatal("setup page shows no secret")
+	}
+	secret := strings.ReplaceAll(m[1], " ", "")
+	if again := authRequest(env.router, http.MethodGet, RouteLoginMFASetup, nil, cookie); !strings.Contains(again.Body.String(), m[1]) {
+		t.Error("reloading the setup page changed the secret")
+	}
+
+	rr := authRequest(env.router, http.MethodPost, RouteLoginMFASetup, url.Values{"code": {wrongCode(t, secret)}}, cookie)
+	if rr.Header().Get("Location") != RouteLoginMFASetup {
+		t.Fatalf("wrong setup code = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	rr = authRequest(env.router, http.MethodPost, RouteLoginMFASetup, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+	if rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("setup confirmation = %d, want the recovery codes page", rr.Code)
+	}
+	signedIn := sessionCookie(t, rr, env.sm)
+	if get := env.session(t, signedIn); get(middleware.SessionKeyUserID) != user.ID || get(middleware.SessionKeyMFAVerified) != true {
+		t.Fatalf("session after enrollment: user %v, mfa %v", get(middleware.SessionKeyUserID), get(middleware.SessionKeyMFAVerified))
+	}
+	if rr := authRequest(env.router, http.MethodGet, "/admin", nil, signedIn); rr.Code != http.StatusNoContent {
+		t.Errorf("/admin after enrollment = %d", rr.Code)
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || !enrolled {
+		t.Errorf("Enrolled = %t, %v", enrolled, err)
+	}
+}
+
+// TestRequiredMFAEndsSessionsWithoutIt checks that a session signed in with
+// the password alone, from before the requirement was switched on, is
+// signed out.
+//
+// Bug state: drop the mfaRequired check from middleware.isSessionStale and
+// this fails.
+func TestRequiredMFAEndsSessionsWithoutIt(t *testing.T) {
+	env := newMFATestEnv(t, true)
+	user := env.createUser(t, model.RoleEditor)
+	ctx, err := env.sm.Load(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.sm.Put(ctx, middleware.SessionKeyUserID, user.ID)
+	token, _, err := env.sm.Commit(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := authRequest(env.router, http.MethodGet, "/admin", nil, &http.Cookie{Name: env.sm.Cookie.Name, Value: token})
+	if rr.Header().Get("Location") != RouteLogin {
+		t.Errorf("password-only session under the requirement = %d %q, want a redirect to %s", rr.Code, rr.Header().Get("Location"), RouteLogin)
+	}
+}
+
+// signedInCookie signs user in with the password and their next TOTP code.
+func (env *mfaTestEnv) signedInCookie(t *testing.T, user store.User, secret string) *http.Cookie {
+	t.Helper()
+	cookie, _ := env.signInWithPassword(t, user)
+	rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") == RouteLoginMFA {
+		t.Fatalf("sign-in = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	return sessionCookie(t, rr, env.sm)
+}
+
+// TestAccountSecurityFormsSubmitWhatHandlersRead posts the account security
+// page's own forms back as a browser would: with the field names the page
+// renders, not ones the test picks. The forms for new recovery codes and for
+// turning two-factor off named their code field after its HTML ID, so the
+// handlers, reading current_code, always got an empty code and refused
+// (Codex review of the two-factor PR); tests that built the request by hand
+// did not notice.
+//
+// Bug state: name CurrentCodeInput's field after its id again, and this
+// fails.
+func TestAccountSecurityFormsSubmitWhatHandlersRead(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RolePublic)
+	secret, codes := env.enroll(t, user)
+	cookie := env.signedInCookie(t, user, secret)
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie).Body.String()
+
+	// Each form's fields get a code that confirms the change.
+	submit := func(action, code string) *httptest.ResponseRecorder {
+		t.Helper()
+		fields := renderedFormFields(t, page, action)
+		form := url.Values{}
+		for _, name := range fields {
+			form.Set(name, code)
+		}
+		return authRequest(env.router, http.MethodPost, action, form, cookie)
+	}
+	if rr := submit(RouteAccountSecurityRecoveryCodes, codes[0]); rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("new recovery codes from the page's form = %d %q, want the new codes", rr.Code, rr.Header().Get("Location"))
+	}
+	if rr := submit(RouteAccountSecurityDisable, totpCode(t, secret, 1)); rr.Header().Get("Location") != RouteAccountSecurity {
+		t.Fatalf("turning off from the page's form = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || enrolled {
+		t.Fatalf("the page's form did not turn two-factor off: %t, %v", enrolled, err)
+	}
+}
+
+// renderedFormFields returns the names of the fields, other than the CSRF
+// token, of the form in page that posts to action.
+func renderedFormFields(t *testing.T, page, action string) []string {
+	t.Helper()
+	form := regexp.MustCompile(`(?s)<form[^>]*action="` + regexp.QuoteMeta(action) + `"[^>]*>(.*?)</form>`).FindStringSubmatch(page)
+	if form == nil {
+		t.Fatalf("no form posting to %s on the page", action)
+	}
+	var names []string
+	for _, m := range regexp.MustCompile(`<(?:input|textarea|select)[^>]*\sname="([^"]+)"`).FindAllStringSubmatch(form[1], -1) {
+		if m[1] != "csrf_token" {
+			names = append(names, m[1])
+		}
+	}
+	if len(names) == 0 {
+		t.Fatalf("the form posting to %s has no fields", action)
+	}
+	return names
+}
+
+func TestAccountSecurityChangesNeedCurrentCode(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RolePublic)
+	secret, codes := env.enroll(t, user)
+	cookie := env.signedInCookie(t, user, secret)
+
+	if rr := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), RouteAccountSecurityDisable) {
+		t.Fatalf("security page = %d", rr.Code)
+	}
+
+	for _, action := range []string{RouteAccountSecurityRecoveryCodes, RouteAccountSecurityDisable} {
+		rr := authRequest(env.router, http.MethodPost, action, url.Values{"current_code": {wrongCode(t, secret)}}, cookie)
+		if rr.Header().Get("Location") != RouteAccountSecurity {
+			t.Errorf("%s with a wrong code = %d %q", action, rr.Code, rr.Header().Get("Location"))
+		}
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || !enrolled {
+		t.Fatalf("a wrong code disabled two-factor: %t, %v", enrolled, err)
+	}
+
+	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityRecoveryCodes, url.Values{"current_code": {codes[0]}}, cookie)
+	if rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("regenerate = %d, want the new codes", rr.Code)
+	}
+
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityDisable, url.Values{"current_code": {totpCode(t, secret, 1)}}, cookie)
+	if rr.Header().Get("Location") != RouteAccountSecurity {
+		t.Fatalf("disable = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || enrolled {
+		t.Fatalf("Enrolled after disable = %t, %v", enrolled, err)
+	}
+	// Disabling bumped the session version; the session that did it stays.
+	if rr := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, sessionCookie(t, rr, env.sm)); rr.Code != http.StatusOK {
+		t.Errorf("security page after disable = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	// The earlier session token was rotated away.
+	if rr := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie); rr.Header().Get("Location") != RouteLogin {
+		t.Errorf("pre-change session token still valid: %d", rr.Code)
+	}
+}
+
+func TestAccountSecurityDisableRefusedWhenRequired(t *testing.T) {
+	env := newMFATestEnv(t, true)
+	user := env.createUser(t, model.RoleEditor)
+	secret, _ := env.enroll(t, user)
+	cookie := env.signedInCookie(t, user, secret)
+
+	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityDisable, url.Values{"current_code": {totpCode(t, secret, 1)}}, cookie)
+	if rr.Header().Get("Location") != RouteAccountSecurity {
+		t.Fatalf("disable = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || !enrolled {
+		t.Errorf("two-factor was turned off although required: %t, %v", enrolled, err)
+	}
+}
+
+func TestAccountEnrollsAuthenticator(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	cookie, next := env.signInWithPassword(t, user)
+	if next != "/admin" {
+		t.Fatalf("password-only sign-in redirected to %q", next)
+	}
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie)
+	m := setupSecret.FindStringSubmatch(page.Body.String())
+	if page.Code != http.StatusOK || m == nil {
+		t.Fatalf("setup page = %d", page.Code)
+	}
+	if strings.Contains(page.Body.String(), `name="current_code"`) || !strings.Contains(page.Body.String(), `name="password"`) {
+		t.Error("a first enrollment did not ask for the password, or asked for a current code")
+	}
+	secret := strings.ReplaceAll(m[1], " ", "")
+
+	// A stolen session cannot add its own authenticator without the password.
+	// Bug state: drop the verifyPassword call from TOTPSetup.
+	for name, form := range map[string]url.Values{
+		"no password":    {"code": {totpCode(t, secret, 0)}},
+		"wrong password": {"password": {"Not-the-password!"}, "code": {totpCode(t, secret, 0)}},
+	} {
+		rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, form, cookie)
+		if rr.Header().Get("Location") != RouteAccountSecurityTOTP {
+			t.Errorf("enroll with %s = %d %q, want it refused", name, rr.Code, rr.Header().Get("Location"))
+		}
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || enrolled {
+		t.Fatalf("enrolled without the password: %t, %v", enrolled, err)
+	}
+
+	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, secret, 0)}}, cookie)
+	if rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("enroll = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	get := env.session(t, sessionCookie(t, rr, env.sm))
+	if get(middleware.SessionKeyMFAVerified) != true {
+		t.Error("enrolling did not mark the session as having passed a second factor")
+	}
+
+	// Replacing the authenticator now needs a code from it.
+	replace := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, sessionCookie(t, rr, env.sm))
+	if !strings.Contains(replace.Body.String(), `name="current_code"`) {
+		t.Error("replacing an authenticator did not ask for a current code")
+	}
+}
+
+func TestUsersHandlerResetMFA(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	admin := env.createUser(t, model.RoleAdmin)
+	editor := env.createUser(t, model.RoleEditor)
+	env.enroll(t, editor)
+	env.enroll(t, admin)
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	h.SetMFAService(env.svc)
+
+	request := func(method, target string, id int64, current ...string) *httptest.ResponseRecorder {
+		form := url.Values{"current_password": {mfaTestPassword}}
+		if len(current) > 0 {
+			form.Set("current_password", current[0])
+		}
+		req := httptest.NewRequest(method, target, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(id, 10)})
+		req = requestWithSession(env.sm, req)
+		req = addUserToContext(req, &admin)
+		rr := httptest.NewRecorder()
+		if method == http.MethodGet {
+			h.EditForm(rr, req)
+		} else {
+			h.ResetMFA(rr, req)
+		}
+		return rr
+	}
+
+	if rr := request(http.MethodGet, "/admin/users/2", editor.ID); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "/mfa/reset") {
+		t.Fatalf("edit page = %d, want the reset action", rr.Code)
+	}
+	if rr := request(http.MethodGet, "/admin/users/1", admin.ID); strings.Contains(rr.Body.String(), "/mfa/reset") {
+		t.Error("an administrator's own edit page offers the reset")
+	}
+	if rr := request(http.MethodPost, "/admin/users/1/mfa/reset", admin.ID); rr.Code != http.StatusSeeOther {
+		t.Fatalf("self reset = %d", rr.Code)
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), admin.ID); err != nil || !enrolled {
+		t.Fatalf("an administrator reset their own second factor: %t, %v", enrolled, err)
+	}
+
+	// The reset needs the acting administrator's password, like the other
+	// changes that could hand an account over.
+	for _, current := range []string{"", "Not-the-password!"} {
+		rr := request(http.MethodPost, "/admin/users/2/mfa/reset", editor.ID, current)
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("reset with current password %q = %d", current, rr.Code)
+		}
+		if enrolled, err := env.svc.Enrolled(t.Context(), editor.ID); err != nil || !enrolled {
+			t.Fatalf("reset with current password %q removed the second factor: %t, %v", current, enrolled, err)
+		}
+	}
+
+	rr := request(http.MethodPost, "/admin/users/2/mfa/reset", editor.ID)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != fmt.Sprintf(redirectAdminUsersID, editor.ID) {
+		t.Fatalf("reset = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), editor.ID); err != nil || enrolled {
+		t.Fatalf("Enrolled after reset = %t, %v", enrolled, err)
+	}
+	var version int64
+	if err := env.db.QueryRow(`SELECT session_version FROM users WHERE id = ?`, editor.ID).Scan(&version); err != nil || version < 2 {
+		t.Errorf("session_version after reset = %d, %v; want the editor signed out", version, err)
+	}
+
+	// A form that fails validation is shown again with the two-factor card.
+	form := url.Values{"name": {""}, "email": {editor.Email}, "role": {model.RoleEditor}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/2", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(editor.ID, 10)})), &admin)
+	update := httptest.NewRecorder()
+	h.Update(update, req)
+	if update.Code != http.StatusOK || !strings.Contains(update.Body.String(), i18n.T("en", "users.mfa_not_enabled")) {
+		t.Errorf("re-rendered edit form = %d, without the two-factor card", update.Code)
+	}
+
+	// A second reset finds nothing to remove and signs nobody out.
+	if rr := request(http.MethodPost, "/admin/users/2/mfa/reset", editor.ID); rr.Code != http.StatusSeeOther {
+		t.Fatalf("reset without a second factor = %d", rr.Code)
+	}
+	var again int64
+	if err := env.db.QueryRow(`SELECT session_version FROM users WHERE id = ?`, editor.ID).Scan(&again); err != nil || again != version {
+		t.Errorf("session_version after a no-op reset = %d, %v; want %d", again, err, version)
+	}
+}
+
+// withLockout gives the environment's handler a login protection that locks
+// an email + address pair after attempts failures.
+func (env *mfaTestEnv) withLockout(t *testing.T, attempts int) *middleware.LoginProtection {
+	t.Helper()
+	lockoutDB, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	lp := middleware.NewLoginProtection(lockoutDB, middleware.LoginProtectionConfig{
+		MaxFailedAttempts: attempts, LockoutDuration: time.Minute, AttemptWindow: time.Minute,
+	})
+	env.h.loginProtection = lp
+	return lp
+}
+
+// TestLoginMFALockout checks that wrong second-factor codes count toward the
+// account lockout, that a locked account cannot finish a pending sign-in,
+// even with the right code, nor change its second factor, and that each
+// attempt on a locked account is logged.
+func TestLoginMFALockout(t *testing.T) {
+	t.Run("wrong codes lock the account", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+
+		authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {wrongCode(t, secret)}}, cookie)
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {wrongCode(t, secret)}}, cookie)
+		if rr.Header().Get("Location") != RouteLogin {
+			t.Fatalf("locking code = %d %q, want the sign-in to end", rr.Code, rr.Header().Get("Location"))
+		}
+		rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		if got := env.session(t, cookie)(middleware.SessionKeyUserID); got != nil || rr.Header().Get("Location") != RouteLogin {
+			t.Errorf("right code after the lockout signed in: user %v, %q", got, rr.Header().Get("Location"))
+		}
+	})
+	t.Run("a locked account cannot finish", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		lp := env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		for range 2 {
+			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
+		}
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		if rr.Header().Get("Location") != RouteLogin {
+			t.Fatalf("code on a locked account = %d %q, want %s", rr.Code, rr.Header().Get("Location"), RouteLogin)
+		}
+		get := env.session(t, cookie)
+		if get(middleware.SessionKeyUserID) != nil || get(sessionKeyMFAPendingUserID) != nil {
+			t.Errorf("locked account: user %v, pending %v; want neither", get(middleware.SessionKeyUserID), get(sessionKeyMFAPendingUserID))
+		}
+		assertEventCount(t, env, "Login attempt on locked account", user.ID, 1)
+	})
+	t.Run("a locked account cannot change its second factor", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		lp := env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("second factor = %d", rr.Code)
+		}
+		cookie = sessionCookie(t, rr, env.sm) // signing in renews the token
+		for range 2 {
+			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
+		}
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityDisable, url.Values{"current_code": {totpCode(t, secret, 1)}}, cookie)
+		if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || !enrolled {
+			t.Fatalf("a locked account turned its second factor off: %t, %v", enrolled, err)
+		}
+		assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+	})
+	t.Run("a locked account hears the lockout when replacing its authenticator", func(t *testing.T) {
+		env := newMFATestEnv(t, false)
+		lp := env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		secret, _ := env.enroll(t, user)
+		cookie, _ := env.signInWithPassword(t, user)
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		cookie = sessionCookie(t, rr, env.sm) // signing in renews the token
+		page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie)
+		m := setupSecret.FindStringSubmatch(page.Body.String())
+		if m == nil {
+			t.Fatalf("setup page = %d", page.Code)
+		}
+		newSecret := strings.ReplaceAll(m[1], " ", "")
+		for range 2 {
+			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
+		}
+		// A wrong new code: before the fix, this answered "invalid code".
+		rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"code": {wrongCode(t, newSecret)}, "current_code": {totpCode(t, secret, 1)}}, cookie)
+		get := env.session(t, cookie)
+		if got, _ := get("flash").(string); rr.Header().Get("Location") != RouteAccountSecurityTOTP || !strings.Contains(got, "locked") {
+			t.Fatalf("replacement on a locked account = %d %q, flash %q; want the lockout message", rr.Code, rr.Header().Get("Location"), got)
+		}
+		if get(sessionKeyMFASetupSecret) == nil {
+			t.Error("the refusal dropped the new authenticator's secret; the user could not retry with the same QR code")
+		}
+		assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+	})
+	t.Run("a locked account cannot finish setup at sign-in", func(t *testing.T) {
+		env := newMFATestEnv(t, true)
+		lp := env.withLockout(t, 2)
+		user := env.createUser(t, model.RoleEditor)
+		cookie, next := env.signInWithPassword(t, user)
+		if next != RouteLoginMFASetup {
+			t.Fatalf("password step went to %q, want %s", next, RouteLoginMFASetup)
+		}
+		page := authRequest(env.router, http.MethodGet, RouteLoginMFASetup, nil, cookie)
+		m := setupSecret.FindStringSubmatch(page.Body.String())
+		if m == nil {
+			t.Fatalf("setup page = %d", page.Code)
+		}
+		secret := strings.ReplaceAll(m[1], " ", "")
+		for range 2 {
+			lp.RecordFailedAttempt(user.Email, "192.0.2.1") // authRequest's RemoteAddr
+		}
+		// The right code: the lockout alone must stop it.
+		rr := authRequest(env.router, http.MethodPost, RouteLoginMFASetup, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+		get := env.session(t, cookie)
+		if rr.Header().Get("Location") != RouteLogin || get(middleware.SessionKeyUserID) != nil || get(sessionKeyMFAPendingUserID) != nil || get(sessionKeyMFASetupSecret) != nil {
+			t.Fatalf("setup on a locked account = %d %q; want the sign-in and its setup to end", rr.Code, rr.Header().Get("Location"))
+		}
+		if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || enrolled {
+			t.Fatalf("a locked account enrolled an authenticator: %t, %v", enrolled, err)
+		}
+		assertEventCount(t, env, "Login attempt on locked account", user.ID, 1)
+	})
+}
+
+// assertEventCount fails unless exactly want events with message were
+// logged for userID.
+func assertEventCount(t *testing.T, env *mfaTestEnv, message string, userID int64, want int) {
+	t.Helper()
+	var got int
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = ? AND user_id = ?`, message, userID).Scan(&got); err != nil || got != want {
+		t.Errorf("events %q = %d, %v; want %d", message, got, err, want)
+	}
+}
+
+// TestLoginMFAWithChangedKey covers OCMS_MFA_KEY being lost or rotated: an
+// authenticator code cannot be checked, which the user is told and which
+// does not count as a wrong code, and a recovery code still signs in.
+func TestLoginMFAWithChangedKey(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	secret, codes := env.enroll(t, user)
+	other, err := mfa.NewService(env.db, "Qm4Tx8Lc2Wv6Rn1Zp9Hb3Jd7Kf5Gs0Ye8Ua2Ni6Ow=", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.h.mfa = other
+
+	cookie, _ := env.signInWithPassword(t, user)
+	rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {totpCode(t, secret, 0)}}, cookie)
+	get := env.session(t, cookie)
+	if rr.Header().Get("Location") != RouteLoginMFA || get("flash") != i18n.T("en", "mfa.totp_unavailable") {
+		t.Fatalf("code under another key = %q, flash %v", rr.Header().Get("Location"), get("flash"))
+	}
+	if tries := get(sessionKeyMFAPendingTries); tries != 0 {
+		t.Errorf("an uncheckable code counted as attempt %v", tries)
+	}
+	rr = authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {codes[0]}}, cookie)
+	if rr.Header().Get("Location") != "/admin" {
+		t.Errorf("recovery code under another key = %d %q, want /admin", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
+func TestAccountReplacesAuthenticator(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	oldSecret, codes := env.enroll(t, user)
+	cookie := env.signedInCookie(t, user, oldSecret)
+
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie)
+	m := setupSecret.FindStringSubmatch(page.Body.String())
+	if m == nil {
+		t.Fatalf("replace page = %d, shows no secret", page.Code)
+	}
+	newSecret := strings.ReplaceAll(m[1], " ", "")
+
+	// A mistake in the new code must not spend the current code: codes[0]
+	// still confirms the replacement below.
+	// Bug state: verify current_code before checking the new code.
+	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP,
+		url.Values{"current_code": {codes[0]}, "code": {wrongCode(t, newSecret)}}, cookie)
+	if rr.Header().Get("Location") != RouteAccountSecurityTOTP {
+		t.Fatalf("replace with a wrong new code = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if status, err := env.svc.Status(t.Context(), user.ID); err != nil || status.RecoveryCodesLeft != mfa.RecoveryCodeCount {
+		t.Fatalf("recovery codes left after a wrong new code = %d, %v; want %d, none spent", status.RecoveryCodesLeft, err, mfa.RecoveryCodeCount)
+	}
+
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP,
+		url.Values{"current_code": {wrongCode(t, oldSecret)}, "code": {totpCode(t, newSecret, 0)}}, cookie)
+	if rr.Header().Get("Location") != RouteAccountSecurityTOTP {
+		t.Fatalf("replace with a wrong current code = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	if _, err := env.svc.Verify(t.Context(), user.ID, totpCode(t, newSecret, 1)); !errors.Is(err, mfa.ErrInvalidCode) {
+		t.Fatalf("the new authenticator was enrolled without the current code: %v", err)
+	}
+
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP,
+		url.Values{"current_code": {codes[0]}, "code": {totpCode(t, newSecret, 0)}}, cookie)
+	if rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("replace = %d %q, want new recovery codes", rr.Code, rr.Header().Get("Location"))
+	}
+	if _, err := env.svc.Verify(t.Context(), user.ID, totpCode(t, oldSecret, 1)); !errors.Is(err, mfa.ErrInvalidCode) {
+		t.Errorf("the replaced authenticator still verifies: %v", err)
+	}
+	if _, err := env.svc.Verify(t.Context(), user.ID, totpCode(t, newSecret, 1)); err != nil {
+		t.Errorf("the new authenticator does not verify: %v", err)
+	}
+	if _, err := env.svc.Verify(t.Context(), user.ID, codes[1]); !errors.Is(err, mfa.ErrInvalidCode) {
+		t.Errorf("an old recovery code survived the replacement: %v", err)
+	}
+}
+
+func TestAccountSetupWithoutKey(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	noKey, err := mfa.NewService(env.db, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.h.mfa = noKey
+	cookie, _ := env.signInWithPassword(t, user)
+
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie)
+	if page.Code != http.StatusOK || strings.Contains(page.Body.String(), `href="`+RouteAccountSecurityTOTP) {
+		t.Fatalf("security page without a key = %d, offers setup", page.Code)
+	}
+	if !strings.Contains(page.Body.String(), "OCMS_MFA_KEY") {
+		t.Error("security page does not say the server lacks OCMS_MFA_KEY")
+	}
+	if rr := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie); rr.Header().Get("Location") != RouteAccountSecurity {
+		t.Errorf("setup without a key = %d %q, want a redirect to %s", rr.Code, rr.Header().Get("Location"), RouteAccountSecurity)
+	}
+}
+
+// mfaDemoChildMarker proves the demo-mode child process ran the scenario.
+const mfaDemoChildMarker = "two-factor demo scenario verified"
+
+// TestTwoFactorDemoMode checks that demo mode refuses every two-factor
+// change: the seeded demo accounts are shared, so one visitor's
+// authenticator would lock the others out.
+func TestTwoFactorDemoMode(t *testing.T) {
+	// Demo mode is cached globally; run this scenario in a fresh test process.
+	if os.Getenv("OCMS_MFA_DEMO_CHILD") != "1" {
+		command := exec.Command(os.Args[0], "-test.run=^TestTwoFactorDemoMode$", "-test.v")
+		command.Env = append(os.Environ(), "OCMS_DEMO_MODE=true", "OCMS_MFA_DEMO_CHILD=1")
+		out, err := command.CombinedOutput()
+		if err != nil || !strings.Contains(string(out), mfaDemoChildMarker) {
+			t.Fatalf("demo scenario: %v\n%s", err, out)
+		}
+		return
+	}
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleAdmin)
+	cookie, _ := env.signInWithPassword(t, user)
+
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie)
+	if !strings.Contains(page.Body.String(), i18n.T("en", "mfa.demo_mode")) || strings.Contains(page.Body.String(), `href="`+RouteAccountSecurityTOTP) {
+		t.Fatalf("demo security page = %d, missing the demo notice or offering setup", page.Code)
+	}
+	for _, rr := range []*httptest.ResponseRecorder{
+		authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie),
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"code": {"123456"}}, cookie),
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityRecoveryCodes, url.Values{"current_code": {"123456"}}, cookie),
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityDisable, url.Values{"current_code": {"123456"}}, cookie),
+	} {
+		if rr.Header().Get("Location") != RouteAccountSecurity {
+			t.Errorf("demo-mode change = %d %q, want a redirect to %s", rr.Code, rr.Header().Get("Location"), RouteAccountSecurity)
+		}
+	}
+
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	h.SetMFAService(env.svc)
+	req := requestWithURLParams(httptest.NewRequest(http.MethodPost, "/admin/users/1/mfa/reset", nil), map[string]string{"id": strconv.FormatInt(user.ID, 10)})
+	rr := httptest.NewRecorder()
+	h.ResetMFA(rr, addUserToContext(requestWithSession(env.sm, req), &user))
+	if rr.Header().Get("Location") != redirectAdminUsers {
+		t.Errorf("demo-mode reset = %d %q, want a redirect to %s", rr.Code, rr.Header().Get("Location"), redirectAdminUsers)
+	}
+	t.Log(mfaDemoChildMarker)
+}
+
+// TestFirstSetupWithoutPasswordIsNotCounted covers a setup form opened while
+// the account had a second factor and sent after it was turned off: it has
+// no password field, which is asked for again without counting as a wrong
+// password.
+func TestFirstSetupWithoutPasswordIsNotCounted(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	env.withLockout(t, 1)
+	user := env.createUser(t, model.RoleEditor)
+	cookie, _ := env.signInWithPassword(t, user)
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie)
+	m := setupSecret.FindStringSubmatch(page.Body.String())
+	if m == nil {
+		t.Fatalf("setup page = %d", page.Code)
+	}
+	secret := strings.ReplaceAll(m[1], " ", "")
+	rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"current_code": {"123456"}, "code": {totpCode(t, secret, 0)}}, cookie)
+	if rr.Header().Get("Location") != RouteAccountSecurityTOTP || env.session(t, cookie)("flash") != i18n.T("en", "mfa.password_required") {
+		t.Fatalf("setup without a password field = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	assertEventCount(t, env, "Two-factor change refused: no password", user.ID, 1)
+	// With a lockout after one failure, a counted attempt would refuse this.
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, secret, 0)}}, cookie)
+	if rr.Code != http.StatusOK {
+		t.Errorf("setup after a missing password = %d %q, want it to succeed", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
+// TestSensitiveUserChangesNeedActorPassword checks that the user edits that
+// could hand an account to whoever holds an administrator's session need
+// that administrator's current password: a new password or email for
+// anyone, and giving or taking away the admin role, on create or edit. Other
+// edits do not. A stolen session therefore cannot set a password of its own,
+// reset an account's lockout by changing its email, mint an administrator
+// it controls and use that one to take the others over, or demote the real
+// administrators.
+//
+// Bug state: drop the actorPasswordNeeded check from UsersHandler.Update, or
+// the admin-role check from Create, and this fails.
+func TestSensitiveUserChangesNeedActorPassword(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	admin := env.createUser(t, model.RoleAdmin)
+	editor := env.createUser(t, model.RoleEditor)
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	h.SetMFAService(env.svc)
+
+	send := func(target *store.User, form url.Values) *httptest.ResponseRecorder {
+		path, params := "/admin/users", map[string]string{}
+		if target != nil {
+			path = "/admin/users/" + strconv.FormatInt(target.ID, 10)
+			params["id"] = strconv.FormatInt(target.ID, 10)
+		}
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, params)), &admin)
+		rr := httptest.NewRecorder()
+		if target == nil {
+			h.Create(rr, req)
+		} else {
+			h.Update(rr, req)
+		}
+		return rr
+	}
+	edit := func(target store.User, changes url.Values) url.Values {
+		form := url.Values{"name": {target.Name}, "email": {target.Email}, "role": {target.Role}}
+		for k, v := range changes {
+			form[k] = v
+		}
+		return form
+	}
+	other := createTestUser(t, env.db, testUser{Email: "other-admin@example.com", Name: "Other admin", Role: model.RoleAdmin, PasswordHash: mustPasswordHash(t, env.db, admin.ID)})
+	newPassword := url.Values{"password": {"Brand-new-password!"}, "password_confirm": {"Brand-new-password!"}}
+	with := func(form url.Values, current string) url.Values {
+		out := url.Values{"current_password": {current}}
+		for k, v := range form {
+			out[k] = v
+		}
+		return out
+	}
+	refused := func(t *testing.T, rr *httptest.ResponseRecorder, message string) {
+		t.Helper()
+		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), message) {
+			t.Errorf("got %d %q, want the form again saying %q", rr.Code, rr.Header().Get("Location"), message)
+		}
+	}
+	accepted := func(t *testing.T, rr *httptest.ResponseRecorder) {
+		t.Helper()
+		if rr.Code != http.StatusSeeOther {
+			t.Errorf("got %d, want the change accepted", rr.Code)
+		}
+	}
+
+	t.Run("without the actor's password", func(t *testing.T) {
+		for _, tc := range []struct {
+			name   string
+			target *store.User
+			form   url.Values
+		}{
+			{"own password", &admin, edit(admin, newPassword)},
+			{"own email", &admin, edit(admin, url.Values{"email": {"new-admin@example.com"}})},
+			{"another user's password", &editor, edit(editor, newPassword)},
+			{"another user's email", &editor, edit(editor, url.Values{"email": {"new-editor-email@example.com"}})},
+			{"promotion to admin", &editor, edit(editor, url.Values{"role": {model.RoleAdmin}})},
+			{"demotion of another admin", &other, edit(other, url.Values{"role": {model.RoleEditor}})},
+			{"new administrator", nil, url.Values{"name": {"Second admin"}, "email": {"second@example.com"}, "role": {model.RoleAdmin},
+				"password": {"Second-admin-pass!"}, "password_confirm": {"Second-admin-pass!"}}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				refused(t, send(tc.target, tc.form), "Enter your current password to make this change")
+				refused(t, send(tc.target, with(tc.form, "Not-the-password!")), "Your current password is incorrect")
+			})
+		}
+	})
+	if ok, _ := auth.CheckPassword(mfaTestPassword, mustPasswordHash(t, env.db, editor.ID)); !ok {
+		t.Fatal("another user's password changed without the actor's password")
+	}
+	var missing int
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'User change refused: no current password' AND user_id = ?`, admin.ID).Scan(&missing); err != nil || missing == 0 {
+		t.Errorf("refusals for a missing current password = %d, %v; want them logged", missing, err)
+	}
+
+	// Other edits never needed it: an unchanged form, a new name, keeping
+	// another administrator's role, an email differing only by spaces.
+	accepted(t, send(&admin, edit(admin, nil)))
+	accepted(t, send(&admin, edit(admin, url.Values{"name": {"Renamed admin"}})))
+	accepted(t, send(&other, edit(other, url.Values{"name": {"Renamed other admin"}})))
+	accepted(t, send(&editor, edit(editor, url.Values{"email": {"  " + editor.Email + " "}})))
+	accepted(t, send(&editor, edit(editor, url.Values{"name": {"Renamed editor"}})))
+	accepted(t, send(nil, url.Values{"name": {"New editor"}, "email": {"new-editor@example.com"}, "role": {model.RoleEditor},
+		"password": {"New-editor-pass-1!"}, "password_confirm": {"New-editor-pass-1!"}}))
+	accepted(t, send(&editor, with(edit(editor, newPassword), mfaTestPassword)))
+	if ok, _ := auth.CheckPassword("Brand-new-password!", mustPasswordHash(t, env.db, editor.ID)); !ok {
+		t.Error("another user's password change with the actor's password did not apply")
+	}
+	accepted(t, send(nil, with(url.Values{"name": {"Second admin"}, "email": {"second@example.com"}, "role": {model.RoleAdmin},
+		"password": {"Second-admin-pass!"}, "password_confirm": {"Second-admin-pass!"}}, mfaTestPassword)))
+	accepted(t, send(&editor, with(edit(editor, url.Values{"email": {"moved-editor@example.com"}}), mfaTestPassword)))
+	editor.Email = "moved-editor@example.com"
+	accepted(t, send(&editor, with(edit(editor, url.Values{"role": {model.RoleAdmin}}), mfaTestPassword)))
+	accepted(t, send(&other, with(edit(other, url.Values{"role": {model.RoleEditor}}), mfaTestPassword)))
+	accepted(t, send(&admin, with(edit(admin, url.Values{"email": {"moved-admin@example.com"}}), mfaTestPassword)))
+	admin.Email = "moved-admin@example.com"
+	accepted(t, send(&admin, with(edit(admin, newPassword), mfaTestPassword)))
+}
+
+// TestActorPasswordLockout checks that wrong confirmations count toward the
+// login lockout: once locked, even the right password is refused.
+func TestActorPasswordLockout(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	lp := env.withLockout(t, 2)
+	admin := env.createUser(t, model.RoleAdmin)
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	h.SetLoginProtection(lp)
+	change := func(current string) *httptest.ResponseRecorder {
+		form := url.Values{"name": {admin.Name}, "email": {admin.Email}, "role": {admin.Role},
+			"password": {"Brand-new-password!"}, "password_confirm": {"Brand-new-password!"}, "current_password": {current}}
+		req := httptest.NewRequest(http.MethodPost, "/admin/users/1", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(admin.ID, 10)})), &admin)
+		rr := httptest.NewRecorder()
+		h.Update(rr, req)
+		return rr
+	}
+	change("Wrong-password-1!")
+	if locking := change("Wrong-password-2!"); !strings.Contains(locking.Body.String(), "Too many failed attempts") {
+		t.Error("the wrong password that locked the account was answered as merely incorrect")
+	}
+	rr := change(mfaTestPassword)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Too many failed attempts") {
+		t.Fatalf("right password after the lockout = %d, want it refused", rr.Code)
+	}
+	if ok, _ := auth.CheckPassword(mfaTestPassword, mustPasswordHash(t, env.db, admin.ID)); !ok {
+		t.Error("the password changed while the account was locked")
+	}
+	assertEventCount(t, env, "Account locked due to failed attempts", admin.ID, 1)
+}
+
+// TestActorPasswordCountsAcrossConfirmations checks that a correct
+// confirmation does not clear earlier failures (only a full sign-in does,
+// so a password alone cannot wipe out wrong second-factor codes), and that
+// a wrong password for a second-factor reset counts too.
+func TestActorPasswordCountsAcrossConfirmations(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	lp := env.withLockout(t, 2)
+	admin := env.createUser(t, model.RoleAdmin)
+	editor := env.createUser(t, model.RoleEditor)
+	env.enroll(t, editor)
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	h.SetMFAService(env.svc)
+	h.SetLoginProtection(lp)
+	update := func(current string) int {
+		form := url.Values{"name": {editor.Name}, "email": {editor.Email}, "role": {editor.Role},
+			"password": {"Brand-new-password!"}, "password_confirm": {"Brand-new-password!"}, "current_password": {current}}
+		req := httptest.NewRequest(http.MethodPost, "/admin/users/2", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(editor.ID, 10)})), &admin)
+		rr := httptest.NewRecorder()
+		h.Update(rr, req)
+		return rr.Code
+	}
+	if code := update("Wrong-password-1!"); code != http.StatusOK {
+		t.Fatalf("wrong password = %d, want it refused", code)
+	}
+	if code := update(mfaTestPassword); code != http.StatusSeeOther {
+		t.Fatalf("right password = %d, want it accepted", code)
+	}
+	form := url.Values{"current_password": {"Wrong-password-2!"}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/2/mfa/reset", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(editor.ID, 10)})), &admin)
+	h.ResetMFA(httptest.NewRecorder(), req)
+	if locked, _ := lp.IsAccountLocked(admin.Email, middleware.GetClientIP(req)); !locked {
+		t.Error("a wrong reset password after a correct confirmation did not lock the account at two failures")
+	}
+	if enrolled, err := env.svc.Enrolled(t.Context(), editor.ID); err != nil || !enrolled {
+		t.Errorf("a reset with a wrong password removed the second factor: %t, %v", enrolled, err)
+	}
+}
+
+func mustPasswordHash(t *testing.T, db *sql.DB, id int64) string {
+	t.Helper()
+	var hash string
+	if err := db.QueryRow(`SELECT password_hash FROM users WHERE id = ?`, id).Scan(&hash); err != nil {
+		t.Fatal(err)
+	}
+	return hash
+}
+
+// TestUnverifiablePasswordIsLogged checks that a stored password hash that
+// cannot be checked refuses the change and leaves an error event, at the
+// user form and at the first authenticator setup, as at theme import and
+// module activation.
+func TestUnverifiablePasswordIsLogged(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	admin := env.createUser(t, model.RoleAdmin)
+	editor := env.createUser(t, model.RoleEditor)
+	h := NewUsersHandler(env.db, env.h.renderer, env.sm)
+	broken := admin
+	broken.PasswordHash = "not-a-hash"
+	form := url.Values{"name": {editor.Name}, "email": {editor.Email}, "role": {editor.Role},
+		"password": {"Brand-new-password!"}, "password_confirm": {"Brand-new-password!"}, "current_password": {mfaTestPassword}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/2", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = addUserToContext(requestWithSession(env.sm, requestWithURLParams(req, map[string]string{"id": strconv.FormatInt(editor.ID, 10)})), &broken)
+	rr := httptest.NewRecorder()
+	h.Update(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Error checking your current password") {
+		t.Fatalf("user change with an unverifiable hash = %d", rr.Code)
+	}
+
+	cookie, _ := env.signInWithPassword(t, editor)
+	if _, err := env.db.Exec(`UPDATE users SET password_hash = 'not-a-hash' WHERE id = ?`, editor.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rr := authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {"123456"}}, cookie); rr.Code != http.StatusInternalServerError {
+		t.Fatalf("first setup with an unverifiable hash = %d", rr.Code)
+	}
+
+	for message, userID := range map[string]int64{
+		"User change refused: password could not be verified":       admin.ID,
+		"Two-factor change refused: password could not be verified": editor.ID,
+	} {
+		var level string
+		if err := env.db.QueryRow(`SELECT level FROM events WHERE message = ? AND user_id = ?`, message, userID).Scan(&level); err != nil || level != model.EventLevelError {
+			t.Errorf("event %q = %q, %v; want an error event", message, level, err)
+		}
+	}
+}
+
+// TestLockedFirstSetupIsLogged checks that the first authenticator setup,
+// like the other password gates, logs a refusal while the account is
+// locked, so attempts on a locked account show in the event log.
+func TestLockedFirstSetupIsLogged(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	env.withLockout(t, 2)
+	user := env.createUser(t, model.RoleEditor)
+	cookie, _ := env.signInWithPassword(t, user)
+	for _, password := range []string{"Not-the-password-1!", "Not-the-password-2!", mfaTestPassword} {
+		authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {password}, "code": {"123456"}}, cookie)
+	}
+	if got := env.session(t, cookie)("flash"); got == nil || !strings.Contains(got.(string), "locked") {
+		t.Fatalf("flash after the right password on a locked account = %v, want the lockout message", got)
+	}
+	assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+}
+
+// TestOffServiceSignsInWithoutSecondFactor checks sign-in in demo mode: an
+// account with an authenticator enrolled before the switch signs in with
+// its password alone, rather than at a code step whose codes cannot be
+// checked without OCMS_MFA_KEY (Codex review of the two-factor PR).
+//
+// Bug state: have newMFAService clear only the key and the requirement in
+// demo mode, keeping enrollments, and the sign-in goes to /login/mfa.
+func TestOffServiceSignsInWithoutSecondFactor(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleAdmin)
+	env.enroll(t, user)
+	env.h.mfa = mfa.NewOffService(env.db)
+
+	cookie, next := env.signInWithPassword(t, user)
+	if next == RouteLoginMFA || next == RouteLoginMFASetup {
+		t.Fatalf("password step went to %s; demo mode asked for a second factor", next)
+	}
+	if got := env.session(t, cookie)(middleware.SessionKeyUserID); got == nil {
+		t.Fatal("the password did not sign the account in")
+	}
+}
+
+// TestReplacementAfterKeyChangeWithLastRecoveryCode follows the documented
+// way back after OCMS_MFA_KEY changes: sign in with a recovery code, then
+// set up the app again. With only one code left, signing in spends it, and
+// the replacement asked for a current code nobody could give anymore: the
+// old authenticator cannot be checked under the new key (Codex review of
+// the two-factor PR). Without a current code it now asks for the account
+// password, as a first setup does.
+//
+// Bug state: decide between the current code and the password by
+// Enrolled alone again, and the setup page asks for a current code.
+func TestReplacementAfterKeyChangeWithLastRecoveryCode(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	user := env.createUser(t, model.RoleEditor)
+	_, codes := env.enroll(t, user)
+	for _, code := range codes[1:] {
+		if _, err := env.svc.Verify(t.Context(), user.ID, code); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rotated, err := mfa.NewService(env.db, "Rq7Mx2Vk9Lp4Wn8Zt3Yb6Hc1Sd5Fg0Ja2Ke4Nu8Pq=", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.h.mfa = rotated
+
+	cookie, _ := env.signInWithPassword(t, user)
+	rr := authRequest(env.router, http.MethodPost, RouteLoginMFA, url.Values{"code": {codes[0]}}, cookie)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") == RouteLoginMFA {
+		t.Fatalf("sign-in with the last recovery code = %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	cookie = sessionCookie(t, rr, env.sm)
+
+	page := authRequest(env.router, http.MethodGet, RouteAccountSecurityTOTP, nil, cookie).Body.String()
+	fields := renderedFormFields(t, page, RouteAccountSecurityTOTP)
+	if !slices.Contains(fields, "password") || slices.Contains(fields, adminviews.CurrentCodeField) {
+		t.Fatalf("setup form fields = %v; want the password and no current code", fields)
+	}
+	m := setupSecret.FindStringSubmatch(page)
+	if m == nil {
+		t.Fatal("setup page shows no secret")
+	}
+	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, strings.ReplaceAll(m[1], " ", ""), 0)}}, cookie)
+	if rr.Code != http.StatusOK || strings.Count(rr.Body.String(), "<li><code>") != mfa.RecoveryCodeCount {
+		t.Fatalf("replacement with the password = %d %q, want the new recovery codes", rr.Code, rr.Header().Get("Location"))
+	}
+}

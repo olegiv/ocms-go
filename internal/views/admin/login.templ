@@ -28,19 +28,7 @@ func (d LoginData) T(key string, args ...any) string {
 
 // LoginPage renders the login page.
 templ LoginPage(d LoginData) {
-	<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-		<meta name="generator" content="oCMS - https://ocms.tech"/>
-		<title>{ d.Title } - oCMS</title>
-		<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
-		<link rel="stylesheet" href="/static/dist/main.css"/>
-		<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
-	</head>
-	<body>
-		<div class="auth-container">
+	@authShell(d.Title, d.AdminLang) {
 			if len(d.LangOptions) > 1 {
 				<form action="/language" method="POST" class="auth-lang-form">
 					@csrfField()
@@ -66,14 +54,7 @@ templ LoginPage(d LoginData) {
 					</label>
 				</form>
 			}
-			<div class="auth-card">
-				<div class="auth-header">
-					<h1 class="auth-title">oCMS</h1>
-					<p class="auth-subtitle">{ d.T("auth.login_title") }</p>
-				</div>
-				if d.Flash != "" {
-					@loginAlert(d.Flash, d.FlashType)
-				}
+			@authCard(d.T("auth.login_title"), d.Flash, d.FlashType) {
 				<form method="POST" action="/login" class="auth-form">
 					@csrfField()
 					<div class="form-group">
@@ -118,11 +99,45 @@ templ LoginPage(d LoginData) {
 						{ d.T("auth.login") }
 					}
 				</form>
-			</div>
-		</div>
+			}
 		@loginValidationScript()
+	}
+}
+
+// authShell is the document around the standalone sign-in pages: login, the
+// two-factor code, authenticator setup and recovery codes.
+templ authShell(title, lang string) {
+	<!DOCTYPE html>
+	<html lang={ lang }>
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta name="generator" content="oCMS - https://ocms.tech"/>
+		<title>{ title } - oCMS</title>
+		<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+		<link rel="stylesheet" href="/static/dist/main.css"/>
+		<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
+	</head>
+	<body>
+		<div class="auth-container">
+			{ children... }
+		</div>
 	</body>
 	</html>
+}
+
+// authCard is the branded card of a sign-in page with its flash message.
+templ authCard(subtitle, flash, flashType string) {
+	<div class="auth-card">
+		<div class="auth-header">
+			<h1 class="auth-title">oCMS</h1>
+			<p class="auth-subtitle">{ subtitle }</p>
+		</div>
+		if flash != "" {
+			@loginAlert(flash, flashType)
+		}
+		{ children... }
+	</div>
 }
 
 // loginAlert renders a flash message on the login page.

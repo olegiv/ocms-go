@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/auth"
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
@@ -35,10 +37,12 @@ type AuthHandler struct {
 	eventService    *service.EventService
 	loginProtection *middleware.LoginProtection
 	hookRegistry    *module.HookRegistry
+	mfa             *mfa.Service
 }
 
-// NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, lp *middleware.LoginProtection, hr *module.HookRegistry) *AuthHandler {
+// NewAuthHandler creates a new AuthHandler. mfaService decides which sign-ins
+// need a second factor; it is required.
+func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, lp *middleware.LoginProtection, hr *module.HookRegistry, mfaService *mfa.Service) *AuthHandler {
 	return &AuthHandler{
 		queries:         store.New(db),
 		renderer:        renderer,
@@ -46,19 +50,16 @@ func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManage
 		eventService:    service.NewEventService(db),
 		loginProtection: lp,
 		hookRegistry:    hr,
+		mfa:             mfaService,
 	}
 }
 
 // LoginForm renders the login page.
 // Redirects already-authenticated users to their role's landing page.
 func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
-	// Redirect already-authenticated users
-	if userID := h.sessionManager.GetInt64(r.Context(), middleware.SessionKeyUserID); userID > 0 {
-		user, err := h.queries.GetUserByID(r.Context(), userID)
-		if err == nil {
-			http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
-			return
-		}
+	if dest, signedIn := h.signedInDestination(r.Context()); signedIn {
+		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
 	}
 
 	lang := middleware.GetAdminLang(r)
@@ -200,11 +201,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clear failed attempts on successful login
-	if h.loginProtection != nil {
-		h.loginProtection.RecordSuccessfulLogin(email, clientIP)
-	}
-
 	// Re-hash password if it uses old/expensive parameters (e.g., 64MB → 19MB).
 	// This is a representation change for the same credential — use
 	// UpdateUserPasswordHash so existing sessions for this user are not
@@ -223,32 +219,45 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update last login timestamp
-	if err := h.queries.UpdateUserLastLogin(r.Context(), store.UpdateUserLastLoginParams{
-		LastLoginAt: sql.NullTime{Time: time.Now(), Valid: true},
-		ID:          user.ID,
-	}); err != nil {
-		slog.Error("failed to update last login time", "error", err, "user_id", user.ID)
-		// Don't block login on this error
+	// The password is right. An account with a second factor, or one that
+	// must set one up, signs in only after the next step; the failed-attempt
+	// counter stays until then, so wrong codes keep counting toward the lockout.
+	enrolled, err := h.mfa.Enrolled(r.Context(), user.ID)
+	if err != nil {
+		logAndInternalError(w, "failed to load two-factor status", "error", err, "user_id", user.ID)
+		return
+	}
+	if enrolled || h.mfa.Required() {
+		if err := h.startPendingSignIn(r.Context(), user, !enrolled); err != nil {
+			logAndInternalError(w, "session renewal error", "error", err)
+			return
+		}
+		next := RouteLoginMFA
+		if !enrolled {
+			next = RouteLoginMFASetup
+		}
+		http.Redirect(w, r, next, http.StatusSeeOther)
+		return
 	}
 
-	// Regenerate session ID to prevent session fixation
-	if err := h.sessionManager.RenewToken(r.Context()); err != nil {
+	if err := h.grantSession(r, user, ""); err != nil {
 		logAndInternalError(w, "session renewal error", "error", err)
 		return
 	}
 
-	// Store user ID in session along with the user's current session_version
-	// so the auth middleware can detect if the credential is rotated under us.
-	h.sessionManager.Put(r.Context(), middleware.SessionKeyUserID, user.ID)
-	h.sessionManager.Put(r.Context(), middleware.SessionKeyUserSessionVersion, user.SessionVersion)
-
-	slog.Info("user logged in", "user_id", user.ID, "email", user.Email)
-	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged in", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": user.Email})
-
 	h.renderer.SetFlash(r, i18n.T(lang, "auth.welcome_back", user.Name), "success")
 
 	http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
+}
+
+// signedInDestination returns the landing page of the user this session is
+// signed in as, and false when it is not signed in.
+func (h *AuthHandler) signedInDestination(ctx context.Context) (string, bool) {
+	user, ok := middleware.SessionUser(ctx, h.sessionManager, h.queries)
+	if !ok {
+		return "", false
+	}
+	return loginDestination(user.Role), true
 }
 
 // loginDestination keeps fresh-login and existing-session destinations consistent.

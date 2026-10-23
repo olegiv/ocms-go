@@ -156,6 +156,8 @@ func ReservedPageSlugs() []string {
 // TestRoutePathsReserveAliases (cmd/ocms) keeps the list equal to the
 // router's registrations.
 var reservedRoutePaths = []string{
+	"account/security",
+	"account/security/totp",
 	"admin/**",
 	"api/informer/demo-credentials",
 	"api/mcp",
@@ -165,6 +167,8 @@ var reservedRoutePaths = []string{
 	"embed/dify/token",
 	"health/live",
 	"health/ready",
+	"login/mfa",
+	"login/mfa/setup",
 	"session/get",
 	"session/set",
 	"static/dist/*/**",

@@ -68,7 +68,7 @@ func TestLoginRejectsControlCharactersInEmail(t *testing.T) {
 	if err := i18n.Init(nil); err != nil {
 		t.Fatal(err)
 	}
-	h := NewAuthHandler(db, renderer, sm, nil, nil)
+	h := NewAuthHandler(db, renderer, sm, nil, nil, testMFAService(t, db))
 	form := url.Values{"email": {"owner@example.com\x1f203.0.113.9"}, "password": {"whatever"}}
 	r := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -291,7 +291,7 @@ func TestLoginLockoutIsScopedByClientAddress(t *testing.T) {
 	lockoutDB, cleanup := testutil.TestDB(t)
 	defer cleanup()
 	lp := middleware.NewLoginProtection(lockoutDB, middleware.LoginProtectionConfig{MaxFailedAttempts: 3, LockoutDuration: time.Minute, AttemptWindow: time.Minute})
-	h := NewAuthHandler(db, renderer, sm, lp, nil)
+	h := NewAuthHandler(db, renderer, sm, lp, nil, testMFAService(t, db))
 
 	attempt := func(remoteAddr string) string {
 		form := url.Values{"email": {"owner@example.com"}, "password": {"wrong"}}

@@ -52,6 +52,7 @@ var demoGates = map[string]demoGate{
 	"OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS":        {how: disabledInDemo},
 	"OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS": {how: disabledInDemo},
 	"OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML":   {how: disabledInDemo},
+	"OCMS_REQUIRE_MFA":                          {how: disabledInDemo},
 
 	"OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS": {
 		how:       satisfiedInDemo,

@@ -58,6 +58,12 @@ func (m *Module) Init(ctx *module.Context) error {
 // already chose a status keep it.
 func (m *Module) ActiveByDefault() bool { return false }
 
+// ActivationNeedsPassword makes activating DB Manager ask for the acting
+// administrator's current password: its raw SQL reaches every table, users
+// and sessions included, so a stolen session must not be able to switch it
+// on and take accounts over with it.
+func (m *Module) ActivationNeedsPassword() bool { return true }
+
 // Shutdown performs cleanup when the module is shutting down.
 func (m *Module) Shutdown() error {
 	if m.ctx != nil {

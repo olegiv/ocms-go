@@ -153,6 +153,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 ### Administration
 - **User Management**: Role-based access control (admin/editor)
 - **Authentication**: Secure session-based authentication with argon2id password hashing
+- **Two-Factor Authentication**: Authenticator apps (TOTP) with single-use recovery codes, required for every account in production; admin reset and `ocms mfa-reset` for lost devices
 - **Event Logging**: Comprehensive audit trail for all actions
 - **Admin Dashboard**: Modern responsive UI with HTMX and Alpine.js
   - Statistics overview
@@ -206,7 +207,7 @@ Prebuilt release binaries have no external runtime dependencies beyond the opera
 
 Building from source requires:
 
-- Go 1.27.2 or later
+- Go 1.27.3 or later
 - [Node.js](https://nodejs.org/) (npm) for frontend dependencies
 - [sqlc](https://sqlc.dev/) for SQL code generation
 - [templ](https://templ.guide/) for type-safe HTML templates
@@ -233,7 +234,8 @@ cd my-site
 ```
 
 `ocms init` creates `my-site/` with a `.env` (including a freshly generated
-`OCMS_SESSION_SECRET`) plus `data/`, `uploads/`, and `custom/` directories.
+`OCMS_SESSION_SECRET` and `OCMS_MFA_KEY`) plus `data/`, `uploads/`, and
+`custom/` directories.
 `ocms serve` starts the server, reading `./.env` from the current directory.
 Running `ocms` with no command still starts the server, so existing
 systemd/Docker setups are unaffected.
@@ -252,6 +254,12 @@ immediately. Stop the foreground process with `Ctrl+C`, set
 `OCMS_DO_SEED=false` in `my-site/.env`, then run `serve` again for normal runs.
 
 Keep `OCMS_SESSION_SECRET` stable; regenerating it invalidates active sessions.
+Keep `OCMS_MFA_KEY` stable too, and back it up with the database: it seals the
+authenticator-app secrets of two-factor authentication, and without it enrolled
+users can sign in only with recovery codes. Someone who lost both their
+authenticator and recovery codes is reset by an administrator on the user page,
+or with `ocms mfa-reset [-db <path>] <email>`, which reads `./.env` like
+`ocms migrate`.
 Do not set `OCMS_ENV=production` for this seeded bootstrap run. Production
 startup rejects default seeded credentials.
 
@@ -313,6 +321,8 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `OCMS_SESSION_SECRET` | Required server secret, validated at startup; nothing is keyed with it today: sessions are stored server-side and CSRF protection checks Fetch metadata headers (min 32 bytes; placeholder values from example files are refused, and the public test-suite secret is refused in production) | - | Yes |
+| `OCMS_MFA_KEY` | Seals the TOTP secrets of two-factor authentication at rest (min 32 bytes, distinct from `OCMS_SESSION_SECRET`; same placeholder and entropy checks). Unset: nobody can enroll an authenticator app, and enrolled users can sign in only with recovery codes. Back it up with the database | - | In production, unless `OCMS_REQUIRE_MFA=false` |
+| `OCMS_REQUIRE_MFA` | Every account (admin, editor and public) must pass a second factor at login; accounts without one set it up at their next sign-in, and sessions that started without one are signed out. Needs `OCMS_MFA_KEY`; ignored in demo mode (see `docs/login-security.md`) | `false` (`true` in production when unset) | No |
 | `OCMS_DB_PATH` | Path to SQLite database file | `./data/ocms.db` | No |
 | `OCMS_ENV_FILE` | Env file to read instead of `./.env` (site instance mode; `site.mk` sets it to the site's `.env`). The server and `ocms migrate` refuse to start if it is missing, unreadable or does not parse; a `./.env` that does not parse is refused too, a missing one ignored. Variables already in the environment win over the file | `./.env` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
@@ -465,7 +475,8 @@ so this first, seeded run sets `OCMS_ENV=development`. Change the admin
 credentials before starting in production: production startup refuses to run
 while the default seeded credentials are active. A production container also
 needs, in a `.env` file beside `docker-compose.yml`: `OCMS_TRUSTED_PROXIES`,
-`OCMS_API_ALLOWED_CIDRS`, `OCMS_EMBED_PROXY_TOKEN` while the Embed module is
+`OCMS_API_ALLOWED_CIDRS`, `OCMS_MFA_KEY` (or `OCMS_REQUIRE_MFA=false`),
+`OCMS_EMBED_PROXY_TOKEN` while the Embed module is
 active (it is on a fresh install), and the hCaptcha keys or
 `OCMS_REQUIRE_FORM_CAPTCHA=false`. Compose passes the container every variable
 the app reads except the listen address, the port and the `/app` paths, which
@@ -519,6 +530,8 @@ Create a `.env` file for production:
 
 ```bash
 OCMS_SESSION_SECRET=your-secure-secret-key-at-least-32-bytes
+# Seals two-factor secrets; production requires a second factor for every account
+OCMS_MFA_KEY=your-secure-mfa-key-at-least-32-bytes
 OCMS_ENV=production
 OCMS_DO_SEED=false
 OCMS_ACTIVE_THEME=default
@@ -1008,7 +1021,7 @@ git commit -m "Update Claude Code shared submodule"
 
 ## Technology Stack
 
-- **Backend**: Go 1.27.2+
+- **Backend**: Go 1.27.3+
 - **Database**: SQLite with [goose](https://github.com/pressly/goose) migrations
 - **SQL**: Type-safe queries with [sqlc](https://sqlc.dev/)
 - **Templates**: [templ](https://templ.guide/) for type-safe HTML

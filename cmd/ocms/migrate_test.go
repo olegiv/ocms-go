@@ -25,13 +25,14 @@ func unsetEnv(t *testing.T, keys ...string) {
 }
 
 // TestRunMigrate checks `ocms migrate`: up applies the migrations, down rolls
-// back the latest, a Go migration the goose CLI cannot roll back, status and
-// version run, and a missing or unknown command is refused.
+// back the latest, and the next down a Go migration the goose CLI cannot roll
+// back (20261018050000_store_times_in_utc, below the two-factor tables),
+// status and version run, and a missing or unknown command is refused.
 func TestRunMigrate(t *testing.T) {
 	unsetEnv(t, "OCMS_DB_PATH", "OCMS_ENV_FILE")
 	t.Chdir(t.TempDir()) // no ./.env
 	path := filepath.Join(t.TempDir(), "migrate.db")
-	for _, command := range []string{"up", "status", "down", "up", "version"} {
+	for _, command := range []string{"up", "status", "down", "down", "up", "version"} {
 		if err := runMigrate([]string{"-db", path, command}); err != nil {
 			t.Fatalf("ocms migrate %s: %v", command, err)
 		}

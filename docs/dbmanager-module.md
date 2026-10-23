@@ -154,6 +154,9 @@ All translation keys are prefixed with `dbmanager.`:
 ## Security
 
 - Inactive by default; enable it only while it is needed
+- Activating it asks for the administrator's current password, so a stolen
+  session cannot switch it on; wrong passwords count toward the login
+  lockout. Once active, queries need no password, so switch it off when done
 - Results are capped at 1,000 rows and each statement is cancelled after 10 seconds
 - Query execution is refused in demo mode (the history stays visible)
 
@@ -184,7 +187,8 @@ is needed. Installs that already chose a status keep it across upgrades.
 
 1. Navigate to **Admin > Modules**
 2. Find "DB Manager" in the list
-3. Toggle the switch to enable/disable
+3. Toggle the switch to enable/disable; switching it on opens a dialog that
+   asks for your current password
 4. Changes take effect immediately (no restart required)
 
 ## Troubleshooting
