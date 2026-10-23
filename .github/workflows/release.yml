@@ -157,11 +157,9 @@ jobs:
           version_no_v="${GITHUB_REF_NAME#v}"
           mkdir -p release
 
-          awk -v ver="$version_no_v" '
-            index($0, "## [" ver "]") == 1 {inblock=1; next}
-            inblock && /^## \[/ {exit}
-            inblock {print}
-          ' CHANGELOG.md > release/notes.md
+          # The script joins CHANGELOG.md's wrapped lines: GitHub renders each
+          # newline of a release description as a line break.
+          scripts/release-notes.sh "$version_no_v" CHANGELOG.md > release/notes.md
 
           if [ ! -s release/notes.md ]; then
             echo "::error::Extracted empty release notes for ${GITHUB_REF_NAME}; CHANGELOG section must have content."
