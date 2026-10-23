@@ -252,6 +252,13 @@ restart_remote_on_exit() {
     fi
     exit "$status"
 }
+# Turn an interrupt into a normal exit, so restart_remote_on_exit runs from
+# the script's own flow, once the interrupted command has finished. Left
+# untrapped, bash runs the EXIT trap from inside its handling of the fatal
+# signal, and on a CI runner it skipped it, leaving the instance stopped.
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 trap restart_remote_on_exit EXIT
 
 checkpoint_remote_db() {

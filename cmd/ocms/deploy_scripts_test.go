@@ -640,8 +640,15 @@ echo "ocmsctl $*" >> "`+calls+`"
 // before step 5's start succeeded must still make the trap start the
 // instance, and one during the health wait must not start it twice.
 //
-// Bug state: drop the EXIT trap, the trap's `trap ” INT TERM HUP`, the health
-// check in start_remote_server, or the exit after a failed stop, or clear
+// The script must also trap INT, TERM and HUP itself, turning them into a
+// normal exit: left untrapped, bash runs the EXIT trap from inside its
+// handling of the fatal signal, and on a CI runner it skipped it ("interrupted
+// during the start" failed there once and never locally). No stub reproduces
+// that race, so the traps are checked in the source.
+//
+// Bug state: drop the EXIT trap, the signal traps, the line in
+// restart_remote_on_exit that ignores INT, TERM and HUP, the health check in
+// start_remote_server, or the exit after a failed stop, or clear
 // REMOTE_STOPPED before step 5's start, and this fails.
 func TestSyncProdToDevRestartsProduction(t *testing.T) {
 	bash, err := exec.LookPath("bash")
@@ -651,6 +658,15 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "deploy", "sync-prod-to-dev.sh"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	source, err := os.ReadFile(script) // #nosec G304 -- fixed repository path
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, trap := range []string{"trap 'exit 129' HUP", "trap 'exit 130' INT", "trap 'exit 143' TERM", "trap restart_remote_on_exit EXIT"} {
+		if !regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(trap) + `$`).Match(source) {
+			t.Errorf("sync-prod-to-dev.sh no longer sets %q, so an interrupt can skip restarting production", trap)
+		}
 	}
 	const anyFailure = -1
 	cases := []struct {
