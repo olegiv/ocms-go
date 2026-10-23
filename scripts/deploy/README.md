@@ -244,8 +244,14 @@ The script:
 4. Installs it as `/opt/ocms/bin/ocms`, the binary `ocmsctl` and `ocms@.service` run, by
    copying it beside that file and renaming it over, which leaves the running binary alone,
    so a failed upload or install stops no instance
-5. Restarts all listed instances via `ocmsctl` (stop, then start)
-6. Checks each instance status
+5. Restarts all listed instances via `ocmsctl` (stop, then start). An instance that does not
+   stop is left as it is and one that does not start is reported; the deploy goes on with
+   the others
+6. Waits for each started instance to report healthy with `ocmsctl health` (15 tries,
+   2 seconds apart; set `HEALTH_RETRIES` and `HEALTH_INTERVAL` to change), prints each
+   instance's status, asks each healthy one once more, and exits 1, naming the instances
+   that failed, when any did. A systemd unit "starts" before its binary has read its config,
+   so one that exits at startup is caught only here
 
 All instances share `/opt/ocms/bin/ocms`, so instances the command does not list keep
 running the old binary until they restart.
@@ -293,7 +299,8 @@ The script:
    (`-v` is the instance directory created by `setup-site.sh`, not the domain root)
 6. (If custom themes exist) Sets ownership to `{owner}:{group}`
 7. Starts the instance
-8. Checks instance status
+8. Waits for it to report healthy and asks it once more, as `deploy-binary.sh` does. A failed
+   stop, start or health check ends the deploy with exit 1 and says why
 
 ### Multi-Instance (on server)
 

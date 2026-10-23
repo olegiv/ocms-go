@@ -59,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `golang:1.27.3-alpine`. It fixes GO-2026-6809 (compromised intermediate
   certificates trusted by `crypto/x509`), which `govulncheck` reports for
   Go 1.27.2. Prebuilt binaries must be rebuilt to pick it up.
+- Update goose 3.28.0 → 3.29.0, modernc.org/sqlite 1.60.1 → 1.61.0 (SQLite
+  3.54.1) with its pinned modernc libc 1.79.0, and boombuler/barcode to
+  1.1.0, which renders the two-factor QR code byte for byte the same.
+- Update Alpine.js and its collapse and sort plugins 3.17.4 → 3.17.5 and
+  swagger-ui-dist 5.33.3 → 5.34.0, with refreshed integrity hashes.
 
 ### Fixed
 - `/health` decided "signed in" from the session's user ID alone, so a
@@ -69,6 +74,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check uses it too. (Sentinel's middleware runs before sessions are loaded,
   so its admin and editor exemption from auto-ban paths has never applied
   there; that is unchanged.)
+- **`deploy-binary.sh` and `deploy.sh` fail when an instance does not come
+  up.** They printed `ocmsctl status` and reported "Deployment complete!"
+  while every instance crash-looped on a missing `OCMS_MFA_KEY`. They now
+  wait for each restarted instance to report healthy (`HEALTH_RETRIES`,
+  default 15, `HEALTH_INTERVAL`, default 2 seconds), check it once more after
+  the status, and exit 1 naming the instances that failed. `deploy-binary.sh`
+  also goes on with the other instances when one does not stop or start,
+  instead of leaving them stopped.
+- Google Analytics 4 hits sent to `www.google.com/g/collect` were blocked by
+  the Content-Security-Policy, so those events were lost. While the External
+  Analytics module is active, `connect-src` now allows `https://*.google.com`,
+  as Google's CSP guide lists for GA4.
+- The notices on the two-factor page (`/account/security`) and the form
+  builder's captcha notice wrapped one word per line.
 
 ## [0.29.1] - 2026-10-18
 

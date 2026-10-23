@@ -31,6 +31,10 @@ REMOTE_RUN_BINARY="${REMOTE_BIN_DIR}/ocms"
 # deploy uses (remote_upload_path in helper.sh).
 REMOTE_UPLOAD="$(remote_upload_path "${REMOTE_BIN_DIR}" "${REMOTE_BINARY}")"
 
+# How long each instance gets to answer /health after the restart.
+HEALTH_RETRIES="${HEALTH_RETRIES:-15}"
+HEALTH_INTERVAL="${HEALTH_INTERVAL:-2}"
+
 # Defaults
 SSH_USER="root"
 SKIP_BUILD=false
@@ -112,6 +116,7 @@ if [[ -z "$SERVER" ]] || [[ ${#INSTANCES[@]} -eq 0 ]]; then
     echo "Use --help for usage information."
     exit 1
 fi
+check_health_settings
 
 # Helper for running or printing commands
 run() {
@@ -172,26 +177,44 @@ echo_step "Installing binary as ${REMOTE_RUN_BINARY}..."
 ssh_cmd "$(install_binary_command "${REMOTE_UPLOAD}" "${REMOTE_RUN_BINARY}")"
 echo_ok "Binary installed"
 
-# Step 4: Restart the instances on the new binary
+# Step 4: Restart the instances on the new binary. A failed stop or start is
+# recorded and the deploy goes on with the other instances, so one broken
+# instance does not leave the rest stopped; an instance that did not stop is
+# left as it is.
+UNHEALTHY=()
+STOPPED=()
 for instance in "${INSTANCES[@]}"; do
     echo_step "Stopping instance '${instance}'..."
-    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${instance}"
-    echo_ok "Instance '${instance}' stopped"
+    rc=0
+    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${instance}" || rc=$?
+    if [[ "$rc" -eq 0 ]]; then
+        echo_ok "Instance '${instance}' stopped"
+        STOPPED+=("${instance}")
+    else
+        remote_failed "$rc" "stopping" "${instance}" "Could not stop instance '${instance}'; leaving it as it is"
+    fi
 done
 
-# Step 5: Start all instances
-for instance in "${INSTANCES[@]}"; do
+# Step 5: Start the instances that stopped
+STARTED=()
+for instance in ${STOPPED[@]+"${STOPPED[@]}"}; do
     echo_step "Starting instance '${instance}'..."
-    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl start ${instance}"
-    echo_ok "Instance '${instance}' started"
+    rc=0
+    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl start ${instance}" || rc=$?
+    if [[ "$rc" -eq 0 ]]; then
+        echo_ok "Instance '${instance}' started"
+        STARTED+=("${instance}")
+    else
+        remote_failed "$rc" "starting" "${instance}" "Could not start instance '${instance}'"
+    fi
 done
 
-# Step 6: Health check
-echo_step "Checking instance status..."
-sleep 2
-for instance in "${INSTANCES[@]}"; do
-    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl status ${instance}"
-done
-
+# Step 6: Health check. Every started instance must report healthy, or the
+# deploy fails.
+echo_step "Waiting for the instances to report healthy..."
+check_instances ${STARTED[@]+"${STARTED[@]}"}
+if [[ ${#UNHEALTHY[@]} -gt 0 ]]; then
+    fail_deploy true
+fi
 echo ""
 echo_ok "Deployment complete!"

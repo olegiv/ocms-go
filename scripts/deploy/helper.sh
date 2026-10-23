@@ -73,6 +73,90 @@ remote_upload_path() {
     esac
 }
 
+# wait_healthy_command prints the shell command that waits for instance $2 to
+# report healthy: it runs `$1 health $2` (ocmsctl) up to $3 times, $4 seconds
+# apart, and when no attempt succeeds prints the last one's output (the HTTP
+# status, or why ocmsctl could not check) and fails. Starting a systemd unit
+# returns before the binary has read its config, so one that exits at startup
+# still "starts": on 2026-10-23 every instance crash-looped on a missing
+# OCMS_MFA_KEY while the deploy reported success. The path and instance are
+# single-quoted in the command, so they must not contain a single quote.
+wait_healthy_command() {
+    printf "n=1; until out=\$('%s' health '%s' 2>&1); do [ \"\$n\" -lt %d ] || { echo \"\$out\"; exit 1; }; n=\$((n + 1)); sleep %d; done" "$1" "$2" "$3" "$4"
+}
+
+# check_health_settings stops the deploy unless HEALTH_RETRIES is a positive
+# whole number and HEALTH_INTERVAL a whole number of seconds.
+check_health_settings() {
+    if [[ ! "$HEALTH_RETRIES" =~ ^[1-9][0-9]*$ ]]; then
+        echo_error "HEALTH_RETRIES must be a positive whole number, got '${HEALTH_RETRIES}'"
+        exit 1
+    fi
+    # No leading zeros: printf %d reads 08 as an invalid octal number.
+    if [[ ! "$HEALTH_INTERVAL" =~ ^(0|[1-9][0-9]*)$ ]]; then
+        echo_error "HEALTH_INTERVAL must be a whole number of seconds, got '${HEALTH_INTERVAL}'"
+        exit 1
+    fi
+}
+
+# remote_failed records that a remote step for instance $3 failed with ssh
+# exit status $1: it adds the instance to UNHEALTHY, which the caller
+# declares, and prints $4, or, when ssh lost the connection (exit 255), that
+# the instance's state is unknown after "$2" (what the step was doing).
+remote_failed() {
+    if [[ "$1" -eq 255 ]]; then
+        echo_error "Lost the connection to the server while ${2} '${3}'; its state is unknown"
+    else
+        echo_error "$4"
+    fi
+    UNHEALTHY+=("$3")
+}
+
+# check_instances waits for each instance named in its arguments to report
+# healthy, shows each one's `ocmsctl status`, then asks each healthy one once
+# more: ocms@.service restarts a binary that exits, so one that dies after its
+# first answer would pass the wait alone. Each instance that failed goes to
+# UNHEALTHY through remote_failed. It runs commands through the calling
+# script's ssh_cmd and reads REMOTE_BIN_DIR, HEALTH_RETRIES and
+# HEALTH_INTERVAL.
+check_instances() {
+    local instance rc
+    local -a healthy=()
+    for instance in "$@"; do
+        rc=0
+        ssh_cmd "$(wait_healthy_command "${REMOTE_BIN_DIR}/ocmsctl" "${instance}" "${HEALTH_RETRIES}" "${HEALTH_INTERVAL}")" || rc=$?
+        if [[ "$rc" -eq 0 ]]; then
+            echo_ok "Instance '${instance}' is healthy"
+            healthy+=("${instance}")
+        else
+            remote_failed "$rc" "waiting for" "${instance}" "Instance '${instance}' did not report healthy after ${HEALTH_RETRIES} attempts"
+        fi
+    done
+    for instance in "$@"; do
+        ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl status ${instance}" || echo_warn "Could not get the status of '${instance}'"
+    done
+    for instance in ${healthy[@]+"${healthy[@]}"}; do
+        rc=0
+        ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl health ${instance}" || rc=$?
+        if [[ "$rc" -ne 0 ]]; then
+            remote_failed "$rc" "checking" "${instance}" "Instance '${instance}' stopped reporting healthy after it started"
+        fi
+    done
+}
+
+# fail_deploy reports the instances in UNHEALTHY and where to look, and exits
+# 1. With $1 true, the deploy backed up the binary it replaced, and it says
+# where that copy is.
+fail_deploy() {
+    echo ""
+    echo_error "Deployment failed for: ${UNHEALTHY[*]}"
+    echo "  Logs:   ssh ${SSH_USER}@${SERVER} ${REMOTE_BIN_DIR}/ocmsctl logs <instance>"
+    if [[ "$1" == true ]]; then
+        echo "  Backup: ${REMOTE_RUN_BINARY}.backup holds the binary this deploy replaced, if there was one"
+    fi
+    exit 1
+}
+
 echo_dry_run() {
     echo -e "$(_ts) ${YELLOW}[DRY-RUN]${NC} $1"
 }
