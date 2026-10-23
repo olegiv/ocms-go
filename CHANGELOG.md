@@ -88,6 +88,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as Google's CSP guide lists for GA4.
 - The notices on the two-factor page (`/account/security`) and the form
   builder's captcha notice wrapped one word per line.
+- **`sync-prod-to-dev.sh` no longer leaves the production site down.** It
+  stops the production instance while it copies the data, and a failed or
+  interrupted step ended the script with the instance stopped. It now starts
+  the instance again whenever it exits while the instance is stopped, waits
+  for it to report healthy after the sync, and exits 1 when it does not. A
+  failed stop used to be ignored, so the database of a running instance was
+  copied; it now ends the sync before anything is copied.
+- **`healthcheck-multi.sh` reports crash-looping sites.** It skipped every
+  unit that was not `active`, and `ocms@.service` restarts a binary that
+  exits, so a site crash-looping at startup (systemd reports `activating`)
+  passed the cron check. `activating` and `failed` units now count as down
+  and are alerted on, but not restarted: systemd already restarts a crash
+  loop, and a `failed` unit (a stop that did not end cleanly) may have been
+  stopped on purpose. `inactive` units are still skipped.
+- `healthcheck-multi.sh` restarted and alerted on a dead site every five
+  minutes for ever, because its restart cooldown was as long as the cron
+  interval. A site is now restarted at most three times per outage, the
+  count resetting once it is healthy, and each outage alerts once when it
+  starts, once when the restarts run out, and once when the site recovers.
+  Its state moved from `/tmp/ocms-health-*`, which any local user could
+  write, to `/run/ocms-health/` (root only); the old files can be deleted.
 
 ## [0.29.1] - 2026-10-18
 

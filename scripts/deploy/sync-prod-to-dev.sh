@@ -18,6 +18,10 @@ LOCAL_UPLOADS_DIR="./uploads"
 LOCAL_LOGS_DIR="./logs"
 LOCAL_CUSTOM_DIR="./custom"
 
+# How long the remote instance gets to answer /health after the restart.
+HEALTH_RETRIES="${HEALTH_RETRIES:-15}"
+HEALTH_INTERVAL="${HEALTH_INTERVAL:-2}"
+
 # Defaults
 SSH_USER="root"
 VHOST=""
@@ -26,6 +30,12 @@ SYNC_DB=true
 SYNC_UPLOADS=true
 SYNC_LOGS=true
 SYNC_CUSTOM=false
+
+# REMOTE_STOPPED is true from the stop until ocmsctl start succeeds, and
+# REMOTE_UNCHECKED from then until its health check has run; see
+# restart_remote_on_exit.
+REMOTE_STOPPED=false
+REMOTE_UNCHECKED=false
 
 # Load local port from .env if available
 LOCAL_PORT=""
@@ -142,6 +152,7 @@ if [[ -z "$VHOST" ]]; then
     echo "Use --help for usage information."
     exit 1
 fi
+check_health_settings
 
 # Construct remote paths from instance directory
 REMOTE_INSTANCE_DIR="${VHOST}"
@@ -181,17 +192,67 @@ stop_local_server() {
     echo_ok "Local server stopped"
 }
 
+# stop_remote_server stops the remote instance, or ends the script before
+# anything is copied: copying the database of a running instance gives a
+# torn copy. When ocmsctl refused the stop the instance is still running, so
+# there is nothing to start again; after a lost connection its state is
+# unknown, and restart_remote_on_exit starts it to be safe.
 stop_remote_server() {
     echo_step "Stopping remote instance '${INSTANCE}'..."
-    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${INSTANCE}" || true
+    local rc=0
+    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${INSTANCE}" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        UNHEALTHY=()
+        remote_failed "$rc" "stopping" "${INSTANCE}" "Could not stop remote instance '${INSTANCE}'; nothing was synced"
+        if [[ "$rc" -ne 255 ]]; then
+            REMOTE_STOPPED=false
+        fi
+        exit 1
+    fi
     echo_ok "Remote server stopped"
 }
 
+# start_remote_server starts the remote instance and waits for it to report
+# healthy (check_instances in helper.sh). It returns 1 when it did not.
 start_remote_server() {
     echo_step "Starting remote instance '${INSTANCE}'..."
-    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl start ${INSTANCE}"
+    UNHEALTHY=()
+    local rc=0
+    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl start ${INSTANCE}" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        remote_failed "$rc" "starting" "${INSTANCE}" "Could not start remote instance '${INSTANCE}'"
+        return 1
+    fi
+    REMOTE_STOPPED=false
+    REMOTE_UNCHECKED=true
     echo_ok "Remote server started"
+    echo_step "Waiting for remote instance '${INSTANCE}' to report healthy..."
+    check_instances "${INSTANCE}"
+    REMOTE_UNCHECKED=false
+    [[ ${#UNHEALTHY[@]} -eq 0 ]]
 }
+
+# restart_remote_on_exit runs when the script exits. If that happens while the
+# remote instance is stopped, because a step failed or the sync was
+# interrupted, it starts the instance again, so a failed sync does not leave
+# the production site down. Another Ctrl-C cannot cut that start short. If
+# the instance had started but its health check was cut short, it says so.
+restart_remote_on_exit() {
+    local status=$?
+    trap - EXIT
+    trap '' INT TERM HUP
+    if [[ "$REMOTE_STOPPED" == true ]]; then
+        REMOTE_STOPPED=false
+        echo_error "The sync stopped before it finished (status ${status}) while the remote instance was stopped; starting it again"
+        if ! start_remote_server; then
+            echo_error "The remote instance '${INSTANCE}' did not come back; see ${REMOTE_BIN_DIR}/ocmsctl logs ${INSTANCE}"
+        fi
+    elif [[ "$REMOTE_UNCHECKED" == true ]]; then
+        echo_warn "The remote instance '${INSTANCE}' was started, but its health check was cut short; check it with ${REMOTE_BIN_DIR}/ocmsctl health ${INSTANCE}"
+    fi
+    exit "$status"
+}
+trap restart_remote_on_exit EXIT
 
 checkpoint_remote_db() {
     echo_step "Checkpointing remote SQLite WAL..."
@@ -335,7 +396,9 @@ fi
 # Step 1: Stop local server
 stop_local_server
 
-# Step 2: Stop remote server
+# Step 2: Stop remote server. From here until it starts again, a failing step
+# or an interrupt makes restart_remote_on_exit start it.
+REMOTE_STOPPED=true
 stop_remote_server
 
 # Step 3: Checkpoint remote database (flush WAL to main file)
@@ -349,8 +412,17 @@ sync_uploads
 sync_logs
 sync_custom
 
-# Step 5: Start remote server
-start_remote_server
+# Step 5: Start remote server; it must report healthy again. REMOTE_STOPPED
+# stays set until ocmsctl start succeeds, so an interrupt before then still
+# makes restart_remote_on_exit start the instance; a start that failed is
+# reported here and not tried again.
+STARTED=true
+start_remote_server || STARTED=false
+REMOTE_STOPPED=false
+if [[ "$STARTED" != true ]]; then
+    echo_error "The data was synced, but the remote instance '${INSTANCE}' is not healthy; see ${REMOTE_BIN_DIR}/ocmsctl logs ${INSTANCE}"
+    exit 1
+fi
 
 # Summary
 echo ""

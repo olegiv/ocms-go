@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # oCMS Multi-Instance Health Check Script
-# Checks all registered oCMS instances and auto-restarts failed ones.
+# Checks all registered oCMS instances, restarts unhealthy ones, reports
+# crash-looping and failed units, and exits with the number of sites down.
 # Designed for cron: */5 * * * * root /opt/ocms/healthcheck-multi.sh
 #
 # Usage: ./healthcheck-multi.sh [site-id]
@@ -25,8 +26,12 @@ fi
 # Configuration
 SITES_CONF="/etc/ocms/sites.conf"
 AUTO_RESTART=true
-MAX_RESTART_ATTEMPTS=3
-RESTART_COOLDOWN=300  # seconds
+MAX_RESTART_ATTEMPTS=3  # per outage: the count resets once the site is healthy
+# Per-site state, in a directory only root can write: in /tmp any local user
+# could plant a file that silences a site's alerts and restarts. /run is
+# cleared on reboot. <dir>/<site-id> holds "time:count", the restarts of the
+# current outage; <dir>/<site-id>.down marks a site already reported down.
+STATE_DIR="/run/ocms-health"
 FILTER_SITE="${1:-}"
 
 # Optional alerting (uncomment and configure)
@@ -50,37 +55,27 @@ send_alert() {
     fi
 }
 
+# get_restart_count prints how many times site $1 was restarted in its
+# current outage. Only clear_restart_state, when the site is healthy again,
+# resets it, so the cap holds however long the site stays down. (A cooldown
+# as long as the cron interval used to reset it between runs, so a dead site
+# was restarted, and alerted on, every five minutes for ever.)
 get_restart_count() {
-    local site_id="$1"
-    local state_file="/tmp/ocms-health-${site_id}"
+    local state_file="${STATE_DIR}/$1"
 
     if [ -f "$state_file" ]; then
-        local last_time count now
-        last_time=$(cut -d: -f1 < "$state_file")
-        count=$(cut -d: -f2 < "$state_file")
-        now=$(date +%s)
-
-        if [ $((now - last_time)) -gt $RESTART_COOLDOWN ]; then
-            echo 0
-        else
-            echo "$count"
-        fi
+        cut -d: -f2 < "$state_file"
     else
         echo 0
     fi
 }
 
 set_restart_count() {
-    local site_id="$1"
-    local count="$2"
-    local state_file="/tmp/ocms-health-${site_id}"
-    echo "$(date +%s):$count" > "$state_file"
+    echo "$(date +%s):$2" > "${STATE_DIR}/$1"
 }
 
 clear_restart_state() {
-    local site_id="$1"
-    local state_file="/tmp/ocms-health-${site_id}"
-    [ -f "$state_file" ] && rm -f "$state_file"
+    rm -f "${STATE_DIR}/$1" "${STATE_DIR}/$1.down"
 }
 
 health_check() {
@@ -99,8 +94,12 @@ restart_site() {
 
     if [ "$count" -ge "$MAX_RESTART_ATTEMPTS" ]; then
         echo_error "[$site_id] Max restart attempts ($MAX_RESTART_ATTEMPTS) reached. Manual intervention required."
-        send_alert "CRITICAL: oCMS site $site_id requires manual intervention" \
-            "oCMS site $site_id failed $MAX_RESTART_ATTEMPTS restart attempts on $(hostname)."
+        # Alert once: the count goes past the cap, so later runs only log.
+        if [ "$count" -eq "$MAX_RESTART_ATTEMPTS" ]; then
+            send_alert "CRITICAL: oCMS site $site_id requires manual intervention" \
+                "oCMS site $site_id failed $MAX_RESTART_ATTEMPTS restart attempts on $(hostname)."
+            set_restart_count "$site_id" $((count + 1))
+        fi
         return 1
     fi
 
@@ -110,7 +109,7 @@ restart_site() {
 
     if health_check "$port"; then
         echo_info "[$site_id] Restarted successfully"
-        set_restart_count "$site_id" 0
+        clear_restart_state "$site_id"
         send_alert "oCMS site $site_id recovered" \
             "oCMS site $site_id on $(hostname) was restarted and is now healthy."
         return 0
@@ -121,39 +120,85 @@ restart_site() {
     fi
 }
 
+# site_down reports site $1 (port $2) as down for reason $3, alerts the
+# first time in an outage (the .down marker), restarts the site when $4 is
+# "restart" and AUTO_RESTART is on, and returns 1.
+site_down() {
+    local site_id="$1"
+    local port="$2"
+    local reason="$3"
+    local action="$4"
+
+    echo_error "[$site_id] $reason (port $port)"
+
+    if [ ! -f "${STATE_DIR}/${site_id}.down" ]; then
+        : > "${STATE_DIR}/${site_id}.down"
+        send_alert "ALERT: oCMS site $site_id is down" \
+            "$reason for $site_id on $(hostname) (port $port)"
+    fi
+
+    if [ "$action" = restart ] && [ "$AUTO_RESTART" = true ]; then
+        restart_site "$site_id" "$port"
+    fi
+
+    return 1
+}
+
 check_site() {
     local site_id="$1"
     local port="$2"
     local service="ocms@${site_id}"
+    local state
 
-    # Only check sites running under systemd
-    if ! systemctl is-active --quiet "$service" 2>/dev/null; then
-        # Not managed by systemd — skip (may be using ocmsctl or stopped intentionally)
-        return 0
-    fi
+    # `systemctl is-active` prints the unit's state; ocms@.service restarts a
+    # binary that exits (Restart=always).
+    #   activating: it keeps exiting at startup and systemd keeps restarting
+    #               it, so it is down, and a restart from here adds nothing.
+    #   failed:     a stop that did not end cleanly (the binary exits 1 when
+    #               requests outlast its shutdown timeout) or a start systemd
+    #               gave up on. It is down, but may have been stopped on
+    #               purpose, so it is reported and not restarted.
+    #   inactive:   stopped cleanly, never started, or not managed by systemd
+    #               (ocmsctl without a unit): skipped.
+    state=$(systemctl is-active "$service" 2>/dev/null) || true
+    case "$state" in
+        active) ;;
+        activating)
+            site_down "$site_id" "$port" "systemd reports $service as activating: it keeps exiting and systemd keeps restarting it" report
+            return 1
+            ;;
+        failed)
+            site_down "$site_id" "$port" "systemd reports $service as failed; not restarted, since it may have been stopped on purpose (systemctl reset-failed $service clears it)" report
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
 
     if health_check "$port"; then
-        # Healthy — clear any restart state
+        if [ -f "${STATE_DIR}/${site_id}.down" ]; then
+            echo_info "[$site_id] Healthy again"
+            send_alert "oCMS site $site_id recovered" \
+                "oCMS site $site_id on $(hostname) is healthy again."
+        fi
         clear_restart_state "$site_id"
         return 0
-    else
-        echo_error "[$site_id] Health check failed (port $port)"
-
-        send_alert "ALERT: oCMS site $site_id is down" \
-            "Health check failed for $site_id on $(hostname) (port $port)"
-
-        if [ "$AUTO_RESTART" = true ]; then
-            restart_site "$site_id" "$port"
-        fi
-
-        return 1
     fi
+    site_down "$site_id" "$port" "Health check failed" restart
 }
 
 # --- Main ---
 
 if [ ! -f "$SITES_CONF" ]; then
     echo_error "No sites registered: $SITES_CONF"
+    exit 1
+fi
+
+# The state directory must be ours alone (see STATE_DIR).
+mkdir -p "$STATE_DIR" 2>/dev/null && chmod 700 "$STATE_DIR" 2>/dev/null
+if [ -L "$STATE_DIR" ] || [ ! -d "$STATE_DIR" ] || [ ! -O "$STATE_DIR" ]; then
+    echo_error "Cannot use $STATE_DIR for the health state: it must be a directory owned by $(id -un) (run this as root)"
     exit 1
 fi
 
