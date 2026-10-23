@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -21,7 +23,8 @@ import (
 // backup_binary_command must copy the binary to .backup, and succeed with a
 // note when there is no binary yet. remote_upload_path must move an upload
 // whose name is a file the deploy uses (ocms, its staging copies, the backup,
-// ocmsctl) to ocms.upload.
+// ocmsctl) to ocms.upload. wait_healthy_command must succeed once ocmsctl
+// health does, and fail after the given number of attempts when it never does.
 func TestDeployBinaryCommands(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	if err != nil {
@@ -129,6 +132,48 @@ func TestDeployBinaryCommands(t *testing.T) {
 			t.Errorf("backing up into a read-only directory succeeded:\n%s", out)
 		}
 	})
+
+	t.Run("wait healthy", func(t *testing.T) {
+		dir := t.TempDir()
+		// stub writes an ocmsctl that logs each call, prints the call's
+		// number, and answers from the given call on, or never when answerOn
+		// is 0.
+		stub := func(name string, answerOn int) (string, string) {
+			path, calls := filepath.Join(dir, name), filepath.Join(dir, name+".calls")
+			script := "#!/bin/sh\necho \"$*\" >> '" + calls + "'\nn=$(wc -l < '" + calls + "')\necho \"FAILED (call $((n)))\"\n" +
+				"[ " + strconv.Itoa(answerOn) + " -gt 0 ] && [ \"$n\" -ge " + strconv.Itoa(answerOn) + " ]\n"
+			if err := os.WriteFile(path, []byte(script), 0o755); err != nil { // #nosec G306 -- executable test stub
+				t.Fatal(err)
+			}
+			return path, calls
+		}
+		attempts := func(calls string) int {
+			data, err := os.ReadFile(calls) // #nosec G304 -- test path
+			if err != nil {
+				t.Fatal(err)
+			}
+			return strings.Count(string(data), "health site_a\n")
+		}
+
+		late, lateCalls := stub("ocmsctl-late", 3)
+		run(t, "wait_healthy_command", late, "site_a", "5", "0")
+		if got := attempts(lateCalls); got != 3 {
+			t.Errorf("an instance healthy on the third check was checked %d times, want 3", got)
+		}
+
+		down, downCalls := stub("ocmsctl-down", 0)
+		out, err := try("wait_healthy_command", down, "site_a", "4", "0")
+		if err == nil {
+			t.Errorf("waiting for an instance that never answers succeeded:\n%s", out)
+		}
+		if got := attempts(downCalls); got != 4 {
+			t.Errorf("an instance that never answers was checked %d times, want 4", got)
+		}
+		// Only the last attempt's output is shown, so the operator sees why.
+		if out != "FAILED (call 4)\n" {
+			t.Errorf("a failed wait printed %q, want the last attempt's output", out)
+		}
+	})
 }
 
 // TestDeployScriptsInstallTheUpload fails when a deploy script visibly copies
@@ -197,12 +242,14 @@ func TestDeployScriptsInstallTheUpload(t *testing.T) {
 // TestDeployScriptsDryRunOrder runs deploy.sh and deploy-binary.sh with
 // --dry-run and checks the commands they would run, in order: back up the
 // running binary, upload, install the upload over /opt/ocms/bin/ocms, then
-// stop and start the instance. String checks of the scripts cannot see a
-// wrong value behind a right-looking line, such as REMOTE_RUN_BINARY pointing
-// at the upload itself.
+// stop and start the instance, wait for it to report healthy with the
+// configured HEALTH_RETRIES and HEALTH_INTERVAL, and ask it once more. String
+// checks of the scripts cannot see a wrong value behind a right-looking line,
+// such as REMOTE_RUN_BINARY pointing at the upload itself.
 //
 // Bug state: set REMOTE_RUN_BINARY="${REMOTE_BIN_DIR}/${REMOTE_BINARY}" in
-// deploy-binary.sh, or move its install after the stop, and this fails.
+// deploy-binary.sh, move its install after the stop, or hard-code the health
+// retries, and this fails.
 func TestDeployScriptsDryRunOrder(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	if err != nil {
@@ -212,13 +259,16 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	order := func(upload string) []string {
+	order := func(upload, retries, interval string) []string {
 		return []string{
 			"cp -p '/opt/ocms/bin/ocms' '/opt/ocms/bin/ocms.backup.new'",
 			"scp bin/ocms-linux-amd64 root@server.example.com:" + upload,
 			"cp '" + upload + "' '/opt/ocms/bin/ocms.new' && chmod 755 '/opt/ocms/bin/ocms.new' && mv -f '/opt/ocms/bin/ocms.new' '/opt/ocms/bin/ocms'",
 			"/opt/ocms/bin/ocmsctl stop site_a",
 			"/opt/ocms/bin/ocmsctl start site_a",
+			"'/opt/ocms/bin/ocmsctl' health 'site_a' 2>&1); do [ \"$n\" -lt " + retries + " ] || { echo \"$out\"; exit 1; }; n=$((n + 1)); sleep " + interval + "; done",
+			"/opt/ocms/bin/ocmsctl status site_a",
+			"/opt/ocms/bin/ocmsctl health site_a",
 		}
 	}
 	cases := []struct {
@@ -226,10 +276,11 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 		env  []string
 		want []string
 	}{
-		{"default upload name", nil, order("/opt/ocms/bin/ocms-linux-amd64")},
+		{"default upload name", nil, order("/opt/ocms/bin/ocms-linux-amd64", "15", "2")},
 		// The upload happens while the instance runs: scp onto the running
 		// binary failed with "Text file busy" (local Codex review).
-		{"REMOTE_BINARY=ocms", []string{"REMOTE_BINARY=ocms"}, order("/opt/ocms/bin/ocms.upload")},
+		{"REMOTE_BINARY=ocms", []string{"REMOTE_BINARY=ocms"}, order("/opt/ocms/bin/ocms.upload", "15", "2")},
+		{"health settings", []string{"HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}, order("/opt/ocms/bin/ocms-linux-amd64", "1", "0")},
 	}
 	for _, tc := range cases {
 		for _, script := range []string{"deploy.sh", "deploy-binary.sh"} {
@@ -259,6 +310,185 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestDeployScriptsFailOnUnhealthyInstance runs deploy.sh and deploy-binary.sh
+// against stubs for ssh and scp. Every remote command succeeds except those
+// the instance names call for: site_bad never reports healthy, site_flaky
+// fails the check after the status, site_nostart fails to start and
+// site_nostop to stop, and ssh drops the connection (exit 255) while waiting
+// for site_lost, while checking site_lostcheck again and while stopping
+// site_loststop. A deploy of healthy instances must report success; any other
+// must still start, check and report on every instance it could, then exit 1
+// and say why. Both scripts only printed `ocmsctl status` and reported
+// success, so on 2026-10-23 a binary that every instance refused to run
+// (OCMS_MFA_KEY unset) deployed "successfully".
+//
+// Bug state: replace either script's health check with the plain
+// `ocmsctl status` it had, let deploy-binary.sh stop at the first failed
+// start, or let deploy.sh end at a failed start without its summary, and
+// this fails.
+func TestDeployScriptsFailOnUnhealthyInstance(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctl := func(verb, instance string) string { return "/opt/ocms/bin/ocmsctl " + verb + " " + instance }
+	// waitFor is in the health wait for instance, and in no other command.
+	waitFor := func(instance string) string { return "'/opt/ocms/bin/ocmsctl' health '" + instance + "'" }
+	const stub = `#!/bin/sh
+printf '%s\n' "$2" >> "$SSH_LOG"
+case "$2" in
+  *"health 'site_bad'"*) echo "FAILED (HTTP 503)"; exit 1 ;;
+  *"health 'site_lost'"*) exit 255 ;;
+  "/opt/ocms/bin/ocmsctl health site_flaky" | "/opt/ocms/bin/ocmsctl start site_nostart" | "/opt/ocms/bin/ocmsctl stop site_nostop") exit 1 ;;
+  "/opt/ocms/bin/ocmsctl health site_lostcheck" | "/opt/ocms/bin/ocmsctl stop site_loststop") exit 255 ;;
+esac
+`
+	cases := []struct {
+		name      string
+		script    string
+		args      []string
+		env       []string
+		ok        bool
+		out       []string // the output must contain each
+		notOut    []string
+		ran       []string // remote commands that must have run
+		notRan    []string
+		waited    []string // instances whose health wait ran
+		notWaited []string
+	}{
+		{name: "healthy", script: "deploy.sh", args: []string{"site_ok"}, ok: true,
+			out: []string{"Deployment complete!"},
+			ran: []string{ctl("start", "site_ok"), ctl("status", "site_ok"), ctl("health", "site_ok")}, waited: []string{"site_ok"}},
+		{name: "unhealthy", script: "deploy.sh", args: []string{"site_bad"},
+			out:    []string{"FAILED (HTTP 503)", "Deployment failed for: site_bad", "Backup: /opt/ocms/bin/ocms.backup"},
+			ran:    []string{ctl("start", "site_bad"), ctl("status", "site_bad")},
+			notRan: []string{ctl("health", "site_bad")}, waited: []string{"site_bad"}},
+		// --skip-binary makes no backup, so the one on the server is not this deploy's.
+		{name: "unhealthy without a binary", script: "deploy.sh", args: []string{"site_bad", "--skip-binary"},
+			out: []string{"Deployment failed for: site_bad"}, notOut: []string{"Backup:"}},
+		{name: "healthy", script: "deploy-binary.sh", args: []string{"site_ok", "site_two"}, ok: true,
+			out: []string{"Deployment complete!"},
+			ran: []string{ctl("start", "site_ok"), ctl("start", "site_two"), ctl("status", "site_ok"), ctl("status", "site_two"),
+				ctl("health", "site_ok"), ctl("health", "site_two")},
+			waited: []string{"site_ok", "site_two"}},
+		{name: "unhealthy", script: "deploy-binary.sh", args: []string{"site_bad", "site_ok"},
+			out:    []string{"FAILED (HTTP 503)", "Deployment failed for: site_bad", "Backup: /opt/ocms/bin/ocms.backup"},
+			notOut: []string{"Deployment failed for: site_bad site_ok"},
+			ran:    []string{ctl("start", "site_bad"), ctl("start", "site_ok"), ctl("status", "site_bad"), ctl("status", "site_ok"), ctl("health", "site_ok")},
+			waited: []string{"site_bad", "site_ok"}},
+		{name: "failed start", script: "deploy-binary.sh", args: []string{"site_nostart", "site_ok"},
+			out:    []string{"Could not start instance 'site_nostart'", "Deployment failed for: site_nostart"},
+			ran:    []string{ctl("start", "site_ok"), ctl("status", "site_ok"), ctl("health", "site_ok")},
+			waited: []string{"site_ok"}, notWaited: []string{"site_nostart"}},
+		{name: "failed stop", script: "deploy-binary.sh", args: []string{"site_nostop", "site_ok"},
+			out:    []string{"Could not stop instance 'site_nostop'", "Deployment failed for: site_nostop"},
+			ran:    []string{ctl("start", "site_ok")},
+			notRan: []string{ctl("start", "site_nostop")}, waited: []string{"site_ok"}, notWaited: []string{"site_nostop"}},
+		{name: "lost connection", script: "deploy-binary.sh", args: []string{"site_lost"},
+			out: []string{"Lost the connection to the server while waiting for 'site_lost'", "Deployment failed for: site_lost"}},
+		{name: "fails after starting", script: "deploy-binary.sh", args: []string{"site_flaky"},
+			out: []string{"Instance 'site_flaky' stopped reporting healthy", "Deployment failed for: site_flaky"}},
+		{name: "bad retries", script: "deploy-binary.sh", args: []string{"site_ok"}, env: []string{"HEALTH_RETRIES=0"},
+			out: []string{"HEALTH_RETRIES must be a positive whole number"}, notRan: []string{ctl("stop", "site_ok")}},
+		{name: "bad interval", script: "deploy.sh", args: []string{"site_ok"}, env: []string{"HEALTH_INTERVAL=0.5"},
+			out: []string{"HEALTH_INTERVAL must be a whole number of seconds"}, notRan: []string{ctl("stop", "site_ok")}},
+		// printf %d reads 08 as an invalid octal number and waits 0 seconds.
+		{name: "octal interval", script: "deploy-binary.sh", args: []string{"site_ok"}, env: []string{"HEALTH_INTERVAL=08"},
+			out: []string{"HEALTH_INTERVAL must be a whole number of seconds"}, notRan: []string{ctl("stop", "site_ok")}},
+		{name: "connection lost on the second check", script: "deploy-binary.sh", args: []string{"site_lostcheck"},
+			out:    []string{"Lost the connection to the server while checking 'site_lostcheck'", "Deployment failed for: site_lostcheck"},
+			notOut: []string{"stopped reporting healthy"}},
+		{name: "connection lost while stopping", script: "deploy-binary.sh", args: []string{"site_loststop", "site_ok"},
+			out:    []string{"Lost the connection to the server while stopping 'site_loststop'", "Deployment failed for: site_loststop"},
+			notOut: []string{"Could not stop"}, ran: []string{ctl("start", "site_ok")}, notRan: []string{ctl("start", "site_loststop")}},
+		{name: "failed start", script: "deploy.sh", args: []string{"site_nostart"},
+			out: []string{"Could not start instance 'site_nostart'", "Deployment failed for: site_nostart"}, notWaited: []string{"site_nostart"}},
+		{name: "failed stop", script: "deploy.sh", args: []string{"site_nostop"},
+			out:    []string{"Could not stop instance 'site_nostop'", "Deployment failed for: site_nostop"},
+			notRan: []string{ctl("start", "site_nostop")}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.script+"/"+tc.name, func(t *testing.T) {
+			work, stubs := t.TempDir(), t.TempDir()
+			if err := os.Mkdir(filepath.Join(work, "bin"), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(work, "bin", "ocms-linux-amd64"), []byte("binary"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			for name, script := range map[string]string{"ssh": stub, "scp": "#!/bin/sh\nexit 0\n"} {
+				if err := os.WriteFile(filepath.Join(stubs, name), []byte(script), 0o755); err != nil { // #nosec G306 -- executable test stub
+					t.Fatal(err)
+				}
+			}
+			sshLog := filepath.Join(work, "ssh.log")
+
+			args := append([]string{filepath.Join(root, "scripts", "deploy", tc.script), "server.example.com"}, tc.args...)
+			cmd := exec.Command(bash, append(args, "--skip-build")...) // #nosec G204 -- fixed repository script, test arguments
+			cmd.Dir = work
+			cmd.Env = append([]string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + work,
+				"SSH_LOG=" + sshLog, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}, tc.env...)
+			out, err := cmd.CombinedOutput()
+			logged, readErr := os.ReadFile(sshLog) // #nosec G304 -- test path
+			if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+				t.Fatal(readErr)
+			}
+			commands := strings.Split(strings.TrimSuffix(string(logged), "\n"), "\n")
+
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("deploy: %v, want success\n%s", err, out)
+				}
+			} else {
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+					t.Fatalf("deploy: %v, want exit status 1\n%s", err, out)
+				}
+				if strings.Contains(string(out), "Deployment complete!") {
+					t.Errorf("a failed deploy reported success:\n%s", out)
+				}
+			}
+			for _, want := range tc.out {
+				if !strings.Contains(string(out), want) {
+					t.Errorf("the output does not say %q:\n%s", want, out)
+				}
+			}
+			for _, unwanted := range tc.notOut {
+				if strings.Contains(string(out), unwanted) {
+					t.Errorf("the output says %q:\n%s", unwanted, out)
+				}
+			}
+			for _, want := range tc.ran {
+				if !slices.Contains(commands, want) {
+					t.Errorf("the deploy never ran %q; it ran:\n%s", want, logged)
+				}
+			}
+			for _, unwanted := range tc.notRan {
+				if slices.Contains(commands, unwanted) {
+					t.Errorf("the deploy ran %q:\n%s", unwanted, logged)
+				}
+			}
+			waited := func(instance string) bool {
+				return slices.ContainsFunc(commands, func(c string) bool { return strings.Contains(c, waitFor(instance)) })
+			}
+			for _, instance := range tc.waited {
+				if !waited(instance) {
+					t.Errorf("the deploy never waited for %s; it ran:\n%s", instance, logged)
+				}
+			}
+			for _, instance := range tc.notWaited {
+				if waited(instance) {
+					t.Errorf("the deploy waited for %s, which it did not start:\n%s", instance, logged)
+				}
+			}
+		})
 	}
 }
 

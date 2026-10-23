@@ -74,6 +74,10 @@ REMOTE_RUN_BINARY="${REMOTE_BIN_DIR}/ocms"
 # deploy uses (remote_upload_path in helper.sh).
 REMOTE_UPLOAD="$(remote_upload_path "${REMOTE_BIN_DIR}" "${REMOTE_BINARY}")"
 
+# How long the instance gets to answer /health after the restart.
+HEALTH_RETRIES="${HEALTH_RETRIES:-15}"
+HEALTH_INTERVAL="${HEALTH_INTERVAL:-2}"
+
 # Defaults
 SSH_USER="root"
 VHOST=""
@@ -192,6 +196,7 @@ if [[ -z "$SERVER" ]] || [[ -z "$INSTANCE" ]]; then
     echo "Use --help for usage information."
     exit 1
 fi
+check_health_settings
 
 # Validate CLI values to prevent shell/option injection in ssh/scp/rsync
 # commands. Must be called in the main shell — exit 1 would be swallowed
@@ -461,9 +466,21 @@ else
     echo_ok "Binary installed"
 fi
 
+# --skip-binary makes no backup, so the one on the server is not this deploy's.
+MADE_BACKUP=true
+if [[ "$SKIP_BINARY" == true ]]; then
+    MADE_BACKUP=false
+fi
+
 # Step 4: Stop instance
 echo_step "Stopping instance '${INSTANCE}'..."
-ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${INSTANCE}"
+UNHEALTHY=()
+rc=0
+ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${INSTANCE}" || rc=$?
+if [[ "$rc" -ne 0 ]]; then
+    remote_failed "$rc" "stopping" "${INSTANCE}" "Could not stop instance '${INSTANCE}'; leaving it as it is"
+    fail_deploy "$MADE_BACKUP"
+fi
 echo_ok "Instance stopped"
 
 # Step 5: Sync custom content (if configured and enabled)
@@ -501,13 +518,19 @@ fi
 
 # Step 7: Start instance
 echo_step "Starting instance '${INSTANCE}'..."
-ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl start ${INSTANCE}"
+rc=0
+ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl start ${INSTANCE}" || rc=$?
+if [[ "$rc" -ne 0 ]]; then
+    remote_failed "$rc" "starting" "${INSTANCE}" "Could not start instance '${INSTANCE}'"
+    fail_deploy "$MADE_BACKUP"
+fi
 echo_ok "Instance started"
 
-# Step 8: Health check
-echo_step "Checking instance status..."
-sleep 2  # Give it a moment to start
-ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl status ${INSTANCE}"
-
+# Step 8: Health check. The instance must report healthy, or the deploy fails.
+echo_step "Waiting for instance '${INSTANCE}' to report healthy..."
+check_instances "${INSTANCE}"
+if [[ ${#UNHEALTHY[@]} -gt 0 ]]; then
+    fail_deploy "$MADE_BACKUP"
+fi
 echo ""
 echo_ok "Deployment complete!"
