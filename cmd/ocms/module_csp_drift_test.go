@@ -30,10 +30,23 @@ var thirdPartyLoads = []struct {
 	{"connect-src", regexp.MustCompile("fetch\\(\\s*[\"'`]https://([a-z0-9.-]+)")},
 }
 
+// vendorLoads lists, by module name, hosts that a module's third-party script
+// picks at run time, so no literal in module source names them. Google's tag
+// sends GA4 hits to these (developers.google.com/tag-platform/security/guides/csp).
+var vendorLoads = map[string][]thirdPartyLoad{
+	"analytics_ext": {
+		{"connect-src", "www.google-analytics.com"},
+		{"connect-src", "region1.google-analytics.com"},
+		{"connect-src", "region1.analytics.google.com"},
+		{"connect-src", "www.google.com"},
+		{"connect-src", "www.googletagmanager.com"},
+	},
+}
+
 // TestModuleThirdPartyHostsAreInCSPSources fails when a built-in module loads
-// a resource from a literal third-party host that its CSPSources does not
-// allow for the directive that load needs (a script under script-src, an
-// iframe under frame-src).
+// a resource from a literal third-party host, or a host in vendorLoads, that
+// its CSPSources does not allow for the directive that load needs (a script
+// under script-src, an iframe under frame-src).
 //
 // The base Content-Security-Policy keeps scripts, connections and (apart
 // from Google Fonts and YouTube) styles and frames first-party; each module
@@ -43,7 +56,8 @@ var thirdPartyLoads = []struct {
 // does.
 //
 // Bug state: drop "https://*.hcaptcha.com" from the hcaptcha module's
-// CSPSources and this names js.hcaptcha.com.
+// CSPSources and this names js.hcaptcha.com; drop "https://*.google.com"
+// from analytics_ext's and it names www.google.com.
 func TestModuleThirdPartyHostsAreInCSPSources(t *testing.T) {
 	const modulePath = "github.com/olegiv/ocms-go/"
 	root := filepath.Join("..", "..")
@@ -60,7 +74,7 @@ func TestModuleThirdPartyHostsAreInCSPSources(t *testing.T) {
 		if sourcer, ok := mod.(module.CSPSourcer); ok {
 			sources = sourcer.CSPSources()
 		}
-		for _, load := range thirdPartyHosts(t, dir) {
+		for _, load := range append(thirdPartyHosts(t, dir), vendorLoads[mod.Name()]...) {
 			found[load.host] = true
 			if !cspAllowsHost(sources[load.directive], load.host) {
 				problems = append(problems, mod.Name()+" loads https://"+load.host+" ("+load.directive+")")

@@ -134,9 +134,10 @@ func (m *Module) CSPSources() map[string][]string {
 		"style-src": {"https://www.googletagmanager.com"},
 		// GTM's <noscript> fallback is an iframe.
 		"frame-src": {"https://www.googletagmanager.com"},
+		// Google's tag also sends GA4 hits to www.google.com/g/collect.
 		"connect-src": {
 			"https://www.google-analytics.com", "https://*.google-analytics.com",
-			"https://*.analytics.google.com",
+			"https://*.analytics.google.com", "https://*.google.com",
 			"https://www.googletagmanager.com", "https://*.googletagmanager.com",
 		},
 	}
