@@ -46,11 +46,13 @@ templ SecurityPage(pc *admin.PageContext, d SecurityData) {
 			@card.Content() {
 				if d.DemoMode {
 					@alert.Alert(alert.Props{Class: "alert-info mb-4"}) {
-						{ pc.T("mfa.demo_mode") }
+						@icon.Info(icon.Props{Size: 16})
+						<span>{ pc.T("mfa.demo_mode") }</span>
 					}
 				} else if !d.Available && !d.Enrolled {
 					@alert.Alert(alert.Props{Class: "alert-info mb-4"}) {
-						{ pc.T("mfa.not_configured") }
+						@icon.Info(icon.Props{Size: 16})
+						<span>{ pc.T("mfa.not_configured") }</span>
 					}
 				}
 				<div class="mb-6 flex flex-wrap items-center gap-3">

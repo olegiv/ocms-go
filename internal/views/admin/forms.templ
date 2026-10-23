@@ -634,15 +634,21 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 						<!-- Captcha field info -->
 						<template x-if="editingField && editingField.type === 'captcha'">
 							@alert.Alert(alert.Props{Class: "alert-info mb-4"}) {
-								<strong>{ pc.T("forms.captcha_info_title") }</strong>
-								<p class="mt-2">{ pc.T("forms.captcha_info_text") }</p>
-								if !data.HcaptchaEnabled {
-									@alert.Alert(alert.Props{Class: "alert-warning mt-2 mb-0"}) {
-										<strong>{ pc.T("forms.captcha_warning_title") }</strong>
-										{ " " + pc.T("forms.captcha_warning_text") + " " }
-										<a href="/admin/hcaptcha">{ pc.T("forms.captcha_configure_link") }</a>
+								@icon.Info(icon.Props{Size: 16})
+								<div>
+									<strong>{ pc.T("forms.captcha_info_title") }</strong>
+									<p class="mt-2">{ pc.T("forms.captcha_info_text") }</p>
+									if !data.HcaptchaEnabled {
+										@alert.Alert(alert.Props{Class: "alert-warning mt-2 mb-0"}) {
+											@icon.TriangleAlert(icon.Props{Size: 16})
+											<div>
+												<strong>{ pc.T("forms.captcha_warning_title") }</strong>
+												{ " " + pc.T("forms.captcha_warning_text") + " " }
+												<a href="/admin/hcaptcha">{ pc.T("forms.captcha_configure_link") }</a>
+											</div>
+										}
 									}
-								}
+								</div>
 							}
 						</template>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
