@@ -24,7 +24,7 @@ Most modern CMSs are PHP monoliths (WordPress, Drupal), Node-heavy with build st
 - **One binary.** `scp` it to a server, run it. No PHP-FPM, no Node toolchain, no Docker required.
 - **Admin UI included.** HTMX + Alpine.js, server-rendered. No SPA, no build pipeline, no JS framework lock-in.
 - **REST API for headless use.** Bearer-token auth, per-key permissions, rate limiting, source-CIDR allowlists.
-- **Security defaults that aren't opt-in.** Argon2id, CSP with nonces, CSRF, hCaptcha on forms, signed embed-proxy tokens, HMAC-signed webhooks.
+- **Security defaults that aren't opt-in.** Argon2id, two-factor authentication required in production, CSP with nonces, CSRF, hCaptcha on forms, signed embed-proxy tokens, HMAC-signed webhooks.
 - **Production-tested.** Powers [ocms.tech](https://ocms.tech), [it-digest.info](https://it-digest.info) and [opossum.su](https://opossum.su).
 
 ## Quickstart (90 seconds)
@@ -153,7 +153,9 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 ### Administration
 - **User Management**: Role-based access control (admin/editor)
 - **Authentication**: Secure session-based authentication with argon2id password hashing
-- **Two-Factor Authentication**: Authenticator apps (TOTP) with single-use recovery codes, required for every account in production; admin reset and `ocms mfa-reset` for lost devices
+- **Two-Factor Authentication**: Authenticator apps (TOTP) with single-use recovery codes, required for every account in production; admin reset and `ocms mfa-reset` for lost devices. See [docs/login-security.md](docs/login-security.md)
+- **Account Security Page**: Every account (admin, editor or public) sets up or replaces its authenticator app, issues new recovery codes and, where a second factor is not required, turns it off at `/account/security`
+- **Confirmation for Sensitive Changes**: Changes that could hand an account over (a new password or email for any user, giving or taking away the admin role, resetting another user's second factor), theme imports and switching on the DB Manager module ask for the acting administrator's current password; wrong attempts count toward the login lockout
 - **Event Logging**: Comprehensive audit trail for all actions
 - **Admin Dashboard**: Modern responsive UI with HTMX and Alpine.js
   - Statistics overview
@@ -433,7 +435,10 @@ On first run with `OCMS_DO_SEED=true`, the application seeds a default admin use
 - **Email**: admin@example.com
 - **Password**: changeme1234
 
-Change these credentials immediately after first login. Seeding never
+Change these credentials immediately after first login. Where a second factor
+is required (`OCMS_REQUIRE_MFA`, on by default in production), every account,
+the seeded admin included, sets up an authenticator app at its first sign-in
+and is shown ten single-use recovery codes to keep. Seeding never
 recreates `admin@example.com` while any administrator account exists, so a
 renamed or replaced admin is not brought back by a restart with
 `OCMS_DO_SEED=true`.
@@ -1028,7 +1033,7 @@ git commit -m "Update Claude Code shared submodule"
 - **Frontend**: HTMX + Alpine.js
 - **Rich Text Editor**: [TinyMCE](https://www.tiny.cloud/) for content editing
 - **Styling**: Custom SCSS framework
-- **Authentication**: Secure sessions with argon2id password hashing
+- **Authentication**: Secure sessions with argon2id password hashing and TOTP two-factor authentication ([pquerna/otp](https://github.com/pquerna/otp))
 - **Containerization**: Docker with multi-stage builds
 
 ## License
