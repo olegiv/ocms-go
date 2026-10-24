@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepted; an empty value hides the link.
 
 ### Fixed
+- Since 0.23.0, draft titles in `/admin/pages` were plain text and a
+  draft's editor had no **Preview** button. Both open the draft at its
+  URL again; only admins and editors can see it there, while public
+  users and visitors still get 404.
 - Release notes on GitHub broke sentences mid-line: the release workflow
   published `CHANGELOG.md`'s wrapped lines as they are, and GitHub renders
   each newline of a release description as a line break. The new

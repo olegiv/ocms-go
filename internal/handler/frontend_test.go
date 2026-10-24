@@ -1353,6 +1353,55 @@ func TestAdminPublicPagePathUsesLanguageRouteAndFailsClosed(t *testing.T) {
 	}
 }
 
+// TestAdminDraftLinkServesOnlyToStaff follows the link the admin pages list
+// and the edit form's Preview button give a draft: the route must serve the
+// draft to admins and editors and 404 for public users and anonymous visitors.
+func TestAdminDraftLinkServesOnlyToStaff(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	editor := createTestUser(t, db, testUser{Email: "editor@example.com", Name: "Editor", Role: "editor"})
+	publicUser := createTestUser(t, db, testUser{Email: "public@example.com", Name: "Public", Role: "public"})
+	createTestLanguage(t, db, "fr", true)
+	createDraftPage(t, db, admin.ID)
+	frenchID := createPublishedLanguagePage(t, db, "brouillon", "fr", admin.ID)
+	if _, err := db.Exec(`UPDATE pages SET status = 'draft' WHERE id = ?`, frenchID); err != nil {
+		t.Fatalf("mark French page draft: %v", err)
+	}
+
+	queries := store.New(db)
+	router := languageAwareAliasTestRouter(db, NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil))
+	for _, slug := range []string{"draft-page", "brouillon"} {
+		page, err := queries.GetPageBySlug(context.Background(), slug)
+		if err != nil {
+			t.Fatal(err)
+		}
+		link := publicPagePath(context.Background(), queries, page)
+		if link == "" {
+			t.Fatalf("%s: draft has no admin link", slug)
+		}
+		for _, viewer := range []struct {
+			name string
+			user *store.User
+			want int
+		}{
+			{"admin", &admin, http.StatusOK},
+			{"editor", &editor, http.StatusOK},
+			{"public", &publicUser, http.StatusNotFound},
+			{"anonymous", nil, http.StatusNotFound},
+		} {
+			req := httptest.NewRequest(http.MethodGet, link, nil)
+			if viewer.user != nil {
+				req = withUser(req, *viewer.user)
+			}
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			if w.Code != viewer.want {
+				t.Errorf("%s as %s: status = %d; want %d", link, viewer.name, w.Code, viewer.want)
+			}
+		}
+	}
+}
+
 func TestFrontendHandler_LegacyUnsafeDefaultLanguageIsIgnored(t *testing.T) {
 	for _, code := range []string{"blog", "x"} {
 		t.Run(code, func(t *testing.T) {

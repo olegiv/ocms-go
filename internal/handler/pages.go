@@ -141,7 +141,7 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 // PagesListData holds data for the pages list template.
 type PagesListData struct {
 	Pages              []store.Page
-	PagePublicURLs     map[int64]string             // Canonical public URL by page ID; empty means not publicly routable
+	PagePublicURLs     map[int64]string             // Canonical public URL by page ID; empty means not routable
 	PageTags           map[int64][]store.Tag        // Map of page ID to tags
 	PageCategories     map[int64][]store.Category   // Map of page ID to categories
 	PageFeaturedImages map[int64]*FeaturedImageData // Map of page ID to featured image
@@ -411,7 +411,7 @@ func publicPagePath(ctx context.Context, queries *store.Queries, page store.Page
 }
 
 func publicPagePathWithLanguages(page store.Page, language, defaultLanguage store.Language) string {
-	if page.Status != PageStatusPublished || !util.IsValidSlug(page.Slug) ||
+	if !util.IsValidSlug(page.Slug) ||
 		!language.IsActive || language.Code != page.LanguageCode ||
 		!util.IsValidLangCode(language.Code) || util.IsReservedLanguageCode(language.Code) {
 		return ""
