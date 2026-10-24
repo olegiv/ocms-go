@@ -308,6 +308,11 @@
             "translation": "View Site"
         },
         {
+            "id": "dashboard.status_page",
+            "message": "Status Page",
+            "translation": "Status Page"
+        },
+        {
             "id": "dashboard.create_page",
             "message": "Create Page",
             "translation": "Create Page"
@@ -4303,6 +4308,21 @@
             "translation": "Footer powered by text"
         },
         {
+            "id": "config.status_page_url",
+            "message": "Status Page URL",
+            "translation": "Status Page URL"
+        },
+        {
+            "id": "config.status_page_url_hint",
+            "message": "Public status page (e.g., UptimeRobot), linked as \"Status\" in the site footer and the admin header. Leave empty to hide the link.",
+            "translation": "Public status page (e.g., UptimeRobot), linked as \"Status\" in the site footer and the admin header. Leave empty to hide the link."
+        },
+        {
+            "id": "config.status_page_url_invalid",
+            "message": "Enter a full URL starting with http:// or https://",
+            "translation": "Enter a full URL starting with http:// or https://"
+        },
+        {
             "id": "config.copyright",
             "message": "Copyright",
             "translation": "Copyright"
@@ -6466,6 +6486,11 @@
             "id": "frontend.all_rights_reserved",
             "message": "All rights reserved.",
             "translation": "All rights reserved."
+        },
+        {
+            "id": "frontend.status_page",
+            "message": "Status",
+            "translation": "Status"
         },
         {
             "id": "frontend.all_posts",

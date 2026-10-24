@@ -308,6 +308,11 @@
             "translation": "Перейти на сайт"
         },
         {
+            "id": "dashboard.status_page",
+            "message": "Status Page",
+            "translation": "Страница статуса"
+        },
+        {
             "id": "dashboard.create_page",
             "message": "Create Page",
             "translation": "Создать страницу"
@@ -3788,6 +3793,21 @@
             "translation": "Текст «Работает на» в подвале"
         },
         {
+            "id": "config.status_page_url",
+            "message": "Status Page URL",
+            "translation": "Адрес страницы статуса"
+        },
+        {
+            "id": "config.status_page_url_hint",
+            "message": "Public status page (e.g., UptimeRobot), linked as \"Status\" in the site footer and the admin header. Leave empty to hide the link.",
+            "translation": "Публичная страница статуса (например, UptimeRobot): ссылка «Статус» в подвале сайта и в шапке панели управления. Оставьте пустым, чтобы скрыть ссылку."
+        },
+        {
+            "id": "config.status_page_url_invalid",
+            "message": "Enter a full URL starting with http:// or https://",
+            "translation": "Укажите полный адрес, начинающийся с http:// или https://"
+        },
+        {
             "id": "config.copyright",
             "message": "Copyright",
             "translation": "Авторские права"
@@ -6496,6 +6516,11 @@
             "id": "frontend.all_rights_reserved",
             "message": "All rights reserved.",
             "translation": "Все права защищены."
+        },
+        {
+            "id": "frontend.status_page",
+            "message": "Status",
+            "translation": "Статус"
         },
         {
             "id": "frontend.all_posts",

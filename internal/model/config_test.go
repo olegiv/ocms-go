@@ -23,6 +23,7 @@ func TestStandardConfigFieldsRegistration(t *testing.T) {
 		ConfigKeyExcludedIPs,
 		ConfigKeyRobotsContentSignal,
 		ConfigKeyMCPServerVersion,
+		ConfigKeyStatusPageURL,
 	}
 
 	registered := make(map[string]bool, len(StandardConfigFields))

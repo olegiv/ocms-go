@@ -1135,11 +1135,12 @@ func (r *Renderer) BuildPageContext(req *http.Request, title string, breadcrumbs
 	}
 
 	pc := &adminviews.PageContext{
-		Title:       title,
-		User:        userInfo,
-		SiteName:    middleware.GetSiteName(req),
-		CurrentPath: req.URL.Path,
-		AdminLang:   adminLang,
+		Title:         title,
+		User:          userInfo,
+		SiteName:      middleware.GetSiteName(req),
+		StatusPageURL: middleware.GetStatusPageURL(req),
+		CurrentPath:   req.URL.Path,
+		AdminLang:     adminLang,
 	}
 
 	// Convert breadcrumbs

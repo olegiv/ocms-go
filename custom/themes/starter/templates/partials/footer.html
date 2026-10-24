@@ -59,7 +59,8 @@
                 <p>
                     {{if .CopyrightText}}{{safeFooterHTML .CopyrightText}}{{else}}&copy; {{.Year}} {{.SiteName}}. {{TTheme .LangCode "frontend.all_rights_reserved"}}{{end -}}
                     {{if .FooterText}}<span class="st-footer__sep"> &bull; </span>{{safeFooterHTML .FooterText}}{{end -}}
-                    {{with privacyFooterLink $.LangCode}}<span class="st-footer__sep"> &bull; </span>{{.}}{{end}}
+                    {{with privacyFooterLink $.LangCode}}<span class="st-footer__sep"> &bull; </span>{{.}}{{end -}}
+                    {{with .StatusPageURL}}<span class="st-footer__sep"> &bull; </span><a href="{{.}}" target="_blank" rel="nofollow noopener noreferrer">{{TTheme $.LangCode "frontend.status_page"}}</a>{{end}}
                 </p>
             </div>
 

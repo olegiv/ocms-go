@@ -27,10 +27,11 @@ type ContextKey string
 
 // Context keys for user data.
 const (
-	ContextKeyUser        ContextKey = "user"
-	ContextKeySiteName    ContextKey = "site_name"
-	ContextKeyRequestPath ContextKey = "request_path"
-	ContextKeyCSPNonce    ContextKey = "csp_nonce"
+	ContextKeyUser          ContextKey = "user"
+	ContextKeySiteName      ContextKey = "site_name"
+	ContextKeyStatusPageURL ContextKey = "status_page_url"
+	ContextKeyRequestPath   ContextKey = "request_path"
+	ContextKeyCSPNonce      ContextKey = "csp_nonce"
 )
 
 // Session keys for storing user data and preferences.
@@ -218,7 +219,8 @@ func GetUserEmail(r *http.Request) string {
 	return ""
 }
 
-// LoadSiteConfig creates middleware that loads site configuration (like site_name) into context.
+// LoadSiteConfig creates middleware that loads site configuration (site_name and
+// status_page_url) into context.
 // If cacheManager is provided, it will be used for faster config lookups.
 // If both cacheManager and db are nil, the default "oCMS" will be used.
 func LoadSiteConfig(db *sql.DB, cacheManager *cache.Manager) func(http.Handler) http.Handler {
@@ -231,20 +233,28 @@ func LoadSiteConfig(db *sql.DB, cacheManager *cache.Manager) func(http.Handler) 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Try to get site_name from config (use cache if available)
 			siteName := "oCMS" // default fallback
+			var statusPageURL string
 
 			if cacheManager != nil {
 				if name, err := cacheManager.GetConfig(r.Context(), "site_name"); err == nil && name != "" {
 					siteName = name
+				}
+				if statusURL, err := cacheManager.GetConfig(r.Context(), model.ConfigKeyStatusPageURL); err == nil {
+					statusPageURL = statusURL
 				}
 			} else if queries != nil {
 				cfg, err := queries.GetConfig(r.Context(), "site_name")
 				if err == nil && cfg.Value != "" {
 					siteName = cfg.Value
 				}
+				if statusCfg, statusErr := queries.GetConfig(r.Context(), model.ConfigKeyStatusPageURL); statusErr == nil {
+					statusPageURL = statusCfg.Value
+				}
 			}
 
-			// Add site name to context
+			// Add site name and status page URL to context
 			ctx := context.WithValue(r.Context(), ContextKeySiteName, siteName)
+			ctx = context.WithValue(ctx, ContextKeyStatusPageURL, statusPageURL)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -258,6 +268,13 @@ func GetSiteName(r *http.Request) string {
 		return "oCMS"
 	}
 	return siteName
+}
+
+// GetStatusPageURL retrieves the public status page URL from the request context.
+// Returns an empty string when none is configured.
+func GetStatusPageURL(r *http.Request) string {
+	statusPageURL, _ := r.Context().Value(ContextKeyStatusPageURL).(string)
+	return statusPageURL
 }
 
 // RequestPath creates middleware that stores the request path in the context.

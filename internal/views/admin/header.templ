@@ -25,6 +25,12 @@ templ Header(pc *PageContext) {
 			<a href="/" class={ "header-link", templ.KV("max-sm:!hidden", pc.AccountLayout) } target="_blank" title={ pc.T("dashboard.view_site") }>
 				<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
 			</a>
+			<!-- Status Page Link (only shown when configured) -->
+			if pc.StatusPageURL != "" {
+				<a href={ templ.URL(pc.StatusPageURL) } class={ "header-link", templ.KV("max-sm:!hidden", pc.AccountLayout) } target="_blank" rel="noopener noreferrer" title={ pc.T("dashboard.status_page") } aria-label={ pc.T("dashboard.status_page") }>
+					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+				</a>
+			}
 			<!-- Language Selector (only shown when multiple languages available) -->
 			if len(pc.LangOptions) > 1 {
 				<form action={ pc.LanguageURL() } method="POST" class="lang-selector-form">

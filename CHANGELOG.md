@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Status page link.** The new **Status Page URL** setting in
+  `/admin/config` (for example, an UptimeRobot public status page) adds a
+  "Status" link (`rel="nofollow noopener noreferrer"`) to the footer of the
+  default, developer and starter themes, and a status icon next to "View
+  site" in the admin header. Custom themes can render it from
+  `.StatusPageURL`. Only absolute `http`/`https` URLs are
+  accepted; an empty value hides the link.
+
 ### Fixed
 - Release notes on GitHub broke sentences mid-line: the release workflow
   published `CHANGELOG.md`'s wrapped lines as they are, and GitHub renders

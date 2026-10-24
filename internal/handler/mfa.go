@@ -427,6 +427,7 @@ func (h *AuthHandler) accountPageContext(r *http.Request, user *store.User, titl
 		AccountLayout: true,
 		AdminLang:     lang,
 		SiteName:      middleware.GetSiteName(r),
+		StatusPageURL: middleware.GetStatusPageURL(r),
 		CurrentPath:   r.URL.Path,
 		User:          adminviews.UserInfo{Name: user.Name, Email: user.Email},
 		Flash:         h.sessionManager.PopString(r.Context(), "flash"),

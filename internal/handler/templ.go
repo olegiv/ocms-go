@@ -57,11 +57,12 @@ func buildPageContext(
 	}
 
 	pc := &adminviews.PageContext{
-		Title:       title,
-		User:        userInfo,
-		SiteName:    middleware.GetSiteName(r),
-		CurrentPath: r.URL.Path,
-		AdminLang:   adminLang,
+		Title:         title,
+		User:          userInfo,
+		SiteName:      middleware.GetSiteName(r),
+		StatusPageURL: middleware.GetStatusPageURL(r),
+		CurrentPath:   r.URL.Path,
+		AdminLang:     adminLang,
 	}
 
 	// Convert breadcrumbs
