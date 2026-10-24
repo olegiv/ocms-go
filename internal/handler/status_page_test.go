@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -26,6 +27,28 @@ import (
 )
 
 const testStatusPageURL = "https://stats.uptimerobot.com/g50rYsPMxR"
+
+// statusLinkRel is the rel every footer status link carries: it is a sitewide
+// outbound link to a third-party page, so it is nofollow like the external
+// links safeFooterHTML rewrites in admin-entered footer text.
+const statusLinkRel = `rel="nofollow noopener noreferrer"`
+
+var statusLinkTagRe = regexp.MustCompile(`<a\s[^>]*href="` + regexp.QuoteMeta(testStatusPageURL) + `"[^>]*>`)
+
+// assertStatusLink checks body has a status page link that opens in a new tab
+// with statusLinkRel.
+func assertStatusLink(t *testing.T, body string) {
+	t.Helper()
+	tag := statusLinkTagRe.FindString(body)
+	if tag == "" {
+		t.Fatalf("no status page link in: %s", body)
+	}
+	for _, want := range []string{`target="_blank"`, statusLinkRel} {
+		if !strings.Contains(tag, want) {
+			t.Errorf("status page link %s missing %s", tag, want)
+		}
+	}
+}
 
 // setTestStatusPageURL stores the status page URL the way a config save does.
 func setTestStatusPageURL(t *testing.T, queries *store.Queries, value string) {
@@ -93,10 +116,9 @@ func TestFrontendFooterStatusPageLink(t *testing.T) {
 	}
 
 	body := renderFooter(BaseTemplateData{SiteName: "Site", LangCode: "en", StatusPageURL: testStatusPageURL})
-	for _, want := range []string{`href="` + testStatusPageURL + `"`, `target="_blank"`, `rel="noopener noreferrer"`, "fe-footer-status"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("footer missing %q", want)
-		}
+	assertStatusLink(t, body)
+	if !strings.Contains(body, "fe-footer-status") {
+		t.Error(`footer status link missing class "fe-footer-status"`)
 	}
 }
 
@@ -117,9 +139,7 @@ func TestThemeFootersRenderStatusPageLink(t *testing.T) {
 			if w.Code != http.StatusNotFound {
 				t.Fatalf("status = %d; want %d; body = %s", w.Code, http.StatusNotFound, w.Body.String())
 			}
-			if body := w.Body.String(); !strings.Contains(body, `href="`+testStatusPageURL+`"`) {
-				t.Errorf("%s footer has no status page link: %s", themeName, body)
-			}
+			assertStatusLink(t, w.Body.String())
 		})
 	}
 }

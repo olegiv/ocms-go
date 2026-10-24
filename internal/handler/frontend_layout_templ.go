@@ -1501,14 +1501,14 @@ func frontendFooter(base BaseTemplateData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "\" class=\"fe-footer-status fe-footer-link hover:text-foreground transition-colors\" target=\"_blank\" rel=\"noopener noreferrer\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "\" class=\"fe-footer-status fe-footer-link hover:text-foreground transition-colors\" target=\"_blank\" rel=\"nofollow noopener noreferrer\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var82 string
 			templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(langOrDefault(base.LangCode), "frontend.status_page"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/handler/frontend_layout.templ`, Line: 305, Col: 231}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/handler/frontend_layout.templ`, Line: 305, Col: 240}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 			if templ_7745c5c3_Err != nil {

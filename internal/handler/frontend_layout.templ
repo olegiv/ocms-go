@@ -302,7 +302,7 @@ templ frontendFooter(base BaseTemplateData) {
 					<span class="fe-footer-powered">{ base.FooterText }</span>
 				}
 				if base.StatusPageURL != "" {
-					<a href={ templ.URL(base.StatusPageURL) } class="fe-footer-status fe-footer-link hover:text-foreground transition-colors" target="_blank" rel="noopener noreferrer">{ i18n.T(langOrDefault(base.LangCode), "frontend.status_page") }</a>
+					<a href={ templ.URL(base.StatusPageURL) } class="fe-footer-status fe-footer-link hover:text-foreground transition-colors" target="_blank" rel="nofollow noopener noreferrer">{ i18n.T(langOrDefault(base.LangCode), "frontend.status_page") }</a>
 				}
 			</div>
 		</div>

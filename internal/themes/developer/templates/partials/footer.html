@@ -34,7 +34,7 @@
             <div class="dev-footer-left">
                 <span class="dev-footer-text">// {{.SiteName}} &copy; {{now.Year}}</span>
                 {{with privacyFooterLink $.LangCode}}<span class="dev-footer-privacy">{{.}}</span>{{end}}
-                {{with .StatusPageURL}}<span class="dev-footer-status"><a href="{{.}}" target="_blank" rel="noopener noreferrer">{{TTheme $.LangCode "frontend.status_page"}}</a></span>{{end}}
+                {{with .StatusPageURL}}<span class="dev-footer-status"><a href="{{.}}" target="_blank" rel="nofollow noopener noreferrer">{{TTheme $.LangCode "frontend.status_page"}}</a></span>{{end}}
             </div>
             <div class="dev-footer-right">
                 <span class="dev-footer-powered">
