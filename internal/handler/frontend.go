@@ -155,6 +155,7 @@ type SiteData struct {
 	Description    string
 	URL            string
 	DefaultOGImage string
+	StatusPageURL  string
 	Theme          *theme.Config
 	Settings       map[string]string
 	CurrentYear    int
@@ -217,6 +218,7 @@ type BaseTemplateData struct {
 	// Footer
 	FooterText    string
 	CopyrightText string
+	StatusPageURL string // Public status page link; empty hides it
 	FooterWidgets []FooterWidget
 	SocialLinks   []SocialLink
 
@@ -2353,6 +2355,9 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 		if ogImage, err := h.cacheManager.GetConfig(ctx, "default_og_image"); err == nil && ogImage != "" {
 			site.DefaultOGImage = ogImage
 		}
+		if statusURL, err := h.cacheManager.GetConfig(ctx, model.ConfigKeyStatusPageURL); err == nil && statusURL != "" {
+			site.StatusPageURL = statusURL
+		}
 	} else {
 		// Fallback to direct DB queries if cache not available
 		if cfg, err := h.queries.GetConfigByKey(ctx, "site_name"); err == nil {
@@ -2366,6 +2371,9 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 		}
 		if cfg, err := h.queries.GetConfigByKey(ctx, "default_og_image"); err == nil && cfg.Value != "" {
 			site.DefaultOGImage = cfg.Value
+		}
+		if cfg, err := h.queries.GetConfigByKey(ctx, model.ConfigKeyStatusPageURL); err == nil && cfg.Value != "" {
+			site.StatusPageURL = cfg.Value
 		}
 	}
 
@@ -2414,6 +2422,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		Year:            site.CurrentYear,
 		Site:            site,
 		ThemeSettings:   site.Settings,
+		StatusPageURL:   site.StatusPageURL,
 		ShowSearch:      true,
 		SearchQuery:     r.URL.Query().Get("q"),
 		CSPNonce:        middleware.GetCSPNonce(r),

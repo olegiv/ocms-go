@@ -24,6 +24,7 @@ type PageContext struct {
 	Flash          string
 	FlashType      string
 	SiteName       string
+	StatusPageURL  string
 	CurrentPath    string
 	AdminLang      string
 	LangOptions    []LangOption

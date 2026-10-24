@@ -443,6 +443,7 @@ Common data available in all templates:
 | `.Tags` | array | Available tags |
 | `.Navigation` | array | Header navigation items |
 | `.FooterNav` | array | Footer navigation items |
+| `.StatusPageURL` | string | Public status page URL from the **Status Page URL** site setting; empty when unset. Bundled themes link it as "Status" (`{{TTheme .LangCode "frontend.status_page"}}`) in the footer |
 | `.ThemeSettings` | map | Theme setting values |
 | `.Widgets` | map | Widgets by area |
 | `.Pagination` | object | Pagination state |

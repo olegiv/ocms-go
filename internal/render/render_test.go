@@ -404,6 +404,46 @@ func TestThemeFooterConfigTextIsSanitized(t *testing.T) {
 	}
 }
 
+// TestThemeFootersRenderStatusPageURL enforces that every bundled theme's
+// footer partial references the status_page_url site setting: an admin who
+// fills it in must see the link whichever bundled theme is active. Bundled
+// means the embedded core themes plus custom/themes/starter; site-owned themes
+// elsewhere under custom/themes are skipped. This is a source check only:
+// TestThemeFootersRenderStatusPageLink in the handler package renders each
+// bundled theme, the templ-engine default included, with the setting filled in.
+func TestThemeFootersRenderStatusPageURL(t *testing.T) {
+	roots := []string{"../../internal/themes", "../../custom/themes/starter"}
+	var footers, missing []string
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || filepath.Base(path) != "footer.html" || filepath.Base(filepath.Dir(path)) != "partials" {
+				return nil
+			}
+			footers = append(footers, path)
+			content, readErr := os.ReadFile(path) //nolint:gosec // Test walks repo-local template sources
+			if readErr != nil {
+				return readErr
+			}
+			if !strings.Contains(string(content), ".StatusPageURL") {
+				missing = append(missing, path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walking %s: %v", root, err)
+		}
+	}
+	if len(footers) < 3 {
+		t.Fatalf("found %d bundled footer templates, want at least 3 (default, developer, starter): %v", len(footers), footers)
+	}
+	if len(missing) > 0 {
+		t.Errorf("bundled theme footers do not render .StatusPageURL:\n%s", strings.Join(missing, "\n"))
+	}
+}
+
 // TestAdminTemplScriptsAvoidInnerHTMLTemplateLiterals enforces the invariant
 // behind the image-picker stored-XSS fix: inline scripts in templ views must
 // not assign template literals to innerHTML, because interpolated data (media

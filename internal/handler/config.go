@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,9 +35,10 @@ var configKeyOrder = map[string]int{
 	model.ConfigKeyDefaultOGImage:  4,
 	model.ConfigKeyCopyright:       5,
 	model.ConfigKeyPoweredBy:       6,
-	model.ConfigKeyPostsPerPage:    7,
-	model.ConfigKeyAdminEmail:      8,
-	model.ConfigKeyExcludedIPs:     9,
+	model.ConfigKeyStatusPageURL:   7,
+	model.ConfigKeyPostsPerPage:    8,
+	model.ConfigKeyAdminEmail:      9,
+	model.ConfigKeyExcludedIPs:     10,
 }
 
 // sortConfigs sorts config items according to configKeyOrder.
@@ -340,6 +342,14 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		if cfg.Key == model.ConfigKeyStatusPageURL {
+			value = strings.TrimSpace(value)
+			if errMsg := validateStatusPageURL(value, lang); errMsg != "" {
+				validationErrors[cfg.Key] = errMsg
+				continue
+			}
+		}
+
 		// Upsert the config value (creates if not exists, updates if exists)
 		_, err := h.queries.UpsertConfig(r.Context(), store.UpsertConfigParams{
 			Key:          cfg.Key,
@@ -354,6 +364,13 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to upsert config", "key", cfg.Key, "error", err)
 			validationErrors[cfg.Key] = i18n.T(lang, "error.saving_value")
 		}
+	}
+
+	// Invalidate config cache before the error branch: the loop above writes
+	// every valid field even when another one fails validation, and the
+	// frontend must not keep serving the values those writes replaced.
+	if h.cacheManager != nil {
+		h.cacheManager.InvalidateConfig()
 	}
 
 	if len(validationErrors) > 0 {
@@ -385,11 +402,6 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 		h.renderConfigPage(w, r, user, lang, data)
 		return
-	}
-
-	// Invalidate config cache
-	if h.cacheManager != nil {
-		h.cacheManager.InvalidateConfig()
 	}
 
 	slog.Info("config updated", "updated_by", middleware.GetUserID(r))
@@ -449,6 +461,19 @@ func validateExcludedIPs(value string, lang string) string {
 		} else if net.ParseIP(entry) == nil {
 			return i18n.T(lang, "error.invalid_ip_entry", i+1, entry)
 		}
+	}
+	return ""
+}
+
+// validateStatusPageURL validates that the status page URL is empty or an
+// absolute http(s) URL with a host, since themes render it as an outbound link.
+func validateStatusPageURL(value string, lang string) string {
+	if value == "" {
+		return ""
+	}
+	u, err := url.Parse(value)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return i18n.T(lang, "config.status_page_url_invalid")
 	}
 	return ""
 }

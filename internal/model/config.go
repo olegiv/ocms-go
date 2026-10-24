@@ -29,6 +29,7 @@ const (
 	ConfigKeyExcludedIPs         = "excluded_ips"
 	ConfigKeyRobotsContentSignal = "robots_content_signal"
 	ConfigKeyMCPServerVersion    = "mcp_server_version"
+	ConfigKeyStatusPageURL       = "status_page_url"
 )
 
 // TranslatableConfigKeys is the list of config keys that support per-language translations.
@@ -57,6 +58,7 @@ var StandardConfigFields = []ConfigFieldDefinition{
 	{Key: ConfigKeyDefaultOGImage, DefaultValue: "", Type: ConfigTypeString, Description: "Default Open Graph image URL for social sharing (1200x630px recommended)"},
 	{Key: ConfigKeyCopyright, DefaultValue: "", Type: ConfigTypeString, Description: "Footer copyright text (leave empty for automatic)"},
 	{Key: ConfigKeyPoweredBy, DefaultValue: "Powered by oCMS", Type: ConfigTypeString, Description: "Footer powered by text"},
+	{Key: ConfigKeyStatusPageURL, DefaultValue: "", Type: ConfigTypeString, Description: "Public status page URL (e.g., an UptimeRobot page), shown as a Status link in the site footer and admin header; leave empty to hide it"},
 	{Key: ConfigKeyPostsPerPage, DefaultValue: "10", Type: ConfigTypeInt, Description: "Number of posts to display per page"},
 	{Key: ConfigKeyAdminEmail, DefaultValue: "admin@example.com", Type: ConfigTypeString, Description: "Administrator email address"},
 	{Key: ConfigKeyExcludedIPs, DefaultValue: "", Type: ConfigTypeText, Description: "IPs or CIDRs to exclude from analytics and event logging (one per line)"},
