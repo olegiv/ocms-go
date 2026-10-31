@@ -17,7 +17,7 @@ kill_timeout = 60
   strategy = 'rolling'
 
 [env]
-  GOMEMLIMIT = '400MiB'
+  GOMEMLIMIT = '800MiB'
   OCMS_ENV_FILE = '/dev/null'
   OCMS_ENV = 'staging'
   # Dual-stack binding also permits the owner's private 6PN tunnel.
@@ -102,5 +102,5 @@ kill_timeout = 60
 
 [[vm]]
   cpu_kind = 'shared'
-  cpus = 1
-  memory = '512mb'
+  cpus = 2
+  memory = '1gb'

@@ -7653,6 +7653,11 @@
             "translation": "reads"
         },
         {
+            "id": "oauth.continue",
+            "message": "Continue to the app",
+            "translation": "Continue to the app"
+        },
+        {
             "id": "oauth.consent_title",
             "message": "Connect an AI app",
             "translation": "Connect an AI app"

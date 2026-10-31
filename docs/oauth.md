@@ -55,6 +55,13 @@ client credentials, JWT assertions, client secrets and OIDC scopes are not
 supported or advertised. The authorization response includes the configured
 `iss` and echoes `state`; clients must validate both.
 
+The browser callback uses a non-cacheable HTML navigation page after consent.
+Its nonce-authorized script performs the GET to the validated callback, with
+a normal Continue link as a fallback. This keeps `form-action 'self'` intact;
+a cross-origin HTTP redirect directly from the consent POST is blocked by
+Chrome. Success and denial both use this path. Consent remains single-use,
+with fresh login/MFA and the existing ten-minute deadline.
+
 Both authorization and token requests must contain exactly one
 `resource=https://mcp-staging.example.com/api/mcp`. Redirects must match a
 registered URI exactly. IP-literal loopback HTTP redirects permit a variable
@@ -169,7 +176,7 @@ The R1.1 target is `https://ocms-mcp-staging.fly.dev`, with a separate Fly app
 `fly.toml`, `ocms-demo` and demo deploy/reset script remain unchanged.
 Deploy this compatibility branch to the separate Fly app.
 
-Use one shared CPU, initially 512 MB RAM, and one fresh 1 GB volume mounted at
+Use two shared vCPUs, 1 GB RAM, and one fresh 1 GB volume mounted at
 `/app/data`, with the database and uploads under that mount. Keep
 `kill_timeout = 60` and the existing health endpoints. Set
 `min_machines_running = 1` during acceptance and keep the only Machine in the

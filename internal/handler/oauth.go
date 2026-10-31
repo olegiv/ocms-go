@@ -50,7 +50,7 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	req, err := h.oauth.Prepare(r.Context(), values)
 	if err != nil {
 		if redirect := h.oauth.Redirect(req, url.Values{"error": {protocolErrorCode(err)}}); redirect != "" {
-			http.Redirect(w, r, redirect, http.StatusSeeOther)
+			oauthClientRedirect(w, r, redirect)
 		} else {
 			oauth.WriteProblem(w, err)
 		}
@@ -76,7 +76,7 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(oauth.IntersectScopes(strings.Fields(req.Scope), user.Role)) != len(strings.Fields(req.Scope)) {
-		http.Redirect(w, r, h.oauth.Redirect(req, url.Values{"error": {"access_denied"}}), http.StatusSeeOther)
+		oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"error": {"access_denied"}}))
 		h.clearOAuthConsent(r)
 		return
 	}
@@ -126,15 +126,22 @@ func (h *AuthHandler) oauthConsent(w http.ResponseWriter, r *http.Request) {
 	}
 	h.clearOAuthConsent(r) // A consent decision is single-use, including a failed grant.
 	if r.PostForm.Get("decision") != "allow" {
-		http.Redirect(w, r, h.oauth.Redirect(req, url.Values{"error": {"access_denied"}}), http.StatusSeeOther)
+		oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"error": {"access_denied"}}))
 		return
 	}
 	code, err := h.oauth.Authorize(ctx, req, user.ID)
 	if err != nil {
-		http.Redirect(w, r, h.oauth.Redirect(req, url.Values{"error": {protocolErrorCode(err)}}), http.StatusSeeOther)
+		oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"error": {protocolErrorCode(err)}}))
 		return
 	}
-	http.Redirect(w, r, h.oauth.Redirect(req, url.Values{"code": {code}}), http.StatusSeeOther)
+	oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"code": {code}}))
+}
+
+// oauthClientRedirect receives only callback URLs validated by Service.Redirect.
+// A fresh document performs a GET navigation: Chrome otherwise applies the
+// consent form's form-action 'self' policy to the cross-origin HTTP redirect.
+func oauthClientRedirect(w http.ResponseWriter, r *http.Request, target string) {
+	renderTempl(w, r, accountviews.OAuthRedirect(middleware.GetAdminLang(r), target))
 }
 
 func (h *AuthHandler) clearOAuthConsent(r *http.Request) {

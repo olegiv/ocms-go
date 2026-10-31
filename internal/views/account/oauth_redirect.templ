@@ -1,0 +1,23 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package account
+
+import "github.com/olegiv/ocms-go/internal/i18n"
+
+// OAuthRedirect ends the form submission before navigating to the validated
+// callback, so form-action 'self' remains enforced for account forms.
+templ OAuthRedirect(lang, target string) {
+	<!DOCTYPE html>
+	<html lang={ lang }>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="referrer" content="no-referrer"/>
+			<title>{ i18n.T(lang, "oauth.consent_title") }</title>
+		</head>
+		<body>
+			<a id="oauth-continue" href={ templ.SafeURL(target) }>{ i18n.T(lang, "oauth.continue") }</a>
+			@templ.JSFuncCall("window.location.replace", target)
+		</body>
+	</html>
+}

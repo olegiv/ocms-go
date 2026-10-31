@@ -102,7 +102,7 @@ func TestFlyStagingPublicIngressAndOwnerCommands(t *testing.T) {
 	}
 	for _, required := range []string{
 		"[http_service]", "force_https = true", "min_machines_running = 1",
-		"auto_start_machines = true", "memory = '512mb'", "cpus = 1",
+		"auto_start_machines = true", "memory = '1gb'", "cpus = 2",
 		"[[http_service.checks]]", "path = '/health/ready'",
 	} {
 		if !strings.Contains(active.String(), required) {

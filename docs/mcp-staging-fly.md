@@ -11,7 +11,8 @@ outside this procedure.
 | `fly.staging.bootstrap.toml` | Fresh app only: private first boot, seeding and MFA enrollment; no public service |
 | `fly.staging.toml` | Normal staging: HTTPS, OAuth/scratch enabled, MFA required, seeding/demo/DCR off |
 
-Both profiles use the same app, process, 512 MB Machine and 1 GB volume.
+Both profiles use the same app, process, 2 shared vCPU / 1 GB Machine and
+1 GB volume. Go's memory limit is 800 MiB, leaving room for the runtime OS.
 The bootstrap uses development mode solely for HTTP cookies on the private
 loopback tunnel. The public profile switches to staging mode and secure
 cookies. Dual-stack `[::]:8080` supports both Fly Proxy and the private 6PN

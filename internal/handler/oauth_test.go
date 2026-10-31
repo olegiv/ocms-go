@@ -18,6 +18,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/oauth"
+	"golang.org/x/net/html"
 )
 
 func enableTestOAuth(t *testing.T, env *mfaTestEnv) url.Values {
@@ -56,9 +57,62 @@ func enableTestOAuth(t *testing.T, env *mfaTestEnv) url.Values {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256([]byte(strings.Repeat("a", 64)))
+	env.router = middleware.SecurityHeaders(middleware.DefaultSecurityHeadersConfig(false))(env.router)
 	return url.Values{"client_id": {client.ID}, "redirect_uri": {"https://client.test/callback"},
 		"response_type": {"code"}, "scope": {"mcp:access mcp:drafts"}, "resource": {s.Resource()},
 		"code_challenge_method": {"S256"}, "code_challenge": {base64.RawURLEncoding.EncodeToString(digest[:])}, "state": {"browser-state"}}
+}
+
+func oauthHTMLAttribute(t *testing.T, body, tag, key, value, attribute string) string {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found string
+	var visit func(*html.Node)
+	visit = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == tag {
+			attributes := make(map[string]string, len(n.Attr))
+			for _, a := range n.Attr {
+				attributes[a.Key] = a.Val
+			}
+			if attributes[key] == value {
+				found = attributes[attribute]
+			}
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(doc)
+	if found == "" {
+		t.Fatalf("missing %s attribute on %s %s=%q", attribute, tag, key, value)
+	}
+	return found
+}
+
+func oauthCallbackResponse(t *testing.T, rr *httptest.ResponseRecorder) *url.URL {
+	t.Helper()
+	if rr.Code != http.StatusOK || rr.Header().Get("Location") != "" {
+		t.Fatalf("OAuth callback must leave the form POST with a navigation page, got %d", rr.Code)
+	}
+	if rr.Header().Get("Cache-Control") != "no-store" || rr.Header().Get("Referrer-Policy") != "no-referrer" ||
+		!strings.Contains(rr.Header().Get("Content-Security-Policy"), "form-action 'self'") {
+		t.Fatal("callback navigation weakened the browser security policy")
+	}
+	body := rr.Body.String()
+	target := oauthHTMLAttribute(t, body, "a", "id", "oauth-continue", "href")
+	nonce := oauthHTMLAttribute(t, body, "script", "type", "", "nonce")
+	if !strings.Contains(rr.Header().Get("Content-Security-Policy"), "'nonce-"+nonce+"'") ||
+		!strings.Contains(body, "window.location.replace(") {
+		t.Fatal("callback navigation script is missing its CSP nonce")
+	}
+	u, err := url.Parse(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
 }
 
 func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {
@@ -105,6 +159,9 @@ func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {
 	if nonce == "" {
 		t.Fatal("no server-held consent nonce")
 	}
+	if rendered := oauthHTMLAttribute(t, rr.Body.String(), "input", "name", "consent_token", "value"); rendered != nonce {
+		t.Fatal("rendered consent token differs from the session token")
+	}
 	bad := url.Values{"consent_token": {"wrong"}, "decision": {"allow"}}
 	if rr := authRequest(env.router, http.MethodPost, "/oauth/authorize", bad, cookie); rr.Code != 403 {
 		t.Fatal("bad consent nonce accepted")
@@ -121,8 +178,8 @@ func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {
 		t.Fatal("cross-site consent accepted")
 	}
 	rr = authRequest(env.router, http.MethodPost, "/oauth/authorize", form, cookie)
-	u, err := url.Parse(rr.Header().Get("Location"))
-	if err != nil || u.Host != "client.test" || u.Query().Get("code") == "" || u.Query().Get("iss") != "https://cms.test" || u.Query().Get("state") != "browser-state" {
+	u := oauthCallbackResponse(t, rr)
+	if u.Host != "client.test" || u.Query().Get("code") == "" || u.Query().Get("iss") != "https://cms.test" || u.Query().Get("state") != "browser-state" {
 		t.Fatalf("consent response status=%d (invalid redirect)", rr.Code)
 	}
 	cookie = sessionCookie(t, rr, env.sm)
@@ -164,7 +221,7 @@ func TestOAuthConsentDenialPublicRoleAndUnregisteredRedirect(t *testing.T) {
 				nonce, _ := env.session(t, cookie)(oauthNonce).(string)
 				rr = authRequest(env.router, http.MethodPost, "/oauth/authorize", url.Values{"consent_token": {nonce}, "decision": {"deny"}}, cookie)
 			}
-			u, _ := url.Parse(rr.Header().Get("Location"))
+			u := oauthCallbackResponse(t, rr)
 			if u.Query().Get("error") != "access_denied" || u.Query().Get("iss") != "https://cms.test" {
 				t.Fatalf("denied redirect=%d", rr.Code)
 			}
