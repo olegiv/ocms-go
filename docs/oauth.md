@@ -7,9 +7,12 @@ OAuth is off by default. Existing API keys remain available with their CIDR,
 expiry, anomaly-revocation and rate-limit policies.
 
 This is the R1.1 compatibility implementation. It does not write CMS drafts,
-publish pages, generate content or call a model provider. Real Claude Desktop
-and ChatGPT account acceptance is still pending; SDK tests do not establish
-support for a particular account tier or GUI version.
+publish pages, generate content or call a model provider. On 2026-10-31,
+Claude Desktop, claude.ai and ChatGPT web passed the tested OAuth, published
+context, scratch and revocation/reconnect flows on Fly staging commit
+`f66bd7b4d5fa` using Pro accounts. CLI OAuth/bearer and IPv6 acceptance remain
+unverified. See the current matrix in `.claude/docs/PHASE5.md`; SDK tests
+alone do not establish client support.
 
 ## Enable
 
@@ -307,8 +310,9 @@ For each real client, record date, app/browser version, OS, account tier,
 transport and auth mode. Test connect → consent → list → read context →
 approve scratch write → retrieve → revoke → next call fails → reconnect.
 Record unavailable account/UI capabilities as unverified. The R1.1 matrix in
-`.claude/docs/PHASE5.md` remains pending until those account checks are run;
-public HTTPS is the common baseline and a tunnel is optional.
+`.claude/docs/PHASE5.md` records the three GUI passes and the remaining CLI
+and environment gaps; public HTTPS is the common baseline and a tunnel is
+optional.
 Record every matrix row against the staged commit and configuration before
 starting R1.2. Missing required GUI passes remain pending until the owner
 resolves the blocker or explicitly changes scope.

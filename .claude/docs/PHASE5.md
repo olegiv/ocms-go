@@ -1697,25 +1697,28 @@ library's transitive dependency. No other existing module version changed.
 
 #### Real-account matrix — current acceptance status
 
-Updated 2026-10-31. The deployed CSP snapshot `2dd1cf49eb9e` matches the source
-committed as `2edc6e90`; the compatibility corrections in R1.1G below remain
-local and have not been deployed. Claude web uses Pro / Chrome 156.0.8078.80
-on macOS 27.2, streamable HTTP and the actual admin account. Editor coverage
-remains explicitly deferred. SDK tests cannot substitute for real-account
-acceptance. Record every remaining client's version, tier, OS and results.
+Updated 2026-10-31 against deployed commit `f66bd7b4d5fa`. The three GUI
+clients passed their OAuth/read/scratch/revocation/reconnect checks on public
+Fly HTTPS; R1.1H below records the evidence and reconnect scope difference.
+Claude Desktop 4.4212.0, Claude web and ChatGPT web use Pro; both web clients
+use Chrome 156.0.8078.80 on macOS 27.2. Account tiers were read from their UI.
+All three use streamable HTTP and the admin account. Editor coverage
+remains explicitly deferred. SDK tests cannot substitute for the remaining
+real-account rows. Record each client's version, tier, OS and results.
 
 | Client | Auth | Connect/consent/list/read/scratch/revoke/reconnect | Current blocker |
 |---|---|---|---|
-| Claude Desktop custom connector | OAuth | Native tool calls unverified | Web acceptance does not establish native Desktop calls |
-| claude.ai web | OAuth | Connect/consent/list/read/search/revoke/reconnect passed; scratch denied for missing scope | HTTP scope-upgrade correction verified locally; live retry pending |
-| ChatGPT web | OAuth | Custom MCP/CIMD setup available; authorization reached oCMS, then `invalid_client` | Supported-auth-method negotiation correction verified locally; live retry pending |
+| Claude Desktop custom connector | OAuth | Passed: native discovery/read/search/scratch save/read, revoked-call denial and fresh read after shared reconnect | None for tested flow; final reconnect grants `mcp:access` only |
+| claude.ai web | OAuth | Passed: consent/discovery/read/search, live scope upgrade, scratch save/read, revoked-call denial and fresh reconnect | None for tested flow; final reconnect grants `mcp:access` only |
+| ChatGPT web | OAuth | Passed: CIMD connect/consent/discovery/read/search/scratch save/read, revoked-call denial, reconnect and scratch retrieval under new grant | None for tested flow |
 | Claude Code | OAuth | Unverified | Real client/version acceptance pending |
 | Claude Code | Bearer key | Unverified | Real client/version and scoped, expiring key acceptance pending |
 | Codex | OAuth | Unverified | Real client/version acceptance pending |
 | Codex | Bearer key | Unverified | Real client/version and scoped, expiring key acceptance pending |
 
-The staging owner chooses the host and deploys it. Use `docs/oauth.md` for
-canonical issuer, scratch flags, MFA/proxy setup and nginx query redaction.
+The owner selected `https://ocms-mcp-staging.fly.dev` and authorized the
+deployment. Use `docs/oauth.md` for canonical issuer, scratch flags,
+MFA/proxy setup and nginx query redaction.
 Do not claim R1.1 real-client completion or start using scratch results as
 proof of CMS persistence. R1.2–R1.5 still own the production authoring path and
 removal of this temporary probe.
@@ -2048,3 +2051,70 @@ gated on recorded required passes or an explicit owner scope decision.
 
 Primary references: [MCP scope challenges](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#scope-challenge-handling)
 and [ChatGPT CIMD authentication](https://developers.openai.com/plugins/build/auth).
+
+
+### R1.1H — Deployed GUI acceptance (2026-10-31)
+
+The owner approved the exact compatibility commit and deployment, with no
+push. Commit `f66bd7b4d5fa131cdc57b5aa157c0f18a58c9d53` was built from a clean
+Git archive and deployed to `ocms-mcp-staging`. The running binary reports
+that commit. The existing Machine, encrypted volume, two shared CPUs/1024 MB,
+MFA requirement, disabled DCR and canonical Fly origin were preserved.
+No seed, secret rotation, production deployment or Git push occurred.
+
+- **Claude web:** the real HTTP 403 scope challenge opened the additional
+  access UI. Fresh MFA/consent granted exactly `mcp:access` and `mcp:drafts`;
+  scratch save/read matched. Final grant revocation produced MCP 401 and
+  refresh 400. Fresh MFA/consent and token exchange succeeded, followed by
+  fresh `get_site_info`, `search_pages("R11")` and `get_page(1)` calls. The
+  published marker was returned under the new grant.
+- **Native Claude Desktop 4.4212.0 / Pro:** a dedicated native session called
+  site info, search, page read, scratch save and scratch retrieval in order.
+  Native UI and server logs confirmed the exact saved/read entry. Revoking
+  its shared Claude grant rejected the next native call. After the web
+  reconnect, a new native site-info call succeeded under the same new grant.
+- **ChatGPT web:** actual CIMD authorization, MFA/consent, tool discovery and
+  all five context/scratch calls passed. Revoking its grant rejected MCP and
+  refresh; reconnect issued a different grant and both site-info and the
+  previously saved scratch entry were read successfully. The test used the
+  Instant model; the profile menu independently identifies the account as Pro.
+- Scratch grants had only `mcp:access` and `mcp:drafts`, with no `pages:read`
+  and `drafts_visible: false`. Writes were explicitly approved in test
+  prompts; no separate client write-approval button was observed. Scratch
+  entries are disposable, isolated and one per user, so later client saves
+  replaced the earlier client's entry. These are not CMS draft writes.
+- Claude's final reconnect requested and received only `mcp:access`.
+  Its working connection therefore reads published content; another scratch
+  operation would require the already-tested scope-upgrade flow. ChatGPT's
+  working connection retains `mcp:access` and `mcp:drafts`.
+- Final Claude MFA was delayed by duplicated keyboard input. Inspection
+  found three doubled digit pairs; a single paste of the owner's fresh code
+  produced exactly six digits and passed immediately. Dummy keyboard/paste
+  tests did not reproduce duplication, and the auth page has no input script.
+  The duplication's source remains unproven. Server clock/replay state was
+  normal. No MFA safeguards were weakened, no counters or credentials were
+  reset, and no recovery code was used. The owner then tested a fresh ordinary
+  staging login, confirmed manual MFA entry worked, and reached the signed-in
+  dashboard. The duplication did not recur in that follow-up check.
+- Sanitized Fly logs show successful token/tool requests and revocation
+  failures without credential patterns or OAuth query strings. Normal and
+  spoofed IPv4 forwarding probes after this deployment resolve to the
+  verified external client reference. IPv6 remains unverified because the
+  current Mac has no working route to the staging IPv6 address.
+
+Baseline checks: focused OAuth/MCP tests, full uncached Go tests, focused
+race tests and scoped lint passed. The clean-archive full suite initially
+failed on absent ignored frontend dependencies; building the lockfile-pinned
+assets resolved that prerequisite and the uncached suite then passed. Both
+Fly profiles passed strict validation. Global lint's five unchanged findings
+remain separately recorded; scoped lint is not a global clean result.
+
+Evidence: `output/r11-validation/fly-staging/deployment/` contains the
+deployment manifest, per-client screenshots/sanitized logs, proxy comparison
+and `CLIENT-ACCEPTANCE-RESULT.md`. These ignored records are not committed.
+The status documentation records the completed deployment and GUI checks.
+
+Remaining R1.1: real Claude Code and Codex OAuth/bearer rows and IPv6 path
+coverage. Editor coverage stays explicitly deferred. R1.2 remains gated on
+required passes or an explicit owner scope decision; the three GUI passes
+do not complete the whole matrix.
