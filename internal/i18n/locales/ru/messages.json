@@ -7651,6 +7651,91 @@
             "id": "frontend.reads",
             "message": "reads",
             "translation": "прочтений"
+        },
+        {
+            "id": "oauth.consent_title",
+            "message": "Connect an AI app",
+            "translation": "Подключение приложения ИИ"
+        },
+        {
+            "id": "oauth.consent_description",
+            "message": "Review access to your oCMS account. Publishing is never granted.",
+            "translation": "Проверьте доступ к своей учётной записи oCMS. Публикация не разрешается."
+        },
+        {
+            "id": "oauth.client_id",
+            "message": "Registered client ID",
+            "translation": "Зарегистрированный ID клиента"
+        },
+        {
+            "id": "oauth.client_host",
+            "message": "Client metadata host",
+            "translation": "Сервер метаданных клиента"
+        },
+        {
+            "id": "oauth.redirect_host",
+            "message": "Return address host",
+            "translation": "Сервер адреса возврата"
+        },
+        {
+            "id": "oauth.permissions",
+            "message": "Requested permissions",
+            "translation": "Запрашиваемые разрешения"
+        },
+        {
+            "id": "oauth.registered_name_note",
+            "message": "The app name is supplied by its registration. Check the client ID and return address.",
+            "translation": "Имя приложения указано при регистрации. Проверьте ID клиента и адрес возврата."
+        },
+        {
+            "id": "oauth.allow",
+            "message": "Allow access",
+            "translation": "Разрешить доступ"
+        },
+        {
+            "id": "oauth.deny",
+            "message": "Deny",
+            "translation": "Отклонить"
+        },
+        {
+            "id": "oauth.connections",
+            "message": "Connected AI apps",
+            "translation": "Подключённые приложения ИИ"
+        },
+        {
+            "id": "oauth.no_connections",
+            "message": "No active AI app connections.",
+            "translation": "Активных подключений приложений ИИ нет."
+        },
+        {
+            "id": "oauth.revoke",
+            "message": "Revoke access",
+            "translation": "Отозвать доступ"
+        },
+        {
+            "id": "oauth.scope.mcp:access",
+            "message": "Read published site content",
+            "translation": "Чтение опубликованного содержимого сайта"
+        },
+        {
+            "id": "oauth.scope.mcp:drafts",
+            "message": "Use your AI-editable drafts (currently development scratch tools only)",
+            "translation": "Работа с вашими черновиками для ИИ (сейчас только временные инструменты разработки)"
+        },
+        {
+            "id": "oauth.scope.pages:read",
+            "message": "Read unpublished pages when the site permits it",
+            "translation": "Чтение неопубликованных страниц, если сайт это разрешает"
+        },
+        {
+            "id": "api_keys.perm_mcp_drafts",
+            "message": "AI-editable drafts; cannot publish or delete",
+            "translation": "Черновики для ИИ; без публикации и удаления"
+        },
+        {
+            "id": "oauth.local_registration",
+            "message": "Registered on this site; no client metadata host",
+            "translation": "Зарегистрировано на этом сайте; хост метаданных не указан"
         }
     ]
 }

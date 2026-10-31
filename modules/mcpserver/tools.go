@@ -9,12 +9,14 @@ import (
 	"log/slog"
 	"math"
 	"runtime/debug"
+	"slices"
 	"time"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
+	"github.com/olegiv/ocms-go/internal/oauth"
 )
 
 // Outcomes recorded in the per-call log line.
@@ -123,11 +125,27 @@ func registerTool[In, Out any](fn toolFunc[In, Out]) func(*Module, *mcp.Server, 
 		if err != nil {
 			panic(fmt.Sprintf("tool %s: output schema: %v", spec.Name, err))
 		}
+		annotations := readOnlyAnnotations(spec.Title)
+		if spec.write {
+			destructive := true
+			annotations.ReadOnlyHint = false
+			annotations.IdempotentHint = false
+			annotations.DestructiveHint = &destructive
+		}
+		var meta mcp.Meta
+		if m.ctx != nil && m.ctx.OAuth != nil {
+			scope := spec.scope
+			if scope == "" {
+				scope = "mcp:access"
+			}
+			meta = mcp.Meta{"securitySchemes": []map[string]any{{"type": "oauth2", "scopes": []string{scope}}}}
+		}
 		mcp.AddTool(srv, &mcp.Tool{
+			Meta:         meta,
 			Name:         spec.Name,
 			Title:        spec.Title,
 			Description:  spec.Description,
-			Annotations:  readOnlyAnnotations(spec.Title),
+			Annotations:  annotations,
 			InputSchema:  inSchema,
 			OutputSchema: outSchema,
 		}, wrapTool(m, spec, fn))
@@ -139,10 +157,11 @@ func registerTool[In, Out any](fn toolFunc[In, Out]) func(*Module, *mcp.Server, 
 func readOnlyAnnotations(title string) *mcp.ToolAnnotations {
 	closedWorld := false
 	return &mcp.ToolAnnotations{
-		Title:          title,
-		ReadOnlyHint:   true,
-		IdempotentHint: true,
-		OpenWorldHint:  &closedWorld,
+		Title:           title,
+		ReadOnlyHint:    true,
+		IdempotentHint:  true,
+		OpenWorldHint:   &closedWorld,
+		DestructiveHint: &closedWorld,
 	}
 }
 
@@ -184,6 +203,17 @@ func wrapTool[In, Out any](m *Module, spec toolSpec, fn toolFunc[In, Out]) mcp.T
 			// as nobody if that ever stops being true.
 			rec.outcome, rec.errorCode = outcomeUnauthenticated, codeUnauthorized
 			return nil, out, &toolError{Code: codeUnauthorized, Message: msgUnauthenticated}
+		}
+		if spec.scope != "" && !slices.Contains(id.scopes, spec.scope) {
+			rec.outcome, rec.errorCode = outcomeToolError, codeForbidden
+			res := &mcp.CallToolResult{IsError: true, Content: []mcp.Content{
+				&mcp.TextContent{Text: (&toolError{Code: codeForbidden, Message: "Additional permission required: " + spec.scope}).Error()},
+			}}
+			if id.grantID != "" && m.ctx.OAuth != nil {
+				challenge := fmt.Sprintf("Bearer resource_metadata=%q, error=\"insufficient_scope\", scope=%q", m.ctx.OAuth.Issuer()+oauth.MetadataPath, spec.scope)
+				res.Meta = mcp.Meta{"mcp/www_authenticate": []string{challenge}}
+			}
+			return res, out, nil
 		}
 
 		settings, refreshed := callCtx.Value(requestSettingsKey{}).(Settings)
@@ -232,7 +262,12 @@ func (m *Module) logToolCall(req *mcp.CallToolRequest, rec *callRecord, elapsed 
 		id, _ = identityFromRequest(req)
 	}
 	if id != nil {
-		attrs = append(attrs, "api_key_id", id.key.ID, "api_key_prefix", id.key.KeyPrefix)
+		attrs = append(attrs, "user_id", id.userID)
+		if id.grantID != "" {
+			attrs = append(attrs, "auth_type", "oauth", "grant_id", id.grantID, "oauth_client_id", id.clientID)
+		} else {
+			attrs = append(attrs, "auth_type", "api_key", "api_key_id", id.key.ID, "api_key_prefix", id.key.KeyPrefix)
+		}
 	}
 	if req != nil {
 		if client := req.ClientInfo(); client != nil {

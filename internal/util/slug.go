@@ -117,7 +117,7 @@ func IsReservedRouteSegment(s string) bool {
 	switch s {
 	case "admin", "api", "blog", "uploads", "static", "themes", "health",
 		"login", "logout", "language", "forms", "search", "tag", "category",
-		"page", "session", "account", "csp-report", "analytics", "embed", "example":
+		"page", "session", "account", "oauth", "csp-report", "analytics", "embed", "example":
 		return true
 	default:
 		return false
@@ -169,6 +169,7 @@ var reservedRoutePaths = []string{
 	"health/ready",
 	"login/mfa",
 	"login/mfa/setup",
+	"oauth/authorize",
 	"session/get",
 	"session/set",
 	"static/dist/*/**",

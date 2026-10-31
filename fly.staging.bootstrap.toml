@@ -1,0 +1,82 @@
+# Copyright (c) 2025-2026 Oleg Ivanchenko
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# FIRST BOOT ONLY. No public http_service/services; access with fly proxy.
+# Development mode permits HTTP cookies over the owner's loopback tunnel.
+# Replace seeded credentials and enroll MFA before the public deployment.
+# docs/mcp-staging-fly.md documents the transition to fly.staging.toml.
+app = 'ocms-mcp-staging'
+primary_region = 'fra'
+kill_timeout = 60
+
+[build]
+  dockerfile = 'Dockerfile'
+
+  [build.args]
+    VERSION = 'mcp-staging'
+
+[deploy]
+  strategy = 'rolling'
+
+[env]
+  GOMEMLIMIT = '400MiB'
+  OCMS_ENV_FILE = '/dev/null'
+  OCMS_ENV = 'development'
+  OCMS_SERVER_HOST = '[::]'
+  OCMS_SERVER_PORT = '8080'
+  OCMS_SITE_URL = 'https://mcp-staging.ocms.tech'
+  OCMS_DB_PATH = '/app/data/ocms.db'
+  OCMS_UPLOADS_DIR = '/app/data/uploads'
+  OCMS_CUSTOM_DIR = '/app/custom'
+  OCMS_ACTIVE_THEME = 'developer'
+  OCMS_LOG_LEVEL = 'info'
+  OCMS_DEMO_MODE = 'false'
+  OCMS_DO_SEED = 'true'
+  OCMS_REQUIRE_MFA = 'true'
+  OCMS_OAUTH_ENABLED = 'false'
+  OCMS_OAUTH_CIMD_ALLOWED_HOSTS = 'claude.ai,chatgpt.com'
+  OCMS_OAUTH_ALLOW_DCR = 'false'
+  OCMS_OAUTH_ACCESS_TTL = '3600'
+  OCMS_OAUTH_REFRESH_TTL_DAYS = '30'
+  OCMS_MCP_SPIKE_TOOLS = 'false'
+  OCMS_AI_DISABLED = 'true'
+  OCMS_SANITIZE_PAGE_HTML = 'true'
+  OCMS_REQUIRE_HTTPS_OUTBOUND = 'true'
+  OCMS_REQUIRE_API_KEY_EXPIRY = 'true'
+  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS = 'true'
+  OCMS_API_KEY_MAX_TTL_DAYS = '90'
+
+[processes]
+  app = '/app/ocms'
+
+[[mounts]]
+  source = 'ocms_staging_data'
+  destination = '/app/data'
+  initial_size = '1gb'
+
+# Intentionally no [http_service] or [[services]]. Do not add public ports.
+
+[checks]
+  [checks.liveness]
+    port = 8080
+    type = 'http'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '15s'
+    path = '/health/live'
+
+  [checks.readiness]
+    port = 8080
+    type = 'http'
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '15s'
+    path = '/health/ready'
+
+[[restart]]
+  policy = 'always'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory = '512mb'

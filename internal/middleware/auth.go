@@ -42,6 +42,11 @@ const (
 	// SessionKeyMFAVerified is true on a session whose sign-in passed a
 	// second factor.
 	SessionKeyMFAVerified = "mfa_verified"
+	// SessionKeyAuthenticatedAt records a completed password/MFA sign-in in Unix nanoseconds.
+	SessionKeyAuthenticatedAt = "authenticated_at"
+	// OAuth return paths are server-created, relative paths, never client redirect URIs.
+	SessionKeyOAuthReturnTo    = "oauth_return_to"
+	SessionKeyOAuthReauthAfter = "oauth_reauth_after"
 )
 
 // mfaRequired mirrors OCMS_REQUIRE_MFA for isSessionStale.

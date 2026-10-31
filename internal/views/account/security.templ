@@ -29,6 +29,8 @@ type SecurityData struct {
 	// the user may replace the authenticator but not turn it off.
 	Required bool
 	DemoMode bool
+	OAuthEnabled bool
+	OAuthGrants []OAuthGrant
 }
 
 // SecurityPage shows the user's two-factor status and its actions.
@@ -77,6 +79,9 @@ templ SecurityPage(pc *admin.PageContext, d SecurityData) {
 					}
 				}
 			}
+		}
+		if d.OAuthEnabled {
+			@connectedApps(pc, d.OAuthGrants)
 		}
 	}
 }

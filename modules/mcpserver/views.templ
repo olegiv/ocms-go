@@ -38,6 +38,8 @@ type DashboardData struct {
 	Tools             []ToolRow
 	Keys              []KeyRow
 	KeysError         bool
+	OAuthEnabled      bool
+	ScratchEnabled    bool
 }
 
 // ToolRow is one tool in the catalog table.
@@ -113,7 +115,11 @@ templ endpointCard(pc *adminviews.PageContext, data DashboardData) {
 				<dt class="text-muted-foreground">{ pc.T("mcp.mode_label") }</dt>
 				<dd>
 					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-						{ pc.T("mcp.read_only") }
+						if data.ScratchEnabled {
+							{ pc.T("mcp.scratch_mode") }
+						} else {
+							{ pc.T("mcp.read_only") }
+						}
 					}
 				</dd>
 				<dt class="text-muted-foreground">{ pc.T("mcp.protocol_versions") }</dt>
@@ -137,6 +143,9 @@ templ connectCard(pc *adminviews.PageContext, data DashboardData) {
 		}
 		@card.Content() {
 			<div class="space-y-4">
+				if data.OAuthEnabled {
+					<p>{ pc.T("mcp.oauth_connect") } <a class="underline" href="/account/security">{ pc.T("oauth.connections") }</a></p>
+				}
 				<div class="space-y-2">
 					<h3 class="text-sm font-medium">{ pc.T("mcp.connect_claude_code") }</h3>
 					<pre class="overflow-x-auto rounded-md bg-muted p-3 text-xs"><code>{ data.ClaudeCodeCommand }</code></pre>

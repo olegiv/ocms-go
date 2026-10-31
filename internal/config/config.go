@@ -49,6 +49,14 @@ type Config struct {
 	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
 	SiteURL       string `env:"OCMS_SITE_URL"` // Full site URL written into site config on startup (overrides the admin setting)
 
+	OAuthEnabled          bool   `env:"OCMS_OAUTH_ENABLED" envDefault:"false"`
+	OAuthCIMDAllowedHosts string `env:"OCMS_OAUTH_CIMD_ALLOWED_HOSTS" envDefault:"claude.ai,chatgpt.com"`
+	OAuthAllowDCR         bool   `env:"OCMS_OAUTH_ALLOW_DCR" envDefault:"false"`
+	OAuthAccessTTL        int    `env:"OCMS_OAUTH_ACCESS_TTL" envDefault:"3600"`
+	OAuthRefreshTTLDays   int    `env:"OCMS_OAUTH_REFRESH_TTL_DAYS" envDefault:"30"`
+	MCPSpikeTools         bool   `env:"OCMS_MCP_SPIKE_TOOLS" envDefault:"false"`
+	AIDisabled            bool   `env:"OCMS_AI_DISABLED" envDefault:"false"`
+
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching
 	CachePrefix  string `env:"OCMS_CACHE_PREFIX" envDefault:"ocms:"`   // Redis key prefix
@@ -179,6 +187,16 @@ func Load() (*Config, error) {
 	}
 
 	applyProductionSecurityDefaults(cfg)
+
+	if cfg.MCPSpikeTools && ((cfg.Env != "development" && cfg.Env != "staging") || os.Getenv("OCMS_DEMO_MODE") == "true") {
+		return nil, fmt.Errorf("OCMS_MCP_SPIKE_TOOLS is restricted to development/staging outside demo mode")
+	}
+	if cfg.OAuthEnabled && strings.TrimSpace(cfg.SiteURL) == "" {
+		return nil, fmt.Errorf("OCMS_SITE_URL is required when OAuth is enabled")
+	}
+	if cfg.OAuthEnabled && (cfg.OAuthAccessTTL < 60 || cfg.OAuthAccessTTL > 86400 || cfg.OAuthRefreshTTLDays < 1 || cfg.OAuthRefreshTTLDays > 90) {
+		return nil, fmt.Errorf("OAuth access TTL must be 60–86400 seconds and refresh TTL 1–90 days")
+	}
 
 	// Production hardening: prevent default seeding in production
 	// (allowed when demo mode is explicitly enabled).

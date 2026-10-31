@@ -17,11 +17,12 @@ import (
 // only response among them is Recoverer's 500, which keeps the headers that
 // SecurityHeaders had already set when the panic happened further down.
 var middlewareBeforeSecurityHeaders = map[string]bool{
-	"chimw.RequestID":                 true,
-	"middleware.AnnotateTrustedProxy": true,
-	"func literal":                    true, // trusted-proxy-aware RemoteAddr rewrite
-	"chimw.Logger":                    true,
-	"chimw.Recoverer":                 true,
+	"chimw.RequestID":                  true,
+	"middleware.AnnotateTrustedProxy":  true,
+	"func literal":                     true, // trusted-proxy-aware RemoteAddr rewrite
+	"chimw.Logger":                     true,
+	"middleware.RedactedRequestLogger": true,
+	"chimw.Recoverer":                  true,
 }
 
 // TestSecurityHeadersPrecedeAnsweringMiddleware fails when a root middleware

@@ -49,6 +49,8 @@ func (m *Module) dashboardData(ctx context.Context) DashboardData {
 		ProtocolVersions: strings.Join(mcp.SupportedProtocolVersions(), ", "),
 		Version:          moduleVersion,
 		MaxInstructions:  maxInstructionsRunes,
+		OAuthEnabled:     m.ctx.OAuth != nil,
+		ScratchEnabled:   m.spikeEnabled(),
 	}
 
 	// The form shows what is stored, which also brings the running server
@@ -85,7 +87,7 @@ func (m *Module) dashboardData(ctx context.Context) DashboardData {
 	data.ClaudeCodeCommand = claudeCodeCommand(endpoint)
 	data.ClientConfigJSON = clientConfigJSON(endpoint)
 
-	for _, spec := range toolCatalog() {
+	for _, spec := range m.catalog() {
 		data.Tools = append(data.Tools, ToolRow{Name: spec.Name, Title: spec.Title, Description: spec.Description})
 	}
 	keys, err := m.mcpKeys(ctx)

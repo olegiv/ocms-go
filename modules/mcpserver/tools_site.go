@@ -49,13 +49,17 @@ type LanguageInfo struct {
 	IsDefault  bool   `json:"is_default"`
 }
 
-// AccessDetails describes what the calling API key may access.
+// AccessDetails describes the verified account and app behind this request.
 type AccessDetails struct {
+	UserID        int64      `json:"user_id" doc:"Authenticated oCMS user who owns the key or grant."`
+	AuthType      string     `json:"auth_type" doc:"api_key or oauth; client display names are not proof of vendor identity."`
+	GrantID       string     `json:"grant_id,omitempty"`
+	ClientID      string     `json:"client_id,omitempty"`
 	KeyName       string     `json:"key_name" doc:"Name the administrator gave the API key."`
 	KeyPrefix     string     `json:"key_prefix" doc:"Public prefix of the API key."`
-	Permissions   []string   `json:"permissions" doc:"Permissions granted to the API key."`
+	Permissions   []string   `json:"permissions" doc:"Current permissions granted to this key or OAuth connection."`
 	DraftsVisible bool       `json:"drafts_visible" doc:"Whether unpublished drafts are visible: the site must expose drafts over MCP and the key must hold pages:read."`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty" doc:"When the API key expires."`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty" doc:"When this bearer credential expires."`
 }
 
 // ServerDetails describes this MCP server.
@@ -97,6 +101,10 @@ func (m *Module) getSiteInfo(ctx context.Context, call *toolCall, _ SiteInfoInpu
 		},
 		Languages: make([]LanguageInfo, 0, len(languages)),
 		Access: AccessDetails{
+			UserID:        call.identity.userID,
+			AuthType:      "api_key",
+			GrantID:       call.identity.grantID,
+			ClientID:      call.identity.clientID,
 			KeyName:       call.identity.key.Name,
 			KeyPrefix:     call.identity.key.KeyPrefix,
 			Permissions:   permissions,
@@ -106,9 +114,14 @@ func (m *Module) getSiteInfo(ctx context.Context, call *toolCall, _ SiteInfoInpu
 			Name:       serverName,
 			Title:      serverTitle,
 			Version:    moduleVersion,
-			ReadOnly:   true,
+			ReadOnly:   !m.spikeEnabled(),
 			MaxPerPage: maxPerPage,
 		},
+	}
+	if call.identity.grantID != "" {
+		out.Access.AuthType = "oauth"
+		expires := call.identity.expiresAt
+		out.Access.ExpiresAt = &expires
 	}
 	if call.identity.key.ExpiresAt.Valid {
 		expires := call.identity.key.ExpiresAt.Time

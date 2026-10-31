@@ -741,6 +741,7 @@ func buildPermissionGroups(existingPerms string) []adminviews.PermissionGroup {
 			TitleKey: "api_keys.perm_mcp",
 			Permissions: []adminviews.PermissionOption{
 				{Value: model.PermissionMCPAccess, DescKey: "api_keys.perm_mcp_access", Checked: strings.Contains(existingPerms, model.PermissionMCPAccess)},
+				{Value: model.PermissionMCPDrafts, DescKey: "api_keys.perm_mcp_drafts", Checked: strings.Contains(existingPerms, model.PermissionMCPDrafts)},
 			},
 		},
 	}

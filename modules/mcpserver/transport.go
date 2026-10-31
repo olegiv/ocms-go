@@ -71,14 +71,19 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 	h = withRequestContext(h)
 	h = rejectBatches(maxRequestBodyBytes, h)
 	h = middleware.APIRateLimit(keyRateLimitRPS, keyRateLimitBurst)(h)
+	inner := h
 	h = auth.RequireBearerToken(verifyValidatedKey, &auth.RequireBearerTokenOptions{
 		// Keys without an expiry are valid unless OCMS_REQUIRE_API_KEY_EXPIRY
 		// says otherwise, which middleware.APIKeyAuth already enforced.
 		AllowMissingExpiration: true,
 	})(h)
 	h = requireMCPAccess(m.logger, h)
+	h = m.keyAccountGuard(h)
 	h = middleware.APIKeyAuth(db)(h)
 	h = withBearerChallenge(h)
+	if m.ctx.OAuth != nil {
+		h = m.mixedAuthentication(h, inner)
+	}
 	h = m.withStoredState(h)
 	h = crossOriginGuard(m.logger, h)
 	h = limitInFlight(m.logger, maxInFlightRequests, h)

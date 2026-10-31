@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Opt-in MCP OAuth (R1.1).** Authorization code with S256 PKCE, scoped
+  browser consent after fresh password/MFA sign-in, issuer/resource discovery,
+  bounded client metadata and optional public-client registration. SQLite
+  stores only opaque credential hashes; atomic code redemption, refresh
+  rotation/reuse revocation and current account checks protect access.
+  Connections can be revoked from Account → Security. A development/staging
+  flag adds bounded, temporary scratch tools with no CMS page writes;
+  production/demo refuse it. Existing API key policies remain in force.
+  Real Claude Desktop and ChatGPT account acceptance is pending; see
+  `docs/oauth.md`.
 - **Status page link.** The new **Status Page URL** setting in
   `/admin/config` (for example, an UptimeRobot public status page) adds a
   "Status" link (`rel="nofollow noopener noreferrer"`) to the footer of the
@@ -17,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepted; an empty value hides the link.
 
 ### Fixed
+- Update `golang.org/x/net` to v0.62.0 for GO-2026-6860 and GO-2026-6866,
+  reachable through HTML-to-Markdown conversion.
 - Since 0.23.0, draft titles in `/admin/pages` were plain text and a
   draft's editor had no **Preview** button. Both open the draft at its
   URL again; only admins and editors can see it there, while public

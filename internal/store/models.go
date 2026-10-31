@@ -227,6 +227,49 @@ type ModuleMigration struct {
 	AppliedAt time.Time `json:"applied_at"`
 }
 
+type OauthClient struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	RedirectUris string `json:"redirect_uris"`
+	Source       string `json:"source"`
+	ExpiresAt    int64  `json:"expires_at"`
+}
+
+type OauthCode struct {
+	CodeHash    string `json:"code_hash"`
+	GrantID     string `json:"grant_id"`
+	RedirectUri string `json:"redirect_uri"`
+	Challenge   string `json:"challenge"`
+	CreatedAt   int64  `json:"created_at"`
+	ExpiresAt   int64  `json:"expires_at"`
+	ConsumedAt  int64  `json:"consumed_at"`
+}
+
+type OauthGrant struct {
+	ID             string `json:"id"`
+	UserID         int64  `json:"user_id"`
+	ClientID       string `json:"client_id"`
+	Scopes         string `json:"scopes"`
+	Resource       string `json:"resource"`
+	SessionVersion int64  `json:"session_version"`
+	CreatedAt      int64  `json:"created_at"`
+	ExpiresAt      int64  `json:"expires_at"`
+	RevokedAt      int64  `json:"revoked_at"`
+	LastUsedAt     int64  `json:"last_used_at"`
+}
+
+type OauthToken struct {
+	ID              string `json:"id"`
+	GrantID         string `json:"grant_id"`
+	AccessHash      string `json:"access_hash"`
+	RefreshHash     string `json:"refresh_hash"`
+	Scopes          string `json:"scopes"`
+	CreatedAt       int64  `json:"created_at"`
+	AccessExpiresAt int64  `json:"access_expires_at"`
+	RefreshUsedAt   int64  `json:"refresh_used_at"`
+	AccessRevokedAt int64  `json:"access_revoked_at"`
+}
+
 type Page struct {
 	ID                int64         `json:"id"`
 	Title             string        `json:"title"`

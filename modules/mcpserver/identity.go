@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -27,8 +28,12 @@ const identityKey = "ocms.identity"
 
 // identity is the authenticated caller of one MCP request.
 type identity struct {
-	key    store.ApiKey
-	scopes []string // permissions granted to the key
+	key       store.ApiKey
+	scopes    []string // permissions granted to the key
+	userID    int64
+	grantID   string
+	clientID  string
+	expiresAt time.Time
 }
 
 // verifyValidatedKey is the auth.TokenVerifier for the endpoint. It does not
@@ -46,7 +51,7 @@ func verifyValidatedKey(_ context.Context, token string, r *http.Request) (*auth
 	info := &auth.TokenInfo{
 		Scopes: scopes,
 		UserID: "apikey:" + strconv.FormatInt(key.ID, 10),
-		Extra:  map[string]any{identityKey: &identity{key: *key, scopes: scopes}},
+		Extra:  map[string]any{identityKey: &identity{key: *key, scopes: scopes, userID: key.CreatedBy}},
 	}
 	if key.ExpiresAt.Valid {
 		info.Expiration = key.ExpiresAt.Time
@@ -85,6 +90,9 @@ func actorFor(id *identity, s Settings) v2.Actor {
 		})
 	}
 	key := id.key
+	if id.grantID != "" {
+		return v2.Actor{Permissions: perms}
+	}
 	return v2.Actor{APIKey: &key, Permissions: perms}
 }
 

@@ -43,12 +43,17 @@ func (m *Module) buildServer(settings Settings) (srv *mcp.Server, err error) {
 			srv, err = nil, fmt.Errorf("registering MCP tools: %v", p)
 		}
 	}()
+	instructions := serverInstructions(settings)
+	if m.spikeEnabled() {
+		instructions = strings.Replace(instructions, "This server gives read-only access to the content of an oCMS website.",
+			"This development server reads oCMS content and exposes temporary, non-publishable scratch drafts. Scratch data expires after one hour and disappears on restart. It never creates or changes CMS pages.", 1)
+	}
 	srv = mcp.NewServer(&mcp.Implementation{
 		Name:    serverName,
 		Title:   serverTitle,
 		Version: moduleVersion,
 	}, &mcp.ServerOptions{
-		Instructions: serverInstructions(settings),
+		Instructions: instructions,
 		Logger:       sdkLogger(m.logger, "mcp-server"),
 		// Tools only. The deprecated logging capability is not advertised and
 		// the tool list never changes at runtime, so no list_changed.
@@ -60,7 +65,7 @@ func (m *Module) buildServer(settings Settings) (srv *mcp.Server, err error) {
 	})
 	// Added after NewServer, so it wraps the SDK's own middleware as well.
 	srv.AddReceivingMiddleware(m.requestGuard)
-	for _, spec := range toolCatalog() {
+	for _, spec := range m.catalog() {
 		spec.register(m, srv, spec)
 	}
 	return srv, nil

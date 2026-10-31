@@ -22,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/oauth"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -38,6 +39,7 @@ type AuthHandler struct {
 	loginProtection *middleware.LoginProtection
 	hookRegistry    *module.HookRegistry
 	mfa             *mfa.Service
+	oauth           *oauth.Service
 }
 
 // NewAuthHandler creates a new AuthHandler. mfaService decides which sign-ins
@@ -247,17 +249,29 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	h.renderer.SetFlash(r, i18n.T(lang, "auth.welcome_back", user.Name), "success")
 
-	http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
+	http.Redirect(w, r, h.postLoginDestination(r.Context(), user.Role), http.StatusSeeOther)
 }
 
 // signedInDestination returns the landing page of the user this session is
 // signed in as, and false when it is not signed in.
 func (h *AuthHandler) signedInDestination(ctx context.Context) (string, bool) {
+	if h.sessionManager.GetInt64(ctx, middleware.SessionKeyOAuthReauthAfter) >
+		h.sessionManager.GetInt64(ctx, middleware.SessionKeyAuthenticatedAt) {
+		return "", false
+	}
 	user, ok := middleware.SessionUser(ctx, h.sessionManager, h.queries)
 	if !ok {
 		return "", false
 	}
 	return loginDestination(user.Role), true
+}
+
+// postLoginDestination resumes only an authorization request saved by our consent handler.
+func (h *AuthHandler) postLoginDestination(ctx context.Context, role string) string {
+	if target := h.sessionManager.PopString(ctx, middleware.SessionKeyOAuthReturnTo); strings.HasPrefix(target, "/oauth/authorize?") {
+		return target
+	}
+	return loginDestination(role)
 }
 
 // loginDestination keeps fresh-login and existing-session destinations consistent.

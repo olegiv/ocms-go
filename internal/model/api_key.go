@@ -32,6 +32,8 @@ const (
 	// Keeping it separate means an existing integration key never becomes
 	// usable by AI agents unless an administrator opts it in.
 	PermissionMCPAccess = "mcp:access"
+	// PermissionMCPDrafts permits user-owned MCP draft operations, never publication.
+	PermissionMCPDrafts = "mcp:drafts"
 )
 
 // AllPermissions returns all available API permissions.
@@ -44,6 +46,7 @@ func AllPermissions() []string {
 		PermissionTaxonomyRead,
 		PermissionTaxonomyWrite,
 		PermissionMCPAccess,
+		PermissionMCPDrafts,
 	}
 }
 

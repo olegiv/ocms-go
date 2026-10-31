@@ -201,6 +201,13 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
 | `OCMS_SITE_URL` | No | - | Full site URL written into site config on startup (overrides DB/admin setting); sitemap and agent-discovery docs 503 until set. Scheme and host only (`https://example.com`) — a path, query, fragment, credentials or an out-of-range port fails startup |
+| `OCMS_OAUTH_ENABLED` | No | `false` | Enable the MCP OAuth server; requires canonical OCMS_SITE_URL (HTTPS outside development loopback) |
+| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | No | `claude.ai,chatgpt.com` | Exact HTTPS client metadata host allowlist |
+| `OCMS_OAUTH_ALLOW_DCR` | No | `false` | Allow bounded public-client dynamic registration |
+| `OCMS_OAUTH_ACCESS_TTL` | No | `3600` | OAuth access lifetime in seconds (60–86400) |
+| `OCMS_OAUTH_REFRESH_TTL_DAYS` | No | `30` | Absolute rotating refresh-family lifetime (1–90 days) |
+| `OCMS_MCP_SPIKE_TOOLS` | No | `false` | Temporary non-publishable scratch tools; development/staging only, refused in production/demo |
+| `OCMS_AI_DISABLED` | No | `false` | Disable draft/scratch tools while retaining normal reads |
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
 | `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
 
@@ -338,10 +345,10 @@ Only `AuthHandler.grantSession` may put `SessionKeyUserID` into a session (`Test
 The spec is derived from Go types via [huma v2](https://huma.rocks/); domain services live under `internal/api/v2/{pages,media,taxonomy}` and MUST NOT import anything from the legacy v1 package (which no longer exists).
 
 ### MCP Server (opt-in module `mcp`, `modules/mcpserver`)
-- `POST /api/mcp` - Streamable HTTP MCP endpoint (stateless, JSON responses); API key with `mcp:access` required; read-only tools
+- `POST /api/mcp` - Streamable HTTP MCP endpoint (stateless, JSON responses); API key or optional OAuth grant with `mcp:access`; read-only CMS tools
 - `/admin/mcp` - Endpoint, client snippets, drafts policy, agent instructions, tool catalog (admin only)
 
-Tools are thin adapters over the v2 domain services; their input/output schemas come from the same huma struct tags. `modules/mcpserver/catalog.go` is the single source of truth: every REST v2 operation needs a tool or an entry in `restOperationsNotExposed` (`TestEveryRESTOperationHasMCPDecision`), and every tool must stay read-only (`TestEveryRegisteredToolIsReadOnly`).
+Tools are thin adapters over the v2 domain services; their input/output schemas come from the same huma struct tags. `modules/mcpserver/catalog.go` is the single source of truth: every REST v2 operation needs a tool or an entry in `restOperationsNotExposed` (`TestEveryRESTOperationHasMCPDecision`). The default catalog stays read-only (`TestEveryRegisteredToolIsReadOnly`). R1.1's explicitly flagged development/staging scratch catalog has its own write annotations and no CMS writes. `internal/oauth` owns the opt-in code/refresh server, hashed SQLite storage, bounded CIMD, fresh-login consent and grant revocation. See `docs/oauth.md`; real GUI client acceptance remains pending.
 
 ### Health Check Routes
 - `GET /health` - Overall health status (200 OK / 503 Service Unavailable)

@@ -127,6 +127,7 @@ type Module struct {
 	invalidSiteURL atomic.Pointer[string]
 
 	schemaCache *mcp.SchemaCache
+	scratch     *scratchStore
 }
 
 // New creates the MCP module.
@@ -147,7 +148,12 @@ func (m *Module) ActiveByDefault() bool { return false }
 
 // Init builds the services, server and HTTP chain from the module context.
 func (m *Module) Init(ctx *module.Context) error {
+	if ctx.Config != nil && ctx.Config.MCPSpikeTools &&
+		((ctx.Config.Env != "development" && ctx.Config.Env != "staging") || middleware.IsDemoMode()) {
+		return fmt.Errorf("MCP scratch tools are forbidden outside development/staging or in demo mode")
+	}
 	m.ctx = ctx
+	m.scratch = newScratchStore()
 	m.logger = ctx.Logger
 	if m.logger == nil {
 		m.logger = slog.Default()
@@ -172,8 +178,8 @@ func (m *Module) Init(ctx *module.Context) error {
 
 	m.logger.Info("MCP module initialized",
 		"endpoint", EndpointPath,
-		"tools", len(toolCatalog()),
-		"read_only", true,
+		"tools", len(m.catalog()),
+		"read_only", !m.spikeEnabled(),
 		"allow_drafts", settings.AllowDrafts,
 		"protocol_versions", mcp.SupportedProtocolVersions(),
 		"max_request_bytes", maxRequestBodyBytes,

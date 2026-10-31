@@ -1133,6 +1133,20 @@ func APIRateLimit(rps float64, burst int) func(http.Handler) http.Handler {
 	}
 }
 
+// PrincipalRateLimit bounds OAuth requests by a verified principal using the same bounded TTL cache.
+func PrincipalRateLimit(key func(*http.Request) string, rps float64, burst int) func(http.Handler) http.Handler {
+	cache := newLimiterCache[string](rps, burst)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !cache.get(key(r)).Allow() {
+				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded", nil)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // GlobalRateLimiter provides a global rate limiter for unauthenticated requests.
 type GlobalRateLimiter struct {
 	cache *limiterCache[string]

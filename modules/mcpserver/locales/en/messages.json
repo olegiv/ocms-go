@@ -34,13 +34,15 @@
         {"id": "mcp.error_instructions_too_long", "message": "Instructions must be at most %d characters", "translation": "Instructions must be at most %d characters"},
         {"id": "mcp.error_instructions_encoding", "message": "Instructions must be valid UTF-8 text", "translation": "Instructions must be valid UTF-8 text"},
         {"id": "mcp.tools_title", "message": "Tools", "translation": "Tools"},
-        {"id": "mcp.tools_description", "message": "Every API key with the MCP permission can call these tools. All of them are read-only.", "translation": "Every API key with the MCP permission can call these tools. All of them are read-only."},
+        {"id": "mcp.tools_description", "message": "Access depends on the app permissions. Scratch tools, when enabled, require mcp:drafts and cannot change CMS pages.", "translation": "Access depends on the app permissions. Scratch tools, when enabled, require mcp:drafts and cannot change CMS pages."},
         {"id": "mcp.tool_name", "message": "Tool", "translation": "Tool"},
         {"id": "mcp.tool_description", "message": "Description", "translation": "Description"},
         {"id": "mcp.keys_title", "message": "API keys with MCP access", "translation": "API keys with MCP access"},
         {"id": "mcp.keys_description", "message": "Keys holding the MCP permission. Edit a key to change its permissions or revoke it.", "translation": "Keys holding the MCP permission. Edit a key to change its permissions or revoke it."},
         {"id": "mcp.keys_empty", "message": "No API key has the MCP permission yet.", "translation": "No API key has the MCP permission yet."},
         {"id": "mcp.keys_error", "message": "Failed to load API keys.", "translation": "Failed to load API keys."},
-        {"id": "mcp.never", "message": "Never", "translation": "Never"}
+        {"id": "mcp.never", "message": "Never", "translation": "Never"},
+        {"id": "mcp.scratch_mode", "message": "Development scratch drafts; CMS content stays read-only", "translation": "Development scratch drafts; CMS content stays read-only"},
+        {"id": "mcp.oauth_connect", "message": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in", "translation": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in"}
     ]
 }

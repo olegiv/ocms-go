@@ -34,13 +34,15 @@
         {"id": "mcp.error_instructions_too_long", "message": "Instructions must be at most %d characters", "translation": "Инструкции должны содержать не более %d символов"},
         {"id": "mcp.error_instructions_encoding", "message": "Instructions must be valid UTF-8 text", "translation": "Инструкции должны быть текстом в кодировке UTF-8"},
         {"id": "mcp.tools_title", "message": "Tools", "translation": "Инструменты"},
-        {"id": "mcp.tools_description", "message": "Every API key with the MCP permission can call these tools. All of them are read-only.", "translation": "Эти инструменты доступны каждому API-ключу с разрешением MCP. Все они работают только на чтение."},
+        {"id": "mcp.tools_description", "message": "Access depends on the app permissions. Scratch tools, when enabled, require mcp:drafts and cannot change CMS pages.", "translation": "Доступ зависит от разрешений приложения. Тестовые инструменты требуют mcp:drafts и не изменяют страницы CMS."},
         {"id": "mcp.tool_name", "message": "Tool", "translation": "Инструмент"},
         {"id": "mcp.tool_description", "message": "Description", "translation": "Описание"},
         {"id": "mcp.keys_title", "message": "API keys with MCP access", "translation": "API-ключи с доступом к MCP"},
         {"id": "mcp.keys_description", "message": "Keys holding the MCP permission. Edit a key to change its permissions or revoke it.", "translation": "Ключи с разрешением MCP. Откройте ключ, чтобы изменить его разрешения или отозвать его."},
         {"id": "mcp.keys_empty", "message": "No API key has the MCP permission yet.", "translation": "Пока ни у одного API-ключа нет разрешения MCP."},
         {"id": "mcp.keys_error", "message": "Failed to load API keys.", "translation": "Не удалось загрузить API-ключи."},
-        {"id": "mcp.never", "message": "Never", "translation": "Никогда"}
+        {"id": "mcp.never", "message": "Never", "translation": "Никогда"},
+        {"id": "mcp.scratch_mode", "message": "Development scratch drafts; CMS content stays read-only", "translation": "Тестовые черновики; контент CMS доступен только для чтения"},
+        {"id": "mcp.oauth_connect", "message": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in", "translation": "Для входа и подтверждения доступа в браузере подключитесь по URL сервера. Управление доступом:"}
     ]
 }

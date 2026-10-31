@@ -19,6 +19,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/oauth"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
 	"github.com/olegiv/ocms-go/internal/service"
@@ -64,6 +65,7 @@ type Context struct {
 	Store             *store.Queries
 	Logger            *slog.Logger
 	Config            *config.Config
+	OAuth             *oauth.Service // Nil unless the administrator enables MCP OAuth.
 	Render            *render.Renderer
 	Events            *service.EventService
 	Hooks             *HookRegistry

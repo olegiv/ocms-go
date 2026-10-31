@@ -5,8 +5,10 @@ other client of the [Model Context Protocol](https://modelcontextprotocol.io))
 read site content: they can search, list and read pages, media, tags and
 categories through typed tools.
 
-This first release is **read-only**. Every tool is marked read-only, and a
-drift test fails if a tool without that mark is registered.
+CMS content tools are **read-only**. The default catalog is checked by a drift
+test. R1.1 adds optional OAuth and a separately flagged development/staging
+scratch probe; it cannot write CMS pages. See [OAuth authorization](oauth.md)
+for configuration, consent, revocation and the pending real-client matrix.
 
 ## Features
 
@@ -23,6 +25,11 @@ drift test fails if a tool without that mark is registered.
 - **API key authentication.** Keys need the `mcp:access` permission and are
   subject to every API key policy, including CIDR allowlists, expiry, maximum
   lifetime and IP-change revocation.
+- **Optional OAuth.** `OCMS_OAUTH_ENABLED=true` enables browser authorization,
+  fresh password/MFA sign-in, scoped consent, rotating refresh and account
+  revocation. The default remains off. The key or grant owner must currently
+  be an editor or admin; OAuth permissions also follow current grant scopes
+  and account credential version.
 - **Drafts are hidden by default.** An agent can see a draft only if an admin
   turns the drafts policy on **and** the agent's key holds `pages:read`.
 - **Admin page** at `/admin/mcp`. It shows the endpoint and ready-made client
@@ -45,7 +52,8 @@ upgrade never opens a new remote endpoint on its own.
    (`mcp:access`). That alone lets agents read published content. Add
    **Pages → Read pages, including unpublished drafts** (`pages:read`) only if
    agents should see drafts (see below).
-3. Configure the client (see [Connecting clients](#connecting-clients)). The
+3. Configure the client (see [Connecting clients](#connecting-clients)), or
+   enable [browser OAuth](oauth.md). The
    admin page at **Admin → Modules → MCP Server** (`/admin/mcp`) shows ready-made
    snippets for the endpoint.
 
@@ -373,7 +381,12 @@ Other controls:
 
 ## Logging
 
-The module logs through `slog` with `module=mcp`:
+The module logs through `slog` with `module=mcp`. Tool-call records now also
+include the verified `user_id` and `auth_type`; OAuth records use `grant_id`
+and `oauth_client_id` in place of API key fields. Arguments and credentials
+remain excluded. OAuth-enabled unauthenticated MCP requests use the SDK's
+`resource_metadata` challenge; key authentication retains its existing
+challenge. The following key-mode details still apply:
 
 | Event | Level | Fields |
 |---|---|---|

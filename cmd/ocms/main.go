@@ -45,6 +45,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/oauth"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
 	"github.com/olegiv/ocms-go/internal/security"
@@ -1947,11 +1948,24 @@ func run() (runErr error) {
 	redirectsMiddleware := middleware.NewRedirectsMiddleware(db)
 
 	// Create module context
+	var oauthService *oauth.Service
+	if cfg.OAuthEnabled {
+		oauthService, err = oauth.New(db, oauth.Options{
+			Issuer: cfg.SiteURL, Development: cfg.IsDevelopment(),
+			AllowedHosts: strings.FieldsFunc(strings.ToLower(cfg.OAuthCIMDAllowedHosts), func(r rune) bool { return r == ',' || r == ' ' }),
+			AllowDCR:     cfg.OAuthAllowDCR, AccessTTL: time.Duration(cfg.OAuthAccessTTL) * time.Second,
+			RefreshTTL: time.Duration(cfg.OAuthRefreshTTLDays) * 24 * time.Hour,
+		})
+		if err != nil {
+			return fmt.Errorf("initializing OAuth: %w", err)
+		}
+	}
 	moduleCtx := &module.Context{
 		DB:                       db,
 		Store:                    store.New(db),
 		Logger:                   logger,
 		Config:                   cfg,
+		OAuth:                    oauthService,
 		Render:                   renderer,
 		Events:                   eventService,
 		Hooks:                    hookRegistry,
@@ -2050,7 +2064,7 @@ func run() (runErr error) {
 	// SecurityHeaders calls for the CSP, is logged and answered with a 500
 	// instead of dropping the connection. Timeout recovers the panics behind
 	// it itself.
-	r.Use(chimw.Logger)
+	r.Use(middleware.RedactedRequestLogger(chimw.Logger))
 	r.Use(chimw.Recoverer)
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.). It runs
 	// before every middleware that can answer on its own (bans, timeouts,
@@ -2119,6 +2133,7 @@ func run() (runErr error) {
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection, hookRegistry, mfaService)
+	authHandler.SetOAuthService(oauthService)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	usersHandler.SetMFAService(mfaService)
@@ -2264,6 +2279,19 @@ func run() (runErr error) {
 		r.Post(handler.RouteLanguage, authHandler.SetLanguage)
 	})
 
+	if oauthService != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(publicRateLimiter.Middleware())
+			r.Get("/.well-known/oauth-authorization-server", oauthService.Discovery)
+			r.Handle(oauth.MetadataPath, oauthService.ProtectedResourceMetadata())
+			r.Post("/oauth/token", oauthService.Token)
+			r.Post("/oauth/revoke", oauthService.Revoke)
+			r.Post("/oauth/register", oauthService.Register)
+		})
+		r.With(publicRateLimiter.HTMLMiddleware(), csrfMiddleware).Get("/oauth/authorize", authHandler.OAuthAuthorize)
+		r.With(publicRateLimiter.HTMLMiddleware(), csrfMiddleware).Post("/oauth/authorize", authHandler.OAuthAuthorize)
+	}
+
 	// Account pages use the core layout and current database permissions.
 	// The two-factor changes that check a code share the login rate limit.
 	r.Group(func(r chi.Router) {
@@ -2274,6 +2302,7 @@ func run() (runErr error) {
 		)
 		r.Get(handler.RouteAccount, authHandler.Account)
 		r.Get(handler.RouteAccountSecurity, authHandler.Security)
+		r.Post("/account/security/oauth/revoke", authHandler.RevokeOAuthGrant)
 		r.Get(handler.RouteAccountSecurityTOTP, authHandler.TOTPSetupForm)
 		r.With(loginProtection.Middleware()).Post(handler.RouteAccountSecurityTOTP, authHandler.TOTPSetup)
 		r.With(loginProtection.Middleware()).Post(handler.RouteAccountSecurityRecoveryCodes, authHandler.RegenerateRecoveryCodes)

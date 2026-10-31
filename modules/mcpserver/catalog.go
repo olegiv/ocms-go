@@ -19,6 +19,19 @@ type toolSpec struct {
 	// MCPOnlyReason explains a tool that has no REST counterpart.
 	MCPOnlyReason string
 	register      func(m *Module, srv *mcp.Server, spec toolSpec)
+	write         bool
+	scope         string
+}
+
+func (m *Module) catalog() []toolSpec {
+	specs := toolCatalog()
+	if m.spikeEnabled() {
+		specs = append(specs,
+			toolSpec{Name: "spike_save_draft", Title: "Save scratch draft", Description: "Development-only scratch storage. Non-publishable; no CMS page, media or translation is written.", MCPOnlyReason: "Temporary OAuth/client compatibility probe", write: true, scope: "mcp:drafts", register: registerTool((*Module).saveScratch)},
+			toolSpec{Name: "spike_get_draft", Title: "Read scratch draft", Description: "Read your own non-publishable scratch entry; never reads a CMS draft.", MCPOnlyReason: "Temporary OAuth/client compatibility probe", scope: "mcp:drafts", register: registerTool((*Module).getScratch)},
+		)
+	}
+	return specs
 }
 
 // toolCatalog returns every tool the server registers, in display order.

@@ -1,0 +1,1905 @@
+# Opossum CMS (oCMS) — Phase 5 Implementation Prompt: Write with Your AI, Review in oCMS
+
+## Product Promise
+
+> **Write with your preferred AI, using your website's context, then review and publish in oCMS.**
+
+The AI apps people already use do the writing: Claude (Desktop, web), ChatGPT (web), Claude Code and
+Codex, using the user's chosen account and plan. They connect to oCMS over MCP; this does not imply
+local model execution or unlimited subscription usage.
+
+oCMS does no text generation. Its job:
+- give the agent the site's context: style guide, presets, taxonomy, languages, existing images, and
+  the pages the user chose as references;
+- accept drafts **safely**: drafts only, idempotent, conflict-checked, saved atomically, owned by the
+  oCMS user;
+- make **editorial review** excellent: accurate previews, revision history, references, translation
+  status, clear validation feedback, and a strict split between what oCMS verified and what the agent
+  only reported.
+
+**Release 1 is one complete, dependable flow.** A brief plus selected existing pages becomes a draft
+with:
+- title, summary, body and SEO metadata;
+- existing taxonomy;
+- an existing image;
+- linked translation drafts;
+- an editor link and a preview link.
+
+The flow is proven in Claude Desktop and ChatGPT with real accounts.
+
+**Release 2 adds reach:**
+- the MCP Apps preview card;
+- image generation and upload;
+- the local Claude Desktop bridge;
+- a public demo endpoint;
+- the MCP Registry listing.
+
+**Later:** usage dashboards and built-in assist (inline, bulk).
+
+### What We May Claim (README, Docs, Demo)
+- **Claim:**
+  - "oCMS retrieves article context from your site and checks submitted site references for existence
+    and visibility";
+  - "agents can only create and edit drafts; publishing is always a human action";
+  - "every revision records who saved it and with which app";
+  - "no server-side model API charges for text authoring" (hosting and the user's AI plan still cost).
+- **Never claim** that the agent used *only* site content. oCMS can't know what an external model or its
+  other tools contributed. Agent-reported information is always labelled as reported.
+- Do not name competitors.
+
+---
+
+## How to Use This File
+
+- One Claude Code session per iteration. Reset context between iterations.
+- Prompt format: `@.claude/docs/PHASE5.md — Implement iteration R1.N: <title>`
+- This file is the spec **and** the persistent memory. At the end of every iteration, append what you
+  decided, what you deviated from and why, and any follow-ups to **Implementation Notes**.
+- **Iteration 0 notes (§0.1–0.9) are binding** where this spec doesn't explicitly supersede them. They
+  use the **old iteration numbers**; translate them with the mapping table at the top of Implementation
+  Notes.
+- **Release 1 ends at R1.7.** STOP for the release before Release 2 starts.
+
+### Running in Claude Code on the Web (Cloud Sessions)
+1. Run `git submodule update --init` first (`.claude/shared` hooks are symlinks into it).
+2. `../llm-wiki-go` is not available. Use `docs/` and `wiki/` for the Wiki-first lookup.
+3. The pre-push test gate is not installed. Run `scripts/test-gate.sh` yourself before every push.
+4. Do not edit `wiki/` (separate repo). List pending wiki changes in Implementation Notes.
+5. At the STOP point, present the diff, verification results and pending manual checks. Follow
+   `AGENTS.md` Git Safety in cloud sessions too: a separate explicit approval is required for the
+   exact commit and another for the exact push. This file grants neither; preserve the session until
+   the human chooses how to retain its changes.
+6. Steps needing my accounts or my Mac (GUI client checks, Keychain, staging deploys) are listed as
+   **Manual check** in the STOP summary.
+
+---
+
+## Critical Development Rules
+
+### 1. Iterative Development
+- **DO NOT implement everything at once.** Work through iterations in order.
+- Each iteration MUST be independently testable and committable.
+- **STOP after each iteration** with a summary: files changed, tests added, how to try it, manual checks,
+  open questions. **Do not commit** (local sessions). I run `/commit-prepare` myself.
+
+### 2. Follow CLAUDE.md Exactly
+- `AGENTS.md` Git Safety applies to every session. `CLAUDE.md` overrides this file where they conflict,
+  especially these sections: Testing Requirements,
+  Test Gate, Fixes Need Drift Tests, Code Quality Requirements, License Headers, Wiki Sync, Wiki-first
+  Lookup, Admin Dashboard UX Policy (templUI first) and Frontend JS Policy.
+- Run `go vet`, `staticcheck`, `errcheck -ignoregenerated` and `govulncheck` before you STOP.
+
+### 3. Dependencies
+- **OAuth:** an established library for the standard OAuth mechanics is allowed **after** the R1.1
+  comparison and my approval. MCP-specific parts are our own code (see Decisions #13).
+- Release 2 may add `github.com/openai/openai-go/v3` (images). Later work may add
+  `github.com/anthropics/anthropic-sdk-go/v2`.
+- Any other new dependency needs my approval: **ask first**.
+- Always use the latest stable versions (`go list -m -versions`).
+- Reuse what is already in `go.mod`:
+  - `modelcontextprotocol/go-sdk`
+  - `google/jsonschema-go`
+  - `yuin/goldmark`
+  - `JohannesKaufmann/html-to-markdown/v2`
+  - `microcosm-cc/bluemonday` (through `internal/security`)
+  - `mozillazg/go-unidecode`
+  - `golang.org/x/net/idna`
+  - `golang.org/x/time/rate`
+  - `golang.org/x/crypto`
+- No Node in runtime pieces or in the test gate.
+
+### 4. Tests Never Call Real Services
+- `go test ./...` passes offline. MCP is tested with the go-sdk client in-process; OAuth with `httptest`
+  (including a TLS server standing in for a CIMD host).
+- Real-client checks are **manual**: listed per iteration and recorded in Notes.
+
+---
+
+## Read First (Every Iteration)
+
+1. `CLAUDE.md`, `AGENTS.md`, **Implementation Notes** (mapping table + §0.1–0.9)
+2. `../llm-wiki-go/wiki/index.md` (local sessions; it predates the MCP module)
+3. `docs/mcp-module.md`, `docs/login-security.md`, `docs/multi-language.md`, `docs/media.md`, `docs/csrf.md`,
+   `docs/i18n.md`, `docs/custom-modules.md`
+4. Code:
+   - `modules/mcpserver/` (catalog, drift tests, settings, identity, logging, transport, `requestGuard`)
+   - `internal/module/module.go`
+   - `internal/api/v2/{api.go,pages,media,taxonomy}`
+   - `internal/handler/pages.go`
+   - `internal/security/page_html.go`, `internal/util/network.go`, `internal/config/config.go`
+   - `internal/auth` and the login, MFA and session flow
+   - `internal/seo/wellknown.go`
+   - htmx 4.0.0 and TinyMCE 8 conventions; `sri_coverage_test.go`; the CSP nonce rules
+
+---
+
+## Verified External Facts — Re-verify in R1.1 with Real Accounts
+
+**Subscription policy (Anthropic).** Third-party apps may not offer Claude.ai login, may not route
+requests through consumer plan credentials, and may not "collect, store, or intermediate Claude.ai
+credentials or session tokens". oCMS OAuth issues **oCMS** tokens for **oCMS** accounts only.
+Source: https://code.claude.com/docs/en/legal-and-compliance
+
+**Claude custom connectors** (support article, checked 2026-10-30)
+- Source:
+  https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp
+- Plans: Free (one connector), Pro, Max, Team (owners), Enterprise (by role). They work in Claude,
+  Cowork and Claude Desktop.
+- **The server must be reachable over the public internet from Anthropic's IP ranges**; no localhost.
+- Authentication options:
+  - "Sign in now" / "Sign in when needed" / "No sign in";
+  - optional "Use your own OAuth client";
+  - **fixed credentials (request headers)**, now described for Pro/Max as well as Team/Enterprise. On
+    2026-10-28 my own dialog had no headers section (§0.5/§0.7), so **re-check in R1.1**.
+- Tool approval prompts apply; "Allow always" is per tool.
+- More details (OAuth callback `https://claude.ai/api/mcp/auth_callback`, CIMD conditions, annotations,
+  240 s timeout, result size): §0.5.
+
+**ChatGPT custom MCP** (OpenAI docs, checked 2026-10-30)
+- Sources:
+  - https://developers.openai.com/api/docs/guides/custom-mcp-server
+  - https://developers.openai.com/apps-sdk/build/auth
+- Read **and write** tools are supported. Tools without `readOnlyHint` count as writes, and writes need
+  confirmation by default (per conversation).
+- It runs on ChatGPT **web**; transport is SSE or streamable HTTP.
+- **Secure MCP Tunnel** can be selected instead of a URL, so a public URL is not strictly required. Read
+  the tunnel guide in R1.1.
+- Auth: OAuth, no auth, or mixed. For OAuth: a predefined client ("static credentials"), **CIMD**
+  (`none` or `private_key_jwt`), or DCR. **No API keys or custom headers.**
+- Requirements:
+  - PKCE `S256` advertised;
+  - RFC 9207 `iss` for the stable redirect `https://chatgpt.com/connector_platform_oauth_redirect`
+    (otherwise `https://chatgpt.com/connector/oauth/{callback_id}`);
+  - `resource` sent on authorize and token, so bind the token audience to it;
+  - advertised OIDC scopes get requested, so don't advertise them;
+  - per-tool `securitySchemes`;
+  - `_meta["mcp/www_authenticate"]` (with `error` and `error_description`) for tool-level auth errors.
+- Plans: the docs page names none. Do not turn third-party rollout reports into a product restriction
+  or support guarantee. **Test with my own account in R1.1** and record the actual availability.
+
+**Claude Code / Codex:** both support static bearer headers and OAuth (§0.5). Codex has no MCP prompts,
+so every prompt needs a tool equivalent.
+
+**Tool annotations:** declare reads, additive creates and replacing updates separately. In the go-sdk,
+`destructiveHint: false` means additive-only, so `update_draft_page` is destructive even though versions
+make it reversible. `idempotentHint` describes repeated-call effects, not whether a tool is read-only.
+Source: https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/
+
+**MCP Apps** (Release 2): official extension `io.modelcontextprotocol/ui`, stable spec 2026-01-26. Key
+points:
+- `ui://` resources with `text/html;profile=mcp-app`;
+- tools link them with `_meta.ui.resourceUri`;
+- rendered in a sandboxed iframe with a restrictive default CSP;
+- text fallback in hosts without support.
+
+Source: https://github.com/modelcontextprotocol/ext-apps
+
+**MCP Registry** (Release 2): `server.json` with templated remote URLs (`https://{host}/api/mcp`);
+namespace via GitHub or DNS (`ocms.tech`).
+
+**Go OAuth libraries** (R1.1A completed; v4.6.0 approved and added 2026-10-30)
+- Recommended: `github.com/go-oauth2/oauth2/v4` **v4.6.0** (Go 1.21, MIT), with an oCMS SQLite/sqlc
+  transaction adapter and explicitly constrained server configuration.
+- Compared: `github.com/zitadel/oidc/v3` **v3.51.16** (Go 1.26, Apache-2.0). Both can run embedded;
+  neither requires a separate identity-provider process. ZITADEL's provider adds OIDC/key/session work.
+- Neither is a complete MCP authorization server. ZITADEL has a CIMD discovery field but no provider
+  resolver in the inspected release; declaring the field does not implement CIMD. Both need MCP glue.
+- Pinned versions, conformance matrix, dependency measurements, source links and remaining validation
+  are recorded under **Iteration R1.1A — OAuth Library Comparison** in Implementation Notes.
+  The earlier `fosite` exclusion remains outside this two-candidate comparison.
+
+---
+
+## Decisions (Fixed — Do Not Re-litigate Without Asking)
+
+1. **Agent-native.** External agents generate; oCMS supplies context, validates, stores drafts, and runs
+   review. No server-side text generation in Releases 1–2.
+2. **Drafts only.**
+   - Every AI write forces `status=draft` and clears `published_at` and `scheduled_at` (§0.6 #11).
+   - No publish, no delete, no un-publish over MCP.
+   - Requests that try to set those fields are rejected by the schema or with `forbidden_field`, never
+     silently stripped. The domain service also rejects them when called without MCP schema validation.
+3. **The oCMS user owns drafts.** Connected apps (OAuth grants, API keys) act **on behalf of a user**
+   with explicit scopes.
+   - An app may read and update that user's drafts that are **AI-editable**:
+     - drafts created through MCP are AI-editable;
+     - drafts a person wrote are editable by agents only after the author switches on "Allow AI
+       edits".
+   - So you can start in Claude, continue in Codex, and rotate credentials without losing access.
+   - The app identity (grant or key, client) is kept per revision in provenance and the event log.
+4. **Dependable writes.**
+   - **Idempotent content writes:** create, update and translation tools require `request_id`. A retry
+     with the same ID returns the original result within the replay window; an expired ID never creates
+     another write (retention below).
+   - **Optimistic concurrency:** updates require `base_revision` and get `revision_conflict` when the
+     page changed. The **admin editor gets the same protection** against agent writes.
+   - **Atomic save:** page content, taxonomy links, translation link, ownership flags, revision row,
+     provenance and the idempotency record are committed in **one transaction**.
+5. **What "site-only" means (enforceable scope).**
+   - oCMS retrieves context only from its own database.
+   - The content resolver never fetches page URLs. OAuth client-metadata retrieval is a separate,
+     outbound operation with its own SSRF controls.
+   - It resolves every submitted site reference for existence and visibility; that is not factual
+     verification of the article or evidence that the model actually used the reference.
+   - It does not claim anything about the agent's other knowledge.
+6. **Links.**
+   - External links are **kept** by default:
+     - sanitized (http, https and mailto only);
+     - `rel="noopener noreferrer"`, with `nofollow` as an admin option;
+     - **listed in review**.
+   - Internal links are checked against existing pages; broken ones are flagged.
+   - An admin option strips external links.
+7. **Markdown in, sanitized HTML out.** goldmark (raw HTML off) → `security.SanitizePageHTML` (always)
+   → suspicious check → link policy. Images in Markdown reference existing media as `![alt](media:123)`
+   and are resolved to proper variant URLs.
+8. **Single write path:** `internal/pagewrite` + v2 services (§0.2). No raw writes from AI or MCP code.
+9. **Verified vs validated vs reported.** These are three distinct classes in storage, API results and
+   UI, and must never be mixed.
+   - **Verified** (authenticated by oCMS): user, app grant or key, registered OAuth client ID,
+     transport, timestamps, revision. A public OAuth client ID identifies the authorized registration;
+     it does not prove that the caller is a genuine vendor application.
+   - **Validated by oCMS:** references resolved to existing pages; links checked; taxonomy, image and
+     language checked; issue list.
+   - **Reported:** model name, MCP client name/version, sources the agent says it used, claims to
+     verify, notes. Client display names from metadata remain labelled as registered display names,
+     never verified vendor identities.
+10. **Cross-cutting data is core:** provenance, revisions, AI-edit flags, idempotency records, preview
+    links, OAuth storage, editorial guidance.
+11. **Engine in `internal/ai`; MCP surface in `modules/mcpserver`;** no `modules/ai` in Releases 1–2.
+12. **Release scope:**
+    - **R1** = OAuth + client compatibility, authoring context, safe writes, translations, review,
+      connected-app management.
+    - **R2** = MCP Apps card, images (generate / attach), local bridge, public demo, Registry.
+    - **Later** = usage dashboard, built-in assist.
+13. **OAuth = library core + our MCP glue.**
+    - The library handles authorization-code/PKCE checks, grant processing, token generation hooks and
+      error formats. oCMS must enforce atomic code consumption, refresh rotation/reuse detection,
+      client/scope/resource binding and grant revocation in its transaction/storage adapter; neither
+      candidate supplies those storage guarantees automatically.
+    - Our code handles PRM (RFC 9728), AS metadata extras, CIMD, RFC 8707 resource binding, RFC 9207
+      `iss`, consent, grants and revocation.
+    - The approved R1.1A choice is `go-oauth2/oauth2/v4` v4.6.0, added on 2026-10-30. The
+      comparison with `zitadel/oidc` is recorded below. If integration fails the mandatory gates,
+      present the concrete gaps and a revised integration
+      proposal; do not silently fall back to writing an authorization-code/token core from scratch.
+14. **No CLI shell-out to `claude -p` or `codex exec`.** Subscription use happens inside the native
+    apps.
+15. **Every tool's text result stands alone.** Rich UI (R2) is progressive enhancement only.
+
+---
+
+## Architecture
+
+### Package Layout
+
+```
+internal/
+├── pagewrite/        # §0.2 shared invariants + revision CAS + atomic save (InTx) + ForceDraft + AI-edit checks
+├── provenance/       # Per-revision provenance (verified / validated / reported), event hooks
+├── idempotency/      # request_id records: lookup, store-in-tx, compact replay payloads
+├── preview/          # Expiring preview links (hashed tokens), theme-accurate draft rendering
+├── editorial/        # Style guides & presets; admin UI /admin/editorial
+├── oauth/            # Authorization server (library-backed core + MCP glue), CIMD fetcher, grants, revocation
+├── store/            # + migrations & sqlc (tables below)
+└── ai/
+    ├── draft/        # PageDraft contract, JSON Schema, Validate/Normalize, issue catalog, md→safe HTML, link policy, media: refs
+    ├── grounding/    # Reference resolver (§0.3 extraction), offered sets, envelope, duplicate guard, overlap check
+    └── prompts/      # Versioned templates + golden tests
+modules/mcpserver/    # resources, prompts, tool equivalents, authoring tools, spike tools (R1.1 only)
+```
+
+### Data Flow (Release 1)
+
+```
+Claude / ChatGPT / Claude Code / Codex  ── connect: OAuth (consent → grant for user U, app A) or API key of U
+   │ get_authoring_context(brief, refs, preset, language)   ◄── DB only: refs resolved, style guide, taxonomy, images, languages
+   │ (the connected AI application generates the content)
+   │ create_draft_page(request_id, PageDraft)
+   ▼
+draft.Validate → issues ─┐
+pagewrite.InTx: page(draft, author=U, ai_editable) + taxonomy + revision r1 + provenance(r1: verified U/A, validated, reported) + idempotency(request_id)
+   ◄ {page_id, revision, admin_url, preview_url (session-authenticated), issues, translation_status}
+   │ create_translation_draft(request_id, source_page_id, source_revision, lang, PageDraft) ×N
+   │ update_draft_page(request_id, page_id, base_revision, changes) ── revision_conflict if changed
+   ▼
+Editor: preview link → revision diff → AI panel (Verified | Validated | Reported) → translation status → publish (human)
+```
+
+### Ownership and Access
+- `pages.author_id` is the owner. Pages created through MCP get `author_id = acting user`.
+- `page_ai_access` (new, core): `page_id` PK, `ai_editable` bool, `set_by`, `set_at`. Rows are created
+  `true` for MCP-created drafts. The editor toggle "Allow AI edits" (owner or admin) flips it.
+- An agent acting for user U may update page P only if all of these hold:
+  - P is a plain draft (`status='draft' AND scheduled_at IS NULL`);
+  - `P.author_id = U`;
+  - `ai_editable = true`;
+  - the app holds `mcp:drafts`.
+- `get_my_draft` / `list_my_drafts` require `mcp:drafts` and return only U's plain AI-editable drafts.
+  General page/context reads retain the existing published/drafts policy; ownership alone does not
+  expose a human draft whose author has not enabled AI access. A translation source is readable only
+  under one of these explicit rules.
+- Admins have no implicit agent access to other users' drafts. They can reassign authorship in the UI.
+- API keys act for `APIKey.CreatedBy`. OAuth grants act for the consenting user. Both are "apps" in
+  `/account/connected-apps`.
+- Recheck active account, current role, module settings and grant/key permissions on every request,
+  including replayed requests. Keys retain their existing expiry, CIDR and anomaly rules. For a new
+  write, recheck ownership, AI access, lifecycle and authorization inside the write transaction.
+- Revocation or role removal rejects the next request, including on an existing MCP session. A write
+  already committed cannot be undone by revocation; queued writes must pass the transaction check.
+
+### Revisions, Idempotency, Atomicity
+- `pages.revision INTEGER NOT NULL DEFAULT 1` (core migration).
+- **Every** page-changing write increments it once per affected page inside `pagewrite.InTx`, including
+  taxonomy, translation membership, featured image, authorship, lifecycle and AI-access changes:
+  `UPDATE … SET …, revision = revision + 1 WHERE id = ? AND revision = ?`.
+  Zero rows means `revision_conflict`; after permission checks, return the current revision and changed
+  field names, not another user's content. Create starts at revision 1; no-op saves do not add revisions.
+- The admin editor form carries the revision as a hidden field. A mismatch shows a conflict notice with
+  "view latest" / "overwrite" (overwrite = a new CAS against the latest revision after confirmation).
+- Writer compatibility is explicit:
+  - MCP updates and admin edit/restore/publish/schedule/AI-access actions require the revision shown to
+    the caller. Permission and lifecycle checks use the same transaction as CAS.
+  - REST v2 adds `revision` to reads and optional `base_revision` to updates. Updates to AI-editable
+    pages require it (`revision_required`); ordinary pages retain legacy unconditional updates when it
+    is absent. A supplied revision is always enforced. Document this opt-in compatibility restriction.
+  - Scheduler, media cleanup and imports also increment revisions and snapshot affected pages.
+    System actions operate on fresh transactional state and narrowly update their intended fields;
+    import overwrites of AI-editable pages require a captured base revision or report a conflict.
+  - Trace every writer, including restore, bulk operations, `UpdatePageCreatedAt`, featured-image
+    cleanup, translation/language changes, importers and developer generators. Existing allowlists do
+    not exempt writes to existing pages from revision tracking.
+- `page_versions` stores a complete immutable content snapshot per new revision: title, slug, language,
+  body, summary, SEO fields, page type, taxonomy and media assignments, plus actor/provenance links.
+  A migration seeds revision-1 snapshots of current pages; older partial versions remain marked legacy
+  with no fabricated complete snapshot. Restoring creates a new revision and retains current ownership,
+  AI-access and publish/schedule state. Diff/preview identify legacy fields that were not recorded.
+- Every new revision has provenance, including human/API/system writes. Missing agent-report fields
+  remain empty; human changes do not inherit the preceding revision's model, claims or validation stamp.
+- `idempotency_keys`: `user_id`, `tool`, `request_id`, `request_hash`, nullable `result_json`,
+  `entity_type`, `entity_id`, `entity_revision`, `created_at`.
+  - Unique on (`user_id`, `tool`, `request_id`); written in the same transaction.
+  - Require a bounded UUID `request_id`, created once per logical mutation and preserved on retries.
+    Hash the typed input canonically, preserving omitted/null distinctions and including target,
+    base/source revision and reported fields, excluding `request_id`. Do this before mutable defaults
+    or slug/media resolution; JSON property order does not change the hash.
+  - After schema parsing and fresh authorization, check for a matching committed request **before**
+    current-content validation, mutable default resolution or the update's CAS: a lost commit response
+    must replay with its original base revision. New requests validate and recheck the key in the write
+    transaction before mutation.
+  - Same key with different input → `idempotency_key_reused`. A concurrent duplicate rolls back the
+    whole losing transaction before a bounded lookup of the winner; SQLite busy/timeout returns a
+    retryable error with the same request ID. Failed validation creates no committed request record.
+  - Keep successful non-secret results for 7 days. Then compact to a tombstone retaining the key,
+    hash and entity/revision identifiers; return `request_expired`, never re-execute. Entity deletion
+    also retains the tombstone. Replays recheck entity access and never store or return preview tokens.
+  - A replay creates no version, webhook or mutation-quota charge. Events and cache invalidation occur
+    only after the original commit; use existing delivery guarantees, without claiming exactly-once
+    external webhook delivery.
+
+### Translation Consistency
+- Require `source_page_id`, the `source_revision` the agent read and an active target language.
+  Resolve the stored source snapshot and compare its content fingerprint with the current source inside
+  the transaction. If changed, return `source_revision_conflict`; the agent must reread and regenerate.
+- Fingerprint the translated fields (title, body, summary and SEO text). Publication, AI-access toggles
+  and sibling-link changes advance CAS revisions but do not make unchanged translations stale.
+- In that same transaction, enforce one page per target language in the entire translation component.
+  Concurrent creates with different request IDs return `translation_exists` for the loser without an
+  orphan page. Source content and lifecycle are never changed by translation creation.
+- Persist source page, source revision and fingerprint per translated revision. Translation status is
+  `not_tracked` for legacy/unlinked provenance, rather than guessing freshness from timestamps. Refreshes
+  supply a new checked source revision; otherwise the preceding translation basis remains in effect.
+
+### PageDraft Contract
+
+```go
+type PageDraft struct {
+	Title           string      `json:"title"`
+	Slug            *string     `json:"slug"`
+	PageType        string      `json:"page_type"` // post | page
+	LanguageCode    *string     `json:"language_code"`
+	Summary         string      `json:"summary"`
+	MetaTitle       *string     `json:"meta_title"`
+	MetaDescription *string     `json:"meta_description"`
+	MetaKeywords    []string    `json:"meta_keywords"`
+	BodyMarkdown    string      `json:"body_markdown"` // images: ![alt](media:123)
+	Tags            []string    `json:"tags"`          // exact existing slugs offered for the chosen language
+	CategoryID      *int64      `json:"category_id"`   // existing only
+	FeaturedImageID *int64      `json:"featured_image_id"` // existing media only
+	References      []Reference `json:"references"`    // {ref, role: example|source|parent}
+	Reported        AgentReport `json:"reported"`      // model, sources_used, claims_to_verify, notes
+}
+```
+
+- **Schema rules:** use separate create and update schemas; reject unknown properties. The MCP schema
+  requires actual mandatory fields, rather than applying provider-specific strict-output rules to every
+  tool. Any later API-provider adapter owns its stricter schema conversion; Go validation is authoritative.
+- **Updates:** `changes` is a non-empty object of editable fields. Omitted means unchanged; explicit
+  null clears only nullable fields; arrays replace their complete collection (empty clears it). Title,
+  summary and body cannot be null. Author, language, page type, lifecycle, AI access and verified fields
+  are not editable through this tool. Taxonomy uses existing, language-valid entries only in R1; no
+  automatic tag/category creation or tag-creation toggle.
+- Stored sanitized HTML is authoritative. `get_my_draft` returns current HTML, derived Markdown,
+  revision and conversion warnings. Metadata-only updates never rewrite the body. Preserve supported
+  `media:ID` references when converting back to Markdown; warn on lossy rich HTML conversion before an
+  agent replaces a human-edited body.
+- **Go limits:** title 1–255 runes; summary ≤ 500; body ≤ 200,000 bytes; at most 10 deduplicated tags.
+  Meta title warns above 60 runes; meta description above 160 is shortened at a word boundary with an
+  issue showing the normalization. Slugs obey existing route/alias rules and bounded collision retries.
+  Retain the existing featured-image minimum and active/routable language checks.
+- Parse Markdown and resolve only existing `media:ID` images before HTML sanitization. Remote, `data:`,
+  `file:` and other inline-image sources are rejected; external text hyperlinks follow Decision 6.
+  The safe allowlist must preserve the supported image/figure markup. Return normalization issues and
+  the saved revision so an agent can see what was actually stored.
+- **Issues:** `draft.Validate` returns `[]Issue{Code, Field, Severity (error|warning|info), Message,
+  Hint}`. Codes are a closed, documented catalog in one Go file:
+  - `slug_taken`, `title_length`, `meta_description_trimmed`;
+  - `unknown_tag`, `tag_creation_not_allowed`, `category_not_found`;
+  - `image_not_found`, `image_too_small`, `media_ref_not_found`;
+  - `language_inactive`;
+  - `reference_unresolved`, `reference_not_visible`;
+  - `external_link`, `internal_link_broken`;
+  - `overlap_with_example`;
+  - `forbidden_field`, `revision_required`, `revision_conflict`, `idempotency_key_reused`,
+    `request_expired`, `not_ai_editable`, `source_revision_conflict`, `translation_exists`;
+  - `body_too_large`.
+- Errors block the write and come back as an `isError` tool result with structured issues. Warnings and
+  info are returned with a successful write and stored for review.
+- Preserve the existing REST-style error envelope; add issues and retryability in `structuredContent`
+  and a complete short text fallback. Transport auth failures remain HTTP 401/403 with appropriate
+  challenges, rather than being disguised as successful tool results. Non-visible references return a
+  generic inaccessible/not-found issue, without revealing another user's draft.
+
+### Preview Access
+- Draft tools return an ordinary **session-authenticated** preview URL by default, alongside the
+  editor URL. Opening it uses existing editor authorization; saving or reading a draft never silently
+  issues a public bearer link.
+- `create_preview_link(page_id, revision)` is an explicit write for a user-requested share link. It
+  requires current own-draft access and `mcp:drafts`, pins one recorded revision (no `latest` tokens),
+  records the issuing grant/key, and explains that anyone holding the link can read that snapshot.
+  Tokens use 32 random bytes, are stored only as hashes, expire after 24 h, and have per-user caps.
+- Revoke share links on explicit revocation, issuer-grant/key revocation, page deletion/publication,
+  author reassignment or disabling AI access. Check current account/page/grant state on every request.
+  Expired, unavailable and mismatched revisions all return 404. Never include token URLs in logs,
+  persisted MCP results, canonical/OG URLs or subsequent read-tool output; configure proxy log redaction.
+- Reuse the active theme's content layout and assets with a preview context: skip analytics, external
+  widgets, forms and third-party network loads; render embeds as placeholders. Add the draft/revision
+  banner, `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex,
+  nofollow`. Bypass page caches and visibility-filter menus, related content and translation links.
+  Theme layout fidelity does not promise live tracking, interactive integrations or historical assets.
+
+### Database (New, Core Unless Noted)
+- `pages.revision`
+- `page_ai_access`
+- `idempotency_keys`
+- `content_provenance`: per entity **and revision**.
+  - Verified: user, app type (oauth or key), grant or key ID, OAuth client ID, client metadata host,
+    client display name, transport, created_at.
+  - Validated: issues JSON, resolved references JSON, external links JSON.
+  - Reported: model, sources_used JSON, claims_to_verify JSON, notes.
+  - Plus prompt template/version, reference page/revision identities, and source page/revision/content
+    fingerprint for translations. Legacy baseline provenance explicitly records unknown historical actor
+    and validation state; migration time is not presented as the original authoring time.
+- `claims_checks`: provenance ID, claim index, checked_by, checked_at.
+- `preview_links`: `token_hash`, `page_id`, `revision` (required), `created_by`, issuing grant/key,
+  `expires_at`, `revoked_at`.
+- `editorial_style_guides`, `editorial_presets`.
+- Existing bounded media search in R1; `media_fts` is deferred unless measured results justify it.
+- `oauth_clients`, `oauth_codes`, `oauth_grants` (user + client + scopes + created and last-used),
+  `oauth_tokens` (hashed, family, grant, resource, expiry, revocation).
+- mcpserver `mcp_settings` additions:
+  - `draft_tools_enabled` (0)
+  - `external_links` (`keep` | `nofollow` | `strip`, default `keep`)
+
+### Scopes and Permissions
+- `mcp:access`: read published context (existing).
+- `mcp:drafts` (new): create drafts, and read and update the acting user's AI-editable drafts. It
+  doesn't require `pages:write`; the draft-actor helper grants write only with ForceDraft (§0.6 #8).
+- `pages:read`: drafts visibility per `AllowDrafts` (existing).
+- Effective permissions = granted scopes ∩ the user's role permissions. The public role gets nothing.
+- `scopes_supported` advertises only these. No OIDC scopes.
+
+---
+
+## Security Requirements (Each Control Needs a Test)
+
+| Threat | Control | Test |
+|---|---|---|
+| Publishing through the back door | ForceDraft; reject status, `published_at`, `scheduled_at`; updates only on plain drafts | Inject each field on create/update; untouched agent drafts never auto-publish; explicit human scheduling still works |
+| Unauthorized drafts | Ownership + `ai_editable` + plain-draft rule + scope | Matrix: other user's draft, human draft without the toggle, published page, scheduled draft, missing scope |
+| Lost or duplicate writes | `request_id` for all content writes; replay before CAS; compact tombstones; admin form CAS | Lost create/update responses, parallel duplicates, changed payload, expired replay, deleted entity, and agent/editor races |
+| Partial writes | Single `InTx` for page, taxonomy, link, flags, revision, provenance, idempotency | Fault injection at each step → no partial rows |
+| Revoked or stolen access | Short access tokens (1 h), rotating refresh with reuse detection, immediate grant revocation, current account/role checks, existing API-key policies | Revocation/disabled user → next call fails, including replay and existing sessions; removed scope → 403; refresh reuse revokes the family |
+| OAuth flow attacks | PKCE S256; exact redirects (+ loopback per RFC 8252); single-use codes ≤ 60 s; `state`; RFC 8707 `resource` = MCP URL; RFC 9207 `iss`; hashed tokens; consent shows client name, client_id host, redirect host and scopes; fresh login + MFA policy; CSRF on consent | `httptest` flow suite |
+| SSRF via CIMD | HTTPS only; `SSRFSafeDialContext`; host allowlist; 5 s; 64 KiB; `client_id` = document URL; cache | Private IP, other host, oversized, slow, mismatched |
+| Prompt injection via site content | Envelope; data-not-instructions server text; drafts only; review | Golden prompt test; injected text cannot escalate (tools have no publish path) |
+| XSS | Pipeline per Decision 7; link policy | XSS corpus through create, update and preview rendering |
+| Provenance spoofing | Agent input lands only in Reported fields; Verified fields come from auth context only; UI renders the classes in separate, labelled components | Report fields containing "Verified" markers render inside the Reported component; verified fields can't be set from input |
+| Preview-link leakage | Session preview by default; explicit revision-pinned share tokens; lifecycle/grant revocation; no-referrer; no external loads; log redaction | No share token on save/read; invalid links → 404; no other drafts or tokens in menus, metadata, telemetry or proxy logs |
+| Secret leakage | No tokens, codes, verifiers or keys in logs or events | slog capture test |
+
+---
+
+## Performance Requirements
+- `get_authoring_context` returns ≤ 50 000 chars by default using existing bounded search/list queries
+  with deterministic ordering. Mark truncated sections and provide follow-up IDs/pagination; never
+  silently drop the user's chosen reference list. Include revision and role for each resolved reference;
+  provenance retains that snapshot identity rather than silently substituting its latest revision.
+- `create_draft_page` / `update_draft_page` take < 100 ms server time (excluding the network), with no
+  transaction around slow work.
+- Measure warm OAuth processing separately from human login/consent and bounded cold CIMD fetches;
+  target < 1 s for warm server processing, with cached metadata and explicit cold-fetch timeouts.
+- Preview rendering costs no more than a normal page render. Previews are never written to the page
+  cache.
+- Benchmarks (`b.Loop()`): context build, `draft.Validate`, the md→HTML pipeline, the token lookup,
+  `InTx` save.
+
+---
+
+## Quality Requirements
+- Unit, table, fuzz (resolver, PageDraft parser, link policy, OAuth parameters), go-sdk client
+  integration, `httptest` OAuth tests; `testing/synctest` for rate limits and expiry.
+- Prompt golden tests (snapshot + version bump).
+- **Required drift tests** (each MUST fail on revert; verify that and note it):
+  1. All MCP/AI page writes go through `pagewrite.InTx`. Maintain an inventory of existing page and
+     relationship writers; behavioral fixtures prove revision/snapshot handling for each. AST/query
+     scans supplement these checks, including raw SQL and import/generator paths.
+  2. Only the allowlisted package (`internal/oauth` CIMD fetcher) uses `net/http` client APIs among the
+     new packages.
+  3. MCP create/update schemas match their distinct presence/null rules and reject unknown fields;
+     schema and service validation both reject forbidden lifecycle/ownership inputs.
+  4. Tool classification:
+     - read-only tools: `readOnlyHint: true`, `destructiveHint: false`;
+     - content creates: `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: true`;
+     - replacing draft updates: `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true`;
+     - explicit share-link issuance: non-read-only, additive, `idempotentHint: false`;
+     - all content writes require `request_id`; updates also require `base_revision`;
+     - no tool can publish or delete.
+  5. Every prompt and resource has a tool equivalent.
+  6. The existing MCP drift tests pass (server card now compares capabilities).
+  7. Every issue code has en and ru messages and a docs entry.
+  8. Every OAuth scope maps to a permission; no OIDC scope is advertised; no secret in logs.
+  9. Verified, validated and reported fields render only in their own components.
+  10. No spike code or flag remains after R1.5.
+  11. i18n completeness; one provenance row per revision.
+- **Docs:**
+  - `docs/mcp-module.md`;
+  - `docs/oauth.md`;
+  - `docs/desktop-authoring.md` (per client);
+  - `docs/editorial-review.md`;
+  - README promise section;
+  - README and `CLAUDE.md` env tables;
+  - wiki;
+  - CHANGELOG.
+
+---
+
+## Configuration (Env)
+
+| Variable | Release | Default | Description |
+|---|---|---|---|
+| `OCMS_AI_DISABLED` | R1 | `false` | Kill switch: disables draft tools (read tools stay) |
+| `OCMS_OAUTH_ENABLED` | R1 | `false` | OAuth 2.1 authorization server for `/api/mcp`; requires `OCMS_SITE_URL` (the issuer) |
+| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | R1 | seeded in R1.1 with the verified client hosts (`claude.ai`, ChatGPT's host) | Hosts allowed to serve Client ID Metadata Documents |
+| `OCMS_OAUTH_ALLOW_DCR` | R1 | `false` | Allow Dynamic Client Registration (rate-limited) |
+| `OCMS_OAUTH_ACCESS_TTL` | R1 | `3600` | Access token lifetime (s) |
+| `OCMS_OAUTH_REFRESH_TTL_DAYS` | R1 | `30` | Refresh lifetime (rotating) |
+| `OCMS_PREVIEW_LINK_TTL_HOURS` | R1 | `24` | Draft preview link lifetime |
+| `OCMS_MCP_SPIKE_TOOLS` | R1.1 only | `false` | Development/staging only: bounded scratch tools, no CMS page writes; refused in production/demo; removed in R1.5 |
+| `OCMS_AI_OPENAI_API_KEY`, `OCMS_AI_IMAGE_MODEL`, `OCMS_AI_IMAGE_DAILY_LIMIT`, `OCMS_AI_MONTHLY_BUDGET_USD` | R2 | – / `gpt-image-2` / `20` / – | Image generation |
+| `OCMS_DEMO_MCP` | R2 | `false` | Public demo endpoint (demo mode only) |
+
+---
+
+## Release 1 — Iteration Plan
+
+### Iteration 0: Recon and Design Notes — DONE (2026-10-28)
+See Implementation Notes §0.1–0.9.
+
+### Iteration R1.1: Client Compatibility Spike and OAuth Core
+Goal: prove with **my real accounts** that Claude Desktop and ChatGPT (plus Claude Code and Codex) can
+connect, read context and invoke an approved write **before** the full authoring flow is built. The
+spike writes isolated scratch data; actual CMS draft persistence is first proven after R1.2–R1.5.
+
+- **Library comparison**:
+  - **First checkpoint completed:** see Iteration R1.1A in Notes. Recommendation: `go-oauth2/oauth2/v4`
+    v4.6.0; explicitly approved and added on 2026-10-30. The local OAuth/scratch implementation and automated/HTTP checks are complete (R1.1B); real-account client acceptance remains pending.
+  - compare `zitadel/oidc` and `go-oauth2/oauth2` against a conformance checklist:
+    - PKCE S256;
+    - single-use codes;
+    - refresh rotation + reuse detection;
+    - opaque hashed tokens or JWT;
+    - RFC 8414 metadata incl. `code_challenge_methods_supported`,
+      `client_id_metadata_document_supported`, `authorization_response_iss_parameter_supported`,
+      `token_endpoint_auth_methods_supported` incl. `none`;
+    - RFC 9728 PRM;
+    - RFC 8707 resource binding;
+    - RFC 9207 `iss`;
+    - CIMD;
+    - optional DCR;
+    - no forced OIDC scopes;
+    - storage interface fit with SQLite/sqlc;
+    - dependency weight;
+    - maintenance activity;
+    - license;
+  - first checkpoint: record pinned versions, source links, the comparison and recommended library,
+    then **STOP for my approval** before adding a dependency; the second checkpoint implements and
+    tests the approved choice. An unmet checklist produces an explicit gap, not a homemade core.
+- **Authorization server** (`internal/oauth`):
+  - metadata;
+  - `/oauth/authorize` (existing login + MFA → templUI consent → code);
+  - `/oauth/token`;
+  - `/oauth/revoke`;
+  - optional `/oauth/register`;
+  - CIMD fetcher (Security table);
+  - grants and tokens storage;
+  - the `/api/mcp` resource-server integration (go-sdk `auth.RequireBearerToken` + our verifier;
+    401 with `resource_metadata`);
+  - the ChatGPT requirements (Verified Facts);
+  - metadata and issuer/resource URLs come from validated `OCMS_SITE_URL`, not request Host or untrusted
+    forwarded headers; the server echoes OAuth client `state`, while clients validate it;
+  - consent has its own session-bound CSRF protection, reauthentication and MFA policy;
+  - CIMD fetches reject redirects and recheck allowed hosts/IPs at connection time; metadata client
+    names are display data. Store user-approved scopes on each grant;
+  - demo write exemptions remain R2 work; the R1 spike is disabled in demo mode.
+- **Principal model**:
+  - MCP requests carry a verified principal (user + app: OAuth grant/client or API key);
+  - `get_site_info` returns it (who am I, which app, which scopes);
+  - effective permissions = scopes ∩ role.
+- **Minimal revocation UI** in `/account/security` (list and revoke grants); polished in R1.7.
+- **Spike tools** `spike_save_draft` and read-only `spike_get_draft` (flagged, dev/staging only):
+  - save/read a user-scoped title and short body in a bounded in-memory scratch store: 8 KiB per entry,
+    one entry per user, 100 entries total, 1 h expiry; data disappears on restart;
+  - the write requires `mcp:drafts`, returns a scratch ID, and is clearly labelled non-publishable;
+  - these tools have no access to page, translation, media or preview-link writes and return no admin
+    page URL. They test client write discovery, approval, principal propagation and revocation;
+  - remove both tools and the flag in R1.5. Their results are not evidence that CMS persistence works.
+- **Staging:** the planned target is `https://mcp-staging.ocms.tech` on a new Fly app,
+  `ocms-mcp-staging` in `fra`, separate from `ocms-demo` and the production host.
+  Prepared `fly.staging.toml`, a private `fly.staging.bootstrap.toml` and exact owner-run commands
+  in `docs/mcp-staging-fly.md`, without changing `fly.toml` or the demo deploy script.
+  Use one Machine and one persistent volume, `--ha=false`, a running minimum of one during tests,
+  `OCMS_REQUIRE_MFA=true`, DCR off and demo mode off. Verify Fly proxy/client IP handling and
+  sanitized Fly logs before the client matrix. R1.1C in Notes records the aligned plan and R1.1D
+  records the prepared files/local evidence. `docs/oauth.md` separates Fly and nginx instructions.
+  I set secrets/DNS and run the deployment.
+- **Manual checks, recorded as a matrix in Notes:** for Claude Desktop (custom connector), claude.ai
+  web, ChatGPT web (URL and/or tunnel), Claude Code (OAuth and bearer) and Codex (OAuth and bearer):
+  - connect;
+  - consent;
+  - list tools;
+  - read context (`get_site_info`, `search_pages`, `get_page`);
+  - approve scratch write, then retrieve it;
+  - revoke → the next call fails;
+  - reconnect.
+
+  Record date, client/version, OS/browser, actual account tier, transport/auth mode and results. Also
+  re-check Claude's headers option and ChatGPT writes. An unavailable GUI capability is **unverified**,
+  not a pass or a silent Codex substitution; record the blocker and obtain a scope decision before
+  claiming that GUI client is supported. Public HTTPS is the common R1 baseline; tunnel testing is optional.
+- Tests: the full OAuth suite (Security table rows), principal propagation, spike flag gating.
+- **Exit gate:** record every real-client matrix row, including explicit blockers, against the staged
+  commit/configuration before starting R1.2. Missing required GUI passes need my scope decision;
+  local SDK passes and a successful staging deployment do not satisfy client acceptance.
+
+### Iteration R1.2: Write Foundations — Shared Path, Ownership, Revisions, Idempotency, Provenance
+- §0.2 in full:
+  - `internal/pagewrite`;
+  - admin `Translate` fixed;
+  - v2 `WriteOptions` (ForceDraft, TranslationOf);
+  - in-service validation;
+  - version rows;
+  - suspicious event;
+  - `v2.ActorForUser`;
+  - `module.Context.Webhooks`;
+  - featured-image size check shared.
+- `pages.revision` + CAS in **all** write paths, including the admin editor form, with a conflict UI.
+- Implement the writer inventory, REST compatibility rule, revision-1 backfill and legacy-version
+  handling from Revisions above. Apply normal schema migration/startup checks; take a backup before
+  migrating a real site and verify on a disposable copy first.
+- `page_ai_access` + the "Allow AI edits" toggle in the editor (owner or admin).
+- `internal/idempotency`.
+- `content_provenance` per revision with the verified, validated and reported columns. Verified fields
+  are filled only from the principal.
+- Atomic save: page + taxonomy + translation link + flags + revision + version row + provenance +
+  idempotency in one `InTx`.
+- Tests:
+  - CAS races (agent vs agent, agent vs editor);
+  - idempotency (lost create/update responses, canonical payload order, parallel duplicates, expired
+    replay/tombstone, deletion and changed permissions);
+  - fault injection for atomicity;
+  - ForceDraft fields;
+  - ownership matrix;
+  - drift tests #1, #9 (storage side), #11;
+  - normal REST updates without a revision on ordinary pages; `revision_required` on AI-editable pages;
+    scheduler, restore, media cleanup, imports and translation membership revision handling;
+  - migration of existing pages/partial version rows; existing handler tests green.
+
+### Iteration R1.3: Draft Contract, Validation Feedback, Safe HTML, Link Policy
+- `internal/ai/draft`: types, schema, `Validate` / `Normalize`, the **issue catalog** (codes, severities,
+  en/ru messages, hints), distinct create/update presence rules, slug derivation, md → safe HTML,
+  `media:` image references (variant URLs,
+  alt, figure), the link policy (keep/nofollow/strip; internal link check).
+- Tests: XSS corpus, PageDraft fuzz test, issue catalog drift test (#7), schema drift test (#3), link
+  policy table, remote inline-image rejection and metadata-only updates preserving human HTML.
+
+### Iteration R1.4: Authoring Context — Grounding, Editorial Guidance, MCP Resources and Prompts
+- Grounding per §0.3:
+  - extract the pure resolvers, with frontend and middleware switched over and their tests green;
+  - bounded redirect walk;
+  - IDNA and port normalization;
+  - visibility (published / drafts policy / own drafts);
+  - Markdown with caps;
+  - envelope;
+  - bounded existing media list/search (defer FTS; supersedes §0.6 #14 for R1);
+  - offered sets (categories, tags, languages, link candidates, **existing images** with dimensions,
+    alt and variants);
+  - duplicate guard;
+  - overlap check.
+- Editorial (minimal): `/admin/editorial` with one default style guide, per-language overrides and
+  presets (blog post, page, FAQ, how-to, release notes, **bot blog**). Seeded.
+- MCP:
+  - prompts: `write_page`, `translate_page`, `seo_review`;
+  - resources: style guide, presets, taxonomy, languages, draft schema, issue catalog;
+  - **tool equivalents**: `get_authoring_context`, `get_page_draft_schema`, `get_style_guide`,
+    `list_presets`;
+  - language filter for list and search;
+  - §0.6 #1–#6 (single-token prompt args, parity, annotations, explicit capabilities and server card,
+    instructions ≤ 4 096 chars, result size).
+- Tests: go-sdk client integration, parity drift test (#5), resolver fuzz test, visibility matrix,
+  unchanged frontend behaviour.
+
+### Iteration R1.5: Authoring Tools — Create, Update, Translate, Links
+- Tools (use the per-operation annotations in Quality #4):
+  - `create_draft_page(request_id, draft)` returns `page_id`, `revision`, `admin_url`, `preview_url`,
+    `issues` and `translation_status`; `preview_url` requires an editor session;
+  - `update_draft_page(request_id, page_id, base_revision, changes)`;
+  - `create_translation_draft(request_id, source_page_id, source_revision, language_code, draft)`, linked
+    atomically with its source fingerprint and one-language-per-component check;
+  - `get_my_draft(page_id)`: current HTML/derived Markdown, revision, issues, translation basis/status,
+    reported info and conversion warnings;
+  - `list_my_drafts(filter)`;
+  - `get_translation_status(page_id)`;
+  - `create_preview_link(page_id, revision)`: explicit share-link issuance only; not called automatically
+    by write or read tools.
+- Translation status and duplicate-language errors follow the caller's visibility rules: no unreadable
+  sibling IDs, titles or content are returned, including when a hidden sibling prevents creation.
+- Policy:
+  - admin toggle `draft_tools_enabled`;
+  - `mcp:drafts`;
+  - the draft-actor helper (§0.6 #8);
+  - aggregate per-user mutation limit (60/h across grants and keys), plus existing per-app/transport
+    limits; successful idempotent replays do not spend another mutation;
+  - the route-level body cap (§0.6 #9);
+  - the external-link setting; existing taxonomy only;
+  - catalog decisions (§0.6 #7);
+  - the classification drift test (#4).
+  - Content create/update tools declare `idempotentHint: true` under the retained-key contract; share-link
+    issuance stays non-idempotent (supersedes §0.6 #3).
+- Delete both scratch tools, their state and flag (#10). Update "read-only" wording everywhere (§0.6 #4).
+- Tests:
+  - **retries** (timeout simulation → same draft);
+  - **concurrent edits** (two clients; client vs editor);
+  - **revoked access** mid-session;
+  - **unauthorized drafts** (matrix);
+  - **publishing through status, `scheduled_at` or `published_at`**;
+  - concurrent translation creation (different request IDs), changed source and non-text source changes;
+  - session preview URL returned; no bearer token generated by content writes or read calls;
+  - issue results;
+  - "start in Claude, continue in Codex" (two grants, same user, same draft).
+- **Manual check:** the full flow in Claude Desktop and ChatGPT on staging.
+
+### Iteration R1.6: Editorial Review
+- **Preview:**
+  - implement Preview Access above: editor-session previews first, explicit revision-pinned share links;
+  - active-theme layout, language prefix and featured image; preview mode filters other private content
+    and suppresses tracking, external embeds and form side effects;
+  - draft/revision banner, noindex/no-store/no-referrer, cache bypass and token-safe proxy logging;
+  - a theme failure or missing snapshot returns an explicit error, never the currently published page.
+- **Revision history:**
+  - list with the verified principal and app per revision;
+  - side-by-side or inline diff of title, summary, meta and body text;
+  - restore uses the existing admin action with CAS, a new snapshot/provenance row, and the restore
+    lifecycle/ownership rules above; old partial snapshots are visibly marked.
+- **AI panel** (editor sidebar), with three labelled sections:
+  - **Verified:** account, grant/key, registered client ID, transport, time, revision; metadata display
+    names are labelled as registered values, not proof of vendor identity;
+  - **Validated by oCMS:** resolved references with links, issue list, external links list, broken
+    internal links;
+  - **Reported by the agent:** model, sources used, notes, and **claims to verify** as a checklist that
+    the editor ticks off (stored in `claims_checks`, scoped to that revision). Checking a claim records
+    an editorial acknowledgment, not server fact verification; new revisions need their own review.
+- **Translation status:** per active language (missing / AI draft / draft / published / **stale** when
+  the translated source fields differ from the recorded fingerprint), with links; legacy basis is
+  `not_tracked`. Adding a sibling, publishing or toggling AI access must not mark translations stale.
+- Page list: AI-draft badge; filter "AI drafts awaiting review"; unchecked-claims count.
+- Before publishing: shared hard validation must pass. Unchecked claims and warning/info issues produce
+  a non-blocking notice. Error-level draft validation cannot have been saved and cannot be overridden
+  by this notice. Publish and schedule require the displayed revision so reviewed content cannot change
+  between review and the action.
+- templUI first; en/ru.
+- Tests: default session-only access; explicit share-token lifecycle, snapshot pinning, headers and
+  no external loads/private sibling leaks; legacy/current diffs and restore; panel separation (#9);
+  translation fingerprints; publish/schedule after an intervening edit.
+
+### Iteration R1.7: Connected Apps, Hardening and Release
+- `/account/connected-apps`: the user's OAuth grants and MCP-capable API keys, with app name, client
+  host, scopes, created, last used, revoke. Admin overview and revoke in `/admin/mcp`.
+- **OAuth retention:** add bounded, repeatable sqlc cleanup of expired codes and eligible expired or
+  revoked grant families before release. Specify the retention policy and preserve spent-refresh
+  evidence for every still-active family; cleanup must not disable replay detection. Test cleanup
+  boundaries, active-family reuse after cleanup, repeated runs and rollback on failure. R1.1's
+  retained rows are an explicit staging limitation, not the final maintenance policy.
+- **End-to-end acceptance (manual, my accounts, staging):**
+  - in Claude Desktop **and** ChatGPT: brief + selected pages → draft (title, summary, body, SEO,
+    existing taxonomy, existing image) → two linked translation drafts → editor and preview links →
+    review → publish by hand;
+  - Claude Code and Codex: the same flow through tools.
+  - Record the results in Notes against the tested build/tree, settings, client versions, account tier
+    and date. Both target GUI clients need a real pass; a blocked account is a pending acceptance item.
+- The failure suite from R1.5 runs green; `/security-audit` and `/code-quality` findings fixed with
+  drift tests; benchmark baselines.
+- **Docs:**
+  - `docs/desktop-authoring.md` (per client: connect, consent, prompts or tool equivalents, the review
+    loop);
+  - `docs/oauth.md`;
+  - `docs/editorial-review.md`;
+  - `docs/skills/ocms-author/SKILL.md`;
+  - README promise section (the claims list above);
+  - env tables, wiki (local), CHANGELOG.
+- **Launch kit:**
+  - `docs/launch/demo-script.md`: a **multilingual article from conversation to reviewed
+    publication**, recorded; no public write endpoint needed;
+  - `docs/launch/article-outline.md`: an article for a production site drafted through oCMS itself.
+- Final test gate. **STOP: Release 1.**
+
+---
+
+## Release 2 — Reach (After the Release 1 STOP)
+
+- **R2.1 MCP Apps preview card.**
+  - `ui://ocms/draft-preview` (`text/html;profile=mcp-app`, one embedded vanilla HTML file, no external
+    loads, no `innerHTML`, thumbnails as `data:` URIs), linked from the draft tools.
+  - It shows the draft and the Verified / Validated / Reported sections.
+  - Actions: open editor, open preview, ask for changes (`ui/message`), full screen. No write actions.
+  - Text fallback drift test.
+  - Recon first: go-sdk extension-capability support; which clients render it.
+- **R2.2 Images.**
+  - `generate_image` (OpenAI `gpt-image-2`, budget cap and ledger, timeouts per §0.6 #10) and
+    `attach_media` (upload constructor per §0.6 #13, body cap per §0.6 #9).
+  - Default prompt suffix: no text, no watermarks, no logos; left third calm.
+- **R2.3 Local bridge** `ocms mcp-bridge`, per §0.4 "Bridge": Claude Desktop with an API key against
+  `localhost` dev servers; Keychain support.
+- **R2.4 Public demo endpoint.**
+  - `OCMS_DEMO_MCP` (demo mode only): OAuth with the demo account, image and attach tools off, per-user
+    and global caps, a "Connect your AI" page, and a daily reset that wipes drafts, grants and tokens.
+- **R2.5 MCP Registry and directories.**
+  - `server.json` (`tech.ocms/ocms` via DNS; remote `https://{host}/api/mcp`, defaulting to the demo
+    host once R2.4 is live), schema validation and version drift tests, a publish script, a directories
+    checklist.
+
+## Later (Not Planned in Detail)
+- **Usage dashboard:** image spend, MCP activity per app and user.
+- **Built-in assist** (the old Part B): `modules/ai` with Anthropic, OpenAI and OpenAI-compatible
+  providers (Ollama free and local); inline TinyMCE assist; bulk SEO, alt-text and tag passes; bulk
+  translation; job queue. Reuses `draft`, `grounding`, `prompts`, provenance and revisions.
+- **Server-side Studio** (the old Part C).
+- Roadmap ideas:
+  - embeddings (related posts, duplicates);
+  - outline-first prompts;
+  - content calendar;
+  - content refresh;
+  - promo pack (Telegram, X);
+  - newsletter;
+  - eval harness;
+  - accessibility checks;
+  - TTS;
+  - log analysis;
+  - form spam scoring;
+  - external authorization servers (PRM pointing at Keycloak or Zitadel, JWT validation);
+  - more MCP Apps views.
+
+---
+
+## Per-Iteration Checklist
+- [ ] Code follows CLAUDE.md (headers, error wrapping, slog, naming, no `//nolint:dupl`)
+- [ ] `sqlc generate` / `templ generate` re-run if needed
+- [ ] `make assets`, server restarted, curl checks pass, new endpoints exercised; MCP via the go-sdk
+      client test and a curl `tools/list`
+- [ ] `scripts/test-gate.sh` green; `go vet`, `staticcheck`, `errcheck`, `govulncheck` clean
+- [ ] New invariants have drift tests that fail on revert (verified)
+- [ ] en and ru complete; docs updated (wiki: local only, else listed as pending)
+- [ ] Manual checks listed in the STOP summary; Implementation Notes appended
+- [ ] Evidence distinguishes normal/failure cases and affected existing consumers; label static/manual
+      traces, executed offline fixtures and real-account checks separately. Bind results to the tested
+      tree/configuration. Pending client checks cannot be described as verified compatibility
+- [ ] **STOP and wait for my confirmation**
+
+---
+
+## Success Criteria — Release 1
+- [ ] In **Claude Desktop** and **ChatGPT**, with my accounts and recorded passing results: connect to
+      an already deployed/configured site (target under a minute), give a brief and pick existing pages,
+      get a draft with title, summary, body, SEO, existing taxonomy, an existing image and linked
+      translation drafts, open the
+      editor and preview links, review, publish by hand
+- [ ] Claude Code and Codex complete the same flow through tools
+- [ ] Create/update retries never repeat a write, including expired request IDs; concurrent edits conflict
+      cleanly (agent↔agent, agent↔editor); revoked access fails on the next request, including replays;
+      unauthorized drafts are refused; agent input cannot publish or schedule
+- [ ] Existing REST callers follow the documented AI-editable-page precondition; scheduler, restore,
+      imports and media/translation changes preserve revision tracking; legacy migrations preserve data
+- [ ] Translations cannot duplicate a component language or silently use changed source content;
+      non-text changes do not create false stale flags
+- [ ] Saves return session-authenticated previews; only explicit share requests mint revision-pinned
+      bearer links, and preview rendering leaks no other private content or third-party requests
+- [ ] Verified, validated and reported information is visibly separate in the editor
+- [ ] Start in one app and continue in another, as the same user
+- [ ] Recorded demo: a multilingual article from conversation to reviewed publication
+
+---
+
+## Implementation Notes
+
+_Claude Code appends here after each iteration: decisions, deviations and why, client capability
+findings, benchmark baselines, follow-ups._
+
+### Iteration Number Mapping (Spec Restructured 2026-10-30)
+
+§0.1–0.9 below were written against the earlier plan. Translate their iteration references with this
+table.
+
+| Old iteration (as referenced in §0) | New iteration |
+|---|---|
+| 1: Foundations | R1.2 (write path, ownership, revisions, idempotency, provenance) + R1.3 (draft contract) |
+| 2: Grounding | R1.4 |
+| 3: Editorial guidance | R1.4 |
+| 4: MCP authoring context | R1.4 |
+| 5: Draft-write tools | R1.5 |
+| 6: Bridge | R2.3 |
+| 7: Images | R1.5 (existing images only) + R2.2 (generation, `attach_media`, timeouts, upload constructor) |
+| 8: MCP Apps | R2.1 |
+| 9: OAuth | R1.1 |
+| 10: Public demo | R2.4 |
+| 11: Registry | R2.5 |
+| 12: Release | R1.7 |
+| 13–21 (Part B), Part C | Later |
+
+### Iteration 0 — Recon and Design Notes (2026-10-28)
+
+Read-only; no code changed. Sources: code at `master` 0b40be56, go-sdk v1.8.0 in the module cache, and
+official client docs fetched 2026-10-28. `file:line` anchors are as of that commit.
+
+**Wiki-first lookup.** `../llm-wiki-go` (compiled 2026-04-15) predates the MCP module. It has no MCP,
+page-write or grounding page; that is a wiki gap. Pages consulted: multi-language, module-system, media.
+Relevant contradiction: the media variant count. `docs/media.md` lists seven variants including `og`;
+the project wiki lists four. Use `docs/media.md` in iteration 7.
+
+#### 0.1 Page-write paths — invariants
+
+Legend: V2 = `internal/api/v2/pages/service.go`, PH = `internal/handler/pages.go`.
+
+| Invariant | v2 service | Admin handler |
+|---|---|---|
+| Route / language-prefix guard (`handler.PageRouteConflict`, PH:1786) | Before the tx only (`ensureSlugAvailable` V2:204-233, uses `s.queries`): **racy** | Before the tx (PH:549, 832) **and inside it** (`writePageGuarded` PH:1732-1765) |
+| Slug unique vs `page_aliases` | **No**, pages only (V2:219) | Yes (`SlugOrAliasExists[Excluding]`, PH:1674, 1690) |
+| Slug derived from title | No (slug required) | `util.Slugify` (unidecode) (PH:544, 819) |
+| Aliases | **No** | User-supplied, after commit (PH:1996-2037) |
+| Alias/redirect on slug change | No | No |
+| `page_versions` row | **No** | Create always (PH:667); update if title/body changed (PH:968); outside tx, errors swallowed |
+| Sanitize on write (`OCMS_SANITIZE_PAGE_HTML`) | Yes (`normalizeBody` V2:133) | Yes (PH:1967); also on render (`trustedPageBody`, frontend.go:628) |
+| Suspicious block (`DetectSuspiciousHTMLTokens`) | Yes, 422 lists tokens (V2:119-130) | Yes (PH:1956) |
+| Security event for suspicious HTML when not blocking | **No** | Yes (`logSuspiciousPageContentEvent` PH:1922) |
+| Webhooks | created/updated/deleted after commit, no author email (V2:477, 594). **MCP's own `pages.Service` has no dispatcher** (`modules/mcpserver/module.go:200-208`; only main.go:2581 wires one) | created/updated (PH:689, 1024); published/unpublished only via TogglePublish |
+| Cache | `InvalidatePage` (page + sitemap) | Same; Translate only invalidates the translation cache |
+| Audit | "API: Page …", user = `APIKey.CreatedBy`, no IP/URL (V2:347) | Session user, IP, URL; extra `published_at` change event |
+| Translation link | **None** | `Translate` (PH:1361-1471): no tx, **no route guard**, pages-only slug check, no webhook |
+| Force draft | **No.** Any `pages:write` key can publish; `scheduled_at` on a draft is auto-published by the scheduler (`GetScheduledPagesForPublishing`, pages.sql:230) | n/a (editor chooses) |
+| Title/status/page_type validation | **huma tags only** (types.go:71-76), so direct callers such as MCP skip them | Title ≥ 2 chars (PH:1657) |
+| Tags | Names → `Slugify` → `GetTagBySlug` (global); creates missing tags if the actor has `taxonomy:write`, else 403; inside the tx (`pages/tags.go:26-100`) | IDs only, after commit, errors swallowed |
+| Categories | Validated, inside the tx | Not validated, after commit |
+| Featured image min size | **No** | Yes (`validateFeaturedImageSize` PH:1892) |
+| Actor | API key only: `requireWritePerm` needs `APIKey != nil` (V2:69); **no session-user constructor** (`v2.ActorFromContext`, api.go:197) | Session user |
+| Demo mode | Only blocks unpublish (V2:636) | `demoGuard` blocks all writes |
+
+Other facts:
+- The tx in V2 Create/Update covers tag resolve/create, the page row, and category and tag links.
+  Cache, audit and webhook run after commit.
+- `pages.Service` imports `internal/handler` for `PageRouteConflict` and `ValidateSlugFormat`.
+- `translations` still uses `language_id` (migration 00020).
+- The FTS5 triggers index published rows only.
+- Neither path touches menus.
+- The existing `internal/handler/page_route_drift_test.go` only checks that the guard's *name* appears,
+  not that every write path calls it.
+
+#### 0.2 Decision — how the v2 service will carry the invariants (iteration 1 shape)
+
+1. **A neutral shared package.** Proposed name `internal/pagewrite`, owned by neither `handler` nor `v2`.
+   It removes the `v2 → internal/handler` import.
+   - `RouteConflict` (moved from `handler.PageRouteConflict`).
+   - `SlugAvailable(ctx, q, slug, exceptID)`: route conflict + slug-or-alias uniqueness.
+   - `InTx(ctx, db, q, slugChanged, fn func(qtx) error)`: re-runs `SlugAvailable` on the tx queries, then
+     runs `fn`, then commits.
+   - `RecordVersion(ctx, qtx, page, changedBy)`: inside the tx.
+   - `LinkTranslation(ctx, qtx, sourceID, langCode, targetID)`: the translation-component check plus
+   `CreateTranslation`, inside the tx.
+   - Callers: admin `createPageGuarded` / `writePageGuarded` / `Translate`, and v2 `Create` / `Update`.
+     `Translate` thereby gains the route guard, the alias-aware slug check and a transaction.
+2. **v2 per-call options, not site policy.** For example `CreateWith(ctx, actor, body, WriteOptions)`.
+   - `ForceDraft`: status=draft, `published_at`=NULL, `scheduled_at`=NULL.
+   - Update under `ForceDraft` refuses unless the stored page is `status='draft' AND scheduled_at IS NULL`
+     (a human-scheduled draft counts as "not a plain draft"). It also refuses `status`, `scheduled_at` and
+     `published_at` input.
+   - `TranslationOf` links through `LinkTranslation` in the same tx.
+3. **In-service validation** of title (trimmed, 1–255 runes), the status enum and the page_type enum.
+   Version rows on create and on a title/body change. The suspicious-content security event when not
+   blocking.
+4. **`v2.Actor` gains a user identity.** Proposed: `UserID int64` plus `v2.ActorForUser(user, perms)`,
+   with role→permissions mapping. One `actor.userID()` helper feeds the author, the audit entry and the
+   version `changed_by`. `requireWritePerm` accepts a key actor or a user actor. Drift test: nothing in
+   `internal/api/v2/**` reads `APIKey.CreatedBy` outside that helper.
+5. **Webhooks from module writes.** Add `Webhooks webhook.EventDispatcher` to `module.Context`
+   (nil-guarded, wired in `cmd/ocms/main.go` from the existing dispatcher). `mcpserver` then calls
+   `SetWebhookDispatcher`.
+6. **Slug derivation lives in `internal/ai/draft`.** `util.Slugify` plus `-2`, `-3`… on collision; REST
+   keeps the slug required. A collision found in the tx gets one retry with the next suffix.
+7. **Parity for AI featured images.** Move `validateFeaturedImageSize` into the shared package so AI
+   featured images pass the same check. A 1536×1024 image passes.
+8. **Drift tests.**
+   - AST: every `store.CreatePage` / `UpdatePage` call outside the importer and developer allowlists runs
+     inside `pagewrite.InTx`. This replaces the name-only check.
+   - The actor-helper test from point 4.
+   - Revert verification for each.
+
+#### 0.3 Frontend resolver — what grounding can reuse (iteration 2)
+
+**Pure already.**
+- `seo.CanonicalLanguagePath` (`internal/seo/sitemap.go:125`)
+- `handler.PageRouteConflict`
+- `util.IsValidSlug`, `IsValidAlias`, `IsRoutableLanguageCode`, `ReservedRoutePath`
+- sqlc `GetPublishedPageBySlugAndLanguage`, `GetPublishedPageByAlias`, `ListEnabledRedirects`
+- migrator `shared.WildcardRedirectMatchesPath` / `RedirectPathOccupied` (a duplicate of the middleware
+  matcher)
+
+**Bound to a request or receiver; extract them as pure `(ctx, q, path)` functions and make the
+frontend/middleware call the extracted versions.** That keeps "reuse the frontend's resolver" literal,
+and existing frontend tests prove the behaviour is unchanged.
+- `middleware.matchLanguagePrefix` / `activeLanguageMap` (`internal/middleware/language.go:161-196`,
+  unexported)
+- `FrontendHandler.canonicalPageLanguagePrefix` (frontend.go:3335), `canonicalAliasLanguagePrefix`
+  (:3360), `pageAliasLookupPath` (:3229), `explicitPageLanguage` (:3250)
+- `RedirectsMiddleware.matchPathWithCaptures` / `buildTargetURL` (`internal/middleware/redirects.go:153-186,
+  257`)
+
+**Behaviour to replicate.**
+- **Language prefix.** The first segment, lowercase only, must be an active and routable language,
+  including the default. `/en/x` with `en` as default is served, not redirected; the canonical form drops
+  the prefix.
+- **Slug lookup.** Per language, `status='published'`. Slugs are globally unique.
+- **Aliases.** Always a 301, and only to a page in the same language.
+- **Redirects.**
+  - They run before routing, on the raw path including the language prefix, and skip
+    `admin|api|account`.
+  - The **first match in alphabetical `source_path` order** wins, so a wildcard can shadow an exact rule.
+  - A target with a host gets a 400. The query string is appended.
+  - **There is no hop or loop handling anywhere.** The spec's "max 3 hops" has nothing to reuse, so
+    grounding implements a bounded walk (≤ 3 hops, visited set, same-site targets only).
+- **Visibility.** `status='published'`, with no `published_at` check. A scheduled page is a draft.
+- **Site host.** No normalization exists: `applySiteURLOverride` (main.go:1462) doesn't lowercase the host,
+  convert IDNA or strip the default port. Grounding normalizes both sides itself. `golang.org/x/net`
+  v0.61.0 is already a direct dependency (used by `internal/security`), so `x/net/idna` adds no module.
+- **Search.**
+  - `pages_fts(title, body, meta_*)`, porter unicode61, published rows only.
+  - `service.SearchPublishedPages` already takes an optional language. MCP passes none.
+  - `SearchAllPages` is a LIKE search over all statuses and languages.
+- **Media search.** There is no media FTS. It is LIKE on `filename` and `alt` only: no caption, no
+  translations, and `%`/`_` are not escaped (`media.sql:24-28`, `media/service.go:177`).
+
+#### 0.4 go-sdk v1.8.0 (still the latest release)
+
+**Prompts.**
+- `(*Server).AddPrompt(*Prompt, PromptHandler)`, `Prompt{Name, Title, Description, Arguments}`,
+  `PromptArgument{Name, Title, Description, Required}`.
+- Every argument value is a **string**, and required arguments are **not enforced** by the SDK.
+- Completion goes through the single `ServerOptions.CompletionHandler`, dispatched on `Ref`.
+
+**Resources.**
+- `AddResource` / `AddResourceTemplate` (RFC 6570 via `yosida95/uritemplate/v3`).
+- Exact URIs are checked first, then templates in **lexicographic** order.
+- **Every `{var}` is optional** (`ocms://style-guide/` matches `ocms://style-guide/{lang}`). `{var}` does
+  not match `/`. The handler receives only the URI, so it extracts variables with `uritemplate.Match`.
+- `Contents` must be non-nil.
+- Not found returns `-32602`.
+- Do not enable subscriptions.
+
+**Tools.**
+- `ToolAnnotations{ReadOnlyHint bool, IdempotentHint bool, DestructiveHint *bool (default true),
+  OpenWorldHint *bool (default true)}`.
+- The current read-only tools leave `DestructiveHint` nil, so it is omitted.
+
+**Capabilities (iteration 4 must do this).**
+- `buildServer` sets only `Tools`. The SDK fills a nil `Prompts` or `Resources` with `listChanged:true`.
+- A 2026-07-28 client may then open `subscriptions/listen`. That request is forced onto SSE and blocks
+  into the 30 s global timeout.
+- Fix: declare `Prompts: &mcp.PromptCapabilities{}` and `Resources: &mcp.ResourceCapabilities{}`
+  explicitly.
+
+**Errors and logging.**
+- A plain handler error goes out as JSON-RPC code 0 with the raw `err.Error()`.
+- `requestGuard`, `finishToolCall`, the 25 s bound and `identityFromRequest` are typed to
+  `*mcp.CallToolRequest`. `prompts/get` and `resources/read` currently get no log line, no time bound and
+  no error scrubbing.
+- `identityFromTokenInfo` works for any `ServerRequest[P]`.
+
+**2026-07-28 header checks.**
+- `Mcp-Method` / `Mcp-Name` must match the body for `prompts/get` and `resources/read`.
+- `Accept` must list `application/json` and `text/event-stream`.
+
+**Bridge (iteration 6).**
+- There is no built-in bridge. `StdioTransport` + `StreamableClientTransport{Endpoint, HTTPClient,
+  DisableStandaloneSSE:true}` and `jsonrpc.EncodeMessage` / `DecodeMessage` (exported) suffice for raw
+  forwarding to our stateless JSON server.
+- The client transport has no header field, so the bearer goes in through an `http.RoundTripper`.
+- Pitfalls:
+  - `Write` blocks for the whole call, so use one goroutine per request.
+  - A failed `Write` produces no JSON-RPC response; synthesize an error response for the request ID.
+  - Non-JSON-RPC 400/401/403 bodies permanently fail the connection. Treat a bad key as fatal and report
+    it on stderr.
+  - The `Mcp-Protocol-Version` header is not set for legacy requests; the server defaults to 2025-03-26.
+  - Split batches.
+  - Exit on stdin EOF.
+- `SDK/examples/server/custom-transport` is the reference `Connection`.
+
+**Auth (iteration 9).**
+- `auth.RequireBearerToken`, `TokenVerifier`, `ProtectedResourceMetadataHandler`.
+- `oauthex` has client-side DCR and metadata helpers, but **no authorization-server implementation**:
+  oCMS would have to build the AS endpoints itself.
+
+**Protocol versions.**
+- 2026-07-28 (stateless only), 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05.
+
+#### 0.5 MCP clients (verified 2026-10-28)
+
+| | Claude Code | Claude Desktop / claude.ai (remote connector) | Claude Desktop (local stdio) | Codex |
+|---|---|---|---|---|
+| Static bearer | Yes: `claude mcp add --transport http ocms <url> --header "Authorization: Bearer …"`. `.mcp.json` headers expand `${VAR}`, and `headersHelper` can run a command (e.g. Keychain lookup) | **Beta, limited orgs only** ("Request headers" section; up to 4 headers; enter `Bearer <key>`). Otherwise OAuth (CIMD preferred, DCR, own client) or no auth | n/a: the bridge holds the key | `[mcp_servers.ocms] url = "…"`, `bearer_token_env_var = "OCMS_MCP_API_KEY"` (or `env_http_headers`) |
+| Reaches localhost | Yes | **No** (requests come from `160.79.104.0/21`, re-confirmed) | Yes, through the bridge | Yes |
+| OAuth | Yes (own CIMD, loopback redirect on any port) | Specs 2025-03-26 / 06-18 / 11-25; callback `https://claude.ai/api/mcp/auth_callback`; PKCE S256; CIMD only if AS metadata has `client_id_metadata_document_supported:true` **and** `none` in `token_endpoint_auth_methods_supported`; 401 + `resource_metadata`; `resource` must equal the URL; rotate refresh tokens; endpoints answer in < 10 s | n/a | `codex mcp login` (CIMD/DCR) |
+| Prompts | Yes: `/ocms:write_page (MCP)` or `/mcp__ocms__write_page`. **Arguments are split on whitespace, one token each** | Supported per Anthropic's build docs; UI placement (the "+" menu) is **unverified** (third-party sources only) | Same as left | **No** (openai/codex#5059 open; #8342 closed as duplicate) |
+| Resources | Yes: `@ocms:ocms://style-guide`; auto list/read tools | Supported (text and blob); no subscriptions, no sampling | Same as left | Yes, through the model tools `list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource` |
+| Annotations | `readOnlyHint` → runs in parallel; `idempotentHint` → **retried once on reconnect**; `_meta["anthropic/requiresUserInteraction"]` → prompt on every call | **Every tool must declare both `readOnlyHint` and `destructiveHint`** | Same | `default_tools_approval_mode = "writes"` prompts for tools not marked read-only; per-tool `tools.<name>.approval_mode` |
+| Tool timeout | `MCP_TOOL_TIMEOUT` (default ≈ 28 h); idle abort after 5 min over HTTP | **240 s** per call | Same | `tool_timeout_sec` **default 60**; `startup_timeout_sec` 10 |
+| Result size | Warning above 10k tokens; limit 25k tokens (`MAX_MCP_OUTPUT_TOKENS`); text over **50,000 chars is saved to a file** unless `_meta["anthropic/maxResultSizeChars"]` (≤ 500,000) | ≈ 150,000 chars | Same | n/s |
+| Instructions | Server instructions and upfront tool descriptions are **cut at 4,096 chars** (16,384 for tool-search-loaded descriptions) | n/s | n/s | n/s |
+
+**Local stdio config.**
+- `claude_desktop_config.json` is still documented on modelcontextprotocol.io: Settings → Developer → Edit
+  Config; `~/Library/Application Support/Claude/claude_desktop_config.json`; `command` / `args` / `env`.
+- stderr goes to `~/Library/Logs/Claude/mcp-server-<name>.log`.
+- claude.com steers users to **MCPB** bundles instead: `.mcpb` with `manifest.json`, `user_config` fields
+  marked `sensitive` are stored in the OS keychain, and Node is "strongly recommended" (a binary server
+  type exists in the MCPB spec). An MCPB wrapper around `ocms mcp-bridge` is an optional later step; it
+  would avoid a plaintext key in `env`.
+
+**Subscription policy re-verified** (code.claude.com legal-and-compliance). It now also says developers
+"may not collect, store, or intermediate Claude.ai credentials or session tokens". Part A complies.
+
+#### 0.6 Spec corrections (apply in the iteration named)
+
+1. **Prompt arguments (it 4).** Claude Code splits slash-command arguments on whitespace, so
+   `write_page(topic, preset, language, references…)` cannot take a multi-word topic or a list of
+   `ref:role` pairs that way. Proposal, pending the user's call in iteration 4:
+   - All prompt arguments become optional single tokens: `preset`, `language`, and `refs` as a
+     comma-joined `12:example,/about:source`.
+   - When the topic is missing, the rendered prompt tells the model to take the topic from the
+     conversation or ask the user.
+   - `get_authoring_context` (a tool, so no tokenizing) stays the full-fidelity path.
+   - Validate required arguments in the handler (the SDK does not), and return `CodeInvalidParams`.
+2. **Codex has no prompts (it 4).** That makes the prompt→tool parity drift test essential, not optional.
+   Resources do work in Codex.
+3. **Annotations (it 4/5).**
+   - Set `DestructiveHint: false` explicitly on every tool (Anthropic requires it to be declared).
+   - Draft-create tools must **not** set `IdempotentHint`: Claude Code would replay them on reconnect and
+     create a duplicate draft. `update_draft_page` may set it.
+   - `generate_image` needs `OpenWorldHint: true`.
+   - The classification test replaces both `TestEveryRegisteredToolIsReadOnly` **and** the read-only
+     assertion in `TestToolsListMatchesCatalog` (`tools_integration_test.go:35-40`).
+4. **Capabilities and the server card (it 4).**
+   - Declare `Prompts` / `Resources` capabilities explicitly (see 0.4).
+   - `seo.MCPCapabilities` has only `Tools` / `REST` (`internal/seo/wellknown.go:139`).
+   - Extend `TestServerCardMatchesInitialize` to compare capabilities as well as `serverInfo`.
+   - Extend `requestGuard` logging, the time bound and error scrubbing to `prompts/get` and
+     `resources/read`.
+   - The "read-only" wording appears in `baseInstructions`, `SiteInfo.Server.ReadOnly`, the Init log, the
+     admin "read only" label and the package doc. Update all of them in iteration 5.
+5. **Server instructions length (it 4).**
+   - `baseInstructions` (~640 chars) + the drafts sentence + the admin text (`maxInstructionsRunes = 4000`)
+     already exceeds Claude Code's 4,096-char cut, and authoring rules will add more.
+   - Put the rules in prompt/tool text, keep the server instructions short, lower the admin cap so the
+     total stays ≤ 4,096, and add a test for the rendered maximum.
+6. **Result size (it 4).** Keep `get_authoring_context` under 50,000 chars by default (per-reference and
+   total caps), or set `_meta["anthropic/maxResultSizeChars"]`. claude.ai caps results at ≈150,000.
+7. **Catalog decisions (it 5).**
+   - Draft tools take a PageDraft (Markdown, forced draft), not the REST body.
+   - Keep `createPage` / `updatePage` in `restOperationsNotExposed`, with the reason changed to "covered
+     by draft tools with a different contract".
+   - Give the draft tools an `MCPOnlyReason`.
+   - `TestToolInputConstraintsMatchREST` compares only path and query parameters, so mirroring the
+     operations would test nothing.
+8. **Permissions (it 5).**
+   - The v2 write path requires `pages:write`, but `mcp:drafts` is meant not to need it. Draft tools build
+     their actor through one helper that grants `pages:write` **only together with `ForceDraft`**, and
+     `taxonomy:write` only when the key holds it **and** "allow tag creation" is on. A drift test confirms
+     no other tool uses that helper.
+   - `actorFor` strips `pages:read` when `AllowDrafts` is off, so a key cannot `get_page` its own draft.
+     Own-draft reads (`list_my_drafts`, `get_my_draft`, own-draft grounding) need a provenance-scoped
+     query, not the general actor.
+9. **Request body cap (it 5/7).**
+   - `maxRequestBodyBytes` is 256 KiB. A JSON-escaped 200,000-byte body can exceed it, and `attach_media`
+     at 8 MiB becomes ≈10.7 MiB of base64. `rejectBatches` also buffers the whole body.
+   - Set the SDK cap to a hard ceiling. Put our own `MaxBytesReader` in front with a limit derived from the
+     settings: ~512 KiB normally, and 4/3 × `attach_media_max_bytes` + 64 KiB when `attach_media` is
+     enabled. Re-check per tool after decoding.
+   - The 32-request in-flight cap bounds the memory use.
+10. **Timeouts for `generate_image` (it 7).**
+
+    | Layer | Limit |
+    |---|---|
+    | Tool `maxToolDuration` | 25 s (`tools.go:40`) |
+    | Global `middleware.Timeout` | **30 s** (`main.go:2077`), a hard ceiling |
+    | Codex `tool_timeout_sec` | **60 s** by default |
+    | claude.ai / Desktop | 240 s |
+
+    - The spec's 120 s default needs `/api/mcp` to get its own route-level timeout outside the global one.
+      Raise the bound for `generate_image` only, to ≤ 180 s.
+    - The client snippets must set Codex `tool_timeout_sec = 180`.
+    - If an exemption is unwanted, fall back to an asynchronous pattern instead: return a job ID and poll
+      with `get_image_job`.
+11. **ForceDraft and scheduling (it 1/5).** The scheduler publishes any `status='draft' AND scheduled_at <=
+    now`. So `ForceDraft` clears `scheduled_at`, and MCP refuses to update drafts that a human scheduled.
+    The status-injection tests must also cover `scheduled_at` and `published_at`.
+12. **Huma-only validation (it 1).** MCP calls the services directly, so title, status and page_type checks
+    must move into the service or into `draft.Validate`. Same for `taxonomy.CreateTag`, which checks that
+    the language exists but not that it is active or routable.
+13. **Media upload (it 7).**
+    - `media.UploadedFileFromReader` is documented as a test helper and needs a seekable reader (use
+      `bytes.Reader`). Promote it, or add a production constructor.
+    - Limits: 20 MB maximum; MIME sniffed from the first 512 bytes against an allowlist (no SVG); images
+      re-encoded, which strips EXIF.
+14. **Media candidates (it 2).** The spec assumes media FTS on filename, alt and caption, but none exists.
+    Add a core `media_fts` FTS5 migration with triggers (including `media_translations` alt/caption), or
+    accept LIKE with `ESCAPE`. Recommendation: FTS5, to meet the "one FTS5 query" performance requirement.
+15. **Webhooks (it 1/5).** "→ webhooks via the service" needs the `module.Context` dispatcher (0.2 point 5);
+    without it MCP writes fire no webhooks.
+16. **Demo mode (it 5).** Saving MCP settings is blocked in demo mode, so the draft-tools toggle stays off
+    there. Record that as intended, and test it.
+
+#### 0.7 Iterations 6 and 9 — what the findings decide
+
+- **Iteration 6 (bridge): needed.** Claude Desktop can attach a bearer only through a local stdio server,
+  except for organizations in the request-headers beta. The bridge is also the only way Desktop reaches
+  `http://localhost` dev servers.
+- **Iteration 9 (OAuth): needed for remote connectors.** Remote connectors on claude.ai web, mobile and
+  Desktop can send a static `Authorization` header only in the limited request-headers beta. Everyone else
+  needs OAuth. The user confirmed on 2026-10-28 that their **Add custom connector** dialog has **no
+  "Request headers" section**.
+  - So remote connectors (web, mobile, Desktop-remote) can reach oCMS only through OAuth.
+  - Until then, Claude Desktop uses the stdio bridge (iteration 6), and Claude Code and Codex use static
+    bearer headers.
+  - Iteration 9 is optional per the spec and still needs the user's go-ahead after the Part A release.
+- If iteration 9 runs:
+  - go-sdk gives only resource-server pieces, so oCMS builds the authorization-server endpoints.
+  - Support **CIMD** (Claude's published identity) first, DCR second.
+  - Accept both `https://claude.ai/api/mcp/auth_callback` and port-agnostic loopback redirects for
+    Claude Code.
+
+#### 0.8 Versions checked (2026-10-28)
+
+go-sdk v1.8.0 (latest; still pinned), `openai-go/v3` v3.90.0, `anthropic-sdk-go/v2` v2.4.0. Re-check
+each in its own iteration.
+
+#### 0.9 Pre-existing issues found (outside Phase 5 scope; fix only where an iteration touches them)
+
+- Admin `Translate`: no route guard, pages-only slug uniqueness, no transaction, no webhook. Fixed by
+  0.2 point 1.
+- `page_route_drift_test.go` asserts names only. Fixed by 0.2 point 8.
+- The media LIKE search doesn't escape `%`/`_`.
+- Redirect precedence is alphabetical, so a wildcard can shadow an exact rule.
+- v2 slug uniqueness ignores aliases. Fixed by 0.2 point 1.
+
+### Spec update — promotion (2026-10-28, by the spec author, not an iteration)
+
+- **Iteration 9 (OAuth) is now required.** This supersedes §0.7's "optional per the spec and still needs
+  the user's go-ahead".
+- **New iterations:**
+  - 8: MCP Apps draft preview;
+  - 10: public demo MCP endpoint;
+  - 11: MCP Registry and directories.
+- **The release moved from iteration 8 to iteration 12.** Numbers 0–7 and 9 are unchanged, so every
+  iteration reference in §0.1–0.9 still holds.
+- **Demo mode:** §0.6 #16 (the draft-tools toggle stays off in demo mode) still holds for the settings
+  UI. Iteration 10 adds the env-driven `OCMS_DEMO_MCP` override for the public demo instance.
+- **Part B** is trimmed to lean built-in assist and renumbered 13–21. The former Studio iterations
+  (UI, Studio images, REST generation and webhooks, server-side style profile) moved to **Part C
+  (deferred)**.
+- **Spec-level additions:**
+  - the provenance principal covers OAuth user + client;
+  - the outbound-HTTP allowlist gains `internal/oauth` (CIMD fetch);
+  - new core tables `media_fts` (§0.6 #14 recommendation adopted) and `oauth_*`;
+  - Quality drift tests #7–#10 (MCP Apps fallback, OAuth scopes and logging, demo gating,
+    `server.json` consistency);
+  - a cloud-session section in "How to Use This File".
+
+### Spec update — ChatGPT (2026-10-29, by the spec author, not an iteration)
+
+- Added "Verified External Facts → ChatGPT" (Developer mode, web only, public HTTPS, plan caveat for
+  writes, OAuth-only auth, CIMD preferred, PKCE S256 advertised, RFC 9207 stable redirect, resource-bound
+  tokens, no OIDC scopes, per-tool `securitySchemes`, `_meta["mcp/www_authenticate"]`).
+- Iteration 9 gains a "ChatGPT compatibility" block. Iteration 10 and the success criteria now name
+  ChatGPT web, with the plan caveat.
+- Scope confirmed by the user: **MCP-driven generation from desktop and chat apps (Part A) is the goal.**
+  Part B stays optional after the Part A release.
+
+### Spec update — Release 1 restructure (2026-10-30, by the spec author, not an iteration)
+
+This restructure follows a review of the plan by Codex.
+
+**Product promise:** "Write with your preferred AI, using your website's context, then review and
+publish in oCMS."
+
+**Release 1 = R1.1–R1.7.** OAuth and real-client testing come first.
+
+**New requirements:**
+- idempotent creation (`request_id`);
+- optimistic concurrency (`pages.revision`, `base_revision`, also protecting the admin editor);
+- one-transaction saves;
+- user-owned drafts with an "Allow AI edits" flag and per-app grants;
+- verified / validated / reported separation;
+- expiring preview links;
+- revision diff;
+- translation status (including stale);
+- a structured issue catalog;
+- connected-apps management.
+
+**Moved to Release 2:** MCP Apps card, image generation and upload, the bridge, the public demo, the
+Registry. Part B and Part C → Later.
+
+**Supersessions:**
+- **§0.6 #3:** create tools may declare `idempotentHint: true`, because `request_id` is required.
+- **§0.6 #8:** "own drafts" now means drafts owned by the **user** (`author_id`) and AI-editable, not
+  drafts scoped to one key or client. The provenance-scoped query becomes an ownership + `ai_editable`
+  query.
+- **Old Decision 4 (strip external links by default):** replaced by keep + list in review + admin
+  option (`keep` | `nofollow` | `strip`).
+- **"Site-only grounding" wording:** limited to retrieval and reference validation (Decisions #5,
+  "What we may claim").
+- **The dependency rule for OAuth** is relaxed to a library core after the R1.1 comparison and my
+  approval. `fosite` is excluded.
+
+**Client facts refreshed 2026-10-30:**
+- Claude documents request headers for Pro/Max as well. Re-check my dialog in R1.1.
+- ChatGPT documents read/write tools, Secure MCP Tunnel, and OAuth or no auth (no API keys).
+
+### Spec update — Implementation contracts (2026-10-30, Codex; not an implementation iteration)
+
+Claude's seven-iteration Release 1 structure, user ownership and deferred Release 2 remain the basis.
+The active sections above now resolve these implementation gaps:
+
+- **Git control:** cloud sessions follow the same separate commit/push approvals as local sessions;
+  the earlier automatic commit/push instruction is superseded by `AGENTS.md` Git Safety.
+- **R1.1 ordering:** library comparison/approval precedes implementation. The compatibility probe uses
+  bounded scratch state, never a page-writing bypass before R1.2 safeguards exist. Real CMS persistence
+  is proven in R1.5; scratch writes do not count as that evidence. No automatic handwritten OAuth core.
+- **Authorization:** fresh account/role/grant checks also cover replays and existing sessions; human
+  drafts need explicit AI access. Registered client identity and metadata display names are not proof
+  that the caller is the vendor's native application.
+- **Writer coverage:** revision tracking includes restore, lifecycle, image cleanup, translation changes
+  and imports/generators. REST adds optional `base_revision`, required for AI-editable pages. Complete
+  new snapshots coexist with visibly partial legacy history; restores retain current lifecycle/ownership.
+- **Retry semantics:** updates also carry `request_id`; replay precedes CAS. Seven-day response retention
+  is followed by permanent compact tombstones, not deletion that allows a later duplicate. Replay does
+  not duplicate versions, mutation charges or webhook dispatch; external delivery keeps existing guarantees.
+- **Translation basis:** compare source content fingerprints, enforce one language per whole component
+  transactionally, and represent untracked legacy provenance explicitly. Non-text revision changes do
+  not mark translations stale. Hidden siblings remain inaccessible in status/conflict results.
+- **Preview policy:** default URLs need an editor session. Share links are explicit, revision-pinned,
+  lifecycle/grant-revocable and excluded from logs/replayed results. Active-theme preview mode suppresses
+  tracking, third-party requests, form actions and unrelated private content.
+- **Draft interfaces:** create/patch schemas have distinct presence/null semantics; domain limits are
+  explicit, existing taxonomy is the R1 policy, metadata edits preserve body HTML, and remote inline
+  images are rejected. Provider strict-output adapters are later work, not a universal MCP schema rule.
+- **Lean context:** existing bounded media search is sufficient for R1 unless benchmarks justify FTS.
+- **Release evidence:** both GUI targets need actual recorded passes; blocked or untested compatibility
+  remains pending. Offline fixtures, static/manual traces and real-client results are separate evidence.
+
+**Historical-note supersessions:** §0.2's partial version snapshots/old writer allowlists, §0.6 #2–#3's
+universal schema/annotation rules, §0.6 #8's old key-scoped reads/tag creation, and §0.6 #14's mandatory
+media FTS yield to the active Revisions, PageDraft, Ownership, Quality and R1.4 sections. Replacing draft
+updates use `destructiveHint: true`; content creates use false, independent of both being draft-only.
+The earlier note that every create is idempotent does not include explicit bearer-preview issuance.
+
+**Primary annotation reference:**
+https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/
+The installed go-sdk v1.8.0 `ToolAnnotations` comments corroborate additive versus replacing effects.
+
+**Verification of this edit:** document consistency checks and manual traces of the named retry,
+translation, preview, writer-compatibility and approval scenarios. No application code, database,
+client connection or dependency was changed; runtime and real-account checks remain implementation work.
+
+### Iteration R1.1A — OAuth Library Comparison (2026-10-30)
+
+Historical pre-approval checkpoint. The explicit approval and implementation update follow in R1.1B.
+
+**Status:** comparison checkpoint complete. **Recommend `github.com/go-oauth2/oauth2/v4` v4.6.0** for
+oCMS's embedded, OAuth-only MCP authorization server. Dependency approval is pending; R1.1's server,
+storage adapters and real-client compatibility checks are not implemented by this checkpoint.
+
+The recommendation is architectural judgment based on the pinned source and measurements below.
+It depends on the mandatory integration gates, not on the library defaults being sufficient.
+
+#### Versions and Fit
+
+| Item | go-oauth2/oauth2 | zitadel/oidc |
+|---|---|---|
+| Latest stable checked through Go proxy and GitHub releases | v4.6.0, 2026-09-01 | v3.51.16, 2026-10-15 |
+| Module / minimum Go | `github.com/go-oauth2/oauth2/v4` / 1.21 | `github.com/zitadel/oidc/v3` / 1.26.0 |
+| License | MIT | Apache-2.0 |
+| Commit inspected | `e444dfa1af98b5e2d4d9ff5dbb0747ad9e82c218` | `8ae30e3cf6d7b38d7fb460c8931dde6a06e5d7bf` |
+| Application integration | Standard `net/http` handlers; existing chi routes and login/MFA remain in control | chi-based OpenID Provider; existing login is pluggable, but provider/storage contracts include OIDC, signing keys and userinfo |
+| Current product fit | Narrow OAuth grants and application-owned storage | Better fit if oCMS itself becomes an OpenID identity provider; broader than R1 requires |
+
+Release sources: [go-oauth2 v4.6.0](https://github.com/go-oauth2/oauth2/releases/tag/v4.6.0),
+[ZITADEL v3.51.16](https://github.com/zitadel/oidc/releases/tag/v3.51.16).
+
+#### Conformance Matrix (Static Source Review; Adapter Work Is Not Yet Verified)
+
+| Requirement | go-oauth2 v4.6.0 | ZITADEL v3.51.16 |
+|---|---|---|
+| Authorization code + PKCE S256 | Native; enable `ForcePKCE`, allow only `CodeChallengeS256`, validate verifier format | Native; public-client token exchange requires PKCE; enforce S256-only before persisting authorization requests |
+| Single-use code, including concurrent redemption | Manager loads then removes a code; transaction-bound store must serialize consumption and token issuance | Auth request lookup and deletion are separate callbacks; application storage must ensure single use and transactionality |
+| Refresh rotation and reuse-family revocation | Rotation configurable; atomic consumption, retained spent-token evidence and family revocation belong to our adapter | `CreateAccessAndRefreshTokens` delegates issuance/rotation to application storage; reuse-family policy remains ours |
+| Opaque tokens, hashed storage | Custom generator hooks and TokenStore; raw input token can be rehydrated only in request memory | Opaque encrypted access tokens or JWTs; provider crypto/signing-key interfaces remain; refresh generation/storage are application-owned |
+| RFC 8414 metadata and explicit `none` | Serve a small OAuth metadata document ourselves; configure public-client form parsing/auth method validation | Has OIDC discovery and auth-method configuration; serve curated OAuth metadata for MCP |
+| RFC 9728 PRM / challenge | Use the existing go-sdk `auth.ProtectedResourceMetadataHandler` and `ResourceMetadataURL` | Same resource-server glue; not a benefit unique to the OIDC provider |
+| RFC 8707 resource binding | Store trusted resource/grant data through token extensions/context and validate authorize, code exchange, refresh and resource access | Custom request/audience mapping and MCP resource validation still required |
+| RFC 9207 `iss`, success and error responses | Add configured issuer to validated authorization redirect results and metadata | No automatic RFC 9207 behavior found in the inspected provider; custom metadata/response handling required |
+| CIMD | Resolve HTTPS client IDs in our bounded ClientStore/metadata layer | Discovery struct has `ClientIDMetadataDocumentSupported`; no complete provider resolver found; custom client lookup/fetch policy required |
+| Optional DCR | Application endpoint and client persistence | Application endpoint and client persistence; not supplied by the inspected provider router |
+| No unwanted OIDC requirements | No OIDC scopes or ID tokens needed | Supported scopes are configurable and `openid` is not required by scope validation, but the stock token response creates an ID token; code-flow refresh issuance depends on `offline_access` |
+| SQLite/sqlc integration | Small ClientStore/TokenStore interfaces; request-scoped transaction wrapper is required | Larger AuthStorage/OPStorage contracts plus keys/claims/session callbacks; refresh issuance callback itself is a useful transaction boundary |
+| External services / CGO requirement | Embedded Go library; custom SQLite store reuses oCMS's existing driver | Also an embedded Go library, not a requirement to deploy the ZITADEL service |
+
+Important source corrections: ZITADEL can override its advertised scopes, so describing it as simply
+"forcing openid" would be inaccurate. Its CIMD discovery flag is not evidence of an implemented CIMD
+authorization flow. go-oauth2's ID-JAG/JWT-bearer resource fields are unrelated to R1's code flow and
+remain disabled.
+
+Source anchors:
+- [go-oauth2 server defaults](https://github.com/go-oauth2/oauth2/blob/v4.6.0/server/config.go),
+  [manager lifecycle and extension hooks](https://github.com/go-oauth2/oauth2/blob/v4.6.0/manage/manager.go),
+  [storage interfaces](https://github.com/go-oauth2/oauth2/blob/v4.6.0/store.go),
+  [default redirect validator](https://github.com/go-oauth2/oauth2/blob/v4.6.0/manage/util.go).
+- [ZITADEL token/refresh policy](https://github.com/zitadel/oidc/blob/v3.51.16/pkg/op/token.go),
+  [storage contract](https://github.com/zitadel/oidc/blob/v3.51.16/pkg/op/storage.go),
+  [provider discovery](https://github.com/zitadel/oidc/blob/v3.51.16/pkg/op/discovery.go),
+  [discovery fields](https://github.com/zitadel/oidc/blob/v3.51.16/pkg/oidc/discovery.go).
+- [MCP authorization requirements](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization),
+  [OpenAI host authentication requirements](https://developers.openai.com/plugins/build/auth).
+
+#### Dependency and Advisory Evidence
+
+Measured using temporary copies of the current oCMS `go.mod`/`go.sum`, Go **1.27.3 darwin/arm64**,
+`GOWORK=off`, `GOTOOLCHAIN=local`. Source downloads and temporary manifests did not alter project
+dependencies. Package loading and advisory analysis did not execute library/application code or tests.
+Scanner: `govulncheck` v1.8.0, `https://vuln.go.dev`, reported database update
+**2026-10-27 21:16:18 UTC**; comparison run 2026-10-30.
+
+| Measurement | go-oauth2 `manage` + `server` | ZITADEL `pkg/op` |
+|---|---|---|
+| Non-standard-library packages loaded for those imports | 8 | 49 |
+| Modules represented in those imported packages | 3 | 19 |
+| Selected imported-module details | oauth2 v4.6.0, JWT v5.3.1, existing UUID v1.6.0 | Includes go-jose v4.1.4, schema, CORS, securecookie and OTel v1.47.0; existing chi/x packages reused |
+| Entire selected module graph, including unimported/test/example requirements | 250 (baseline 217; +33 paths, no existing version changes) | 227 (+10 paths; doublestar v4.10.0 → v4.10.3) |
+| `govulncheck -scan=package` on the named imports | Exit 0: no known vulnerabilities found | Exit 0: no known vulnerabilities found |
+
+The small imported package set does **not** mean go-oauth2 adds only two entries to the complete
+module graph; its older example/test requirements expand that graph more than ZITADEL's. These are
+package/module measurements, not binary-size or latency benchmarks. Advisory checks are date-specific
+and do not establish OAuth correctness. Inspect the actual module diff and rerun the scan after approval.
+
+Executed commands (each candidate used a temporary module copy):
+```sh
+go list -m -json github.com/go-oauth2/oauth2/v4@latest
+go list -m -json github.com/zitadel/oidc/v3@latest
+go list -mod=mod -deps -json github.com/go-oauth2/oauth2/v4/manage github.com/go-oauth2/oauth2/v4/server
+go list -mod=mod -deps -json github.com/zitadel/oidc/v3/pkg/op
+go list -mod=mod -m -json all
+govulncheck -scan=package github.com/go-oauth2/oauth2/v4/manage github.com/go-oauth2/oauth2/v4/server
+govulncheck -scan=package github.com/zitadel/oidc/v3/pkg/op
+```
+
+#### Mandatory Integration Gates for the Recommended Library
+
+1. **Constrain protocol defaults.** Only response `code`, grants `authorization_code`/`refresh_token`,
+   PKCE S256, and explicitly supported client authentication methods. Disable implicit, password,
+   client-credentials and JWT-bearer grants. The default redirect check uses host-suffix matching;
+   replace it with registered-URI exact matching plus the RFC 8252 loopback-port exception, and validate
+   before consent or any error redirect. Never return a code or error to an unvalidated redirect URI.
+2. **Use our storage, not example stores.** SQLite/sqlc adapters store hashes of random 32-byte codes,
+   access and refresh tokens, retaining grant/resource/family metadata and spent-refresh evidence.
+   Use generator hooks; avoid the default UUID-derived credentials. Keep state request-scoped, with
+   no global mutable "current client/transaction" variables.
+3. **Make code exchange atomic.** Resolve/cache client metadata before entering the transaction.
+   Serialize code lookup/consumption and token creation in one SQLite write transaction; invalid PKCE
+   rolls back library code deletion. Buffer protocol output and emit tokens only after successful
+   commit. A double redemption cannot both succeed; commit failure must not return usable credentials.
+4. **Wrap refresh validation explicitly.** The manager refresh method selects the client from stored
+   token data; do not assume it validates the requesting client's identity/secret or scope subset.
+   Validate the presented client against the stored grant, resource, current role/scopes and token
+   expiry before delegation. Restrict requested scopes to the grant and preserve its audience.
+5. **Keep refresh state atomic and durable.** Rotate with single-use consumption, absolute family
+   expiry and retained used-token hashes. A reused token revokes its family durably even though the
+   HTTP response is `invalid_grant`—a blanket rollback-on-error must not undo that revocation.
+   Do not store old token plaintext just to satisfy manager getters: hydrate only the presented token
+   in request memory and invalidate previous access rows by stored family/row identifiers. Disable the
+   manager's raw-old-access removal when the transaction adapter handles that invalidation itself.
+6. **Keep MCP integration separate.** Reuse go-sdk's resource metadata/challenge support; implement
+   bounded CIMD, RFC 9207, resource binding, consent and optional DCR around the library. Preserve the
+   existing API-key verifier and its policies; reject invalid OAuth tokens without falling through to
+   weaker key authentication. Reuse `SessionUser` and `grantSession` for login/MFA; fresh-consent login
+   needs server-recorded authentication time, not merely an existing `mfa_verified` boolean.
+
+**oCMS evidence:** the existing transport is API-key-only in `modules/mcpserver/transport.go` and
+`identity.go`; go-sdk v1.8.0 already provides the PRM handler/challenge option. `internal/store/database.go`
+uses SQLite WAL, busy timeout and immediate write transactions; `store.WithTx` provides transaction-bound
+queries. `internal/handler/mfa.go:grantSession` is the sole session-grant path and currently stores
+session version/MFA completion, not a dedicated authentication timestamp. These are inspected
+integration points, not evidence that the proposed OAuth adapter already works.
+
+#### Verification Still Required Before Claiming Compatibility
+
+- Normal code → tokens → protected tool call; normal rotation and reduced-scope refresh.
+- Missing/plain/malformed PKCE, unregistered redirects, wrong client/resource and scope escalation.
+- Concurrent code redemption and refresh, interrupted exchange/commit failure, and refresh replay
+  whose family revocation survives the error response and server restart.
+- SQLite rows and captured logs contain no raw credentials; revocation/current-role changes reject
+  both newly connected and existing MCP sessions; existing bearer-key behavior remains covered.
+- Real Claude Desktop/ChatGPT account checks from R1.1, then the scratch read/write/revoke flow.
+
+These runtime/fixture/client checks are **not run** at this checkpoint. Approval would authorize adding
+the recommended library and its required transitive dependencies, followed by implementation of these
+gates. It would not approve a commit, push, deployment or publication. No application code, `go.mod`,
+`go.sum`, database or connected-client settings were changed by this comparison.
+
+
+### Iteration R1.1B — Approved OAuth Core and Local Compatibility Probe (2026-10-30)
+
+**Status:** implementation and local verification complete; R1.1's real-account
+acceptance remains open. The user explicitly approved adding
+`github.com/go-oauth2/oauth2/v4` **v4.6.0** and implementing its integration gates.
+The working tree remains uncommitted. There was no push, deployment, wiki
+publication or change to a Claude/ChatGPT/Codex connection.
+
+Implemented:
+
+- `internal/oauth`: code + S256-only grant engine, per-request manager/store,
+  configured HTTPS issuer (development loopback exception), RFC 8414/9728
+  metadata, exact resource binding and RFC 9207 `iss`. Unsupported grants,
+  OIDC scopes and client authentication methods are excluded.
+- SQLite/sqlc migration and adapter: 32-byte random opaque credentials stored
+  only as hashes, single-use 60-second codes, transaction-bound redemption,
+  rotation, absolute family expiry and retained spent-refresh hashes. Failed
+  PKCE and failed commits roll back consumption; credentials are emitted
+  after commit. Correct-client refresh replay commits family revocation before
+  returning `invalid_grant`, even with an invalid requested scope.
+- Bounded CIMD: exact host allowlist, DNS-aware SSRF guard, no proxy/redirects,
+  5 seconds, 64 KiB, matching client ID, 15-minute durable cache, concurrent
+  fetch coalescing and a transaction-enforced 1,000-client cap. Optional
+  public-client DCR defaults off; registrations expire after ninety days.
+- Fresh full password/MFA sign-in after each authorization intent, escaped
+  consent display, current role checks, a session-bound one-use nonce and
+  ten-minute timeout. GET parameters are held in the session; POST cannot
+  replace its callback or scopes. Origin checks and nonce validation both
+  apply. `/account/security` lists and revokes the account's connections.
+- MCP verified user/app identity, role/grant revalidation on every request,
+  current API-key owner checks, OAuth metadata challenges, per-user throttling
+  and tool-level scope challenges. Existing key verification/CIDR/expiry/
+  revocation behavior remains covered. `get_site_info` reports the verified
+  account, auth type, app and effective grant permissions.
+- Flagged, isolated scratch tools with accurate read/write annotations:
+  one entry per user, 8 KiB combined title/body, 100 entries, one-hour expiry,
+  no CMS writes or admin preview URL. Production/demo reject the flag; the
+  draft kill switch removes the probe. The admin page labels scratch mode.
+- OAuth query redaction in access logs; bounded audit events identify only
+  account, grant, client and scopes. Config, Docker forwarding, English/Russian
+  UI, env examples, README, login/MCP docs and corresponding local wiki pages
+  are updated. Setup and nginx path-only logging are in `docs/oauth.md`.
+
+Dependency follow-up: the full application scan found two pre-existing,
+reachable HTML conversion advisories in `golang.org/x/net` v0.61.0. It was
+updated to **v0.62.0** for
+[GO-2026-6860](https://pkg.go.dev/vuln/GO-2026-6860) and
+[GO-2026-6866](https://pkg.go.dev/vuln/GO-2026-6866).
+`golang.org/x/sync` v0.24.0 is now direct (singleflight); JWT v5.3.1 is the
+library's transitive dependency. No other existing module version changed.
+
+#### Executed evidence
+
+- `scripts/test-gate.sh`: full suite, uncached, passed on the final source.
+- `go vet ./...`, `staticcheck ./...`, `errcheck -ignoregenerated ./...`: passed.
+- `go test -race ./internal/oauth ./modules/mcpserver`: passed; concurrent
+  redemption/rotation and the SDK principal/scratch/revoke cases were also
+  rerun with the race detector after the final source edits.
+- `FuzzAuthorizationRedirectBinding`: 21,802 executions with two workers in
+  the short fuzz run; no failure. Seed cases also run in the full suite.
+- Negative controls: temporarily removing `mcp:drafts` from the permissions
+  inventory failed `TestMetadataIssuerAndPermissionContract`; marking the
+  scratch save read-only failed the SDK annotation test. Both edits were
+  restored, and the final full suite passed.
+- Code/token tests include wrong/missing/malformed PKCE, exact redirect,
+  client/resource/scope mismatch, code replay/expiry, concurrent code and
+  refresh, reduced scopes, canceled requests, injected insert failure and a
+  deferred-FK commit failure. Normal code and refresh paths pass. Reuse
+  revocation remains visible after closing and reopening the SQLite database and creating a fresh service.
+- CIMD fixtures cover safe TLS fetch/cache/expiry, disallowed hosts, private
+  IPs/DNS, forbidden URL forms, redirects, oversized/mismatched documents and
+  timeout. DCR/body/client caps, grant ownership, current role/version/expiry,
+  consent fresh sign-in/MFA/CSRF/denial/replay and token/audit storage redaction
+  are exercised.
+- `govulncheck ./...`: exit 0, **zero affected imported code** after the update.
+  Verbose output retains one module-only advisory for the unimported,
+  unmaintained `x/crypto/openpgp` package (GO-2026-5932, no fixed version).
+- `golangci-lint run ./...`: **not globally clean**. Five findings remain in
+  unchanged files: account-layout test `offBy1`, weather renderer quick-fix,
+  and unused helper results/parameters in weather, MFA handler and MFA service
+  tests. The changed R1.1 code has no reported lint findings. Baseline locations
+  were checked against HEAD or the existing ignored custom module; these were
+  not silently counted as a passing gate.
+- `CI=true make assets`, `make check-no-absolute-paths`, root and wiki
+  `git diff --check`: passed. Generated SQL/templ sources were regenerated;
+  unrelated SQL generator formatting changes were removed.
+- Owned local preview: `http://127.0.0.1:18080`, disposable database/uploads,
+  no existing site DB touched. Homepage 200; unauthenticated admin 303 to login;
+  signed-in admin 200 in the browser; liveness/readiness 200; both discovery
+  documents 200. The preview remains running.
+- Actual HTTP (protocol 2025-11-25): sign-in → consent → code exchange → MCP
+  initialize/list → verified principal → scratch save/read → token revocation
+  → next request 401 with `resource_metadata`. The SDK tests also negotiate
+  2026-07-28. Captured server logs contained no probe code, access/refresh
+  token, verifier, state or scratch content.
+- Playwright: fresh login leads back to the consent page; consent displays the
+  account/app/scopes and escapes client data; Deny grants nothing; the
+  connected-app card renders and its Revoke action removes the connection.
+  Local screenshots: `output/playwright/r11/consent.png` and `connections.png`.
+  Validation logs and a manifest are under ignored `output/r11-validation/`.
+
+#### Real-account matrix — all pending
+
+No rows below are passes. A local browser and the SDK cannot substitute for
+vendor/account acceptance. Record date, version, OS/browser, account tier,
+transport and actual UI availability when each row is executed.
+
+| Client | Auth | Connect/consent/list/read/scratch/revoke/reconnect | Current blocker |
+|---|---|---|---|
+| Claude Desktop custom connector | OAuth | Unverified | Owner-deployed public HTTPS staging + real account |
+| claude.ai web | OAuth | Unverified | Same; re-check headers UI availability |
+| ChatGPT web | OAuth | Unverified | Same; re-check account app/developer-mode/write capability |
+| Claude Code | OAuth | Unverified | Staging + real client/version |
+| Claude Code | Bearer key | Unverified | Staging + real client/version and key CIDRs |
+| Codex | OAuth | Unverified | Staging + real client/version |
+| Codex | Bearer key | Unverified | Staging + real client/version and key CIDRs |
+
+The staging owner chooses the host and deploys it. Use `docs/oauth.md` for
+canonical issuer, scratch flags, MFA/proxy setup and nginx query redaction.
+Do not claim R1.1 real-client completion or start using scratch results as
+proof of CMS persistence. R1.2–R1.5 still own the production authoring path and
+removal of this temporary probe.
+
+
+### Iteration R1.1C — Staging Plan Aligned with Claude (2026-10-31)
+
+**Scope:** planning update, not a deployment or a new OAuth implementation.
+Read Claude's latest response in the live **oCMS / AI content generation
+feature** desktop conversation. The original shared conversation is a frozen
+snapshot and is not evidence of the latest staging decisions. This file stays
+the canonical plan; incorporate reviewed proposals here without concurrent,
+independent rewrites of its historical notes.
+
+Both proposals choose **Fly.io**, with a new app separate from `ocms-demo`,
+for `https://mcp-staging.ocms.tech`. Keep the compatibility branch on staging. A new VDS is unnecessary for this
+client probe. Verify production nginx during the later authorized rollout to
+the production host.
+
+#### Aligned preparation and owner-run deployment sequence
+
+1. **Isolate and review the source.** The current work is uncommitted on
+   `master`. Prepare a dedicated R1.1 branch (default
+   `codex/phase5-r1.1-oauth`, retaining the repository's Codex prefix; Claude
+   suggested the equivalent `phase5/r1.1-oauth`). The owner invokes the commit
+   workflow and approves the exact commit message before any commit. A push
+   needs its own explicit approval. Deploy only the tested commit of that
+   branch, including the staging config, from a clean checkout. Report the
+   existing five lint findings separately; do not relabel them a clean gate.
+   This proposal supplies no Git or deployment approval.
+2. **Prepare `fly.staging.toml`.** Planned app `ocms-mcp-staging`, region `fra`,
+   one shared CPU with 512 MB RAM initially, one fresh app-scoped 1 GB volume
+   mounted at `/app/data`. Keep DB/uploads there, `kill_timeout = 60`,
+   `force_https = true`, internal port 8080, and liveness/readiness checks.
+   Keep `fly.toml`, the `ocms-demo` app and `.fly/scripts/deploy.sh` unchanged;
+   that script is demo-specific. The new config/commands remain preparation
+   work, not files already delivered by this planning update.
+3. **Keep one persistent instance.** Use `--ha=false` for every staging deploy.
+   The running policy during acceptance is `auto_stop_machines = "stop"`,
+   `auto_start_machines = true`, `min_machines_running = 1`, in primary region
+   `fra`. Verify exactly one Machine and its volume after deployment;
+   `--ha=false` prevents automatic spare creation but does not remove existing
+   Machines. Independent SQLite volumes and process-local scratch entries
+   cannot serve one coherent acceptance session across multiple instances.
+4. **Require the intended environment and MFA.** Set:
+
+   ```dotenv
+   OCMS_ENV=staging
+   OCMS_SITE_URL=https://mcp-staging.ocms.tech
+   OCMS_OAUTH_ENABLED=true
+   OCMS_OAUTH_CIMD_ALLOWED_HOSTS=claude.ai,chatgpt.com
+   OCMS_OAUTH_ALLOW_DCR=false
+   OCMS_OAUTH_ACCESS_TTL=3600
+   OCMS_OAUTH_REFRESH_TTL_DAYS=30
+   OCMS_MCP_SPIKE_TOOLS=true
+   OCMS_AI_DISABLED=false
+   OCMS_DEMO_MODE=false
+   OCMS_REQUIRE_MFA=true
+   OCMS_DO_SEED=false
+   ```
+
+   Seed once with a controlled first-boot override, establish non-default
+   credentials before public access, then keep seeding off. Enable the MCP
+   module and use a dedicated editor account with MFA. First-boot bootstrap
+   instructions must cover these steps rather than expose seeded passwords.
+   Content is fresh seed data plus a reviewed content-only export, never a
+   production user/session/OAuth database.
+5. **Owner-held secrets.** The owner sets `OCMS_SESSION_SECRET` and
+   `OCMS_MFA_KEY` through Fly secrets, using distinct random values of at least
+   32 bytes. They stay out of config files, repository history and transcripts.
+   The agent prepares commands without secret values; the owner supplies them.
+6. **Verify actual proxy behavior.** Observe a controlled non-secret request's
+   original peer and relevant IP headers on the deployed Machine. oCMS trusts
+   `X-Forwarded-For` only from configured peers, then chooses the first
+   untrusted hop from the right; it does not consume `Fly-Client-IP`.
+   Configure `OCMS_TRUSTED_PROXIES` from the verified peer/proxy chain and check
+   the real external client reaches IP rate limits and auth events. Include
+   spoofed forwarding-header input and a repeat check after redeploy. One
+   observed peer alone is not proof that the whole forwarded chain is correct.
+   Do not guess broad trust CIDRs or silently switch to another header. If
+   current middleware cannot resolve it safely, a scoped, tested fix is a
+   staging acceptance prerequisite.
+7. **Verify Fly logs.** The nginx example in `docs/oauth.md` applies to the
+   later nginx deployment; Fly uses its own proxy/TLS path. Inspect
+   `fly logs` after one complete sign-in, token exchange and MCP call. No raw
+   code, state, verifier, access/refresh credential or scratch body may appear.
+   Keep body/header debug logging off and record the check without persisting
+   the probe's secrets.
+8. **Attach the hostname; owner changes DNS.** Prepare the explicit-app
+   certificate commands. Obtain the actual DNS target and verification
+   records from Fly's certificate setup output; the ordinary app hostname is
+   a proposal, not an authoritative CNAME value. The owner applies DNS for
+   `mcp-staging.ocms.tech`. Verify certificate, canonical issuer and resource
+   metadata at that hostname before testing clients.
+9. **Owner deploys and acceptance is recorded.** Deliver exact bootstrap,
+   secrets, app/volume, domain, deploy and verification commands with the
+   staging config, leaving their remote execution to the owner. The deploy
+   invocation must explicitly select `fly.staging.toml`, app
+   `ocms-mcp-staging` and `--ha=false`. Run the full R1.1 matrix: Claude Desktop,
+   claude.ai, ChatGPT web, Claude Code and Codex; test both OAuth and bearer
+   modes for the CLI clients. Record client/version/tier/date, commit/config,
+   connect/consent/list/read, scratch save/read, revocation failure and
+   reconnect. Re-check GUI capabilities and actual CIMD URLs/auth methods.
+   Keep unsupported `private_key_jwt` and other grant methods disabled;
+   diagnose a token-step failure before changing client registration policy.
+   **Do not start R1.2 until all rows are recorded and required passes or an
+   explicit owner scope decision resolve pending acceptance.**
+
+#### Clarifications retained alongside Claude's proposal
+
+- Use the standard `codex/` prefix when creating the branch unless the owner
+  explicitly chooses Claude's alternative name. Branch planning does not
+  authorize a commit, push or deployment.
+- Bootstrap must replace known seed credentials before public exposure.
+- Fly's current custom-domain docs specify a per-app certificate DNS target;
+  use the returned value rather than assume `ocms-mcp-staging.fly.dev`.
+- Proxy validation must cover the complete forwarded chain and spoofed input,
+  not merely a guessed address list. The actual Fly peer ranges and observed
+  chain remain pending until staging exists.
+- Add the expired/revoked OAuth-row cleanup job in R1.7, retaining spent-refresh
+  evidence for active families. This is release work, not a prerequisite to
+  collecting the bounded R1.1 compatibility results.
+
+**Verification for this plan update:** manually traced the proposed steps
+through current `fly.toml`, the demo-only deploy script, the shared-binary
+workflow docs, configuration env tags and `GetClientIP`. Checked the installed
+Fly CLI help and current official docs for `--config`, `--app`, `--ha`,
+minimum-running behavior, kill timeout, headers and certificate DNS setup.
+The executable staging config, bootstrap/proxy/log checks, provisioning,
+secrets, DNS and all real-account matrix rows remain unexecuted. No runtime
+source was changed and earlier R1.1 runtime passes remain historical evidence;
+they do not validate this remote deployment sequence.
+
+Sources checked 2026-10-31:
+[Fly configuration](https://docs.fly.io/reference/configuration),
+[Fly deploy options](https://docs.fly.io/flyctl/deploy),
+[Fly request headers](https://docs.fly.io/networking/request-headers),
+[Fly custom domains](https://docs.fly.io/networking/custom-domain),
+and [Fly volumes](https://docs.fly.io/volumes/overview).
+
+### Iteration R1.1D — Fly Deployment Files Prepared (2026-10-31)
+
+**Scope:** the owner requested staging configuration and exact deploy commands,
+with no commit, push or deployment. Prepared these as local working-tree files:
+
+- `fly.staging.toml`: `ocms-mcp-staging`, `fra`, one shared CPU/512 MB, one 1 GB
+  volume, HTTPS, one running Machine during acceptance, routing readiness check
+  plus named health checks, MFA required, OAuth/scratch on and seeding/demo/DCR
+  off. Existing API-key expiry/source-CIDR and outbound HTTPS controls stay on.
+- `fly.staging.bootstrap.toml`: same app/image/volume, **no public service**,
+  seeding on, MFA required, OAuth/scratch off. Development-mode cookies work
+  through the owner's loopback-bound private Fly tunnel. Replace seeded admin
+  credentials, enroll MFA and prepare the editor before public promotion.
+- `docs/mcp-staging-fly.md`: exact owner-run commands for a reviewed commit
+  archive, app/volume creation, hidden secret entry, private bootstrap, domain
+  setup, promotion of the same image, proxy/log verification and client checks.
+  Every deploy explicitly selects its app/config, `--ha=false` and rolling
+  strategy. Subsequent updates use only the public profile. Documentation is
+  mirrored locally in `wiki/MCP-Staging-Fly.md` and `wiki/MCP-OAuth.md`.
+- Configuration tests reuse the demo env reader and check both profiles, MFA
+  key validation, persistent state, private bootstrap and required deploy flags.
+  The existing demo config and deployment script were not changed.
+
+**Direct local verification:** both profiles pass Fly's strict validator; all
+14 Bash blocks pass syntax and ShellCheck. Disposable command fixtures reject
+master/detached/dirty inputs before any provisioning step, and the clean-branch
+fixture archives only its source and validates both profiles. This fixture uses
+stubbed Git/test commands; it is not an actual commit or remote deployment.
+Negative controls prove the tests reject public bootstrap routing, disabled
+MFA, an omitted `--ha=false`, and an omitted routing readiness check; restored
+files pass. A native binary with disposable SQLite exercised private initial
+login, MFA enrollment, credential replacement, old-login rejection, MCP module
+activation and restart with the public profile. The account, MFA enrollment and
+module state persisted; secure-cookie behavior, health, issuer/resource metadata
+and unauthenticated MCP challenge were checked. No full public OAuth/client
+acceptance is claimed by this loopback test.
+
+**Baseline checks:** the uncached full Go test gate, vet, staticcheck, errcheck,
+assets build and Linux amd64 CGO-disabled build pass. Govulncheck reports zero
+affected vulnerabilities, with one advisory confined to an unused required
+module. Golangci-lint still reports the same five pre-existing findings in
+unchanged files; this is not a clean lint gate. Whitespace and absolute-path
+checks pass. Local evidence is under `output/r11-validation/fly-staging/`.
+
+**Remaining remote evidence:** Docker is installed but its daemon is stopped,
+so no container image was built locally. Fly app-name/region availability,
+remote build/runtime, actual ingress peers/forwarded chain, DNS/certificate
+issuance, public sign-in/logs and every real-client matrix row remain pending.
+Observe and verify proxy addresses before setting `OCMS_TRUSTED_PROXIES`; do
+not guess them. The runbook's source gate intentionally rejects the current
+dirty `master`; branch/commit work needs the later owner-directed workflow.
+No app, volume, secret or DNS record was created or changed; no Git history,
+remote or deployment mutation occurred. R1.2 remains gated on real acceptance.

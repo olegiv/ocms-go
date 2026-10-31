@@ -7651,6 +7651,91 @@
             "id": "frontend.reads",
             "message": "reads",
             "translation": "reads"
+        },
+        {
+            "id": "oauth.consent_title",
+            "message": "Connect an AI app",
+            "translation": "Connect an AI app"
+        },
+        {
+            "id": "oauth.consent_description",
+            "message": "Review access to your oCMS account. Publishing is never granted.",
+            "translation": "Review access to your oCMS account. Publishing is never granted."
+        },
+        {
+            "id": "oauth.client_id",
+            "message": "Registered client ID",
+            "translation": "Registered client ID"
+        },
+        {
+            "id": "oauth.client_host",
+            "message": "Client metadata host",
+            "translation": "Client metadata host"
+        },
+        {
+            "id": "oauth.redirect_host",
+            "message": "Return address host",
+            "translation": "Return address host"
+        },
+        {
+            "id": "oauth.permissions",
+            "message": "Requested permissions",
+            "translation": "Requested permissions"
+        },
+        {
+            "id": "oauth.registered_name_note",
+            "message": "The app name is supplied by its registration. Check the client ID and return address.",
+            "translation": "The app name is supplied by its registration. Check the client ID and return address."
+        },
+        {
+            "id": "oauth.allow",
+            "message": "Allow access",
+            "translation": "Allow access"
+        },
+        {
+            "id": "oauth.deny",
+            "message": "Deny",
+            "translation": "Deny"
+        },
+        {
+            "id": "oauth.connections",
+            "message": "Connected AI apps",
+            "translation": "Connected AI apps"
+        },
+        {
+            "id": "oauth.no_connections",
+            "message": "No active AI app connections.",
+            "translation": "No active AI app connections."
+        },
+        {
+            "id": "oauth.revoke",
+            "message": "Revoke access",
+            "translation": "Revoke access"
+        },
+        {
+            "id": "oauth.scope.mcp:access",
+            "message": "Read published site content",
+            "translation": "Read published site content"
+        },
+        {
+            "id": "oauth.scope.mcp:drafts",
+            "message": "Use your AI-editable drafts (currently development scratch tools only)",
+            "translation": "Use your AI-editable drafts (currently development scratch tools only)"
+        },
+        {
+            "id": "oauth.scope.pages:read",
+            "message": "Read unpublished pages when the site permits it",
+            "translation": "Read unpublished pages when the site permits it"
+        },
+        {
+            "id": "api_keys.perm_mcp_drafts",
+            "message": "AI-editable drafts; cannot publish or delete",
+            "translation": "AI-editable drafts; cannot publish or delete"
+        },
+        {
+            "id": "oauth.local_registration",
+            "message": "Registered on this site; no client metadata host",
+            "translation": "Registered on this site; no client metadata host"
         }
     ]
 }

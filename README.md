@@ -138,6 +138,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 - **Official Go SDK**: Built on `modelcontextprotocol/go-sdk`, protocol versions 2024-11-05 through 2026-07-28
 - **Read-only tools**: Search, list and read pages (HTML or Markdown), media, tags and categories, with the same visibility rules as REST v2
 - **Opt-in and key-gated**: Inactive until enabled; API keys need the `mcp:access` permission and every API key policy applies
+- **Optional OAuth**: Fresh browser sign-in, MFA, scoped consent and revocation for MCP apps; off by default
 - **Drafts hidden by default**: Exposed only when the admin allows it and the key holds `pages:read`
 - **Discoverable**: Advertised in `/.well-known/mcp/server-card.json` while active
 
@@ -335,6 +336,13 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 | `OCMS_CUSTOM_DIR` | Directory for custom themes (custom modules are compiled in) | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
 | `OCMS_SITE_URL` | Full site URL written into site config on startup (overrides DB/admin setting). Required for RSS/Atom feeds, the sitemap and agent-discovery documents, which answer 503 while it is unset. Must be scheme and host only, e.g. `https://example.com` — a path, query, fragment, credentials or an out-of-range port fails startup, because routes are served from the root | - | No |
+| `OCMS_OAUTH_ENABLED` | Enable the MCP OAuth server; requires canonical OCMS_SITE_URL (HTTPS outside development loopback) | `false` | No |
+| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | Exact HTTPS client metadata host allowlist | `claude.ai,chatgpt.com` | No |
+| `OCMS_OAUTH_ALLOW_DCR` | Allow bounded public-client dynamic registration | `false` | No |
+| `OCMS_OAUTH_ACCESS_TTL` | OAuth access lifetime in seconds (60–86400) | `3600` | No |
+| `OCMS_OAUTH_REFRESH_TTL_DAYS` | Absolute rotating refresh-family lifetime (1–90 days) | `30` | No |
+| `OCMS_MCP_SPIKE_TOOLS` | Temporary non-publishable scratch tools; development/staging only, refused in production/demo | `false` | No |
+| `OCMS_AI_DISABLED` | Disable draft/scratch tools while retaining normal reads | `false` | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
 | `OCMS_CACHE_TTL` | TTL in seconds for the Redis (or fallback) cache, which the caches do not use yet; the in-memory caches have fixed TTLs | `3600` | No |
 | `OCMS_REDIS_URL` | Redis URL; the connection shows in the cache admin, but the caches stay in memory per process | - | No |
@@ -712,7 +720,12 @@ claude mcp add --transport http ocms https://example.com/api/mcp \
 | `list_tags` / `get_tag` | Tags with usage counts |
 | `list_categories` / `get_category` | Category tree or flat list |
 
-All tools are read-only. See [docs/mcp-module.md](docs/mcp-module.md) for authentication, visibility rules, limits, logging, and security notes.
+CMS tools are read-only. An optional development/staging probe adds temporary,
+non-publishable scratch drafts. Set `OCMS_OAUTH_ENABLED=true` and a canonical
+HTTPS `OCMS_SITE_URL` to offer browser authorization alongside API keys.
+Connections can be revoked at `/account/security`. Real Claude Desktop and
+ChatGPT account acceptance remains pending; see [OAuth setup and staging checks](docs/oauth.md).
+See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.
 
 ## Theme Development
 
