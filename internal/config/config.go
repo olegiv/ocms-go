@@ -49,13 +49,14 @@ type Config struct {
 	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
 	SiteURL       string `env:"OCMS_SITE_URL"` // Full site URL written into site config on startup (overrides the admin setting)
 
-	OAuthEnabled          bool   `env:"OCMS_OAUTH_ENABLED" envDefault:"false"`
-	OAuthCIMDAllowedHosts string `env:"OCMS_OAUTH_CIMD_ALLOWED_HOSTS" envDefault:"claude.ai,chatgpt.com"`
-	OAuthAllowDCR         bool   `env:"OCMS_OAUTH_ALLOW_DCR" envDefault:"false"`
-	OAuthAccessTTL        int    `env:"OCMS_OAUTH_ACCESS_TTL" envDefault:"3600"`
-	OAuthRefreshTTLDays   int    `env:"OCMS_OAUTH_REFRESH_TTL_DAYS" envDefault:"30"`
-	MCPSpikeTools         bool   `env:"OCMS_MCP_SPIKE_TOOLS" envDefault:"false"`
-	AIDisabled            bool   `env:"OCMS_AI_DISABLED" envDefault:"false"`
+	OAuthEnabled              bool   `env:"OCMS_OAUTH_ENABLED" envDefault:"false"`
+	OAuthCIMDAllowedHosts     string `env:"OCMS_OAUTH_CIMD_ALLOWED_HOSTS" envDefault:"claude.ai,chatgpt.com"`
+	OAuthPreRegisteredClients string `env:"OCMS_OAUTH_PRE_REGISTERED_CLIENTS"`
+	OAuthAllowDCR             bool   `env:"OCMS_OAUTH_ALLOW_DCR" envDefault:"false"`
+	OAuthAccessTTL            int    `env:"OCMS_OAUTH_ACCESS_TTL" envDefault:"3600"`
+	OAuthRefreshTTLDays       int    `env:"OCMS_OAUTH_REFRESH_TTL_DAYS" envDefault:"30"`
+	MCPSpikeTools             bool   `env:"OCMS_MCP_SPIKE_TOOLS" envDefault:"false"`
+	AIDisabled                bool   `env:"OCMS_AI_DISABLED" envDefault:"false"`
 
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching

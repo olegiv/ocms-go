@@ -1,6 +1,6 @@
 # Deploy MCP staging to Fly.io
 
-Owner-run procedure for `https://mcp-staging.ocms.tech`, app
+Owner-run procedure for `https://ocms-mcp-staging.fly.dev`, app
 `ocms-mcp-staging`, region `fra`. The commands below create resources and
 deploy when **you** run them. Preparing this guide does not execute them.
 The existing `ocms-demo`, `fly.toml`, demo deployment script and the production host are
@@ -18,6 +18,15 @@ cookies. Dual-stack `[::]:8080` supports both Fly Proxy and the private 6PN
 tunnel. There is no release command: oCMS migrates SQLite on startup on the
 Machine that actually mounts the volume. The public service's readiness check
 gates request routing; named top-level checks provide additional monitoring.
+Use the app's Fly-managed HTTPS hostname for R1.1. A custom domain is optional;
+this procedure requires no changes to the `ocms.tech` DNS zone.
+
+Both profiles include an explicit, owner-reviewed public Claude registration
+in `OCMS_OAUTH_PRE_REGISTERED_CLIENTS`. The Fly Machine received HTTP 403
+when fetching Claude's metadata URL. The pin supplies only the verified
+client identity and exact callback; login, MFA, S256 PKCE, consent and grant
+revocation remain required. DCR stays disabled. Review the public identity
+before changing the pin; see [OAuth client registration](oauth.md#client-metadata-and-registration).
 
 ## 1. Prepare the reviewed source
 
@@ -45,7 +54,7 @@ command -v jq
 command -v rg
 
 export STAGING_APP=ocms-mcp-staging
-export STAGING_HOST=mcp-staging.ocms.tech
+export STAGING_HOST=ocms-mcp-staging.fly.dev
 export STAGING_ORIGIN="https://$STAGING_HOST"
 STAGING_BRANCH="$(git branch --show-current)"
 export STAGING_BRANCH
@@ -190,23 +199,26 @@ Both accounts and the MFA enrollment persist on the volume through promotion.
 Finish this bootstrap before the next deploy. Close the tunnel with Ctrl-C
 when you have finished; it is only a local connection.
 
-## 5. Attach the hostname and prepare DNS
+If the owner defers the dedicated editor for the bounded R1.1 probe, record
+that decision and the actual admin role in the acceptance matrix. The admin
+must still have non-default credentials and MFA. Leave editor-role manual
+coverage unverified; this exception does not authorize broader MCP scopes or
+CMS writes.
+
+## 5. Prepare Fly public ingress
 
 Back in the first Bash session:
 
 ```bash
 flyctl ips allocate-v4 --shared --app "$STAGING_APP"
 flyctl ips allocate-v6 --app "$STAGING_APP"
-flyctl certs add "$STAGING_HOST" --app "$STAGING_APP"
-flyctl certs setup "$STAGING_HOST" --app "$STAGING_APP"
+flyctl ips list --app "$STAGING_APP"
 ```
 
-In your DNS GUI, apply the **actual records returned by `certs setup`** for
-`mcp-staging.ocms.tech`, including any ownership/challenge records. Replace
-the existing staging subdomain's conflicting A/AAAA records if choosing the
-supplied CNAME. Keep the apex `ocms.tech` records unchanged. Use direct DNS
-routing for this initial Fly acceptance pass. Certificate validation may
-remain pending until the public service is running.
+Fly manages DNS and TLS for `ocms-mcp-staging.fly.dev`. Do not add a custom
+certificate for that hostname or change the `ocms.tech` zone. These address
+allocation commands are for a new app; retain the existing addresses on later
+deployments. Public routing begins when the public profile is deployed.
 
 ## 6. Promote the same image to public staging
 
@@ -223,13 +235,12 @@ flyctl machines list --app "$STAGING_APP"
 test "$(flyctl machines list --quiet --app "$STAGING_APP" | wc -w | tr -d '[:space:]')" -eq 1
 flyctl volumes list --app "$STAGING_APP"
 flyctl checks list --app "$STAGING_APP"
-flyctl certs check "$STAGING_HOST" --app "$STAGING_APP"
 flyctl ssh console --app "$STAGING_APP" --command '/app/ocms -version'
 ```
 
 Confirm the original volume remains attached, checks pass and the certificate
-is ready. Re-run certificate/check commands while provisioning completes;
-never bypass certificate verification. Then:
+is trusted at the Fly hostname. Re-run health checks while provisioning
+completes; never bypass certificate verification. Then:
 
 ```bash
 curl --fail --silent --show-error "$STAGING_ORIGIN/health/live"
@@ -322,7 +333,7 @@ later nginx verification on the production host.
 
 ## 8. Run and record the client matrix
 
-Use `https://mcp-staging.ocms.tech/api/mcp`. For Claude Desktop, claude.ai,
+Use `https://ocms-mcp-staging.fly.dev/api/mcp`. For Claude Desktop, claude.ai,
 ChatGPT web, Claude Code and Codex, record date, client/version, account tier,
 OS/browser, commit/image, settings and actual GUI availability. CLI clients
 also need their bearer-key mode checked: create expiring `mcp:access` keys
@@ -361,6 +372,20 @@ on the volume. Retain the tested commit/image references for comparison and
 recovery planning. Do not blindly roll an older binary back across a database
 migration.
 
+## Optional custom hostname later
+
+Moving to `mcp-staging.ocms.tech` is a separate canonical-issuer change.
+Review and test the new `OCMS_SITE_URL` in both profiles, attach the custom
+hostname to this app, and use the actual DNS/verification records returned by
+`flyctl certs setup`. Deploy only the public profile and reconnect clients to
+the new issuer. Retain the existing secrets and volume. The original custom
+hostname is deferred for R1.1; its DNS is outside the current deployment.
+
+A configuration-only change may reuse an already reviewed image after
+validating and recording the exact profile delta. It does not rebuild source
+or authorize a Git commit/push. Source updates still use the clean commit
+archive procedure above.
+
 ## Validation and scope
 
 The prepared profiles are checked with Fly's strict config validator and
@@ -371,5 +396,5 @@ help and the official [configuration](https://docs.fly.io/reference/configuratio
 [staged secrets](https://docs.fly.io/flyctl/secrets-import) and
 [deploy](https://docs.fly.io/flyctl/deploy) documentation.
 App-name/region capacity, remote image builds, bootstrap on Fly, actual proxy
-addresses, DNS/certificate issuance and real-client acceptance are verified
+addresses, public TLS and real-client acceptance are verified
 when the owner runs the procedure; preparation is not evidence of those passes.

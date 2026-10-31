@@ -104,9 +104,31 @@ The default hosts cover the planned Claude and ChatGPT CIMD clients. This is
 an allowlist, not proof of account compatibility. Add another exact hostname
 only for a client you intend to support. DCR is a separate opt-in fallback for
 public clients; it creates a random client ID, no secret, and a ninety-day
-registration. Both paths accept only code/refresh grant metadata. Public
-protocol routes use the application's IP rate limiter; MCP adds its existing
-request/body/concurrency guards and a per-user OAuth limit.
+registration. DCR accepts only code/refresh grant metadata. CIMD documents
+must advertise authorization code support when `grant_types` is present;
+additional advertised grant types do not enable those flows in oCMS. Both
+paths still require public-client authentication and code response types.
+Public protocol routes use the application's IP rate limiter; MCP adds its
+existing request/body/concurrency guards and a per-user OAuth limit.
+
+`OCMS_OAUTH_PRE_REGISTERED_CLIENTS` optionally supplies a JSON array of
+owner-reviewed public client metadata. It defaults to empty, accepts at most
+20 documents within 64 KiB, and applies the same client-ID host allowlist,
+HTTPS identifier, callback, code-flow and `none` authentication checks.
+Invalid configuration refuses OAuth startup. Each exact configured identity
+uses that registration instead of a live metadata fetch; unknown identities
+still use normal discovery. No client gains account access from registration.
+
+Both staging profiles pin Claude's public identity and its exact
+`https://claude.ai/api/mcp/auth_callback` callback, reviewed on 2026-10-31.
+Live metadata retrieval returned HTTP 403 from the Fly Machine with oCMS's
+Go transport. This explicit registration follows
+[CIMD pre-registration](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document#section-7.2);
+it preserves S256, fresh login/MFA, consent, scopes and revocation, with DCR
+disabled. Update the registration only after reviewing the provider's public
+identity. Registrations use the existing fifteen-minute SQLite metadata
+cache; removing a pin resumes live discovery after that cache expires.
+Revoke account grants separately to remove existing access immediately.
 
 ## Temporary client-write probe
 
@@ -140,7 +162,7 @@ connected-client settings.
 
 ### Fly.io staging preparation
 
-The prepared R1.1 target is `https://mcp-staging.ocms.tech`, with a new Fly app
+The R1.1 target is `https://ocms-mcp-staging.fly.dev`, with a separate Fly app
 `ocms-mcp-staging` in `fra`. The dedicated `fly.staging.toml` and private
 `fly.staging.bootstrap.toml` are accompanied by the
 [exact owner-run deployment procedure](mcp-staging-fly.md). The existing
@@ -162,7 +184,7 @@ The staging environment must include:
 
 ```dotenv
 OCMS_ENV=staging
-OCMS_SITE_URL=https://mcp-staging.ocms.tech
+OCMS_SITE_URL=https://ocms-mcp-staging.fly.dev
 OCMS_OAUTH_ENABLED=true
 OCMS_OAUTH_CIMD_ALLOWED_HOSTS=claude.ai,chatgpt.com
 OCMS_OAUTH_ALLOW_DCR=false
@@ -184,14 +206,21 @@ dedicated editor privately. Then deploy the same image and volume with
 seed data and a reviewed content-only export; keep production
 user/session/token databases out of staging.
 
+The owner has deferred the editor account for this bounded R1.1 probe. Record
+the actual admin role in client results and leave manual editor-role coverage
+unverified. Required MFA, non-default credentials and the scope/CMS-write
+restrictions still apply.
+
 The owner sets `OCMS_SESSION_SECRET` and `OCMS_MFA_KEY` through Fly secrets;
 they must be distinct random values of at least 32 bytes. Keep them out of
 TOML, repository files, shared command transcripts and logs.
 
-Fly Proxy provides the public HTTPS endpoint. Attach the custom hostname to
-the staging app and use the DNS target/verification records returned by
-`fly certs setup`; the owner applies DNS. Do not assume the ordinary app
-hostname is the required CNAME target. See
+Fly Proxy provides HTTPS at the app's `fly.dev` hostname, so R1.1 requires no
+custom-domain DNS or certificate setup. Keep `OCMS_SITE_URL`, authorization
+server issuer, protected resource and client endpoint on that same origin.
+The original `mcp-staging.ocms.tech` hostname is deferred. If adopting it
+later, review the issuer change and use the actual DNS/verification records
+returned by `fly certs setup`; reconnect clients after the switch. See
 [custom-domain setup](https://docs.fly.io/networking/custom-domain).
 
 Before client acceptance, verify both deployment-specific controls:
@@ -210,13 +239,16 @@ Before client acceptance, verify both deployment-specific controls:
   content must be absent. Keep HTTP body/header debug logging disabled.
   Record the result without copying secrets into the evidence.
 
-The runbook contains exact owner-run bootstrap, secrets, domain, deploy and
+The runbook contains exact owner-run bootstrap, secrets, ingress, deploy and
 verification commands. It builds from a clean commit archive to exclude
 ignored local modules and working files. Branch/commit handling follows
 `AGENTS.md`; preparing files is not commit, push or deployment approval.
-Deploy only a clean, tested commit of the R1.1 branch, with the explicit
-staging config/app and `--ha=false` supplied to `fly deploy`. The owner performs
-provisioning, secret entry, DNS and deployment.
+Build images only from a clean, tested commit of the R1.1 branch, with the
+explicit staging config/app and `--ha=false` supplied to `fly deploy`.
+For configuration-only changes, validate and record the exact profile delta
+and retain the reviewed image; this does not authorize a new source build or
+Git mutation. Provisioning, secret handling and deployment require owner
+authorization; preparation alone supplies none.
 
 ### nginx deployments
 

@@ -41,9 +41,12 @@ type Options struct {
 	Issuer       string
 	Development  bool
 	AllowedHosts []string
-	AllowDCR     bool
-	AccessTTL    time.Duration
-	RefreshTTL   time.Duration
+	// PreRegisteredClients contains owner-reviewed public CIMD documents as a
+	// JSON array. Empty keeps live metadata discovery as the only CIMD source.
+	PreRegisteredClients string
+	AllowDCR             bool
+	AccessTTL            time.Duration
+	RefreshTTL           time.Duration
 }
 
 // Principal is the currently authorized account and grant, never agent-supplied identity.
@@ -88,6 +91,9 @@ func New(db *sql.DB, options Options) (*Service, error) {
 	}
 	s := &Service{db: db, q: store.New(db), options: options, now: time.Now}
 	s.clients = newClientResolver(s)
+	if err := s.clients.loadPreRegistered(options.PreRegisteredClients); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 

@@ -600,6 +600,7 @@ type PageDraft struct {
 | `OCMS_AI_DISABLED` | R1 | `false` | Kill switch: disables draft tools (read tools stay) |
 | `OCMS_OAUTH_ENABLED` | R1 | `false` | OAuth 2.1 authorization server for `/api/mcp`; requires `OCMS_SITE_URL` (the issuer) |
 | `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | R1 | seeded in R1.1 with the verified client hosts (`claude.ai`, ChatGPT's host) | Hosts allowed to serve Client ID Metadata Documents |
+| `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | R1.1 | empty | Owner-reviewed public CIMD metadata JSON array; at most 20 documents / 64 KiB; no account authorization |
 | `OCMS_OAUTH_ALLOW_DCR` | R1 | `false` | Allow Dynamic Client Registration (rate-limited) |
 | `OCMS_OAUTH_ACCESS_TTL` | R1 | `3600` | Access token lifetime (s) |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | R1 | `30` | Refresh lifetime (rotating) |
@@ -673,7 +674,7 @@ spike writes isolated scratch data; actual CMS draft persistence is first proven
   - these tools have no access to page, translation, media or preview-link writes and return no admin
     page URL. They test client write discovery, approval, principal propagation and revocation;
   - remove both tools and the flag in R1.5. Their results are not evidence that CMS persistence works.
-- **Staging:** the planned target is `https://mcp-staging.ocms.tech` on a new Fly app,
+- **Staging:** the target is `https://ocms-mcp-staging.fly.dev` on a separate Fly app,
   `ocms-mcp-staging` in `fra`, separate from `ocms-demo` and the production host.
   Prepared `fly.staging.toml`, a private `fly.staging.bootstrap.toml` and exact owner-run commands
   in `docs/mcp-staging-fly.md`, without changing `fly.toml` or the demo deploy script.
@@ -681,7 +682,9 @@ spike writes isolated scratch data; actual CMS draft persistence is first proven
   `OCMS_REQUIRE_MFA=true`, DCR off and demo mode off. Verify Fly proxy/client IP handling and
   sanitized Fly logs before the client matrix. R1.1C in Notes records the aligned plan and R1.1D
   records the prepared files/local evidence. `docs/oauth.md` separates Fly and nginx instructions.
-  I set secrets/DNS and run the deployment.
+  The owner authorized provisioning/deployment and retained fresh secrets in macOS Keychain.
+  The Fly hostname replaces the original custom domain for R1.1, with no DNS change. The owner
+  deferred editor creation; record the actual admin role and leave editor-role acceptance pending.
 - **Manual checks, recorded as a matrix in Notes:** for Claude Desktop (custom connector), claude.ai
   web, ChatGPT web (URL and/or tunnel), Claude Code (OAuth and bearer) and Codex (OAuth and bearer):
   - connect;
@@ -1903,3 +1906,83 @@ not guess them. The runbook's source gate intentionally rejects the current
 dirty `master`; branch/commit work needs the later owner-directed workflow.
 No app, volume, secret or DNS record was created or changed; no Git history,
 remote or deployment mutation occurred. R1.2 remains gated on real acceptance.
+
+### Iteration R1.1E — Fly Staging Running (2026-10-31)
+
+The owner authorized deployment and selected the existing Fly hostname,
+`https://ocms-mcp-staging.fly.dev`, instead of changing `ocms.tech` DNS.
+Both staging profiles and the runbook now use that canonical origin. The
+earlier custom-domain plan in R1.1C/R1.1D is historical; its certificate request
+is deferred and its DNS was not changed by this work.
+
+The `ocms-mcp-staging` app runs in `ocms-tech`, region `fra`, on one shared
+CPU/512 MB Machine with one encrypted 1 GB volume. Its immutable image was
+built from commit `342f63e0c5666c6c811cf3cf5a256440c394cab6`. Public promotion
+and later configuration updates reused that image and volume. The hostname
+update changed only `OCMS_SITE_URL` in the two profiles; no runtime Go source
+was changed or rebuilt. New hostname/configuration documentation remains
+uncommitted pending an explicit commit instruction.
+
+Private bootstrap was completed with admin MFA and rotated credentials;
+the old default login was verified to fail. The owner retained recovery codes
+and approved keeping the fresh session/MFA sealing keys in macOS login
+Keychain, with values sent directly to Fly. Neither key was regenerated during
+promotion. The owner skipped editor creation: this probe uses the admin role,
+and manual editor-role coverage remains unverified.
+
+MCP is enabled. Two disposable context fixtures were saved: published page
+`r11-published-context-probe` and draft `r11-draft-context-probe`. The published
+body was verified over HTTP; the draft returns 404 to unauthenticated callers.
+The published page also rendered successfully in a browser over Fly HTTPS.
+
+Verified on the deployed Fly hostname:
+
+- TLS verification, liveness, readiness and the public routing check pass.
+  The app still has one Machine and the original volume/image.
+- OAuth discovery now advertises the Fly origin for issuer, authorization,
+  token and revocation URLs. Protected-resource metadata and the unauthenticated
+  MCP 401 metadata challenge use the same origin. DCR remains disabled.
+- Required MFA, staging mode, demo/seeding off and guarded scratch configuration
+  remain intact. Tests and strict validation passed for the hostname change;
+  assets were rebuilt and all 14 runbook Bash blocks passed syntax/ShellCheck.
+- One exact, nonce-marked health request was observed to identify the real
+  Fly socket peer and forwarded chain. Its packet filter was compiled and
+  verified before capture; no cookie or authorization header was captured and
+  no raw packet was retained. Only the verified peer and app-assigned addresses
+  were configured in `OCMS_TRUSTED_PROXIES`.
+- Normal IPv4 requests, spoofed `X-Forwarded-For`/`X-Real-IP` input and a repeat
+  after deployment all resolved to the observed client address. Temporary
+  packet-capture tooling and its filter were removed.
+
+Evidence is under `output/r11-validation/fly-staging/deployment/`.
+Successful public sign-in/auth-event IP verification, a full OAuth exchange
+and MCP-call log check, IPv6 client-path coverage and the real-client matrix
+remain pending. Do not label this deployment a completed R1.1 acceptance or
+start R1.2 without the recorded client results and required scope decisions.
+
+
+### R1.1F — Claude connection blockers (2026-10-31)
+
+The actual Claude Desktop 4.4212.0 / Pro connection opened authorization and
+received `invalid_client`; discovery alone was not an acceptance pass.
+Claude's public CIMD advertises JWT bearer in addition to code and refresh.
+The original validator rejected the document. A captured-metadata regression
+reproduced the failure, then passed after separating CIMD capability metadata
+from strict DCR registration. JWT token requests remain unsupported.
+
+The Fly Machine also received HTTP 403 from Claude metadata retrieval using
+the same Go HTTP transport settings and SSRF dialer as oCMS. A local fix to
+metadata validation alone cannot clear that deployed blocker. The temporary
+probe binary was removed after recording its status.
+
+An opt-in, bounded owner-reviewed public registration is now prepared via
+`OCMS_OAUTH_PRE_REGISTERED_CLIENTS`, following CIMD pre-registration. Both
+staging profiles pin the verified Claude client ID and callback. Exact-host,
+public-client, S256, fresh MFA/login, consent and scope/revocation safeguards
+remain; DCR remains off. Configuration defaults empty elsewhere. Pins are
+validated at startup and use the existing fifteen-minute SQLite client cache.
+
+This follow-up is local and uncommitted. A newly reviewed image and explicit
+commit approval are required before staging can use it. Real-client tool
+listing, reads, scratch save/read, revocation/reconnect, successful public MFA
+and complete exchange log verification remain pending after deployment.

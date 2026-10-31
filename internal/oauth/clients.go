@@ -83,9 +83,10 @@ func (s clientStorage) GetByID(_ context.Context, id string) (lib.ClientInfo, er
 }
 
 type clientResolver struct {
-	service *Service
-	http    *http.Client
-	group   singleflight.Group
+	service       *Service
+	http          *http.Client
+	group         singleflight.Group
+	preRegistered map[string]registeredClient
 }
 
 func newClientResolver(s *Service) *clientResolver {
@@ -108,6 +109,19 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 		return registeredClient{}, problem("invalid_client")
 	}
 	cached, err := c.service.q.GetOAuthClient(ctx, id)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return registeredClient{}, problem("server_error")
+	}
+	if client, ok := c.preRegistered[id]; ok {
+		redirects, _ := json.Marshal(client.Redirects)
+		if err != nil || cached.Source != "cimd" || cached.Name != client.Name ||
+			cached.RedirectUris != string(redirects) || cached.ExpiresAt <= c.service.now().Unix() {
+			if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
+				return registeredClient{}, err
+			}
+		}
+		return client, nil
+	}
 	if err == nil && cached.ExpiresAt > c.service.now().Unix() {
 		var redirects []string
 		if json.Unmarshal([]byte(cached.RedirectUris), &redirects) != nil {
@@ -115,16 +129,7 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 		}
 		return registeredClient{ID: id, Name: cached.Name, Redirects: redirects, AuthMethod: "none"}, nil
 	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return registeredClient{}, problem("server_error")
-	}
-	u, err := url.Parse(id)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" ||
-		u.Fragment != "" || u.Path == "" || (u.Port() != "" && u.Port() != "443") ||
-		!slices.Contains(c.service.options.AllowedHosts, strings.ToLower(u.Hostname())) {
-		return registeredClient{}, problem("invalid_client")
-	}
-	if ip := net.ParseIP(u.Hostname()); ip != nil && util.IsPrivateIP(ip) {
+	if !validCIMDID(id, c.service.options.AllowedHosts) {
 		return registeredClient{}, problem("invalid_client")
 	}
 	result := c.group.DoChan(id, func() (any, error) { return c.fetch(ctx, id) })
@@ -143,6 +148,36 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 	}
 }
 
+func validCIMDID(id string, allowedHosts []string) bool {
+	u, err := url.Parse(id)
+	if err != nil || id == "" || len(id) > 2048 || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" ||
+		u.Fragment != "" || u.Path == "" || (u.Port() != "" && u.Port() != "443") ||
+		!slices.Contains(allowedHosts, strings.ToLower(u.Hostname())) {
+		return false
+	}
+	ip := net.ParseIP(u.Hostname())
+	return ip == nil || !util.IsPrivateIP(ip)
+}
+
+func (c *clientResolver) loadPreRegistered(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	var clients []registeredClient
+	if len(raw) > 64<<10 || json.Unmarshal([]byte(raw), &clients) != nil || len(clients) > 20 {
+		return errors.New("invalid pre-registered OAuth client configuration")
+	}
+	c.preRegistered = make(map[string]registeredClient, len(clients))
+	for _, client := range clients {
+		_, duplicate := c.preRegistered[client.ID]
+		if duplicate || !validCIMDID(client.ID, c.service.options.AllowedHosts) || !validCIMDClient(client) {
+			return errors.New("invalid pre-registered OAuth client configuration")
+		}
+		c.preRegistered[client.ID] = client
+	}
+	return nil
+}
+
 func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, id, nil)
 	if err != nil {
@@ -159,7 +194,7 @@ func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient
 		return registeredClient{}, problem("invalid_client")
 	}
 	var client registeredClient
-	if json.Unmarshal(raw, &client) != nil || client.ID != id || !validClient(client) {
+	if json.Unmarshal(raw, &client) != nil || client.ID != id || !validCIMDClient(client) {
 		return registeredClient{}, problem("invalid_client")
 	}
 	if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
@@ -169,13 +204,27 @@ func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient
 }
 
 func validClient(c registeredClient) bool {
-	if c.AuthMethod != "none" || c.Name == "" || len(c.Name) > 200 || len(c.Redirects) == 0 || len(c.Redirects) > 20 {
+	if !validClientMetadata(c) {
 		return false
 	}
 	for _, grant := range c.GrantTypes {
 		if grant != "authorization_code" && grant != "refresh_token" {
 			return false
 		}
+	}
+	return true
+}
+
+func validCIMDClient(c registeredClient) bool {
+	// Published metadata describes capabilities across authorization servers.
+	// Extra advertised grants do not enable them at our token endpoint.
+	return validClientMetadata(c) &&
+		(len(c.GrantTypes) == 0 || slices.Contains(c.GrantTypes, "authorization_code"))
+}
+
+func validClientMetadata(c registeredClient) bool {
+	if c.AuthMethod != "none" || c.Name == "" || len(c.Name) > 200 || len(c.Redirects) == 0 || len(c.Redirects) > 20 {
+		return false
 	}
 	for _, response := range c.Responses {
 		if response != "code" {

@@ -203,6 +203,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_SITE_URL` | No | - | Full site URL written into site config on startup (overrides DB/admin setting); sitemap and agent-discovery docs 503 until set. Scheme and host only (`https://example.com`) — a path, query, fragment, credentials or an out-of-range port fails startup |
 | `OCMS_OAUTH_ENABLED` | No | `false` | Enable the MCP OAuth server; requires canonical OCMS_SITE_URL (HTTPS outside development loopback) |
 | `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | No | `claude.ai,chatgpt.com` | Exact HTTPS client metadata host allowlist |
+| `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | No | Empty | JSON array of owner-reviewed public client metadata; at most 20 documents / 64 KiB |
 | `OCMS_OAUTH_ALLOW_DCR` | No | `false` | Allow bounded public-client dynamic registration |
 | `OCMS_OAUTH_ACCESS_TTL` | No | `3600` | OAuth access lifetime in seconds (60–86400) |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | No | `30` | Absolute rotating refresh-family lifetime (1–90 days) |

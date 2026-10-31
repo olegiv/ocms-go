@@ -23,7 +23,7 @@ kill_timeout = 60
   # Dual-stack binding also permits the owner's private 6PN tunnel.
   OCMS_SERVER_HOST = '[::]'
   OCMS_SERVER_PORT = '8080'
-  OCMS_SITE_URL = 'https://mcp-staging.ocms.tech'
+  OCMS_SITE_URL = 'https://ocms-mcp-staging.fly.dev'
   OCMS_DB_PATH = '/app/data/ocms.db'
   OCMS_UPLOADS_DIR = '/app/data/uploads'
   OCMS_CUSTOM_DIR = '/app/custom'
@@ -34,6 +34,9 @@ kill_timeout = 60
   OCMS_REQUIRE_MFA = 'true'
   OCMS_OAUTH_ENABLED = 'true'
   OCMS_OAUTH_CIMD_ALLOWED_HOSTS = 'claude.ai,chatgpt.com'
+  # Owner-reviewed Claude public identity (2026-10-31); no account access is granted.
+  # Fly currently receives HTTP 403 from live Claude metadata discovery.
+  OCMS_OAUTH_PRE_REGISTERED_CLIENTS = '[{"client_id":"https://claude.ai/oauth/mcp-oauth-client-metadata","client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}]'
   OCMS_OAUTH_ALLOW_DCR = 'false'
   OCMS_OAUTH_ACCESS_TTL = '3600'
   OCMS_OAUTH_REFRESH_TTL_DAYS = '30'

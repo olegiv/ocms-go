@@ -1952,8 +1952,9 @@ func run() (runErr error) {
 	if cfg.OAuthEnabled {
 		oauthService, err = oauth.New(db, oauth.Options{
 			Issuer: cfg.SiteURL, Development: cfg.IsDevelopment(),
-			AllowedHosts: strings.FieldsFunc(strings.ToLower(cfg.OAuthCIMDAllowedHosts), func(r rune) bool { return r == ',' || r == ' ' }),
-			AllowDCR:     cfg.OAuthAllowDCR, AccessTTL: time.Duration(cfg.OAuthAccessTTL) * time.Second,
+			AllowedHosts:         strings.FieldsFunc(strings.ToLower(cfg.OAuthCIMDAllowedHosts), func(r rune) bool { return r == ',' || r == ' ' }),
+			PreRegisteredClients: cfg.OAuthPreRegisteredClients,
+			AllowDCR:             cfg.OAuthAllowDCR, AccessTTL: time.Duration(cfg.OAuthAccessTTL) * time.Second,
 			RefreshTTL: time.Duration(cfg.OAuthRefreshTTLDays) * 24 * time.Hour,
 		})
 		if err != nil {

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/oauth"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 func TestFlyStagingBootstrapHasNoPublicService(t *testing.T) {
@@ -41,7 +44,7 @@ func TestFlyStagingRequiresMFAAndPreservesBootstrapState(t *testing.T) {
 		"OCMS_ENV": "staging", "OCMS_DO_SEED": "false", "OCMS_DEMO_MODE": "false",
 		"OCMS_REQUIRE_MFA": "true", "OCMS_OAUTH_ENABLED": "true", "OCMS_MCP_SPIKE_TOOLS": "true",
 		"OCMS_AI_DISABLED": "false", "OCMS_OAUTH_ALLOW_DCR": "false",
-		"OCMS_SITE_URL": "https://mcp-staging.ocms.tech", "OCMS_DB_PATH": "/app/data/ocms.db",
+		"OCMS_SITE_URL": "https://ocms-mcp-staging.fly.dev", "OCMS_DB_PATH": "/app/data/ocms.db",
 		"OCMS_UPLOADS_DIR": "/app/data/uploads", "OCMS_SERVER_HOST": "[::]",
 	} {
 		if got := public[key]; got != want {
@@ -149,6 +152,31 @@ func TestFlyStagingEnvironmentsLoad(t *testing.T) {
 			}
 			if !cfg.RequireMFA || cfg.ServerAddr() != "[::]:8080" {
 				t.Fatal("staging/bootstrap lost required MFA or dual-stack binding")
+			}
+			if cfg.OAuthEnabled {
+				db, err := store.NewDB(filepath.Join(t.TempDir(), "staging.db"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = db.Close() })
+				if err := store.Migrate(db); err != nil {
+					t.Fatal(err)
+				}
+				service, err := oauth.New(db, oauth.Options{Issuer: cfg.SiteURL,
+					AllowedHosts: strings.Split(cfg.OAuthCIMDAllowedHosts, ","), PreRegisteredClients: cfg.OAuthPreRegisteredClients})
+				if err != nil {
+					t.Fatal(err)
+				}
+				// The actual profile pin resolves without live metadata discovery.
+				request, err := service.Prepare(t.Context(), url.Values{
+					"client_id":    {"https://claude.ai/oauth/mcp-oauth-client-metadata"},
+					"redirect_uri": {"https://claude.ai/api/mcp/auth_callback"}, "response_type": {"code"},
+					"code_challenge": {strings.Repeat("A", 43)}, "code_challenge_method": {"S256"},
+					"resource": {cfg.SiteURL + "/api/mcp"}, "scope": {"mcp:access"},
+				})
+				if err != nil || request.ClientName != "Claude" {
+					t.Fatalf("staging pin cannot prepare Claude authorization: %v", err)
+				}
 			}
 			t.Setenv("OCMS_MFA_KEY", "")
 			if _, err := config.Load(); err == nil {
