@@ -1711,9 +1711,9 @@ real-account rows. Record each client's version, tier, OS and results.
 | Claude Desktop custom connector | OAuth | Passed: native discovery/read/search/scratch save/read, revoked-call denial and fresh read after shared reconnect | None for tested flow; final reconnect grants `mcp:access` only |
 | claude.ai web | OAuth | Passed: consent/discovery/read/search, live scope upgrade, scratch save/read, revoked-call denial and fresh reconnect | None for tested flow; final reconnect grants `mcp:access` only |
 | ChatGPT web | OAuth | Passed: CIMD connect/consent/discovery/read/search/scratch save/read, revoked-call denial, reconnect and scratch retrieval under new grant | None for tested flow |
-| Claude Code | OAuth | Unverified | Real client/version acceptance pending |
+| Claude Code | OAuth | 2.1.316 registration probe identifies its own CIMD and `localhost` callback; full account flow unverified | Metadata fetch returns 403 from Fly; native loopback/pinned-registration correction local only |
 | Claude Code | Bearer key | Unverified | Real client/version and scoped, expiring key acceptance pending |
-| Codex | OAuth | Unverified | Real client/version acceptance pending |
+| Codex | OAuth | 0.166.0 reaches staging with its stable CIMD, then receives `invalid_client`; full account flow unverified | Metadata's additional `localhost` callback is rejected by deployed validation; correction local only |
 | Codex | Bearer key | Unverified | Real client/version and scoped, expiring key acceptance pending |
 
 The owner selected `https://ocms-mcp-staging.fly.dev` and authorized the
@@ -2118,3 +2118,55 @@ Remaining R1.1: real Claude Code and Codex OAuth/bearer rows and IPv6 path
 coverage. Editor coverage stays explicitly deferred. R1.2 remains gated on
 required passes or an explicit owner scope decision; the three GUI passes
 do not complete the whole matrix.
+
+
+### R1.1I — Native CLI registration blockers (2026-10-31)
+
+The GUI acceptance documentation was committed separately as `3bddee09` with
+owner approval. No push or deployment followed. CLI checks still target the
+running `f66bd7b4` image; the following correction is an uncommitted local
+follow-up, not a new acceptance pass.
+
+- Codex CLI **0.166.0**, signed in through ChatGPT, selected its stable
+  `https://chatgpt.com/oauth/codex/client.json` CIMD and requested only
+  `mcp:access mcp:drafts`. Its actual callback was IP-literal loopback.
+  Staging returned `invalid_client`. The same transport as oCMS fetched that
+  document from Fly with HTTP 200; its declared callbacks include both
+  `127.0.0.1` and `localhost`. The original validator rejected the whole
+  document. A captured-metadata code-flow regression reproduced the failure.
+- Claude Code **2.1.316** reports a first-party Enterprise subscription in
+  CLI auth status; this differs from the GUI's Pro tier. A registration-only
+  probe identified `https://claude.ai/oauth/claude-code-client-metadata` and
+  `http://localhost:<port>/callback`, with only the two intended scopes.
+  No MFA or consent was completed. Its published metadata URL returns HTTP
+  403 from both this Mac and Fly; the Fly probe used oCMS's bounded SSRF-safe
+  Go transport and was removed without restarting or deploying the app.
+- The local correction accepts declared literal `localhost` native CIMD
+  callbacks with the existing loopback-port exception. Exact hostname, path
+  and query checks remain; token exchange still binds the code to the exact
+  callback and port. Subdomains, credentials, fragments and unregistered
+  callbacks are rejected. DCR remains off and its registration validation
+  retains the previous IP-literal-only HTTP policy.
+- Both local staging profiles add an explicit Claude Code registration,
+  derived from the installed client's observed identity/callback and the
+  official callback documentation. It is separate from Claude web's existing
+  registration. Registration alone grants no account access: fresh login,
+  MFA, consent, S256, scopes, audience and revocation remain required.
+
+The Mac locked during this work; browser-based acceptance is paused until
+the owner unlocks it. Neither CLI's full OAuth or bearer row is a pass yet.
+The local correction and its evidence must be reviewed before another
+commit/deployment. Working GUI connections were not revoked or reconfigured.
+
+Local verification: the captured Codex metadata and native pinned-client
+regressions failed before their corrections. The final focused tests, full
+uncached Go suite, OAuth race suite and scoped OAuth/MCP lint passed. Both
+Fly profiles passed strict validation; their two registration arrays match
+and DCR stays disabled. Callback-binding tests reject changed host, path,
+query, credentials and fragments, and reject a different port during code
+exchange. The existing HTTP `localhost` issuer rejection and DCR tests pass.
+Evidence is under `output/r11-validation/fly-staging/deployment/` in the
+`cli-native-*` reports; live CLI acceptance remains unverified.
+
+Primary references: [Codex native CIMD and callbacks](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
+and [Claude Code callbacks and scopes](https://code.claude.com/docs/en/mcp).

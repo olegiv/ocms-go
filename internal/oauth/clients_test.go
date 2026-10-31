@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -109,6 +110,117 @@ func TestCIMDChatGPTMetadataNegotiatesPublicClient(t *testing.T) {
 		"client_id": {client.ID}, "resource": {f.s.Resource()}, "client_assertion": {"unsupported-assertion"}})
 	if status != http.StatusBadRequest || denied["error"] != "invalid_client" {
 		t.Fatalf("client assertion was accepted: status=%d error=%v", status, denied["error"])
+	}
+}
+
+func TestCIMDCodexMetadataSupportsLoopback(t *testing.T) {
+	// Relevant public Codex metadata captured on 2026-10-31. Its localhost
+	// alternative must not prevent use of the supported IP-literal callback.
+	const metadata = `{"client_id":"https://chatgpt.com/oauth/codex/client.json","client_name":"Codex","redirect_uris":["http://127.0.0.1/callback","http://localhost/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none","token_endpoint_auth_methods_supported":["none"]}`
+	f := metadataFixture(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(metadata))
+	})
+	f.s.options.AllowedHosts = []string{"chatgpt.com"}
+	f.values.Set("client_id", "https://chatgpt.com/oauth/codex/client.json")
+	f.values.Set("redirect_uri", "http://127.0.0.1:60023/callback")
+	f.values.Set("scope", "mcp:access mcp:drafts")
+	body := f.redeem(t, f.code(t))
+	p, err := f.s.VerifyAccess(t.Context(), access(body))
+	if err != nil || p.ClientID != f.values.Get("client_id") || len(p.Scopes) != 2 ||
+		!slices.Contains(p.Scopes, "mcp:access") || !slices.Contains(p.Scopes, "mcp:drafts") {
+		t.Fatalf("Codex loopback code flow failed: principal=%+v error=%v", p, err)
+	}
+	status, rotated := f.exchange(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh(body)}})
+	if status != http.StatusOK || access(rotated) == "" || refresh(rotated) == refresh(body) {
+		t.Fatalf("Codex refresh failed: status=%d", status)
+	}
+	for _, redirect := range []string{
+		"http://localhost.evil.test:60023/callback", "http://127.0.0.1:60023/other",
+		"http://127.0.0.2:60023/callback", "http://[::1]:60023/callback",
+	} {
+		f.values.Set("redirect_uri", redirect)
+		if _, err := f.s.Prepare(t.Context(), f.values); err == nil {
+			t.Fatalf("cached Codex metadata allowed unsupported callback %q", redirect)
+		}
+	}
+}
+
+func TestCIMDLoopbackMetadataCapabilities(t *testing.T) {
+	const supported = "http://127.0.0.1/callback"
+	for _, tc := range []struct {
+		name      string
+		redirects []string
+		want      bool
+	}{
+		{"https", []string{"https://client.test/callback"}, true},
+		{"ip literal", []string{supported}, true},
+		{"localhost alternative", []string{supported, "http://localhost/callback"}, true},
+		{"only localhost", []string{"http://localhost/callback"}, true},
+		{"localhost subdomain", []string{supported, "http://localhost.evil.test/callback"}, false},
+		{"private non-loopback", []string{supported, "http://192.168.1.1/callback"}, false},
+		{"userinfo", []string{supported, "http://user@localhost/callback"}, false},
+		{"fragment", []string{supported, "http://localhost/callback#fragment"}, false},
+		{"oversized", []string{supported, "http://localhost/" + strings.Repeat("x", 2048)}, false},
+		{"too many", append([]string{supported}, slices.Repeat([]string{"http://localhost/callback"}, 20)...), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := registeredClient{Name: "Native client", AuthMethod: "none", Redirects: tc.redirects}
+			if got := validCIMDClient(client); got != tc.want {
+				t.Fatalf("CIMD callback metadata accepted=%v, want %v", got, tc.want)
+			}
+			if tc.name == "localhost alternative" || tc.name == "only localhost" {
+				if validClient(client) {
+					t.Fatal("CIMD callbacks relaxed DCR redirect validation")
+				}
+				if !client.acceptsRedirect("http://localhost:60023/callback") {
+					t.Fatal("registered localhost callback rejected its variable port")
+				}
+			}
+		})
+	}
+}
+
+func TestPreRegisteredNativeClientLoopbackBinding(t *testing.T) {
+	// The native CLI and official callback documentation identify this client
+	// and localhost path. Live metadata fetching from Fly returns HTTP 403.
+	const id = "https://claude.ai/oauth/claude-code-client-metadata"
+	const pin = `[{"client_id":"https://claude.ai/oauth/claude-code-client-metadata","client_name":"Claude Code","redirect_uris":["http://localhost/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}]`
+	f := newFixture(t)
+	var err error
+	f.s, err = New(f.db, Options{Issuer: f.s.Issuer(), AllowedHosts: []string{"claude.ai"}, PreRegisteredClients: pin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.s.clients.http.Transport = roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+		t.Fatal("pinned native client attempted live discovery")
+		return nil, nil
+	})
+	f.values.Set("client_id", id)
+	f.values.Set("redirect_uri", "http://localhost:65101/callback")
+	f.values.Set("scope", "mcp:access mcp:drafts")
+	code := f.code(t)
+	for _, redirect := range []string{"http://localhost:65102/callback", "http://127.0.0.1:65101/callback"} {
+		status, denied := f.exchange(url.Values{"grant_type": {"authorization_code"}, "code": {code},
+			"redirect_uri": {redirect}, "code_verifier": {f.verifier}})
+		if status != http.StatusBadRequest || access(denied) != "" {
+			t.Fatalf("code lost exact redirect binding for %q: status=%d", redirect, status)
+		}
+	}
+	body := f.redeem(t, code)
+	p, err := f.s.VerifyAccess(t.Context(), access(body))
+	if err != nil || p.ClientID != id || len(p.Scopes) != 2 {
+		t.Fatalf("native pinned flow failed: principal=%+v error=%v", p, err)
+	}
+	for _, redirect := range []string{
+		"http://127.0.0.1:65101/callback", "http://localhost.evil.test:65101/callback",
+		"http://localhost:65101/other", "http://localhost:65101/callback?extra=1",
+		"http://localhost:65101/callback#fragment", "http://user@localhost:65101/callback",
+	} {
+		f.values.Set("redirect_uri", redirect)
+		if _, err := f.s.Prepare(t.Context(), f.values); err == nil {
+			t.Fatalf("native pin accepted an unregistered callback %q", redirect)
+		}
 	}
 }
 
@@ -330,6 +442,7 @@ func TestRegistrationDisabledAndBounded(t *testing.T) {
 		strings.Replace(valid, `"none"`, `"none","grant_types":["password"]`, 1),
 		strings.Replace(valid, `"none"`, `"none","grant_types":["authorization_code","urn:ietf:params:oauth:grant-type:jwt-bearer"]`, 1),
 		strings.Replace(valid, "127.0.0.1", "localhost", 1),
+		strings.Replace(valid, `"http://127.0.0.1/callback"`, `"http://127.0.0.1/callback","http://localhost/callback"`, 1),
 	} {
 		if w := register(body); w.Code != 400 {
 			t.Fatalf("invalid registration status=%d", w.Code)

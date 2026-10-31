@@ -37,7 +37,7 @@ kill_timeout = 60
   OCMS_OAUTH_CIMD_ALLOWED_HOSTS = 'claude.ai,chatgpt.com'
   # Owner-reviewed Claude public identity (2026-10-31); no account access is granted.
   # Fly currently receives HTTP 403 from live Claude metadata discovery.
-  OCMS_OAUTH_PRE_REGISTERED_CLIENTS = '[{"client_id":"https://claude.ai/oauth/mcp-oauth-client-metadata","client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}]'
+  OCMS_OAUTH_PRE_REGISTERED_CLIENTS = '[{"client_id":"https://claude.ai/oauth/mcp-oauth-client-metadata","client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"},{"client_id":"https://claude.ai/oauth/claude-code-client-metadata","client_name":"Claude Code","redirect_uris":["http://localhost/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}]'
   OCMS_OAUTH_ALLOW_DCR = 'false'
   OCMS_OAUTH_ACCESS_TTL = '3600'
   OCMS_OAUTH_REFRESH_TTL_DAYS = '30'

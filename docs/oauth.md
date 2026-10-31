@@ -67,9 +67,12 @@ with fresh login/MFA and the existing ten-minute deadline.
 
 Both authorization and token requests must contain exactly one
 `resource=https://mcp-staging.example.com/api/mcp`. Redirects must match a
-registered URI exactly. IP-literal loopback HTTP redirects permit a variable
-port at authorization, as RFC 8252 requires; the token exchange still binds to
-the exact redirect used for its code. Other HTTP redirects are refused.
+registered URI exactly. Native CIMD clients may register IP-literal loopback
+or literal `localhost` HTTP callbacks with a variable port at authorization.
+The registered hostname, path and query must still match; `localhost` and
+`127.0.0.1` are distinct registrations. The token exchange binds to the exact
+redirect, including its port, used for its code. Other HTTP redirects are
+refused. DCR retains its IP-literal-only HTTP registration policy.
 
 | Scope | Current behavior |
 |---|---|
@@ -134,10 +137,14 @@ Invalid configuration refuses OAuth startup. Each exact configured identity
 uses that registration instead of a live metadata fetch; unknown identities
 still use normal discovery. No client gains account access from registration.
 
-Both staging profiles pin Claude's public identity and its exact
+Both staging profiles pin Claude web's identity and its exact
 `https://claude.ai/api/mcp/auth_callback` callback, reviewed on 2026-10-31.
-Live metadata retrieval returned HTTP 403 from the Fly Machine with oCMS's
-Go transport. This explicit registration follows
+The native CLI follow-up also prepares the distinct
+`https://claude.ai/oauth/claude-code-client-metadata` identity with
+`http://localhost/callback`. That identity and callback were observed from
+installed Claude Code 2.1.316; its official documentation describes this
+loopback form. Live metadata retrieval for both Claude identities returned
+HTTP 403 from Fly with oCMS's Go transport. This explicit registration follows
 [CIMD pre-registration](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document#section-7.2);
 it preserves S256, fresh login/MFA, consent, scopes and revocation, with DCR
 disabled. Update the registration only after reviewing the provider's public

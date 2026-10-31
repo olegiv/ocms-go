@@ -44,10 +44,19 @@ func loopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+func loopbackRedirectHost(host string) bool {
+	return host == "localhost" || loopbackHost(host)
+}
+
+func validDCRRedirect(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && validRedirect(raw) && (u.Scheme != "http" || u.Hostname() != "localhost")
+}
+
 func validRedirect(raw string) bool {
 	u, err := url.Parse(raw)
 	return err == nil && len(raw) <= 2048 && u.Host != "" && u.User == nil && u.Fragment == "" &&
-		(u.Scheme == "https" || (u.Scheme == "http" && loopbackHost(u.Hostname())))
+		(u.Scheme == "https" || (u.Scheme == "http" && loopbackRedirectHost(u.Hostname())))
 }
 
 func (c registeredClient) acceptsRedirect(raw string) bool {
@@ -61,10 +70,11 @@ func (c registeredClient) acceptsRedirect(raw string) bool {
 		a, _ := url.Parse(registered)
 		b, _ := url.Parse(raw)
 		if a == nil || b == nil || a.Scheme != "http" || b.Scheme != "http" ||
-			!loopbackHost(a.Hostname()) || a.Hostname() != b.Hostname() {
+			!loopbackRedirectHost(a.Hostname()) || a.Hostname() != b.Hostname() {
 			continue
 		}
-		// RFC 8252 permits a variable port for registered IP-literal loopback redirects.
+		// Native loopback clients choose a callback port at login; the
+		// registered host and the rest of the URI must still match exactly.
 		a.Host = a.Hostname()
 		b.Host = b.Hostname()
 		if a.String() == b.String() {
@@ -207,7 +217,7 @@ func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient
 }
 
 func validClient(c registeredClient) bool {
-	if !validClientMetadata(c) {
+	if !validClientMetadata(c, validDCRRedirect) {
 		return false
 	}
 	for _, grant := range c.GrantTypes {
@@ -229,11 +239,11 @@ func validCIMDClient(c registeredClient) bool {
 		}
 		c.AuthMethod = "none"
 	}
-	return validClientMetadata(c) &&
+	return validClientMetadata(c, validRedirect) &&
 		(len(c.GrantTypes) == 0 || slices.Contains(c.GrantTypes, "authorization_code"))
 }
 
-func validClientMetadata(c registeredClient) bool {
+func validClientMetadata(c registeredClient, checkRedirect func(string) bool) bool {
 	if c.AuthMethod != "none" || c.Name == "" || len(c.Name) > 200 || len(c.Redirects) == 0 || len(c.Redirects) > 20 {
 		return false
 	}
@@ -243,7 +253,7 @@ func validClientMetadata(c registeredClient) bool {
 		}
 	}
 	for _, redirect := range c.Redirects {
-		if !validRedirect(redirect) {
+		if !checkRedirect(redirect) {
 			return false
 		}
 	}
