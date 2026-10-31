@@ -1695,21 +1695,24 @@ library's transitive dependency. No other existing module version changed.
   Local screenshots: `output/playwright/r11/consent.png` and `connections.png`.
   Validation logs and a manifest are under ignored `output/r11-validation/`.
 
-#### Real-account matrix — all pending
+#### Real-account matrix — current acceptance status
 
-No rows below are passes. A local browser and the SDK cannot substitute for
-vendor/account acceptance. Record date, version, OS/browser, account tier,
-transport and actual UI availability when each row is executed.
+Updated 2026-10-31. The deployed CSP snapshot `2dd1cf49eb9e` matches the source
+committed as `2edc6e90`; the compatibility corrections in R1.1G below remain
+local and have not been deployed. Claude web uses Pro / Chrome 156.0.8078.80
+on macOS 27.2, streamable HTTP and the actual admin account. Editor coverage
+remains explicitly deferred. SDK tests cannot substitute for real-account
+acceptance. Record every remaining client's version, tier, OS and results.
 
 | Client | Auth | Connect/consent/list/read/scratch/revoke/reconnect | Current blocker |
 |---|---|---|---|
-| Claude Desktop custom connector | OAuth | Unverified | Owner-deployed public HTTPS staging + real account |
-| claude.ai web | OAuth | Unverified | Same; re-check headers UI availability |
-| ChatGPT web | OAuth | Unverified | Same; re-check account app/developer-mode/write capability |
-| Claude Code | OAuth | Unverified | Staging + real client/version |
-| Claude Code | Bearer key | Unverified | Staging + real client/version and key CIDRs |
-| Codex | OAuth | Unverified | Staging + real client/version |
-| Codex | Bearer key | Unverified | Staging + real client/version and key CIDRs |
+| Claude Desktop custom connector | OAuth | Native tool calls unverified | Web acceptance does not establish native Desktop calls |
+| claude.ai web | OAuth | Connect/consent/list/read/search/revoke/reconnect passed; scratch denied for missing scope | HTTP scope-upgrade correction verified locally; live retry pending |
+| ChatGPT web | OAuth | Custom MCP/CIMD setup available; authorization reached oCMS, then `invalid_client` | Supported-auth-method negotiation correction verified locally; live retry pending |
+| Claude Code | OAuth | Unverified | Real client/version acceptance pending |
+| Claude Code | Bearer key | Unverified | Real client/version and scoped, expiring key acceptance pending |
+| Codex | OAuth | Unverified | Real client/version acceptance pending |
+| Codex | Bearer key | Unverified | Real client/version and scoped, expiring key acceptance pending |
 
 The staging owner chooses the host and deploys it. Use `docs/oauth.md` for
 canonical issuer, scratch flags, MFA/proxy setup and nginx query redaction.
@@ -1982,7 +1985,66 @@ public-client, S256, fresh MFA/login, consent and scope/revocation safeguards
 remain; DCR remains off. Configuration defaults empty elsewhere. Pins are
 validated at startup and use the existing fifteen-minute SQLite client cache.
 
-This follow-up is local and uncommitted. A newly reviewed image and explicit
-commit approval are required before staging can use it. Real-client tool
-listing, reads, scratch save/read, revocation/reconnect, successful public MFA
-and complete exchange log verification remain pending after deployment.
+This compatibility follow-up was committed as `0cb668b4` and deployed. The
+subsequent CSP callback correction and staging capacity changes were committed
+as `2edc6e90`; their equivalent source snapshot was already deployed. Current
+acceptance results and the next local compatibility corrections follow in R1.1G.
+
+
+### R1.1G — Real Claude lifecycle and ChatGPT acceptance (2026-10-31)
+
+Claude web / Pro, Chrome 156.0.8078.80, macOS 27.2, streamable HTTP:
+
+- Fresh password/MFA/consent, tool discovery, `get_site_info`, `get_page(id=1)`
+  and `search_pages(query="R11")` passed against the deployed source equivalent
+  to commit `2edc6e90`. The published fixture marker was returned.
+- The `mcp:access` grant correctly denied a scratch save. A second attempt
+  allowing normal scope reauthorization still produced an ordinary tool error
+  in Claude; no scope-upgrade UI appeared. The result-metadata hint alone did
+  not establish Claude compatibility.
+- Revoking the newest grant returned 303; subsequent MCP requests returned
+  401 and the refresh attempt returned 400. Claude displayed its reconnect UI.
+  The owner completed a new password/MFA/consent flow; token exchange and the
+  resumed `get_site_info` returned 200 under a different grant. The existing
+  connection is working. No scratch or CMS data was written.
+- Public MFA audit-event IP matches the verified external client reference.
+  Fresh IPv4 normal/spoofed health probes also resolve to that reference.
+  IPv6 AAAA is present, but this Mac's IPv6 route/connection probe could not
+  reach staging. IPv6 acceptance remains unverified.
+
+ChatGPT web exposes Add custom MCP server and advanced OAuth configuration.
+The staging connector uses CIMD, the stable callback, and only `mcp:access`
+and `mcp:drafts`; `pages:read` is deselected. Authorization reached oCMS but
+returned `invalid_client` before login. Its public client metadata advertises
+`none` and `private_key_jwt` while retaining a singular `private_key_jwt`
+preference. A temporary diagnostic using oCMS's Go HTTP settings and SSRF
+safe dialer fetched that metadata from the existing Fly Machine with HTTP 200.
+The diagnostic was removed; the application was not restarted or deployed.
+
+Two local corrections are prepared, not committed or deployed:
+
+1. CIMD selects the supported public-client method `none` from the advertised
+   capability array. Legacy documents retain the singular-method check. DCR
+   and actual token authentication remain public-client-only; assertions fail.
+2. OAuth tool requests missing a catalog scope receive HTTP 403 with an
+   `insufficient_scope` challenge containing endpoint access and the required
+   tool scope. Consent must still authorize a new grant. Read-only grants,
+   API-key behavior, catalog gating, body limits and batch rejection remain.
+   The tool wrapper retains its scope enforcement and metadata challenge.
+
+Both regressions failed before the corrections. Focused OAuth/MCP tests,
+full uncached Go tests, focused race tests and scoped lint passed afterwards.
+The local source identity and direct behavior evidence are recorded in
+`output/r11-validation/fly-staging/deployment/client-compatibility-manifest.json`
+and `client-compatibility-behavior.md` in the same directory. Live validation
+of these corrections is pending a separately approved commit/deployment.
+No Git push, application deployment, seeding, secret change or CMS write was
+performed during this acceptance pass. Wiki edits remain uncommitted.
+
+Remaining: live Claude scope upgrade and scratch save/read; full ChatGPT
+OAuth/read/scratch/revoke/reconnect; native Desktop calls; both CLI clients'
+OAuth/bearer rows; IPv6 coverage. Editor coverage stays deferred. R1.2 remains
+gated on recorded required passes or an explicit owner scope decision.
+
+Primary references: [MCP scope challenges](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#scope-challenge-handling)
+and [ChatGPT CIMD authentication](https://developers.openai.com/plugins/build/auth).

@@ -24,12 +24,13 @@ import (
 )
 
 type registeredClient struct {
-	ID         string   `json:"client_id"`
-	Name       string   `json:"client_name"`
-	Redirects  []string `json:"redirect_uris"`
-	AuthMethod string   `json:"token_endpoint_auth_method"`
-	GrantTypes []string `json:"grant_types,omitempty"`
-	Responses  []string `json:"response_types,omitempty"`
+	ID          string   `json:"client_id"`
+	Name        string   `json:"client_name"`
+	Redirects   []string `json:"redirect_uris"`
+	AuthMethod  string   `json:"token_endpoint_auth_method"`
+	AuthMethods []string `json:"token_endpoint_auth_methods_supported,omitempty"`
+	GrantTypes  []string `json:"grant_types,omitempty"`
+	Responses   []string `json:"response_types,omitempty"`
 }
 
 func (c registeredClient) GetID() string     { return c.ID }
@@ -173,6 +174,7 @@ func (c *clientResolver) loadPreRegistered(raw string) error {
 		if duplicate || !validCIMDID(client.ID, c.service.options.AllowedHosts) || !validCIMDClient(client) {
 			return errors.New("invalid pre-registered OAuth client configuration")
 		}
+		client.AuthMethod = "none"
 		c.preRegistered[client.ID] = client
 	}
 	return nil
@@ -197,6 +199,7 @@ func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient
 	if json.Unmarshal(raw, &client) != nil || client.ID != id || !validCIMDClient(client) {
 		return registeredClient{}, problem("invalid_client")
 	}
+	client.AuthMethod = "none"
 	if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
 		return registeredClient{}, problem("temporarily_unavailable")
 	}
@@ -218,6 +221,14 @@ func validClient(c registeredClient) bool {
 func validCIMDClient(c registeredClient) bool {
 	// Published metadata describes capabilities across authorization servers.
 	// Extra advertised grants do not enable them at our token endpoint.
+	// When present, the supported-method set is authoritative; select only
+	// our public-client method rather than the legacy preference.
+	if c.AuthMethods != nil {
+		if len(c.AuthMethods) > 20 || !slices.Contains(c.AuthMethods, "none") {
+			return false
+		}
+		c.AuthMethod = "none"
+	}
 	return validClientMetadata(c) &&
 		(len(c.GrantTypes) == 0 || slices.Contains(c.GrantTypes, "authorization_code"))
 }

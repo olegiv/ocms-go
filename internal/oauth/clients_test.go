@@ -84,6 +84,62 @@ func TestCIMDClaudeMetadataSupportsCodeFlow(t *testing.T) {
 	}
 }
 
+func TestCIMDChatGPTMetadataNegotiatesPublicClient(t *testing.T) {
+	// ChatGPT's public metadata captured on 2026-10-31 advertises both
+	// methods. Its legacy preference must not override the supported set.
+	const metadata = `{"client_id":"https://chatgpt.com/oauth/client.json","client_name":"ChatGPT","redirect_uris":["https://chatgpt.com/connector_platform_oauth_redirect"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"private_key_jwt","token_endpoint_auth_methods_supported":["none","private_key_jwt"]}`
+	f := metadataFixture(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(metadata))
+	})
+	f.s.options.AllowedHosts = []string{"chatgpt.com"}
+	f.values.Set("client_id", "https://chatgpt.com/oauth/client.json")
+	f.values.Set("redirect_uri", "https://chatgpt.com/connector_platform_oauth_redirect")
+	client, err := f.s.clients.resolve(t.Context(), f.values.Get("client_id"))
+	if err != nil || client.AuthMethod != "none" {
+		t.Fatalf("public-client method not selected: method=%q error=%v", client.AuthMethod, err)
+	}
+	body := f.redeem(t, f.code(t))
+	status, rotated := f.exchange(url.Values{"grant_type": {"refresh_token"},
+		"client_id": {client.ID}, "resource": {f.s.Resource()}, "refresh_token": {refresh(body)}})
+	if status != http.StatusOK || access(rotated) == "" || refresh(rotated) == refresh(body) {
+		t.Fatalf("ChatGPT public-client refresh failed: status=%d", status)
+	}
+	status, denied := f.exchange(url.Values{"grant_type": {"authorization_code"},
+		"client_id": {client.ID}, "resource": {f.s.Resource()}, "client_assertion": {"unsupported-assertion"}})
+	if status != http.StatusBadRequest || denied["error"] != "invalid_client" {
+		t.Fatalf("client assertion was accepted: status=%d error=%v", status, denied["error"])
+	}
+}
+
+func TestCIMDAuthMethodCapabilities(t *testing.T) {
+	for _, tc := range []struct {
+		name, methods string
+		want          bool
+	}{
+		{"legacy public", `"token_endpoint_auth_method":"none"`, true},
+		{"legacy assertion only", `"token_endpoint_auth_method":"private_key_jwt"`, false},
+		{"public supported with assertion preference", `"token_endpoint_auth_method":"private_key_jwt","token_endpoint_auth_methods_supported":["none","private_key_jwt"]`, true},
+		{"public supported without preference", `"token_endpoint_auth_methods_supported":["none"]`, true},
+		{"assertion only with public preference", `"token_endpoint_auth_method":"none","token_endpoint_auth_methods_supported":["private_key_jwt"]`, false},
+		{"empty capabilities", `"token_endpoint_auth_method":"none","token_endpoint_auth_methods_supported":[]`, false},
+		{"no method", `"unrelated":true`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var client registeredClient
+			if err := json.Unmarshal([]byte(`{"client_name":"Client","redirect_uris":["https://client.test/callback"],`+tc.methods+`}`), &client); err != nil {
+				t.Fatal(err)
+			}
+			if got := validCIMDClient(client); got != tc.want {
+				t.Fatalf("CIMD method capabilities accepted=%v, want %v", got, tc.want)
+			}
+			if tc.name == "public supported with assertion preference" && validClient(client) {
+				t.Fatal("CIMD capability negotiation relaxed DCR authentication")
+			}
+		})
+	}
+}
+
 func TestPreRegisteredClientSurvivesMetadataFetchFailure(t *testing.T) {
 	f := newFixture(t)
 	client := registeredClient{ID: "https://client.test/pinned", Name: "Pinned client", AuthMethod: "none",

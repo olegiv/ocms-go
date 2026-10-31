@@ -416,6 +416,8 @@ Some requests never reach the tool-call log:
 
 - requests the SDK rejects before dispatching them, such as undecodable
   parameters or a mismatched protocol version or header;
+- OAuth tool requests rejected before dispatch with an HTTP 403 scope-upgrade
+  challenge; their HTTP status remains in the access log;
 - JSON-RPC batches, which are answered with a 400.
 
 Client-supplied values (an unknown tool's name, the client's name and version)

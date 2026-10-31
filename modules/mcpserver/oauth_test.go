@@ -130,9 +130,9 @@ func TestOAuthMCPPrincipalScratchRevocationAndKeyCompatibility(t *testing.T) {
 		t.Fatal("foreign scratch entry disclosed")
 	}
 	limitedToken, _ := oauthToken(t, s, env.userID, "mcp:access")
-	denied := call(t, env.connect(limitedToken), "spike_save_draft", map[string]any{"title": "Denied", "body": ""})
-	if !denied.IsError || denied.Meta["mcp/www_authenticate"] == nil {
-		t.Fatal("missing tool-level OAuth scope challenge")
+	scopeResponse := env.rawPost(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"spike_save_draft","arguments":{"title":"Denied","body":""}}}`, map[string]string{"Authorization": "Bearer " + limitedToken})
+	if scopeResponse.StatusCode != http.StatusForbidden || !strings.Contains(scopeResponse.Header.Get("WWW-Authenticate"), `error="insufficient_scope"`) {
+		t.Fatal("missing transport-level OAuth scope challenge")
 	}
 	if err := s.RevokeGrant(t.Context(), env.userID, p.GrantID); err != nil {
 		t.Fatal(err)

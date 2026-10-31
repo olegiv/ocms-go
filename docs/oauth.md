@@ -115,6 +115,11 @@ registration. DCR accepts only code/refresh grant metadata. CIMD documents
 must advertise authorization code support when `grant_types` is present;
 additional advertised grant types do not enable those flows in oCMS. Both
 paths still require public-client authentication and code response types.
+For CIMD, an advertised `token_endpoint_auth_methods_supported` array is
+authoritative and must include `none`; oCMS selects that method even when
+the legacy singular preference names `private_key_jwt`. Without the array,
+the singular method must be `none`. JWT assertions remain rejected. DCR
+continues to require the singular `none` method.
 Public protocol routes use the application's IP rate limiter; MCP adds its
 existing request/body/concurrency guards and a per-user OAuth limit.
 
@@ -153,7 +158,11 @@ Entries have an 8 KiB combined title/body limit, one per user, 100 total,
 and one-hour expiry. A process restart drops all entries. They have no CMS,
 translation, media or preview-link write path and return no admin page URL.
 The write is advertised as non-read-only, destructive and non-idempotent.
-Missing OAuth tool scope returns an MCP authentication challenge.
+Missing OAuth tool scope returns HTTP 403 with a Bearer `insufficient_scope`
+challenge naming `mcp:access`, the tool's required scope and resource metadata.
+Clients can request fresh consent and retry; an existing read-only grant is
+not expanded automatically. The tool wrapper also retains its scope check
+and result-metadata challenge. API keys retain their existing tool errors.
 
 Production and demo mode refuse the scratch flag. `OCMS_AI_DISABLED=true`
 removes these tools while keeping normal reads. Remove the probe tools and
