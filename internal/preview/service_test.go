@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -72,8 +73,23 @@ func (f *fixture) issue(t *testing.T, principal ...provenance.Principal) preview
 	return link
 }
 func token(link preview.Link) string {
-	_, raw, _ := strings.Cut(link.URL, "/preview/share/")
-	return raw
+	u, _ := url.Parse(link.URL)
+	return u.Fragment
+}
+
+func TestPreviewShareURLKeepsBearerOutOfRequestTarget(t *testing.T) {
+	f := setup(t)
+	link := f.issue(t)
+	u, err := url.Parse(link.URL)
+	if err != nil || u.Path != "/preview/share" || u.RawQuery != "" || u.ForceQuery || len(u.Fragment) != 43 {
+		t.Fatal("share bearer must exist only in the fragment of a fixed-path URL")
+	}
+	if strings.Contains(u.RequestURI(), u.Fragment) {
+		t.Fatal("share bearer reached the HTTP request target")
+	}
+	if _, err := f.svc.Resolve(f.ctx, u.Fragment); err != nil {
+		t.Fatal("fragment bearer no longer resolves its pinned snapshot")
+	}
 }
 func (f *fixture) exec(t *testing.T, query string, args ...any) {
 	t.Helper()
@@ -220,7 +236,7 @@ func TestPreviewCapsOwnershipAndMalformedTokens(t *testing.T) {
 			t.Fatal("malformed token accepted")
 		}
 	}
-	for _, origin := range []string{"http://public.test", "https://cms.test/path", "https://user:pass@cms.test", "https://cms.test?x=y"} {
+	for _, origin := range []string{"http://public.test", "https://cms.test/path", "https://user:pass@cms.test", "https://cms.test?x=y", "https://cms.test?"} {
 		if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID}, f.page.ID, 1, origin, nil); !errors.Is(err, preview.ErrUnavailable) {
 			t.Fatal("unsafe origin accepted")
 		}
@@ -259,7 +275,7 @@ func TestPreviewConcurrentCapAndRevokedIssuanceRate(t *testing.T) {
 func TestReviewMigrationRollbackPreservesPagesAndSnapshots(t *testing.T) {
 	f := setup(t)
 	f.issue(t)
-	if err := store.RunMigrationCommand(f.ctx, f.db, "down"); err != nil {
+	if err := store.RunMigrationCommand(f.ctx, f.db, "down-to", "20261101220000"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := preview.Load(f.ctx, f.q, f.page.ID, 1); err != nil {

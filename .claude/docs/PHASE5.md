@@ -2942,3 +2942,139 @@ key is inactive. A restore test rejects invalid historical content on an
 already-published AI page atomically, and accepts a valid restore with a new
 revision while preserving publication. Public proxy logging and fresh real
 client R1.6 acceptance remain unexecuted under the no-deployment instruction.
+
+## R1.6 Fly and web-client acceptance — 2026-11-02
+
+The owner subsequently authorized deployment and Claude/ChatGPT acceptance,
+with no push. Exact commit `ff4de3b1368cdc86095980283121c3aceed54d15` was
+built from `git archive`: 1,288 archived blobs remained unchanged after the
+asset build; 66 archived Go test packages passed uncached. This differs from
+the earlier working-checkout gate of 67 packages. Runtime version and image
+`[deployment ID redacted]` identify that deployed source. Snapshot
+`[snapshot ID redacted]` completed before deployment. The existing
+Frankfurt machine, encrypted volume, 2 shared CPUs/1,024 MB, MFA and disabled
+DCR were preserved. Public health/readiness and all Fly checks pass.
+
+### Direct acceptance results
+
+- Claude web (Pro, Opus 5.5 Extra) and ChatGPT web (Instant) used the existing
+  dedicated Editor, user 2, through their dedicated acceptance connectors.
+  Normal login, generated MFA and consent used the shared authenticator;
+  no owner code, recovery code, seed extraction or MFA reset was needed.
+- Claude created/replayed page 6 revision 1. ChatGPT continued it at revision
+  2, created/replayed its own page 7, and created Russian translation page 8.
+  Membership-only source revision 3 kept that translation current; Claude's
+  body change at revision 4 made it stale. Final revisions are 6/5, 7/3 and
+  8/1, all unscheduled, AI-editable drafts with matching snapshot/provenance
+  counts. A fresh ChatGPT stale-write test returned `revision_conflict`,
+  current revision 5, changed fields and a non-retryable structured error.
+  Its sentinel summary was absent from every stored snapshot.
+- The editor showed Verified / Validated / Reported separation, attributed
+  cross-client history, a recorded comparison and disabled historical claim
+  controls. Checking a revision-4 claim recorded the reviewer/time without
+  creating a revision. Revision 5 started unchecked while revision 4 retained
+  its acknowledgment. A stale share form was rejected after the newer save.
+- Neither saves, replays nor reads issued a share. Each client explicitly
+  issued one link to synthetic content; later draft reads and idempotency
+  receipts omitted bearer paths. Only 64-character token hashes are stored.
+  Claude's revision-1 share returned the original body after later edits;
+  ChatGPT's share returned only its own snapshot. Anonymous session previews,
+  missing and malformed bearer links returned 404.
+- Share responses had private/no-store, no-referrer, noindex/nofollow and a
+  script/frame/form/external-load-blocking CSP. The tested developer theme
+  retained local presentation and omitted canonical metadata, forms,
+  tracking and the private Russian sibling. The old session preview also
+  visibly rendered revision 1 while the current page was revision 5.
+- Explicit editor revocation and controlled expiry each changed 200 to 404.
+  Publishing only disposable page 7 invalidated its link; returning it to
+  draft did not resurrect access. Revoking the dedicated Claude issuer
+  grant invalidated its link and caused the real client to request reconnect.
+  Normal base-scope reconnect followed by the additional draft-scope flow
+  restored a fresh read under a new scoped grant. Only the redundant new
+  base grant was revoked; the working scopes remain `mcp:access mcp:drafts`.
+
+### Failed upstream-redaction gate
+
+Application access logs recorded `/preview/share/redacted`; the captured
+normal-request stream contained zero tested bearer tokens, query markers or
+referrer markers. **Fly Proxy did not redact the path on an error.** A request
+with a non-credential canary and invalid force-instance header returned 400;
+its provider=`proxy` record retained the path in `meta.URL.Full`. This directly
+reproduces Fly's documented COMPLIANCE-12 behavior. No real token was sent in
+the error probe. Evidence is sanitized; raw log streams and tokens were not
+saved in the repository.
+
+The tested web-client and application behavior passes do not close secure
+public sharing. A follow-up must remove the bearer from the proxy-visible
+URL or change the ingress, then repeat the error-path verification. An nginx
+configuration behind Fly Proxy cannot repair a prior edge record. Private
+draft content must use session previews until this is corrected. No runtime
+fix or additional deployment was made during these acceptance checks.
+
+### Cleanup and boundaries
+
+All four disposable share links are revoked and return 404. The three R1.6
+test pages remain drafts; earlier agent pages and all six owner grants are
+unchanged. The existing dedicated Claude Code and ChatGPT grants are retained;
+the dedicated Claude web grant was replaced by the tested reconnect. SQLite
+quick check is `ok`; temporary server helpers and private code/token delivery
+files were removed. No new API test keys, secret changes or Git push occurred.
+
+ChatGPT initially displayed “This response couldn't load”; fresh readback,
+explicit share and final structured-conflict responses rendered successfully.
+The native multiline input initially split a test prompt and altered Markdown;
+later prompts used a single fill, and no mutation was retried with a new UUID.
+Claude retained an R1.5 cached share description although the real R1.6 call
+succeeded; that is a client discovery/cache observation. Relation-only source
+revision 3 intentionally carried empty validation/report evidence, as in the
+existing contract. Native Desktop and CLI acceptance, the full stale
+publish/schedule matrix and an independent security audit were not rerun on
+this build; they remain R1.7 work. No full release-readiness claim is made.
+
+Sanitized transcripts, screenshots, deployment/source manifests, database
+metadata and HTTP/log checks are in ignored
+`output/r16-validation/staging-acceptance/`. These status updates are local,
+uncommitted documentation; the pre-existing dirty wiki is untouched.
+
+## R1.6 local preview transport fix — 2026-11-02
+
+The owner authorized a local fix and verification only: no commit, push or
+deployment. New links use `/preview/share#<bearer>`. A standalone nonce-only
+bootstrap clears the fragment/tracking query from the current URL and submits
+one form field to fixed `/preview/share/open`. The resulting captured preview
+retains the strict script-blocking CSP and all per-read lifecycle checks.
+No bearer cookie or stored redemption receipt is introduced. Distinct landing
+and rendering paths force a fresh request when another link is opened.
+ChatGPT's added `utm_source` query is ignored by the credential-free GET,
+cleared before submission, and never accepted as authorization.
+
+Legacy path-token requests fail without a redirect. A one-time migration
+irreversibly revokes all previously unrevoked links, including expired ones,
+so logged old credentials cannot be converted into the new transport.
+Accounts, sessions, content, keys and grants are retained; repeated normal
+startup does not revoke freshly issued links. Browser sharing now requires
+JavaScript; non-browser consumers use the documented bounded body-only POST.
+
+Direct local verification reproduced the original URL-shape regression before
+the fix, then passed fragment issuance, MCP output, strict POST parsing,
+encoded/legacy/query-only denial, pinned rendering, and migration up/repeated
+startup/down behavior. A real Chrome session through an isolated local proxy
+proved the GET → POST flow, token-free address bar after redemption, reopening,
+ChatGPT tracking links, explicit revocation, expiry, malformed fragments and
+an upstream 503 before application handling. All 24 observed request targets
+and referrers excluded the synthetic bearers. The fixture used a disposable
+local Editor/database, with no owner or staging credentials.
+
+The prepared source copy passed asset generation without changing any source
+blobs and the full uncached Go suite across 66 test packages. Focused race
+tests passed for preview, handler, app routing and MCP; vet passed. A fresh
+read-only investigation and independent candidate review found no remaining
+concrete bypass or regression in this boundary. The existing unrelated MFA
+`unparam` lint finding remains; no new scoped lint issue remains. Browser
+fixtures and private token-delivery files were removed after verification.
+
+This closes the leak in the locally tested transport, not the deployed Fly
+gate. Staging remains on `ff4de3b1368c`; its controlled upstream-error and
+fresh Claude/ChatGPT sharing checks still require a separately authorized
+deployment. An old URL-issuing binary must not run concurrently against the
+upgraded database. Request/response body dumps remain prohibited.

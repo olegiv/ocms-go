@@ -34,25 +34,38 @@ func IsPath(p string) bool {
 	return strings.HasPrefix(p, "/preview/") || strings.Contains(p, "/preview/")
 }
 
-type tokenKey struct{}
+type unsafeShareURLKey struct{}
 
-// Token exists only in request context, never in request URLs seen by integrations/loggers.
-func Token(ctx context.Context) string { token, _ := ctx.Value(tokenKey{}).(string); return token }
+// ShareRequestAllowed rejects encoded/legacy aliases and query-bearing POSTs
+// even after redaction. GET is only a static landing: client-added tracking
+// queries confer no access and are cleared before the fixed-path POST.
+func ShareRequestAllowed(r *http.Request) bool {
+	unsafe, _ := r.Context().Value(unsafeShareURLKey{}).(bool)
+	landing := r.Method == http.MethodGet || r.Method == http.MethodHead
+	return !unsafe && r.URL.RawPath == "" && r.URL.Fragment == "" &&
+		((landing && r.URL.Path == SharePath) ||
+			(r.Method == http.MethodPost && r.URL.Path == ShareOpenPath && r.URL.RawQuery == "" && !r.URL.ForceQuery))
+}
 
-// RedactRequest runs before loggers and integrations. Routing needs only the
-// share route's shape; the handler resolves the original secret from context.
+// RedactRequest runs before loggers and integrations. Legacy URL credentials
+// are discarded, never resolved or redirected into the body-only transport.
 func RedactRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if index := strings.Index(r.URL.Path, "/preview/share/"); index >= 0 {
-			prefix := r.URL.Path[:index] + "/preview/share/"
-			ctx := context.WithValue(r.Context(), tokenKey{}, strings.TrimPrefix(r.URL.Path, prefix))
-			clean := r.Clone(ctx)
+		index := strings.Index(r.URL.Path, SharePath)
+		if index >= 0 && (len(r.URL.Path) == index+len(SharePath) || r.URL.Path[index+len(SharePath)] == '/') {
+			unsafe := !ShareRequestAllowed(r)
+			clean := r.Clone(context.WithValue(r.Context(), unsafeShareURLKey{}, unsafe))
 			u := *r.URL
-			u.Path = prefix + "redacted"
+			if len(u.Path) > index+len(SharePath) && u.Path != ShareOpenPath {
+				u.Path = u.Path[:index] + SharePath + "/redacted"
+			}
 			u.RawPath = ""
 			u.RawQuery = ""
+			u.ForceQuery = false
+			u.Fragment, u.RawFragment = "", ""
 			clean.URL = &u
 			clean.RequestURI = u.EscapedPath()
+			clean.Header.Del("Referer")
 			r = clean
 		}
 		next.ServeHTTP(w, r)

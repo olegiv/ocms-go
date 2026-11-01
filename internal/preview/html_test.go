@@ -85,8 +85,8 @@ func TestPreviewRedactionPrecedesApplicationObservers(t *testing.T) {
 			if strings.Contains(r.URL.String(), secret) || strings.Contains(r.RequestURI, secret) || r.URL.RawQuery != "" {
 				t.Fatal("application observer saw bearer URL")
 			}
-			if preview.Token(r.Context()) != secret || !preview.IsRequest(r.Context()) {
-				t.Fatal("private handler context lost")
+			if preview.ShareRequestAllowed(r) || !preview.IsRequest(r.Context()) {
+				t.Fatal("legacy URL transport was accepted or preview context lost")
 			}
 			w.WriteHeader(http.StatusNotFound)
 		})))
@@ -95,6 +95,34 @@ func TestPreviewRedactionPrecedesApplicationObservers(t *testing.T) {
 		if response.Code != 404 || response.Header().Get("Cache-Control") != "private, no-store" {
 			t.Fatal("denied preview lost privacy headers")
 		}
+	}
+}
+
+func TestShareRedactionDoesNotTurnUnsafeURLsIntoValidTransport(t *testing.T) {
+	for _, tc := range []struct {
+		path    string
+		allowed bool
+	}{
+		{"/preview/share/open", true},
+		{"/preview/share", false},
+		{"/preview/share?token=private", false},
+		{"/preview/share?", false},
+		{"/preview/%73hare", false},
+		{"/preview/share/private", false},
+		{"/ru/preview/share", false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, tc.path, nil)
+			r.Header.Set("Referer", "https://cms.test/preview/share/private")
+			preview.RedactRequest(http.HandlerFunc(func(w http.ResponseWriter, clean *http.Request) {
+				if strings.Contains(clean.URL.String(), "private") || strings.Contains(clean.RequestURI, "private") || clean.Header.Get("Referer") != "" {
+					t.Fatal("application observer saw a URL credential")
+				}
+				if preview.ShareRequestAllowed(clean) != tc.allowed {
+					t.Fatal("redaction changed whether the transport is safe")
+				}
+			})).ServeHTTP(httptest.NewRecorder(), r)
+		})
 	}
 }
 

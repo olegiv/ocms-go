@@ -8,19 +8,36 @@ import (
 	"database/sql"
 	"html/template"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
+
+func postedShareRequest(t *testing.T, link string) *http.Request {
+	t.Helper()
+	u, err := neturl.Parse(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := neturl.Values{"token": {u.Fragment}}.Encode()
+	u.Fragment = ""
+	u.Path = preview.ShareOpenPath
+	r := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return r
+}
 
 func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
@@ -55,8 +72,9 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 	}
 	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
 	router := chi.NewRouter()
-	router.Use(preview.RedactRequest, preview.Middleware)
-	router.Get("/preview/share/{token}", h.PreviewShare)
+	router.Use(preview.RedactRequest, middleware.SecurityHeaders(middleware.DefaultSecurityHeadersConfig(true)), preview.Middleware)
+	router.Get(preview.SharePath, h.PreviewShareLanding)
+	router.Post(preview.ShareOpenPath, h.PreviewShare)
 	router.Get("/preview/pages/{id}/revisions/{revision}", h.PreviewSession)
 	sessionURL := preview.SessionURL("", "", p.ID, p.Revision)
 	for _, tc := range []struct {
@@ -70,6 +88,9 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest("GET", tc.url, nil)
+			if tc.name == "anonymous explicit share" {
+				r = postedShareRequest(t, tc.url)
+			}
 			if tc.authenticated {
 				r = withUser(r, user)
 			}
@@ -89,10 +110,49 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 			}
 		})
 	}
+	u, _ := neturl.Parse(link.URL)
+	secret := u.Fragment
+	u.Fragment = ""
+	t.Run("resource-free landing", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, u.String(), nil))
+		if w.Code != http.StatusOK || strings.Contains(w.Body.String(), secret) || strings.Contains(w.Body.String(), "Draft content") || strings.Contains(w.Body.String(), "src=") {
+			t.Fatal("landing disclosed content or a credential, or loaded another resource")
+		}
+		if !strings.Contains(w.Header().Get("Content-Security-Policy"), "script-src 'nonce-") || !strings.Contains(w.Header().Get("Content-Security-Policy"), "form-action 'self'") || !strings.Contains(w.Body.String(), `nonce="`) || !strings.Contains(w.Body.String(), "history.replaceState") || !strings.Contains(w.Body.String(), "requestSubmit") {
+			t.Fatal("landing lost its isolated fragment-to-POST bootstrap")
+		}
+		if w.Header().Get("Set-Cookie") != "" || w.Header().Get("Location") != "" {
+			t.Fatal("landing introduced a cookie or redirect")
+		}
+	})
+	for _, tc := range []struct{ name, method, target, body, contentType string }{
+		{"legacy path", "GET", preview.SharePath + "/" + secret, "", ""},
+		{"encoded legacy path", "GET", "/preview/%73hare/" + secret, "", ""},
+		{"encoded endpoint", "POST", "/preview/%73hare/open", "token=" + secret, "application/x-www-form-urlencoded"},
+		{"query only", "POST", preview.ShareOpenPath + "?token=" + secret, "", "application/x-www-form-urlencoded"},
+		{"query and body", "POST", preview.ShareOpenPath + "?token=" + secret, "token=" + secret, "application/x-www-form-urlencoded"},
+		{"duplicate body", "POST", preview.ShareOpenPath, "token=" + secret + "&token=" + secret, "application/x-www-form-urlencoded"},
+		{"extra body field", "POST", preview.ShareOpenPath, "token=" + secret + "&other=value", "application/x-www-form-urlencoded"},
+		{"malformed body", "POST", preview.ShareOpenPath, "token=" + secret + "&bad=%", "application/x-www-form-urlencoded"},
+		{"oversized body", "POST", preview.ShareOpenPath, "token=" + secret + strings.Repeat("&x=1", 100), "application/x-www-form-urlencoded"},
+		{"json body", "POST", preview.ShareOpenPath, `{"token":"` + secret + `"}`, "application/json"},
+		{"empty body", "POST", preview.ShareOpenPath, "", "application/x-www-form-urlencoded"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
+			r.Header.Set("Content-Type", tc.contentType)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, r)
+			if w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), "Draft content") || strings.Contains(w.Body.String(), secret) || strings.Contains(w.Header().Get("Location"), secret) {
+				t.Fatal("unsafe share transport was accepted or reflected")
+			}
+		})
+	}
 	h.themeManager = loadedFrontendThemeManager(t, "developer")
 	h.themeManager.GetActiveTheme().Templates = template.New("broken theme")
 	failed := httptest.NewRecorder()
-	router.ServeHTTP(failed, httptest.NewRequest("GET", link.URL, nil))
+	router.ServeHTTP(failed, postedShareRequest(t, link.URL))
 	if failed.Code != 503 || strings.Contains(failed.Body.String(), "Draft content") || strings.Contains(failed.Body.String(), "Later private") {
 		t.Fatal("theme failure fell back to content")
 	}
@@ -101,7 +161,7 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, httptest.NewRequest("GET", link.URL, nil))
+	router.ServeHTTP(w, postedShareRequest(t, link.URL))
 	if w.Code != 404 || strings.Contains(w.Body.String(), "Later private") {
 		t.Fatal("missing snapshot fell back to live content")
 	}

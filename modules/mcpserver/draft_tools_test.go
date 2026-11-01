@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -186,7 +187,11 @@ func TestDraftToolsSDKCreateReadUpdateReplayAndExplicitSharing(t *testing.T) {
 		t.Fatal("save/read silently issued a token")
 	}
 	shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": updated.Revision}))
-	_, secret, _ := strings.Cut(shared.URL, "/preview/share/")
+	sharedURL, err := url.Parse(shared.URL)
+	if err != nil || sharedURL.Path != preview.SharePath || sharedURL.RawQuery != "" || len(sharedURL.Fragment) != 43 {
+		t.Fatal("MCP issued a proxy-visible bearer")
+	}
+	secret := sharedURL.Fragment
 	snapshot, err := (preview.Service{Q: env.q}).Resolve(t.Context(), secret)
 	if err != nil || snapshot.Page.ID != saved.PageID || snapshot.Page.Revision != updated.Revision {
 		t.Fatal("explicit share failed to pin the requested revision")

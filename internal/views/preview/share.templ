@@ -1,0 +1,36 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package preview
+
+import "github.com/olegiv/ocms-go/internal/i18n"
+import "github.com/olegiv/ocms-go/internal/preview"
+
+// ShareLanding contains no theme, external assets, private content or token.
+templ ShareLanding(lang string) {
+	<!DOCTYPE html>
+	<html lang={ lang }>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="referrer" content="no-referrer"/>
+			<title>{ i18n.T(lang, "preview.open_revision") }</title>
+		</head>
+		<body>
+			<h1>{ i18n.T(lang, "preview.open_revision") }</h1>
+			<p>{ i18n.T(lang, "preview.open_complete_link") }</p>
+			<noscript><p>{ i18n.T(lang, "preview.javascript_required") }</p></noscript>
+			<form id="preview-open" method="post" action={ templ.SafeURL(preview.ShareOpenPath) } hidden>
+				<input type="hidden" name="token" autocomplete="off"/>
+			</form>
+			<script nonce={ templ.GetNonce(ctx) }>
+				(() => {
+					const form = document.getElementById("preview-open");
+					const token = window.location.hash.slice(1);
+					history.replaceState(null, "", window.location.pathname);
+					form.elements.namedItem("token").value = /^[A-Za-z0-9_-]{43}$/.test(token) ? token : "";
+					form.requestSubmit();
+				})();
+			</script>
+		</body>
+	</html>
+}

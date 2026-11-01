@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"mime"
 	"net/http"
 	"strconv"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	previewviews "github.com/olegiv/ocms-go/internal/views/preview"
 )
 
 // PreviewSession renders exactly the recorded revision, without going through page caches.
@@ -47,15 +49,52 @@ func (h *FrontendHandler) renderRevisionPreview(w http.ResponseWriter, r *http.R
 	h.renderCapturedPreview(w, r, snapshot)
 }
 
-// PreviewShare does not depend on or widen the viewer's session permissions.
+// PreviewShareLanding is deliberately independent of themes and integrations:
+// only its nonce-authorized bootstrap may see the browser-only fragment.
+func (h *FrontendHandler) PreviewShareLanding(w http.ResponseWriter, r *http.Request) {
+	preview.Headers(w.Header())
+	if !preview.ShareRequestAllowed(r) {
+		http.NotFound(w, r)
+		return
+	}
+	nonce := middleware.GetCSPNonce(r)
+	if nonce == "" {
+		http.Error(w, "Preview unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'nonce-"+nonce+"'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	renderTempl(w, r, previewviews.ShareLanding(i18n.MatchLanguage(r.Header.Get("Accept-Language"))))
+}
+
+// PreviewShare resolves only a bounded POST body, without session credentials,
+// redirects, bearer cookies or a stored redemption that could bypass revocation.
 func (h *FrontendHandler) PreviewShare(w http.ResponseWriter, r *http.Request) {
 	preview.Headers(w.Header())
-	snapshot, err := (preview.Service{Q: h.queries}).Resolve(r.Context(), preview.Token(r.Context()))
+	snapshot, err := (preview.Service{Q: h.queries}).Resolve(r.Context(), postedPreviewToken(w, r))
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	h.renderCapturedPreview(w, r, snapshot)
+}
+
+func postedPreviewToken(w http.ResponseWriter, r *http.Request) string {
+	if r.Method != http.MethodPost || !preview.ShareRequestAllowed(r) {
+		return ""
+	}
+	body := http.MaxBytesReader(w, r.Body, 256)
+	r.Body = body
+	r.Form, r.PostForm = nil, nil
+	defer func() {
+		_ = body.Close()
+		r.Body, r.ContentLength = http.NoBody, 0
+		r.Form, r.PostForm = nil, nil
+	}()
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/x-www-form-urlencoded" || r.ParseForm() != nil || len(r.PostForm) != 1 || len(r.PostForm["token"]) != 1 {
+		return ""
+	}
+	return r.PostForm["token"][0]
 }
 
 func (h *FrontendHandler) renderCapturedPreview(w http.ResponseWriter, r *http.Request, snapshot preview.Snapshot) {

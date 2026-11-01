@@ -113,6 +113,18 @@ func registerSettingsRoutes(r chi.Router, route string, get, update http.Handler
 	r.Post(route, update) // HTML forms can't send PUT
 }
 
+func registerPreviewRoutes(r chi.Router, h *handler.FrontendHandler) {
+	r.Route("/preview", func(pr chi.Router) {
+		pr.Get("/pages/{id}/revisions/{revision}", h.PreviewSession)
+		limiter := middleware.NewGlobalRateLimiter(2, 20)
+		pr.With(limiter.Middleware()).Get("/share", h.PreviewShareLanding)
+		pr.With(limiter.Middleware()).Post("/share/open", h.PreviewShare)
+		pr.Get("/", http.NotFound)
+		pr.NotFound(http.NotFound)
+	})
+	r.Get("/{lang}/preview/pages/{id}/revisions/{revision}", h.PreviewSession)
+}
+
 // registerFrontendRoutes registers common frontend public routes on the given router.
 func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 	for _, feed := range []struct {
@@ -2240,14 +2252,7 @@ func run() (runErr error) {
 	// Preview routes intentionally bypass analytics and normal page caches.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.OptionalLoadUser(sessionManager, db))
-		r.Route("/preview", func(pr chi.Router) {
-			pr.Get("/pages/{id}/revisions/{revision}", frontendHandler.PreviewSession)
-			limiter := middleware.NewGlobalRateLimiter(2, 20)
-			pr.With(limiter.Middleware()).Get("/share/{token}", frontendHandler.PreviewShare)
-			pr.Get("/", http.NotFound)
-			pr.NotFound(http.NotFound)
-		})
-		r.Get("/{lang}/preview/pages/{id}/revisions/{revision}", frontendHandler.PreviewSession)
+		registerPreviewRoutes(r, frontendHandler)
 	})
 
 	// Public discovery files are unprefixed routes. Keep them outside the

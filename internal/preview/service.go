@@ -26,6 +26,13 @@ import (
 const DefaultTTL = 24 * time.Hour
 const MaxActiveLinks = 10
 
+// SharePath never includes a credential. Browsers send its fragment in a POST body.
+const SharePath = "/preview/share"
+
+// ShareOpenPath differs from the landing so opening another share is a full
+// navigation, rather than a fragment change on an already-rendered preview.
+const ShareOpenPath = "/preview/share/open"
+
 var ErrUnavailable = errors.New("preview_unavailable")
 var ErrLimit = errors.New("preview_limit")
 
@@ -68,7 +75,7 @@ func SessionURL(origin, language string, pageID, revision int64) string {
 // Issue rechecks the trusted caller and ownership in the same transaction as the cap and insert.
 func (s Service) Issue(ctx context.Context, principal provenance.Principal, pageID, revision int64, origin string, authorize func(context.Context, *store.Queries) error) (Link, error) {
 	base, err := url.Parse(origin)
-	if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" || (base.Path != "" && base.Path != "/") {
+	if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Host == "" || base.User != nil || base.RawQuery != "" || base.ForceQuery || base.Fragment != "" || (base.Path != "" && base.Path != "/") {
 		return Link{}, ErrUnavailable
 	}
 	if base.Scheme == "http" && base.Hostname() != "localhost" {
@@ -157,7 +164,8 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 		if _, err = work.Q.GetPreviewLinkByHash(ctx, store.GetPreviewLinkByHashParams{TokenHash: created.TokenHash, ExpiresAt: now.Unix()}); err != nil {
 			return ErrUnavailable
 		}
-		result = Link{PageID: pageID, Revision: revision, URL: strings.TrimRight(origin, "/") + "/preview/share/" + raw, ExpiresAt: time.Unix(created.ExpiresAt, 0).UTC(), Warning: "Anyone holding this link can read this revision until it expires or is revoked."}
+		base.Path, base.RawPath, base.Fragment = SharePath, "", raw
+		result = Link{PageID: pageID, Revision: revision, URL: base.String(), ExpiresAt: time.Unix(created.ExpiresAt, 0).UTC(), Warning: "Anyone holding this link can read this revision until it expires or is revoked."}
 		return nil
 	})
 	return result, err

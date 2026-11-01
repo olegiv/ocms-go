@@ -8418,6 +8418,16 @@
             "translation": "Предпросмотр этой версии"
         },
         {
+            "id": "preview.open_complete_link",
+            "message": "Open the complete share link to view this revision.",
+            "translation": "Откройте полную ссылку общего доступа для просмотра этой версии."
+        },
+        {
+            "id": "preview.javascript_required",
+            "message": "JavaScript is required to open a shared preview. Enable it and reopen the original link.",
+            "translation": "Для общего предпросмотра нужен JavaScript. Включите его и снова откройте исходную ссылку."
+        },
+        {
             "id": "preview.share_warning",
             "message": "Anyone with a share link can read the selected revision until expiry or revocation.",
             "translation": "Любой обладатель ссылки может читать выбранную версию до истечения срока или отзыва доступа."

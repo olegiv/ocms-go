@@ -1,8 +1,12 @@
 # Connected-app draft authoring
 
-R1.5 staging acceptance is recorded in PHASE5 implementation notes. R1.6 adds
-editorial review and isolated revision previews locally; fresh connected-client
-acceptance for those changes remains pending.
+R1.5 and R1.6 staging acceptance is recorded in PHASE5 implementation notes.
+R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
+`ff4de3b1368c`. Public share-link release remains blocked: Fly Proxy error logs
+retain the request path before application redaction. Use session previews
+for private content until the bearer transport or hosting boundary is corrected.
+The fragment/POST transport fix is prepared and verified locally, but is not
+deployed; staging still needs the later authorized deployment and retest.
 
 ## Workflow
 
@@ -21,6 +25,9 @@ acceptance for those changes remains pending.
    Previews are pinned to the saved revision. Sharing requires a separate,
    user-requested `create_preview_link`; anyone holding that URL can read the
    snapshot until it expires or is revoked.
+   Copy the complete share URL including `#...`. A JavaScript-enabled browser
+   opens it through the credential-free landing and body-only redemption;
+   never move that fragment into a path or query parameter.
 5. To continue in another app, connect with the same oCMS user and scopes,
    use `list_my_drafts`/`get_my_draft`, then update with a new request UUID and
    the last-read `base_revision`. Foreign-user drafts remain inaccessible,
@@ -55,3 +62,10 @@ revocation/expiry and publication invalidation. Check theme/privacy headers,
 private sibling isolation, claim acknowledgment, revision comparison,
 translation freshness and stale publish/schedule rejection. Confirm upstream
 request logs redact bearer paths before issuing a public share link.
+
+The 2026-11-02 Fly check used only synthetic drafts and a non-credential error
+canary. Application logs redacted real bearer paths, query and referrer markers;
+Fly Proxy recorded the canary path in `meta.URL.Full`. Every test share was
+revoked afterward. This is a failed upstream-redaction check, not a complete
+secure-sharing pass. Native Desktop and CLI coverage of this build remains
+part of the R1.7 matrix; earlier-build results do not establish that coverage.

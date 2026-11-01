@@ -348,7 +348,19 @@ Admin → MCP Server, grant only required scopes and follow
 sign-in/MFA → consent → context → owned draft save/read/update/translation
 → revoke → next request fails → reconnect. Use stable request IDs and current
 revisions. Check anonymous preview denial; share links remain unavailable
-until R1.6. Record actual client/version/build/results in PHASE5 and mark any
+until R1.6. R1.6 is deployed at `ff4de3b1368c`; its tested web-client results
+are recorded in PHASE5. **Public secure sharing is blocked on Fly:** the
+2026-11-02 error-canary test proved that Fly Proxy records a full preview path
+in `meta.URL.Full`, before oCMS redaction. Keep private content on
+session-authenticated previews until the bearer transport or ingress is
+corrected and retested. All acceptance links were revoked.
+
+The fragment/POST fix and one-time legacy-link revocation migration are now
+verified locally and remain undeployed. On a later approved deployment,
+exclude concurrent old URL-issuing writers, let startup migrate first, and
+repeat the fixed-path upstream-error and real-client sharing checks. Keep
+HTTP body dumps disabled. Record actual client/version/build/results in
+PHASE5 and mark any
 unavailable capability pending. DCR and unsupported authentication methods
 remain off. Do not reuse the historical R1.1 probe result as a CMS-write pass.
 

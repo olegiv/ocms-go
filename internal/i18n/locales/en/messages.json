@@ -8418,6 +8418,16 @@
             "translation": "Preview this revision"
         },
         {
+            "id": "preview.open_complete_link",
+            "message": "Open the complete share link to view this revision.",
+            "translation": "Open the complete share link to view this revision."
+        },
+        {
+            "id": "preview.javascript_required",
+            "message": "JavaScript is required to open a shared preview. Enable it and reopen the original link.",
+            "translation": "JavaScript is required to open a shared preview. Enable it and reopen the original link."
+        },
+        {
             "id": "preview.share_warning",
             "message": "Anyone with a share link can read the selected revision until expiry or revocation.",
             "translation": "Anyone with a share link can read the selected revision until expiry or revocation."
