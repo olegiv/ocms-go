@@ -7771,6 +7771,336 @@
             "id": "pages.revision_conflict_title",
             "message": "Page changed",
             "translation": "Page changed"
+        },
+        {
+            "id": "draft.issues.invalid_input.message",
+            "message": "Input does not match the draft contract.",
+            "translation": "Input does not match the draft contract."
+        },
+        {
+            "id": "draft.issues.invalid_input.hint",
+            "message": "Use the create or update schema and check field types, required values and nullability.",
+            "translation": "Use the create or update schema and check field types, required values and nullability."
+        },
+        {
+            "id": "draft.issues.title_length.message",
+            "message": "The title must contain 1–255 characters.",
+            "translation": "The title must contain 1–255 characters."
+        },
+        {
+            "id": "draft.issues.title_length.hint",
+            "message": "Trim the title and keep it within the character limit.",
+            "translation": "Trim the title and keep it within the character limit."
+        },
+        {
+            "id": "draft.issues.summary_length.message",
+            "message": "The summary exceeds 500 characters.",
+            "translation": "The summary exceeds 500 characters."
+        },
+        {
+            "id": "draft.issues.summary_length.hint",
+            "message": "Shorten the summary to at most 500 characters.",
+            "translation": "Shorten the summary to at most 500 characters."
+        },
+        {
+            "id": "draft.issues.meta_title_length.message",
+            "message": "The SEO title exceeds 60 characters.",
+            "translation": "The SEO title exceeds 60 characters."
+        },
+        {
+            "id": "draft.issues.meta_title_length.hint",
+            "message": "Consider a shorter SEO title; the submitted value is retained.",
+            "translation": "Consider a shorter SEO title; the submitted value is retained."
+        },
+        {
+            "id": "draft.issues.meta_description_trimmed.message",
+            "message": "The SEO description was shortened to 160 characters or fewer.",
+            "translation": "The SEO description was shortened to 160 characters or fewer."
+        },
+        {
+            "id": "draft.issues.meta_description_trimmed.hint",
+            "message": "Review the description shortened at a word boundary.",
+            "translation": "Review the description shortened at a word boundary."
+        },
+        {
+            "id": "draft.issues.slug_invalid.message",
+            "message": "The slug has an invalid format.",
+            "translation": "The slug has an invalid format."
+        },
+        {
+            "id": "draft.issues.slug_invalid.hint",
+            "message": "Use lowercase Latin letters, digits and single hyphens, up to 255 characters.",
+            "translation": "Use lowercase Latin letters, digits and single hyphens, up to 255 characters."
+        },
+        {
+            "id": "draft.issues.slug_taken.message",
+            "message": "The slug conflicts with an existing page, alias or route.",
+            "translation": "The slug conflicts with an existing page, alias or route."
+        },
+        {
+            "id": "draft.issues.slug_taken.hint",
+            "message": "Choose another slug or omit it when creating a draft to derive an available one.",
+            "translation": "Choose another slug or omit it when creating a draft to derive an available one."
+        },
+        {
+            "id": "draft.issues.tags_limit.message",
+            "message": "More than ten distinct tags were supplied.",
+            "translation": "More than ten distinct tags were supplied."
+        },
+        {
+            "id": "draft.issues.tags_limit.hint",
+            "message": "Keep at most ten existing tag slugs after deduplication.",
+            "translation": "Keep at most ten existing tag slugs after deduplication."
+        },
+        {
+            "id": "draft.issues.unknown_tag.message",
+            "message": "A tag is unavailable in the selected language.",
+            "translation": "A tag is unavailable in the selected language."
+        },
+        {
+            "id": "draft.issues.unknown_tag.hint",
+            "message": "Choose an existing tag offered for this language.",
+            "translation": "Choose an existing tag offered for this language."
+        },
+        {
+            "id": "draft.issues.tag_creation_not_allowed.message",
+            "message": "Creating tags through draft authoring is not allowed.",
+            "translation": "Creating tags through draft authoring is not allowed."
+        },
+        {
+            "id": "draft.issues.tag_creation_not_allowed.hint",
+            "message": "Use existing tag slugs from the authoring context.",
+            "translation": "Use existing tag slugs from the authoring context."
+        },
+        {
+            "id": "draft.issues.category_not_found.message",
+            "message": "The category is unavailable in the selected language.",
+            "translation": "The category is unavailable in the selected language."
+        },
+        {
+            "id": "draft.issues.category_not_found.hint",
+            "message": "Choose an existing category offered for this language, or clear it.",
+            "translation": "Choose an existing category offered for this language, or clear it."
+        },
+        {
+            "id": "draft.issues.image_not_found.message",
+            "message": "The featured image is unavailable or is not a supported image.",
+            "translation": "The featured image is unavailable or is not a supported image."
+        },
+        {
+            "id": "draft.issues.image_not_found.hint",
+            "message": "Choose an existing JPEG, PNG, GIF or WebP image from the media library.",
+            "translation": "Choose an existing JPEG, PNG, GIF or WebP image from the media library."
+        },
+        {
+            "id": "draft.issues.image_too_small.message",
+            "message": "The featured image is smaller than 1200×800 pixels.",
+            "translation": "The featured image is smaller than 1200×800 pixels."
+        },
+        {
+            "id": "draft.issues.image_too_small.hint",
+            "message": "Choose an existing image meeting the featured-image minimum dimensions.",
+            "translation": "Choose an existing image meeting the featured-image minimum dimensions."
+        },
+        {
+            "id": "draft.issues.media_ref_not_found.message",
+            "message": "An inline image does not resolve to supported existing media.",
+            "translation": "An inline image does not resolve to supported existing media."
+        },
+        {
+            "id": "draft.issues.media_ref_not_found.hint",
+            "message": "Use a canonical media:ID reference to an existing image.",
+            "translation": "Use a canonical media:ID reference to an existing image."
+        },
+        {
+            "id": "draft.issues.language_inactive.message",
+            "message": "The language is unavailable, inactive or cannot be routed.",
+            "translation": "The language is unavailable, inactive or cannot be routed."
+        },
+        {
+            "id": "draft.issues.language_inactive.hint",
+            "message": "Choose an active language offered by this site.",
+            "translation": "Choose an active language offered by this site."
+        },
+        {
+            "id": "draft.issues.reference_unresolved.message",
+            "message": "A site reference could not be resolved.",
+            "translation": "A site reference could not be resolved."
+        },
+        {
+            "id": "draft.issues.reference_unresolved.hint",
+            "message": "Reread the authoring context and choose an existing site reference.",
+            "translation": "Reread the authoring context and choose an existing site reference."
+        },
+        {
+            "id": "draft.issues.reference_not_visible.message",
+            "message": "A site reference is unavailable to this account.",
+            "translation": "A site reference is unavailable to this account."
+        },
+        {
+            "id": "draft.issues.reference_not_visible.hint",
+            "message": "Use only references visible under the current connection's permissions.",
+            "translation": "Use only references visible under the current connection's permissions."
+        },
+        {
+            "id": "draft.issues.external_link.message",
+            "message": "The draft includes an external link for editorial review.",
+            "translation": "The draft includes an external link for editorial review."
+        },
+        {
+            "id": "draft.issues.external_link.hint",
+            "message": "Review the external-links list and the applied keep, nofollow or strip policy.",
+            "translation": "Review the external-links list and the applied keep, nofollow or strip policy."
+        },
+        {
+            "id": "draft.issues.internal_link_broken.message",
+            "message": "An internal link does not resolve to visible site content.",
+            "translation": "An internal link does not resolve to visible site content."
+        },
+        {
+            "id": "draft.issues.internal_link_broken.hint",
+            "message": "Choose a valid internal link from the authoring context.",
+            "translation": "Choose a valid internal link from the authoring context."
+        },
+        {
+            "id": "draft.issues.link_not_allowed.message",
+            "message": "A link uses an unsupported or unsafe URL.",
+            "translation": "A link uses an unsupported or unsafe URL."
+        },
+        {
+            "id": "draft.issues.link_not_allowed.hint",
+            "message": "Use an internal link, HTTP, HTTPS or mailto URL without embedded credentials.",
+            "translation": "Use an internal link, HTTP, HTTPS or mailto URL without embedded credentials."
+        },
+        {
+            "id": "draft.issues.raw_html_not_allowed.message",
+            "message": "Raw HTML is not accepted in Markdown drafts.",
+            "translation": "Raw HTML is not accepted in Markdown drafts."
+        },
+        {
+            "id": "draft.issues.raw_html_not_allowed.hint",
+            "message": "Use Markdown syntax; put HTML examples inside fenced code blocks.",
+            "translation": "Use Markdown syntax; put HTML examples inside fenced code blocks."
+        },
+        {
+            "id": "draft.issues.overlap_with_example.message",
+            "message": "The draft overlaps substantially with an example page.",
+            "translation": "The draft overlaps substantially with an example page."
+        },
+        {
+            "id": "draft.issues.overlap_with_example.hint",
+            "message": "Review and rewrite passages that copy an example rather than use it for style.",
+            "translation": "Review and rewrite passages that copy an example rather than use it for style."
+        },
+        {
+            "id": "draft.issues.forbidden_field.message",
+            "message": "The request contains a field this operation cannot change.",
+            "translation": "The request contains a field this operation cannot change."
+        },
+        {
+            "id": "draft.issues.forbidden_field.hint",
+            "message": "Remove lifecycle, ownership, language, page-type or verified fields from updates.",
+            "translation": "Remove lifecycle, ownership, language, page-type or verified fields from updates."
+        },
+        {
+            "id": "draft.issues.revision_required.message",
+            "message": "A base revision is required.",
+            "translation": "A base revision is required."
+        },
+        {
+            "id": "draft.issues.revision_required.hint",
+            "message": "Read the current draft and submit its revision with the update.",
+            "translation": "Read the current draft and submit its revision with the update."
+        },
+        {
+            "id": "draft.issues.revision_conflict.message",
+            "message": "The page changed after it was read.",
+            "translation": "The page changed after it was read."
+        },
+        {
+            "id": "draft.issues.revision_conflict.hint",
+            "message": "Reread the draft and merge the changes before submitting a new update.",
+            "translation": "Reread the draft and merge the changes before submitting a new update."
+        },
+        {
+            "id": "draft.issues.idempotency_key_reused.message",
+            "message": "This request ID was already used for different input.",
+            "translation": "This request ID was already used for different input."
+        },
+        {
+            "id": "draft.issues.idempotency_key_reused.hint",
+            "message": "Reuse an ID only for an unchanged retry; use a new UUID for a new operation.",
+            "translation": "Reuse an ID only for an unchanged retry; use a new UUID for a new operation."
+        },
+        {
+            "id": "draft.issues.request_expired.message",
+            "message": "The original result is expired or its page was deleted.",
+            "translation": "The original result is expired or its page was deleted."
+        },
+        {
+            "id": "draft.issues.request_expired.hint",
+            "message": "Inspect current drafts before starting a new operation with a new request ID.",
+            "translation": "Inspect current drafts before starting a new operation with a new request ID."
+        },
+        {
+            "id": "draft.issues.not_ai_editable.message",
+            "message": "The draft is not available for AI edits.",
+            "translation": "The draft is not available for AI edits."
+        },
+        {
+            "id": "draft.issues.not_ai_editable.hint",
+            "message": "The owner must enable AI edits on a plain draft accessible to this account.",
+            "translation": "The owner must enable AI edits on a plain draft accessible to this account."
+        },
+        {
+            "id": "draft.issues.source_revision_conflict.message",
+            "message": "The translation source changed after it was read.",
+            "translation": "The translation source changed after it was read."
+        },
+        {
+            "id": "draft.issues.source_revision_conflict.hint",
+            "message": "Reread the source and regenerate the translation from its current revision.",
+            "translation": "Reread the source and regenerate the translation from its current revision."
+        },
+        {
+            "id": "draft.issues.translation_exists.message",
+            "message": "This translation group already contains the target language.",
+            "translation": "This translation group already contains the target language."
+        },
+        {
+            "id": "draft.issues.translation_exists.hint",
+            "message": "Read the translation status before creating another translation.",
+            "translation": "Read the translation status before creating another translation."
+        },
+        {
+            "id": "draft.issues.body_too_large.message",
+            "message": "The Markdown or resulting HTML exceeds 200,000 bytes.",
+            "translation": "The Markdown or resulting HTML exceeds 200,000 bytes."
+        },
+        {
+            "id": "draft.issues.body_too_large.hint",
+            "message": "Shorten the body and retry the same logical operation only with a new request ID.",
+            "translation": "Shorten the body and retry the same logical operation only with a new request ID."
+        },
+        {
+            "id": "draft.issues.html_conversion_lossy.message",
+            "message": "The stored rich HTML cannot be represented completely as Markdown.",
+            "translation": "The stored rich HTML cannot be represented completely as Markdown."
+        },
+        {
+            "id": "draft.issues.html_conversion_lossy.hint",
+            "message": "Review the stored HTML before explicitly replacing its body; metadata-only updates preserve it.",
+            "translation": "Review the stored HTML before explicitly replacing its body; metadata-only updates preserve it."
+        },
+        {
+            "id": "draft.issues.media_conversion_lossy.message",
+            "message": "An existing image could not be converted to a media:ID reference.",
+            "translation": "An existing image could not be converted to a media:ID reference."
+        },
+        {
+            "id": "draft.issues.media_conversion_lossy.hint",
+            "message": "Choose matching media from the library before replacing this body.",
+            "translation": "Choose matching media from the library before replacing this body."
         }
     ]
 }

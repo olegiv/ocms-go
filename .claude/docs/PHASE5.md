@@ -715,7 +715,7 @@ spike writes isolated scratch data; actual CMS draft persistence is first proven
 
 ### Iteration R1.2: Write Foundations — Shared Path, Ownership, Revisions, Idempotency, Provenance
 
-**Status: implemented locally (2026-11-01), uncommitted.** The shared boundary,
+**Status: complete locally (2026-11-01), committed as `fc25f0d2`.** The shared boundary,
 legacy writers, admin conflict flow and storage contracts are covered by local
 checks. See `docs/page-writes.md` and the R1.2 implementation notes. No R1.2
 push/deployment has been authorized; MCP page-authoring tools remain R1.5.
@@ -753,6 +753,13 @@ push/deployment has been authorized; MCP page-authoring tools remain R1.5.
   - migration of existing pages/partial version rows; existing handler tests green.
 
 ### Iteration R1.3: Draft Contract, Validation Feedback, Safe HTML, Link Policy
+
+**Status: complete locally; uncommitted (2026-11-01).** Work is on
+`codex/phase5-r1.3-draft-contract`, based on `fc25f0d2`. Full tests, focused
+race/fuzz/drift checks and live local HTTP/browser verification passed. No commit,
+push or deployment was performed. See `docs/draft-contract.md` and the R1.3
+implementation notes below. R1.4 has not started.
+
 - `internal/ai/draft`: types, schema, `Validate` / `Normalize`, the **issue catalog** (codes, severities,
   en/ru messages, hints), distinct create/update presence rules, slug derivation, md → safe HTML,
   `media:` image references (variant URLs,
@@ -2426,3 +2433,70 @@ Final R1.2 verification: 59 packages, 7489 test/subtest results,
 race checks passed. Runtime/test source fingerprint: `98a70310f78e07fe41dba453c5ff0b2f108c506880d7ff115f5aac6304341d3d`.
 The full evidence record and remaining staged-authoring scope are in
 `docs/page-writes.md`. No commit, push or deployment was performed.
+
+### Iteration R1.3 — Draft contract and safe content (2026-11-01)
+
+Implemented locally on `codex/phase5-r1.3-draft-contract`, based on committed
+R1.2 `fc25f0d29fbc56be9fd8e5dd09d6b7f407e9fde9`. The work remains uncommitted;
+no dependency, migration, push or deployment was added. Staging remains on
+`c885da9071eb`.
+
+- Added `internal/ai/draft` with distinct closed create/update schemas derived
+  from Huma tags, also exercised through the actual MCP schema builder. Creates
+  require title, summary and Markdown; changes must be non-empty. Unknown,
+  forbidden, duplicate, excessive-depth and invalid UTF-8 inputs fail closed.
+  Presence wrappers preserve omission, null and explicit empty values through
+  typed idempotency hashing, including nested agent-reported fields.
+- Added bounded normalization, slug derivation, language/taxonomy/media reads,
+  shared featured-image minimum checks and SEO warnings/description trimming.
+  The normalizer never mutates input, writes pages or fetches URLs. Operational
+  resolver errors remain errors. A blocking issue returns no saveable content.
+  The 33-code catalog has English/Russian messages and hints, matching locales
+  and documentation; reserved R1.4/R1.5 codes are explicitly distinguished.
+- Added Goldmark rendering with raw HTML disabled and rejected, existing
+  `media:ID` references, escaped alt/captions, available responsive variants and
+  unconditional sanitization. Both Markdown and final HTML have byte caps.
+  Metadata-only changes preserve authoritative stored HTML byte for byte.
+  Explicit derived Markdown warns about rich-content loss and verifies media
+  identity against its actual stored local URL.
+- Added keep/nofollow/strip external-link policy and review results without
+  remote verification. Internal links use an injected visibility callback;
+  `StoreResolver` fails closed if it is absent. Shared frontend/redirect resolver
+  extraction belongs to R1.4, so no second routing implementation was added.
+  Host comparison covers IDNA, ports and IPv6. An observed Goldmark IPv6-host
+  escaping regression was reproduced and fixed in the safe link renderer.
+- The shared page sanitizer now preserves explicit allowed link relations
+  instead of automatically adding nofollow. This is necessary for the reviewed
+  keep policy to survive v2 saves and frontend re-sanitization. Local tests and
+  actual REST/frontend requests verify all three policies, responsive images
+  and exact body preservation. Existing valid nofollow relations remain valid.
+- Direct failure evidence includes the XSS/remote-image corpus, invalid schema
+  and reference inputs, missing/forged media, operational resolver failures and
+  output expansion limits. Eight deliberate safeguard removals each failed
+  their targeted checks; restored source passed. An invalid inline-image body
+  stops resolution after the first blocking error. Normalizer rejection leaves
+  the disposable database's page count unchanged.
+- Baseline checks: `scripts/test-gate.sh` passed all 60 test packages. Race
+  checks passed for draft, sanitizer, pagewrite, v2 pages and MCP. Both final
+  15-second fuzz targets passed (74,012 executions total). Vet, Staticcheck and
+  Errcheck passed; scoped GolangCI reported zero issues. Full GolangCI retains
+  the same five pre-existing findings in unchanged layout/MFA tests and local
+  weather code. Govulncheck reports zero reachable/imported-package findings
+  and one uncalled module advisory. These are not a whole-repository audit.
+- Built assets with the immutable npm lockfile, rebuilt/restarted the disposable
+  loopback app, and passed 32 actual HTTP checks across all three link policies,
+  draft privacy, metadata updates, complete revisions/provenance and image
+  assets. Browser inspection verified the article, caption and responsive
+  source selection. Only synthetic local fixtures were published for this
+  check; their short-lived REST key was deactivated and its private file removed.
+  The local app remains running at `http://127.0.0.1:18082`.
+- Source docs and local wiki were updated while preserving prior wiki work.
+  Evidence is retained under ignored `output/r13-validation/`, including
+  `verification.json`, `behavior-verification.md` and `source-manifest.json`.
+  Runtime/test source fingerprint:
+  `f4f48db10a7a5a206879ecf6cbb0d97ffd8feb215a28207dfd5978de5c926d8b`.
+
+R1.3 is complete locally. No MCP CMS-authoring tools were registered and no
+real-client authoring acceptance was claimed. Next is R1.4: shared grounding
+and visibility resolvers, editorial guidance, MCP resources and prompts. Stop
+here for human review; commit, push and deployment remain separate actions.

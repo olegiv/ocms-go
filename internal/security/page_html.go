@@ -88,6 +88,18 @@ var pageHTMLSanitizer = buildPageHTMLSanitizer()
 
 func buildPageHTMLSanitizer() *bluemonday.Policy {
 	p := bluemonday.UGCPolicy()
+	// Link policy is explicit. Forcing nofollow here would override an agent's
+	// reviewed keep policy every time the v2 service or frontend sanitizes again.
+	p.RequireNoFollowOnLinks(false)
+	p.AllowAttrs("rel").Matching(regexp.MustCompile(`^(?:noopener|noreferrer|nofollow)(?: (?:noopener|noreferrer|nofollow))*$`)).OnElements("a")
+	// Generated draft media uses existing local uploads only. Do not accept
+	// arbitrary remote srcsets or CSS in responsive-image attributes.
+	asset := `/uploads/(?:small|medium|large)/[a-fA-F0-9-]{36}/[^\s"'<>,]+ [1-9][0-9]*w`
+	p.AllowAttrs("srcset").Matching(regexp.MustCompile(`^` + asset + `(?:, ` + asset + `)*$`)).OnElements("img")
+	p.AllowAttrs("sizes").Matching(regexp.MustCompile(`^\(max-width: 800px\) 100vw, 800px$`)).OnElements("img")
+	p.AllowAttrs("data-media-id").Matching(regexp.MustCompile(`^[1-9][0-9]{0,18}$`)).OnElements("img")
+	p.AllowAttrs("loading").Matching(regexp.MustCompile(`^(?:lazy|eager)$`)).OnElements("img")
+	p.AllowAttrs("decoding").Matching(regexp.MustCompile(`^(?:async|sync|auto)$`)).OnElements("img")
 	// Allow Prism.js language classes on pre/code elements for syntax highlighting.
 	// Pattern permits "language-go", "language-bash", etc.
 	p.AllowAttrs("class").Matching(

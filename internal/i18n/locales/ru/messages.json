@@ -7771,6 +7771,336 @@
             "id": "pages.revision_conflict_title",
             "message": "Page changed",
             "translation": "Страница изменилась"
+        },
+        {
+            "id": "draft.issues.invalid_input.message",
+            "message": "Input does not match the draft contract.",
+            "translation": "Входные данные не соответствуют контракту черновика."
+        },
+        {
+            "id": "draft.issues.invalid_input.hint",
+            "message": "Use the create or update schema and check field types, required values and nullability.",
+            "translation": "Проверьте типы полей, обязательные значения и допустимость null по схеме создания или обновления."
+        },
+        {
+            "id": "draft.issues.title_length.message",
+            "message": "The title must contain 1–255 characters.",
+            "translation": "Заголовок должен содержать от 1 до 255 символов."
+        },
+        {
+            "id": "draft.issues.title_length.hint",
+            "message": "Trim the title and keep it within the character limit.",
+            "translation": "Уберите пробелы по краям и соблюдайте ограничение длины."
+        },
+        {
+            "id": "draft.issues.summary_length.message",
+            "message": "The summary exceeds 500 characters.",
+            "translation": "Краткое описание превышает 500 символов."
+        },
+        {
+            "id": "draft.issues.summary_length.hint",
+            "message": "Shorten the summary to at most 500 characters.",
+            "translation": "Сократите краткое описание до 500 символов."
+        },
+        {
+            "id": "draft.issues.meta_title_length.message",
+            "message": "The SEO title exceeds 60 characters.",
+            "translation": "SEO-заголовок превышает 60 символов."
+        },
+        {
+            "id": "draft.issues.meta_title_length.hint",
+            "message": "Consider a shorter SEO title; the submitted value is retained.",
+            "translation": "Рекомендуется сократить SEO-заголовок; переданное значение сохранено."
+        },
+        {
+            "id": "draft.issues.meta_description_trimmed.message",
+            "message": "The SEO description was shortened to 160 characters or fewer.",
+            "translation": "SEO-описание сокращено до 160 символов или меньше."
+        },
+        {
+            "id": "draft.issues.meta_description_trimmed.hint",
+            "message": "Review the description shortened at a word boundary.",
+            "translation": "Проверьте описание, сокращённое по границе слова."
+        },
+        {
+            "id": "draft.issues.slug_invalid.message",
+            "message": "The slug has an invalid format.",
+            "translation": "Недопустимый формат URL-идентификатора."
+        },
+        {
+            "id": "draft.issues.slug_invalid.hint",
+            "message": "Use lowercase Latin letters, digits and single hyphens, up to 255 characters.",
+            "translation": "Используйте строчные латинские буквы, цифры и одиночные дефисы, не более 255 символов."
+        },
+        {
+            "id": "draft.issues.slug_taken.message",
+            "message": "The slug conflicts with an existing page, alias or route.",
+            "translation": "URL-идентификатор занят страницей, псевдонимом или маршрутом."
+        },
+        {
+            "id": "draft.issues.slug_taken.hint",
+            "message": "Choose another slug or omit it when creating a draft to derive an available one.",
+            "translation": "Выберите другой идентификатор или не передавайте его при создании для автоматического подбора."
+        },
+        {
+            "id": "draft.issues.tags_limit.message",
+            "message": "More than ten distinct tags were supplied.",
+            "translation": "Передано более десяти разных тегов."
+        },
+        {
+            "id": "draft.issues.tags_limit.hint",
+            "message": "Keep at most ten existing tag slugs after deduplication.",
+            "translation": "Оставьте не более десяти существующих тегов после удаления повторов."
+        },
+        {
+            "id": "draft.issues.unknown_tag.message",
+            "message": "A tag is unavailable in the selected language.",
+            "translation": "Тег недоступен для выбранного языка."
+        },
+        {
+            "id": "draft.issues.unknown_tag.hint",
+            "message": "Choose an existing tag offered for this language.",
+            "translation": "Выберите существующий тег, предложенный для этого языка."
+        },
+        {
+            "id": "draft.issues.tag_creation_not_allowed.message",
+            "message": "Creating tags through draft authoring is not allowed.",
+            "translation": "Создание тегов через инструменты черновиков запрещено."
+        },
+        {
+            "id": "draft.issues.tag_creation_not_allowed.hint",
+            "message": "Use existing tag slugs from the authoring context.",
+            "translation": "Используйте существующие теги из контекста сайта."
+        },
+        {
+            "id": "draft.issues.category_not_found.message",
+            "message": "The category is unavailable in the selected language.",
+            "translation": "Категория недоступна для выбранного языка."
+        },
+        {
+            "id": "draft.issues.category_not_found.hint",
+            "message": "Choose an existing category offered for this language, or clear it.",
+            "translation": "Выберите существующую категорию для этого языка или очистите поле."
+        },
+        {
+            "id": "draft.issues.image_not_found.message",
+            "message": "The featured image is unavailable or is not a supported image.",
+            "translation": "Изображение записи недоступно или имеет неподдерживаемый формат."
+        },
+        {
+            "id": "draft.issues.image_not_found.hint",
+            "message": "Choose an existing JPEG, PNG, GIF or WebP image from the media library.",
+            "translation": "Выберите существующее изображение JPEG, PNG, GIF или WebP из медиатеки."
+        },
+        {
+            "id": "draft.issues.image_too_small.message",
+            "message": "The featured image is smaller than 1200×800 pixels.",
+            "translation": "Изображение записи меньше 1200×800 пикселей."
+        },
+        {
+            "id": "draft.issues.image_too_small.hint",
+            "message": "Choose an existing image meeting the featured-image minimum dimensions.",
+            "translation": "Выберите существующее изображение с допустимыми минимальными размерами."
+        },
+        {
+            "id": "draft.issues.media_ref_not_found.message",
+            "message": "An inline image does not resolve to supported existing media.",
+            "translation": "Изображение в тексте не найдено в медиатеке или имеет неподдерживаемый формат."
+        },
+        {
+            "id": "draft.issues.media_ref_not_found.hint",
+            "message": "Use a canonical media:ID reference to an existing image.",
+            "translation": "Используйте ссылку media:ID на существующее изображение."
+        },
+        {
+            "id": "draft.issues.language_inactive.message",
+            "message": "The language is unavailable, inactive or cannot be routed.",
+            "translation": "Язык недоступен, неактивен или не поддерживает маршрутизацию."
+        },
+        {
+            "id": "draft.issues.language_inactive.hint",
+            "message": "Choose an active language offered by this site.",
+            "translation": "Выберите активный язык, предложенный сайтом."
+        },
+        {
+            "id": "draft.issues.reference_unresolved.message",
+            "message": "A site reference could not be resolved.",
+            "translation": "Не удалось разрешить ссылку на материал сайта."
+        },
+        {
+            "id": "draft.issues.reference_unresolved.hint",
+            "message": "Reread the authoring context and choose an existing site reference.",
+            "translation": "Обновите контекст сайта и выберите существующий материал."
+        },
+        {
+            "id": "draft.issues.reference_not_visible.message",
+            "message": "A site reference is unavailable to this account.",
+            "translation": "Материал сайта недоступен этому аккаунту."
+        },
+        {
+            "id": "draft.issues.reference_not_visible.hint",
+            "message": "Use only references visible under the current connection's permissions.",
+            "translation": "Используйте только материалы, доступные текущему подключению."
+        },
+        {
+            "id": "draft.issues.external_link.message",
+            "message": "The draft includes an external link for editorial review.",
+            "translation": "Черновик содержит внешнюю ссылку для редакторской проверки."
+        },
+        {
+            "id": "draft.issues.external_link.hint",
+            "message": "Review the external-links list and the applied keep, nofollow or strip policy.",
+            "translation": "Проверьте список внешних ссылок и применённую политику keep, nofollow или strip."
+        },
+        {
+            "id": "draft.issues.internal_link_broken.message",
+            "message": "An internal link does not resolve to visible site content.",
+            "translation": "Внутренняя ссылка не ведёт на доступный материал сайта."
+        },
+        {
+            "id": "draft.issues.internal_link_broken.hint",
+            "message": "Choose a valid internal link from the authoring context.",
+            "translation": "Выберите допустимую внутреннюю ссылку из контекста сайта."
+        },
+        {
+            "id": "draft.issues.link_not_allowed.message",
+            "message": "A link uses an unsupported or unsafe URL.",
+            "translation": "Ссылка содержит неподдерживаемый или небезопасный URL."
+        },
+        {
+            "id": "draft.issues.link_not_allowed.hint",
+            "message": "Use an internal link, HTTP, HTTPS or mailto URL without embedded credentials.",
+            "translation": "Используйте внутреннюю ссылку, HTTP, HTTPS или mailto без встроенных учётных данных."
+        },
+        {
+            "id": "draft.issues.raw_html_not_allowed.message",
+            "message": "Raw HTML is not accepted in Markdown drafts.",
+            "translation": "HTML-разметка не принимается в Markdown-черновиках."
+        },
+        {
+            "id": "draft.issues.raw_html_not_allowed.hint",
+            "message": "Use Markdown syntax; put HTML examples inside fenced code blocks.",
+            "translation": "Используйте Markdown; примеры HTML помещайте в блоки кода."
+        },
+        {
+            "id": "draft.issues.overlap_with_example.message",
+            "message": "The draft overlaps substantially with an example page.",
+            "translation": "Черновик существенно совпадает с материалом-примером."
+        },
+        {
+            "id": "draft.issues.overlap_with_example.hint",
+            "message": "Review and rewrite passages that copy an example rather than use it for style.",
+            "translation": "Проверьте и перепишите фрагменты, скопированные из примера вместо использования его стиля."
+        },
+        {
+            "id": "draft.issues.forbidden_field.message",
+            "message": "The request contains a field this operation cannot change.",
+            "translation": "Запрос содержит поле, которое эта операция не может изменять."
+        },
+        {
+            "id": "draft.issues.forbidden_field.hint",
+            "message": "Remove lifecycle, ownership, language, page-type or verified fields from updates.",
+            "translation": "Уберите из обновления поля публикации, владельца, языка, типа страницы и проверенных данных."
+        },
+        {
+            "id": "draft.issues.revision_required.message",
+            "message": "A base revision is required.",
+            "translation": "Необходимо указать базовую ревизию."
+        },
+        {
+            "id": "draft.issues.revision_required.hint",
+            "message": "Read the current draft and submit its revision with the update.",
+            "translation": "Прочитайте текущий черновик и передайте его ревизию при обновлении."
+        },
+        {
+            "id": "draft.issues.revision_conflict.message",
+            "message": "The page changed after it was read.",
+            "translation": "Страница изменена после чтения."
+        },
+        {
+            "id": "draft.issues.revision_conflict.hint",
+            "message": "Reread the draft and merge the changes before submitting a new update.",
+            "translation": "Перечитайте черновик и объедините изменения перед повторным обновлением."
+        },
+        {
+            "id": "draft.issues.idempotency_key_reused.message",
+            "message": "This request ID was already used for different input.",
+            "translation": "Этот идентификатор запроса уже использован с другими данными."
+        },
+        {
+            "id": "draft.issues.idempotency_key_reused.hint",
+            "message": "Reuse an ID only for an unchanged retry; use a new UUID for a new operation.",
+            "translation": "Повторяйте идентификатор только с теми же данными; для новой операции создайте новый UUID."
+        },
+        {
+            "id": "draft.issues.request_expired.message",
+            "message": "The original result is expired or its page was deleted.",
+            "translation": "Срок хранения результата истёк или страница удалена."
+        },
+        {
+            "id": "draft.issues.request_expired.hint",
+            "message": "Inspect current drafts before starting a new operation with a new request ID.",
+            "translation": "Проверьте текущие черновики перед новой операцией с новым идентификатором запроса."
+        },
+        {
+            "id": "draft.issues.not_ai_editable.message",
+            "message": "The draft is not available for AI edits.",
+            "translation": "Черновик недоступен для редактирования ИИ."
+        },
+        {
+            "id": "draft.issues.not_ai_editable.hint",
+            "message": "The owner must enable AI edits on a plain draft accessible to this account.",
+            "translation": "Владелец должен разрешить правки ИИ для доступного этому аккаунту неопубликованного черновика."
+        },
+        {
+            "id": "draft.issues.source_revision_conflict.message",
+            "message": "The translation source changed after it was read.",
+            "translation": "Источник перевода изменён после чтения."
+        },
+        {
+            "id": "draft.issues.source_revision_conflict.hint",
+            "message": "Reread the source and regenerate the translation from its current revision.",
+            "translation": "Перечитайте источник и подготовьте перевод по его текущей ревизии."
+        },
+        {
+            "id": "draft.issues.translation_exists.message",
+            "message": "This translation group already contains the target language.",
+            "translation": "Группа переводов уже содержит материал на целевом языке."
+        },
+        {
+            "id": "draft.issues.translation_exists.hint",
+            "message": "Read the translation status before creating another translation.",
+            "translation": "Проверьте состояние переводов перед созданием нового."
+        },
+        {
+            "id": "draft.issues.body_too_large.message",
+            "message": "The Markdown or resulting HTML exceeds 200,000 bytes.",
+            "translation": "Markdown или итоговый HTML превышает 200 000 байт."
+        },
+        {
+            "id": "draft.issues.body_too_large.hint",
+            "message": "Shorten the body and retry the same logical operation only with a new request ID.",
+            "translation": "Сократите текст; для изменённых данных используйте новый идентификатор запроса."
+        },
+        {
+            "id": "draft.issues.html_conversion_lossy.message",
+            "message": "The stored rich HTML cannot be represented completely as Markdown.",
+            "translation": "Сохранённый HTML нельзя полностью представить в Markdown."
+        },
+        {
+            "id": "draft.issues.html_conversion_lossy.hint",
+            "message": "Review the stored HTML before explicitly replacing its body; metadata-only updates preserve it.",
+            "translation": "Проверьте HTML перед заменой текста; обновления метаданных сохраняют его без изменений."
+        },
+        {
+            "id": "draft.issues.media_conversion_lossy.message",
+            "message": "An existing image could not be converted to a media:ID reference.",
+            "translation": "Не удалось преобразовать существующее изображение в ссылку media:ID."
+        },
+        {
+            "id": "draft.issues.media_conversion_lossy.hint",
+            "message": "Choose matching media from the library before replacing this body.",
+            "translation": "Перед заменой текста выберите соответствующий файл из медиатеки."
         }
     ]
 }

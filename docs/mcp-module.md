@@ -522,3 +522,13 @@ revisions/provenance and retained idempotency in core. It does not expose CMS
 write tools through MCP yet; those remain R1.5. REST updates to AI-editable
 pages now require `base_revision`. See [Page writes](page-writes.md) for the
 compatibility rule, writer inventory, local verification and migration notes.
+
+
+## Draft validation engine (R1.3 development)
+
+`internal/ai/draft` supplies separate strict create/update schemas, localized
+validation issues, safe Markdown/media conversion and explicit link policy.
+Metadata-only edits preserve stored HTML. The generic MCP schema builder is
+tested against these types; page-authoring tools remain scheduled for R1.5.
+See [Draft contract](draft-contract.md) for the payload rules, issue catalog,
+resolver boundary and verification.

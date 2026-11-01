@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Draft validation engine (R1.3).** Strict create/update inputs, localized
+  issues, safe Markdown with existing media references, explicit link policy,
+  loss-aware Markdown reads and metadata updates that preserve rich HTML.
+  Shared sanitization preserves explicit link relations through saves and
+  rendering. MCP page-authoring tools remain R1.5; see `docs/draft-contract.md`.
 - **Atomic page-write foundations (R1.2).** Complete page revisions and
   provenance, editor conflict handling, owner/admin AI-edit consent, retained
   idempotency and revision tracking across API, scheduler, imports and cleanup.

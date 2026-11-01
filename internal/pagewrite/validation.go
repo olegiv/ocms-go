@@ -130,8 +130,14 @@ func FeaturedImageSize(ctx context.Context, q *store.Queries, id sql.NullInt64) 
 	if err != nil {
 		return fmt.Errorf("featured image: %w", err)
 	}
-	if media.Width.Valid && media.Height.Valid && (media.Width.Int64 < model.MinFeaturedImageWidth || media.Height.Int64 < model.MinFeaturedImageHeight) {
-		return &FeaturedImageSizeError{Width: media.Width.Int64, Height: media.Height.Int64}
+	return CheckFeaturedImageDimensions(media.Width.Int64, media.Height.Int64, media.Width.Valid && media.Height.Valid)
+}
+
+// CheckFeaturedImageDimensions shares the editor's minimum with draft validation.
+// Missing historical dimensions retain the existing grandfathering behavior.
+func CheckFeaturedImageDimensions(width, height int64, known bool) error {
+	if known && (width < model.MinFeaturedImageWidth || height < model.MinFeaturedImageHeight) {
+		return &FeaturedImageSizeError{Width: width, Height: height}
 	}
 	return nil
 }

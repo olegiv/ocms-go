@@ -84,7 +84,7 @@ When assigning a featured image to a page, the image must meet minimum size requ
 - **Minimum dimensions**: 1200 x 800 pixels
 - **Supported formats**: JPEG, PNG, GIF, WebP
 
-Size validation is enforced in the admin page editor when creating a page or changing the featured image on an existing page; the REST API does not check it. If a page already has a featured image that is below the minimum size, saving other fields on that page will not trigger validation — the existing image is grandfathered.
+Size validation is shared by the admin editor, REST v2 and the AI draft engine when assigning a new featured image or changing an existing assignment. Unchanged historical assignments below the minimum and absent historical dimensions retain the existing compatibility behavior. The draft engine also requires a supported existing library image; see [Draft contract](draft-contract.md).
 
 ## Supported Formats
 
