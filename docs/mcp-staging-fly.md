@@ -9,7 +9,7 @@ outside this procedure.
 | File | Role |
 |---|---|
 | `fly.staging.bootstrap.toml` | Fresh app only: private first boot, seeding and MFA enrollment; no public service |
-| `fly.staging.toml` | Normal staging: HTTPS, OAuth/scratch enabled, MFA required, seeding/demo/DCR off |
+| `fly.staging.toml` | Normal staging: HTTPS, OAuth enabled, draft authoring default-off, MFA required, seeding/demo/DCR off |
 
 Both profiles use the same app, process, 2 shared vCPU / 1 GB Machine and
 1 GB volume. Go's memory limit is 800 MiB, leaving room for the runtime OS.
@@ -189,7 +189,7 @@ steps before enabling public routing:
    non-default credentials. Enter the acting admin's current password when
    requested. Sign out and verify the new login plus MFA; the default login
    must fail.
-3. Enable **MCP Server** under **Modules**. OAuth/scratch remain disabled in
+3. Enable **MCP Server** under **Modules**. OAuth remains disabled and draft authoring stays off in
    the bootstrap profile even after module activation.
 4. Create a dedicated editor with a strong password; sign in as that editor
    in a separate browser session and enroll MFA. Add a small published test
@@ -225,7 +225,7 @@ deployments. Public routing begins when the public profile is deployed.
 
 The seeded credentials must already have been replaced. This changes the
 runtime profile, not the tested image or database. It enables public HTTPS,
-OAuth and scratch tools with MFA required, demo/DCR/seeding off.
+OAuth with MFA required and draft authoring off by default, demo/DCR/seeding off.
 
 ```bash
 flyctl deploy "$STAGING_CONTEXT" \
@@ -328,7 +328,7 @@ flyctl logs --no-tail --app "$STAGING_APP"
 ```
 
 Record whether logs exclude raw code, state, verifier, access/refresh tokens
-and scratch content; retain no secret values in the acceptance record. Keep
+and article content; retain no secret values in the acceptance record. Keep
 HTTP body/header debug logging off. This Fly check is separate from the
 later nginx verification on the production host.
 
@@ -338,15 +338,19 @@ Use `https://ocms-mcp-staging.fly.dev/api/mcp`. For Claude Desktop, claude.ai,
 ChatGPT web, Claude Code and Codex, record date, client/version, account tier,
 OS/browser, commit/image, settings and actual GUI availability. CLI clients
 also need their bearer-key mode checked: create expiring `mcp:access` keys
-with appropriate per-key source CIDRs; add `mcp:drafts` for the scratch probe.
+with appropriate per-key source CIDRs; add `mcp:drafts` for authorized draft authoring.
 `pages:read` still needs the MCP drafts visibility setting.
 
-Test connect → fresh sign-in/MFA → consent → list/read → approve scratch save
-→ retrieve → revoke in Account → Security → next request fails → reconnect.
-Record unavailable capabilities and failures explicitly in the PHASE5 R1.1
-matrix. R1.2 stays gated on recorded results and the required passes or an
-explicit owner scope decision. DCR and unsupported client authentication
-methods remain off while failures are diagnosed.
+R1.1 compatibility acceptance is complete, including its retired temporary
+probe. For separately authorized R1.5 deployments, enable draft authoring in
+Admin → MCP Server, grant only required scopes and follow
+[desktop authoring acceptance](desktop-authoring.md). Test connect → fresh
+sign-in/MFA → consent → context → owned draft save/read/update/translation
+→ revoke → next request fails → reconnect. Use stable request IDs and current
+revisions. Check anonymous preview denial; share links remain unavailable
+until R1.6. Record actual client/version/build/results in PHASE5 and mark any
+unavailable capability pending. DCR and unsupported authentication methods
+remain off. Do not reuse the historical R1.1 probe result as a CMS-write pass.
 
 ## Subsequent source updates
 
@@ -367,9 +371,9 @@ flyctl checks list --app "$STAGING_APP"
 flyctl ssh console --app "$STAGING_APP" --command '/app/ocms -version'
 ```
 
-Repeat health, issuer, proxy and log verification. Redeploying clears the
-in-memory scratch entries; it must preserve accounts, MFA and OAuth state
-on the volume. Retain the tested commit/image references for comparison and
+Repeat health, issuer, proxy and log verification. Redeploying must preserve
+accounts, MFA, OAuth state, drafts, revisions, provenance and idempotency
+records on the volume. The retired in-memory probe no longer exists. Retain the tested commit/image references for comparison and
 recovery planning. Do not blindly roll an older binary back across a database
 migration.
 

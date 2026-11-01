@@ -287,6 +287,37 @@ func TestAccessChecksCurrentRoleSessionAndExpiry(t *testing.T) {
 			if _, err := f.s.VerifyAccess(context.Background(), access(body)); err == nil {
 				t.Fatal("stale access accepted")
 			}
+			if _, err := f.s.RecheckAccess(t.Context(), store.New(f.db), p); err == nil {
+				t.Fatal("transaction recheck accepted stale authorization")
+			}
 		})
+	}
+}
+
+func TestRecheckAccessUsesExactTokenAndCurrentGrantScopes(t *testing.T) {
+	f := newFixture(t)
+	body := f.redeem(t, f.code(t))
+	p, err := f.s.VerifyAccess(t.Context(), access(body))
+	if err != nil || p.TokenID == "" {
+		t.Fatalf("verified token identity: %v", err)
+	}
+	if _, err = f.db.Exec(`UPDATE oauth_grants SET scopes='mcp:access' WHERE id=?`, p.GrantID); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := f.db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := store.New(tx)
+	fresh, err := f.s.RecheckAccess(t.Context(), q, p)
+	if err != nil || strings.Join(fresh.Scopes, " ") != "mcp:access" {
+		t.Fatalf("fresh transaction scopes: %+v %v", fresh.Scopes, err)
+	}
+	if _, err = tx.ExecContext(t.Context(), "UPDATE oauth_tokens SET access_revoked_at=1 WHERE id=?", p.TokenID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.s.RecheckAccess(t.Context(), q, p); err == nil {
+		t.Fatal("exact access token revocation ignored inside transaction")
 	}
 }

@@ -35,7 +35,8 @@ func TestEditorialMigrationRollbackAndExistingPagePreservation(t *testing.T) {
 	if err = editorial.New(q).SaveGuide(ctx, user.ID, "", "Disposable custom guidance"); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.RunMigrationCommand(ctx, db, "down"); err != nil {
+	// Target this migration even when later authoring migrations exist.
+	if err = store.RunMigrationCommand(ctx, db, "down-to", "20261101209999"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = q.GetEditorialGuide(ctx, ""); err == nil {

@@ -61,7 +61,7 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 			// DNS rebinding is countered by the cross-origin check and the
 			// mandatory bearer authentication instead.
 			DisableLocalhostProtection:   true,
-			MaxRequestBodyBytes:          maxRequestBodyBytes,
+			MaxRequestBodyBytes:          sdkRequestBodyCeiling,
 			PropagateRequestCancellation: true,
 			Logger:                       sdkLogger(m.logger, "mcp-transport"),
 		},

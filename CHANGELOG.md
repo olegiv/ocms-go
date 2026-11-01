@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
+  translations and private reads over MCP, with original-input retries, revision
+  checks, rolling user quotas and separate provenance. Removes compatibility
+  scratch tools/flag. Session preview URLs are returned; sharing remains
+  explicitly unavailable until R1.6. See `docs/draft-authoring.md`.
 - **Authoring context (R1.4).** Database-only reference grounding with shared
   frontend routing, recorded revisions, bounded existing taxonomy/media and
   duplicate/overlap feedback. Adds editorial style guides/presets, three MCP
-  prompts, resource/tool parity and language filters. CMS draft writes remain
-  R1.5; see `docs/authoring-context.md`.
+  prompts, resource/tool parity and language filters. R1.5 consumes this context for CMS draft writes; see `docs/authoring-context.md`.
 - **Draft validation engine (R1.3).** Strict create/update inputs, localized
   issues, safe Markdown with existing media references, explicit link policy,
   loss-aware Markdown reads and metadata updates that preserve rich HTML.
@@ -29,9 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bounded client metadata and optional public-client registration. SQLite
   stores only opaque credential hashes; atomic code redemption, refresh
   rotation/reuse revocation and current account checks protect access.
-  Connections can be revoked from Account → Security. A development/staging
-  flag adds bounded, temporary scratch tools with no CMS page writes;
-  production/demo refuse it. Existing API key policies remain in force.
+  Connections can be revoked from Account → Security. The development/staging compatibility probe used
+  for R1.1 acceptance was retired in R1.5. Existing API key policies remain in force.
   R1.1 real-client acceptance is complete; see `docs/oauth.md` and the
   current client matrix in `.claude/docs/PHASE5.md`.
 - **Status page link.** The new **Status Page URL** setting in

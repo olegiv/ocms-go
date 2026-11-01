@@ -23,7 +23,7 @@ func (m *Module) verifyOAuth(ctx context.Context, raw string, _ *http.Request) (
 	}
 	return &auth.TokenInfo{
 		UserID: strconv.FormatInt(p.UserID, 10), Scopes: p.Scopes, Expiration: p.ExpiresAt,
-		Extra: map[string]any{identityKey: &identity{userID: p.UserID, grantID: p.GrantID, clientID: p.ClientID, scopes: p.Scopes, expiresAt: p.ExpiresAt}},
+		Extra: map[string]any{identityKey: &identity{userID: p.UserID, grantID: p.GrantID, clientID: p.ClientID, scopes: p.Scopes, expiresAt: p.ExpiresAt, tokenID: p.TokenID}},
 	}, nil
 }
 

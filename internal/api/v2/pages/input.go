@@ -39,17 +39,18 @@ type updateRequest struct {
 // typed assignments cannot be hidden behind an earlier JSON null.
 func canonicalWriteInput(value any) any {
 	type payload struct {
-		Values     any      `json:"values"`
-		NullFields []string `json:"explicit_null_fields"`
+		Values             any      `json:"values"`
+		NullFields         []string `json:"explicit_null_fields"`
+		ClearFeaturedImage bool     `json:"clear_featured_image,omitempty"`
 	}
 	switch input := value.(type) {
 	case CreatePageBody:
-		return payload{input, nullFields(input.supplied)}
+		return payload{Values: input, NullFields: nullFields(input.supplied)}
 	case updateRequest:
 		return struct {
 			PageID  int64   `json:"page_id"`
 			Changes payload `json:"changes"`
-		}{input.PageID, payload{input.Changes, nullFields(input.Changes.supplied)}}
+		}{input.PageID, payload{Values: input.Changes, NullFields: nullFields(input.Changes.supplied), ClearFeaturedImage: input.Changes.ClearFeaturedImage}}
 	default:
 		return value
 	}

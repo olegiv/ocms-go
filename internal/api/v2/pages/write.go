@@ -36,6 +36,13 @@ type WriteOptions struct {
 	RequestID     string
 	Evidence      provenance.Evidence
 	Authorize     func(context.Context, *store.Queries) error
+	// Idempotency retains the original typed agent request before normalization.
+	// Only ForceDraft transports may supply it; REST keeps its existing hash.
+	Idempotency *idempotency.Request
+	// PrepareMutation checks quotas and translation/reference state after replay
+	// lookup, returning the evidence for this transaction without charging replays.
+	PrepareMutation func(context.Context, *store.Queries) (provenance.Evidence, error)
+	EvidenceChanges bool
 }
 
 func validateTitle(title string) error {
@@ -136,7 +143,12 @@ func authorizeDraft(ctx context.Context, q *store.Queries, userID, id int64) err
 func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool string, input any, mutate func(*Service, v2.Actor, *pagewrite.Tx) (*Page, error)) (*Page, error) {
 	var request idempotency.Request
 	var err error
-	if opt.RequestID != "" || opt.ForceDraft {
+	if opt.Idempotency != nil {
+		request, err = draftRequest(a, opt, tool)
+		if err != nil {
+			return nil, writeError(err)
+		}
+	} else if opt.RequestID != "" || opt.ForceDraft {
 		request, err = idempotency.New(a.ActingUserID(), tool, opt.RequestID, struct {
 			Input         any                 `json:"input"`
 			ForceDraft    bool                `json:"force_draft"`
@@ -179,22 +191,44 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 				return json.Unmarshal([]byte(record.ResultJson.String), &result)
 			}
 		}
+		evidence := opt.Evidence
+		if opt.PrepareMutation != nil {
+			var err error
+			evidence, err = opt.PrepareMutation(ctx, work.Q)
+			if err != nil {
+				return err
+			}
+		}
 		transactional := *s
 		transactional.queries = work.Q
 		actor := a
 		if opt.ForceDraft {
 			actor.Permissions = append(slices.Clone(a.Permissions), model.PermissionPagesWrite)
 		}
-		work.SetEvidence(opt.Evidence)
+		if !opt.ForceDraft {
+			work.SetEvidence(evidence)
+		}
 		result, err = mutate(&transactional, actor, work)
 		if err != nil {
 			return err
+		}
+		if opt.ForceDraft {
+			work.SetPageEvidence(result.ID, evidence)
+			if opt.EvidenceChanges {
+				work.TrackEvidenceChanges(result.ID)
+			}
 		}
 		if err = work.Finish(ctx); err != nil {
 			return err
 		}
 		result.Revision = work.Pages[result.ID].Revision
 		if request.ID != "" {
+			if opt.Idempotency != nil {
+				// Agent tools return a receipt, not the full HTML body. Keep its
+				// replay compact even for a maximum-size Markdown draft.
+				compact := &Page{ID: result.ID, Revision: result.Revision, Slug: result.Slug, LanguageCode: result.LanguageCode, Status: result.Status}
+				return idempotency.Store(ctx, work.Q, request, "page", result.ID, result.Revision, compact, time.Now().UTC())
+			}
 			return idempotency.Store(ctx, work.Q, request, "page", result.ID, result.Revision, result, time.Now().UTC())
 		}
 		return nil
@@ -226,6 +260,61 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 		}
 	}
 	return result, nil
+}
+
+// ReplayDraft checks a retained agent request before Markdown, mutable defaults,
+// media or current-content validation. CreateWith/UpdateWith repeat the lookup
+// under their transaction, so a concurrent retry cannot insert another page.
+func (s *Service) ReplayDraft(ctx context.Context, a v2.Actor, opt WriteOptions) (*Page, error) {
+	request, err := draftRequest(a, opt, "")
+	if err != nil {
+		return nil, writeError(err)
+	}
+	var result *Page
+	_, err = pagewrite.InTx(ctx, s.db, principalFor(a), func(work *pagewrite.Tx) error {
+		if err := s.authorizeWrite(ctx, work.Q, a, opt); err != nil {
+			return err
+		}
+		record, err := idempotency.Lookup(ctx, work.Q, request, time.Now().UTC(), func(entity string, id int64) error {
+			if entity != "page" {
+				return v2.NewError(v2.ErrForbidden, "Invalid replay entity")
+			}
+			if _, err := work.Q.GetPageByID(ctx, id); errors.Is(err, sql.ErrNoRows) {
+				return idempotency.ErrExpired
+			} else if err != nil {
+				return err
+			}
+			return authorizeDraft(ctx, work.Q, a.ActingUserID(), id)
+		})
+		if err != nil || record == nil {
+			return err
+		}
+		return json.Unmarshal([]byte(record.ResultJson.String), &result)
+	})
+	return result, writeError(err)
+}
+
+func draftRequest(a v2.Actor, opt WriteOptions, operation string) (idempotency.Request, error) {
+	if !opt.ForceDraft || opt.Idempotency == nil {
+		return idempotency.Request{}, idempotency.ErrInvalidRequest
+	}
+	r := *opt.Idempotency
+	if r.UserID != a.ActingUserID() || r.ID == "" || r.ID != opt.RequestID || len(r.Hash) != 64 {
+		return idempotency.Request{}, idempotency.ErrInvalidRequest
+	}
+	switch r.Tool {
+	case "create_draft_page", "create_translation_draft":
+		if operation != "" && operation != "create_page" {
+			return idempotency.Request{}, idempotency.ErrInvalidRequest
+		}
+	case "update_draft_page":
+		if operation != "" && operation != "update_page" {
+			return idempotency.Request{}, idempotency.ErrInvalidRequest
+		}
+	default:
+		return idempotency.Request{}, idempotency.ErrInvalidRequest
+	}
+	return r, nil
 }
 
 func (s *Service) authorizeWrite(ctx context.Context, q *store.Queries, a v2.Actor, opt WriteOptions) error {

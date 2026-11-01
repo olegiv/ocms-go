@@ -1,8 +1,8 @@
 # Atomic page writes and revisions
 
-R1.2 provides the storage and editor foundations for AI authoring. It does not
-add MCP page-writing tools: those remain scheduled for R1.5, after draft
-validation and authoring context are implemented.
+R1.2 provides the storage and editor foundations for AI authoring. R1.5 now
+consumes this boundary through [gated MCP draft tools](draft-authoring.md),
+using shared validation and authoring context.
 
 ## Write boundary
 
@@ -151,7 +151,7 @@ The whole-checkout GolangCI run retains five pre-existing findings in account
 layout/MFA tests and the local weather module; no new finding is accepted.
 Govulncheck reports no reachable vulnerability, with one uncalled module
 advisory. This is local verification, not staging acceptance of AI authoring.
-New MCP content tools and their real-client acceptance remain R1.5 work.
+R1.5 adds local MCP content tools; fresh real-client acceptance remains pending.
 
 
 Final local results on 2026-11-01: **59 test packages passed**, including
@@ -171,3 +171,14 @@ The matching manifest and machine-readable results are
 `output/r12-validation/verification.json`. These local artifacts are ignored by
 Git and contain no test bearer credentials. No staging deployment or new
 real-client authoring claim is included in this result.
+
+## R1.5 trusted adapter extension
+
+The authoring adapter hashes original typed input before mutable defaults and
+checks retained requests before normalization or CAS. A trusted mutation callback
+rechecks credential/policy, user quota, references and translation fingerprints
+inside the shared transaction. These callbacks are not request fields. Compact
+agent receipts omit body HTML and resolve their original validation from the
+immutable saved revision. Per-page evidence prevents translation membership
+updates from copying target claims onto source/sibling revisions. Explicit
+report/reference edits participate in CAS; identical evidence is a no-op.

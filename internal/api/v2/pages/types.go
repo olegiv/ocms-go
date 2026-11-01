@@ -102,30 +102,32 @@ type CreatePageBody struct {
 // distinguish "not provided" from zero values. CategoryIDs / TagIDs / TagNames
 // pointers let callers explicitly clear collections by sending an empty array.
 type UpdatePageBody struct {
-	supplied          map[string]json.RawMessage
-	BaseRevision      *int64    `json:"base_revision,omitempty" minimum:"1" doc:"Required for AI-editable pages; enforced whenever supplied."`
-	Title             *string   `json:"title,omitempty" minLength:"1" maxLength:"255"`
-	Slug              *string   `json:"slug,omitempty" minLength:"1" maxLength:"255" pattern:"^[a-z0-9]+(?:-[a-z0-9]+)*$"`
-	Body              *string   `json:"body,omitempty"`
-	Summary           *string   `json:"summary,omitempty" maxLength:"500"`
-	Status            *string   `json:"status,omitempty" enum:"draft,published"`
-	PageType          *string   `json:"page_type,omitempty" enum:"post,page"`
-	FeaturedImageID   *int64    `json:"featured_image_id,omitempty"`
-	HideFeaturedImage *bool     `json:"hide_featured_image,omitempty"`
-	ExcludeFromLists  *bool     `json:"exclude_from_lists,omitempty"`
-	MetaTitle         *string   `json:"meta_title,omitempty"`
-	MetaDescription   *string   `json:"meta_description,omitempty"`
-	MetaKeywords      *string   `json:"meta_keywords,omitempty"`
-	OGImageID         *int64    `json:"og_image_id,omitempty"`
-	NoIndex           *bool     `json:"no_index,omitempty"`
-	NoFollow          *bool     `json:"no_follow,omitempty"`
-	CanonicalURL      *string   `json:"canonical_url,omitempty" format:"uri-reference" maxLength:"2048"`
-	ScheduledAt       *string   `json:"scheduled_at,omitempty" format:"date-time"`
-	CategoryIDs       *[]int64  `json:"category_ids,omitempty"`
-	TagIDs            *[]int64  `json:"tag_ids,omitempty"`
-	TagNames          *[]string `json:"tags,omitempty"`
-	VideoURL          *string   `json:"video_url,omitempty" format:"uri-reference" maxLength:"2048"`
-	VideoTitle        *string   `json:"video_title,omitempty"`
+	supplied map[string]json.RawMessage
+	// Trusted draft adapters use this for explicit null; it is not an HTTP field.
+	ClearFeaturedImage bool      `json:"-"`
+	BaseRevision       *int64    `json:"base_revision,omitempty" minimum:"1" doc:"Required for AI-editable pages; enforced whenever supplied."`
+	Title              *string   `json:"title,omitempty" minLength:"1" maxLength:"255"`
+	Slug               *string   `json:"slug,omitempty" minLength:"1" maxLength:"255" pattern:"^[a-z0-9]+(?:-[a-z0-9]+)*$"`
+	Body               *string   `json:"body,omitempty"`
+	Summary            *string   `json:"summary,omitempty" maxLength:"500"`
+	Status             *string   `json:"status,omitempty" enum:"draft,published"`
+	PageType           *string   `json:"page_type,omitempty" enum:"post,page"`
+	FeaturedImageID    *int64    `json:"featured_image_id,omitempty"`
+	HideFeaturedImage  *bool     `json:"hide_featured_image,omitempty"`
+	ExcludeFromLists   *bool     `json:"exclude_from_lists,omitempty"`
+	MetaTitle          *string   `json:"meta_title,omitempty"`
+	MetaDescription    *string   `json:"meta_description,omitempty"`
+	MetaKeywords       *string   `json:"meta_keywords,omitempty"`
+	OGImageID          *int64    `json:"og_image_id,omitempty"`
+	NoIndex            *bool     `json:"no_index,omitempty"`
+	NoFollow           *bool     `json:"no_follow,omitempty"`
+	CanonicalURL       *string   `json:"canonical_url,omitempty" format:"uri-reference" maxLength:"2048"`
+	ScheduledAt        *string   `json:"scheduled_at,omitempty" format:"date-time"`
+	CategoryIDs        *[]int64  `json:"category_ids,omitempty"`
+	TagIDs             *[]int64  `json:"tag_ids,omitempty"`
+	TagNames           *[]string `json:"tags,omitempty"`
+	VideoURL           *string   `json:"video_url,omitempty" format:"uri-reference" maxLength:"2048"`
+	VideoTitle         *string   `json:"video_title,omitempty"`
 }
 
 // ListFilter is the input for Service.List.

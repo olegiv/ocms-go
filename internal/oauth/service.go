@@ -51,6 +51,7 @@ type Options struct {
 
 // Principal is the currently authorized account and grant, never agent-supplied identity.
 type Principal struct {
+	TokenID   string
 	UserID    int64
 	GrantID   string
 	ClientID  string
@@ -181,8 +182,22 @@ func (s *Service) VerifyAccess(ctx context.Context, raw string) (Principal, erro
 	if err != nil {
 		return Principal{}, problem("invalid_token")
 	}
-	return Principal{UserID: g.UserID, GrantID: g.ID, ClientID: g.ClientID, Scopes: intersectGranted(t.Scopes, g.Scopes),
+	return Principal{TokenID: t.ID, UserID: g.UserID, GrantID: g.ID, ClientID: g.ClientID, Scopes: intersectGranted(t.Scopes, g.Scopes),
 		ExpiresAt: time.Unix(t.AccessExpiresAt, 0)}, nil
+}
+
+// RecheckAccess repeats token/grant/account checks on transaction-bound queries.
+// The token ID comes from VerifyAccess, never from a content request.
+func (s *Service) RecheckAccess(ctx context.Context, q *store.Queries, prior Principal) (Principal, error) {
+	t, err := q.GetOAuthTokenByID(ctx, prior.TokenID)
+	if err != nil || t.GrantID != prior.GrantID || t.AccessRevokedAt != 0 || t.AccessExpiresAt <= s.now().Unix() {
+		return Principal{}, problem("invalid_token")
+	}
+	g, err := s.activeGrant(ctx, q, t.GrantID)
+	if err != nil || g.UserID != prior.UserID || g.ClientID != prior.ClientID {
+		return Principal{}, problem("invalid_token")
+	}
+	return Principal{TokenID: t.ID, UserID: g.UserID, GrantID: g.ID, ClientID: g.ClientID, Scopes: intersectGranted(t.Scopes, g.Scopes), ExpiresAt: time.Unix(t.AccessExpiresAt, 0)}, nil
 }
 
 // ListGrants returns at most 100 active connections for the signed-in account.

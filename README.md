@@ -136,10 +136,10 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 ### MCP Server (AI Agents)
 - **Model Context Protocol endpoint**: AI agents (Claude Code, Cursor, VS Code, Codex) read site content over Streamable HTTP at `/api/mcp`
 - **Official Go SDK**: Built on `modelcontextprotocol/go-sdk`, protocol versions 2024-11-05 through 2026-07-28
-- **Read-only tools**: Search, list and read pages (HTML or Markdown), media, tags and categories, with the same visibility rules as REST v2
+- **Context and draft tools**: Read published context, editorial guidance and existing media; opt-in draft authoring saves owned AI-editable drafts with revisions, retries and linked translations
 - **Opt-in and key-gated**: Inactive until enabled; API keys need the `mcp:access` permission and every API key policy applies
 - **Optional OAuth**: Fresh browser sign-in, MFA, scoped consent and revocation for MCP apps; off by default
-- **Drafts hidden by default**: Exposed only when the admin allows it and the key holds `pages:read`
+- **Draft access is explicit**: General draft reads need the admin policy and `pages:read`; private authoring needs `mcp:drafts`, the authoring toggle and owned AI-editable unscheduled drafts
 - **Discoverable**: Advertised in `/.well-known/mcp/server-card.json` while active
 
 ### SEO
@@ -342,8 +342,7 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 | `OCMS_OAUTH_ALLOW_DCR` | Allow bounded public-client dynamic registration | `false` | No |
 | `OCMS_OAUTH_ACCESS_TTL` | OAuth access lifetime in seconds (60–86400) | `3600` | No |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | Absolute rotating refresh-family lifetime (1–90 days) | `30` | No |
-| `OCMS_MCP_SPIKE_TOOLS` | Temporary non-publishable scratch tools; development/staging only, refused in production/demo | `false` | No |
-| `OCMS_AI_DISABLED` | Disable draft/scratch tools while retaining normal reads | `false` | No |
+| `OCMS_AI_DISABLED` | Disable draft authoring while retaining normal content reads | `false` | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
 | `OCMS_CACHE_TTL` | TTL in seconds for the Redis (or fallback) cache, which the caches do not use yet; the in-memory caches have fixed TTLs | `3600` | No |
 | `OCMS_REDIS_URL` | Redis URL; the connection shows in the cache admin, but the caches stay in memory per process | - | No |
@@ -705,7 +704,7 @@ The REST surface is `/api/v2`. The OpenAPI 3.1 spec is generated from Go types v
 
 ## MCP Server
 
-The opt-in **MCP Server** module lets AI agents read site content over the [Model Context Protocol](https://modelcontextprotocol.io). Enable it in **Admin > Modules**, then create an API key with the **MCP** permission (`mcp:access`) in **Admin > API Keys**. The admin page at `/admin/mcp` shows the endpoint, client configuration snippets, the tool catalog, and the drafts and instructions settings.
+The opt-in **MCP Server** module lets AI agents read site content over the [Model Context Protocol](https://modelcontextprotocol.io). Enable it in **Admin > Modules**, then create an API key with the **MCP** permission (`mcp:access`) in **Admin > API Keys**. The admin page at `/admin/mcp` shows the endpoint, client configuration snippets, the tool catalog, and the draft access, authoring, link policy and instructions settings.
 
 ```bash
 claude mcp add --transport http ocms https://example.com/api/mcp \
@@ -721,11 +720,16 @@ claude mcp add --transport http ocms https://example.com/api/mcp \
 | `list_tags` / `get_tag` | Tags with usage counts |
 | `list_categories` / `get_category` | Category tree or flat list |
 
-CMS tools are read-only. An optional development/staging probe adds temporary,
-non-publishable scratch drafts. Set `OCMS_OAUTH_ENABLED=true` and a canonical
-HTTPS `OCMS_SITE_URL` to offer browser authorization alongside API keys.
-Connections can be revoked at `/account/security`. Real Claude Desktop and
-ChatGPT account acceptance remains pending; see [OAuth setup and staging checks](docs/oauth.md).
+Draft authoring is off by default. Enable it in Admin → MCP Server and grant
+`mcp:access` plus `mcp:drafts` to create/update owned AI-editable drafts or
+linked translations. Writes use stable UUID request IDs, revisions and existing
+taxonomy/media; agents cannot publish or delete. Saves return editor-session
+preview URLs. Share links remain unavailable until R1.6. See
+[draft authoring](docs/draft-authoring.md) for contracts and safeguards.
+Set `OCMS_OAUTH_ENABLED=true` and a canonical HTTPS `OCMS_SITE_URL` for browser
+authorization alongside API keys. Connections can be revoked at
+`/account/security`. R1.1 OAuth acceptance passed; fresh R1.5 cloud authoring
+acceptance remains pending. See [OAuth](docs/oauth.md).
 See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.
 
 ## Theme Development

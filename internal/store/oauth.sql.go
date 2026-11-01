@@ -242,6 +242,27 @@ func (q *Queries) GetOAuthTokenByAccess(ctx context.Context, accessHash string) 
 	return i, err
 }
 
+const getOAuthTokenByID = `-- name: GetOAuthTokenByID :one
+SELECT id, grant_id, access_hash, refresh_hash, scopes, created_at, access_expires_at, refresh_used_at, access_revoked_at FROM oauth_tokens WHERE id = ?
+`
+
+func (q *Queries) GetOAuthTokenByID(ctx context.Context, id string) (OauthToken, error) {
+	row := q.db.QueryRowContext(ctx, getOAuthTokenByID, id)
+	var i OauthToken
+	err := row.Scan(
+		&i.ID,
+		&i.GrantID,
+		&i.AccessHash,
+		&i.RefreshHash,
+		&i.Scopes,
+		&i.CreatedAt,
+		&i.AccessExpiresAt,
+		&i.RefreshUsedAt,
+		&i.AccessRevokedAt,
+	)
+	return i, err
+}
+
 const getOAuthTokenByRefresh = `-- name: GetOAuthTokenByRefresh :one
 SELECT id, grant_id, access_hash, refresh_hash, scopes, created_at, access_expires_at, refresh_used_at, access_revoked_at FROM oauth_tokens WHERE refresh_hash = ?
 `

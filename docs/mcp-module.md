@@ -5,10 +5,12 @@ other client of the [Model Context Protocol](https://modelcontextprotocol.io))
 read site content: they can search, list and read pages, media, tags and
 categories through typed tools.
 
-CMS content tools are **read-only**. The default catalog is checked by a drift
-test. R1.1 adds optional OAuth and a separately flagged development/staging
-scratch probe; it cannot write CMS pages. See [OAuth authorization](oauth.md)
-for configuration, consent, revocation and the pending real-client matrix.
+Content reads remain available under their existing policy. R1.5 adds opt-in
+owned draft creation/update/translation with `mcp:drafts`, retained retries,
+CAS, provenance and existing taxonomy/media. Publishing and deletion remain
+human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
+[OAuth](oauth.md) records the completed R1.1 authentication acceptance and
+pending fresh R1.5 cloud-client checks.
 
 ## Features
 
@@ -19,7 +21,7 @@ for configuration, consent, revocation and the pending real-client matrix.
   ([`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk)
   v1.8.0). It speaks protocol versions `2026-07-28`, `2025-11-25`,
   `2025-06-18`, `2025-03-26` and `2024-11-05`.
-- **14 read-only tools** over core authoring and REST v2 services. Existing content tools share one
+- **21 registrations** over core authoring and REST v2 services (14 existing reads, six available draft operations and reserved unavailable share issuance). Existing content tools share one
   set of visibility rules, validation and caching, and the tool input schemas
   come from the same struct tags as the REST parameters.
 - **API key authentication.** Keys need the `mcp:access` permission and are
@@ -201,7 +203,7 @@ Notes:
   because each response is produced for one API key.
 
 REST operations without a tool are listed in `restOperationsNotExposed`
-(`modules/mcpserver/catalog.go`), each with its reason: direct REST mutations are not exposed, draft authoring is scheduled for R1.5,
+(`modules/mcpserver/catalog.go`), each with its reason: direct REST mutations are covered by draft tools with a different contract,
 and `status` is covered by MCP discovery.
 `TestEveryRESTOperationHasMCPDecision` fails when REST gains an operation that
 has neither a tool nor an entry there.
@@ -341,7 +343,7 @@ security headers) runs before all of it.
 
 | Limit | Value |
 |---|---|
-| Request body | 256 KiB |
+| Request body | 512 KiB wire cap; 2 MiB SDK hard ceiling |
 | Concurrent requests | 32 |
 | Per-IP rate | 20 requests/s, burst 40 |
 | Per-key rate | 10 requests/s, burst 30 |
@@ -382,8 +384,7 @@ Other controls:
   tools return is website data, not instructions. Agents should still be run
   with the usual care for untrusted input, and drafts should stay hidden unless
   you need them.
-- **Read-only scope:** no tool writes data. Write tools will come with their
-  own policy layer.
+- **Draft-only authoring:** admin opt-in, current `mcp:drafts`, user ownership, AI access, no schedule, retained request IDs and revision checks. No publish/delete tool exists.
 
 ## Logging
 
@@ -488,7 +489,7 @@ Drift tests in `modules/mcpserver/drift_test.go`:
 |---|---|
 | `TestEveryRESTOperationHasMCPDecision` | A REST v2 operation has neither a tool nor a documented reason |
 | `TestToolInputConstraintsMatchREST` | MCP argument constraints diverge from the REST parameters |
-| `TestEveryRegisteredToolIsReadOnly` | A registered tool lacks the read-only annotations |
+| `TestEveryRegisteredToolHasTheExpectedMutationClass` | Read/create/update/share annotations do not match the closed catalog |
 | `TestCatalogSpecsWellFormed` | A catalog entry has an invalid or duplicate name, lacks a title or description, or declares both or neither of a REST mapping and an MCP-only reason |
 | `TestTranslationsCompleteAndUsedKeysExist` | en/ru keys diverge, or code uses an `mcp.*` key that does not exist |
 | `TestServerCardMatchesInitialize` | The server card's identity or tool/prompt/resource capabilities differ from `initialize` |
@@ -510,6 +511,18 @@ for REST and MCP together:
 - **Draft status with category or tag.** `list_pages` rejects `status: "draft"`
   combined with `category_id` or `tag_id`; these combinations are unsupported.
 
+## Draft authoring (R1.5 development)
+
+Enable draft authoring in Admin → MCP Server and grant `mcp:drafts`. The
+new tools are `create_draft_page`, `update_draft_page`,
+`create_translation_draft`, `get_my_draft`, `list_my_drafts` and
+`get_translation_status`. `create_preview_link` is registered as explicitly
+unavailable until R1.6. Three content mutations require stable UUID request
+IDs; updates require the last-read revision. Own reads do not depend on the
+separate general drafts policy. All writes use the shared atomic service.
+The per-user rolling quota is 60 new successful content operations per hour;
+retained retries spend no additional quota. See [Draft authoring](draft-authoring.md).
+
 ## Authoring context (R1.4 development)
 
 Read-only prompts, resources, tool equivalents, editorial guidance and language
@@ -520,15 +533,14 @@ include their current revision. Generic page reads retain their existing draft
 policy; authoring context also supports the caller's own opted-in plain drafts.
 
 OAuth acceptance is complete for R1.1; see [OAuth](oauth.md). Real CMS draft
-creation/update/translation tools remain R1.5, editorial review R1.6 and release
+creation/update/translation tools are implemented locally in R1.5; editorial review remains R1.6 and release
 hardening R1.7. This section grants no deployment or remote Git action.
 
 
 ## Page authoring foundations (R1.2 development)
 
 R1.2 adds shared atomic page writes, user-owned AI-edit consent, complete
-revisions/provenance and retained idempotency in core. It does not expose CMS
-write tools through MCP yet; those remain R1.5. REST updates to AI-editable
+revisions/provenance and retained idempotency in core. R1.5 exposes gated CMS draft tools through this shared path. REST updates to AI-editable
 pages now require `base_revision`. See [Page writes](page-writes.md) for the
 compatibility rule, writer inventory, local verification and migration notes.
 
@@ -538,6 +550,6 @@ compatibility rule, writer inventory, local verification and migration notes.
 `internal/ai/draft` supplies separate strict create/update schemas, localized
 validation issues, safe Markdown/media conversion and explicit link policy.
 Metadata-only edits preserve stored HTML. The generic MCP schema builder is
-tested against these types; page-authoring tools remain scheduled for R1.5.
+tested against these types; R1.5 page-authoring tools now consume these contracts.
 See [Draft contract](draft-contract.md) for the payload rules, issue catalog,
 resolver boundary and verification.

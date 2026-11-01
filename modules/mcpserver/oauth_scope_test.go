@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/ai/authoring"
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
@@ -16,9 +17,9 @@ func TestOAuthToolScopeHTTPChallenge(t *testing.T) {
 	s := enableOAuth(t, env, true)
 	token, _ := oauthToken(t, s, env.userID, "mcp:access")
 	headers := map[string]string{"Authorization": "Bearer " + token}
-	for _, name := range []string{"spike_save_draft", "spike_get_draft"} {
-		args := `{"id":"unknown"}`
-		if name == "spike_save_draft" {
+	for _, name := range []string{"create_draft_page", "get_my_draft"} {
+		args := `{"page_id":1}`
+		if name == "create_draft_page" {
 			args = `{"title":"Denied","body":"Scratch only"}`
 		}
 		body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + name + `","arguments":` + args + `}}`
@@ -34,8 +35,8 @@ func TestOAuthToolScopeHTTPChallenge(t *testing.T) {
 			t.Fatal("scope challenge may be cached")
 		}
 	}
-	if len(env.module.scratch.entries) != 0 {
-		t.Fatal("insufficient-scope request executed a scratch write")
+	if total, err := env.q.CountPages(t.Context()); err != nil || total != 0 {
+		t.Fatal("insufficient-scope request executed a content write")
 	}
 	info := decodeResult[SiteInfo](t, call(t, env.connect(token), "get_site_info", nil))
 	if info.Access.AuthType != "oauth" || len(info.Access.Permissions) != 1 {
@@ -44,29 +45,30 @@ func TestOAuthToolScopeHTTPChallenge(t *testing.T) {
 	// A separately consented grant can retry the operation normally.
 	upgraded, _ := oauthToken(t, s, env.userID, "mcp:access mcp:drafts")
 	session := env.connect(upgraded)
-	saved := decodeResult[scratchEntry](t, call(t, session, "spike_save_draft", map[string]any{"title": "Scope retry", "body": "Scratch only"}))
-	got := decodeResult[scratchEntry](t, call(t, session, "spike_get_draft", map[string]any{"id": saved.ID}))
-	if got.Title != saved.Title || got.Body != saved.Body {
-		t.Fatal("authorized scratch retry did not preserve content")
+	saved := decodeResult[authoring.SaveResult](t, call(t, session, "create_draft_page", draftCreateArgs("Scope retry")))
+	got := decodeResult[authoring.DraftDetail](t, call(t, session, "get_my_draft", map[string]any{"page_id": saved.PageID}))
+	if got.Title != "Scope retry" || got.BodyHTML == "" {
+		t.Fatal("authorized draft retry did not preserve content")
 	}
+
 }
 
 func TestOAuthScopeChallengePreservesOtherRequests(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string
-		spike      bool
+		drafts     bool
 		status     int
 	}{
 		{"list", listToolsBody, true, http.StatusOK},
 		{"unknown tool", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"unknown","arguments":{}}}`, true, http.StatusOK},
-		{"disabled scratch", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"spike_save_draft","arguments":{"title":"Denied"}}}`, false, http.StatusOK},
+		{"disabled tools list", listToolsBody, false, http.StatusOK},
 		{"malformed", `{"method":"tools/call",`, true, http.StatusBadRequest},
 		{"batch", `[` + listToolsBody + `]`, true, http.StatusBadRequest},
 		{"oversized", strings.Repeat("x", maxRequestBodyBytes+1), true, http.StatusRequestEntityTooLarge},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := newTestEnv(t)
-			s := enableOAuth(t, env, tc.spike)
+			s := enableOAuth(t, env, tc.drafts)
 			token, _ := oauthToken(t, s, env.userID, "mcp:access")
 			resp := env.rawPost(tc.body, map[string]string{"Authorization": "Bearer " + token})
 			if resp.StatusCode != tc.status || resp.Header.Get("WWW-Authenticate") != "" {
@@ -77,13 +79,13 @@ func TestOAuthScopeChallengePreservesOtherRequests(t *testing.T) {
 	env := newTestEnv(t)
 	enableOAuth(t, env, true)
 	key := env.createKey(model.PermissionMCPAccess)
-	denied := call(t, env.connect(key), "spike_save_draft", map[string]any{"title": "Denied", "body": ""})
+	denied := call(t, env.connect(key), "create_draft_page", draftCreateArgs("Denied"))
 	if !denied.IsError || denied.Meta["mcp/www_authenticate"] != nil {
 		t.Fatal("API-key request was routed to OAuth scope upgrade")
 	}
 	key = env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts)
-	saved := decodeResult[scratchEntry](t, call(t, env.connect(key), "spike_save_draft", map[string]any{"title": "Legacy key", "body": ""}))
-	if saved.Title != "Legacy key" {
-		t.Fatal("scoped API-key scratch write changed")
+	saved := decodeResult[authoring.SaveResult](t, call(t, env.connect(key), "create_draft_page", draftCreateArgs("Legacy key")))
+	if saved.PageID <= 0 {
+		t.Fatal("scoped API-key draft write failed")
 	}
 }

@@ -67,7 +67,7 @@ type ServerDetails struct {
 	Name       string `json:"name" doc:"Server name, as reported at initialize."`
 	Title      string `json:"title" doc:"Display name of the server."`
 	Version    string `json:"version"`
-	ReadOnly   bool   `json:"read_only" doc:"True when the server exposes read-only tools only."`
+	ReadOnly   bool   `json:"read_only" doc:"True when draft authoring is disabled; reserved write tools then reject calls."`
 	MaxPerPage int    `json:"max_per_page" doc:"Largest per_page value list tools accept."`
 }
 
@@ -114,7 +114,7 @@ func (m *Module) getSiteInfo(ctx context.Context, call *toolCall, _ SiteInfoInpu
 			Name:       serverName,
 			Title:      serverTitle,
 			Version:    moduleVersion,
-			ReadOnly:   !m.spikeEnabled(),
+			ReadOnly:   !call.settings.DraftToolsEnabled,
 			MaxPerPage: maxPerPage,
 		},
 	}

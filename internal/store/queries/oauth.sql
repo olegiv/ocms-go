@@ -53,6 +53,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?);
 -- name: GetOAuthTokenByAccess :one
 SELECT * FROM oauth_tokens WHERE access_hash = ?;
 
+-- name: GetOAuthTokenByID :one
+SELECT * FROM oauth_tokens WHERE id = ?;
+
 -- name: GetOAuthTokenByRefresh :one
 SELECT * FROM oauth_tokens WHERE refresh_hash = ?;
 

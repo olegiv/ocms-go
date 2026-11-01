@@ -32,20 +32,26 @@ type Settings struct {
 	AllowDrafts bool
 	// Instructions is site-specific guidance appended to the instructions
 	// every MCP client receives.
-	Instructions string
+	Instructions      string
+	DraftToolsEnabled bool
+	ExternalLinks     string
 }
 
 // loadSettings reads the settings row. A missing row yields the defaults.
-func loadSettings(ctx context.Context, db *sql.DB) (Settings, error) {
+type settingsReader interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func loadSettings(ctx context.Context, db settingsReader) (Settings, error) {
 	var (
 		allowDrafts int
 		s           Settings
 	)
 	err := db.QueryRowContext(ctx,
-		`SELECT allow_drafts, instructions FROM mcp_settings WHERE id = 1`,
-	).Scan(&allowDrafts, &s.Instructions)
+		`SELECT allow_drafts, instructions, draft_tools_enabled, external_links FROM mcp_settings WHERE id = 1`,
+	).Scan(&allowDrafts, &s.Instructions, &s.DraftToolsEnabled, &s.ExternalLinks)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Settings{}, nil
+		return Settings{ExternalLinks: "keep"}, nil
 	}
 	if err != nil {
 		return Settings{}, fmt.Errorf("loading MCP settings: %w", err)
@@ -61,13 +67,15 @@ func saveSettings(ctx context.Context, db *sql.DB, s Settings) error {
 		allowDrafts = 1
 	}
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO mcp_settings (id, allow_drafts, instructions, updated_at)
-		VALUES (1, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO mcp_settings (id, allow_drafts, instructions, draft_tools_enabled, external_links, updated_at)
+		VALUES (1, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			allow_drafts = excluded.allow_drafts,
 			instructions = excluded.instructions,
+			draft_tools_enabled = excluded.draft_tools_enabled,
+			external_links = excluded.external_links,
 			updated_at = CURRENT_TIMESTAMP
-	`, allowDrafts, s.Instructions)
+	`, allowDrafts, s.Instructions, s.DraftToolsEnabled, linkPolicy(s))
 	if err != nil {
 		return fmt.Errorf("saving MCP settings: %w", err)
 	}
@@ -108,6 +116,12 @@ func (m *Module) saveAndApply(ctx context.Context, next Settings) (Settings, err
 	m.settingsMu.Lock()
 	defer m.settingsMu.Unlock()
 	prev := m.currentSettings()
+	if next.ExternalLinks == "" {
+		next.ExternalLinks = "keep"
+	}
+	if next.ExternalLinks != "keep" && next.ExternalLinks != "nofollow" && next.ExternalLinks != "strip" {
+		return prev, errors.New("invalid external link policy")
+	}
 	srv, err := m.buildServer(next)
 	if err != nil {
 		return prev, fmt.Errorf("rebuilding MCP server: %w", err)
@@ -117,6 +131,13 @@ func (m *Module) saveAndApply(ctx context.Context, next Settings) (Settings, err
 	}
 	m.state.Store(&serverState{settings: next, server: srv})
 	return prev, nil
+}
+
+func linkPolicy(s Settings) string {
+	if s.ExternalLinks == "" {
+		return "keep"
+	}
+	return s.ExternalLinks
 }
 
 // reloadSettings reads the stored settings and, when they differ from the

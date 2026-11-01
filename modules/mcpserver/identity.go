@@ -34,6 +34,8 @@ type identity struct {
 	grantID   string
 	clientID  string
 	expiresAt time.Time
+	tokenID   string
+	sourceIP  string
 }
 
 // verifyValidatedKey is the auth.TokenVerifier for the endpoint. It does not
@@ -51,7 +53,7 @@ func verifyValidatedKey(_ context.Context, token string, r *http.Request) (*auth
 	info := &auth.TokenInfo{
 		Scopes: scopes,
 		UserID: "apikey:" + strconv.FormatInt(key.ID, 10),
-		Extra:  map[string]any{identityKey: &identity{key: *key, scopes: scopes, userID: key.CreatedBy}},
+		Extra:  map[string]any{identityKey: &identity{key: *key, scopes: scopes, userID: key.CreatedBy, sourceIP: middleware.GetClientIP(r)}},
 	}
 	if key.ExpiresAt.Valid {
 		info.Expiration = key.ExpiresAt.Time

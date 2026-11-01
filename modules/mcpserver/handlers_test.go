@@ -74,7 +74,7 @@ func TestHandleSaveSettingsAppliesAndAudits(t *testing.T) {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
 
-	want := Settings{AllowDrafts: true, Instructions: "Focus on recent posts."}
+	want := Settings{AllowDrafts: true, Instructions: "Focus on recent posts.", ExternalLinks: "keep"}
 	if got := env.module.currentSettings(); got != want {
 		t.Errorf("active settings = %+v, want %+v", got, want)
 	}

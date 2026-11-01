@@ -208,4 +208,4 @@ or real-client CMS-authoring test is implied by those results.
 Tested base: `fc25f0d29fbc56be9fd8e5dd09d6b7f407e9fde9`. Runtime/test source
 fingerprint: `f4f48db10a7a5a206879ecf6cbb0d97ffd8feb215a28207dfd5978de5c926d8b`.
 The per-file manifest, direct behavior evidence, logs and browser screenshot are
-in ignored `output/r13-validation/`. R1.4 is implemented separately; see [Authoring context](authoring-context.md). R1.5 CMS authoring remains unimplemented.
+in ignored `output/r13-validation/`. R1.4 is implemented separately; see [Authoring context](authoring-context.md). R1.5 now consumes these types through [gated draft tools](draft-authoring.md); fresh cloud-client acceptance remains pending.

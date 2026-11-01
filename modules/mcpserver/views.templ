@@ -12,6 +12,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/checkbox"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 	"github.com/olegiv/ocms-go/internal/views/components/textarea"
 )
@@ -39,7 +40,8 @@ type DashboardData struct {
 	Keys              []KeyRow
 	KeysError         bool
 	OAuthEnabled      bool
-	ScratchEnabled    bool
+	DraftToolsEnabled bool
+	ExternalLinks     string
 }
 
 // ToolRow is one tool in the catalog table.
@@ -115,8 +117,8 @@ templ endpointCard(pc *adminviews.PageContext, data DashboardData) {
 				<dt class="text-muted-foreground">{ pc.T("mcp.mode_label") }</dt>
 				<dd>
 					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-						if data.ScratchEnabled {
-							{ pc.T("mcp.scratch_mode") }
+						if data.DraftToolsEnabled {
+							{ pc.T("mcp.authoring_enabled") }
 						} else {
 							{ pc.T("mcp.read_only") }
 						}
@@ -178,6 +180,37 @@ templ settingsCard(pc *adminviews.PageContext, data DashboardData) {
 				</div>
 			}
 			<form method="POST" action="/admin/mcp" class="space-y-6">
+				<div class="flex items-start gap-3">
+					@checkbox.Checkbox(checkbox.Props{ID: "draft_tools_enabled", Name: "draft_tools_enabled", Value: "1", Checked: data.DraftToolsEnabled, Disabled: data.SettingsError})
+					<div class="grid gap-1">
+						@label.Label(label.Props{For: "draft_tools_enabled"}) {
+							{ pc.T("mcp.draft_tools_enabled") }
+						}
+						<p class="text-sm text-muted-foreground">{ pc.T("mcp.draft_tools_help") }</p>
+					</div>
+				</div>
+				<div class="grid gap-2">
+					@label.Label(label.Props{For: "external_links"}) {
+						{ pc.T("mcp.external_links") }
+					}
+					@selectbox.SelectBox() {
+						@selectbox.Trigger(selectbox.TriggerProps{ID: "external_links", Name: "external_links", Disabled: data.SettingsError}) {
+							@selectbox.Value()
+						}
+						@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+							@selectbox.Item(selectbox.ItemProps{Value: "keep", Selected: data.ExternalLinks == "keep"}) {
+								{ pc.T("mcp.links_keep") }
+							}
+							@selectbox.Item(selectbox.ItemProps{Value: "nofollow", Selected: data.ExternalLinks == "nofollow"}) {
+								{ pc.T("mcp.links_nofollow") }
+							}
+							@selectbox.Item(selectbox.ItemProps{Value: "strip", Selected: data.ExternalLinks == "strip"}) {
+								{ pc.T("mcp.links_strip") }
+							}
+						}
+					}
+					<p class="text-sm text-muted-foreground">{ pc.T("mcp.external_links_help") }</p>
+				</div>
 				<div class="flex items-start gap-3">
 					@checkbox.Checkbox(checkbox.Props{ID: "allow_drafts", Name: "allow_drafts", Value: "1", Checked: data.AllowDrafts, Disabled: data.SettingsError})
 					<div class="grid gap-1">

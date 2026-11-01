@@ -2,8 +2,8 @@
 
 R1.4 gives connected AI apps bounded, database-only site context. It adds
 four read-only tools, three versioned prompts, eight resource registrations
-and `/admin/editorial`. It does not add CMS draft-writing tools; those remain
-R1.5. There is no server-side text generation or outbound content retrieval.
+and `/admin/editorial`. R1.5 now adds [gated draft-writing tools](draft-authoring.md)
+that consume this context. There is no server-side text generation or outbound content retrieval.
 
 ## Tools
 
@@ -70,7 +70,7 @@ importer wildcard checks. `internal/ai/grounding` calls those same primitives:
   AI-editable, unscheduled plain drafts. Human drafts without opt-in, other
   users' drafts and scheduled drafts do not gain access through that scope.
   Generic `get_page`/search/list reads keep their existing broader-read policy;
-  full own-draft reads arrive with R1.5's `get_my_draft`.
+  full own-draft reads use R1.5's `get_my_draft` when authoring is enabled.
 
 Missing and inaccessible references return the same `reference_unresolved`
 issue, without private IDs, titles or body data. Operational database failures
@@ -124,8 +124,7 @@ oCMS controls an external model's other knowledge or tools.
 `CheckOverlap` provides a bounded warning for substantial five-word-shingle
 reuse from an example excerpt (at least 40 shingles and 60% coverage). Source
 and parent references and short quotations do not trigger it. It is neither
-plagiarism detection nor factual verification. R1.5 will consume the warning
-while saving; R1.4 does not write drafts or certify article truth.
+plagiarism detection nor factual verification. R1.5 consumes the warning while saving; the context read does not write drafts or certify article truth.
 
 ## Editorial administration
 
@@ -187,8 +186,7 @@ those read logs. Transport authentication failures retain HTTP 401/403.
 Initialize explicitly advertises empty tools/prompts/resources capabilities,
 with no subscriptions or list-change notifications. The server card matches
 those capabilities. Administrator-wide MCP instructions now cap at 2,400
-characters so the complete instructions stay within 4,096, including the
-staging scratch orientation. Older stored text is clipped only for rendering;
+characters so the complete instructions stay within 4,096, including the authoring orientation. Older stored text is clipped only for rendering;
 its database value is not silently rewritten. Longer writing guidance belongs
 in the editorial guide/preset resources.
 
@@ -213,5 +211,5 @@ and one uncalled module advisory. Full details and limits are in the evidence
 record; these checks are not an independent repository security audit.
 
 This local implementation does not claim a new staging deployment or fresh
-real-client R1.4 compatibility. CMS creation/update/translation tools remain
-R1.5; review previews and connected-app release work remain R1.6/R1.7.
+real-client R1.4 compatibility. CMS creation/update/translation tools are implemented locally in R1.5;
+review previews and connected-app release work remain R1.6/R1.7.

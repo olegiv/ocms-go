@@ -626,6 +626,9 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 			return v2.NewValidationError(map[string]string{"featured_image_id": err.Error()}, "Validation failed")
 		}
 	}
+	if in.ClearFeaturedImage {
+		params.FeaturedImageID = sql.NullInt64{}
+	}
 	if in.OGImageID != nil {
 		params.OgImageID = util.NullInt64FromPtr(in.OGImageID)
 	}

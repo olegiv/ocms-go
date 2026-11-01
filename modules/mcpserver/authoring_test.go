@@ -144,10 +144,7 @@ func TestAuthoringSurfacesCapabilitiesAndInstructionsAreBounded(t *testing.T) {
 		if utf8.RuneCountInString(text) > 4096 {
 			t.Fatalf("instructions exceed client limit: %d", utf8.RuneCountInString(text))
 		}
-		text = strings.Replace(text, "This server gives read-only access to the content of an oCMS website.", "This development server reads oCMS content and exposes temporary, non-publishable scratch drafts. Scratch data expires after one hour and disappears on restart. It never creates or changes CMS pages.", 1)
-		if utf8.RuneCountInString(text) > 4096 {
-			t.Fatalf("scratch instructions exceed client limit: %d", utf8.RuneCountInString(text))
-		}
+
 	}
 }
 

@@ -47,7 +47,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 		t.Errorf("defaults = %+v, want drafts off and no instructions", got)
 	}
 
-	want := Settings{AllowDrafts: true, Instructions: "Be concise."}
+	want := Settings{AllowDrafts: true, Instructions: "Be concise.", ExternalLinks: "keep"}
 	if err := saveSettings(context.Background(), db, want); err != nil {
 		t.Fatalf("saveSettings: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestLoadSettingsMissingRow(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 	got, err := loadSettings(context.Background(), db)
-	if err != nil || got != (Settings{}) {
+	if err != nil || got != (Settings{ExternalLinks: "keep"}) {
 		t.Errorf("missing row: %+v, %v; want defaults", got, err)
 	}
 	// Saving recreates the row.
@@ -554,7 +554,7 @@ func TestMigrationsUpDown(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 	migrations := New().Migrations()
-	moduleutil.AssertMigrations(t, migrations, 1)
+	moduleutil.AssertMigrations(t, migrations, 2)
 	moduleutil.RunMigrations(t, db, migrations)
 	var allow int
 	if err := db.QueryRow(`SELECT allow_drafts FROM mcp_settings WHERE id = 1`).Scan(&allow); err != nil || allow != 0 {

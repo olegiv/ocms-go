@@ -1,0 +1,175 @@
+# Draft authoring over MCP
+
+R1.5 lets connected agents save drafts for review through the same atomic page
+writer as the editor and REST API. oCMS does no text generation. No MCP tool
+can publish, schedule, delete, change ownership or enable AI access to a page.
+R1.5 is local development work; fresh cloud-client acceptance is pending.
+
+## Enable and authorize
+
+Enable **MCP Server** in Admin → Modules, then open Admin → MCP Server:
+
+1. Turn on **Enable draft authoring** (off by default).
+2. Choose the external-link policy: keep, add nofollow, or strip hyperlinks.
+3. Authorize an editor/admin account's app for `mcp:access` and `mcp:drafts`.
+
+The `mcp:drafts` scope does not require `pages:write` or `taxonomy:write`.
+New tags/categories are not created. `OCMS_AI_DISABLED=true`, an inactive MCP
+module or demo mode blocks draft tools. General published/context reads remain
+available under their existing rules. The retired compatibility probe and its
+environment flag no longer exist. Upgrades keep draft authoring disabled.
+
+OAuth scope upgrades use normal fresh sign-in/MFA and consent. API keys keep
+expiry, global/per-key CIDR, lifetime and anomaly policies. Current account,
+role, module/toggle, credential/scopes and source policy are checked again in
+the write transaction. A changed link/read policy makes a new write retryable
+with its original request ID. Credentials and consent never come from draft
+input. Turning a feature on does not expand an app's granted scopes.
+
+## Tools and annotations
+
+The catalog has 21 registrations: 14 existing reads, six available authoring
+operations and one explicitly unavailable share-link operation.
+
+| Tool | Input | Behavior |
+|---|---|---|
+| `create_draft_page` | `request_id`, `draft` | Create an owned, AI-editable, unscheduled draft. |
+| `update_draft_page` | `request_id`, `page_id`, `base_revision`, `changes` | Apply selected changes to an owned AI-editable plain draft. |
+| `create_translation_draft` | `request_id`, `source_page_id`, `source_revision`, `language_code`, `draft` | Create and link a target-language draft atomically. |
+| `get_my_draft` | `page_id` | Current HTML/derived Markdown, revision, warnings and provenance. |
+| `list_my_drafts` | Optional `language_code`, `page`, `per_page` | Own AI-editable plain drafts only; at most 100 per page. |
+| `get_translation_status` | `page_id` | Visibility-filtered active-language membership and freshness. |
+| `create_preview_link` | `page_id`, `revision` | Returns `preview_unavailable`; issues no token until R1.6. |
+
+Reads are read-only, non-destructive and idempotent. Creates/translations are
+additive, non-read-only and idempotent under their retained request key.
+Updates are replacing/destructive and idempotent. Reserved share issuance is
+additive/non-idempotent. All declare a closed world; none grants publication.
+`get_site_info.server.read_only` reports the current draft-authoring setting.
+
+## Save contract
+
+Read `get_page_draft_schema` and `get_authoring_context` first. The distinct
+[create/update contracts](draft-contract.md) retain omission and null:
+
+```json
+{
+  "request_id": "b52d8972-9e36-4e7c-8a26-b0d890d62d3e",
+  "draft": {
+    "title": "An article for review",
+    "summary": "A concise summary.",
+    "body_markdown": "## Introduction\n\nDraft text grounded in selected pages.",
+    "references": [{"ref": "12", "role": "source"}],
+    "reported": {"claims_to_verify": ["Check the stated software version."]}
+  }
+}
+```
+
+Use a new, non-zero UUID once for each logical create/update/translation.
+Reuse it on network failures, timeouts and retryable errors. Do not generate
+a replacement UUID merely because the response was lost.
+
+A save returns `page_id`, `revision`, `admin_url`, `preview_url`, `issues`
+and `translation_status`. Warnings/info do not block; error-level issues do.
+The preview URL is the current draft's ordinary language-qualified frontend
+URL: opening it requires an editor session. It is not a revision-pinned public
+link. Saves, reads and retries never mint or persist a bearer preview token.
+The owner approved keeping explicit sharing unavailable until R1.6's renderer.
+
+Updates require the last-read `base_revision`. Omission preserves fields;
+arrays replace collections and empty arrays clear them. Explicit null clears
+nullable SEO/image/category fields. Author, language, page type, lifecycle,
+AI access and verified provenance cannot be supplied in `changes`.
+Metadata-only changes preserve stored rich HTML byte-for-byte. Existing links
+are inspected for review without applying a new link policy to old HTML.
+Oversized legacy-body link review is explicitly marked truncated. Body
+replacement uses Markdown with existing `media:ID` images and the selected
+external-link policy. No remote image or content URL is fetched.
+
+## Ownership, retries and quotas
+
+Ownership is the authenticated oCMS user, not a key or OAuth connection. A
+second app for that user can continue the same draft. Admin credentials have
+no implicit right to other users' AI drafts. Private reads and updates require
+an owned page with AI access enabled, `status=draft` and no schedule.
+Human drafts without AI opt-in, foreign drafts, published/scheduled pages and
+missing pages share the generic inaccessible/not-found response.
+
+Typed input is hashed before normalization, defaults, media and slug lookup.
+Fresh authorization and retained-request lookup precede current validation
+and CAS; the write transaction repeats both checks. A lost committed response
+replays its original receipt even after the page or mutable defaults changed.
+Different input under the same ID returns `idempotency_key_reused`.
+
+The original non-secret receipt is retained for seven days, then compacted to
+a permanent tombstone; deletion also preserves a tombstone. `request_expired`
+never re-executes the write. Replays recheck current owned-draft access and
+add no version, provenance, webhook or quota charge. Retained agent receipts
+exclude full body HTML, so maximum-size articles cannot overflow replay storage.
+
+At most 60 new successful content operations per user per rolling hour are
+allowed across all grants/keys. The transaction counts retained operation
+records; rejected/rolled-back writes spend no quota. `mutation_rate_limited`
+has `retryable=true` and `retry_after_seconds`. Existing transport/app limits
+also apply. Requests have a 512 KiB wire cap inside a 2 MiB SDK hard ceiling;
+Markdown and expanded HTML remain limited to 200,000 bytes each.
+
+## References, translation and provenance
+
+Selected references are resolved through shared site routing and current
+visibility. Every role and recorded page/revision is retained, including
+duplicate roles. Omitted reference changes retain those snapshots; explicit
+empty references clear them. Follow-up source edits do not silently replace
+the recorded reference revision. Substantial example copying yields a warning.
+Reference validity establishes existence/visibility, not truth or model usage.
+
+Translations require an active target language matching any explicit draft
+language. The recorded source snapshot's title, body, summary and SEO text
+fingerprint must still match current source content inside the transaction.
+Publication, AI-access and sibling membership revisions do not cause staleness
+when these text fields are unchanged. A changed source yields
+`source_revision_conflict`; a duplicate target language anywhere in the full
+component yields generic `translation_exists`. Concurrent attempts leave no
+orphan page. Source content/lifecycle is never replaced by the translation.
+
+The source page/revision/fingerprint is stored as the translation basis.
+Ordinary updates retain it; a later text change marks it stale rather than
+claiming it was refreshed. Legacy/unlinked basis is `not_tracked`. Hidden
+sources/siblings return no unreadable page IDs, revisions, titles or bodies.
+
+`get_my_draft` separates three objects:
+
+- `verified`: authenticated user, grant/key, registered client ID, transport,
+  revision timestamp; a public client registration is not vendor identity.
+- `validated`: server issues, reference snapshots, link review, translation
+  basis and contract version; this does not attest factual correctness.
+- `reported`: untrusted model, sources, claims, notes and MCP client name/version.
+
+Explicit reference/report-only edits can create a CAS-protected revision;
+identical evidence is a no-op. Metadata-only edits never reconstruct the body.
+Omitted reports retain the previous revision's agent report, including the
+legacy bare-report format; `reported: {}` clears it. MCP client name/version
+always describe the current call and remain untrusted. Inherited agent claims
+are not proof of the current app's sources or model usage. Human revisions have
+fresh empty agent reports. Translation membership
+revisions on source/sibling pages do not inherit the target draft's claims.
+The [shared writer](page-writes.md) commits content, assignments, AI access,
+translation links, snapshots/provenance and retained request atomically.
+
+## Errors, logging and acceptance
+
+Tool failures preserve the REST error envelope. `structuredContent` adds
+issues and retryability; text content carries the complete same JSON fallback.
+Authorization failures at the HTTP layer remain 401/403 with normal challenges.
+Arguments, bodies, result URLs and raw panic values are not logged. Writes
+retain the 25-second cancellation bound; retry a timeout with the same UUID.
+
+Local tests cover SDK flows, lost responses, escaped large bodies, scope/
+ownership/lifecycle matrices, queued policy changes, CAS/translation races,
+rollback, quotas, translation fingerprints and provenance classes. The local
+HTTP/browser evidence and exact tested source are recorded under ignored
+`output/r15-validation/` and in PHASE5 implementation notes.
+Fresh Claude Desktop/ChatGPT staging authoring acceptance needs a separately
+authorized deployment. Theme-isolated revision previews, share tokens and
+editorial panels remain R1.6. No deployment or Git publication is authorized
+by these instructions.

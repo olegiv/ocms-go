@@ -224,11 +224,9 @@ func TestCatalogSpecsWellFormed(t *testing.T) {
 	}
 }
 
-// TestEveryRegisteredToolIsReadOnly guards the scope of the read-only
-// release: no tool may reach the server without readOnlyHint, whether added
-// to the catalog or registered directly. Write tools need their own policy
-// layer (publish and delete gates) before this test may be relaxed.
-func TestEveryRegisteredToolIsReadOnly(t *testing.T) {
+// TestEveryRegisteredToolHasTheExpectedMutationClass verifies read, additive,
+// replacing and explicit share annotations against the closed catalog.
+func TestEveryRegisteredToolHasTheExpectedMutationClass(t *testing.T) {
 	env := newTestEnv(t)
 	session := env.connect(env.createKey(model.PermissionMCPAccess))
 	listed, err := session.ListTools(context.Background(), nil)
@@ -238,9 +236,15 @@ func TestEveryRegisteredToolIsReadOnly(t *testing.T) {
 	if len(listed.Tools) != len(toolCatalog()) {
 		t.Errorf("server registers %d tools, catalog has %d", len(listed.Tools), len(toolCatalog()))
 	}
+	mutations := map[string]string{"create_draft_page": mutationCreate, "create_translation_draft": mutationCreate, "update_draft_page": mutationReplace, "create_preview_link": mutationShare}
 	for _, tool := range listed.Tools {
-		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
-			t.Errorf("tool %s is not read-only", tool.Name)
+		kind := mutations[tool.Name]
+		annotations := tool.Annotations
+		if annotations == nil || annotations.DestructiveHint == nil || annotations.OpenWorldHint == nil || *annotations.OpenWorldHint {
+			t.Fatalf("%s: incomplete annotations", tool.Name)
+		}
+		if annotations.ReadOnlyHint != (kind == "") || *annotations.DestructiveHint != (kind == mutationReplace) || annotations.IdempotentHint != (kind != mutationShare) {
+			t.Errorf("tool %s misclassified: %+v", tool.Name, annotations)
 		}
 	}
 }

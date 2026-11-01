@@ -6,8 +6,9 @@ official MCP Go SDK for bearer verification and protected-resource discovery.
 OAuth is off by default. Existing API keys remain available with their CIDR,
 expiry, anomaly-revocation and rate-limit policies.
 
-This is the R1.1 compatibility implementation. It does not write CMS drafts,
-publish pages, generate content or call a model provider. On 2026-10-31,
+The OAuth layer authenticates apps; [R1.5 draft tools](draft-authoring.md)
+separately provide gated CMS writes. No tool publishes or calls a text model
+provider. The following acceptance record covers the earlier R1.1 build. On 2026-10-31,
 Claude Desktop, claude.ai and ChatGPT web passed the tested OAuth, published
 context, scratch and revocation/reconnect flows on Fly staging commit
 `f66bd7b4d5fa` using Pro accounts. On 2026-11-01, both CLI OAuth lifecycles and
@@ -85,7 +86,7 @@ refused. DCR retains its IP-literal-only HTTP registration policy.
 |---|---|
 | `mcp:access` | Read published context; required to reach MCP |
 | `pages:read` | Read unpublished pages only when the MCP drafts policy also permits it |
-| `mcp:drafts` | Use the temporary scratch tools when explicitly enabled |
+| `mcp:drafts` | Use opt-in owned AI-draft tools; no publication/deletion |
 
 The public role has no OAuth permissions. Every MCP request resolves the
 current account and grant, not a cached client session. Deleting the account,
@@ -159,36 +160,21 @@ identity. Registrations use the existing fifteen-minute SQLite metadata
 cache; removing a pin resumes live discovery after that cache expires.
 Revoke account grants separately to remove existing access immediately.
 
-## Temporary client-write probe
+## Draft authoring and scope upgrades
 
-On an isolated development or staging instance only:
-
-```dotenv
-OCMS_ENV=staging
-OCMS_MCP_SPIKE_TOOLS=true
-OCMS_AI_DISABLED=false
-```
-
-`spike_save_draft` replaces the user's in-memory scratch entry;
-`spike_get_draft` reads it by its returned ID. Both require `mcp:drafts`.
-Entries have an 8 KiB combined title/body limit, one per user, 100 total,
-and one-hour expiry. A process restart drops all entries. They have no CMS,
-translation, media or preview-link write path and return no admin page URL.
-The write is advertised as non-read-only, destructive and non-idempotent.
-Missing OAuth tool scope returns HTTP 403 with a Bearer `insufficient_scope`
-challenge naming `mcp:access`, the tool's required scope and resource metadata.
-Clients can request fresh consent and retry; an existing read-only grant is
-not expanded automatically. The tool wrapper also retains its scope check
-and result-metadata challenge. API keys retain their existing tool errors.
-
-Production and demo mode refuse the scratch flag. `OCMS_AI_DISABLED=true`
-removes these tools while keeping normal reads. Remove the probe tools and
-flag in R1.5; they cannot establish that real CMS persistence is correct.
+R1.5 removes the temporary compatibility probe and its flag. Actual draft
+creation/update/translation now uses the shared writer, an admin authoring
+toggle and `mcp:drafts`; see [Draft authoring](draft-authoring.md).
+Missing tool scope returns HTTP 403 with a Bearer `insufficient_scope`
+challenge naming `mcp:access`, `mcp:drafts` and resource metadata. Clients
+request fresh consent and retry; read-only grants do not expand automatically.
+API keys retain their existing tool errors and source/expiry policies.
+`OCMS_AI_DISABLED=true` blocks draft operations while retaining general reads.
 
 ## Public staging and logs
 
 Use a separate database, HTTPS host, fresh staging secrets and required MFA.
-For the scratch probe, use `OCMS_ENV=staging` and leave demo mode off. DCR
+For authoring acceptance, use `OCMS_ENV=staging` and leave demo mode off. DCR
 defaults off; investigate a client registration/authentication failure before
 changing that policy. The deployment plan does not provision a host or alter
 connected-client settings.
@@ -208,8 +194,8 @@ Use two shared vCPUs, 1 GB RAM, and one fresh 1 GB volume mounted at
 `min_machines_running = 1` during acceptance and keep the only Machine in the
 primary region. Deploy with `--ha=false` and verify that exactly one Machine
 and its volume exist: the flag does not remove any existing extra Machines.
-Independent volumes have independent SQLite state, and the scratch store is
-process-local. See [Fly configuration](https://docs.fly.io/reference/configuration),
+Independent volumes have independent SQLite state; page writes and replay
+records must use the same persistent database. See [Fly configuration](https://docs.fly.io/reference/configuration),
 [deploy options](https://docs.fly.io/flyctl/deploy) and
 [volume behavior](https://docs.fly.io/volumes/overview).
 
@@ -223,7 +209,6 @@ OCMS_OAUTH_CIMD_ALLOWED_HOSTS=claude.ai,chatgpt.com
 OCMS_OAUTH_ALLOW_DCR=false
 OCMS_OAUTH_ACCESS_TTL=3600
 OCMS_OAUTH_REFRESH_TTL_DAYS=30
-OCMS_MCP_SPIKE_TOOLS=true
 OCMS_AI_DISABLED=false
 OCMS_DEMO_MODE=false
 OCMS_REQUIRE_MFA=true
@@ -231,7 +216,7 @@ OCMS_DO_SEED=false
 ```
 
 `fly.staging.bootstrap.toml` has no public service. On this first boot only,
-`OCMS_DO_SEED=true`, OAuth/scratch are disabled, and development mode permits
+`OCMS_DO_SEED=true`, OAuth and AI authoring are disabled, and development mode permits
 HTTP cookies through an owner-bound loopback `fly proxy` tunnel. MFA remains
 required. Replace seeded credentials, enable the MCP module and enroll a
 dedicated editor privately. Then deploy the same image and volume with
@@ -268,7 +253,7 @@ Before client acceptance, verify both deployment-specific controls:
   existing resolver cannot safely handle the observed chain, make a scoped,
   tested fix before proceeding. [Fly request headers](https://docs.fly.io/networking/request-headers)
 - **Logs:** inspect owner-visible `fly logs` after a complete sign-in and MCP
-  call. Codes, state, PKCE verifiers, bearer/refresh credentials and scratch
+  call. Codes, state, PKCE verifiers, bearer/refresh credentials and article
   content must be absent. Keep HTTP body/header debug logging disabled.
   Record the result without copying secrets into the evidence.
 
@@ -312,24 +297,21 @@ Use `$uri`, never `$request`, `$request_uri`, `$args`, `$http_referer`,
 Authorization or request bodies for these routes. Apply equivalent redaction
 to upstream load balancers and observability tools.
 
-## Acceptance evidence still needed
+## Acceptance evidence and pending authoring checks
 
-The local suite covers code exchange, retry/rollback, concurrent redemption,
-refresh rotation/replay/commit failure, audience/client/scope binding, CIMD,
-fresh login/MFA/consent, grant management and authenticated MCP tool calls.
-It also checks scratch ownership/bounds and legacy key behavior. The running
-application must additionally be checked over HTTP after a build.
+R1.1 OAuth acceptance is complete on the commits recorded in PHASE5, including
+Claude Desktop/web, ChatGPT web, both CLI OAuth/bearer lifecycles and external
+IPv6/TLS/forwarding verification. The retired compatibility probe established
+authentication/scope/revocation behavior, not real CMS draft persistence.
 
-For each real client, record date, app/browser version, OS, account tier,
-transport and auth mode. Test connect → consent → list → read context →
-approve scratch write → retrieve → revoke → next call fails → reconnect.
-Record unavailable account/UI capabilities as unverified. The R1.1 matrix in
-`.claude/docs/PHASE5.md` records all client rows, their tested commits and the
-passed external IPv6/TLS/forwarding check; public HTTPS is the common baseline
-and a tunnel is optional.
-The development scratch probe stores only the latest entry per user. Serialize
-scratch writes/lifecycles across clients sharing an account; a later save
-replaces an earlier ID even when it uses a different grant or API key.
-Record every matrix row against the staged commit and configuration before
-starting R1.2. Missing required GUI passes remain pending until the owner
-resolves the blocker or explicitly changes scope.
+R1.5 tests actual CMS draft flows with the Go SDK and isolated HTTP fixtures.
+Fresh Claude Desktop/ChatGPT cloud authoring acceptance remains pending a
+separately approved staging deployment. Record client/browser versions, OS,
+account tier, transport, auth mode, deployed commit and module settings.
+Use the dedicated development account and shared authenticator; preserve the
+owner's existing connections. Test create → read → metadata/body update →
+retained retry → linked translation → revocation → denied next call → reconnect.
+Use two grants for the same user to continue one draft. Verify another user's
+and non-opted-in human drafts remain inaccessible; publishing stays manual.
+Default preview URLs require an editor session; sharing remains unavailable
+until R1.6. Record unavailable client capabilities as pending, never passed.

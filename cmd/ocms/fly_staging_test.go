@@ -29,7 +29,7 @@ func TestFlyStagingBootstrapHasNoPublicService(t *testing.T) {
 	}
 	for key, want := range map[string]string{
 		"OCMS_ENV": "development", "OCMS_DO_SEED": "true", "OCMS_REQUIRE_MFA": "true",
-		"OCMS_OAUTH_ENABLED": "false", "OCMS_MCP_SPIKE_TOOLS": "false", "OCMS_AI_DISABLED": "true",
+		"OCMS_OAUTH_ENABLED": "false", "OCMS_AI_DISABLED": "true",
 	} {
 		if got := readFlyEnv(t, "fly.staging.bootstrap.toml")[key]; got != want {
 			t.Errorf("private bootstrap %s=%q, want %q", key, got, want)
@@ -42,7 +42,7 @@ func TestFlyStagingRequiresMFAAndPreservesBootstrapState(t *testing.T) {
 	private := readFlyEnv(t, "fly.staging.bootstrap.toml")
 	for key, want := range map[string]string{
 		"OCMS_ENV": "staging", "OCMS_DO_SEED": "false", "OCMS_DEMO_MODE": "false",
-		"OCMS_REQUIRE_MFA": "true", "OCMS_OAUTH_ENABLED": "true", "OCMS_MCP_SPIKE_TOOLS": "true",
+		"OCMS_REQUIRE_MFA": "true", "OCMS_OAUTH_ENABLED": "true",
 		"OCMS_AI_DISABLED": "false", "OCMS_OAUTH_ALLOW_DCR": "false",
 		"OCMS_SITE_URL": "https://ocms-mcp-staging.fly.dev", "OCMS_DB_PATH": "/app/data/ocms.db",
 		"OCMS_UPLOADS_DIR": "/app/data/uploads", "OCMS_SERVER_HOST": "[::]",
@@ -53,7 +53,7 @@ func TestFlyStagingRequiresMFAAndPreservesBootstrapState(t *testing.T) {
 	}
 	differences := map[string]bool{
 		"OCMS_ENV": true, "OCMS_DO_SEED": true, "OCMS_OAUTH_ENABLED": true,
-		"OCMS_MCP_SPIKE_TOOLS": true, "OCMS_AI_DISABLED": true,
+		"OCMS_AI_DISABLED": true,
 	}
 	for key, value := range public {
 		if !differences[key] && private[key] != value {

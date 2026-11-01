@@ -605,7 +605,7 @@ type PageDraft struct {
 | `OCMS_OAUTH_ACCESS_TTL` | R1 | `3600` | Access token lifetime (s) |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | R1 | `30` | Refresh lifetime (rotating) |
 | `OCMS_PREVIEW_LINK_TTL_HOURS` | R1 | `24` | Draft preview link lifetime |
-| `OCMS_MCP_SPIKE_TOOLS` | R1.1 only | `false` | Development/staging only: bounded scratch tools, no CMS page writes; refused in production/demo; removed in R1.5 |
+| Retired compatibility probe | Removed in R1.5 | – | No scratch tools or environment flag remain; use gated draft authoring |
 | `OCMS_AI_OPENAI_API_KEY`, `OCMS_AI_IMAGE_MODEL`, `OCMS_AI_IMAGE_DAILY_LIMIT`, `OCMS_AI_MONTHLY_BUDGET_USD` | R2 | – / `gpt-image-2` / `20` / – | Image generation |
 | `OCMS_DEMO_MCP` | R2 | `false` | Public demo endpoint (demo mode only) |
 
@@ -769,7 +769,7 @@ implementation notes below. R1.4 is the active iteration.
 
 ### Iteration R1.4: Authoring Context — Grounding, Editorial Guidance, MCP Resources and Prompts
 
-**Status: complete locally, uncommitted (2026-11-01).**
+**Status: complete locally; committed as `1c8f71d4` (2026-11-01).**
 Work is on `codex/phase5-r1.4-authoring-context`, based on R1.3 `67fb3980`.
 No commit, push or deployment is authorized. See `docs/authoring-context.md`.
 Local SDK, HTTP and browser checks passed; fresh cloud-client compatibility
@@ -801,6 +801,13 @@ is not claimed. Implementation notes and remaining R1.5 work are below.
   unchanged frontend behaviour.
 
 ### Iteration R1.5: Authoring Tools — Create, Update, Translate, Links
+
+**Status: implemented and locally verified, uncommitted (2026-11-01).**
+Branch `codex/phase5-r1.5-authoring-tools`, base `1c8f71d4`. No commit, push
+or deployment is authorized. The owner approved keeping `create_preview_link`
+explicitly unavailable until R1.6; saves return existing session-only draft URLs.
+See `docs/draft-authoring.md`. Fresh cloud-client acceptance remains pending.
+
 - Tools (use the per-operation annotations in Quality #4):
   - `create_draft_page(request_id, draft)` returns `page_id`, `revision`, `admin_url`, `preview_url`,
     `issues` and `translation_status`; `preview_url` requires an editor session;
@@ -2624,3 +2631,91 @@ Editorial guidance open for inspection. No fresh Claude/ChatGPT cloud-client
 acceptance or staging/production migration is claimed. Next is R1.5: real
 draft creation/update/translation tools and their policy/acceptance checks.
 Stop here for human review; commit, push and deployment need separate approval.
+
+
+## R1.5 implementation notes — local verification (2026-11-01)
+
+Branch `codex/phase5-r1.5-authoring-tools`, base `1c8f71d4`. Work remains
+uncommitted. No push, staging/production deployment or wiki publication occurred.
+The last recorded staging build is `c885da9071eb`. Fresh Claude Desktop and
+ChatGPT authoring acceptance is **pending**, so the full R1.5 manual exit check
+is not closed. The owner explicitly approved deferring share issuance to R1.6.
+
+### Implemented behavior
+
+- Twenty-one MCP registrations: fourteen existing reads, three content mutations,
+  own-draft get/list, translation status and reserved `create_preview_link`.
+  The latter returns `preview_unavailable` and creates no token. Save/read URLs
+  use existing session-authenticated current-draft rendering. No new preview
+  renderer, publication, scheduling or deletion tool was added.
+- Default-off admin draft toggle and keep/nofollow/strip policy, using existing
+  templUI controls. Current user/role, exact OAuth access token or API key,
+  scopes, source restrictions and module/toggle are rechecked on transaction
+  queries. Policy changes during queued work are rejected or retryable.
+- Only owned opted-in unscheduled drafts are editable, across apps for the same
+  user. MCP `mcp:drafts` does not grant broad REST page/taxonomy write access.
+- Original typed-input idempotency precedes normalization, mutable defaults and
+  CAS. Retained compact receipts reconstruct the original result from immutable
+  revision provenance. Replays spend no quota or new revision/side effect.
+  Seven-day results/tombstones reuse the R1.2 contract. New successful content
+  operations are limited to sixty per user per rolling hour across credentials.
+- Normalization, assignments, CAS, translation relationships, version/provenance
+  and idempotency use the shared atomic writer. Translation source fingerprints
+  cover title/body/summary/SEO text; lifecycle and membership-only changes do not
+  make text stale. A duplicate target language leaves no orphan. Current
+  visibility conceals hidden sibling/source identities and provenance references.
+- Metadata-only saves preserve rich HTML and inspect links without rewriting it.
+  Explicit report/reference edits can create a revision; identical evidence is
+  a no-op. Omitted reports retain prior agent reports, including legacy format;
+  an explicit empty report clears them. Client metadata always describes the
+  current call and is untrusted. Human/system and related membership revisions
+  receive empty agent evidence rather than the translated target's claims.
+- The transport wire cap is 512 KiB inside a 2 MiB SDK ceiling; Markdown and
+  expanded HTML remain bounded at 200,000 bytes. Errors preserve structured
+  issues/retryability and complete text fallback. A typed-nil SDK result is safe.
+  The scratch implementation/state/flag and active configuration were removed.
+  Prompts use contract version 1.1.0 and direct agents to the actual draft tools.
+
+### Direct evidence and baseline checks
+
+- The final uncached suite passes **65 test packages**. Focused race checks cover
+  authoring, normalization, pagewrite, v2 pages, OAuth, middleware and MCP. After
+  the final report-omission fix, authoring and the affected SDK flows were also
+  rerun under the race detector and passed.
+- **Thirteen deliberate negative probes** fail by assertion, with byte-exact
+  restoration: early replay, own-draft opt-in, quota, source fingerprint,
+  per-page evidence, admin toggle, current key/source policy, annotation class,
+  structured feedback, no-content-fetch boundary, mutation adapter inventory,
+  probe retirement and omitted-report preservation. Positive checks pass after
+  restoration. This is regression evidence, not an independent security audit.
+- Parser/link fuzzing passes **34,374 executions**. Current small-fixture
+  `b.Loop` authoring benchmarks: create about **0.83 ms/op**, update **1.49 ms/op**,
+  excluding network/authentication and not a large-site latency claim. The quota
+  query runs; historical benchmark receipts are outside its window. Validation
+  and Markdown benchmarks also pass.
+- Vet, Staticcheck and Errcheck pass, with final affected-package reruns. Scoped
+  GolangCI has zero findings. Full GolangCI retains the same five unchanged
+  layout/MFA/weather findings; the full lint gate is not green. Govulncheck has
+  zero reachable/imported-package findings and one uncalled module advisory.
+- sqlc/templ regeneration, lockfile assets, binary build, absolute-path and diff
+  checks pass. The full suite exposed an editorial rollback test that assumed
+  its migration was newest; it now rolls back to that migration explicitly.
+- The rebuilt loopback app passes **25 live MCP checks** (including raw curl)
+  and **39 HTTP checks**. They cover actual CMS saves/replays, same-user app
+  continuation, CAS, translations, forbidden/foreign/published access, nofollow,
+  sharing refusal, prompt/resource parity, session preview and anonymous denial.
+  Browser checks confirm default-off settings, a saved nofollow policy, the
+  normal editor/linked translation and authenticated frontend rendering.
+  All temporary loopback-only API keys are deactivated; no owner MFA or external
+  app connection was used. The prior synthetic database is preserved separately.
+
+Runtime/test tree SHA-256:
+`da72b5f4141a83ddf0e0f17a138f2fda2bf800f4f39a08ac11efb11d33480ddc`.
+Ignored `output/r15-validation/` contains per-file source/candidate manifests,
+`verification.json`, `behavior-verification.md`, test/quality/probe logs and
+local HTTP/browser artifacts. Main docs and relevant local wiki pages are
+updated; unrelated wiki work is retained and nothing is published.
+
+Remaining: separately authorized staging deployment and fresh Claude Desktop/
+ChatGPT authoring acceptance. Then R1.6 owns isolated revision previews, explicit
+share tokens and editorial review panels; R1.7 owns release work. Stop here.

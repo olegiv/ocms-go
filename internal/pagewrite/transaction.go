@@ -39,12 +39,14 @@ type trackedPage struct {
 // Tx is a unit of work. Track existing pages before their first mutation, and
 // register inserts with Created. All related writes use Q from this transaction.
 type Tx struct {
-	Q         *store.Queries
-	principal provenance.Principal
-	evidence  provenance.Evidence
-	tracked   map[int64]trackedPage
-	Pages     map[int64]store.Page
-	Changed   map[int64]bool
+	Q               *store.Queries
+	principal       provenance.Principal
+	evidence        provenance.Evidence
+	pageEvidence    map[int64]provenance.Evidence
+	evidenceChanges map[int64]bool
+	tracked         map[int64]trackedPage
+	Pages           map[int64]store.Page
+	Changed         map[int64]bool
 }
 
 // NewTx joins an existing transaction (imports and compound system operations).
@@ -88,6 +90,24 @@ func InTx(ctx context.Context, db *sql.DB, principal provenance.Principal, fn fu
 
 // SetEvidence associates new validation and report data with this operation.
 func (t *Tx) SetEvidence(evidence provenance.Evidence) { t.evidence = evidence }
+
+// SetPageEvidence keeps an authored page's claims/validation separate from
+// relation-only revisions of other pages in the same transaction.
+func (t *Tx) SetPageEvidence(id int64, evidence provenance.Evidence) {
+	if t.pageEvidence == nil {
+		t.pageEvidence = make(map[int64]provenance.Evidence)
+	}
+	t.pageEvidence[id] = evidence
+}
+
+// TrackEvidenceChanges allows an explicit references/report edit to create a
+// revision even when the article fields did not change. Identical evidence is a no-op.
+func (t *Tx) TrackEvidenceChanges(id int64) {
+	if t.evidenceChanges == nil {
+		t.evidenceChanges = make(map[int64]bool)
+	}
+	t.evidenceChanges[id] = true
+}
 
 // Track captures fresh state and enforces CAS before any mutation. Set required
 // for an editor/agent action; legacy REST updates may omit it on ordinary pages.
@@ -180,8 +200,19 @@ func (t *Tx) Finish(ctx context.Context) error {
 				return fieldsErr
 			}
 			if len(fields) == 0 {
-				t.Pages[id] = page
-				continue
+				changed := false
+				if t.evidenceChanges[id] {
+					previous, err := t.Q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: id, Revision: page.Revision})
+					if err != nil && !errors.Is(err, sql.ErrNoRows) {
+						return err
+					}
+					evidence := t.pageEvidence[id]
+					changed = !equalJSON(previous.ValidatedJson, evidence.Validated) || !equalJSON(previous.ReportedJson, evidence.Reported)
+				}
+				if !changed {
+					t.Pages[id] = page
+					continue
+				}
 			}
 			page, err = t.Q.AdvancePageRevision(ctx, store.AdvancePageRevisionParams{ID: id, Revision: tracked.revision})
 			if errors.Is(err, sql.ErrNoRows) {
@@ -209,7 +240,11 @@ func (t *Tx) Finish(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("record page snapshot: %w", err)
 		}
-		if err = provenance.Record(ctx, t.Q, page, t.principal, t.evidence); err != nil {
+		evidence := t.evidence
+		if selected, ok := t.pageEvidence[id]; ok {
+			evidence = selected
+		}
+		if err = provenance.Record(ctx, t.Q, page, t.principal, evidence); err != nil {
 			return fmt.Errorf("record page provenance: %w", err)
 		}
 		t.Pages[id] = page
@@ -217,6 +252,17 @@ func (t *Tx) Finish(ctx context.Context) error {
 	}
 	clear(t.tracked)
 	return nil
+}
+
+func equalJSON(previous string, next json.RawMessage) bool {
+	var a, b any
+	if previous == "" {
+		previous = "{}"
+	}
+	if len(next) == 0 {
+		next = json.RawMessage(`{}`)
+	}
+	return json.Unmarshal([]byte(previous), &a) == nil && json.Unmarshal(next, &b) == nil && reflect.DeepEqual(a, b)
 }
 
 func (t *Tx) changedSince(ctx context.Context, page store.Page, base int64) ([]string, error) {

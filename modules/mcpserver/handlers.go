@@ -50,7 +50,6 @@ func (m *Module) dashboardData(ctx context.Context) DashboardData {
 		Version:          moduleVersion,
 		MaxInstructions:  maxInstructionsRunes,
 		OAuthEnabled:     m.ctx.OAuth != nil,
-		ScratchEnabled:   m.spikeEnabled(),
 	}
 
 	// The form shows what is stored, which also brings the running server
@@ -63,6 +62,7 @@ func (m *Module) dashboardData(ctx context.Context) DashboardData {
 		settings = m.currentSettings()
 	}
 	data.AllowDrafts, data.Instructions = settings.AllowDrafts, settings.Instructions
+	data.DraftToolsEnabled, data.ExternalLinks = settings.DraftToolsEnabled, linkPolicy(settings)
 
 	endpoint := EndpointPath
 	siteURL, status, err := m.resolveSiteURL(ctx)
@@ -210,8 +210,17 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	next := Settings{
-		AllowDrafts:  r.FormValue("allow_drafts") == "1",
-		Instructions: instructions,
+		AllowDrafts:       r.FormValue("allow_drafts") == "1",
+		Instructions:      instructions,
+		DraftToolsEnabled: r.FormValue("draft_tools_enabled") == "1",
+		ExternalLinks:     r.FormValue("external_links"),
+	}
+	if next.ExternalLinks == "" {
+		next.ExternalLinks = linkPolicy(m.currentSettings())
+	}
+	if next.ExternalLinks != "keep" && next.ExternalLinks != "nofollow" && next.ExternalLinks != "strip" {
+		fail(i18n.T(lang, "mcp.invalid_link_policy"))
+		return
 	}
 	prev, err := m.saveAndApply(r.Context(), next)
 	if err != nil {
@@ -221,6 +230,8 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	meta := map[string]any{
+		"draft_tools_enabled":   next.DraftToolsEnabled,
+		"external_links":        next.ExternalLinks,
 		"allow_drafts":          next.AllowDrafts,
 		"previous_allow_drafts": prev.AllowDrafts,
 		"instructions_length":   utf8.RuneCountInString(next.Instructions),

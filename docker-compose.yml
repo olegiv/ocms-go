@@ -95,7 +95,6 @@ services:
       # Site and modes
       - OCMS_SITE_URL
       - OCMS_AI_DISABLED
-      - OCMS_MCP_SPIKE_TOOLS
       - OCMS_OAUTH_ENABLED
       - OCMS_OAUTH_CIMD_ALLOWED_HOSTS
       - OCMS_OAUTH_PRE_REGISTERED_CLIENTS

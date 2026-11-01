@@ -10,6 +10,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 
+	"github.com/olegiv/ocms-go/internal/ai/authoring"
+	"github.com/olegiv/ocms-go/internal/ai/draft"
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 )
 
@@ -42,14 +44,22 @@ const (
 // An agent therefore gets machine-readable details it can act on (fix an
 // argument, try another id) instead of a protocol failure.
 type toolError struct {
-	Code    string
-	Message string
-	Details map[string]string
+	Code              string
+	Message           string
+	Details           map[string]string
+	Issues            []draft.Issue
+	Retryable         bool
+	RetryAfterSeconds int64
 }
 
 // Error renders the REST error envelope.
 func (e *toolError) Error() string {
-	body := v2.ErrorBody{Error: v2.ErrorDetail{Code: e.Code, Message: e.Message, Details: e.Details}}
+	body := struct {
+		Error             v2.ErrorDetail `json:"error"`
+		Issues            []draft.Issue  `json:"issues,omitempty"`
+		Retryable         bool           `json:"retryable"`
+		RetryAfterSeconds int64          `json:"retry_after_seconds,omitempty"`
+	}{v2.ErrorDetail{Code: e.Code, Message: e.Message, Details: e.Details}, e.Issues, e.Retryable, e.RetryAfterSeconds}
 	raw, err := json.Marshal(body)
 	if err != nil {
 		// A string-only struct cannot fail to marshal; keep a valid fallback.
@@ -72,7 +82,7 @@ func internalToolError() *toolError {
 // timeoutToolError reports a call cut short by cancellation or the per-call
 // time limit.
 func timeoutToolError() *toolError {
-	return &toolError{Code: codeTimeout, Message: msgTimeout}
+	return &toolError{Code: codeTimeout, Message: msgTimeout, Retryable: true}
 }
 
 // internalRPCError is the scrubbed JSON-RPC error for failures outside tool
@@ -116,13 +126,24 @@ func errorDetail(err error) string {
 // REST does; anything else is replaced by a generic message so file paths,
 // SQL or driver diagnostics never leak into a model's context.
 func toToolError(err error) (*toolError, bool) {
+	var feedback *authoring.Error
+	if errors.As(err, &feedback) {
+		return &toolError{Code: feedback.Code, Message: feedback.Message, Issues: feedback.Issues, Retryable: feedback.Retryable, RetryAfterSeconds: feedback.RetryAfterSeconds}, false
+	}
 	var te *toolError
 	if errors.As(err, &te) {
 		return te, te.Code == codeInternal
 	}
 	var de *v2.Error
 	if errors.As(err, &de) {
-		return &toolError{Code: de.Code(), Message: de.Msg, Details: de.Fields}, de.Kind == v2.ErrInternal
+		te := &toolError{Code: de.Code(), Message: de.Msg, Details: de.Fields, Retryable: de.Code() == "write_retryable"}
+		for _, definition := range draft.Catalog() {
+			if definition.Code == de.Code() {
+				te.Issues = []draft.Issue{draft.NewIssue(de.Code(), "request", "en")}
+				break
+			}
+		}
+		return te, de.Kind == v2.ErrInternal
 	}
 	return internalToolError(), true
 }

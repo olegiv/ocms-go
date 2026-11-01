@@ -13,14 +13,14 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/olegiv/ocms-go/internal/ai/authoring"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/oauth"
 )
 
-func enableOAuth(t *testing.T, env *testEnv, scratch bool) *oauth.Service {
+func enableOAuth(t *testing.T, env *testEnv, drafts bool) *oauth.Service {
 	t.Helper()
 	s, err := oauth.New(env.db, oauth.Options{Issuer: "https://cms.test", AllowDCR: true})
 	if err != nil {
@@ -29,7 +29,8 @@ func enableOAuth(t *testing.T, env *testEnv, scratch bool) *oauth.Service {
 	ctx := env.module.ctx
 	ctx.OAuth = s
 	ctx.Config.Env = "development"
-	ctx.Config.MCPSpikeTools = scratch
+	env.setSettings(Settings{DraftToolsEnabled: drafts, ExternalLinks: "keep"})
+	env.setConfig(model.ConfigKeySiteURL, "https://cms.test")
 	if err := env.module.Init(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +87,7 @@ func oauthToken(t *testing.T, s *oauth.Service, userID int64, scopes string) (st
 	return body.Access, p
 }
 
-func TestOAuthMCPPrincipalScratchRevocationAndKeyCompatibility(t *testing.T) {
+func TestOAuthMCPPrincipalDraftRevocationAndKeyCompatibility(t *testing.T) {
 	env := newTestEnv(t)
 	s := enableOAuth(t, env, true)
 	token, p := oauthToken(t, s, env.userID, "mcp:access mcp:drafts")
@@ -101,36 +102,37 @@ func TestOAuthMCPPrincipalScratchRevocationAndKeyCompatibility(t *testing.T) {
 	}
 	found := false
 	for _, tool := range listed.Tools {
-		if tool.Name == "spike_save_draft" {
+		if tool.Name == "create_draft_page" {
 			found = true
-			if tool.Annotations.ReadOnlyHint || tool.Annotations.IdempotentHint || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint || tool.Meta["securitySchemes"] == nil {
-				t.Fatal("scratch write misclassified")
+			if tool.Annotations.ReadOnlyHint || !tool.Annotations.IdempotentHint || tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint || tool.Meta["securitySchemes"] == nil {
+				t.Fatal("draft create misclassified")
 			}
 		}
 	}
 	if !found {
-		t.Fatal("scratch tool not discovered")
+		t.Fatal("draft tool not discovered")
 	}
 	var pagesBefore, pagesAfter int
 	if err := env.db.QueryRow(`SELECT COUNT(*) FROM pages`).Scan(&pagesBefore); err != nil {
 		t.Fatal(err)
 	}
-	entry := decodeResult[scratchEntry](t, call(t, session, "spike_save_draft", map[string]any{"title": "Scratch", "body": "Never published"}))
-	got := decodeResult[scratchEntry](t, call(t, session, "spike_get_draft", map[string]any{"id": entry.ID}))
-	if got.Body != entry.Body {
-		t.Fatal("scratch read differs")
+	args := draftCreateArgs("OAuth draft")
+	entry := decodeResult[authoring.SaveResult](t, call(t, session, "create_draft_page", args))
+	got := decodeResult[authoring.DraftDetail](t, call(t, session, "get_my_draft", map[string]any{"page_id": entry.PageID}))
+	if got.BodyHTML == "" || got.Verified.OAuthGrantID != p.GrantID {
+		t.Fatal("draft read/provenance differs")
 	}
-	if err := env.db.QueryRow(`SELECT COUNT(*) FROM pages`).Scan(&pagesAfter); err != nil || pagesAfter != pagesBefore {
-		t.Fatal("scratch changed CMS pages")
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM pages`).Scan(&pagesAfter); err != nil || pagesAfter != pagesBefore+1 {
+		t.Fatal("draft not saved atomically")
 	}
 	otherUser := env.createUser("other@example.test", "Other")
 	otherToken, _ := oauthToken(t, s, otherUser, "mcp:access mcp:drafts")
-	foreign := call(t, env.connect(otherToken), "spike_get_draft", map[string]any{"id": entry.ID})
+	foreign := call(t, env.connect(otherToken), "get_my_draft", map[string]any{"page_id": entry.PageID})
 	if code, _, _ := toolErrorBody(t, foreign); code != "not_found" {
-		t.Fatal("foreign scratch entry disclosed")
+		t.Fatal("foreign draft disclosed")
 	}
 	limitedToken, _ := oauthToken(t, s, env.userID, "mcp:access")
-	scopeResponse := env.rawPost(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"spike_save_draft","arguments":{"title":"Denied","body":""}}}`, map[string]string{"Authorization": "Bearer " + limitedToken})
+	scopeResponse := env.rawPost(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_draft_page","arguments":{"title":"Denied","body":""}}}`, map[string]string{"Authorization": "Bearer " + limitedToken})
 	if scopeResponse.StatusCode != http.StatusForbidden || !strings.Contains(scopeResponse.Header.Get("WWW-Authenticate"), `error="insufficient_scope"`) {
 		t.Fatal("missing transport-level OAuth scope challenge")
 	}
@@ -150,7 +152,7 @@ func TestOAuthMCPPrincipalScratchRevocationAndKeyCompatibility(t *testing.T) {
 		t.Fatal("legacy bearer principal changed")
 	}
 	logs := env.logs.text()
-	for _, secret := range []string{token, key, "Never published"} {
+	for _, secret := range []string{token, key, "R15 private draft paragraph"} {
 		if strings.Contains(logs, secret) {
 			t.Fatal("MCP log leaked credential/content")
 		}
@@ -177,53 +179,5 @@ func TestMCPRejectsChangedAccountAndInvalidOAuthWithoutKeyFallback(t *testing.T)
 	resp := env.rawPost(`{}`, map[string]string{"Authorization": "Bearer ocms.oauth.at.invalid"})
 	if resp.StatusCode != 401 || !strings.Contains(resp.Header.Get("WWW-Authenticate"), "resource_metadata=") {
 		t.Fatal("invalid OAuth fell into API-key verifier")
-	}
-}
-
-func TestScratchBoundsExpiryAndStartupGates(t *testing.T) {
-	env := newTestEnv(t)
-	enableOAuth(t, env, true)
-	m := env.module
-	id := &identity{userID: env.userID, scopes: []string{"mcp:drafts"}}
-	call := &toolCall{identity: id}
-	if _, err := m.saveScratch(t.Context(), call, scratchInput{Title: "X", Body: strings.Repeat("x", 8192)}); err == nil {
-		t.Fatal("oversized scratch accepted")
-	}
-	first, err := m.saveScratch(t.Context(), call, scratchInput{Title: "One"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := m.saveScratch(t.Context(), call, scratchInput{Title: "Two"})
-	if err != nil || len(m.scratch.entries) != 1 {
-		t.Fatal("more than one entry per user")
-	}
-	if _, err := m.getScratch(t.Context(), call, scratchID{ID: first.ID}); err == nil {
-		t.Fatal("replaced ID still valid")
-	}
-	for user := int64(2); user <= 100; user++ {
-		if _, err := m.saveScratch(t.Context(), &toolCall{identity: &identity{userID: user, scopes: id.scopes}}, scratchInput{Title: "Bounded"}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := m.saveScratch(t.Context(), &toolCall{identity: &identity{userID: 101, scopes: id.scopes}}, scratchInput{Title: "Overflow"}); err == nil {
-		t.Fatal("scratch capacity exceeded")
-	}
-	m.scratch.now = func() time.Time { return second.ExpiresAt.Add(time.Second) }
-	if _, err := m.getScratch(t.Context(), call, scratchID{ID: second.ID}); err == nil {
-		t.Fatal("expired scratch readable")
-	}
-	if _, err := m.saveScratch(t.Context(), call, scratchInput{Title: "After expiry"}); err != nil || len(m.scratch.entries) != 1 {
-		t.Fatal("expired entries not removed")
-	}
-	m.ctx.Config.AIDisabled = true
-	if len(m.catalog()) != len(toolCatalog()) {
-		t.Fatal("kill switch left scratch tools listed")
-	}
-	if _, err := m.saveScratch(t.Context(), call, scratchInput{Title: "Disabled"}); err == nil {
-		t.Fatal("kill switch left writes enabled")
-	}
-	m.ctx.Config.Env = "production"
-	if err := New().Init(m.ctx); err == nil {
-		t.Fatal("production scratch flag accepted")
 	}
 }

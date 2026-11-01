@@ -6,7 +6,7 @@
 //
 // It serves a stateless Streamable HTTP endpoint at EndpointPath built on the
 // official Go SDK (github.com/modelcontextprotocol/go-sdk). The tools are thin
-// read-only adapters over core authoring and REST v2 domain services. Existing content tools
+// adapters over core authoring and REST v2 domain services. Existing content tools
 // share REST validation, visibility rules and caching; tool schemas are generated
 // from the same huma struct tags REST v2 validates with. Access requires an
 // API key holding the mcp:access permission.
@@ -64,21 +64,22 @@ const (
 // Request limits for the MCP endpoint. Every call is authenticated, but the
 // limits still bound what one key, or one address probing for keys, can cost.
 //
-// The read-only tools take a handful of scalar arguments, so 256 KiB leaves
-// generous room for JSON-RPC framing and the per-request _meta of protocol
-// 2026-07-28 while keeping the body the SDK buffers in memory small. Agents
+// Draft bodies need up to 512 KiB of JSON framing and escaping within a
+// separate 2 MiB SDK ceiling. Read tools take only bounded scalar arguments.
+// The route cap also bounds protocol 2026-07-28 per-request metadata. Agents
 // call tools sequentially and rarely exceed a few calls per second; the
 // per-key limit allows bursts of 30 and refills at 10 per second, and the
 // per-IP limit sits in front of API key verification (Argon2) to blunt key
 // guessing. The in-flight cap stops a burst from queueing unbounded work
 // behind SQLite.
 const (
-	maxRequestBodyBytes = 256 << 10
-	maxInFlightRequests = 32
-	ipRateLimitRPS      = 20.0
-	ipRateLimitBurst    = 40
-	keyRateLimitRPS     = 10.0
-	keyRateLimitBurst   = 30
+	maxRequestBodyBytes   = 512 << 10
+	sdkRequestBodyCeiling = 2 << 20
+	maxInFlightRequests   = 32
+	ipRateLimitRPS        = 20.0
+	ipRateLimitBurst      = 40
+	keyRateLimitRPS       = 10.0
+	keyRateLimitBurst     = 30
 )
 
 // services are the domain services the tools adapt: the same types REST v2
@@ -127,7 +128,6 @@ type Module struct {
 	invalidSiteURL atomic.Pointer[string]
 
 	schemaCache *mcp.SchemaCache
-	scratch     *scratchStore
 }
 
 // New creates the MCP module.
@@ -148,12 +148,7 @@ func (m *Module) ActiveByDefault() bool { return false }
 
 // Init builds the services, server and HTTP chain from the module context.
 func (m *Module) Init(ctx *module.Context) error {
-	if ctx.Config != nil && ctx.Config.MCPSpikeTools &&
-		((ctx.Config.Env != "development" && ctx.Config.Env != "staging") || middleware.IsDemoMode()) {
-		return fmt.Errorf("MCP scratch tools are forbidden outside development/staging or in demo mode")
-	}
 	m.ctx = ctx
-	m.scratch = newScratchStore()
 	m.logger = ctx.Logger
 	if m.logger == nil {
 		m.logger = slog.Default()
@@ -179,7 +174,7 @@ func (m *Module) Init(ctx *module.Context) error {
 	m.logger.Info("MCP module initialized",
 		"endpoint", EndpointPath,
 		"tools", len(m.catalog()),
-		"read_only", !m.spikeEnabled(),
+		"read_only", !settings.DraftToolsEnabled,
 		"allow_drafts", settings.AllowDrafts,
 		"protocol_versions", mcp.SupportedProtocolVersions(),
 		"max_request_bytes", maxRequestBodyBytes,
@@ -337,6 +332,16 @@ func (m *Module) Migrations() []module.Migration {
 			Down: func(db *sql.DB) error {
 				_, err := db.Exec(`DROP TABLE IF EXISTS mcp_settings`)
 				return err
+			},
+		},
+		{
+			Version:     2,
+			Description: "Add draft authoring policy",
+			Up: func(db *sql.DB) error {
+				return migrateDraftSettings(db, true)
+			},
+			Down: func(db *sql.DB) error {
+				return migrateDraftSettings(db, false)
 			},
 		},
 	}

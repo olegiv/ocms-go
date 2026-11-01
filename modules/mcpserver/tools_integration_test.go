@@ -32,8 +32,8 @@ func TestToolsListMatchesCatalog(t *testing.T) {
 	var listed []string
 	for _, tool := range res.Tools {
 		listed = append(listed, tool.Name)
-		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
-			t.Errorf("%s: missing readOnlyHint", tool.Name)
+		if tool.Annotations == nil {
+			t.Errorf("%s: missing annotations", tool.Name)
 		}
 		if tool.Annotations != nil && (tool.Annotations.OpenWorldHint == nil || *tool.Annotations.OpenWorldHint) {
 			t.Errorf("%s: openWorldHint must be false", tool.Name)

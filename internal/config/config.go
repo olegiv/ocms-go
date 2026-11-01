@@ -55,7 +55,6 @@ type Config struct {
 	OAuthAllowDCR             bool   `env:"OCMS_OAUTH_ALLOW_DCR" envDefault:"false"`
 	OAuthAccessTTL            int    `env:"OCMS_OAUTH_ACCESS_TTL" envDefault:"3600"`
 	OAuthRefreshTTLDays       int    `env:"OCMS_OAUTH_REFRESH_TTL_DAYS" envDefault:"30"`
-	MCPSpikeTools             bool   `env:"OCMS_MCP_SPIKE_TOOLS" envDefault:"false"`
 	AIDisabled                bool   `env:"OCMS_AI_DISABLED" envDefault:"false"`
 
 	// Cache configuration
@@ -189,9 +188,6 @@ func Load() (*Config, error) {
 
 	applyProductionSecurityDefaults(cfg)
 
-	if cfg.MCPSpikeTools && ((cfg.Env != "development" && cfg.Env != "staging") || os.Getenv("OCMS_DEMO_MODE") == "true") {
-		return nil, fmt.Errorf("OCMS_MCP_SPIKE_TOOLS is restricted to development/staging outside demo mode")
-	}
 	if cfg.OAuthEnabled && strings.TrimSpace(cfg.SiteURL) == "" {
 		return nil, fmt.Errorf("OCMS_SITE_URL is required when OAuth is enabled")
 	}

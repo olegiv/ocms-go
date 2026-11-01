@@ -72,7 +72,7 @@ type Context struct {
 
 // Build snapshots selected references and bounded site choices without network calls or writes.
 func (r *Resolver) Build(ctx context.Context, in Input) (Context, error) {
-	out := Context{DataPolicy: DataPolicy, Task: in.Task, Brief: in.Brief, References: []Reference{}, FollowUp: "Use get_page for a page ID, get_media for an image ID, get_style_guide/list_presets for full guidance, or get_authoring_context with the returned next offsets. Compare a follow-up page revision with this snapshot and refresh context if it changed. Own-draft full reads remain R1.5. Duplicate references retain every role and share the first recorded revision."}
+	out := Context{DataPolicy: DataPolicy, Task: in.Task, Brief: in.Brief, References: []Reference{}, FollowUp: "Use get_page for a page ID, get_media for an image ID, get_style_guide/list_presets for full guidance, or get_authoring_context with the returned next offsets. Compare a follow-up page revision with this snapshot and refresh context if it changed. Own-draft full reads use get_my_draft with mcp:drafts while authoring is enabled. Duplicate references retain every role and share the first recorded revision."}
 	if len(in.References) > MaxReferences || !utf8.ValidString(in.Brief+in.MediaSearch) || utf8.RuneCountInString(in.Brief) > 4000 || utf8.RuneCountInString(in.MediaSearch) > 200 {
 		return out, ErrInput
 	}

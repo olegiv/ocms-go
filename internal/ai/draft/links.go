@@ -203,6 +203,26 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 	return result, links, issues, err
 }
 
+// InspectHTMLLinks reviews an existing body without returning replacement HTML.
+// Metadata-only edits preserve legacy markup; unsafe legacy anchors therefore
+// produce a conversion warning instead of pretending the old body was validated.
+func InspectHTMLLinks(ctx context.Context, body string, options Options) ([]Link, []Issue, error) {
+	base, err := options.base()
+	if err != nil {
+		return nil, nil, err
+	}
+	_, links, issues, err := applyLinks(ctx, body, base, Keep, options.Resolver, options.UILanguage)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i, issue := range issues {
+		if issue.Severity == Error {
+			issues[i] = NewIssue("html_conversion_lossy", "body_html", options.UILanguage)
+		}
+	}
+	return links, issues, nil
+}
+
 func attribute(node *html.Node, name string) string {
 	for _, attr := range node.Attr {
 		if attr.Key == name {

@@ -541,6 +541,26 @@ func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID in
 	return false, true, nil
 }
 
+// RecheckAPIKeyPolicy checks current key/source policy without repeating the
+// expensive credential hash. Callers must first load the authenticated key by ID.
+// This supports queued writes using queries from the write transaction.
+func RecheckAPIKeyPolicy(ctx context.Context, q *store.Queries, key store.ApiKey, clientIP string) (bool, error) {
+	if !key.IsActive || isAPIKeyExpiryRequired() && !key.ExpiresAt.Valid || key.ExpiresAt.Valid && !time.Now().Before(key.ExpiresAt.Time) {
+		return false, nil
+	}
+	if isAPIAllowedCIDRsRequired() && !hasAPIAllowedCIDRsConfigured() || !isAPIClientAllowed(clientIP) {
+		return false, nil
+	}
+	if maximum := getAPIKeyMaxTTL(); maximum > 0 && (!key.ExpiresAt.Valid || key.ExpiresAt.Time.After(key.CreatedAt.Add(maximum))) {
+		return false, nil
+	}
+	allowed, configured, err := isAPIKeySourceAllowed(ctx, q, key.ID, clientIP)
+	if err != nil {
+		return false, err
+	}
+	return allowed && (!isAPIKeySourceCIDRsRequired() || configured), nil
+}
+
 // WriteAPIError writes a JSON error response.
 func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
