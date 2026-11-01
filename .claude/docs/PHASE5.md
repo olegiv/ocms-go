@@ -802,11 +802,15 @@ is not claimed. Implementation notes and remaining R1.5 work are below.
 
 ### Iteration R1.5: Authoring Tools — Create, Update, Translate, Links
 
-**Status: implemented and locally verified, uncommitted (2026-11-01).**
-Branch `codex/phase5-r1.5-authoring-tools`, base `1c8f71d4`. No commit, push
-or deployment is authorized. The owner approved keeping `create_preview_link`
-explicitly unavailable until R1.6; saves return existing session-only draft URLs.
-See `docs/draft-authoring.md`. Fresh cloud-client acceptance remains pending.
+**Status: committed, deployed; core GUI acceptance passed (2026-11-01).**
+Commit `0afcbf618e3b` on `codex/phase5-r1.5-authoring-tools`, base `1c8f71d4`,
+is deployed to `ocms-mcp-staging` with explicit approval. Claude web/Desktop and
+ChatGPT passed the dedicated-account authoring and revoke/reconnect flow.
+The OAuth consent description is corrected locally in English/Russian; these
+catalog changes are not deployed. See the staging notes below. No Git push
+occurred. The owner approved keeping
+`create_preview_link` explicitly unavailable until R1.6; saves return existing
+session-only draft URLs. See `docs/draft-authoring.md`.
 
 - Tools (use the per-operation annotations in Quality #4):
   - `create_draft_page(request_id, draft)` returns `page_id`, `revision`, `admin_url`, `preview_url`,
@@ -2635,11 +2639,12 @@ Stop here for human review; commit, push and deployment need separate approval.
 
 ## R1.5 implementation notes — local verification (2026-11-01)
 
-Branch `codex/phase5-r1.5-authoring-tools`, base `1c8f71d4`. Work remains
-uncommitted. No push, staging/production deployment or wiki publication occurred.
-The last recorded staging build is `c885da9071eb`. Fresh Claude Desktop and
-ChatGPT authoring acceptance is **pending**, so the full R1.5 manual exit check
-is not closed. The owner explicitly approved deferring share issuance to R1.6.
+Initial local verification on `codex/phase5-r1.5-authoring-tools`, base
+`1c8f71d4`, preceded commit `0afcbf618e3b` and the subsequently authorized staging
+deployment. At that point staging still ran `c885da9071eb` and fresh GUI
+acceptance was pending. The completed staging checks and subsequent local
+consent-copy correction are recorded below. Share issuance remains deferred to
+R1.6 by the owner's explicit decision.
 
 ### Implemented behavior
 
@@ -2716,6 +2721,100 @@ Ignored `output/r15-validation/` contains per-file source/candidate manifests,
 local HTTP/browser artifacts. Main docs and relevant local wiki pages are
 updated; unrelated wiki work is retained and nothing is published.
 
-Remaining: separately authorized staging deployment and fresh Claude Desktop/
-ChatGPT authoring acceptance. Then R1.6 owns isolated revision previews, explicit
-share tokens and editorial review panels; R1.7 owns release work. Stop here.
+The subsequent staging deployment and fresh Claude Desktop/ChatGPT authoring
+acceptance are recorded below. R1.6 owns isolated revision previews, explicit
+share tokens and editorial review panels; R1.7 owns release work.
+
+
+## R1.5 staging deployment and GUI acceptance (2026-11-01)
+
+The owner authorized deployment and dedicated-account Claude/ChatGPT acceptance,
+with no Git push. Deployed exact commit
+`0afcbf618e3b1f1d6e0cb362137ae60ca66369c9` from an isolated `git archive` source
+context. All 1,270 archived source blobs remained unchanged after asset building;
+64 archived Go test packages passed. The deployed version reports that commit.
+Fly image `[deployment ID redacted]` runs on the existing single
+Frankfurt machine, with 2 shared CPUs and 1,024 MB RAM. Pre-deployment volume
+snapshot `[snapshot ID redacted]` completed before deployment. Public health,
+readiness, OAuth/resource metadata and the MCP server card passed; final Fly
+checks remain passing.
+
+### Real-client results
+
+- Used the dedicated Editor `ocms-agent@example.test` (user 2), its Keychain
+  password and the shared development authenticator. Every OAuth login used
+  normal password, MFA and consent; no owner codes, recovery codes or MFA reset.
+  The only requested permissions were `mcp:access` and `mcp:drafts`.
+- Created separate **oCMS R1.5 agent acceptance** connectors in Claude and
+  ChatGPT. Claude disallows another connector at an identical URL, so both tests
+  use the harmless `?acceptance=r15-agent` marker on the existing MCP endpoint;
+  discovery and OAuth resource binding remain canonical `/api/mcp`. Existing
+  owner connections were preserved.
+- Claude web proved the default-off gate (`draft_tools_disabled`), then created
+  page 3, replayed the identical request without a duplicate, read provenance
+  and saved an update. ChatGPT read and continued the same user's page at the
+  next revision; an intentional stale update returned `revision_conflict`.
+- Native Claude Desktop read ChatGPT's update and later saved the source change
+  that made the Russian translation stale. It also read ChatGPT's separate draft
+  after the final reconnect. These were actual native-app interactions, not SDK
+  probes standing in for Desktop.
+- ChatGPT created/replayed its own English draft (page 4), translated Claude's
+  source into Russian (page 5), and received generic `translation_exists` for a
+  distinct request/slug targeting the same language. No duplicate or orphan page
+  remained. Source membership revision 4 changed only `revision`/`translations`,
+  keeping the translation current; the subsequent text edit to revision 5 made
+  it stale. Both clients read the recorded source basis at revision 3.
+- Claude's calls to a published page and another user's draft both returned
+  generic `not_found`. A publication field was rejected by JSON Schema with
+  `validation_error`; no content/lifecycle write occurred. Explicit share
+  creation returned `preview_unavailable` and no token, as approved for R1.5.
+- Revoked each new scoped test grant separately. Actual client calls received
+  HTTP 401 and refresh attempts were refused; both apps displayed reconnect UI.
+  Normal MFA/consent restored access under new grants. Claude required its normal
+  base-scope reconnect followed by the draft-scope upgrade. The server then
+  logged successful reads under the replacement scoped grants, user 2.
+- Editor-session English/Russian preview URLs rendered saved content and
+  `rel="noopener noreferrer nofollow"`. Anonymous requests to all three draft
+  URLs and the registered REST v2 page routes returned 404. The existing editor
+  showed the AI-editable flag, saved summary and linked Russian draft.
+
+Final database inspection: three own AI-editable drafts, pages **3/revision 5**,
+**4/revision 1**, **5/revision 1**; none published or scheduled. Complete snapshot
+and provenance counts match every revision. The original seven active grants
+(six owner grants and the existing dedicated Claude Code grant) are preserved.
+Only the two replacement scoped GUI test grants remain in addition; redundant
+base grants were revoked. SQLite quick check is `ok`. Temporary Fly maintenance
+executables and each private MFA code file were removed. Staging authoring stays
+enabled with `nofollow`; broad unpublished-content visibility stays disabled.
+Russian was enabled as a non-default staging language for translation checks.
+
+### Observations and remaining work
+
+- **Consent copy corrected locally (not deployed):** staging acceptance found
+  that `oauth.scope.mcp:drafts` still described retired development scratch
+  tools. The English catalog now says “Create and edit your own AI drafts”;
+  Russian says “Создание и редактирование ваших ИИ-черновиков”. The scope key and
+  authorization behavior are unchanged. A later approved deployment is needed
+  for staging to display this correction. Local before/after rendering of the
+  actual consent component passed in both languages with and without the draft
+  scope. The i18n suite, OAuth handler tests and translation-key drift check
+  passed. Evidence: `output/r15-validation/oauth-consent-wording/`.
+- ChatGPT intermittently displayed “This response couldn’t load”. A reload
+  recovered the initial result, and a fresh read after reconnect rendered the
+  final complete result. No mutation was repeated with a new request ID to work
+  around a display failure. This client-display limitation is recorded rather
+  than counted as a backend success before verification.
+- Relation-only source revisions intentionally carry empty validation/report
+  evidence instead of copying the target translation's claims. Earlier source
+  revision evidence remains in history; the current projection is empty until a
+  later authored revision. This matches the current documented/tested contract
+  and is a review-UI consideration for R1.6, not destruction of history.
+- Generic schema `validation_error` on a forbidden publication field is the
+  observed catalog behavior; do not claim a `forbidden_field` response for that
+  input. No independent security audit, new IPv6 verification, production
+  migration, new CLI authoring acceptance or R1.6 preview isolation is claimed.
+
+Evidence is in ignored `output/r15-validation/staging-acceptance/`, including
+`acceptance.json`, deployment/snapshot manifests, sanitized tool/request logs,
+exact request fixtures, database checks, client transcripts and screenshots.
+The status update is uncommitted; no push or wiki publication occurred.

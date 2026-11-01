@@ -7724,8 +7724,8 @@
         },
         {
             "id": "oauth.scope.mcp:drafts",
-            "message": "Use your AI-editable drafts (currently development scratch tools only)",
-            "translation": "Работа с вашими черновиками для ИИ (сейчас только временные инструменты разработки)"
+            "message": "Create and edit your own AI drafts",
+            "translation": "Создание и редактирование ваших ИИ-черновиков"
         },
         {
             "id": "oauth.scope.pages:read",
