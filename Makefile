@@ -71,6 +71,13 @@ build:
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS_VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_DIR)
 
+.PHONY: build-dev-authenticator
+
+# Local agent authenticator; the seed stays in the macOS login Keychain.
+build-dev-authenticator:
+	@mkdir -p $(BUILD_DIR)
+	$(GO) build -o $(BUILD_DIR)/ocms-dev-auth ./cmd/ocms-dev-auth
+
 # Build with optimizations (smaller binary)
 build-prod:
 	@echo "Building $(BINARY_NAME) $(VERSION) for production..."

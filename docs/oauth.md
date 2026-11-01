@@ -10,9 +10,16 @@ This is the R1.1 compatibility implementation. It does not write CMS drafts,
 publish pages, generate content or call a model provider. On 2026-10-31,
 Claude Desktop, claude.ai and ChatGPT web passed the tested OAuth, published
 context, scratch and revocation/reconnect flows on Fly staging commit
-`f66bd7b4d5fa` using Pro accounts. CLI OAuth/bearer and IPv6 acceptance remain
-unverified. See the current matrix in `.claude/docs/PHASE5.md`; SDK tests
-alone do not establish client support.
+`f66bd7b4d5fa` using Pro accounts. On 2026-11-01, both CLI OAuth lifecycles and
+both bearer-key modes passed on `c885da9071eb`; all three GUI clients passed
+fresh published-content reads on that build. Claude Code uses the dedicated
+Editor account and the shared Keychain authenticator described in
+`docs/dev-authenticator.md`. Both short-lived test keys were deactivated at the
+end. External Internet IPv6/TLS and real-client-IP handling also passed on
+2026-11-01 from an independent probe, including forged IPv4, IPv6 and mixed
+forwarding headers. R1.1 acceptance is complete against the recorded builds.
+See the current matrix in `.claude/docs/PHASE5.md`; SDK tests alone do not
+establish client support.
 
 ## Enable
 
@@ -317,9 +324,12 @@ For each real client, record date, app/browser version, OS, account tier,
 transport and auth mode. Test connect → consent → list → read context →
 approve scratch write → retrieve → revoke → next call fails → reconnect.
 Record unavailable account/UI capabilities as unverified. The R1.1 matrix in
-`.claude/docs/PHASE5.md` records the three GUI passes and the remaining CLI
-and environment gaps; public HTTPS is the common baseline and a tunnel is
-optional.
+`.claude/docs/PHASE5.md` records all client rows, their tested commits and the
+passed external IPv6/TLS/forwarding check; public HTTPS is the common baseline
+and a tunnel is optional.
+The development scratch probe stores only the latest entry per user. Serialize
+scratch writes/lifecycles across clients sharing an account; a later save
+replaces an earlier ID even when it uses a different grant or API key.
 Record every matrix row against the staged commit and configuration before
 starting R1.2. Missing required GUI passes remain pending until the owner
 resolves the blocker or explicitly changes scope.

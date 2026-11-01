@@ -617,13 +617,19 @@ type PageDraft struct {
 See Implementation Notes §0.1–0.9.
 
 ### Iteration R1.1: Client Compatibility Spike and OAuth Core
+
+**Status: complete (2026-11-01).** The real-client matrix and external public
+IPv6/TLS/forwarding acceptance are recorded in R1.1M–R1.1N. The deployed runtime
+remains `c885da9071eb`; the shared development authenticator and acceptance
+records accompany this closeout. R1.2 has not started.
+
 Goal: prove with **my real accounts** that Claude Desktop and ChatGPT (plus Claude Code and Codex) can
 connect, read context and invoke an approved write **before** the full authoring flow is built. The
 spike writes isolated scratch data; actual CMS draft persistence is first proven after R1.2–R1.5.
 
 - **Library comparison**:
   - **First checkpoint completed:** see Iteration R1.1A in Notes. Recommendation: `go-oauth2/oauth2/v4`
-    v4.6.0; explicitly approved and added on 2026-10-30. The local OAuth/scratch implementation and automated/HTTP checks are complete (R1.1B); real-account client acceptance remains pending.
+    v4.6.0; explicitly approved and added on 2026-10-30. The OAuth/scratch implementation, automated/HTTP checks and real-account acceptance are complete; see the current matrix and R1.1N closeout.
   - compare `zitadel/oidc` and `go-oauth2/oauth2` against a conformance checklist:
     - PKCE S256;
     - single-use codes;
@@ -684,7 +690,9 @@ spike writes isolated scratch data; actual CMS draft persistence is first proven
   records the prepared files/local evidence. `docs/oauth.md` separates Fly and nginx instructions.
   The owner authorized provisioning/deployment and retained fresh secrets in macOS Keychain.
   The Fly hostname replaces the original custom domain for R1.1, with no DNS change. The owner
-  deferred editor creation; record the actual admin role and leave editor-role acceptance pending.
+  initially deferred editor creation. GUI acceptance uses the admin account;
+  the dedicated Editor account now covers Claude Code OAuth and both CLI bearer
+  modes (R1.1M). Additional GUI/editor flows are not claimed.
 - **Manual checks, recorded as a matrix in Notes:** for Claude Desktop (custom connector), claude.ai
   web, ChatGPT web (URL and/or tunnel), Claude Code (OAuth and bearer) and Codex (OAuth and bearer):
   - connect;
@@ -1697,30 +1705,38 @@ library's transitive dependency. No other existing module version changed.
 
 #### Real-account matrix — current acceptance status
 
-Updated 2026-10-31 against deployed commit `f66bd7b4d5fa`. The three GUI
-clients passed their OAuth/read/scratch/revocation/reconnect checks on public
-Fly HTTPS; R1.1H below records the evidence and reconnect scope difference.
+Updated 2026-11-01. The three GUI clients passed their full recorded flows
+on `f66bd7b4d5fa`; R1.1H records that evidence and reconnect scope difference.
+Native follow-up `c885da90` is deployed. Both CLI OAuth lifecycles and both
+bearer-key rows passed on 2026-11-01. All three GUI clients also passed fresh
+site-info/search/page calls on `c885da90`; their full lifecycle baseline remains
+the recorded `f66bd7b4` run.
 Claude Desktop 4.4212.0, Claude web and ChatGPT web use Pro; both web clients
 use Chrome 156.0.8078.80 on macOS 27.2. Account tiers were read from their UI.
-All three use streamable HTTP and the admin account. Editor coverage
-remains explicitly deferred. SDK tests cannot substitute for the remaining
-real-account rows. Record each client's version, tier, OS and results.
+All three GUI clients use streamable HTTP and the admin account. Claude Code
+2.1.316 reports Enterprise; Codex CLI 0.166.0 reports ChatGPT plan type `prolite`
+through read-only `account/read`. The dedicated Editor account is now exercised
+by Claude Code OAuth and both CLI bearer tests. Additional GUI/editor flows are
+not claimed. External Internet IPv6 acceptance passed on 2026-11-01 from an
+independent Hetzner AS24940 probe, including TLS and spoofed forwarding headers
+(R1.1N). No production network changes were made for this verification.
 
 | Client | Auth | Connect/consent/list/read/scratch/revoke/reconnect | Current blocker |
 |---|---|---|---|
 | Claude Desktop custom connector | OAuth | Passed: native discovery/read/search/scratch save/read, revoked-call denial and fresh read after shared reconnect | None for tested flow; final reconnect grants `mcp:access` only |
 | claude.ai web | OAuth | Passed: consent/discovery/read/search, live scope upgrade, scratch save/read, revoked-call denial and fresh reconnect | None for tested flow; final reconnect grants `mcp:access` only |
 | ChatGPT web | OAuth | Passed: CIMD connect/consent/discovery/read/search/scratch save/read, revoked-call denial, reconnect and scratch retrieval under new grant | None for tested flow |
-| Claude Code | OAuth | 2.1.316 registration probe identifies its own CIMD and `localhost` callback; full account flow unverified | Metadata fetch returns 403 from Fly; native loopback/pinned-registration correction local only |
-| Claude Code | Bearer key | Unverified | Real client/version and scoped, expiring key acceptance pending |
-| Codex | OAuth | 0.166.0 reaches staging with its stable CIMD, then receives `invalid_client`; full account flow unverified | Metadata's additional `localhost` callback is rejected by deployed validation; correction local only |
-| Codex | Bearer key | Unverified | Real client/version and scoped, expiring key acceptance pending |
+| Claude Code | OAuth | Passed on `c885da90`: native password/generated MFA/consent, discovery/read/search/scratch save/read, MCP 401 + refresh 400 after revocation, reconnect and current user-owned scratch read under a new grant | None for tested flow; dedicated Editor account |
+| Claude Code | Bearer key | Passed on `c885da90`: five tools, deactivation denial, restoration and fresh scratch retrieval | Test key deactivated again at finish |
+| Codex | OAuth | Passed on `c885da90`: native connect/consent/discovery/read/search/scratch save/read, revoked-connection denial, reconnect and same scratch read under a new grant | None for tested flow; tier metadata subsequently recorded as `prolite` |
+| Codex | Bearer key | Passed on `c885da90`: five tools, deactivation denial, restoration and fresh scratch retrieval | Test key deactivated again at finish |
 
 The owner selected `https://ocms-mcp-staging.fly.dev` and authorized the
 deployment. Use `docs/oauth.md` for canonical issuer, scratch flags,
 MFA/proxy setup and nginx query redaction.
-Do not claim R1.1 real-client completion or start using scratch results as
-proof of CMS persistence. R1.2–R1.5 still own the production authoring path and
+The client rows and external IPv6 gate are complete; R1.1 is closed against the
+recorded commits/configuration. Do not use scratch results as proof of CMS
+persistence. R1.2–R1.5 still own the production authoring path and
 removal of this temporary probe.
 
 
@@ -2170,3 +2186,184 @@ Evidence is under `output/r11-validation/fly-staging/deployment/` in the
 
 Primary references: [Codex native CIMD and callbacks](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 and [Claude Code callbacks and scopes](https://code.claude.com/docs/en/mcp).
+
+
+### R1.1J — Native fix deployed; account checks pending (2026-10-31)
+
+The owner approved the separate native fix commit and staging deployment.
+Commit `c885da9071ebf911c8af71c285b67efee68f703e`, tree
+`dd83b2df90172d7ace6fd8b56502f8f8d793c994`, was committed with the approved
+message and deployed from a clean Git archive. Its uncached full Go suite
+passed after lockfile-pinned frontend dependency preparation. The running
+binary reports that exact commit. No Git push occurred.
+
+The existing Machine, two shared CPUs/1024 MB, original encrypted volume and
+other environment settings were preserved. The only environment change is
+the added native Claude Code registration. DCR remains disabled, MFA remains
+required, and no session/MFA sealing key was changed.
+
+Public HTTPS verification on this image passed: liveness/readiness, canonical
+issuer and the resource metadata URL advertised by the unauthenticated MCP
+401 challenge. Authorization requests using the actual native client IDs,
+callback forms, S256 and only `mcp:access mcp:drafts` both return 303 to fresh
+login. These are HTTP registration preflights, not completed CLI OAuth flows;
+no credentials or account grants were issued by those probes. Normal and
+spoofed IPv4 health requests still resolve to the verified client reference.
+
+Chrome continues to report the owner's Mac locked. The real CLI account
+flows and both bearer-key rows therefore remain unverified. Browser work
+requires the owner to unlock it and complete normal MFA/consent. A bounded
+CLI runner is prepared with only the staging MCP server, fixed test scopes
+and no command tools or other connectors. It has not yet run an account test.
+
+The prior full GUI acceptance evidence remains tied to `f66bd7b4`; fresh GUI
+calls on this new image have not been observed. No GUI grant was revoked or
+connector reconfigured during this deployment. IPv6 and the explicitly
+deferred editor role retain their existing dispositions. R1.1 is not complete.
+
+New deployment and verification records are under
+`output/r11-validation/fly-staging/deployment/cli-native-*`; the exact image
+and source context are in `cli-native-deployment.json`. This post-deployment
+status update remains uncommitted while acceptance continues.
+
+
+### R1.1K — Codex CLI OAuth passed (2026-11-01)
+
+Staging readiness and the running `c885da90` binary were rechecked after the
+owner unlocked the Mac. Installed clients remain Codex CLI 0.166.0 and Claude
+Code 2.1.316 on macOS 27.2. No new deployment or Git push was performed.
+
+Codex used its direct native CIMD identity,
+`https://chatgpt.com/oauth/codex/client.json`, with a loopback callback and
+only `mcp:access mcp:drafts`. Actual password/MFA/consent and code exchange
+succeeded. The client then called site info, search, page read, scratch save
+and scratch read in order. Structured results and server audit logs agree:
+OAuth auth, user 1, exactly those two permissions, `drafts_visible: false`,
+the published fixture marker, and identical saved/retrieved scratch content.
+The model used the configured `gpt-6-sol`; account authentication is ChatGPT,
+but the CLI's subscription tier was not independently established.
+
+Only the new Codex grant was revoked in Account Security. Subsequent native
+MCP initialization received 401 and refresh received 400. The model reported
+its tool unavailable; that alone was not treated as proof. Independent Fly
+logs establish the actual authentication rejection. A fresh password/MFA/
+consent flow issued a different grant. Fresh site-info and retrieval of the
+same scratch entry both passed under that new grant, retaining only the two
+intended scopes. The Codex connection is left working.
+
+Claude Code's separate native identity reached password/MFA successfully.
+Its native wait ended after about five minutes without any MFA submission
+or consent reaching staging. The Mac had locked again; this is an incomplete
+owner-interactive flow, not a completed compatibility test. No fresh attempt
+will be opened until the owner is unlocked and ready to complete it.
+
+An independent, credential-free probe from the existing Fly Machine forced
+TCP IPv6 to the app's assigned public IPv6 address, with the canonical HTTPS
+hostname and certificate verification. Normal and spoofed-header requests
+returned 200; access logs resolved both to the exact IPv6 client address
+observed by that probe. This source was a private Fly IPv6 address, so the
+result covers the Fly-hosted IPv6 path and parser/spoofing behavior, not an
+external Internet IPv6 client or the Mac's missing route. No new Machine or
+other resource was created; the temporary executable was removed, and the
+app was not restarted.
+
+Evidence: `codex-oauth-lifecycle-c885-result.json`, the corresponding sanitized
+CLI event/server logs and screenshots, `claude-code-oauth-initial-login-c885.json`
+and `ipv6-public-probe-result.json`, under the existing ignored deployment
+evidence directory. Both bearer-key rows and fresh GUI reads on `c885da90`
+remain pending. No test API key has been created. R1.1 remains incomplete;
+the post-acceptance status documentation is still uncommitted.
+
+### R1.1L — Shared development authenticator (2026-11-01)
+
+The owner requested agent-generated development TOTP codes shared by Codex and
+Claude Code, and paused interactive acceptance until later. Do not open another
+OAuth attempt or ask the owner for another manual code while paused.
+
+Added the local Go helper `cmd/ocms-dev-auth` and shared agent instructions in
+`docs/dev-authenticator.md`, `AGENTS.md` and `CLAUDE.md`. It stores a dedicated
+account's seed and target binding in the macOS login Keychain, passes enrollment
+only through private stdin, delivers codes through private temporary files and
+coordinates separate agents with a file lock and time-step reservation. It
+supports the canonical staging origin and IP-literal loopback development only.
+No server MFA or consent safeguard is changed; no deployment is required.
+
+RFC vectors and a disposable database enrollment/verification passed, including
+server replay rejection. The actual macOS login Keychain import/generation flow
+also passed with a uniquely named public test fixture, removed afterward.
+**The dedicated staging account is not created or enrolled yet.** Normal initial
+enrollment remains pending for the resumed session; the helper cannot generate
+codes for an unknown existing personal seed. Claude Code OAuth, both bearer rows,
+fresh current-image GUI reads and external IPv6 coverage remain pending. No new
+commit, push or deployment is authorized by this preparation work.
+
+### R1.1M — Shared MFA active; CLI acceptance passed (2026-11-01)
+
+The owner resumed setup/testing and explicitly prohibited commit, push and
+deployment. Created `ocms-agent@example.test` (Editor, user ID 2) with a one-off
+staging maintenance command using existing store/auth/MFA services. Its password,
+new seed and ten recovery codes are retained privately in the macOS login
+Keychain. Normal browser login and later OAuth logins used helper-generated
+codes successfully; no manual code handoff was requested. Both coding agents
+share the documented helper and credential binding. The owner's account and
+existing GUI grants were preserved.
+
+After explicit consent/key approval, Claude Code 2.1.316 completed native OAuth
+with exactly `mcp:access mcp:drafts`. Its five actual structured tool results
+passed; revocation produced MCP 401 and refresh 400, then fresh password/MFA/
+consent restored access under a different grant. The abandoned attempt that
+outlasted the approval wait was also revoked. Codex and Claude Code each passed
+five bearer tool calls with separate 90-minute, current-Mac-IPv4 `/32` keys,
+exactly the same two scopes and `drafts_visible=false`. Both keys failed when
+deactivated, passed fresh site-info/current-scratch reads after restoration,
+and were deactivated again; final independent HTTP probes returned 401 for both.
+
+Scratch storage intentionally retains only one entry per user. The bearer saves
+replaced the earlier OAuth entry, so the first reconnect read of that older ID
+returned `not_found`. This was test interference, not a server restart or token
+failure. The latest saved entry was verified byte-for-byte under the new OAuth
+grant and both restored keys. Serialize future scratch lifecycles per account.
+
+Claude web, native Desktop and ChatGPT web each passed three fresh published
+context calls on `c885da90`; full GUI lifecycle evidence remains tied to `f66bd7b4`.
+Codex CLI's read-only account metadata reports `chatgpt` / `prolite`, without
+persisting identity or tokens. Fresh sanitized server logs showed no credential
+patterns. Temporary remote maintenance binaries were removed. The running image
+was unchanged; no app restart, commit, push or deployment was performed.
+
+External IPv6 remains unverified: this Mac failed both normal IPv6 resolution
+and a strict-TLS connection forced to the assigned public IPv6 address. The
+earlier successful Fly-hosted probe used a private Fly IPv6 source and is not
+an external Internet substitute. An IPv6-capable external runner is still
+needed, or the owner must explicitly defer that check before R1.1 closes.
+Evidence: `staging-agent-enrollment.json`, per-client `*-result.json`, sanitized
+server logs/screenshots and `R11-ACCEPTANCE-2026-11-01.md` in the ignored
+`output/r11-validation/fly-staging/deployment/` directory.
+
+### R1.1N — External IPv6 verified; R1.1 closed (2026-11-01)
+
+The owner requested completion of the external IPv6 gate without a commit, push
+or deployment. The production host was inspected without changes.
+
+Used an existing independent Globalping probe in Falkenstein, Germany, on
+Hetzner AS24940. An IPv6 HTTPS request to the public IP reflector established
+the probe's global source address; only its SHA256 was retained locally. Reused
+that exact probe for four requests to staging's canonical HTTPS hostname:
+normal, forged IPv4 XFF/X-Real-IP, forged IPv6 headers, and a forged mixed XFF
+chain plus X-Real-IP/Fly-Client-IP. All resolved the assigned public IPv6,
+returned HTTP 200 with the expected readiness body, and reported authorized
+TLS 1.3 with a matching `*.fly.dev` certificate.
+
+Each nonce matched exactly one Fly app access-log entry. All four resolved
+client addresses were global IPv6 and matched the independent source-reference
+hash; every forged address was ignored. This is an external Internet result,
+separate from the earlier private-source Fly probe. No application credentials,
+raw client addresses or raw app logs were saved in the local evidence.
+
+R1.1's client and environment gates are now complete. The runtime stayed on
+`c885da9071eb`; R1.2 was not started. No new infrastructure, app restart, push
+or deployment was needed for verification. Evidence is in `ipv6-external-verification.json`,
+`ipv6-external-measurements.json` and `R11-ACCEPTANCE-2026-11-01.md` under the
+existing ignored deployment-evidence directory. The shared helper and acceptance
+records are separate from the deployed runtime. The existing wiki work is
+excluded from this closeout.

@@ -53,6 +53,21 @@ make migrate-create      # Create new migration
 go run ./cmd/ocms mfa-reset [-db ./data/ocms.db] admin@example.com
 ```
 
+## Development MFA for Coding Agents
+
+Codex and Claude Code use the same local `bin/ocms-dev-auth` helper. Build with
+`make build-dev-authenticator` and follow `docs/dev-authenticator.md`. The seed
+is stored in the macOS login Keychain; codes are handed privately to the browser
+controller through temporary files and removed after use. Check `status` first;
+missing enrollment means setup is pending, not a reason to ask repeatedly for
+manual codes. Never print seeds/codes or extract the owner's existing MFA seed.
+
+The dedicated staging account `ocms-agent@example.test` (Editor, user ID 2) is
+enrolled and its generated-code browser login passed. Its password and recovery
+codes are retained in the same login Keychain; the shared document describes the
+service names and record binding. Use it for resumed acceptance. Keep required
+MFA, normal scope consent and the owner's current authenticator intact.
+
 ## Go Toolchain Requirements
 
 **CRITICAL**: If you see this error during build or test:
@@ -349,7 +364,7 @@ The spec is derived from Go types via [huma v2](https://huma.rocks/); domain ser
 - `POST /api/mcp` - Streamable HTTP MCP endpoint (stateless, JSON responses); API key or optional OAuth grant with `mcp:access`; read-only CMS tools
 - `/admin/mcp` - Endpoint, client snippets, drafts policy, agent instructions, tool catalog (admin only)
 
-Tools are thin adapters over the v2 domain services; their input/output schemas come from the same huma struct tags. `modules/mcpserver/catalog.go` is the single source of truth: every REST v2 operation needs a tool or an entry in `restOperationsNotExposed` (`TestEveryRESTOperationHasMCPDecision`). The default catalog stays read-only (`TestEveryRegisteredToolIsReadOnly`). R1.1's explicitly flagged development/staging scratch catalog has its own write annotations and no CMS writes. `internal/oauth` owns the opt-in code/refresh server, hashed SQLite storage, bounded CIMD, fresh-login consent and grant revocation. Claude Desktop, claude.ai and ChatGPT web passed the tested GUI OAuth flows on staging commit `f66bd7b4d5fa` (2026-10-31). CLI OAuth/bearer and IPv6 acceptance remain unverified; see `docs/oauth.md` and the current R1.1 matrix in `.claude/docs/PHASE5.md`.
+Tools are thin adapters over the v2 domain services; their input/output schemas come from the same huma struct tags. `modules/mcpserver/catalog.go` is the single source of truth: every REST v2 operation needs a tool or an entry in `restOperationsNotExposed` (`TestEveryRESTOperationHasMCPDecision`). The default catalog stays read-only (`TestEveryRegisteredToolIsReadOnly`). R1.1's explicitly flagged development/staging scratch catalog has its own write annotations and no CMS writes. `internal/oauth` owns the opt-in code/refresh server, hashed SQLite storage, bounded CIMD, fresh-login consent and grant revocation. Claude Desktop, claude.ai and ChatGPT web passed full GUI OAuth flows on `f66bd7b4d5fa` (2026-10-31) and fresh reads on `c885da9071eb` (2026-11-01). Both CLI OAuth lifecycles and bearer modes passed on `c885da9071eb`; test keys were deactivated afterward. External public IPv6/TLS and forwarding-spoof resistance also passed from an independent probe on 2026-11-01, closing R1.1. See `docs/oauth.md` and the current R1.1 matrix in `.claude/docs/PHASE5.md`. R1.2 has not started. Serialize scratch writes across clients sharing one account: the probe retains only its latest entry.
 
 ### Health Check Routes
 - `GET /health` - Overall health status (200 OK / 503 Service Unavailable)
