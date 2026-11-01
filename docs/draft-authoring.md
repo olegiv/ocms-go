@@ -3,7 +3,8 @@
 R1.5 lets connected agents save drafts for review through the same atomic page
 writer as the editor and REST API. oCMS does no text generation. No MCP tool
 can publish, schedule, delete, change ownership or enable AI access to a page.
-R1.5 is local development work; fresh cloud-client acceptance is pending.
+R1.5 staging acceptance is recorded in PHASE5 implementation notes. R1.6 adds
+local editorial review and secure previews; its fresh cloud acceptance is pending.
 
 ## Enable and authorize
 
@@ -39,7 +40,7 @@ operations and one explicitly unavailable share-link operation.
 | `get_my_draft` | `page_id` | Current HTML/derived Markdown, revision, warnings and provenance. |
 | `list_my_drafts` | Optional `language_code`, `page`, `per_page` | Own AI-editable plain drafts only; at most 100 per page. |
 | `get_translation_status` | `page_id` | Visibility-filtered active-language membership and freshness. |
-| `create_preview_link` | `page_id`, `revision` | Returns `preview_unavailable`; issues no token until R1.6. |
+| `create_preview_link` | `page_id`, `revision` | Explicitly issues one expiring, revision-pinned bearer link; warns about disclosure. |
 
 Reads are read-only, non-destructive and idempotent. Creates/translations are
 additive, non-read-only and idempotent under their retained request key.
@@ -71,10 +72,11 @@ a replacement UUID merely because the response was lost.
 
 A save returns `page_id`, `revision`, `admin_url`, `preview_url`, `issues`
 and `translation_status`. Warnings/info do not block; error-level issues do.
-The preview URL is the current draft's ordinary language-qualified frontend
-URL: opening it requires an editor session. It is not a revision-pinned public
-link. Saves, reads and retries never mint or persist a bearer preview token.
-The owner approved keeping explicit sharing unavailable until R1.6's renderer.
+The preview URL is language-qualified and revision-pinned. Opening it requires
+an editor session. Saves, reads and retries never mint or persist a bearer
+preview token. Sharing requires the separate explicit `create_preview_link`
+action. See [editorial review](editorial-review.md) for expiry, revocation,
+private rendering and proxy-log configuration.
 
 Updates require the last-read `base_revision`. Omission preserves fields;
 arrays replace collections and empty arrays clear them. Explicit null clears
@@ -169,7 +171,8 @@ ownership/lifecycle matrices, queued policy changes, CAS/translation races,
 rollback, quotas, translation fingerprints and provenance classes. The local
 HTTP/browser evidence and exact tested source are recorded under ignored
 `output/r15-validation/` and in PHASE5 implementation notes.
-Fresh Claude Desktop/ChatGPT staging authoring acceptance needs a separately
-authorized deployment. Theme-isolated revision previews, share tokens and
-editorial panels remain R1.6. No deployment or Git publication is authorized
-by these instructions.
+R1.5 cloud authoring acceptance is recorded in PHASE5 implementation notes.
+R1.6 local tests and browser evidence are under `output/r16-validation/`.
+Fresh connected-client preview/review acceptance and public proxy-log checks
+require a separately authorized deployment. No deployment or Git publication
+is authorized by these instructions.

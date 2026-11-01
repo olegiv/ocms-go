@@ -17,6 +17,7 @@ import (
 // only response among them is Recoverer's 500, which keeps the headers that
 // SecurityHeaders had already set when the panic happened further down.
 var middlewareBeforeSecurityHeaders = map[string]bool{
+	"preview.RedactRequest":            true, // only clones the URL/context; never answers a request
 	"chimw.RequestID":                  true,
 	"middleware.AnnotateTrustedProxy":  true,
 	"func literal":                     true, // trusted-proxy-aware RemoteAddr rewrite

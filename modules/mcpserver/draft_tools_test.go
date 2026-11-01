@@ -18,6 +18,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/ai/authoring"
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -152,7 +153,7 @@ func enableDraftTools(env *testEnv) {
 	env.setConfig(model.ConfigKeySiteURL, "https://example.test")
 }
 
-func TestDraftToolsSDKCreateReadUpdateReplayAndUnavailableSharing(t *testing.T) {
+func TestDraftToolsSDKCreateReadUpdateReplayAndExplicitSharing(t *testing.T) {
 	env := newTestEnv(t)
 	enableDraftTools(env)
 	session := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
@@ -180,10 +181,21 @@ func TestDraftToolsSDKCreateReadUpdateReplayAndUnavailableSharing(t *testing.T) 
 	if !reflect.DeepEqual(saved, continued) {
 		t.Fatal("second app lost original receipt")
 	}
-	denied := call(t, session, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": updated.Revision})
-	code, _, _ := toolErrorBody(t, denied)
-	if code != "preview_unavailable" || denied.StructuredContent == nil {
-		t.Fatalf("share issuance should be unavailable: %+v", denied)
+	var count int
+	if err := env.db.QueryRow("SELECT COUNT(*) FROM preview_links").Scan(&count); err != nil || count != 0 {
+		t.Fatal("save/read silently issued a token")
+	}
+	shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": updated.Revision}))
+	_, secret, _ := strings.Cut(shared.URL, "/preview/share/")
+	snapshot, err := (preview.Service{Q: env.q}).Resolve(t.Context(), secret)
+	if err != nil || snapshot.Page.ID != saved.PageID || snapshot.Page.Revision != updated.Revision {
+		t.Fatal("explicit share failed to pin the requested revision")
+	}
+	if strings.Contains(env.logs.text(), secret) {
+		t.Fatal("share token leaked to logs")
+	}
+	if !strings.Contains(saved.PreviewURL, "/revisions/1") {
+		t.Fatal("save preview is not revision-pinned")
 	}
 	if strings.Contains(env.logs.text(), "private draft paragraph") {
 		t.Fatal("draft body leaked into logs")

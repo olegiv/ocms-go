@@ -50,6 +50,13 @@ type Category struct {
 	LanguageCode string         `json:"language_code"`
 }
 
+type ClaimsCheck struct {
+	ProvenanceID int64         `json:"provenance_id"`
+	ClaimIndex   int64         `json:"claim_index"`
+	CheckedBy    sql.NullInt64 `json:"checked_by"`
+	CheckedAt    int64         `json:"checked_at"`
+}
+
 type Config struct {
 	Key          string        `json:"key"`
 	Value        string        `json:"value"`
@@ -384,6 +391,20 @@ type PagesFt struct {
 	MetaTitle       string `json:"meta_title"`
 	MetaDescription string `json:"meta_description"`
 	MetaKeywords    string `json:"meta_keywords"`
+}
+
+type PreviewLink struct {
+	ID             int64          `json:"id"`
+	TokenHash      string         `json:"token_hash"`
+	PageID         int64          `json:"page_id"`
+	Revision       int64          `json:"revision"`
+	CreatedBy      int64          `json:"created_by"`
+	SessionVersion int64          `json:"session_version"`
+	IssuingGrantID sql.NullString `json:"issuing_grant_id"`
+	IssuingKeyID   sql.NullInt64  `json:"issuing_key_id"`
+	CreatedAt      int64          `json:"created_at"`
+	ExpiresAt      int64          `json:"expires_at"`
+	RevokedAt      int64          `json:"revoked_at"`
 }
 
 type Redirect struct {

@@ -24,6 +24,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/review"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -80,6 +81,7 @@ func defaultPagesSort(_, _ string) (string, string) {
 
 // PagesHandler handles page management routes.
 type PagesHandler struct {
+	previewTTL            time.Duration
 	db                    *sql.DB
 	queries               *store.Queries
 	renderer              *render.Renderer
@@ -142,6 +144,7 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 
 // PagesListData holds data for the pages list template.
 type PagesListData struct {
+	ReviewStates       map[int64]store.GetPageReviewStateRow
 	Pages              []store.Page
 	PagePublicURLs     map[int64]string             // Canonical public URL by page ID; empty means not routable
 	PageTags           map[int64][]store.Tag        // Map of page ID to tags
@@ -171,7 +174,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get status filter from query string
 	statusFilter := r.URL.Query().Get("status")
 	// Allow "scheduled" as a special filter in addition to regular statuses
-	if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && !isValidPageStatus(statusFilter) {
+	if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && statusFilter != "ai_review" && !isValidPageStatus(statusFilter) {
 		statusFilter = ""
 	}
 
@@ -196,6 +199,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	listParams := store.ListPagesSortedParams{
 		SortField: sortField,
 		SortDir:   sortDir,
+		AIReview:  statusFilter == "ai_review",
 	}
 
 	if pageTypeFilter != "" {
@@ -208,19 +212,19 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		if languageFilter != "" {
 			listParams.LanguageCode = util.NullStringFromValue(languageFilter)
 		}
-		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && statusFilter != "ai_review" {
 			listParams.Status = util.NullStringFromValue(statusFilter)
 		}
 	case languageFilter != "":
 		listParams.LanguageCode = util.NullStringFromValue(languageFilter)
-		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && statusFilter != "ai_review" {
 			listParams.Status = util.NullStringFromValue(statusFilter)
 		}
 	case categoryFilter > 0:
 		listParams.CategoryID = sql.NullInt64{Int64: categoryFilter, Valid: true}
 	case statusFilter == "scheduled":
 		listParams.ScheduledOnly = true
-	case statusFilter != "" && statusFilter != "all":
+	case statusFilter != "" && statusFilter != "all" && statusFilter != "ai_review":
 		listParams.Status = util.NullStringFromValue(statusFilter)
 	}
 
@@ -246,6 +250,15 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reviewStates := make(map[int64]store.GetPageReviewStateRow, len(pages))
+	for _, listed := range pages {
+		state, e := h.queries.GetPageReviewState(r.Context(), listed.ID)
+		if e != nil {
+			http.Error(w, "Cannot load review counts", 500)
+			return
+		}
+		reviewStates[listed.ID] = state
+	}
 	// Fetch tags for all displayed pages
 	pageTags := batchFetchRelated(r.Context(), pages,
 		func(p store.Page) int64 { return p.ID },
@@ -321,6 +334,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	pagination.SortDir = sortDir
 
 	data := PagesListData{
+		ReviewStates:       reviewStates,
 		Pages:              pages,
 		PageTags:           pageTags,
 		PageCategories:     pageCategories,
@@ -341,6 +355,11 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.title"), pagesBreadcrumbs(lang))
+	for _, listed := range pages {
+		if listed.Status == "draft" {
+			data.PagePublicURLs[listed.ID] = sessionPreviewPath(listed)
+		}
+	}
 	viewData := convertPagesListViewData(data, h.renderer, lang)
 	renderTempl(w, r, adminviews.PagesListPage(pc, viewData))
 }
@@ -788,6 +807,12 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "pages.edit"), pagesEditBreadcrumbs(adminLang, page.Title, page.ID))
 	viewData := convertPageFormViewData(data, h.renderer, adminLang)
+	viewData.PublicURL = sessionPreviewPath(page)
+	viewData.Review, err = h.reviewPanel(r, page, page.Revision)
+	if err != nil {
+		http.Error(w, "Cannot load editorial review", http.StatusInternalServerError)
+		return
+	}
 	renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 }
 
@@ -1142,6 +1167,9 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 				UpdatedAt: now,
 			})
 		} else {
+			if err := review.ValidatePublication(r.Context(), work.Q, page); err != nil {
+				return err
+			}
 			updatedPage, err = work.Q.PublishUnpublishedPage(r.Context(), store.PublishUnpublishedPageParams{
 				ID:          id,
 				UpdatedAt:   now,
@@ -1237,6 +1265,21 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, fmt.Sprintf("%s - %s", i18n.T(lang, "versions.title"), page.Title), pagesVersionsBreadcrumbs(lang, page.Title, page.ID))
 	viewData := convertPageVersionsViewData(data, h.renderer, lang)
+	for i, version := range versions {
+		if version.Revision.Valid {
+			fact, e := h.queries.GetContentProvenance(r.Context(), store.GetContentProvenanceParams{PageID: page.ID, Revision: version.Revision.Int64})
+			if e != nil && !errors.Is(e, sql.ErrNoRows) {
+				http.Error(w, "Cannot load revision attribution", 500)
+				return
+			}
+			viewData.Versions[i].VerifiedSource = fact.Source
+			viewData.Versions[i].RegisteredClient = fact.OauthClientID
+			if fact.ApiKeyID.Valid {
+				viewData.Versions[i].RegisteredClient = fmt.Sprintf("API key #%d", fact.ApiKeyID.Int64)
+			}
+		}
+	}
+
 	renderTempl(w, r, adminviews.PageVersionsPage(pc, viewData))
 }
 
@@ -1307,7 +1350,17 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		return work.Restore(r.Context(), current, recorded, normalizedBody)
+		if err = work.Restore(r.Context(), current, recorded, normalizedBody); err != nil {
+			return err
+		}
+		if current.Status == "published" || current.ScheduledAt.Valid {
+			restored, err := work.Q.GetPageByID(r.Context(), id)
+			if err != nil {
+				return err
+			}
+			return review.ValidatePublication(r.Context(), work.Q, restored)
+		}
+		return nil
 	})
 	if err != nil {
 		flashError(w, r, h.renderer, versionsURL, "Version was not restored: "+err.Error())

@@ -5,9 +5,7 @@ package authoring
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,26 +13,14 @@ import (
 	"github.com/olegiv/ocms-go/internal/ai/draft"
 	"github.com/olegiv/ocms-go/internal/ai/grounding"
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-type translatedFields struct {
-	Title           string `json:"title"`
-	Body            string `json:"body"`
-	Summary         string `json:"summary"`
-	MetaTitle       string `json:"meta_title"`
-	MetaDescription string `json:"meta_description"`
-	MetaKeywords    string `json:"meta_keywords"`
-}
+type translatedFields = provenance.TranslatedText
 
-func fingerprint(fields translatedFields) string {
-	raw, _ := json.Marshal(fields)
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:])
-}
-func currentFingerprint(p store.Page) string {
-	return fingerprint(translatedFields{p.Title, p.Body, p.Summary, p.MetaTitle, p.MetaDescription, p.MetaKeywords})
-}
+func fingerprint(fields translatedFields) string { return provenance.TextFingerprint(fields) }
+func currentFingerprint(p store.Page) string     { return provenance.PageFingerprint(p) }
 
 func (s *Service) checkSource(ctx context.Context, q *store.Queries, basis Basis) error {
 	r, err := grounding.NewResolver(q, s.SiteURL, s.Access)

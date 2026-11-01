@@ -1,8 +1,8 @@
 # Connected-app draft authoring
 
-R1.5 is implemented locally. The new CMS-write flow has not yet been deployed
-or accepted in Claude Desktop or ChatGPT. R1.1's OAuth compatibility results
-remain valid for that earlier build, not evidence for these new tools.
+R1.5 staging acceptance is recorded in PHASE5 implementation notes. R1.6 adds
+editorial review and isolated revision previews locally; fresh connected-client
+acceptance for those changes remains pending.
 
 ## Workflow
 
@@ -18,7 +18,9 @@ remain valid for that earlier build, not evidence for these new tools.
    retries, and calls `create_draft_page`.
 4. Inspect `issues`, `revision`, `admin_url` and `preview_url`. Open the URLs in
    a signed-in editor session. Anonymous visitors cannot open draft content.
-   Explicit share links are unavailable until R1.6.
+   Previews are pinned to the saved revision. Sharing requires a separate,
+   user-requested `create_preview_link`; anyone holding that URL can read the
+   snapshot until it expires or is revoked.
 5. To continue in another app, connect with the same oCMS user and scopes,
    use `list_my_drafts`/`get_my_draft`, then update with a new request UUID and
    the last-read `base_revision`. Foreign-user drafts remain inaccessible,
@@ -30,7 +32,9 @@ remain valid for that earlier build, not evidence for these new tools.
 
 The agent cannot publish, schedule, delete, switch ownership or opt another
 page into AI editing. Publishing remains a deliberate human editor action.
-See [draft authoring](draft-authoring.md) for retries, quotas and provenance.
+See [draft authoring](draft-authoring.md) for retries, quotas and provenance,
+and [editorial review](editorial-review.md) for checks, revision comparisons and
+secure sharing.
 
 ## Acceptance record after authorized deployment
 
@@ -44,3 +48,10 @@ all temporary test keys afterwards. Use the dedicated agent account and
 [shared development authenticator](dev-authenticator.md); preserve the owner's
 connections. Record unavailable capabilities as pending. Do not mark R1.5
 external acceptance complete from SDK tests or from R1.1 probe results.
+
+For R1.6 additionally verify the saved revision after another edit, anonymous
+session-preview denial, explicit sharing only, anonymous share rendering,
+revocation/expiry and publication invalidation. Check theme/privacy headers,
+private sibling isolation, claim acknowledgment, revision comparison,
+translation freshness and stale publish/schedule rejection. Confirm upstream
+request logs redact bearer paths before issuing a public share link.

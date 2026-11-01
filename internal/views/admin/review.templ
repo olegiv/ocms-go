@@ -1,0 +1,379 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+import "time"
+import "github.com/olegiv/ocms-go/internal/review"
+import "github.com/olegiv/ocms-go/internal/preview"
+import "github.com/olegiv/ocms-go/internal/ai/draft"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/alert"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+
+type ReviewPanelData struct {
+	PageID, Revision, BaseRevision int64
+	Current                        bool
+	Details                        review.Review
+	CanShare                       bool
+	PreviewURL                     string
+}
+
+func reviewFieldLabel(pc *PageContext, field string) string {
+	switch field {
+	case "title":
+		return pc.T("review.field.title")
+	case "summary":
+		return pc.T("review.field.summary")
+	case "body":
+		return pc.T("review.field.body")
+	case "meta_title":
+		return pc.T("review.field.meta_title")
+	case "meta_description":
+		return pc.T("review.field.meta_description")
+	case "meta_keywords":
+		return pc.T("review.field.meta_keywords")
+	case "slug":
+		return pc.T("review.field.slug")
+	case "language_code":
+		return pc.T("review.field.language_code")
+	case "featured_image_id":
+		return pc.T("review.field.featured_image_id")
+	case "category_ids":
+		return pc.T("review.field.category_ids")
+	case "tag_ids":
+		return pc.T("review.field.tag_ids")
+	default:
+		return field
+	}
+}
+
+func reviewLayout(panel bool) string {
+	if panel {
+		return "grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]"
+	}
+	return "block"
+}
+
+func reviewUnchecked(data ReviewPanelData) int {
+	count := 0
+	for _, claim := range data.Details.Claims {
+		if !claim.Checked {
+			count++
+		}
+	}
+	return count
+}
+
+// Translate catalog text for display without changing the recorded evidence.
+func reviewLocalizedIssues(recorded []draft.Issue, language string) []draft.Issue {
+	issues := make([]draft.Issue, len(recorded))
+	for i, issue := range recorded {
+		localized := draft.NewIssue(issue.Code, issue.Field, language)
+		if localized.Code == issue.Code {
+			issue.Message, issue.Hint = localized.Message, localized.Hint
+		}
+		issues[i] = issue
+	}
+	return issues
+}
+
+func reviewStatus(pc *PageContext, status string) string {
+	switch status {
+	case "draft":
+		return pc.T("status.draft")
+	case "published":
+		return pc.T("status.published")
+	case "ai_draft":
+		return pc.T("review.ai_draft")
+	case "stale":
+		return pc.T("review.stale")
+	case "current":
+		return pc.T("review.current")
+	case "not_tracked":
+		return pc.T("review.not_tracked")
+	case "missing":
+		return pc.T("review.missing")
+	default:
+		return pc.T("review.unavailable")
+	}
+}
+
+templ EditorialReviewPanel(pc *PageContext, data ReviewPanelData) {
+	<aside aria-label={ pc.T("review.title") } class="space-y-6 min-w-0">
+		@card.Card(card.Props{Attributes: templ.Attributes{"data-provenance-class": "verified"}}) {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("review.verified") }
+				}
+			}
+			@card.Content(card.ContentProps{Class: "space-y-2 break-words"}) {
+				<p>{ pc.T("review.revision",data.Revision) }</p>
+				if data.Details.Fact.ID==0 || data.Details.Fact.Source=="migration" {
+					<p>{ pc.T("review.baseline") }</p>
+				} else {
+					if data.Details.Fact.UserID.Valid {
+						<p>{ pc.T("review.account") }: { data.Details.ActorName } (#{ fmt.Sprint(data.Details.Fact.UserID.Int64) })</p>
+					} else {
+						<p>{ pc.T("review.system") }</p>
+					}
+					<p>{ pc.T("review.source") }: { data.Details.Fact.Source } / { data.Details.Fact.Transport }</p>
+					<p>{ data.Details.Fact.CreatedAt.UTC().Format(time.RFC3339) }</p>
+					if data.Details.RegisteredApp!="" {
+						<p>{ pc.T("review.registered_app") }: { data.Details.RegisteredApp }</p>
+					}
+					if data.Details.Fact.OauthClientID!="" {
+						<p>{ pc.T("review.client_id") }: <code>{ data.Details.Fact.OauthClientID }</code></p>
+					}
+					if data.Details.Fact.OauthGrantID!="" {
+						<p>{ pc.T("review.grant_id") }: <code>{ data.Details.Fact.OauthGrantID }</code></p>
+					}
+					if data.Details.Fact.ApiKeyID.Valid {
+						<p>{ pc.T("review.key_id") }: #{ fmt.Sprint(data.Details.Fact.ApiKeyID.Int64) }</p>
+					}
+					<p class="text-sm text-muted-foreground">{ pc.T("review.registration_note") }</p>
+				}
+			}
+		}
+		@card.Card(card.Props{Attributes: templ.Attributes{"data-provenance-class": "validated"}}) {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("review.validated") }
+				}
+			}
+			@card.Content(card.ContentProps{Class: "space-y-3 break-words"}) {
+				<p class="text-sm text-muted-foreground">{ pc.T("review.validation_note") }</p>
+				for _,issue:=range reviewLocalizedIssues(data.Details.Validated.Issues,pc.AdminLang) {
+					<div><strong>{ string(issue.Severity) }: { issue.Code }</strong><p>{ issue.Message }</p><p class="text-sm">{ issue.Hint }</p></div>
+				}
+				for _,ref:=range data.Details.Validated.References {
+					if ref.PageID>0 {
+						<p>{ ref.Role }: <a class="underline" href={ templ.SafeURL(preview.SessionURL("", "", ref.PageID, ref.Revision)) }>{ pc.T("review.reference",ref.PageID,ref.Revision) }</a></p>
+					} else {
+						<p>{ pc.T("review.unavailable") }</p>
+					}
+				}
+				for _,link:=range data.Details.Validated.Links {
+					<p><code>{ link.URL }</code> — { link.Kind } / { link.Status }</p>
+				}
+				if len(data.Details.Validated.Issues)==0 && len(data.Details.Validated.References)==0 && len(data.Details.Validated.Links)==0 {
+					<p>{ pc.T("review.no_validation") }</p>
+				}
+				if data.Details.Validated.PromptContractVersion!="" {
+					<p>{ pc.T("review.prompt_contract") }: { data.Details.Validated.PromptContractVersion }</p>
+				}
+			}
+		}
+		@card.Card(card.Props{Attributes: templ.Attributes{"data-provenance-class": "reported"}}) {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("review.reported") }
+				}
+			}
+			@card.Content(card.ContentProps{Class: "space-y-3 break-words"}) {
+				<p class="text-sm text-muted-foreground">{ pc.T("review.reported_note") }</p>
+				if data.Details.Reported.Agent.Model.Present {
+					<p>{ pc.T("review.model") }: { data.Details.Reported.Agent.Model.Value }</p>
+				}
+				if data.Details.Reported.MCPClientName!="" {
+					<p>{ pc.T("review.client_report") }: { data.Details.Reported.MCPClientName } { data.Details.Reported.MCPClientVersion }</p>
+				}
+				for _,source:=range data.Details.Reported.Agent.SourcesUsed.Value {
+					<p>{ pc.T("review.reported_source") }: { source }</p>
+				}
+				if data.Details.Reported.Agent.Notes.Present {
+					<p class="whitespace-pre-wrap">{ data.Details.Reported.Agent.Notes.Value }</p>
+				}
+				<p>{ pc.T("review.acknowledgment_note") }</p>
+				for _,claim:=range data.Details.Claims {
+					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/claims/%d", data.PageID, claim.Index)) } class="space-y-2 border-t pt-3">
+						@csrfField()
+						<input type="hidden" name="base_revision" value={ fmt.Sprint(data.Revision) }/>
+						<div class="flex gap-2 items-start">
+							@checkbox.Checkbox(checkbox.Props{ID: fmt.Sprintf("claim-%d-%d", data.Details.Fact.ID, claim.Index), Name: "checked", Checked: claim.Checked, Disabled: !data.Current})
+							@label.Label(label.Props{For: fmt.Sprintf("claim-%d-%d", data.Details.Fact.ID, claim.Index)}) {
+								{ claim.Text }
+							}
+						</div>
+						if claim.Checked {
+							<p class="text-sm">
+								{ pc.T("review.checked_by") }:
+								if claim.CheckedBy!="" {
+									{ claim.CheckedBy }
+								} else {
+									{ pc.T("review.unavailable") }
+								}
+								— { time.Unix(claim.CheckedAt,0).UTC().Format(time.RFC3339) }
+							</p>
+						}
+						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Disabled: !data.Current}) {
+							{ pc.T("review.save_check") }
+						}
+					</form>
+				}
+				if reviewUnchecked(data)>0 || len(data.Details.Validated.Issues)>0 {
+					@alert.Alert() {
+						@alert.Description() {
+							{ pc.T("review.publish_notice",reviewUnchecked(data)) }
+						}
+					}
+				}
+			}
+		}
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("review.translations") }
+				}
+			}
+			@card.Content(card.ContentProps{Class: "space-y-3"}) {
+				for _,translation:=range data.Details.Translations {
+					<div>
+						<strong>{ translation.Language }</strong>: { reviewStatus(pc,translation.Status) } / { reviewStatus(pc,translation.Freshness) }
+						if translation.PageID>0 {
+							<a class="block underline" href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", translation.PageID)) }>{ translation.Title }</a>
+						}
+					</div>
+				}
+			}
+		}
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("preview.title") }
+				}
+			}
+			@card.Content(card.ContentProps{Class: "space-y-3"}) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: data.PreviewURL, Target: "_blank"}) {
+					{ pc.T("preview.open_revision") }
+				}
+				<p>{ pc.T("preview.share_warning") }</p>
+				if data.CanShare {
+					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/preview-links", data.PageID)) } class="space-y-3">
+						@csrfField()
+						<input type="hidden" name="revision" value={ fmt.Sprint(data.Revision) }/>
+						<input type="hidden" name="base_revision" value={ fmt.Sprint(data.BaseRevision) }/>
+						<div class="flex gap-2 items-start">
+							@checkbox.Checkbox(checkbox.Props{ID: "share-acknowledge", Name: "acknowledge", Attributes: templ.Attributes{"required": true}})
+							@label.Label(label.Props{For: "share-acknowledge"}) {
+								{ pc.T("preview.acknowledge") }
+							}
+						</div>
+						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}) {
+							{ pc.T("preview.create_share") }
+						}
+					</form>
+				}
+				for _,link:=range data.Details.Links {
+					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/preview-links/%d/revoke", data.PageID, link.ID)) } class="space-y-2 border-t pt-3">
+						@csrfField()
+						<p>{ pc.T("review.revision",link.Revision) } — { pc.T("preview.expires") }: { time.Unix(link.ExpiresAt,0).UTC().Format(time.RFC3339) }</p>
+						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}) {
+							{ pc.T("preview.revoke") }
+						}
+					</form>
+				}
+			}
+		}
+	</aside>
+}
+
+templ PreviewLinkCreated(pc *PageContext, link preview.Link) {
+	@AdminLayout(pc) {
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					{ pc.T("preview.created") }
+				}
+			}
+			@card.Content(card.ContentProps{Class: "space-y-4"}) {
+				<p>{ pc.T("preview.share_warning") }</p>
+				<p>{ pc.T("preview.only_once") }</p>
+				@label.Label(label.Props{For: "preview-share-url"}) {
+					{ pc.T("preview.share_url") }
+				}
+				@input.Input(input.Props{ID: "preview-share-url", Value: link.URL, Attributes: templ.Attributes{"readonly": true}})
+				<p>{ pc.T("preview.expires") }: { link.ExpiresAt.UTC().Format(time.RFC3339) }</p>
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d", link.PageID)}) {
+					{ pc.T("pages.back_to_pages") }
+				}
+			}
+		}
+	}
+}
+
+type RevisionReviewData struct {
+	PageID, VersionID, Revision, BaseRevision int64
+	Title                                     string
+	Legacy                                    bool
+	Differences                               []review.Difference
+	Panel                                     *ReviewPanelData
+}
+
+templ RevisionReviewPage(pc *PageContext, data RevisionReviewData) {
+	@AdminLayout(pc) {
+		@PageHeader(pc.T("review.compare"), data.Title) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d/versions", data.PageID)}) {
+				{ pc.T("pages.version_history") }
+			}
+		}
+		if data.Legacy {
+			@alert.Alert() {
+				@alert.Description() {
+					{ pc.T("versions.legacy") }
+				}
+			}
+		}
+		<div class={ reviewLayout(data.Panel != nil) }>
+			<div class="space-y-4 min-w-0">
+				<p>{ pc.T("review.compare_note") }</p>
+				if len(data.Differences)==0 {
+					<p>{ pc.T("review.no_changes") }</p>
+				}
+				for _,difference:=range data.Differences {
+					@card.Card() {
+						@card.Header() {
+							@card.Title() {
+								{ reviewFieldLabel(pc,difference.Field) }
+							}
+						}
+						@card.Content() {
+							<div class="grid gap-4 md:grid-cols-2">
+								<div>
+									<h3>{ pc.T("review.before") }</h3>
+									<pre class="whitespace-pre-wrap break-words text-sm">
+										if difference.BeforeRecorded {
+											{ difference.Before }
+										} else {
+											{ pc.T("review.not_recorded") }
+										}
+									</pre>
+								</div>
+								<div>
+									<h3>{ pc.T("review.after") }</h3>
+									<pre class="whitespace-pre-wrap break-words text-sm">
+										if difference.AfterRecorded {
+											{ difference.After }
+										} else {
+											{ pc.T("review.not_recorded") }
+										}
+									</pre>
+								</div>
+							</div>
+							if difference.Truncated {
+								<p>{ pc.T("review.diff_truncated") }</p>
+							}
+						}
+					}
+				}
+			</div>
+			if data.Panel!=nil {
+				@EditorialReviewPanel(pc, *data.Panel)
+			}
+		</div>
+	}
+}

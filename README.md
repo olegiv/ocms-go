@@ -724,12 +724,13 @@ Draft authoring is off by default. Enable it in Admin → MCP Server and grant
 `mcp:access` plus `mcp:drafts` to create/update owned AI-editable drafts or
 linked translations. Writes use stable UUID request IDs, revisions and existing
 taxonomy/media; agents cannot publish or delete. Saves return editor-session
-preview URLs. Share links remain unavailable until R1.6. See
+revision-pinned preview URLs. Explicit expiring share links and review panels
+are available in R1.6; see [editorial review](docs/editorial-review.md) and
 [draft authoring](docs/draft-authoring.md) for contracts and safeguards.
 Set `OCMS_OAUTH_ENABLED=true` and a canonical HTTPS `OCMS_SITE_URL` for browser
 authorization alongside API keys. Connections can be revoked at
-`/account/security`. R1.1 OAuth acceptance passed; fresh R1.5 cloud authoring
-acceptance remains pending. See [OAuth](docs/oauth.md).
+`/account/security`. R1.1 OAuth and R1.5 staging authoring results are recorded;
+R1.6 changes still need fresh staging acceptance. See [OAuth](docs/oauth.md).
 See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.
 
 ## Theme Development

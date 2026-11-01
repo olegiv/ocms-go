@@ -16,6 +16,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
+	"github.com/olegiv/ocms-go/internal/review"
 	"github.com/olegiv/ocms-go/internal/store"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
@@ -107,6 +108,9 @@ func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int
 			if err = work.Q.SetPageAIAccess(ctx, store.SetPageAIAccessParams{PageID: page.ID, AiEditable: enabled, SetBy: userID, SetAt: time.Now().UTC()}); err != nil {
 				return err
 			}
+		}
+		if page.Status == "published" || page.ScheduledAt.Valid {
+			return review.ValidatePublication(ctx, work.Q, page)
 		}
 		return nil
 	}}

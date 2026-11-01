@@ -2818,3 +2818,127 @@ Evidence is in ignored `output/r15-validation/staging-acceptance/`, including
 `acceptance.json`, deployment/snapshot manifests, sanitized tool/request logs,
 exact request fixtures, database checks, client transcripts and screenshots.
 The status update is uncommitted; no push or wiki publication occurred.
+
+
+## R1.6 Implementation Notes — 2026-11-01
+
+Implemented locally on `codex/phase5-r1.6-editorial-review`, based on
+`50e4d8485c83ed540e7f893f112f25bf6c1aae0c`. The owner authorized implementation
+only: no commit, push or deployment. Existing dirty wiki work was preserved
+and corresponding pages updated locally, with before-sync copies in the
+ignored validation directory.
+
+### Review and publishing
+
+- Added `claims_checks` and hash-only `preview_links` in migration
+  `20261101230000_editorial_review.sql`; sqlc models/queries were regenerated
+  through the repository wrapper. Migration down/up preserves pages and
+  earlier snapshots. Deleting a reviewer retains the acknowledgment while
+  clearing its user association.
+- The editor sidebar separates Verified, Validated by oCMS and Reported by
+  the agent. Registered names are not vendor verification; agent text cannot
+  enter the Verified/Validated panels. Known validation messages are localized
+  for display without changing recorded evidence; unknown historical codes
+  retain their recorded text. New labels and controls cover English/Russian.
+- Claim controls record the reviewer/time against one provenance/revision;
+  stale forms fail without changing content or evidence. Historical controls
+  are disabled. Current claim counts, AI badges and an AI-review list filter
+  support the review queue.
+- History attributes each recorded revision, uses logical revision numbers
+  where available, labels legacy/system uncertainty and opens bounded
+  side-by-side recorded-field/body-text comparisons. The existing shared
+  CAS restore path remains authoritative and creates a new revision.
+- Translation review uses the same fingerprint implementation as authoring.
+  Text/SEO changes make translations stale; sibling membership/publication
+  alone does not. Prior missing bases remain explicitly untracked.
+- Admin publish/schedule, restoration into a published/scheduled page, REST
+  publication and the scheduler share current
+  AI-content hard validation, including live assignments/link/media checks.
+  Historical authoring provenance prevents bypass by disabling AI access.
+  Warnings/info and unchecked claims remain non-blocking. CAS rejects an
+  action after an intervening edit, while a fresh reviewed schedule succeeds.
+
+### Preview and sharing decisions
+
+- Ordinary save/read URLs now pin a recorded revision and require a current
+  editor/admin session. The staff draft-slug path uses the same isolated
+  renderer. No content save, replay, list or read implicitly issues a bearer
+  token. The shared prompt contract is now 1.2.0, with versioned goldens.
+- Explicit MCP issuance requires current policy/scopes/ownership and binds the
+  issuing grant/key. The editor requires a separate disclosure acknowledgment
+  and displayed-revision CAS. Only own opted-in plain unscheduled drafts can
+  issue links, including to an older complete recorded snapshot.
+- Tokens contain 32 random bytes; SQLite stores only SHA-256 hashes. The URL is
+  returned once, never retained in receipts or subsequent reads. Default TTL
+  is 24 hours, configurable down to one hour and bounded by issuer expiry.
+  Caps are ten active links and sixty issuances per rolling hour per user;
+  revoked links still count toward issuance. Concurrent issuance is capped
+  transactionally.
+- Reads recheck current account/page/credential state. Explicit revoke, page
+  lifecycle/owner/AI changes, credential revoke/scope changes and role/session
+  changes invalidate links. Durable triggers prevent reversal resurrecting
+  disclosed links. All unavailable bearer variants use 404.
+- Preview rendering bypasses page caches and frontend tracking, suppresses
+  module hooks/widgets, filters menu IDs/aliases/children and replaces HTML
+  theme helpers with public-only request-local versions. It clears private
+  translation/structured metadata, prepares embed placeholders, sanitizes body
+  HTML and strips active/external theme content. CSP blocks scripts, frames,
+  forms and external resource loads. Local theme CSS/image/font assets remain
+  available; only bounded version cache-busters are accepted.
+- The renderer uses only the selected complete snapshot for content and
+  assignments. Missing/legacy snapshots return 404; theme failure returns 503,
+  with no live-content fallback. Account presentation, taxonomy names and local
+  asset bytes are current; historical asset fidelity is not promised.
+- Application redaction precedes logging/integration middleware. Loopback
+  HTTP checks verified bearer paths were logged as `/preview/share/redacted`
+  and token/key strings were absent. Proxy/APM/CDN/error-log configuration is
+  documented in `docs/editorial-review.md`; the nginx example was manually
+  traced, not executed against a hosting proxy. Public-host redaction remains
+  a prerequisite for later public share-link acceptance.
+
+### Local verification and boundaries
+
+- Direct service tests cover pinning across edits, missing/legacy snapshots,
+  current-role/ownership/AI/lifecycle and credential revocation, expiry,
+  concurrent caps, revoked-issuance quotas and migration rollback.
+- HTTP handler tests cover anonymous/session/share behavior, theme failure,
+  public menu/helper isolation and recorded-snapshot denial. DOM/CSP tests
+  remove active/external loads and retain local versioned assets/placeholders.
+  Review tests cover provenance spoofing, per-revision checks, deleted
+  reviewers, translation fingerprints, diffs and publication validation.
+- The real loopback app uses an isolated copy of the synthetic R1.5 database,
+  a dedicated synthetic Editor and disposable CIDR-limited key. No staging
+  account, owner authenticator, Fly resource or production data was touched.
+  SDK-over-HTTP plus real admin handlers proved session-only saved URLs,
+  explicit old-revision anonymous rendering, English/Russian preview access,
+  language/anonymous denial, claim checks, revision comparison, one-time URL
+  display, revoke and credential-bound invalidation. Test key was deactivated.
+- Browser verification covered English/Russian panels and localized issue
+  text, actual checkbox save, source freshness and attributed history. Captures
+  and command logs are in ignored `output/r16-validation/`; the final evidence
+  record binds results to source hashes and records the final gate results.
+- Public staging/reverse-proxy and fresh Claude Desktop/ChatGPT/CLI acceptance
+  of R1.6 remain pending for a separately authorized deployment/R1.7. R1.5's
+  earlier cloud authoring results are retained as historical evidence. No new
+  staging acceptance, deployment, independent security audit, commit or Git
+  publication is claimed.
+
+### Final local gate
+
+The uncached Go suite passes across 67 test packages. Race checks pass for
+preview, review, authoring and MCP Server (the complete MCP race package took
+286 seconds). Vet, staticcheck, errcheck, govulncheck, generated sources,
+asset/application builds, absolute-path and diff checks pass. Govulncheck
+reports zero affected/called vulnerabilities and one advisory only in an
+uncalled required module. Full golangci-lint retains the same five findings
+in unchanged account-layout/MFA/weather code; there are no new R1.6 findings.
+These are baseline quality results, separate from the direct behavior checks
+above. Logs and the final source manifest are in the ignored evidence folder.
+
+Final handler checks additionally reject malformed/overflowing claim indexes
+without aliasing claim zero, confirm a fresh claim save and stale conflict,
+match logical history numbers to preview revisions and verify the disposable
+key is inactive. A restore test rejects invalid historical content on an
+already-published AI page atomically, and accepts a valid restore with a new
+revision while preserving publication. Public proxy logging and fresh real
+client R1.6 acceptance remain unexecuted under the no-deployment instruction.

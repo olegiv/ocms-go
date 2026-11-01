@@ -8196,6 +8196,346 @@
             "id": "editorial.invalid",
             "message": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000).",
             "translation": "Проверьте язык и шаблон. Общие правила: 1–8000 символов; шаблон: название (1–100) и инструкции (1–4000)."
+        },
+        {
+            "id": "review.title",
+            "message": "Editorial review",
+            "translation": "Редакторская проверка"
+        },
+        {
+            "id": "review.verified",
+            "message": "Verified",
+            "translation": "Подтверждено"
+        },
+        {
+            "id": "review.validated",
+            "message": "Validated by oCMS",
+            "translation": "Проверено oCMS"
+        },
+        {
+            "id": "review.reported",
+            "message": "Reported by the agent",
+            "translation": "Сообщено агентом"
+        },
+        {
+            "id": "review.revision",
+            "message": "Revision %d",
+            "translation": "Версия %d"
+        },
+        {
+            "id": "review.baseline",
+            "message": "Baseline snapshot: the original author and validation were not recorded.",
+            "translation": "Базовый снимок: исходный автор и результаты проверки не зафиксированы."
+        },
+        {
+            "id": "review.account",
+            "message": "Recorded account",
+            "translation": "Зафиксированная учётная запись"
+        },
+        {
+            "id": "review.source",
+            "message": "Source and transport",
+            "translation": "Источник и канал"
+        },
+        {
+            "id": "review.registered_app",
+            "message": "Registered app name",
+            "translation": "Зарегистрированное имя приложения"
+        },
+        {
+            "id": "review.client_id",
+            "message": "Registered client ID",
+            "translation": "Зарегистрированный ID клиента"
+        },
+        {
+            "id": "review.grant_id",
+            "message": "OAuth grant ID",
+            "translation": "ID разрешения OAuth"
+        },
+        {
+            "id": "review.key_id",
+            "message": "API key ID",
+            "translation": "ID API-ключа"
+        },
+        {
+            "id": "review.registration_note",
+            "message": "Registration details identify an app registration, not a verified vendor.",
+            "translation": "Данные регистрации идентифицируют приложение, но не подтверждают его производителя."
+        },
+        {
+            "id": "review.validation_note",
+            "message": "These checks establish structure and reference visibility, not factual accuracy.",
+            "translation": "Эти проверки подтверждают структуру и доступность источников, но не достоверность утверждений."
+        },
+        {
+            "id": "review.reference",
+            "message": "Page %d, revision %d",
+            "translation": "Страница %d, версия %d"
+        },
+        {
+            "id": "review.no_validation",
+            "message": "No validation was recorded for this revision.",
+            "translation": "Для этой версии результаты проверки не зафиксированы."
+        },
+        {
+            "id": "review.prompt_contract",
+            "message": "Guidance version",
+            "translation": "Версия инструкций"
+        },
+        {
+            "id": "review.reported_note",
+            "message": "The following information was supplied by the agent and is unverified.",
+            "translation": "Следующие сведения предоставлены агентом и не подтверждены."
+        },
+        {
+            "id": "review.model",
+            "message": "Agent-reported model",
+            "translation": "Модель по сообщению агента"
+        },
+        {
+            "id": "review.client_report",
+            "message": "Client-reported name/version",
+            "translation": "Название и версия по сообщению клиента"
+        },
+        {
+            "id": "review.reported_source",
+            "message": "Agent-reported source",
+            "translation": "Источник по сообщению агента"
+        },
+        {
+            "id": "review.acknowledgment_note",
+            "message": "Checking a claim records your review; it does not verify the claim as fact.",
+            "translation": "Отметка фиксирует вашу проверку, но не подтверждает утверждение как факт."
+        },
+        {
+            "id": "review.checked_by",
+            "message": "Reviewed by",
+            "translation": "Проверил"
+        },
+        {
+            "id": "review.save_check",
+            "message": "Save review",
+            "translation": "Сохранить отметку"
+        },
+        {
+            "id": "review.publish_notice",
+            "message": "%d unchecked claims. Claims and warning/info issues do not block publication; review this revision before publishing.",
+            "translation": "Непроверенных утверждений: %d. Утверждения, предупреждения и замечания не блокируют публикацию; проверьте эту версию перед публикацией."
+        },
+        {
+            "id": "review.translations",
+            "message": "Translation review",
+            "translation": "Проверка переводов"
+        },
+        {
+            "id": "review.ai_draft",
+            "message": "AI draft",
+            "translation": "ИИ-черновик"
+        },
+        {
+            "id": "review.stale",
+            "message": "Stale",
+            "translation": "Устарел"
+        },
+        {
+            "id": "review.current",
+            "message": "Current",
+            "translation": "Актуален"
+        },
+        {
+            "id": "review.not_tracked",
+            "message": "Source basis not recorded",
+            "translation": "Версия источника не зафиксирована"
+        },
+        {
+            "id": "review.missing",
+            "message": "Missing",
+            "translation": "Отсутствует"
+        },
+        {
+            "id": "review.unavailable",
+            "message": "Unavailable",
+            "translation": "Недоступно"
+        },
+        {
+            "id": "review.awaiting",
+            "message": "AI drafts awaiting review",
+            "translation": "ИИ-черновики для проверки"
+        },
+        {
+            "id": "review.unchecked",
+            "message": "%d unchecked claims",
+            "translation": "Непроверенных утверждений: %d"
+        },
+        {
+            "id": "review.check_conflict",
+            "message": "The reviewed revision changed or this claim is unavailable. Reload the page.",
+            "translation": "Проверяемая версия изменилась или утверждение недоступно. Обновите страницу."
+        },
+        {
+            "id": "review.compare",
+            "message": "Review and compare",
+            "translation": "Проверить и сравнить"
+        },
+        {
+            "id": "review.compare_note",
+            "message": "Compared with the preceding recorded version. Legacy versions contain only title and body.",
+            "translation": "Сравнение с предыдущей сохранённой версией. Старые версии содержат только заголовок и текст."
+        },
+        {
+            "id": "review.no_changes",
+            "message": "No recorded text or assignment changes.",
+            "translation": "Изменений текста и связей не зафиксировано."
+        },
+        {
+            "id": "review.before",
+            "message": "Previous recorded version",
+            "translation": "Предыдущая сохранённая версия"
+        },
+        {
+            "id": "review.after",
+            "message": "Selected version",
+            "translation": "Выбранная версия"
+        },
+        {
+            "id": "review.not_recorded",
+            "message": "Not recorded",
+            "translation": "Не зафиксировано"
+        },
+        {
+            "id": "review.diff_truncated",
+            "message": "This comparison is shortened. Open the recorded preview to review the full content.",
+            "translation": "Сравнение сокращено. Откройте предпросмотр сохранённой версии для проверки полного текста."
+        },
+        {
+            "id": "preview.title",
+            "message": "Revision previews and sharing",
+            "translation": "Предпросмотр версий и общий доступ"
+        },
+        {
+            "id": "preview.open_revision",
+            "message": "Preview this revision",
+            "translation": "Предпросмотр этой версии"
+        },
+        {
+            "id": "preview.share_warning",
+            "message": "Anyone with a share link can read the selected revision until expiry or revocation.",
+            "translation": "Любой обладатель ссылки может читать выбранную версию до истечения срока или отзыва доступа."
+        },
+        {
+            "id": "preview.acknowledge",
+            "message": "I understand that anyone holding this link can read this revision.",
+            "translation": "Я понимаю, что любой обладатель ссылки сможет читать эту версию."
+        },
+        {
+            "id": "preview.create_share",
+            "message": "Create share link",
+            "translation": "Создать ссылку общего доступа"
+        },
+        {
+            "id": "preview.revoke",
+            "message": "Revoke link",
+            "translation": "Отозвать ссылку"
+        },
+        {
+            "id": "preview.expires",
+            "message": "Expires",
+            "translation": "Срок действия"
+        },
+        {
+            "id": "preview.created",
+            "message": "Share link created",
+            "translation": "Ссылка общего доступа создана"
+        },
+        {
+            "id": "preview.only_once",
+            "message": "Copy this URL now. oCMS stores only its hash and cannot show it again.",
+            "translation": "Скопируйте ссылку сейчас. oCMS хранит только её хеш и не сможет показать её повторно."
+        },
+        {
+            "id": "preview.share_url",
+            "message": "Share URL",
+            "translation": "Ссылка общего доступа"
+        },
+        {
+            "id": "preview.unavailable",
+            "message": "Cannot share this revision. Reload the editor or revoke an existing link.",
+            "translation": "Нельзя открыть общий доступ к этой версии. Обновите редактор или отзовите существующую ссылку."
+        },
+        {
+            "id": "preview.render_error",
+            "message": "The theme could not render the recorded revision. Preview is unavailable.",
+            "translation": "Тема не смогла отобразить сохранённую версию. Предпросмотр недоступен."
+        },
+        {
+            "id": "preview.banner",
+            "message": "Preview · page %d · revision %d",
+            "translation": "Предпросмотр · страница %d · версия %d"
+        },
+        {
+            "id": "preview.placeholder",
+            "message": "External media and interactive content are omitted in previews.",
+            "translation": "Внешние материалы и интерактивное содержимое отключены в предпросмотре."
+        },
+        {
+            "id": "review.field.title",
+            "message": "Title",
+            "translation": "Заголовок"
+        },
+        {
+            "id": "review.field.summary",
+            "message": "Summary",
+            "translation": "Краткое описание"
+        },
+        {
+            "id": "review.field.body",
+            "message": "Body text",
+            "translation": "Текст"
+        },
+        {
+            "id": "review.field.meta_title",
+            "message": "SEO title",
+            "translation": "SEO-заголовок"
+        },
+        {
+            "id": "review.field.meta_description",
+            "message": "SEO description",
+            "translation": "SEO-описание"
+        },
+        {
+            "id": "review.field.meta_keywords",
+            "message": "SEO keywords",
+            "translation": "Ключевые слова SEO"
+        },
+        {
+            "id": "review.field.slug",
+            "message": "URL slug",
+            "translation": "Адрес страницы"
+        },
+        {
+            "id": "review.field.language_code",
+            "message": "Language",
+            "translation": "Язык"
+        },
+        {
+            "id": "review.field.featured_image_id",
+            "message": "Featured image",
+            "translation": "Главное изображение"
+        },
+        {
+            "id": "review.field.category_ids",
+            "message": "Categories",
+            "translation": "Категории"
+        },
+        {
+            "id": "review.field.tag_ids",
+            "message": "Tags",
+            "translation": "Теги"
+        },
+        {
+            "id": "review.system",
+            "message": "System action; no acting account was recorded.",
+            "translation": "Системное действие; учётная запись исполнителя не зафиксирована."
         }
     ]
 }

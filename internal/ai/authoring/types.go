@@ -43,7 +43,7 @@ type SaveResult struct {
 	PageID            int64         `json:"page_id"`
 	Revision          int64         `json:"revision"`
 	AdminURL          string        `json:"admin_url"`
-	PreviewURL        string        `json:"preview_url" doc:"Current draft URL requiring an editor session; no bearer token is issued."`
+	PreviewURL        string        `json:"preview_url" doc:"Recorded revision URL requiring an editor session; no bearer token is issued."`
 	Issues            []draft.Issue `json:"issues"`
 	TranslationStatus string        `json:"translation_status" enum:"current,stale,not_tracked,unavailable"`
 }

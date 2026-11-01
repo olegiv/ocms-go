@@ -412,6 +412,14 @@ func testDB(t *testing.T) *sql.DB {
 	}
 	versionUp, _, _ := strings.Cut(string(baseVersion), "-- +goose Down")
 	schema += versionUp + up
+	reviewMigration, readErr := os.ReadFile("../store/migrations/20261101230000_editorial_review.sql")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	// This lightweight fixture has no OAuth tables. Full migration/trigger
+	// behavior is exercised on migrated databases by the preview tests.
+	reviewUp, _, _ := strings.Cut(string(reviewMigration), "-- Persist lifecycle invalidation")
+	schema += reviewUp
 
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("failed to create test schema: %v", err)

@@ -1,23 +1,112 @@
-# Editorial review status
+# Editorial review and revision previews
 
-R1.5 draft tools save into the normal oCMS editor. They return `admin_url` and
-an ordinary, current-draft `preview_url` that requires an editor session. The
-editor can review content, metadata, existing images/taxonomy, AI-edit consent,
-translation membership and version history. Publishing remains a human action.
+R1.6 is implemented for local verification. It has not been deployed or
+accepted in connected cloud clients. Publishing remains an explicit human
+action; MCP cannot publish, schedule, delete or transfer pages.
 
-R1.6 has not started. Theme-isolated, revision-pinned previews, explicit expiring
-share tokens, the dedicated AI provenance/review panels and translation-review
-UI remain pending. `create_preview_link` returns `preview_unavailable` without
-issuing a token, as approved for R1.5. The existing frontend preview is not a
-public share URL or a claim about a historical revision.
+## Review a draft
 
-For now, inspect the current `verified`, `validated` and `reported` objects
-through `get_my_draft`. Treat source existence/link checks as server validation,
-and model claims/notes as untrusted reports. A public OAuth registration or MCP
-client name does not establish vendor identity. Use `get_translation_status`
-for current source freshness. Re-read before further agent edits after a human
-changes the page; stale `base_revision` saves fail rather than overwriting it.
+Open the saved `admin_url`. The editor sidebar separates:
 
-See [draft authoring](draft-authoring.md) and
-[connected-app acceptance](desktop-authoring.md) for current contracts and
-checks still pending on staging.
+- **Verified:** recorded account, credential/grant and registered client ID,
+  transport, time and revision. Registered display names do not establish
+  vendor identity. Historical migration actors remain explicitly unknown.
+- **Validated by oCMS:** validation issues, resolved reference revisions,
+  inspected links and the authoring contract version. These checks do not
+  establish the factual truth of the article.
+- **Reported by the agent:** model, claimed sources, notes and claims needing
+  editorial attention. Checkboxes record who acknowledged each claim and when,
+  without changing its provenance or converting it into a verified fact.
+
+Checks belong to one provenance/revision pair. New revisions start unchecked;
+old acknowledgments remain visible in revision review. A stale checkbox form
+is rejected. Deleting a reviewer retains the acknowledgment with an unavailable
+reviewer label. The page list has AI-draft badges, unchecked counts and an
+**AI drafts awaiting review** filter.
+
+Translations show their lifecycle and source freshness. Freshness uses the
+same content fingerprint as draft authoring: source text/SEO changes make a
+translation stale; publication, AI-access changes and sibling membership do
+not. Missing or historical bases are labelled explicitly.
+
+Revision history identifies the recorded principal/app and links to a
+side-by-side comparison of title, summary, SEO metadata and body text.
+Incomplete legacy revisions show unrecorded fields rather than borrowing
+current values. The existing restore action creates a new revision and checks
+the displayed revision before changing content.
+
+Publish, schedule and restore require the displayed revision. Restoring content
+into a published or scheduled AI page also runs the publication gate. Shared hard validation
+rechecks AI-authored content, including current links, taxonomy and media,
+even after AI access is disabled. Unchecked claims and warning/info issues
+are visible notices and do not block otherwise valid publication.
+
+## Session previews
+
+Save/read results return `/LANG/preview/pages/ID/revisions/REVISION`.
+This URL grants no access: the viewer needs a current editor/admin session.
+It renders the recorded snapshot, including its language and image assignment,
+without following subsequent edits. The ordinary staff-only draft slug route
+also uses the isolated recorded renderer. Missing/incomplete snapshots return
+404; theme-rendering failures return 503. Neither falls back to live content.
+
+Previews use the active content layout and local theme assets, with a visible
+revision banner. They bypass page caches and suppress scripts, tracking,
+widgets, forms and external loads. Embeds become placeholders. Menus expose
+only public content, including when an HTML theme calls menu helpers.
+Private translation links and structured/canonical/OG URLs are omitted.
+Headers enforce private/no-store, no-referrer, noindex/nofollow and a restrictive
+CSP. Interactive integrations and historical asset bytes are outside the
+preview fidelity promise. Taxonomy/image assignments are pinned; referenced
+names and local media files use their current stored values.
+
+## Explicit secure sharing
+
+Sharing is a separate action. The owner of a plain, unscheduled, AI-editable
+draft may choose a recorded revision, acknowledge the disclosure and create a
+link in the editor. MCP `create_preview_link(page_id, revision)` requires
+`mcp:access` and `mcp:drafts`, the current draft-authoring policy, and ownership.
+Its description warns that anyone holding the link can read that snapshot.
+Saving, reading, retrying or listing never creates a share link.
+
+Links contain 32 random bytes; only SHA-256 hashes are stored. Their URL is
+returned once and is absent from later reads, metadata and idempotency receipts.
+The default lifetime is 24 hours, bounded by the issuing credential's expiry.
+Set `OCMS_PREVIEW_LINK_TTL_HOURS` to 1–24 to shorten it. Limits are ten active
+links and sixty issuances per user per rolling hour; revocation does not reset
+the issuance limit. Revoke links from the editor's preview panel.
+
+Each read rechecks current account/role, owner, AI opt-in, draft/schedule and
+issuing key/grant state. Explicit revocation, publication, scheduling, deletion,
+owner change, disabling page AI access, role loss, credential revocation and
+session-version rotation invalidate links. Durable invalidation prevents those
+links reappearing when a setting is reversed. Missing, expired, malformed or
+revoked links all return 404. A link never grants editor or MCP permissions.
+
+## Proxy and telemetry logging
+
+The application replaces bearer paths before its loggers and integration
+middleware can observe the request. Upstream proxies and external telemetry
+must also redact the path **before public deployment**. Do not log `$request`,
+`$request_uri`, query arguments, referers, response bodies or redirect headers
+for preview traffic. A minimal nginx access-log pattern is:
+
+```nginx
+# http context; use this format on the oCMS server block.
+map $uri $ocms_log_path {
+    default $uri;
+    ~^(/[^/]+)?/preview/share/ /preview/share/[redacted];
+}
+log_format ocms_safe '$remote_addr $request_method $ocms_log_path '
+                     '$server_protocol $status $body_bytes_sent';
+# server context:
+access_log /var/log/nginx/ocms-access.log ocms_safe;
+```
+
+Apply equivalent redaction/exclusion to error logs, CDN/WAF tracing, APM and
+hosting request logs; do not enable request dumps. The nginx example is
+configuration guidance, not proof about an existing host's logs. Public proxy
+logging and fresh Claude/ChatGPT acceptance remain deployment checks for R1.7.
+
+See [draft authoring](draft-authoring.md), [page writes](page-writes.md) and
+[connected-app acceptance](desktop-authoring.md).

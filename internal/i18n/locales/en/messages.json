@@ -8196,6 +8196,346 @@
             "id": "editorial.invalid",
             "message": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000).",
             "translation": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000)."
+        },
+        {
+            "id": "review.title",
+            "message": "Editorial review",
+            "translation": "Editorial review"
+        },
+        {
+            "id": "review.verified",
+            "message": "Verified",
+            "translation": "Verified"
+        },
+        {
+            "id": "review.validated",
+            "message": "Validated by oCMS",
+            "translation": "Validated by oCMS"
+        },
+        {
+            "id": "review.reported",
+            "message": "Reported by the agent",
+            "translation": "Reported by the agent"
+        },
+        {
+            "id": "review.revision",
+            "message": "Revision %d",
+            "translation": "Revision %d"
+        },
+        {
+            "id": "review.baseline",
+            "message": "Baseline snapshot: the original author and validation were not recorded.",
+            "translation": "Baseline snapshot: the original author and validation were not recorded."
+        },
+        {
+            "id": "review.account",
+            "message": "Recorded account",
+            "translation": "Recorded account"
+        },
+        {
+            "id": "review.source",
+            "message": "Source and transport",
+            "translation": "Source and transport"
+        },
+        {
+            "id": "review.registered_app",
+            "message": "Registered app name",
+            "translation": "Registered app name"
+        },
+        {
+            "id": "review.client_id",
+            "message": "Registered client ID",
+            "translation": "Registered client ID"
+        },
+        {
+            "id": "review.grant_id",
+            "message": "OAuth grant ID",
+            "translation": "OAuth grant ID"
+        },
+        {
+            "id": "review.key_id",
+            "message": "API key ID",
+            "translation": "API key ID"
+        },
+        {
+            "id": "review.registration_note",
+            "message": "Registration details identify an app registration, not a verified vendor.",
+            "translation": "Registration details identify an app registration, not a verified vendor."
+        },
+        {
+            "id": "review.validation_note",
+            "message": "These checks establish structure and reference visibility, not factual accuracy.",
+            "translation": "These checks establish structure and reference visibility, not factual accuracy."
+        },
+        {
+            "id": "review.reference",
+            "message": "Page %d, revision %d",
+            "translation": "Page %d, revision %d"
+        },
+        {
+            "id": "review.no_validation",
+            "message": "No validation was recorded for this revision.",
+            "translation": "No validation was recorded for this revision."
+        },
+        {
+            "id": "review.prompt_contract",
+            "message": "Guidance version",
+            "translation": "Guidance version"
+        },
+        {
+            "id": "review.reported_note",
+            "message": "The following information was supplied by the agent and is unverified.",
+            "translation": "The following information was supplied by the agent and is unverified."
+        },
+        {
+            "id": "review.model",
+            "message": "Agent-reported model",
+            "translation": "Agent-reported model"
+        },
+        {
+            "id": "review.client_report",
+            "message": "Client-reported name/version",
+            "translation": "Client-reported name/version"
+        },
+        {
+            "id": "review.reported_source",
+            "message": "Agent-reported source",
+            "translation": "Agent-reported source"
+        },
+        {
+            "id": "review.acknowledgment_note",
+            "message": "Checking a claim records your review; it does not verify the claim as fact.",
+            "translation": "Checking a claim records your review; it does not verify the claim as fact."
+        },
+        {
+            "id": "review.checked_by",
+            "message": "Reviewed by",
+            "translation": "Reviewed by"
+        },
+        {
+            "id": "review.save_check",
+            "message": "Save review",
+            "translation": "Save review"
+        },
+        {
+            "id": "review.publish_notice",
+            "message": "%d unchecked claims. Claims and warning/info issues do not block publication; review this revision before publishing.",
+            "translation": "%d unchecked claims. Claims and warning/info issues do not block publication; review this revision before publishing."
+        },
+        {
+            "id": "review.translations",
+            "message": "Translation review",
+            "translation": "Translation review"
+        },
+        {
+            "id": "review.ai_draft",
+            "message": "AI draft",
+            "translation": "AI draft"
+        },
+        {
+            "id": "review.stale",
+            "message": "Stale",
+            "translation": "Stale"
+        },
+        {
+            "id": "review.current",
+            "message": "Current",
+            "translation": "Current"
+        },
+        {
+            "id": "review.not_tracked",
+            "message": "Source basis not recorded",
+            "translation": "Source basis not recorded"
+        },
+        {
+            "id": "review.missing",
+            "message": "Missing",
+            "translation": "Missing"
+        },
+        {
+            "id": "review.unavailable",
+            "message": "Unavailable",
+            "translation": "Unavailable"
+        },
+        {
+            "id": "review.awaiting",
+            "message": "AI drafts awaiting review",
+            "translation": "AI drafts awaiting review"
+        },
+        {
+            "id": "review.unchecked",
+            "message": "%d unchecked claims",
+            "translation": "%d unchecked claims"
+        },
+        {
+            "id": "review.check_conflict",
+            "message": "The reviewed revision changed or this claim is unavailable. Reload the page.",
+            "translation": "The reviewed revision changed or this claim is unavailable. Reload the page."
+        },
+        {
+            "id": "review.compare",
+            "message": "Review and compare",
+            "translation": "Review and compare"
+        },
+        {
+            "id": "review.compare_note",
+            "message": "Compared with the preceding recorded version. Legacy versions contain only title and body.",
+            "translation": "Compared with the preceding recorded version. Legacy versions contain only title and body."
+        },
+        {
+            "id": "review.no_changes",
+            "message": "No recorded text or assignment changes.",
+            "translation": "No recorded text or assignment changes."
+        },
+        {
+            "id": "review.before",
+            "message": "Previous recorded version",
+            "translation": "Previous recorded version"
+        },
+        {
+            "id": "review.after",
+            "message": "Selected version",
+            "translation": "Selected version"
+        },
+        {
+            "id": "review.not_recorded",
+            "message": "Not recorded",
+            "translation": "Not recorded"
+        },
+        {
+            "id": "review.diff_truncated",
+            "message": "This comparison is shortened. Open the recorded preview to review the full content.",
+            "translation": "This comparison is shortened. Open the recorded preview to review the full content."
+        },
+        {
+            "id": "preview.title",
+            "message": "Revision previews and sharing",
+            "translation": "Revision previews and sharing"
+        },
+        {
+            "id": "preview.open_revision",
+            "message": "Preview this revision",
+            "translation": "Preview this revision"
+        },
+        {
+            "id": "preview.share_warning",
+            "message": "Anyone with a share link can read the selected revision until expiry or revocation.",
+            "translation": "Anyone with a share link can read the selected revision until expiry or revocation."
+        },
+        {
+            "id": "preview.acknowledge",
+            "message": "I understand that anyone holding this link can read this revision.",
+            "translation": "I understand that anyone holding this link can read this revision."
+        },
+        {
+            "id": "preview.create_share",
+            "message": "Create share link",
+            "translation": "Create share link"
+        },
+        {
+            "id": "preview.revoke",
+            "message": "Revoke link",
+            "translation": "Revoke link"
+        },
+        {
+            "id": "preview.expires",
+            "message": "Expires",
+            "translation": "Expires"
+        },
+        {
+            "id": "preview.created",
+            "message": "Share link created",
+            "translation": "Share link created"
+        },
+        {
+            "id": "preview.only_once",
+            "message": "Copy this URL now. oCMS stores only its hash and cannot show it again.",
+            "translation": "Copy this URL now. oCMS stores only its hash and cannot show it again."
+        },
+        {
+            "id": "preview.share_url",
+            "message": "Share URL",
+            "translation": "Share URL"
+        },
+        {
+            "id": "preview.unavailable",
+            "message": "Cannot share this revision. Reload the editor or revoke an existing link.",
+            "translation": "Cannot share this revision. Reload the editor or revoke an existing link."
+        },
+        {
+            "id": "preview.render_error",
+            "message": "The theme could not render the recorded revision. Preview is unavailable.",
+            "translation": "The theme could not render the recorded revision. Preview is unavailable."
+        },
+        {
+            "id": "preview.banner",
+            "message": "Preview · page %d · revision %d",
+            "translation": "Preview · page %d · revision %d"
+        },
+        {
+            "id": "preview.placeholder",
+            "message": "External media and interactive content are omitted in previews.",
+            "translation": "External media and interactive content are omitted in previews."
+        },
+        {
+            "id": "review.field.title",
+            "message": "Title",
+            "translation": "Title"
+        },
+        {
+            "id": "review.field.summary",
+            "message": "Summary",
+            "translation": "Summary"
+        },
+        {
+            "id": "review.field.body",
+            "message": "Body text",
+            "translation": "Body text"
+        },
+        {
+            "id": "review.field.meta_title",
+            "message": "SEO title",
+            "translation": "SEO title"
+        },
+        {
+            "id": "review.field.meta_description",
+            "message": "SEO description",
+            "translation": "SEO description"
+        },
+        {
+            "id": "review.field.meta_keywords",
+            "message": "SEO keywords",
+            "translation": "SEO keywords"
+        },
+        {
+            "id": "review.field.slug",
+            "message": "URL slug",
+            "translation": "URL slug"
+        },
+        {
+            "id": "review.field.language_code",
+            "message": "Language",
+            "translation": "Language"
+        },
+        {
+            "id": "review.field.featured_image_id",
+            "message": "Featured image",
+            "translation": "Featured image"
+        },
+        {
+            "id": "review.field.category_ids",
+            "message": "Categories",
+            "translation": "Categories"
+        },
+        {
+            "id": "review.field.tag_ids",
+            "message": "Tags",
+            "translation": "Tags"
+        },
+        {
+            "id": "review.system",
+            "message": "System action; no acting account was recorded.",
+            "translation": "System action; no acting account was recorded."
         }
     ]
 }

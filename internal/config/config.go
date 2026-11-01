@@ -37,17 +37,18 @@ var publicTestSecretPrefixes = []string{
 
 // Config holds the application configuration loaded from environment variables.
 type Config struct {
-	DBPath        string `env:"OCMS_DB_PATH" envDefault:"./data/ocms.db"`
-	SessionSecret string `env:"OCMS_SESSION_SECRET,required"`
-	ServerHost    string `env:"OCMS_SERVER_HOST" envDefault:"localhost"`
-	ServerPort    int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
-	Env           string `env:"OCMS_ENV" envDefault:"development"`
-	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
-	ErrorLogPath  string `env:"OCMS_ERROR_LOG_PATH"` // Optional path for a separate error log file (5xx/ERROR+)
-	CustomDir     string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
-	UploadsDir    string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
-	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
-	SiteURL       string `env:"OCMS_SITE_URL"` // Full site URL written into site config on startup (overrides the admin setting)
+	PreviewLinkTTLHours int    `env:"OCMS_PREVIEW_LINK_TTL_HOURS" envDefault:"24"`
+	DBPath              string `env:"OCMS_DB_PATH" envDefault:"./data/ocms.db"`
+	SessionSecret       string `env:"OCMS_SESSION_SECRET,required"`
+	ServerHost          string `env:"OCMS_SERVER_HOST" envDefault:"localhost"`
+	ServerPort          int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
+	Env                 string `env:"OCMS_ENV" envDefault:"development"`
+	LogLevel            string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
+	ErrorLogPath        string `env:"OCMS_ERROR_LOG_PATH"` // Optional path for a separate error log file (5xx/ERROR+)
+	CustomDir           string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
+	UploadsDir          string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
+	ActiveTheme         string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
+	SiteURL             string `env:"OCMS_SITE_URL"` // Full site URL written into site config on startup (overrides the admin setting)
 
 	OAuthEnabled              bool   `env:"OCMS_OAUTH_ENABLED" envDefault:"false"`
 	OAuthCIMDAllowedHosts     string `env:"OCMS_OAUTH_CIMD_ALLOWED_HOSTS" envDefault:"claude.ai,chatgpt.com"`
@@ -188,6 +189,9 @@ func Load() (*Config, error) {
 
 	applyProductionSecurityDefaults(cfg)
 
+	if cfg.PreviewLinkTTLHours < 1 || cfg.PreviewLinkTTLHours > 24 {
+		return nil, fmt.Errorf("preview link TTL must be 1–24 hours")
+	}
 	if cfg.OAuthEnabled && strings.TrimSpace(cfg.SiteURL) == "" {
 		return nil, fmt.Errorf("OCMS_SITE_URL is required when OAuth is enabled")
 	}

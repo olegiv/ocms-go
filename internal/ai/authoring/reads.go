@@ -22,7 +22,7 @@ func emptyValidation() Validation {
 }
 
 func (s *Service) summary(p store.Page) DraftSummary {
-	admin, preview := s.urls(s.SiteURL, p.ID, p.Slug, p.LanguageCode)
+	admin, preview := s.urls(s.SiteURL, p.ID, p.LanguageCode, p.Revision)
 	return DraftSummary{PageID: p.ID, Revision: p.Revision, Title: p.Title, LanguageCode: p.LanguageCode, AdminURL: admin, PreviewURL: preview, UpdatedAt: p.UpdatedAt}
 }
 

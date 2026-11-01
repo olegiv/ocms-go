@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
+	"github.com/olegiv/ocms-go/internal/review"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -211,6 +212,16 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 		result, err = mutate(&transactional, actor, work)
 		if err != nil {
 			return err
+		}
+		if stored, err := work.Q.GetPageByID(ctx, result.ID); err != nil {
+			return err
+		} else if stored.Status == "published" || stored.ScheduledAt.Valid {
+			if err := review.ValidatePublication(ctx, work.Q, stored); err != nil {
+				if errors.Is(err, review.ErrHardValidation) {
+					return v2.NewValidationError(map[string]string{"body": "Draft failed publication validation"}, "Draft failed publication validation")
+				}
+				return err
+			}
 		}
 		if opt.ForceDraft {
 			work.SetPageEvidence(result.ID, evidence)

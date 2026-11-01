@@ -26,6 +26,9 @@ import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // PageListItemView represents a page in the list.
 type PageListItemView struct {
+	Revision         int64
+	AIEditable       bool
+	UncheckedClaims  int64
 	ID               int64
 	Title            string
 	Slug             string
@@ -73,6 +76,7 @@ type PageCategoryNodeView struct {
 
 // PageFormViewData holds data for the page form page.
 type PageFormViewData struct {
+	Review           *ReviewPanelData
 	BaseRevision     int64
 	ConflictRevision int64
 	AIEditable       bool
@@ -184,13 +188,21 @@ type PagesListViewData struct {
 
 // PageVersionView represents a version in the list.
 type PageVersionView struct {
-	Legacy        bool
-	Revision      int64
-	ID            int64
-	Title         string
-	Body          string
-	ChangedByName string
-	CreatedAt     string
+	VerifiedSource, RegisteredClient string
+	Legacy                           bool
+	Revision                         int64
+	ID                               int64
+	Title                            string
+	Body                             string
+	ChangedByName                    string
+	CreatedAt                        string
+}
+
+func versionDisplayNumber(version PageVersionView) int64 {
+	if version.Revision > 0 {
+		return version.Revision
+	}
+	return version.ID
 }
 
 // PageVersionsViewData holds data for the versions page.
@@ -411,6 +423,9 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 				<div class="filter-buttons">
 					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == ""), Size: button.SizeSm, Href: pagesListURL(data.Pagination, "", data.PageTypeFilter, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
 						{ pc.T("label.all") }
+					}
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == "ai_review"), Size: button.SizeSm, Href: pagesListURL(data.Pagination, "ai_review", data.PageTypeFilter, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
+						{ pc.T("review.awaiting") }
 					}
 					for _, s := range data.Statuses {
 						@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == s), Size: button.SizeSm, Href: pagesListURL(data.Pagination, s, data.PageTypeFilter, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
@@ -749,6 +764,12 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 			} else {
 				<span class="page-title-link">{ page.Title }</span>
 			}
+			if page.AIEditable && page.Status=="draft" && !page.IsScheduled {
+				@badge.Badge(badge.Props{Class: "badge-info mt-1"}) {
+					{ pc.T("review.ai_draft") }
+				}
+				<span class="block text-sm text-muted-foreground">{ pc.T("review.unchecked",page.UncheckedClaims) }</span>
+			}
 		}
 		@table.Cell() {
 			if len(page.Tags) > 0 {
@@ -893,320 +914,327 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 				}
 			}
 		}
-		@card.Card() {
-			<form
-				method="POST"
-				action={ templ.SafeURL(pageFormAction(data)) }
-				class="p-6"
-				x-data={ pageFormXData(data) }
-			>
-				@csrfField()
-				if data.IsEdit {
-					<input type="hidden" name="base_revision" value={ fmt.Sprint(data.BaseRevision) }/>
-				}
-				if data.ConflictRevision > 0 {
-					@alert.Alert(alert.Props{Class: "alert-warning mb-4"}) {
-						@alert.Title() {
-							{ pc.T("pages.revision_conflict_title") }
+		<div class={ reviewLayout(data.Review != nil) }>
+			<div class="min-w-0">
+				@card.Card() {
+					<form
+						method="POST"
+						action={ templ.SafeURL(pageFormAction(data)) }
+						class="p-6"
+						x-data={ pageFormXData(data) }
+					>
+						@csrfField()
+						if data.IsEdit {
+							<input type="hidden" name="base_revision" value={ fmt.Sprint(data.BaseRevision) }/>
 						}
-						@alert.Description(alert.DescriptionProps{Class: "gap-3"}) {
-							<p>{ pc.T("pages.revision_conflict") }</p>
-							<div class="flex flex-wrap gap-2">
-								@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d", data.PageID)}) {
-									{ pc.T("pages.view_latest") }
+						if data.ConflictRevision > 0 {
+							@alert.Alert(alert.Props{Class: "alert-warning mb-4"}) {
+								@alert.Title() {
+									{ pc.T("pages.revision_conflict_title") }
 								}
-								@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{"name": "overwrite_revision", "value": fmt.Sprint(data.ConflictRevision)}}) {
-									{ pc.T("pages.confirm_overwrite") }
+								@alert.Description(alert.DescriptionProps{Class: "gap-3"}) {
+									<p>{ pc.T("pages.revision_conflict") }</p>
+									<div class="flex flex-wrap gap-2">
+										@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d", data.PageID)}) {
+											{ pc.T("pages.view_latest") }
+										}
+										@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{"name": "overwrite_revision", "value": fmt.Sprint(data.ConflictRevision)}}) {
+											{ pc.T("pages.confirm_overwrite") }
+										}
+									</div>
+								}
+							}
+						}
+						if data.CanManageAI {
+							<input type="hidden" name="ai_access_present" value="1"/>
+							<div class="mb-6 flex items-center gap-2">
+								@checkbox.Checkbox(checkbox.Props{ID: "allow_ai_edits", Name: "allow_ai_edits", Checked: data.AIEditable})
+								@label.Label(label.Props{For: "allow_ai_edits"}) {
+									{ pc.T("pages.allow_ai_edits") }
 								}
 							</div>
 						}
-					}
-				}
-				if data.CanManageAI {
-					<input type="hidden" name="ai_access_present" value="1"/>
-					<div class="mb-6 flex items-center gap-2">
-						@checkbox.Checkbox(checkbox.Props{ID: "allow_ai_edits", Name: "allow_ai_edits", Checked: data.AIEditable})
-						@label.Label(label.Props{For: "allow_ai_edits"}) {
-							{ pc.T("pages.allow_ai_edits") }
+						if data.IsEdit {
+							<input type="hidden" name="_method" value="PUT"/>
 						}
-					</div>
-				}
-				if data.IsEdit {
-					<input type="hidden" name="_method" value="PUT"/>
-				}
-				<div class="form-grid">
-					<!-- Title -->
-					<div class="form-group form-group-full">
-						@label.Label(label.Props{For: "title", Class: "block mb-1"}) {
-							{ pc.T("label.title") } <span class="required">*</span>
-						}
-						@input.Input(input.Props{
-							ID:          "title",
-							Name:        "title",
-							Type:        input.TypeText,
-							Value:       formVal(data.FormValues, "title", data.PageTitle),
-							Placeholder: pc.T("hint.enter_page_title"),
-							HasError:    data.Errors["title"] != "",
-							Attributes:  templ.Attributes{"required": true, "maxlength": "255", "@input": "generateSlug($event.target.value)"},
-						})
-						if data.Errors["title"] != "" {
-							<span class="form-error">{ data.Errors["title"] }</span>
-						}
-					</div>
-					<!-- Slug -->
-					<div class="form-group">
-						@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
-							{ pc.T("label.slug") } <span class="required">*</span>
-						}
-						<div class="input-with-prefix">
-							<span class="input-prefix">/</span>
-							@input.Input(input.Props{
-								ID:          "slug",
-								Name:        "slug",
-								Type:        input.TypeText,
-								Value:       formVal(data.FormValues, "slug", data.PageSlug),
-								Placeholder: pc.T("hint.page_slug"),
-								HasError:    data.Errors["slug"] != "",
-								Attributes:  templ.Attributes{"x-model": "slug", "@input": "slugEdited = true", "maxlength": "255"},
-							})
-						</div>
-						if data.Errors["slug"] != "" {
-							<span class="form-error">{ data.Errors["slug"] }</span>
-						} else {
-							<span class="form-hint">{ pc.T("hint.slug") }</span>
-						}
-					</div>
-					<!-- Status -->
-					<div class="form-group">
-						@label.Label(label.Props{For: "status", Class: "block mb-1"}) {
-							{ pc.T("label.status") }
-						}
-						if data.IsDemoMode && data.IsEdit && currentStatus(data.FormValues, data.PageStatus) == "published" {
-							<input type="hidden" name="status" value="published"/>
-							@badge.Badge(badge.Props{Class: "badge-success"}) {
-								{ pc.T("status.published") }
-							}
-						} else {
-							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
-								@selectbox.Trigger(selectbox.TriggerProps{
-									Name:     "status",
-									HasError: data.Errors["status"] != "",
-								}) {
-									@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("label.status")})
+						<div class="form-grid">
+							<!-- Title -->
+							<div class="form-group form-group-full">
+								@label.Label(label.Props{For: "title", Class: "block mb-1"}) {
+									{ pc.T("label.title") } <span class="required">*</span>
 								}
-								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
-									for _, s := range data.Statuses {
-										@selectbox.Item(selectbox.ItemProps{
-											Value:    s,
-											Selected: s == currentStatus(data.FormValues, data.PageStatus),
+								@input.Input(input.Props{
+									ID:          "title",
+									Name:        "title",
+									Type:        input.TypeText,
+									Value:       formVal(data.FormValues, "title", data.PageTitle),
+									Placeholder: pc.T("hint.enter_page_title"),
+									HasError:    data.Errors["title"] != "",
+									Attributes:  templ.Attributes{"required": true, "maxlength": "255", "@input": "generateSlug($event.target.value)"},
+								})
+								if data.Errors["title"] != "" {
+									<span class="form-error">{ data.Errors["title"] }</span>
+								}
+							</div>
+							<!-- Slug -->
+							<div class="form-group">
+								@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
+									{ pc.T("label.slug") } <span class="required">*</span>
+								}
+								<div class="input-with-prefix">
+									<span class="input-prefix">/</span>
+									@input.Input(input.Props{
+										ID:          "slug",
+										Name:        "slug",
+										Type:        input.TypeText,
+										Value:       formVal(data.FormValues, "slug", data.PageSlug),
+										Placeholder: pc.T("hint.page_slug"),
+										HasError:    data.Errors["slug"] != "",
+										Attributes:  templ.Attributes{"x-model": "slug", "@input": "slugEdited = true", "maxlength": "255"},
+									})
+								</div>
+								if data.Errors["slug"] != "" {
+									<span class="form-error">{ data.Errors["slug"] }</span>
+								} else {
+									<span class="form-hint">{ pc.T("hint.slug") }</span>
+								}
+							</div>
+							<!-- Status -->
+							<div class="form-group">
+								@label.Label(label.Props{For: "status", Class: "block mb-1"}) {
+									{ pc.T("label.status") }
+								}
+								if data.IsDemoMode && data.IsEdit && currentStatus(data.FormValues, data.PageStatus) == "published" {
+									<input type="hidden" name="status" value="published"/>
+									@badge.Badge(badge.Props{Class: "badge-success"}) {
+										{ pc.T("status.published") }
+									}
+								} else {
+									@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+										@selectbox.Trigger(selectbox.TriggerProps{
+											Name:     "status",
+											HasError: data.Errors["status"] != "",
 										}) {
-											if s == "draft" {
-												{ pc.T("status.draft") }
-											} else if s == "published" {
-												{ pc.T("status.published") }
-											} else {
-												{ s }
+											@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("label.status")})
+										}
+										@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+											for _, s := range data.Statuses {
+												@selectbox.Item(selectbox.ItemProps{
+													Value:    s,
+													Selected: s == currentStatus(data.FormValues, data.PageStatus),
+												}) {
+													if s == "draft" {
+														{ pc.T("status.draft") }
+													} else if s == "published" {
+														{ pc.T("status.published") }
+													} else {
+														{ s }
+													}
+												}
 											}
 										}
 									}
 								}
-							}
-						}
-						if data.Errors["status"] != "" {
-							<span class="form-error">{ data.Errors["status"] }</span>
-						}
-					</div>
-					<!-- Page Type -->
-					<div class="form-group">
-						@label.Label(label.Props{For: "page_type", Class: "block mb-1"}) {
-							{ pc.T("pages.page_type") }
-						}
-						@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
-							@selectbox.Trigger(selectbox.TriggerProps{
-								Name:     "page_type",
-								HasError: data.Errors["page_type"] != "",
-							}) {
-								@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("pages.page_type")})
-							}
-							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
-								for _, pt := range data.PageTypes {
-									@selectbox.Item(selectbox.ItemProps{
-										Value:    pt,
-										Selected: pt == currentPageType(data.FormValues, data.PageType),
+								if data.Errors["status"] != "" {
+									<span class="form-error">{ data.Errors["status"] }</span>
+								}
+							</div>
+							<!-- Page Type -->
+							<div class="form-group">
+								@label.Label(label.Props{For: "page_type", Class: "block mb-1"}) {
+									{ pc.T("pages.page_type") }
+								}
+								@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+									@selectbox.Trigger(selectbox.TriggerProps{
+										Name:     "page_type",
+										HasError: data.Errors["page_type"] != "",
 									}) {
-										if pt == "post" {
-											{ pc.T("pages.type_post") }
-										} else if pt == "page" {
-											{ pc.T("pages.type_page") }
-										} else {
-											{ pt }
+										@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("pages.page_type")})
+									}
+									@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+										for _, pt := range data.PageTypes {
+											@selectbox.Item(selectbox.ItemProps{
+												Value:    pt,
+												Selected: pt == currentPageType(data.FormValues, data.PageType),
+											}) {
+												if pt == "post" {
+													{ pc.T("pages.type_post") }
+												} else if pt == "page" {
+													{ pc.T("pages.type_page") }
+												} else {
+													{ pt }
+												}
+											}
 										}
 									}
 								}
-							}
-						}
-						if data.Errors["page_type"] != "" {
-							<span class="form-error">{ data.Errors["page_type"] }</span>
-						} else {
-							<span class="form-hint">{ pc.T("pages.page_type_hint") }</span>
-						}
-					</div>
-					<!-- Language -->
-					if data.HasMultipleLanguages {
-						<div class="form-group">
-							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
-								{ pc.T("label.language") }
-							}
-							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
-								@selectbox.Trigger(selectbox.TriggerProps{
-									Name:     langSelectName(data.IsEdit),
-									Disabled: data.IsEdit,
-								}) {
-									@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("label.language")})
+								if data.Errors["page_type"] != "" {
+									<span class="form-error">{ data.Errors["page_type"] }</span>
+								} else {
+									<span class="form-hint">{ pc.T("pages.page_type_hint") }</span>
 								}
-								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
-									for _, lang := range data.AllLanguages {
-										@selectbox.Item(selectbox.ItemProps{
-											Value:    lang.Code,
-											Selected: lang.Code == pageCurrentLanguageCode(data.FormValues, data.Language, ""),
+							</div>
+							<!-- Language -->
+							if data.HasMultipleLanguages {
+								<div class="form-group">
+									@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
+										{ pc.T("label.language") }
+									}
+									@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+										@selectbox.Trigger(selectbox.TriggerProps{
+											Name:     langSelectName(data.IsEdit),
+											Disabled: data.IsEdit,
 										}) {
-											{ lang.Name } ({ lang.Code })
+											@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("label.language")})
+										}
+										@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+											for _, lang := range data.AllLanguages {
+												@selectbox.Item(selectbox.ItemProps{
+													Value:    lang.Code,
+													Selected: lang.Code == pageCurrentLanguageCode(data.FormValues, data.Language, ""),
+												}) {
+													{ lang.Name } ({ lang.Code })
+												}
+											}
 										}
 									}
+									if data.IsEdit {
+										if data.Language != nil {
+											<input type="hidden" name="language_code" value={ data.Language.Code }/>
+										}
+										<span class="form-hint">{ pc.T("pages.language_readonly") }</span>
+									} else {
+										<span class="form-hint">{ pc.T("pages.select_language") }</span>
+									}
+								</div>
+							} else if data.Language != nil {
+								<input type="hidden" name="language_code" value={ data.Language.Code }/>
+							}
+							<!-- Translations Panel (Edit mode only) -->
+							if data.IsEdit && data.HasMultipleLanguages {
+								<div class="form-group form-group-full">
+									@translationsPanel(pc, data)
+								</div>
+							}
+							<!-- Body (TinyMCE Editor) -->
+							<div class="form-group form-group-full">
+								@label.Label(label.Props{Class: "block mb-1"}) {
+									{ pc.T("label.content") }
+								}
+								<div class="editor-container">
+									<textarea id="editor" name="body" class="tinymce-editor">
+										{ formVal(data.FormValues, "body", data.PageBody) }
+									</textarea>
+								</div>
+								@editorImageModal(pc)
+								if data.Errors["body"] != "" {
+									<span class="form-error">{ data.Errors["body"] }</span>
+								}
+							</div>
+							<!-- Summary -->
+							<div class="form-group form-group-full">
+								@label.Label(label.Props{For: "summary", Class: "block mb-1"}) {
+									{ pc.T("pages.summary") }
+								}
+								@textarea.Textarea(textarea.Props{
+									ID:          "summary",
+									Name:        "summary",
+									Placeholder: pc.T("pages.summary_placeholder"),
+									Value:       formVal(data.FormValues, "summary", data.PageSummary),
+									Attributes:  templ.Attributes{"rows": "3", "maxlength": "500"},
+								})
+								<span class="form-hint">{ pc.T("pages.summary_hint") }</span>
+							</div>
+							<!-- Featured Image -->
+							<div class="form-group form-group-full">
+								<div
+									class="media-dropzone"
+									x-data="mediaDropzone()"
+									x-init="init()"
+									data-mode="select"
+									data-initial-image={ featuredImageJSON(data.FeaturedImage) }
+								>
+									@label.Label(label.Props{Class: "block mb-1"}) {
+										{ pc.T("media.featured_image") }
+									}
+									@mediaDropzoneSelectArea(pc)
+									<span class="form-hint">{ pc.T("media.featured_image_requirements") }</span>
+									if data.Errors["featured_image_id"] != "" {
+										<span class="form-error">{ data.Errors["featured_image_id"] }</span>
+									}
+									@mediaDropzoneSelectModal(pc)
+								</div>
+							</div>
+							<!-- Hide Featured Image -->
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input
+										type="checkbox"
+										name="hide_featured_image"
+										value="1"
+										checked?={ formChecked(data.FormValues, "hide_featured_image", data.HideFeaturedImage) }
+									/>
+									<span>{ pc.T("pages.hide_featured_image") }</span>
+								</label>
+								<span class="form-hint">{ pc.T("pages.hide_featured_image_hint") }</span>
+							</div>
+							<!-- Exclude from Lists -->
+							<div class="form-group">
+								<label class="checkbox-label">
+									<input
+										type="checkbox"
+										name="exclude_from_lists"
+										value="1"
+										checked?={ formChecked(data.FormValues, "exclude_from_lists", data.ExcludeFromLists) }
+									/>
+									<span>{ pc.T("pages.exclude_from_lists") }</span>
+								</label>
+								<span class="form-hint">{ pc.T("pages.exclude_from_lists_hint") }</span>
+							</div>
+							<!-- Tags -->
+							<div class="form-group form-group-full">
+								@tagSelector(pc, data.Tags)
+							</div>
+							<!-- Categories -->
+							<div class="form-group form-group-full">
+								@categorySelector(pc, data.AllCategories, data.Categories)
+							</div>
+							<!-- URL Aliases -->
+							<div class="form-group form-group-full">
+								@aliasesSection(pc, data)
+							</div>
+							<!-- Video -->
+							<div class="form-group form-group-full">
+								@videoSection(pc, data)
+							</div>
+							<!-- SEO Settings -->
+							<div class="form-group form-group-full">
+								@seoSection(pc, data)
+							</div>
+							<!-- Scheduling -->
+							<div class="form-group form-group-full">
+								@schedulingSection(pc, data)
+							</div>
+						</div>
+						<div class="form-actions">
+							@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
+								{ pc.T("btn.cancel") }
+							}
+							@button.Button(button.Props{Type: button.TypeSubmit}) {
+								if data.IsEdit {
+									{ pc.T("pages.update") }
+								} else {
+									{ pc.T("pages.create") }
 								}
 							}
-							if data.IsEdit {
-								if data.Language != nil {
-									<input type="hidden" name="language_code" value={ data.Language.Code }/>
-								}
-								<span class="form-hint">{ pc.T("pages.language_readonly") }</span>
-							} else {
-								<span class="form-hint">{ pc.T("pages.select_language") }</span>
-							}
 						</div>
-					} else if data.Language != nil {
-						<input type="hidden" name="language_code" value={ data.Language.Code }/>
-					}
-					<!-- Translations Panel (Edit mode only) -->
-					if data.IsEdit && data.HasMultipleLanguages {
-						<div class="form-group form-group-full">
-							@translationsPanel(pc, data)
-						</div>
-					}
-					<!-- Body (TinyMCE Editor) -->
-					<div class="form-group form-group-full">
-						@label.Label(label.Props{Class: "block mb-1"}) {
-							{ pc.T("label.content") }
-						}
-						<div class="editor-container">
-							<textarea id="editor" name="body" class="tinymce-editor">
-								{ formVal(data.FormValues, "body", data.PageBody) }
-							</textarea>
-						</div>
-						@editorImageModal(pc)
-						if data.Errors["body"] != "" {
-							<span class="form-error">{ data.Errors["body"] }</span>
-						}
-					</div>
-					<!-- Summary -->
-					<div class="form-group form-group-full">
-						@label.Label(label.Props{For: "summary", Class: "block mb-1"}) {
-							{ pc.T("pages.summary") }
-						}
-						@textarea.Textarea(textarea.Props{
-							ID:          "summary",
-							Name:        "summary",
-							Placeholder: pc.T("pages.summary_placeholder"),
-							Value:       formVal(data.FormValues, "summary", data.PageSummary),
-							Attributes:  templ.Attributes{"rows": "3", "maxlength": "500"},
-						})
-						<span class="form-hint">{ pc.T("pages.summary_hint") }</span>
-					</div>
-					<!-- Featured Image -->
-					<div class="form-group form-group-full">
-						<div
-							class="media-dropzone"
-							x-data="mediaDropzone()"
-							x-init="init()"
-							data-mode="select"
-							data-initial-image={ featuredImageJSON(data.FeaturedImage) }
-						>
-							@label.Label(label.Props{Class: "block mb-1"}) {
-								{ pc.T("media.featured_image") }
-							}
-							@mediaDropzoneSelectArea(pc)
-							<span class="form-hint">{ pc.T("media.featured_image_requirements") }</span>
-							if data.Errors["featured_image_id"] != "" {
-								<span class="form-error">{ data.Errors["featured_image_id"] }</span>
-							}
-							@mediaDropzoneSelectModal(pc)
-						</div>
-					</div>
-					<!-- Hide Featured Image -->
-					<div class="form-group">
-						<label class="checkbox-label">
-							<input
-								type="checkbox"
-								name="hide_featured_image"
-								value="1"
-								checked?={ formChecked(data.FormValues, "hide_featured_image", data.HideFeaturedImage) }
-							/>
-							<span>{ pc.T("pages.hide_featured_image") }</span>
-						</label>
-						<span class="form-hint">{ pc.T("pages.hide_featured_image_hint") }</span>
-					</div>
-					<!-- Exclude from Lists -->
-					<div class="form-group">
-						<label class="checkbox-label">
-							<input
-								type="checkbox"
-								name="exclude_from_lists"
-								value="1"
-								checked?={ formChecked(data.FormValues, "exclude_from_lists", data.ExcludeFromLists) }
-							/>
-							<span>{ pc.T("pages.exclude_from_lists") }</span>
-						</label>
-						<span class="form-hint">{ pc.T("pages.exclude_from_lists_hint") }</span>
-					</div>
-					<!-- Tags -->
-					<div class="form-group form-group-full">
-						@tagSelector(pc, data.Tags)
-					</div>
-					<!-- Categories -->
-					<div class="form-group form-group-full">
-						@categorySelector(pc, data.AllCategories, data.Categories)
-					</div>
-					<!-- URL Aliases -->
-					<div class="form-group form-group-full">
-						@aliasesSection(pc, data)
-					</div>
-					<!-- Video -->
-					<div class="form-group form-group-full">
-						@videoSection(pc, data)
-					</div>
-					<!-- SEO Settings -->
-					<div class="form-group form-group-full">
-						@seoSection(pc, data)
-					</div>
-					<!-- Scheduling -->
-					<div class="form-group form-group-full">
-						@schedulingSection(pc, data)
-					</div>
-				</div>
-				<div class="form-actions">
-					@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
-						{ pc.T("btn.cancel") }
-					}
-					@button.Button(button.Props{Type: button.TypeSubmit}) {
-						if data.IsEdit {
-							{ pc.T("pages.update") }
-						} else {
-							{ pc.T("pages.create") }
-						}
-					}
-				</div>
-			</form>
-		}
+					</form>
+				}
+			</div>
+			if data.Review!=nil {
+				@EditorialReviewPanel(pc, *data.Review)
+			}
+		</div>
 		@pageFormScripts(pc, data)
 	}
 }
@@ -2314,7 +2342,7 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 	@table.Row() {
 		@table.Cell() {
 			@badge.Badge(badge.Props{Class: "badge-info"}) {
-				#{ fmt.Sprintf("%d", version.ID) }
+				#{ fmt.Sprint(versionDisplayNumber(version)) }
 			}
 		}
 		@table.Cell() {
@@ -2324,7 +2352,20 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 			}
 		}
 		@table.Cell() {
-			<span class="user-name">{ version.ChangedByName }</span>
+			if version.VerifiedSource!="migration" && version.VerifiedSource!="system" {
+				<span class="user-name">{ version.ChangedByName }</span>
+			}
+			if version.VerifiedSource=="system" {
+				<p>{ pc.T("review.system") }</p>
+			}
+			if version.VerifiedSource=="migration" {
+				<p>{ pc.T("review.baseline") }</p>
+			} else {
+				<p class="text-sm">{ version.VerifiedSource }</p>
+				if version.RegisteredClient!="" {
+					<p class="text-sm break-words">{ version.RegisteredClient }</p>
+				}
+			}
 		}
 		@table.Cell() {
 			{ version.CreatedAt }
@@ -2332,6 +2373,9 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 		@table.Cell() {
 			<div class="action-buttons">
 				<div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d/versions/%d", data.PageID, version.ID)}) {
+						{ pc.T("review.compare") }
+					}
 					<!-- Preview Button -->
 					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showPreview = true", "title": pc.T("versions.preview")}}) {
 						@iconEye()
@@ -2351,7 +2395,7 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 					>
 						<div class="modal modal-lg" @click.stop>
 							<div class="modal-header">
-								<h3 class="modal-title">{ pc.T("versions.preview_title") } #{ fmt.Sprintf("%d", version.ID) }</h3>
+								<h3 class="modal-title">{ pc.T("versions.preview_title") } #{ fmt.Sprint(versionDisplayNumber(version)) }</h3>
 								<button type="button" class="modal-close" @click="showPreview = false" aria-label={ pc.T("btn.close") }>&times;</button>
 							</div>
 							<div class="modal-body">
@@ -2359,7 +2403,14 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 									<div class="version-meta">
 										<strong>{ pc.T("label.title") }:</strong> { version.Title }
 										<br/>
-										<strong>{ pc.T("versions.changed_by") }:</strong> { version.ChangedByName }
+										<strong>{ pc.T("versions.changed_by") }:</strong>
+										if version.VerifiedSource=="migration" {
+											{ pc.T("review.baseline") }
+										} else if version.VerifiedSource=="system" {
+											{ pc.T("review.system") }
+										} else {
+											{ version.ChangedByName }
+										}
 										<br/>
 										<strong>{ pc.T("versions.date") }:</strong> { version.CreatedAt }
 									</div>
@@ -2404,7 +2455,7 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 								<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
 							</div>
 							<div class="modal-body">
-								<p>{ pc.T("versions.restore_confirm") } <strong>#{ fmt.Sprintf("%d", version.ID) }</strong>?</p>
+								<p>{ pc.T("versions.restore_confirm") } <strong>#{ fmt.Sprint(versionDisplayNumber(version)) }</strong>?</p>
 								<p class="text-muted">{ pc.T("versions.restore_note") }</p>
 							</div>
 							<div class="modal-footer">

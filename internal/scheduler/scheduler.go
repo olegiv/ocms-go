@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
+	"github.com/olegiv/ocms-go/internal/review"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/webhook"
@@ -165,7 +166,14 @@ func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, pag
 		if _, err := work.TrackSystem(ctx, page.ID); err != nil {
 			return err
 		}
-		_, err := work.Q.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
+		current, err := work.Q.GetPageByID(ctx, page.ID)
+		if err != nil {
+			return err
+		}
+		if err = review.ValidatePublication(ctx, work.Q, current); err != nil {
+			return err
+		}
+		_, err = work.Q.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
 			PublishedAt: sql.NullTime{Time: now, Valid: true},
 			UpdatedAt:   now,
 			ID:          page.ID,

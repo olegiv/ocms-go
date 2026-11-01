@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/api/v2/pages"
 	"github.com/olegiv/ocms-go/internal/contentpath"
 	"github.com/olegiv/ocms-go/internal/idempotency"
+	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -32,6 +33,7 @@ type Service struct {
 	LinkPolicy                draft.LinkPolicy
 	Authorize                 func(context.Context, *store.Queries) error
 	CheckPolicy               func(context.Context, *store.Queries) error
+	PreviewTTL                time.Duration
 	ClientName, ClientVersion string
 	Now                       func() time.Time
 }
@@ -264,17 +266,11 @@ func (s *Service) receipt(ctx context.Context, p *pages.Page) (SaveResult, error
 	if err = json.Unmarshal([]byte(fact.ValidatedJson), &v); err != nil {
 		return SaveResult{}, err
 	}
-	admin, preview := s.urls(v.SiteURL, p.ID, p.Slug, p.LanguageCode)
-	return SaveResult{PageID: p.ID, Revision: p.Revision, AdminURL: admin, PreviewURL: preview, Issues: slices.Clone(v.Issues), TranslationStatus: v.TranslationStatus}, nil
+	adminURL, previewURL := s.urls(v.SiteURL, p.ID, p.LanguageCode, p.Revision)
+	return SaveResult{PageID: p.ID, Revision: p.Revision, AdminURL: adminURL, PreviewURL: previewURL, Issues: slices.Clone(v.Issues), TranslationStatus: v.TranslationStatus}, nil
 }
 
-func (s *Service) urls(origin string, id int64, slug, language string) (string, string) {
-	path := "/" + slug
-	// A default-language read may be unavailable during a replay. URLs use the
-	// explicit routable language, which the existing frontend accepts for defaults too.
-	if language != "" {
-		path = "/" + language + path
-	}
+func (s *Service) urls(origin string, id int64, language string, revision int64) (string, string) {
 	origin = strings.TrimRight(origin, "/")
-	return fmt.Sprintf("%s/admin/pages/%d", origin, id), origin + path
+	return fmt.Sprintf("%s/admin/pages/%d", origin, id), preview.SessionURL(origin, language, id, revision)
 }

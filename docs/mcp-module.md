@@ -10,7 +10,7 @@ owned draft creation/update/translation with `mcp:drafts`, retained retries,
 CAS, provenance and existing taxonomy/media. Publishing and deletion remain
 human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
 [OAuth](oauth.md) records the completed R1.1 authentication acceptance and
-pending fresh R1.5 cloud-client checks.
+R1.5 staging results and pending R1.6 acceptance in PHASE5 notes.
 
 ## Features
 
@@ -516,8 +516,10 @@ for REST and MCP together:
 Enable draft authoring in Admin → MCP Server and grant `mcp:drafts`. The
 new tools are `create_draft_page`, `update_draft_page`,
 `create_translation_draft`, `get_my_draft`, `list_my_drafts` and
-`get_translation_status`. `create_preview_link` is registered as explicitly
-unavailable until R1.6. Three content mutations require stable UUID request
+`get_translation_status`. R1.6 enables explicit revision-pinned
+`create_preview_link` with expiring bearer access and lifecycle revocation.
+Save/read results remain session-only; see [Editorial review](editorial-review.md).
+Three content mutations require stable UUID request
 IDs; updates require the last-read revision. Own reads do not depend on the
 separate general drafts policy. All writes use the shared atomic service.
 The per-user rolling quota is 60 new successful content operations per hour;
@@ -533,8 +535,8 @@ include their current revision. Generic page reads retain their existing draft
 policy; authoring context also supports the caller's own opted-in plain drafts.
 
 OAuth acceptance is complete for R1.1; see [OAuth](oauth.md). Real CMS draft
-creation/update/translation tools are implemented locally in R1.5; editorial review remains R1.6 and release
-hardening R1.7. This section grants no deployment or remote Git action.
+creation/update/translation tools have R1.5 staging results. R1.6 editorial
+review/previews are implemented locally; release hardening remains R1.7. This section grants no deployment or remote Git action.
 
 
 ## Page authoring foundations (R1.2 development)

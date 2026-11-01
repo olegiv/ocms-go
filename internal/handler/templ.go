@@ -1339,7 +1339,7 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 	var pages []adminviews.PageListItemView
 	for _, p := range data.Pages {
 		item := adminviews.PageListItemView{
-			ID:        p.ID,
+			ID: p.ID, Revision: p.Revision, AIEditable: data.ReviewStates[p.ID].AiEditable, UncheckedClaims: data.ReviewStates[p.ID].UncheckedClaims,
 			Title:     p.Title,
 			Slug:      p.Slug,
 			PublicURL: data.PagePublicURLs[p.ID],

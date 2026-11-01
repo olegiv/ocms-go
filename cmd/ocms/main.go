@@ -46,6 +46,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/oauth"
+	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
 	"github.com/olegiv/ocms-go/internal/security"
@@ -2046,6 +2047,7 @@ func run() (runErr error) {
 
 	// Middleware stack
 	r.Use(chimw.RequestID)
+	r.Use(preview.RedactRequest)
 	// Snapshot trusted-proxy status before RealIP overwrites RemoteAddr,
 	// so downstream code (e.g. X-Forwarded-Proto resolution) can still
 	// check the original peer via middleware.WasFromTrustedProxy.
@@ -2079,6 +2081,7 @@ func run() (runErr error) {
 	// Third-party hosts join the CSP only while the module loading them is active.
 	securityConfig.CSPSources = moduleRegistry.ActiveCSPSources
 	r.Use(middleware.SecurityHeaders(securityConfig))
+	r.Use(preview.Middleware)
 	slog.Info("security headers middleware initialized",
 		"hsts", !cfg.IsDevelopment(),
 		"hsts_preload", securityConfig.HSTSPreload,
@@ -2141,6 +2144,7 @@ func run() (runErr error) {
 	usersHandler.SetMFAService(mfaService)
 	usersHandler.SetLoginProtection(loginProtection)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
+	pagesHandler.SetPreviewTTL(time.Duration(cfg.PreviewLinkTTLHours) * time.Hour)
 	pagesHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
 	pagesHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	if cfg.BlockSuspiciousPageHTML {
@@ -2232,6 +2236,19 @@ func run() (runErr error) {
 		// interface from a single GET of the homepage.
 		r.Use(middleware.LinkHeaders)
 	}
+
+	// Preview routes intentionally bypass analytics and normal page caches.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.OptionalLoadUser(sessionManager, db))
+		r.Route("/preview", func(pr chi.Router) {
+			pr.Get("/pages/{id}/revisions/{revision}", frontendHandler.PreviewSession)
+			limiter := middleware.NewGlobalRateLimiter(2, 20)
+			pr.With(limiter.Middleware()).Get("/share/{token}", frontendHandler.PreviewShare)
+			pr.Get("/", http.NotFound)
+			pr.NotFound(http.NotFound)
+		})
+		r.Get("/{lang}/preview/pages/{id}/revisions/{revision}", frontendHandler.PreviewSession)
+	})
 
 	// Public discovery files are unprefixed routes. Keep them outside the
 	// language-aware child router so /{lang}/... exposes only frontend content
@@ -2359,6 +2376,10 @@ func run() (runErr error) {
 			r.Post(handler.RoutePages+handler.RouteSuffixBulkDelete, pagesHandler.BulkDelete)
 			r.Post(handler.RoutePagesID+"/publish", pagesHandler.TogglePublish)
 			r.Get(handler.RoutePagesID+"/versions", pagesHandler.Versions)
+			r.Get(handler.RoutePagesID+"/versions/{versionId}", pagesHandler.RevisionReview)
+			r.Post(handler.RoutePagesID+"/claims/{index}", pagesHandler.CheckClaim)
+			r.Post(handler.RoutePagesID+"/preview-links", pagesHandler.CreatePreviewLink)
+			r.Post(handler.RoutePagesID+"/preview-links/{linkID}/revoke", pagesHandler.RevokePreviewLink)
 			r.Post(handler.RoutePagesID+"/versions/{versionId}/restore", pagesHandler.RestoreVersion)
 			r.Post(handler.RoutePagesID+handler.RouteSuffixTranslate, pagesHandler.Translate)
 

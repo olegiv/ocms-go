@@ -6,6 +6,7 @@ package mcpserver
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/ai/authoring"
 	"github.com/olegiv/ocms-go/internal/ai/draft"
@@ -14,6 +15,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/oauth"
+	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -77,6 +79,9 @@ func (m *Module) authoringService(ctx context.Context, call *toolCall) (*authori
 		return nil, actor, err
 	}
 	service := &authoring.Service{Q: m.svc.queries, Pages: m.svc.pages, SiteURL: origin, Access: grounding.Access{UserID: call.identity.userID, OwnDrafts: true, AllDrafts: draftsVisible(actor)}, LinkPolicy: draft.LinkPolicy(linkPolicy(call.settings)), ClientName: call.clientName, ClientVersion: call.clientVersion, Authorize: func(ctx context.Context, q *store.Queries) error { return m.authorizeDraftCall(ctx, q, call.identity) }}
+	if m.ctx.Config != nil && m.ctx.Config.PreviewLinkTTLHours > 0 {
+		service.PreviewTTL = time.Duration(m.ctx.Config.PreviewLinkTTLHours) * time.Hour
+	}
 	service.CheckPolicy = func(ctx context.Context, q *store.Queries) error {
 		settings, err := loadSettings(ctx, q.DBHandle())
 		if err != nil {
@@ -156,9 +161,10 @@ func (m *Module) getTranslationStatus(ctx context.Context, call *toolCall, in au
 	return s.TranslationStatus(ctx, a, in)
 }
 
-func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, _ authoring.PreviewInput) (authoring.SaveResult, error) {
-	if _, _, err := m.authoringService(ctx, call); err != nil {
-		return authoring.SaveResult{}, err
+func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in authoring.PreviewInput) (preview.Link, error) {
+	s, a, err := m.authoringService(ctx, call)
+	if err != nil {
+		return preview.Link{}, err
 	}
-	return authoring.SaveResult{}, &v2.Error{Kind: v2.ErrForbidden, MachineCode: "preview_unavailable", Msg: "Share links are unavailable until R1.6; use the draft's session-authenticated preview URL"}
+	return s.CreatePreviewLink(ctx, a, in)
 }

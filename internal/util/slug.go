@@ -115,7 +115,7 @@ func IsValidLangCode(s string) bool {
 // the router.
 func IsReservedRouteSegment(s string) bool {
 	switch s {
-	case "admin", "api", "blog", "uploads", "static", "themes", "health",
+	case "admin", "api", "blog", "uploads", "static", "themes", "health", "preview",
 		"login", "logout", "language", "forms", "search", "tag", "category",
 		"page", "session", "account", "oauth", "csp-report", "analytics", "embed", "example":
 		return true
@@ -130,7 +130,7 @@ func IsReservedRouteSegment(s string) bool {
 // Segments that own only deeper paths (forms/{slug}, uploads/...) or other
 // methods (POST /logout) stay free for pages. TestExactRoutesReservePageSlugs
 // (cmd/ocms) keeps the list equal to the router's exact routes.
-var reservedPageSlugs = []string{"account", "admin", "blog", "example", "health", "login", "search"}
+var reservedPageSlugs = []string{"account", "admin", "blog", "example", "health", "login", "preview", "search"}
 
 // IsReservedPageSlug reports whether a page slug or single-segment alias equals
 // the exact URL of an application route, which answers it instead of the page.
@@ -170,6 +170,7 @@ var reservedRoutePaths = []string{
 	"login/mfa",
 	"login/mfa/setup",
 	"oauth/authorize",
+	"preview/**",
 	"session/get",
 	"session/set",
 	"static/dist/*/**",
@@ -223,7 +224,7 @@ func IsReservedLanguageCode(s string) bool {
 func IsPrivateRoutePath(path string) bool {
 	first, _, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
 	switch first {
-	case "admin", "api", "account":
+	case "admin", "api", "account", "preview":
 		return true
 	default:
 		return false

@@ -27,6 +27,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -573,11 +575,23 @@ func TestFrontendHandler_TrustedPageBody_SanitizesWhenEnabled(t *testing.T) {
 func createDraftPage(t *testing.T, db *sql.DB, authorID int64) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO pages (title, slug, body, status, author_id, page_type) VALUES (?, ?, ?, ?, ?, ?)`,
-		"Draft Page", "draft-page", "<p>Draft content</p>", "draft", authorID, "post",
+		`INSERT INTO pages (title, slug, body, status, author_id, page_type, language_code) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		"Draft Page", "draft-page", "<p>Draft content</p>", "draft", authorID, "post", "en",
 	)
 	if err != nil {
 		t.Fatalf("failed to create draft page: %v", err)
+	}
+	page, err := store.New(db).GetPageBySlug(t.Context(), "draft-page")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordFrontendFixture(t, db, page)
+}
+
+func recordFrontendFixture(t *testing.T, db *sql.DB, page store.Page) {
+	t.Helper()
+	if _, err := pagewrite.InTx(t.Context(), db, provenance.Principal{UserID: page.AuthorID, Source: "human", Transport: "test"}, func(work *pagewrite.Tx) error { work.Created(page); return nil }); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1369,6 +1383,11 @@ func TestAdminDraftLinkServesOnlyToStaff(t *testing.T) {
 	}
 
 	queries := store.New(db)
+	recorded, err := queries.GetPageByID(t.Context(), frenchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordFrontendFixture(t, db, recorded)
 	router := languageAwareAliasTestRouter(db, NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil))
 	for _, slug := range []string{"draft-page", "brouillon"} {
 		page, err := queries.GetPageBySlug(context.Background(), slug)

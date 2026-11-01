@@ -30,6 +30,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/seo"
 	mdneg "github.com/olegiv/ocms-go/internal/seo/markdown"
@@ -928,8 +929,8 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 				draftPage, draftErr := h.queries.GetPageBySlug(ctx, slug)
 				if draftErr == nil && draftPage.Status != PageStatusPublished &&
 					draftPage.LanguageCode == routeLanguageCode {
-					page = draftPage
-					err = nil
+					h.renderRevisionPreview(w, r, draftPage.ID, draftPage.Revision)
+					return
 				}
 			}
 
@@ -2430,7 +2431,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	// Populate module HTML for templ-based layouts by calling known template funcs.
 	// HTML themes call these directly; templ layouts need the aggregated output.
 	// Fetched per-request so module toggle takes effect without restart.
-	if h.moduleFuncsProvider != nil {
+	if h.moduleFuncsProvider != nil && !preview.IsRequest(ctx) {
 		funcs := h.moduleFuncsProvider.AllTemplateFuncs()
 		data.ModuleHeadHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "privacyHead", "analyticsExtHead", "embedHead")
 		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, pageOrigin, "informerBar", "analyticsExtBody")
@@ -2518,7 +2519,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	data.FooterNav = data.FooterMenu
 
 	// Load widgets for the active theme
-	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil {
+	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil && !preview.IsRequest(ctx) {
 		data.Widgets = h.widgetService.GetAllWidgetsForTheme(ctx, activeTheme.Name)
 	}
 
