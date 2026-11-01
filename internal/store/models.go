@@ -84,6 +84,22 @@ type ContentProvenance struct {
 	CreatedAt     time.Time     `json:"created_at"`
 }
 
+type EditorialPreset struct {
+	Slug         string        `json:"slug"`
+	LanguageCode string        `json:"language_code"`
+	Name         string        `json:"name"`
+	Instructions string        `json:"instructions"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+}
+
+type EditorialStyleGuide struct {
+	LanguageCode string        `json:"language_code"`
+	Body         string        `json:"body"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+}
+
 type Event struct {
 	ID         int64         `json:"id"`
 	Level      string        `json:"level"`

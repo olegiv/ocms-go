@@ -2147,6 +2147,7 @@ func run() (runErr error) {
 		slog.Info("page suspicious HTML blocking policy enabled")
 	}
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
+	editorialHandler := handler.NewEditorialHandler(db, renderer, sessionManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
 	taxonomyHandler.SetCacheManager(cacheManager)
@@ -2466,6 +2467,7 @@ func run() (runErr error) {
 
 			// Configuration routes
 			registerSettingsRoutes(r, handler.RouteConfig, configHandler.List, configHandler.Update)
+			registerSettingsRoutes(r, handler.RouteEditorial, editorialHandler.Get, editorialHandler.Update)
 
 			// Theme management routes (activation is admin only)
 			r.Get("/themes", themesHandler.List)

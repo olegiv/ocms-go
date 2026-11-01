@@ -754,11 +754,11 @@ push/deployment has been authorized; MCP page-authoring tools remain R1.5.
 
 ### Iteration R1.3: Draft Contract, Validation Feedback, Safe HTML, Link Policy
 
-**Status: complete locally; uncommitted (2026-11-01).** Work is on
-`codex/phase5-r1.3-draft-contract`, based on `fc25f0d2`. Full tests, focused
-race/fuzz/drift checks and live local HTTP/browser verification passed. No commit,
-push or deployment was performed. See `docs/draft-contract.md` and the R1.3
-implementation notes below. R1.4 has not started.
+**Status: complete locally; committed as `67fb3980` (2026-11-01).** Work was
+verified on `codex/phase5-r1.3-draft-contract`, based on `fc25f0d2`. Full tests,
+focused race/fuzz/drift checks and live local HTTP/browser verification passed.
+No push or deployment was performed. See `docs/draft-contract.md` and the R1.3
+implementation notes below. R1.4 is the active iteration.
 
 - `internal/ai/draft`: types, schema, `Validate` / `Normalize`, the **issue catalog** (codes, severities,
   en/ru messages, hints), distinct create/update presence rules, slug derivation, md → safe HTML,
@@ -768,6 +768,13 @@ implementation notes below. R1.4 has not started.
   policy table, remote inline-image rejection and metadata-only updates preserving human HTML.
 
 ### Iteration R1.4: Authoring Context — Grounding, Editorial Guidance, MCP Resources and Prompts
+
+**Status: complete locally, uncommitted (2026-11-01).**
+Work is on `codex/phase5-r1.4-authoring-context`, based on R1.3 `67fb3980`.
+No commit, push or deployment is authorized. See `docs/authoring-context.md`.
+Local SDK, HTTP and browser checks passed; fresh cloud-client compatibility
+is not claimed. Implementation notes and remaining R1.5 work are below.
+
 - Grounding per §0.3:
   - extract the pure resolvers, with frontend and middleware switched over and their tests green;
   - bounded redirect walk;
@@ -2500,3 +2507,120 @@ R1.3 is complete locally. No MCP CMS-authoring tools were registered and no
 real-client authoring acceptance was claimed. Next is R1.4: shared grounding
 and visibility resolvers, editorial guidance, MCP resources and prompts. Stop
 here for human review; commit, push and deployment remain separate actions.
+
+### Iteration R1.4 — Shared Grounding and Authoring Context
+
+Implemented locally on `codex/phase5-r1.4-authoring-context`, based on R1.3
+`67fb3980`. No commit, push or deployment occurred. Existing staging remains
+on `c885da9071eb`; this iteration did not use its accounts or credentials.
+
+**Grounding and existing consumers**
+
+- Extracted the existing language, alias, canonical page, taxonomy/form and
+  wildcard redirect rules into neutral `internal/contentpath`. Frontend,
+  language/redirect middleware, importer and draft-origin callers now use
+  these primitives. Grounding uses them too, without an HTTP client or a
+  second approximation of frontend routing.
+- References accept page IDs, slugs, paths/aliases and normalized same-origin
+  URLs. Redirect walks stop at three hops and track visited paths. Explicit
+  languages, default-language rules, reserved routes, IDNA/default ports,
+  encoded paths, taxonomy/form precedence and canonical ID redirects are
+  covered by executed frontend/resolver parity fixtures.
+- Preserved the general draft-read policy. The separate context exception
+  requires `mcp:drafts`, the current user as owner, AI opt-in and an
+  unscheduled draft. Missing and inaccessible references have the same
+  unresolved result. No preview/share token is generated.
+- Context retains every selected role and page/revision identity. Duplicate
+  references retain their entries and use the first recorded snapshot once.
+  Markdown conversion preserves supported existing media and captions,
+  reports losses and never rewrites authoritative HTML. Follow-up page
+  list/detail results expose the current revision for comparison.
+- Context data caps at 46,000 characters, leaving room for shared instructions
+  below the 50,000-character client bound. Excerpts/guidance have explicit
+  truncation flags; reference identities/roles are never silently dropped.
+  Categories, tags, languages, link candidates and existing images have
+  deterministic paging. Sparse legacy media rows advance the storage offset.
+  Media LIKE search escapes literal wildcards and includes translations.
+- Added the bounded example-overlap helper: at least 40 five-word shingles
+  and 60% candidate coverage produce a warning. Source/parent references and
+  short quotations do not trigger it. R1.5 will consume this during saves;
+  R1.4 does not claim factual verification or plagiarism detection.
+
+**Editorial guidance and MCP**
+
+- Added core editorial tables, one site-default guide, a Russian override
+  and six seeded presets: blog post, page, FAQ, how-to, release notes and bot
+  blog. Per-language overrides replace defaults; clearing restores fallback.
+  Migration rollback/reapply was tested against a preserved existing page.
+- Added `/admin/editorial` with existing templUI components and English/
+  Russian strings. Saves use the authenticated admin, recheck the current
+  database role, respect demo restrictions and retain submitted text on
+  validation failure. Existing Fetch Metadata CSRF protects the route.
+- Added four read-only tools: `get_authoring_context`,
+  `get_page_draft_schema`, `get_style_guide` and `list_presets`. The default
+  catalog is now 14 tools; CMS-authoring mutations remain R1.5.
+- Added versioned `write_page`, `translate_page` and `seo_review` prompts.
+  Optional `preset`, `language` and compact `refs` arguments are single
+  tokens. The conversation supplies the topic; a multi-word brief uses the
+  full context tool. Prompt instructions and tool instructions share one
+  definition and versioned golden fixtures. Site content is JSON-escaped in
+  one labelled data envelope, never interpolated as instruction markup.
+- Registered eight resource variants/templates for style guides, presets,
+  taxonomy, languages, draft schema and issue catalog. Every resource returns
+  the complete equivalent tool result; all three prompts use the same
+  context/instructions as their equivalent task. Added active-language
+  filtering to MCP list/search and the existing REST page list.
+- Explicit empty tools/prompts/resources capabilities match the server card,
+  without subscriptions/list-change notifications. Admin MCP instructions
+  cap at 2,400 characters, keeping complete instructions within 4,096 even
+  with scratch orientation; older stored text is only clipped for rendering.
+- Prompt/resource reads use current authentication/revocation, the shared
+  25-second cancellation bound, scrubbed errors and one principal-aware log
+  record. Arguments, content, full resource URIs and raw exception text are
+  excluded from these logs. Scratch tools stay behind their existing flag
+  until their planned R1.5 removal. No dependency was added.
+
+**Executed verification and limits**
+
+- Two direct regressions were reproduced and corrected during implementation:
+  encoded router paths initially disagreed with frontend 404/alias handling;
+  mixed anonymous/named SQL parameters initially emptied taxonomy paging.
+  The corrected shared raw/decoded-path handling and fully named queries pass
+  their focused before/after checks and the complete suite.
+- All ten deliberate safeguard-removal probes failed the intended tests,
+  then were restored byte-for-byte. They cover shared consumers, visibility,
+  hop/context limits, prompt boundaries, tool equivalents, capabilities,
+  cancellation, no outbound content fetches and fresh administrator checks.
+- `scripts/test-gate.sh`: all 64 test packages passed uncached. Race checks
+  passed for grounding, prompts, contentpath, editorial, MCP, handlers, v2
+  pages and search service. The 15-second resolver fuzz run passed 131,040
+  executions. A small-fixture context benchmark measured about 0.51 ms/op;
+  this is not a large-site performance claim.
+- Vet, Staticcheck and Errcheck passed. Whole-tree GolangCI reports the same
+  five pre-existing findings in unchanged layout/MFA tests and local weather
+  source; no new finding was introduced. Govulncheck reports zero reachable/
+  imported-package vulnerabilities and one uncalled module advisory.
+- Regenerated sqlc/templ, built assets from the existing lockfile, rebuilt
+  the binary and restarted only the disposable loopback app. Its database
+  and uploads are a separate copy; the R1.3 synthetic fixture is preserved.
+  Live SDK checks verify all prompt/resource equivalents, scope/ownership,
+  revocation, language filtering, revisions, existing images and read-only
+  behavior. Raw curl `tools/list` verifies the default catalog too.
+- The 27 HTTP checks cover readiness, discovery, published language routes,
+  REST filters/revisions, draft privacy, admin login/form, guide/preset
+  overrides and fallback, invalid/oversized forms and cross-site rejection.
+  Actual browser interaction saved an English override and restored site
+  inheritance. Synthetic fixture keys were deactivated on success/failure;
+  no key value was written to chat, command arguments or repository files.
+- Source docs and local wiki were updated while preserving prior wiki work;
+  no wiki publication occurred. Evidence is under ignored
+  `output/r14-validation/`, including `verification.json`,
+  `behavior-verification.md`, source/candidate manifests and the GUI capture.
+  Runtime/test source fingerprint:
+  `9bc88132c813b4e063903a1df67760bd2a99f336a661bbc9bd7ffdcf1ba5c13c`.
+
+R1.4 is complete locally. The app remains at `http://127.0.0.1:18082`, with
+Editorial guidance open for inspection. No fresh Claude/ChatGPT cloud-client
+acceptance or staging/production migration is claimed. Next is R1.5: real
+draft creation/update/translation tools and their policy/acceptance checks.
+Stop here for human review; commit, push and deployment need separate approval.

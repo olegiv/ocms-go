@@ -8101,6 +8101,101 @@
             "id": "draft.issues.media_conversion_lossy.hint",
             "message": "Choose matching media from the library before replacing this body.",
             "translation": "Перед заменой текста выберите соответствующий файл из медиатеки."
+        },
+        {
+            "id": "nav.editorial",
+            "message": "Editorial guidance",
+            "translation": "Редакционные правила"
+        },
+        {
+            "id": "editorial.title",
+            "message": "Editorial guidance",
+            "translation": "Редакционные правила"
+        },
+        {
+            "id": "editorial.description",
+            "message": "Set the style and article presets your connected AI apps receive.",
+            "translation": "Настройте стиль и шаблоны статей для подключённых ИИ-приложений."
+        },
+        {
+            "id": "editorial.language",
+            "message": "Guidance language",
+            "translation": "Язык правил"
+        },
+        {
+            "id": "editorial.default",
+            "message": "Site default",
+            "translation": "Общие правила сайта"
+        },
+        {
+            "id": "editorial.guide",
+            "message": "Style guide",
+            "translation": "Руководство по стилю"
+        },
+        {
+            "id": "editorial.guide_help",
+            "message": "Use plain text or Markdown. Describe audience, tone, structure and claims that need review. Maximum 8,000 characters.",
+            "translation": "Используйте текст или Markdown. Опишите аудиторию, тон, структуру и утверждения, требующие проверки. До 8000 символов."
+        },
+        {
+            "id": "editorial.guide_body",
+            "message": "Writing guidance",
+            "translation": "Правила написания"
+        },
+        {
+            "id": "editorial.inherited",
+            "message": "This language uses the site default. Saving creates an override.",
+            "translation": "Для этого языка используются общие правила сайта. Сохранение создаст отдельные правила."
+        },
+        {
+            "id": "editorial.reset_help",
+            "message": "Leave the guide empty and save to use the site default again.",
+            "translation": "Очистите правила и сохраните, чтобы снова использовать общие правила сайта."
+        },
+        {
+            "id": "editorial.save_guide",
+            "message": "Save style guide",
+            "translation": "Сохранить правила"
+        },
+        {
+            "id": "editorial.presets",
+            "message": "Article presets",
+            "translation": "Шаблоны статей"
+        },
+        {
+            "id": "editorial.preset_help",
+            "message": "Choose a preset to edit its outline and authoring instructions. These settings guide drafting; publication remains a human action.",
+            "translation": "Выберите шаблон для настройки структуры и правил подготовки. Публикацию выполняет человек."
+        },
+        {
+            "id": "editorial.preset_name",
+            "message": "Preset name",
+            "translation": "Название шаблона"
+        },
+        {
+            "id": "editorial.preset_instructions",
+            "message": "Outline and instructions",
+            "translation": "Структура и инструкции"
+        },
+        {
+            "id": "editorial.reset_preset_help",
+            "message": "Clear both fields and save to restore this language’s default preset.",
+            "translation": "Очистите оба поля и сохраните, чтобы вернуть общий шаблон для этого языка."
+        },
+        {
+            "id": "editorial.save_preset",
+            "message": "Save preset",
+            "translation": "Сохранить шаблон"
+        },
+        {
+            "id": "editorial.saved",
+            "message": "Editorial guidance saved.",
+            "translation": "Редакционные правила сохранены."
+        },
+        {
+            "id": "editorial.invalid",
+            "message": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000).",
+            "translation": "Проверьте язык и шаблон. Общие правила: 1–8000 символов; шаблон: название (1–100) и инструкции (1–4000)."
         }
     ]
 }

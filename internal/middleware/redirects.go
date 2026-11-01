@@ -8,11 +8,10 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/contentpath"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -82,199 +81,30 @@ func (rm *RedirectsMiddleware) InvalidateCache() {
 	rm.mu.Unlock()
 }
 
-// Handler returns the middleware handler function.
+// Handler returns the shared content redirect middleware.
 func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Admin, API and account routes are never subject to content redirects.
-		path := r.URL.Path
-		if util.IsPrivateRoutePath(path) {
+		if util.IsPrivateRoutePath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
-
-		// Check for matching redirect
-		redirects := rm.getRedirects()
-		for _, rd := range redirects {
-			matched, captures := rm.matchPathWithCaptures(path, rd.SourcePath, rd.IsWildcard)
-			if matched {
-				targetURL := rm.buildTargetURL(rd, captures)
-
-				// For _blank target, we can't do a server redirect to open a new window
-				// The browser will follow the redirect in the same window
-				// _blank is mainly useful for links, but we still process it
-				// as a regular redirect (the target_type is informational for HTML links)
-
-				// Preserve query string
-				if r.URL.RawQuery != "" {
-					if strings.Contains(targetURL, "?") {
-						targetURL += "&" + r.URL.RawQuery
-					} else {
-						targetURL += "?" + r.URL.RawQuery
-					}
-				}
-
-				slog.Debug("redirect matched",
-					"source", path,
-					"target", targetURL,
-					"status", rd.StatusCode,
-					"wildcard", rd.IsWildcard,
-				)
-
-				// Normalize and validate redirect target to prevent open redirects.
-				// Replace backslashes, as some browsers treat them like forward slashes.
-				safeTarget := strings.ReplaceAll(targetURL, "\\", "/")
-				parsedTarget, err := url.Parse(safeTarget)
-				if err != nil || parsedTarget.Hostname() != "" {
-					// Invalid or external redirect target: reject the redirect.
-					slog.Warn("blocked unsafe redirect target",
-						"source", path,
-						"target", targetURL,
-						"error", err,
-					)
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-
-				http.Redirect(w, r, parsedTarget.String(), int(rd.StatusCode))
-				return
-			}
+		target, status, matched, err := contentpath.FirstRedirect(rm.getRedirects(), r.URL.Path, r.URL.RawQuery)
+		if err != nil {
+			slog.Warn("blocked unsafe redirect target", "source", r.URL.Path)
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
-
+		if matched {
+			http.Redirect(w, r, target, status)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-// matchPathWithCaptures matches a request path against a source pattern and returns captured wildcard segments.
-// For non-wildcard patterns, it returns a simple equality check with no captures.
-// For wildcard patterns:
-//   - "*" captures exactly one path segment (when standalone)
-//   - "**" captures zero or more path segments (joined with "/")
-//   - Trailing "*" (e.g., /user/login*) matches any path starting with that prefix
-func (rm *RedirectsMiddleware) matchPathWithCaptures(requestPath, sourcePath string, isWildcard bool) (bool, []string) {
-	if !isWildcard {
-		return requestPath == sourcePath, nil
-	}
-
-	// Handle trailing prefix wildcard (e.g., /user/login*)
-	// Must end with single * but not ** (which is handled by segment matching)
-	if strings.HasSuffix(sourcePath, "*") && !strings.HasSuffix(sourcePath, "**") {
-		// Check if it's a standalone segment wildcard like /blog/*
-		// by verifying the character before * is not /
-		prefix := strings.TrimSuffix(sourcePath, "*")
-		if !strings.HasSuffix(prefix, "/") {
-			// This is a prefix wildcard like /user/login* (not /user/login/*)
-			reqPath := strings.TrimSuffix(requestPath, "/")
-			prefixNorm := strings.TrimSuffix(prefix, "/")
-
-			// Match exact prefix or prefix followed by more path
-			if reqPath == prefixNorm || strings.HasPrefix(reqPath, prefix) {
-				// Capture everything after the prefix
-				captured := strings.TrimPrefix(reqPath, prefix)
-				captured = strings.TrimPrefix(captured, "/")
-				return true, []string{captured}
-			}
-			return false, nil
-		}
-	}
-
-	sourceParts := strings.Split(strings.Trim(sourcePath, "/"), "/")
-	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
-
-	var captures []string
-	matched := matchPathPartsWithCaptures(sourceParts, requestParts, 0, 0, &captures)
-	return matched, captures
+func (rm *RedirectsMiddleware) matchPathWithCaptures(path, pattern string, wildcard bool) (bool, []string) {
+	return contentpath.MatchRedirect(path, pattern, wildcard)
 }
-
-// matchPathPartsWithCaptures recursively matches path parts with wildcard support and captures matched segments.
-func matchPathPartsWithCaptures(sourceParts, requestParts []string, si, ri int, captures *[]string) bool {
-	// Both exhausted - match
-	if si >= len(sourceParts) && ri >= len(requestParts) {
-		return true
-	}
-
-	// Source exhausted but request has more - no match
-	if si >= len(sourceParts) {
-		return false
-	}
-
-	// Request exhausted but source has more - check for ** only
-	if ri >= len(requestParts) {
-		// Only match if remaining source parts are all **
-		for i := si; i < len(sourceParts); i++ {
-			if sourceParts[i] != "**" {
-				return false
-			}
-			// ** matching zero segments captures empty string
-			*captures = append(*captures, "")
-		}
-		return true
-	}
-
-	part := sourceParts[si]
-
-	switch part {
-	case "*":
-		// Single wildcard - matches exactly one segment, capture it
-		*captures = append(*captures, requestParts[ri])
-		return matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri+1, captures)
-
-	case "**":
-		// Double wildcard - matches zero or more segments
-		// Try matching zero segments first (move source forward)
-		capturesBefore := len(*captures)
-		*captures = append(*captures, "") // Capture empty for zero match
-		if matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri, captures) {
-			return true
-		}
-		// Backtrack: remove captures added during failed attempt
-		*captures = (*captures)[:capturesBefore]
-
-		// Try matching one or more segments
-		// Collect all segments that ** should match
-		for endIdx := ri; endIdx <= len(requestParts); endIdx++ {
-			capturesBefore := len(*captures)
-			captured := strings.Join(requestParts[ri:endIdx], "/")
-			*captures = append(*captures, captured)
-			if matchPathPartsWithCaptures(sourceParts, requestParts, si+1, endIdx, captures) {
-				return true
-			}
-			// Backtrack
-			*captures = (*captures)[:capturesBefore]
-		}
-		return false
-
-	default:
-		// Literal match
-		if part == requestParts[ri] {
-			return matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri+1, captures)
-		}
-		return false
-	}
-}
-
-// buildTargetURL builds the final target URL by substituting captured wildcard segments.
-// Each "*" or "**" in the target URL is replaced with the corresponding captured segment.
 func (rm *RedirectsMiddleware) buildTargetURL(rd store.Redirect, captures []string) string {
-	if !rd.IsWildcard || len(captures) == 0 {
-		return rd.TargetUrl
-	}
-
-	targetURL := rd.TargetUrl
-
-	// Replace each * in the target with the corresponding captured segment
-	for _, capture := range captures {
-		// Find and replace the first * (which could be part of ** too)
-		if idx := strings.Index(targetURL, "*"); idx != -1 {
-			// Check if it's ** (double wildcard)
-			if idx+1 < len(targetURL) && targetURL[idx+1] == '*' {
-				// Replace ** with the captured segment
-				targetURL = targetURL[:idx] + capture + targetURL[idx+2:]
-			} else {
-				// Replace single * with the captured segment
-				targetURL = targetURL[:idx] + capture + targetURL[idx+1:]
-			}
-		}
-	}
-
-	return targetURL
+	return contentpath.BuildRedirectTarget(rd, captures)
 }

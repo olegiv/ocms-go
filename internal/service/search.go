@@ -316,6 +316,10 @@ func (s *SearchService) SearchAllPages(ctx context.Context, params SearchParams)
 
 	likePattern := "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(params.Query) + "%"
 
+	if params.LanguageCode != "" {
+		return s.searchAdminByLanguage(ctx, params, likePattern)
+	}
+
 	// Count total results using SQLC
 	total, err := s.queries.CountAdminSearchPages(ctx, store.CountAdminSearchPagesParams{
 		Title: likePattern,
@@ -358,4 +362,21 @@ func (s *SearchService) SearchAllPages(ctx context.Context, params SearchParams)
 	}
 
 	return results, total, nil
+}
+
+// searchAdminByLanguage preserves escaped literal LIKE semantics and the caller's language filter.
+func (s *SearchService) searchAdminByLanguage(ctx context.Context, params SearchParams, pattern string) ([]SearchResult, int64, error) {
+	total, err := s.queries.CountAdminSearchPagesByLanguage(ctx, store.CountAdminSearchPagesByLanguageParams{LanguageCode: params.LanguageCode, SearchPattern: pattern})
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.queries.SearchAdminPagesByLanguage(ctx, store.SearchAdminPagesByLanguageParams{LanguageCode: params.LanguageCode, SearchPattern: pattern, ResultLimit: int64(params.Limit), ResultOffset: int64(params.Offset)})
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]SearchResult, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, SearchResult{ID: row.ID, Title: row.Title, Slug: row.Slug, Body: row.Body, Status: row.Status, PublishedAt: row.PublishedAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, FeaturedImageID: row.FeaturedImageID, Excerpt: s.generateExcerpt(row.Body, params.Query, 200)})
+	}
+	return result, total, nil
 }

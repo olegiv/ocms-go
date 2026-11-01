@@ -130,6 +130,7 @@ type UpdatePageBody struct {
 
 // ListFilter is the input for Service.List.
 type ListFilter struct {
+	LanguageCode      string
 	Page              int
 	PerPage           int
 	Status            string // "", "draft", "published"

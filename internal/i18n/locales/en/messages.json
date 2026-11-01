@@ -8101,6 +8101,101 @@
             "id": "draft.issues.media_conversion_lossy.hint",
             "message": "Choose matching media from the library before replacing this body.",
             "translation": "Choose matching media from the library before replacing this body."
+        },
+        {
+            "id": "nav.editorial",
+            "message": "Editorial guidance",
+            "translation": "Editorial guidance"
+        },
+        {
+            "id": "editorial.title",
+            "message": "Editorial guidance",
+            "translation": "Editorial guidance"
+        },
+        {
+            "id": "editorial.description",
+            "message": "Set the style and article presets your connected AI apps receive.",
+            "translation": "Set the style and article presets your connected AI apps receive."
+        },
+        {
+            "id": "editorial.language",
+            "message": "Guidance language",
+            "translation": "Guidance language"
+        },
+        {
+            "id": "editorial.default",
+            "message": "Site default",
+            "translation": "Site default"
+        },
+        {
+            "id": "editorial.guide",
+            "message": "Style guide",
+            "translation": "Style guide"
+        },
+        {
+            "id": "editorial.guide_help",
+            "message": "Use plain text or Markdown. Describe audience, tone, structure and claims that need review. Maximum 8,000 characters.",
+            "translation": "Use plain text or Markdown. Describe audience, tone, structure and claims that need review. Maximum 8,000 characters."
+        },
+        {
+            "id": "editorial.guide_body",
+            "message": "Writing guidance",
+            "translation": "Writing guidance"
+        },
+        {
+            "id": "editorial.inherited",
+            "message": "This language uses the site default. Saving creates an override.",
+            "translation": "This language uses the site default. Saving creates an override."
+        },
+        {
+            "id": "editorial.reset_help",
+            "message": "Leave the guide empty and save to use the site default again.",
+            "translation": "Leave the guide empty and save to use the site default again."
+        },
+        {
+            "id": "editorial.save_guide",
+            "message": "Save style guide",
+            "translation": "Save style guide"
+        },
+        {
+            "id": "editorial.presets",
+            "message": "Article presets",
+            "translation": "Article presets"
+        },
+        {
+            "id": "editorial.preset_help",
+            "message": "Choose a preset to edit its outline and authoring instructions. These settings guide drafting; publication remains a human action.",
+            "translation": "Choose a preset to edit its outline and authoring instructions. These settings guide drafting; publication remains a human action."
+        },
+        {
+            "id": "editorial.preset_name",
+            "message": "Preset name",
+            "translation": "Preset name"
+        },
+        {
+            "id": "editorial.preset_instructions",
+            "message": "Outline and instructions",
+            "translation": "Outline and instructions"
+        },
+        {
+            "id": "editorial.reset_preset_help",
+            "message": "Clear both fields and save to restore this language’s default preset.",
+            "translation": "Clear both fields and save to restore this language’s default preset."
+        },
+        {
+            "id": "editorial.save_preset",
+            "message": "Save preset",
+            "translation": "Save preset"
+        },
+        {
+            "id": "editorial.saved",
+            "message": "Editorial guidance saved.",
+            "translation": "Editorial guidance saved."
+        },
+        {
+            "id": "editorial.invalid",
+            "message": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000).",
+            "translation": "Check the language and preset. A default guide needs 1–8,000 characters; a preset needs a name (1–100) and instructions (1–4,000)."
         }
     ]
 }

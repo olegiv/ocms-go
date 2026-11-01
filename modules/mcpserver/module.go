@@ -6,8 +6,8 @@
 //
 // It serves a stateless Streamable HTTP endpoint at EndpointPath built on the
 // official Go SDK (github.com/modelcontextprotocol/go-sdk). The tools are thin
-// read-only adapters over the REST v2 domain services, so both transports
-// share validation, visibility rules and caching; tool schemas are generated
+// read-only adapters over core authoring and REST v2 domain services. Existing content tools
+// share REST validation, visibility rules and caching; tool schemas are generated
 // from the same huma struct tags REST v2 validates with. Access requires an
 // API key holding the mcp:access permission.
 package mcpserver
@@ -296,6 +296,7 @@ func ServerCardEndpoint() *seo.MCPEndpoint {
 		Title:            serverTitle,
 		Version:          moduleVersion,
 		ProtocolVersions: mcp.SupportedProtocolVersions(),
+		Prompts:          true, Resources: true,
 	}
 }
 

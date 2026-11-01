@@ -73,44 +73,46 @@ func TestEveryIssueHasEnglishRussianAndDocumentation(t *testing.T) {
 
 func TestDraftPackagesCannotFetchURLsOrWritePages(t *testing.T) {
 	set := token.NewFileSet()
-	err := filepath.WalkDir("..", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		file, err := parser.ParseFile(set, path, nil, 0)
-		if err != nil {
-			return err
-		}
-		for _, imported := range file.Imports {
-			name, err := strconv.Unquote(imported.Path.Value)
+	for _, root := range []string{"..", "../../contentpath", "../../editorial"} {
+		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if name == "net/http" {
-				t.Errorf("%s: only the OAuth CIMD fetcher may use an HTTP client in the new engine packages", path)
+			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
 			}
-		}
-		ast.Inspect(file, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
+			file, err := parser.ParseFile(set, path, nil, 0)
+			if err != nil {
+				return err
+			}
+			for _, imported := range file.Imports {
+				name, err := strconv.Unquote(imported.Path.Value)
+				if err != nil {
+					return err
+				}
+				if name == "net/http" {
+					t.Errorf("%s: only the OAuth CIMD fetcher may use an HTTP client in the new engine packages", path)
+				}
+			}
+			ast.Inspect(file, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selected, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				switch selected.Sel.Name {
+				case "CreatePage", "UpdatePage", "DeletePage", "PublishPage", "PublishScheduledPage", "SetPageAIAccess":
+					t.Errorf("%s: draft normalization must not write pages", set.Position(call.Pos()))
+				}
 				return true
-			}
-			selected, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			switch selected.Sel.Name {
-			case "CreatePage", "UpdatePage", "DeletePage", "PublishPage", "PublishScheduledPage", "SetPageAIAccess":
-				t.Errorf("%s: draft normalization must not write pages", set.Position(call.Pos()))
-			}
-			return true
+			})
+			return nil
 		})
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

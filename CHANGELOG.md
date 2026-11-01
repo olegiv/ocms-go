@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Authoring context (R1.4).** Database-only reference grounding with shared
+  frontend routing, recorded revisions, bounded existing taxonomy/media and
+  duplicate/overlap feedback. Adds editorial style guides/presets, three MCP
+  prompts, resource/tool parity and language filters. CMS draft writes remain
+  R1.5; see `docs/authoring-context.md`.
 - **Draft validation engine (R1.3).** Strict create/update inputs, localized
   issues, safe Markdown with existing media references, explicit link policy,
   loss-aware Markdown reads and metadata updates that preserve rich HTML.

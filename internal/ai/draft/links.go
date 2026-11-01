@@ -8,16 +8,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/netip"
 	"net/url"
-	"strconv"
 	"strings"
 	"unicode"
 
+	"github.com/olegiv/ocms-go/internal/contentpath"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
-	"golang.org/x/net/idna"
 )
 
 // LinkPolicy applies only to external text links, never inline image sources.
@@ -62,35 +59,7 @@ func siteBase(siteURL, pagePath string) (*url.URL, error) {
 	return base.ResolveReference(page), nil
 }
 
-func origin(value *url.URL) (string, error) {
-	host := strings.TrimSuffix(strings.ToLower(value.Hostname()), ".")
-	if address, err := netip.ParseAddr(host); err == nil {
-		host = address.String()
-	} else {
-		var convertErr error
-		host, convertErr = idna.Lookup.ToASCII(host)
-		if convertErr != nil || host == "" {
-			return "", errors.New("invalid site/link host")
-		}
-	}
-	port := value.Port()
-	if port == "" {
-		switch strings.ToLower(value.Scheme) {
-		case "https":
-			port = "443"
-		case "http":
-			port = "80"
-		default:
-			return "", errors.New("unsupported site/link scheme")
-		}
-	}
-	parsedPort, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		return "", errors.New("invalid site/link port")
-	}
-	port = strconv.FormatUint(parsedPort, 10)
-	return strings.ToLower(value.Scheme) + "://" + net.JoinHostPort(host, port), nil
-}
+func origin(value *url.URL) (string, error) { return contentpath.Origin(value) }
 
 func targetURL(raw string, base *url.URL) (linkTarget, error) {
 	if strings.IndexFunc(raw, unicode.IsControl) >= 0 || strings.Contains(raw, "\\") {

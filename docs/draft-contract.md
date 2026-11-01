@@ -2,7 +2,7 @@
 
 R1.3 provides `internal/ai/draft`: strict inputs, normalization, localized
 feedback, Markdown rendering and link policy. It does not register MCP page
-authoring tools. R1.4 supplies grounding and the shared visible-content resolver;
+authoring tools. R1.4 now supplies local grounding and the shared visible-content resolver;
 R1.5 connects this engine to the R1.2 draft-only transactional write service.
 
 ## Create and update inputs
@@ -208,4 +208,4 @@ or real-client CMS-authoring test is implied by those results.
 Tested base: `fc25f0d29fbc56be9fd8e5dd09d6b7f407e9fde9`. Runtime/test source
 fingerprint: `f4f48db10a7a5a206879ecf6cbb0d97ffd8feb215a28207dfd5978de5c926d8b`.
 The per-file manifest, direct behavior evidence, logs and browser screenshot are
-in ignored `output/r13-validation/`. R1.4 and R1.5 remain unimplemented.
+in ignored `output/r13-validation/`. R1.4 is implemented separately; see [Authoring context](authoring-context.md). R1.5 CMS authoring remains unimplemented.

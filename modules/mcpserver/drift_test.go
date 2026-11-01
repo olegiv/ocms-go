@@ -357,6 +357,9 @@ func TestServerCardMatchesInitialize(t *testing.T) {
 		t.Fatal("no initialize result")
 	}
 	card := ServerCardEndpoint()
+	if (init.Capabilities.Prompts != nil) != card.Prompts || (init.Capabilities.Resources != nil) != card.Resources || init.Capabilities.Tools == nil {
+		t.Fatal("server card capabilities differ from initialize")
+	}
 	live := init.ServerInfo
 	if live.Name != card.Name || live.Title != card.Title || live.Version != card.Version {
 		t.Errorf("server card says %s/%s/%s, initialize says %s/%s/%s",

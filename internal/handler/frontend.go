@@ -26,6 +26,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/contentpath"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -876,10 +877,7 @@ func (h *FrontendHandler) publishedPageForRoute(
 		}
 		return *cached, nil
 	}
-	return h.queries.GetPublishedPageBySlugAndLanguage(ctx, store.GetPublishedPageBySlugAndLanguageParams{
-		Slug:         slug,
-		LanguageCode: languageCode,
-	})
+	return contentpath.PublishedPage(ctx, h.queries, slug, languageCode)
 }
 
 func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
@@ -1166,7 +1164,7 @@ func (h *FrontendHandler) PageByID(w http.ResponseWriter, r *http.Request) {
 			err = cacheErr
 		}
 	} else {
-		page, err = h.queries.GetPublishedPageByID(ctx, id)
+		page, err = contentpath.PublishedPageByID(ctx, h.queries, id)
 	}
 
 	if err != nil {
@@ -1206,7 +1204,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get category
-	category, err := h.queries.GetCategoryBySlug(ctx, slug)
+	category, err := contentpath.Category(ctx, h.queries, slug, routeLanguage.Code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			h.renderNotFound(w, r)
@@ -1301,7 +1299,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get tag
-	tag, err := h.queries.GetTagBySlug(ctx, slug)
+	tag, err := contentpath.Tag(ctx, h.queries, slug, routeLanguage.Code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			h.renderNotFound(w, r)
@@ -3227,38 +3225,15 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 }
 
 func pageAliasLookupPath(r *http.Request) string {
-	path := strings.TrimPrefix(r.URL.Path, "/")
-	prefix := middleware.GetLanguagePrefix(r)
-	if prefix == "" {
-		return path
-	}
-	if path == prefix {
-		return ""
-	}
-
-	remainder, ok := strings.CutPrefix(path, prefix+"/")
-	if !ok {
-		return ""
-	}
-	return remainder
+	return contentpath.AliasPath(r.URL.Path, middleware.GetLanguagePrefix(r))
 }
 
-// explicitPageLanguage returns the active, routable language selected by an
-// explicit URL prefix. Language middleware is the authority that populates
-// both context values; validating their agreement here keeps Page safe when it
-// is invoked by a custom router or test harness.
 func explicitPageLanguage(r *http.Request) (string, bool) {
-	prefix := middleware.GetLanguagePrefix(r)
-	if prefix == "" {
-		return "", true
+	code := ""
+	if language := middleware.GetLanguage(r); language != nil {
+		code = language.Code
 	}
-
-	lang := middleware.GetLanguage(r)
-	if lang == nil || lang.Code != prefix || !util.IsValidLangCode(prefix) ||
-		util.IsReservedLanguageCode(prefix) {
-		return "", false
-	}
-	return prefix, true
+	return contentpath.ExplicitLanguage(middleware.GetLanguagePrefix(r), code)
 }
 
 func (h *FrontendHandler) taxonomyRouteLanguage(ctx context.Context, r *http.Request) (store.Language, bool, error) {
@@ -3333,48 +3308,17 @@ func (h *FrontendHandler) redirectPageAlias(w http.ResponseWriter, r *http.Reque
 // public canonical form. Inactive, orphaned, invalid, and reserved language
 // codes fail closed, including unsafe legacy defaults.
 func (h *FrontendHandler) canonicalPageLanguagePrefix(ctx context.Context, page store.Page) (string, bool) {
-	if !util.IsValidSlug(page.Slug) {
-		return "", false
-	}
-	defaultLang, err := h.queries.GetDefaultLanguage(ctx)
-	if err != nil {
-		// Public language routing deliberately installs no namespace when the
-		// database has zero or multiple defaults. Do not advertise a canonical
-		// redirect that the router cannot serve in that state.
-		return "", false
-	}
-
-	lang, err := h.queries.GetLanguageByCode(ctx, page.LanguageCode)
-	if err != nil || !lang.IsActive || lang.Code != page.LanguageCode {
-		return "", false
-	}
-	if !util.IsValidLangCode(lang.Code) || util.IsReservedLanguageCode(lang.Code) {
-		return "", false
-	}
-	if lang.ID == defaultLang.ID && lang.Code == defaultLang.Code {
-		return "", true
-	}
-	return lang.Code, true
+	prefix, ok, err := contentpath.PageLanguagePrefix(ctx, h.queries, page)
+	return prefix, ok && err == nil
 }
 
 func (h *FrontendHandler) canonicalAliasLanguagePrefix(r *http.Request, page store.Page) (string, bool) {
-	canonicalPrefix, ok := h.canonicalPageLanguagePrefix(r.Context(), page)
-	if !ok {
+	explicit, valid := explicitPageLanguage(r)
+	if !valid {
 		return "", false
 	}
-
-	explicitPrefix, validExplicitLanguage := explicitPageLanguage(r)
-	if !validExplicitLanguage {
-		return "", false
-	}
-	if explicitPrefix == "" {
-		return canonicalPrefix, true
-	}
-	if page.LanguageCode != explicitPrefix {
-		return "", false
-	}
-
-	return canonicalPrefix, true
+	prefix, ok, err := contentpath.AliasLanguagePrefix(r.Context(), h.queries, page, explicit)
+	return prefix, ok && err == nil
 }
 
 // writePermanentPageRedirect emits only a same-origin path assembled from

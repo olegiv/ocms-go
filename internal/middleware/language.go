@@ -8,12 +8,12 @@ package middleware
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/contentpath"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -96,7 +96,7 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 			// the original request URL for logging and canonical URL handling.
 			routePath := r.URL.Path
 			if routeCtx := chi.RouteContext(ctx); routeCtx != nil && routeCtx.RoutePath != "" {
-				routePath = routeCtx.RoutePath
+				routePath = contentpath.RoutingPath(r.URL.Path, routeCtx.RoutePath)
 			}
 			if lang, strippedPath, ok := matchLanguagePrefix(routePath, langMap); ok {
 				if routeCtx := chi.RouteContext(ctx); routeCtx != nil {
@@ -158,41 +158,11 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 // activeLanguageMap returns only codes that are safe to expose as URL
 // prefixes. Invalid and reserved legacy rows stay manageable in the admin UI,
 // but cannot shadow application routes.
-func activeLanguageMap(activeLangs []store.Language) map[string]store.Language {
-	langMap := make(map[string]store.Language, len(activeLangs))
-	for _, lang := range activeLangs {
-		code := lang.Code
-		if !util.IsValidLangCode(code) {
-			slog.Warn("ignoring active language with invalid code", "language_id", lang.ID, "code", lang.Code)
-			continue
-		}
-		if util.IsReservedLanguageCode(code) {
-			slog.Warn("ignoring active language with reserved route prefix", "language_id", lang.ID, "code", lang.Code)
-			continue
-		}
-		langMap[code] = lang
-	}
-	return langMap
+func activeLanguageMap(languages []store.Language) map[string]store.Language {
+	return contentpath.ActiveLanguages(languages)
 }
-
-// matchLanguagePrefix matches the first path segment against the active
-// language map and returns the path to route after removing that prefix.
-func matchLanguagePrefix(path string, langMap map[string]store.Language) (store.Language, string, bool) {
-	path = strings.TrimPrefix(path, "/")
-	code, remainder, hasRemainder := strings.Cut(path, "/")
-	if !util.IsValidLangCode(code) {
-		return store.Language{}, "", false
-	}
-
-	lang, ok := langMap[code]
-	if !ok {
-		return store.Language{}, "", false
-	}
-
-	if !hasRemainder || remainder == "" {
-		return lang, "/", true
-	}
-	return lang, "/" + remainder, true
+func matchLanguagePrefix(path string, languages map[string]store.Language) (store.Language, string, bool) {
+	return contentpath.MatchLanguagePrefix(path, languages)
 }
 
 // matchAcceptLanguage finds the best matching language from Accept-Language header.

@@ -26,6 +26,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/contentpath"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -428,55 +429,14 @@ func (h *FormsHandler) verifyCaptcha(ctx context.Context, r *http.Request, lang 
 // getActiveFormBySlug retrieves a form by slug and checks if it's active.
 // Returns nil if form not found or inactive (response already sent).
 func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Request, slug string) *store.Form {
-	var routeLanguage store.Language
-	var err error
-	prefix := middleware.GetLanguagePrefix(r)
-	if prefix != "" {
-		routeLanguage, err = h.queries.GetLanguageByCode(r.Context(), prefix)
-	} else {
-		routeLanguage, err = h.queries.GetDefaultLanguage(r.Context())
-	}
+	form, err := contentpath.PublicForm(r.Context(), h.queries, slug, middleware.GetLanguagePrefix(r))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			h.publicFormNotFound(w, r)
 		} else {
-			slog.Error("failed to resolve public form route language", "error", err, "slug", slug)
+			slog.Error("failed to resolve public form", "error", err, "slug", slug)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
-		return nil
-	}
-	if !routeLanguage.IsActive || !util.IsValidLangCode(routeLanguage.Code) ||
-		util.IsReservedLanguageCode(routeLanguage.Code) {
-		h.publicFormNotFound(w, r)
-		return nil
-	}
-
-	form, err := h.queries.GetFormBySlugAndLanguage(r.Context(), store.GetFormBySlugAndLanguageParams{
-		Slug: slug, LanguageCode: routeLanguage.Code,
-	})
-	if errors.Is(err, sql.ErrNoRows) && prefix == "" {
-		// Old data and third-party callers may have inserted an empty code before
-		// language_code became mandatory in the admin flow. It belongs only to
-		// the default, unprefixed namespace; never let it claim a prefix.
-		form, err = h.queries.GetFormBySlugAndLanguage(r.Context(), store.GetFormBySlugAndLanguageParams{
-			Slug: slug, LanguageCode: "",
-		})
-		if err == nil {
-			form.LanguageCode = routeLanguage.Code
-		}
-	}
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.publicFormNotFound(w, r)
-		} else {
-			slog.Error("failed to get form", "error", err, "slug", slug)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return nil
-	}
-
-	if !form.IsActive {
-		h.publicFormNotFound(w, r)
 		return nil
 	}
 	return &form

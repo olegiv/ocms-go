@@ -16,7 +16,7 @@ import (
 // maxInstructionsRunes caps the administrator's agent instructions. They are
 // sent to every MCP client and land in the model's context, so they stay
 // short enough not to crowd out the content agents actually asked for.
-const maxInstructionsRunes = 4000
+const maxInstructionsRunes = 2400
 
 // i18n message keys returned by normalizeInstructions.
 const (

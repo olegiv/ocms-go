@@ -472,7 +472,7 @@ func TestNormalizePaging(t *testing.T) {
 
 func TestServerInstructions(t *testing.T) {
 	hidden := serverInstructions(Settings{})
-	if !strings.Contains(hidden, "not returned over MCP") || strings.Contains(hidden, "Guidance from the site administrator") {
+	if !strings.Contains(hidden, "General content reads return published pages only") || strings.Contains(hidden, "Guidance from the site administrator") {
 		t.Errorf("default instructions:\n%s", hidden)
 	}
 	shown := serverInstructions(Settings{AllowDrafts: true, Instructions: "Prefer recent posts."})

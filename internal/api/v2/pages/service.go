@@ -770,7 +770,18 @@ func (s *Service) List(ctx context.Context, a v2.Actor, f ListFilter) (*ListResu
 	var rows []store.Page
 	var total int64
 	var err error
+	if f.LanguageCode != "" {
+		if _, err := s.resolveLanguageCode(ctx, &f.LanguageCode); err != nil {
+			return nil, err
+		}
+	}
 	switch {
+	case f.LanguageCode != "":
+		rows, err = s.queries.ListPagesInLanguage(ctx, store.ListPagesInLanguageParams{LanguageCode: f.LanguageCode, Status: status, CategoryID: f.CategoryID, TagID: f.TagID, ResultLimit: limit, ResultOffset: offset})
+		if err == nil {
+			total, err = s.queries.CountPagesInLanguage(ctx, store.CountPagesInLanguageParams{LanguageCode: f.LanguageCode, Status: status, CategoryID: f.CategoryID, TagID: f.TagID})
+		}
+
 	case f.CategoryID > 0:
 		rows, total, err = s.listByCategory(ctx, publishedOnly, f.CategoryID, limit, offset)
 	case f.TagID > 0:
