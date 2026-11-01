@@ -188,7 +188,7 @@ func registerUpdate(api huma.API, svc *Service) {
 		Method:      http.MethodPut,
 		Path:        "/pages/{id}",
 		Summary:     "Update a page",
-		Description: "Requires the `pages:write` permission. Only provided fields are modified; nullable columns can be cleared by sending null.",
+		Description: "Requires the `pages:write` permission. Only provided fields are modified. Updates to AI-editable pages require `base_revision`; any supplied revision is enforced. A conflict returns `revision_conflict` with the current revision and changed field names.",
 		Tags:        []string{"Pages"},
 		Security:    v2.PagesWriteSecurity,
 	}, func(ctx context.Context, in *UpdatePageInput) (*PageOutput, error) {

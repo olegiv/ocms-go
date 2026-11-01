@@ -69,6 +69,21 @@ type ConfigTranslation struct {
 	UpdatedBy  sql.NullInt64 `json:"updated_by"`
 }
 
+type ContentProvenance struct {
+	ID            int64         `json:"id"`
+	PageID        int64         `json:"page_id"`
+	Revision      int64         `json:"revision"`
+	UserID        sql.NullInt64 `json:"user_id"`
+	Source        string        `json:"source"`
+	ApiKeyID      sql.NullInt64 `json:"api_key_id"`
+	OauthGrantID  string        `json:"oauth_grant_id"`
+	OauthClientID string        `json:"oauth_client_id"`
+	Transport     string        `json:"transport"`
+	ValidatedJson string        `json:"validated_json"`
+	ReportedJson  string        `json:"reported_json"`
+	CreatedAt     time.Time     `json:"created_at"`
+}
+
 type Event struct {
 	ID         int64         `json:"id"`
 	Level      string        `json:"level"`
@@ -121,6 +136,18 @@ type FormSubmission struct {
 	IsRead       bool           `json:"is_read"`
 	LanguageCode string         `json:"language_code"`
 	CreatedAt    time.Time      `json:"created_at"`
+}
+
+type IdempotencyKey struct {
+	UserID         int64          `json:"user_id"`
+	Tool           string         `json:"tool"`
+	RequestID      string         `json:"request_id"`
+	RequestHash    string         `json:"request_hash"`
+	ResultJson     sql.NullString `json:"result_json"`
+	EntityType     string         `json:"entity_type"`
+	EntityID       int64          `json:"entity_id"`
+	EntityRevision int64          `json:"entity_revision"`
+	CreatedAt      time.Time      `json:"created_at"`
 }
 
 type Language struct {
@@ -296,6 +323,14 @@ type Page struct {
 	Summary           string        `json:"summary"`
 	VideoUrl          string        `json:"video_url"`
 	VideoTitle        string        `json:"video_title"`
+	Revision          int64         `json:"revision"`
+}
+
+type PageAiAccess struct {
+	PageID     int64     `json:"page_id"`
+	AiEditable bool      `json:"ai_editable"`
+	SetBy      int64     `json:"set_by"`
+	SetAt      time.Time `json:"set_at"`
 }
 
 type PageAlias struct {
@@ -316,12 +351,15 @@ type PageTag struct {
 }
 
 type PageVersion struct {
-	ID        int64     `json:"id"`
-	PageID    int64     `json:"page_id"`
-	Title     string    `json:"title"`
-	Body      string    `json:"body"`
-	ChangedBy int64     `json:"changed_by"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           int64          `json:"id"`
+	PageID       int64          `json:"page_id"`
+	Title        string         `json:"title"`
+	Body         string         `json:"body"`
+	ChangedBy    int64          `json:"changed_by"`
+	CreatedAt    time.Time      `json:"created_at"`
+	Revision     sql.NullInt64  `json:"revision"`
+	SnapshotJson sql.NullString `json:"snapshot_json"`
+	Legacy       bool           `json:"legacy"`
 }
 
 type PagesFt struct {

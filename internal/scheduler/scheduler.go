@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"syscall"
@@ -16,7 +17,10 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/olegiv/ocms-go/internal/demo"
+	"github.com/olegiv/ocms-go/internal/idempotency"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/webhook"
@@ -107,6 +111,12 @@ func (s *Scheduler) processScheduledPages() error {
 	ctx := context.Background()
 	queries := store.New(s.db)
 
+	// Successful replay payloads expire after seven days. Compact them while
+	// retaining the permanent key/hash/entity tombstone; retries never re-execute.
+	if err := queries.CompactIdempotencyKeys(ctx, time.Now().UTC().Add(-idempotency.ReplayWindow)); err != nil {
+		return fmt.Errorf("compact page write replays: %w", err)
+	}
+
 	// Get pages scheduled to be published up to now
 	now := time.Now()
 	pages, err := queries.GetScheduledPagesForPublishing(ctx, sql.NullTime{
@@ -151,18 +161,27 @@ func (s *Scheduler) processScheduledPages() error {
 // page.published webhook event. It returns errNoLongerDue, and does nothing
 // else, when the page is no longer a draft due by now.
 func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, page store.Page, now time.Time) error {
-	published, err := queries.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
-		PublishedAt: sql.NullTime{Time: now, Valid: true},
-		UpdatedAt:   now,
-		ID:          page.ID,
-		ScheduledAt: sql.NullTime{Time: now, Valid: true},
+	work, err := pagewrite.InTx(ctx, s.db, provenance.Principal{Source: "system", Transport: "scheduler"}, func(work *pagewrite.Tx) error {
+		if _, err := work.TrackSystem(ctx, page.ID); err != nil {
+			return err
+		}
+		_, err := work.Q.PublishScheduledPage(ctx, store.PublishScheduledPageParams{
+			PublishedAt: sql.NullTime{Time: now, Valid: true},
+			UpdatedAt:   now,
+			ID:          page.ID,
+			ScheduledAt: sql.NullTime{Time: now, Valid: true},
+		})
+		if errors.Is(err, sql.ErrNoRows) {
+			return errNoLongerDue
+		}
+		return err
+
 	})
-	if errors.Is(err, sql.ErrNoRows) {
-		return errNoLongerDue
-	}
 	if err != nil {
 		return err
 	}
+	published := work.Pages[page.ID]
+	_ = queries // retained parameter for existing callers; writes use the transaction.
 
 	// Log the event
 	metadata := map[string]any{

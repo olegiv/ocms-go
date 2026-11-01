@@ -23,6 +23,8 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -593,7 +595,7 @@ func (s *Source) createCategory(ctx context.Context, queries *store.Queries, nam
 		return 0, false
 	}
 	if !s.track(ctx, tracker, result, types.EntityCategory, category.ID, func(rollbackCtx context.Context) error {
-		return queries.DeleteCategory(rollbackCtx, category.ID)
+		return pagewrite.DeleteTermFromQueries(rollbackCtx, queries, "category", category.ID)
 	}) {
 		return 0, false
 	}
@@ -659,7 +661,7 @@ func (s *Source) importStoryCategoryTags(ctx context.Context, queries *store.Que
 			continue
 		}
 		if !s.track(ctx, tracker, result, types.EntityTag, tag.ID, func(rollbackCtx context.Context) error {
-			return queries.DeleteTag(rollbackCtx, tag.ID)
+			return pagewrite.DeleteTermFromQueries(rollbackCtx, queries, "tag", tag.ID)
 		}) {
 			continue
 		}
@@ -972,7 +974,7 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 			return "", mediaFailed
 		}
 		if !s.track(ctx, tracker, result, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
-			if err := queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
+			if err := pagewrite.DeleteMediaFromQueries(rollbackCtx, queries, media.ID); err != nil {
 				return err
 			}
 			return s.cleanupMediaFiles(rollbackCtx, tracker, writtenRoot, fileUUID)
@@ -1009,7 +1011,7 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 		return "", mediaFailed
 	}
 	if !s.track(ctx, tracker, result, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
-		if err := queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
+		if err := pagewrite.DeleteMediaFromQueries(rollbackCtx, queries, media.ID); err != nil {
 			return err
 		}
 		return s.cleanupMediaFiles(rollbackCtx, tracker, canonicalUploadRoot, fileUUID)
@@ -1129,7 +1131,7 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 		if !resolved && namesAnAuthor(story) {
 			unattributed++
 		}
-		page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		page, err := pagewrite.Insert(ctx, queries, provenance.Principal{Source: "system", Transport: "migrator"}, store.CreatePageParams{
 			Title:        title,
 			Slug:         slug,
 			Body:         s.prepareBody(assembleStoryBody(story), mediaMap, bodiesAltered),
@@ -1142,31 +1144,29 @@ func (s *Source) importStories(ctx context.Context, queries *store.Queries, stor
 			PublishedAt:  sql.NullTime{Time: publishedAt, Valid: true},
 			CreatedAt:    publishedAt,
 			UpdatedAt:    now,
+		}, func(work *pagewrite.Tx, page store.Page) error {
+			if categoryID, ok := topicMap[story.Topic()]; ok {
+				if err := work.Q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: page.ID, CategoryID: categoryID}); err != nil {
+					return err
+				}
+			}
+			if tagID, ok := storyCategoryMap[story.Category()]; ok {
+				if err := work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: page.ID, TagID: tagID}); err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 		if err != nil {
 			result.AddError("Failed to create post %q: %v", title, err)
 			continue
 		}
 		if !s.track(ctx, tracker, result, types.EntityPost, page.ID, func(rollbackCtx context.Context) error {
-			return queries.DeletePage(rollbackCtx, page.ID)
+			return pagewrite.DeleteFromQueries(rollbackCtx, queries, page.ID)
 		}) {
 			continue
 		}
 
-		if categoryID, ok := topicMap[story.Topic()]; ok {
-			if err := queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
-				PageID: page.ID, CategoryID: categoryID,
-			}); err != nil {
-				result.AddError("Failed to add category to post %q: %v", title, err)
-			}
-		}
-		if tagID, ok := storyCategoryMap[story.Category()]; ok {
-			if err := queries.AddTagToPage(ctx, store.AddTagToPageParams{
-				PageID: page.ID, TagID: tagID,
-			}); err != nil {
-				result.AddError("Failed to add tag to post %q: %v", title, err)
-			}
-		}
 		result.PostsImported++
 	}
 	if unattributed > 0 {
@@ -1220,7 +1220,7 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 			publishedAt = sql.NullTime{Time: createdAt, Valid: true}
 		}
 
-		page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		page, err := pagewrite.Insert(ctx, queries, provenance.Principal{Source: "system", Transport: "migrator"}, store.CreatePageParams{
 			Title:        title,
 			Slug:         slug,
 			Body:         s.prepareBody(assembleStaticPageBody(source), mediaMap, bodiesAltered),
@@ -1235,22 +1235,20 @@ func (s *Source) importStaticPages(ctx context.Context, queries *store.Queries, 
 			PublishedAt:     publishedAt,
 			CreatedAt:       createdAt,
 			UpdatedAt:       now,
+		}, func(work *pagewrite.Tx, page store.Page) error {
+			if categoryID, ok := pageCategoryMap[source.Category()]; ok {
+				return work.Q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: page.ID, CategoryID: categoryID})
+			}
+			return nil
 		})
 		if err != nil {
 			result.AddError("Failed to create page %q: %v", title, err)
 			continue
 		}
 		if !s.track(ctx, tracker, result, types.EntityPage, page.ID, func(rollbackCtx context.Context) error {
-			return queries.DeletePage(rollbackCtx, page.ID)
+			return pagewrite.DeleteFromQueries(rollbackCtx, queries, page.ID)
 		}) {
 			continue
-		}
-		if categoryID, ok := pageCategoryMap[source.Category()]; ok {
-			if err := queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
-				PageID: page.ID, CategoryID: categoryID,
-			}); err != nil {
-				result.AddError("Failed to add category to page %q: %v", title, err)
-			}
 		}
 		result.PagesImported++
 	}
@@ -1296,7 +1294,7 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 			publishedAt = sql.NullTime{Time: now, Valid: true}
 		}
 
-		page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		page, err := pagewrite.Insert(ctx, queries, provenance.Principal{Source: "system", Transport: "migrator"}, store.CreatePageParams{
 			Title:        title,
 			Slug:         slug,
 			Body:         s.prepareBody(buildEncyclopediaBody(entry, terms), mediaMap, bodiesAltered),
@@ -1309,13 +1307,13 @@ func (s *Source) importEncyclopedia(ctx context.Context, queries *store.Queries,
 			PublishedAt:  publishedAt,
 			CreatedAt:    now,
 			UpdatedAt:    now,
-		})
+		}, nil)
 		if err != nil {
 			result.AddError("Failed to create encyclopedia page %q: %v", title, err)
 			continue
 		}
 		if !s.track(ctx, tracker, result, types.EntityPage, page.ID, func(rollbackCtx context.Context) error {
-			return queries.DeletePage(rollbackCtx, page.ID)
+			return pagewrite.DeleteFromQueries(rollbackCtx, queries, page.ID)
 		}) {
 			continue
 		}

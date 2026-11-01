@@ -1021,7 +1021,7 @@ func TestPageSlugCannotClaimApplicationRoute(t *testing.T) {
 
 // TestValidatePageAliases checks that the page form names the first alias it
 // cannot store instead of dropping it silently on save, and that a failed
-// lookup is reported on the form while savePageAliases keeps the alias.
+// lookup is reported on the form and also refuses the write transaction.
 func TestValidatePageAliases(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 	user := createTestAdminUser(t, db)
@@ -1105,8 +1105,8 @@ func TestValidatePageAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAliasesForPage failed: %v", err)
 	}
-	if !slices.ContainsFunc(aliases, func(a store.PageAlias) bool { return a.Alias == "about/team" }) {
-		t.Errorf("aliases after a failed lookup = %v, want about/team kept", aliases)
+	if slices.ContainsFunc(aliases, func(a store.PageAlias) bool { return a.Alias == "about/team" }) {
+		t.Errorf("aliases after a failed lookup = %v, want the unchecked alias rejected", aliases)
 	}
 }
 

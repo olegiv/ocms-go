@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -398,6 +400,18 @@ func testDB(t *testing.T) *sql.DB {
 		CREATE INDEX idx_widgets_theme ON widgets(theme);
 		CREATE INDEX idx_widgets_area ON widgets(area);
 	`
+
+	migration, readErr := os.ReadFile("../store/migrations/20261101150000_page_write_foundations.sql")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	up, _, _ := strings.Cut(string(migration), "-- +goose Down")
+	baseVersion, readErr := os.ReadFile("../store/migrations/00004_create_page_versions.sql")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	versionUp, _, _ := strings.Cut(string(baseVersion), "-- +goose Down")
+	schema += versionUp + up
 
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("failed to create test schema: %v", err)

@@ -32,6 +32,8 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -184,6 +186,7 @@ type mediaZipManifest struct {
 
 // Importer handles importing CMS content from JSON format.
 type Importer struct {
+	principal             provenance.Principal
 	store                 *store.Queries
 	db                    *sql.DB
 	logger                *slog.Logger
@@ -488,7 +491,24 @@ func (i *Importer) importWithPreCommit(
 
 	// Create queries with transaction
 	queries := i.store.WithTx(tx)
-	if err := i.importSelectedEntities(ctx, queries, data, opts, result); err != nil {
+	principal := i.principal
+	if principal.Source == "" {
+		principal = provenance.Principal{Source: "system", Transport: "import"}
+	}
+	work, err := pagewrite.NewTx(queries, principal)
+	if err != nil {
+		return result, err
+	}
+	if principal.UserID > 0 {
+		if err = pagewrite.RequireEditor(ctx, queries, principal.UserID); err != nil {
+			return result, err
+		}
+	}
+	if err := trackImportedPages(ctx, work, data, opts); err != nil {
+		return result, err
+	}
+
+	if err := i.importSelectedEntities(ctx, queries, data, opts, result, work); err != nil {
 		return result, err
 	}
 
@@ -496,6 +516,22 @@ func (i *Importer) importWithPreCommit(
 		if err := preCommitCheck(); err != nil {
 			return result, fmt.Errorf("pre-commit import validation failed: %w", err)
 		}
+	}
+
+	if opts.ImportPages {
+		for _, id := range result.IDMaps["pages"] {
+			if work.IsTracked(id) {
+				continue
+			}
+			page, loadErr := queries.GetPageByID(ctx, id)
+			if loadErr != nil {
+				return result, loadErr
+			}
+			work.Created(page)
+		}
+	}
+	if err := work.Finish(ctx); err != nil {
+		return result, err
 	}
 
 	// Commit transaction
@@ -513,6 +549,7 @@ func (i *Importer) importSelectedEntities(
 	data *ExportData,
 	opts ImportOptions,
 	result *ImportResult,
+	work *pagewrite.Tx,
 ) error {
 	// Import in dependency order: languages, users, taxonomy, media, pages,
 	// menus, forms, config, then translation edges.
@@ -598,7 +635,7 @@ func (i *Importer) importSelectedEntities(
 		}
 	}
 	if opts.ImportPages && len(data.Pages) > 0 {
-		if err := i.importPages(ctx, queries, data.Pages, userMap, categoryMap, tagMap, mediaMap,
+		if err := i.importPages(ctx, work, data.Pages, userMap, categoryMap, tagMap, mediaMap,
 			defaultLangCode, opts, result); err != nil {
 			return fmt.Errorf("failed to import pages: %w", err)
 		}
@@ -633,7 +670,7 @@ func (i *Importer) importSelectedEntities(
 	if opts.ImportConfig && len(data.Config) > 0 {
 		i.importConfig(ctx, queries, data.Config, userMap, defaultLangCode, opts, result)
 	}
-	if err := i.importTranslations(ctx, queries, data, defaultLangCode, opts, result); err != nil {
+	if err := i.importTranslations(ctx, work, data, defaultLangCode, opts, result); err != nil {
 		return fmt.Errorf("failed to import translations: %w", err)
 	}
 
@@ -4202,7 +4239,7 @@ func replaceMediaVariants(
 
 func (i *Importer) importPages(
 	ctx context.Context,
-	queries *store.Queries,
+	work *pagewrite.Tx,
 	pages []ExportPage,
 	userMap map[string]int64,
 	categoryMap map[string]int64,
@@ -4212,6 +4249,7 @@ func (i *Importer) importPages(
 	opts ImportOptions,
 	result *ImportResult,
 ) error {
+	queries := work.Q
 	now := time.Now()
 
 	pageOldToNew := make(map[int64]int64) // maps export ID to new ID
@@ -4238,7 +4276,7 @@ func (i *Importer) importPages(
 				result.IncrementSkipped("pages")
 				continue
 			case ConflictOverwrite:
-				pageID, existsErr = i.updateExistingPage(ctx, queries, page, existing.ID, mediaMap, defaultLangCode, now)
+				pageID, existsErr = i.updateExistingPage(ctx, work, page, existing.ID, mediaMap, defaultLangCode, now)
 				if existsErr != nil {
 					result.AddError("page", page.Slug, existsErr.Error())
 					continue
@@ -4263,7 +4301,7 @@ func (i *Importer) importPages(
 
 		if shouldCreate {
 			var createErr error
-			pageID, createErr = i.createNewPage(ctx, queries, page, userMap, mediaMap, defaultLangCode, now)
+			pageID, createErr = i.createNewPage(ctx, work, page, userMap, mediaMap, defaultLangCode, now)
 			if createErr != nil {
 				result.AddError("page", page.Slug, createErr.Error())
 				continue
@@ -4384,33 +4422,50 @@ func extractPageFields(page ExportPage, mediaMap map[string]int64, defaultLangCo
 // updateExistingPage updates an existing page with imported data.
 func (i *Importer) updateExistingPage(
 	ctx context.Context,
-	queries *store.Queries,
+	work *pagewrite.Tx,
 	page ExportPage,
 	existingID int64,
 	mediaMap map[string]int64,
 	defaultLangCode string,
 	now time.Time,
 ) (int64, error) {
-	f := extractPageFields(page, mediaMap, defaultLangCode)
 
-	updated, err := queries.UpdatePage(ctx, store.UpdatePageParams{
-		ID:              existingID,
-		Title:           page.Title,
-		Slug:            page.Slug,
-		Body:            page.Body,
-		Status:          page.Status,
-		FeaturedImageID: f.FeaturedImageID,
-		MetaTitle:       f.MetaTitle,
-		MetaDescription: f.MetaDescription,
-		MetaKeywords:    f.MetaKeywords,
-		OgImageID:       f.OgImageID,
-		NoIndex:         f.NoIndex,
-		NoFollow:        f.NoFollow,
-		CanonicalUrl:    f.CanonicalURL,
-		ScheduledAt:     f.ScheduledAt,
-		LanguageCode:    f.LanguageCode,
-		UpdatedAt:       now,
-	})
+	queries := work.Q
+	current, err := queries.GetPageByID(ctx, existingID)
+	if err != nil {
+		return 0, err
+	}
+	f := extractPageFields(page, mediaMap, defaultLangCode)
+	params := pagewrite.ParamsFor(current)
+	params.Title = page.Title
+	params.Slug = page.Slug
+	params.Body = page.Body
+	params.Status = page.Status
+	params.FeaturedImageID = f.FeaturedImageID
+	params.MetaTitle = f.MetaTitle
+	params.MetaDescription = f.MetaDescription
+	params.MetaKeywords = f.MetaKeywords
+	params.OgImageID = f.OgImageID
+	params.NoIndex = f.NoIndex
+	params.NoFollow = f.NoFollow
+	params.CanonicalUrl = f.CanonicalURL
+	params.ScheduledAt = f.ScheduledAt
+	params.LanguageCode = f.LanguageCode
+	params.VideoUrl = page.VideoURL
+	params.VideoTitle = page.VideoTitle
+	params.UpdatedAt = now
+	params.PublishedAt = sql.NullTime{}
+	if page.Status == "published" {
+		switch {
+		case page.PublishedAt != nil:
+			params.PublishedAt = sql.NullTime{Time: *page.PublishedAt, Valid: true}
+		case current.PublishedAt.Valid:
+			params.PublishedAt = current.PublishedAt
+		default:
+			params.PublishedAt = sql.NullTime{Time: now, Valid: true}
+		}
+	}
+	updated, err := queries.UpdatePage(ctx, params)
 	if err != nil {
 		return 0, err
 	}
@@ -4421,13 +4476,14 @@ func (i *Importer) updateExistingPage(
 // createNewPage creates a new page from imported data.
 func (i *Importer) createNewPage(
 	ctx context.Context,
-	queries *store.Queries,
+	work *pagewrite.Tx,
 	page ExportPage,
 	userMap map[string]int64,
 	mediaMap map[string]int64,
 	defaultLangCode string,
 	now time.Time,
 ) (int64, error) {
+	queries := work.Q
 	// Get author ID
 	authorID := int64(1)
 	if page.AuthorEmail != "" {
@@ -4437,6 +4493,21 @@ func (i *Importer) createNewPage(
 	}
 
 	f := extractPageFields(page, mediaMap, defaultLangCode)
+
+	if err := pagewrite.SlugAvailableInLanguage(ctx, queries, page.Slug, f.LanguageCode, 0); err != nil {
+		return 0, err
+	}
+	createdAt := page.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = now
+	}
+	publishedAt := sql.NullTime{}
+	if page.Status == "published" {
+		publishedAt = sql.NullTime{Time: now, Valid: true}
+		if page.PublishedAt != nil {
+			publishedAt.Time = *page.PublishedAt
+		}
+	}
 
 	created, err := queries.CreatePage(ctx, store.CreatePageParams{
 		Title:           page.Title,
@@ -4454,15 +4525,18 @@ func (i *Importer) createNewPage(
 		CanonicalUrl:    f.CanonicalURL,
 		ScheduledAt:     f.ScheduledAt,
 		LanguageCode:    f.LanguageCode,
+		PageType:        "post",
 		VideoUrl:        page.VideoURL,
 		VideoTitle:      page.VideoTitle,
-		CreatedAt:       now,
+		CreatedAt:       createdAt,
+		PublishedAt:     publishedAt,
 		UpdatedAt:       now,
 	})
 	if err != nil {
 		return 0, err
 	}
 
+	work.Created(created)
 	return created.ID, nil
 }
 
@@ -5289,12 +5363,14 @@ func translationEdgeCount(data *ExportData, opts ImportOptions) int {
 
 func (i *Importer) importTranslations(
 	ctx context.Context,
-	queries *store.Queries,
+	work *pagewrite.Tx,
 	data *ExportData,
 	defaultLangCode string,
 	opts ImportOptions,
 	result *ImportResult,
 ) error {
+	queries := work.Q
+
 	sets := buildExportedTranslationSets(data, defaultLangCode, opts)
 
 	now := time.Now()
@@ -5658,3 +5734,7 @@ func toNullString(s string) sql.NullString {
 	}
 	return sql.NullString{String: s, Valid: true}
 }
+
+// SetPrincipal binds an authenticated import initiator. Call before Import;
+// archival metadata is never used as the revision's verified actor.
+func (i *Importer) SetPrincipal(principal provenance.Principal) { i.principal = principal }

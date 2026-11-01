@@ -91,9 +91,9 @@ func actorFor(id *identity, s Settings) v2.Actor {
 	}
 	key := id.key
 	if id.grantID != "" {
-		return v2.Actor{Permissions: perms}
+		return v2.Actor{UserID: id.userID, OAuthGrantID: id.grantID, OAuthClientID: id.clientID, Transport: "mcp", Permissions: perms}
 	}
-	return v2.Actor{APIKey: &key, Permissions: perms}
+	return v2.Actor{APIKey: &key, Transport: "mcp", Permissions: perms}
 }
 
 // draftsVisible reports whether the actor may see unpublished pages.

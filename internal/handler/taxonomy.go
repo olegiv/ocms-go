@@ -22,6 +22,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -41,6 +43,7 @@ var tagsSortableFields = map[string]SortConfig{
 
 // TaxonomyHandler handles tag and category management routes.
 type TaxonomyHandler struct {
+	db             *sql.DB
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
@@ -56,6 +59,7 @@ func (h *TaxonomyHandler) SetCacheManager(cm *cache.Manager) {
 // NewTaxonomyHandler creates a new TaxonomyHandler.
 func NewTaxonomyHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *TaxonomyHandler {
 	return &TaxonomyHandler{
+		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
@@ -399,7 +403,9 @@ func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
 	params := deleteEntityParams[store.Tag]{EntityName: "tag", IDField: "tag_id", RedirectURL: redirectAdminTags, SuccessMessage: "Tag deleted successfully"}
 	params.RequireFn = func(id int64) (store.Tag, bool) { return h.requireTagWithError(w, r, id) }
-	params.DeleteFn = h.queries.DeleteTag
+	params.DeleteFn = func(ctx context.Context, id int64) error {
+		return h.deleteTermAtomic(ctx, middleware.GetUserID(r), "tag", id)
+	}
 	params.GetSlug = func(t store.Tag) string { return t.Slug }
 	handleDeleteEntity(w, r, h.renderer, params)
 }
@@ -431,7 +437,7 @@ func (h *TaxonomyHandler) BulkDeleteTags(w http.ResponseWriter, r *http.Request)
 			continue
 		}
 
-		if err := h.queries.DeleteTag(r.Context(), id); err != nil {
+		if err := h.deleteTermAtomic(r.Context(), middleware.GetUserID(r), "tag", id); err != nil {
 			slog.Error("failed to bulk delete tag", "error", err, "tag_id", id)
 			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting tag"})
 			continue
@@ -1032,8 +1038,10 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 		RedirectURL:    redirectAdminCategories,
 		SuccessMessage: "Category deleted successfully",
 		RequireFn:      func(id int64) (store.Category, bool) { return h.requireCategoryWithError(w, r, id) },
-		DeleteFn:       h.queries.DeleteCategory,
-		GetSlug:        func(c store.Category) string { return c.Slug },
+		DeleteFn: func(ctx context.Context, id int64) error {
+			return h.deleteTermAtomic(ctx, middleware.GetUserID(r), "category", id)
+		},
+		GetSlug: func(c store.Category) string { return c.Slug },
 	})
 }
 
@@ -1378,4 +1386,22 @@ func (h *TaxonomyHandler) SearchCategories(w http.ResponseWriter, r *http.Reques
 	if err := json.NewEncoder(w).Encode(categories); err != nil {
 		slog.Error("failed to encode categories response", "error", err)
 	}
+}
+
+func (h *TaxonomyHandler) deleteTermAtomic(ctx context.Context, userID int64, kind string, id int64) error {
+	work, err := pagewrite.InTx(ctx, h.db, provenance.Principal{UserID: userID, Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
+		if err := pagewrite.RequireEditor(ctx, work.Q, userID); err != nil {
+			return err
+		}
+		return work.DeleteTerm(ctx, kind, id)
+	})
+	if err != nil {
+		return err
+	}
+	if h.cacheManager != nil {
+		for pageID := range work.Pages {
+			h.cacheManager.InvalidatePage(pageID)
+		}
+	}
+	return nil
 }

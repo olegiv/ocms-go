@@ -562,6 +562,11 @@ func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{Title: "Media references", Slug: "media-references", Status: "draft", AuthorID: user.ID, LanguageCode: language.Code, PageType: "post", FeaturedImageID: sql.NullInt64{Int64: media.ID, Valid: true}, OgImageID: sql.NullInt64{Int64: media.ID, Valid: true}, CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	uploadRoot := t.TempDir()
 	svc := NewMediaService(db, uploadRoot)
 	svc.deleteMediaFiles = func(*os.Root, string) error { return errors.New("injected cleanup failure") }
@@ -576,6 +581,18 @@ func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
 	if err != nil || len(variants) != 0 {
 		t.Fatalf("variant rows = %+v, error = %v; want committed deletion", variants, err)
 	}
+	changed, err := queries.GetPageByID(ctx, page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.FeaturedImageID.Valid || changed.OgImageID.Valid || changed.Revision != 2 {
+		t.Fatalf("media cleanup was not revisioned once: %+v", changed)
+	}
+	version, err := queries.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{PageID: page.ID, Revision: sql.NullInt64{Int64: 2, Valid: true}})
+	if err != nil || version.Legacy || !version.SnapshotJson.Valid {
+		t.Fatalf("media cleanup snapshot: %+v %v", version, err)
+	}
+
 }
 
 func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *testing.T) {

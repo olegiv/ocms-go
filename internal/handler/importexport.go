@@ -25,6 +25,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
@@ -322,6 +323,7 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 
 	// Create importer
 	importer := h.newImporter()
+	importer.SetPrincipal(provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
 
 	var validationResult *transfer.ValidationResult
 	var exportData transfer.ExportData
@@ -566,6 +568,7 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	// Create importer
 	importer := h.newImporter()
+	importer.SetPrincipal(provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
 
 	var result *transfer.ImportResult
 	var err error

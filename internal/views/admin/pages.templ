@@ -12,6 +12,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/alert"
 import "github.com/olegiv/ocms-go/internal/views/components/badge"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
@@ -72,24 +73,28 @@ type PageCategoryNodeView struct {
 
 // PageFormViewData holds data for the page form page.
 type PageFormViewData struct {
-	IsEdit        bool
-	PageID        int64
-	PageTitle     string
-	PageSlug      string
-	PublicURL     string
-	PageBody      string
-	PageSummary   string
-	PageStatus    string
-	PageType      string
-	Statuses      []string
-	PageTypes     []string
-	AllCategories []PageCategoryNodeView
-	Tags          []PageFormTagView
-	Categories    []PageFormCategoryView
-	FeaturedImage *PageFormFeaturedImageView
-	Aliases       []PageFormAliasView
-	Errors        map[string]string
-	FormValues    map[string]string
+	BaseRevision     int64
+	ConflictRevision int64
+	AIEditable       bool
+	CanManageAI      bool
+	IsEdit           bool
+	PageID           int64
+	PageTitle        string
+	PageSlug         string
+	PublicURL        string
+	PageBody         string
+	PageSummary      string
+	PageStatus       string
+	PageType         string
+	Statuses         []string
+	PageTypes        []string
+	AllCategories    []PageCategoryNodeView
+	Tags             []PageFormTagView
+	Categories       []PageFormCategoryView
+	FeaturedImage    *PageFormFeaturedImageView
+	Aliases          []PageFormAliasView
+	Errors           map[string]string
+	FormValues       map[string]string
 	// Language/Translation
 	HasMultipleLanguages bool
 	AllLanguages         []LanguageOption
@@ -179,6 +184,8 @@ type PagesListViewData struct {
 
 // PageVersionView represents a version in the list.
 type PageVersionView struct {
+	Legacy        bool
+	Revision      int64
 	ID            int64
 	Title         string
 	Body          string
@@ -188,11 +195,12 @@ type PageVersionView struct {
 
 // PageVersionsViewData holds data for the versions page.
 type PageVersionsViewData struct {
-	PageID     int64
-	PageTitle  string
-	TotalCount int64
-	Versions   []PageVersionView
-	Pagination PaginationData
+	BaseRevision int64
+	PageID       int64
+	PageTitle    string
+	TotalCount   int64
+	Versions     []PageVersionView
+	Pagination   PaginationData
 }
 
 // =============================================================================
@@ -388,7 +396,6 @@ func statusBadgeClass(status string) string {
 // =============================================================================
 // PAGES LIST PAGE
 // =============================================================================
-
 templ PagesListPage(pc *PageContext, data PagesListViewData) {
 	@AdminLayout(pc) {
 		@PageHeader(pc.T("pages.title"), pc.T("pages.total_count", data.TotalCount)) {
@@ -470,9 +477,9 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							@selectbox.Trigger(selectbox.TriggerProps{
 								Name: "category",
 							}) {
-							@selectbox.Value(selectbox.ValueProps{
-								Placeholder: pc.T("pages.all_categories"),
-							})
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: pc.T("pages.all_categories"),
+								})
 							}
 							@selectbox.Content(selectbox.ContentProps{}) {
 								@selectbox.Item(selectbox.ItemProps{
@@ -524,9 +531,9 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							@selectbox.Trigger(selectbox.TriggerProps{
 								Name: "language",
 							}) {
-							@selectbox.Value(selectbox.ValueProps{
-								Placeholder: pc.T("pages.all_languages"),
-							})
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: pc.T("pages.all_languages"),
+								})
 							}
 							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
 								@selectbox.Item(selectbox.ItemProps{
@@ -612,7 +619,9 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 										/>
 									}
 								}
-								@table.Head(table.HeadProps{Class: "w-[60px]"}) { { pc.T("label.image") } }
+								@table.Head(table.HeadProps{Class: "w-[60px]"}) {
+									{ pc.T("label.image") }
+								}
 								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("title"))}}) {
 									<a
 										href={ data.Pagination.SortURL("title", sortDirAsc) }
@@ -624,8 +633,12 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("title"))) }</span>
 									</a>
 								}
-								@table.Head() { { pc.T("label.tags") } }
-								@table.Head() { { pc.T("label.categories") } }
+								@table.Head() {
+									{ pc.T("label.tags") }
+								}
+								@table.Head() {
+									{ pc.T("label.categories") }
+								}
 								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("language_code"))}}) {
 									<a
 										href={ data.Pagination.SortURL("language_code", sortDirAsc) }
@@ -670,7 +683,9 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("updated_at"))) }</span>
 									</a>
 								}
-								@table.Head() { { pc.T("label.actions") } }
+								@table.Head() {
+									{ pc.T("label.actions") }
+								}
 							}
 						}
 						@table.Body() {
@@ -766,32 +781,38 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 		}
 		@table.Cell() {
 			if page.PageType == "post" {
-				@badge.Badge(badge.Props{Class: "badge-info"}) { { pc.T("pages.type_post") } }
+				@badge.Badge(badge.Props{Class: "badge-info"}) {
+					{ pc.T("pages.type_post") }
+				}
 			} else if page.PageType == "page" {
-				@badge.Badge(badge.Props{}) { { pc.T("pages.type_page") } }
+				@badge.Badge(badge.Props{}) {
+					{ pc.T("pages.type_page") }
+				}
 			} else {
 				<span class="text-muted">{ page.PageType }</span>
 			}
 		}
 		@table.Cell() {
-		if page.IsScheduled {
-			@badge.Badge(badge.Props{Class: "badge-info", Attributes: templ.Attributes{"title": page.ScheduledAtTitle}}) {
-				@iconClock12()
-				{ pc.T("status.scheduled") }
-			}
-		} else {
-			@badge.Badge(badge.Props{Class: statusBadgeClass(page.Status)}) {
-				if page.Status == "published" {
-					{ pc.T("status.published") }
-				} else if page.Status == "draft" {
-					{ pc.T("status.draft") }
-				} else {
-					{ page.Status }
+			if page.IsScheduled {
+				@badge.Badge(badge.Props{Class: "badge-info", Attributes: templ.Attributes{"title": page.ScheduledAtTitle}}) {
+					@iconClock12()
+					{ pc.T("status.scheduled") }
+				}
+			} else {
+				@badge.Badge(badge.Props{Class: statusBadgeClass(page.Status)}) {
+					if page.Status == "published" {
+						{ pc.T("status.published") }
+					} else if page.Status == "draft" {
+						{ pc.T("status.draft") }
+					} else {
+						{ page.Status }
+					}
 				}
 			}
 		}
+		@table.Cell() {
+			{ page.UpdatedAt }
 		}
-		@table.Cell() { { page.UpdatedAt } }
 		@table.Cell() {
 			<div class="action-buttons">
 				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", page.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
@@ -845,7 +866,6 @@ func publishTitle(pc *PageContext, status string) string {
 // =============================================================================
 // PAGE FORM PAGE
 // =============================================================================
-
 templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
 		if data.IsEdit {
@@ -881,6 +901,36 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 				x-data={ pageFormXData(data) }
 			>
 				@csrfField()
+				if data.IsEdit {
+					<input type="hidden" name="base_revision" value={ fmt.Sprint(data.BaseRevision) }/>
+				}
+				if data.ConflictRevision > 0 {
+					@alert.Alert(alert.Props{Class: "alert-warning mb-4"}) {
+						@alert.Title() {
+							{ pc.T("pages.revision_conflict_title") }
+						}
+						@alert.Description(alert.DescriptionProps{Class: "gap-3"}) {
+							<p>{ pc.T("pages.revision_conflict") }</p>
+							<div class="flex flex-wrap gap-2">
+								@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d", data.PageID)}) {
+									{ pc.T("pages.view_latest") }
+								}
+								@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{"name": "overwrite_revision", "value": fmt.Sprint(data.ConflictRevision)}}) {
+									{ pc.T("pages.confirm_overwrite") }
+								}
+							</div>
+						}
+					}
+				}
+				if data.CanManageAI {
+					<input type="hidden" name="ai_access_present" value="1"/>
+					<div class="mb-6 flex items-center gap-2">
+						@checkbox.Checkbox(checkbox.Props{ID: "allow_ai_edits", Name: "allow_ai_edits", Checked: data.AIEditable})
+						@label.Label(label.Props{For: "allow_ai_edits"}) {
+							{ pc.T("pages.allow_ai_edits") }
+						}
+					</div>
+				}
 				if data.IsEdit {
 					<input type="hidden" name="_method" value="PUT"/>
 				}
@@ -928,10 +978,14 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 					<!-- Status -->
 					<div class="form-group">
-						@label.Label(label.Props{For: "status", Class: "block mb-1"}) { { pc.T("label.status") } }
+						@label.Label(label.Props{For: "status", Class: "block mb-1"}) {
+							{ pc.T("label.status") }
+						}
 						if data.IsDemoMode && data.IsEdit && currentStatus(data.FormValues, data.PageStatus) == "published" {
 							<input type="hidden" name="status" value="published"/>
-							@badge.Badge(badge.Props{Class: "badge-success"}) { { pc.T("status.published") } }
+							@badge.Badge(badge.Props{Class: "badge-success"}) {
+								{ pc.T("status.published") }
+							}
 						} else {
 							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 								@selectbox.Trigger(selectbox.TriggerProps{
@@ -964,7 +1018,9 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 					<!-- Page Type -->
 					<div class="form-group">
-						@label.Label(label.Props{For: "page_type", Class: "block mb-1"}) { { pc.T("pages.page_type") } }
+						@label.Label(label.Props{For: "page_type", Class: "block mb-1"}) {
+							{ pc.T("pages.page_type") }
+						}
 						@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 							@selectbox.Trigger(selectbox.TriggerProps{
 								Name:     "page_type",
@@ -998,7 +1054,9 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					<!-- Language -->
 					if data.HasMultipleLanguages {
 						<div class="form-group">
-							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) { { pc.T("label.language") } }
+							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
+								{ pc.T("label.language") }
+							}
 							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 								@selectbox.Trigger(selectbox.TriggerProps{
 									Name:     langSelectName(data.IsEdit),
@@ -1037,7 +1095,9 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					}
 					<!-- Body (TinyMCE Editor) -->
 					<div class="form-group form-group-full">
-						@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("label.content") } }
+						@label.Label(label.Props{Class: "block mb-1"}) {
+							{ pc.T("label.content") }
+						}
 						<div class="editor-container">
 							<textarea id="editor" name="body" class="tinymce-editor">
 								{ formVal(data.FormValues, "body", data.PageBody) }
@@ -1050,7 +1110,9 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 					<!-- Summary -->
 					<div class="form-group form-group-full">
-						@label.Label(label.Props{For: "summary", Class: "block mb-1"}) { { pc.T("pages.summary") } }
+						@label.Label(label.Props{For: "summary", Class: "block mb-1"}) {
+							{ pc.T("pages.summary") }
+						}
 						@textarea.Textarea(textarea.Props{
 							ID:          "summary",
 							Name:        "summary",
@@ -1069,7 +1131,9 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 							data-mode="select"
 							data-initial-image={ featuredImageJSON(data.FeaturedImage) }
 						>
-							@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("media.featured_image") } }
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("media.featured_image") }
+							}
 							@mediaDropzoneSelectArea(pc)
 							<span class="form-hint">{ pc.T("media.featured_image_requirements") }</span>
 							if data.Errors["featured_image_id"] != "" {
@@ -1177,7 +1241,6 @@ func langSelectName(isEdit bool) string {
 // =============================================================================
 // FORM SUB-COMPONENTS
 // =============================================================================
-
 templ translationsPanel(pc *PageContext, data PageFormViewData) {
 	<div class="translations-panel">
 		<div class="translations-header">
@@ -1239,7 +1302,9 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 
 templ tagSelector(pc *PageContext, tags []PageFormTagView) {
 	<div class="tag-selector" x-data="tagSelector()" x-init="init()" data-initial-tags={ tagsJSON(tags) }>
-		@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("tags.title") } }
+		@label.Label(label.Props{Class: "block mb-1"}) {
+			{ pc.T("tags.title") }
+		}
 		<!-- Selected Tags Display -->
 		<div class="selected-tags">
 			<template x-for="tag in selectedTags" :key="tag.id">
@@ -1301,7 +1366,9 @@ templ tagSelector(pc *PageContext, tags []PageFormTagView) {
 
 templ categorySelector(pc *PageContext, allCategories []PageCategoryNodeView, selectedCategories []PageFormCategoryView) {
 	<div class="category-selector" x-data="categorySelector()" data-initial-categories={ categoriesJSON(selectedCategories) }>
-		@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("categories.title") } }
+		@label.Label(label.Props{Class: "block mb-1"}) {
+			{ pc.T("categories.title") }
+		}
 		if len(allCategories) > 0 {
 			<div class="category-tree">
 				for _, cat := range allCategories {
@@ -1341,7 +1408,7 @@ templ aliasesSection(pc *PageContext, data PageFormViewData) {
 			@iconChevronRight()
 			<span>{ pc.T("pages.aliases") }</span>
 			<template x-if="aliases.length > 0">
-				@badge.Badge(badge.Props{Class: "badge-info ml-2", Attributes: templ.Attributes{"x-text": "aliases.length"}}) {}
+				@badge.Badge(badge.Props{Class: "badge-info ml-2", Attributes: templ.Attributes{"x-text": "aliases.length"}})
 			</template>
 		</summary>
 		<div class="collapsible-content">
@@ -1355,7 +1422,7 @@ templ aliasesSection(pc *PageContext, data PageFormViewData) {
 								Name: "aliases[]",
 								Attributes: templ.Attributes{
 									"x-model":     "alias.value",
-									"placeholder":  pc.T("pages.alias_placeholder"),
+									"placeholder": pc.T("pages.alias_placeholder"),
 									"@input":      "validateAlias(index)",
 									"maxlength":   "255",
 								},
@@ -1407,7 +1474,9 @@ templ videoSection(pc *PageContext, data PageFormViewData) {
 		</summary>
 		<div class="collapsible-content">
 			<div class="form-group">
-				@label.Label(label.Props{For: "video_url", Class: "block mb-1"}) { { pc.T("pages.video_url") } }
+				@label.Label(label.Props{For: "video_url", Class: "block mb-1"}) {
+					{ pc.T("pages.video_url") }
+				}
 				@input.Input(input.Props{
 					ID:          "video_url",
 					Name:        "video_url",
@@ -1423,14 +1492,16 @@ templ videoSection(pc *PageContext, data PageFormViewData) {
 				<span class="form-hint">{ pc.T("pages.video_url_hint") }</span>
 			</div>
 			<div class="form-group">
-				@label.Label(label.Props{For: "video_title", Class: "block mb-1"}) { { pc.T("pages.video_title") } }
+				@label.Label(label.Props{For: "video_title", Class: "block mb-1"}) {
+					{ pc.T("pages.video_title") }
+				}
 				@input.Input(input.Props{
-					ID:          "video_title",
-					Name:        "video_title",
-					Type:        input.TypeText,
-					Value:       formVal(data.FormValues, "video_title", data.VideoTitle),
-					HasError:    data.Errors["video_title"] != "",
-					Attributes:  templ.Attributes{"maxlength": "255"},
+					ID:         "video_title",
+					Name:       "video_title",
+					Type:       input.TypeText,
+					Value:      formVal(data.FormValues, "video_title", data.VideoTitle),
+					HasError:   data.Errors["video_title"] != "",
+					Attributes: templ.Attributes{"maxlength": "255"},
 				})
 				if data.Errors["video_title"] != "" {
 					<span class="form-error">{ data.Errors["video_title"] }</span>
@@ -1450,7 +1521,9 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 		<div class="collapsible-content">
 			<!-- Meta Title -->
 			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaTitleInput.value.length">
-				@label.Label(label.Props{For: "meta_title", Class: "block mb-1"}) { { pc.T("seo.meta_title") } }
+				@label.Label(label.Props{For: "meta_title", Class: "block mb-1"}) {
+					{ pc.T("seo.meta_title") }
+				}
 				@input.Input(input.Props{
 					ID:          "meta_title",
 					Name:        "meta_title",
@@ -1461,12 +1534,14 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 				})
 				<span class="form-hint">
 					<span x-text="charCount"></span>/60 { pc.T("seo.chars_recommended") }
-					<span x-show="charCount > 60" class="text-warning"> - { pc.T("seo.may_be_truncated") }</span>
+					<span x-show="charCount > 60" class="text-warning">- { pc.T("seo.may_be_truncated") }</span>
 				</span>
 			</div>
 			<!-- Meta Description -->
 			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaDescInput.value.length">
-				@label.Label(label.Props{For: "meta_description", Class: "block mb-1"}) { { pc.T("seo.meta_description") } }
+				@label.Label(label.Props{For: "meta_description", Class: "block mb-1"}) {
+					{ pc.T("seo.meta_description") }
+				}
 				@textarea.Textarea(textarea.Props{
 					ID:          "meta_description",
 					Name:        "meta_description",
@@ -1474,19 +1549,21 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 					Placeholder: pc.T("seo.meta_description_hint"),
 					Value:       formVal(data.FormValues, "meta_description", data.MetaDescription),
 					Attributes: templ.Attributes{
-						"x-ref":    "metaDescInput",
+						"x-ref":     "metaDescInput",
 						"maxlength": "320",
-						"@input":   "charCount = $event.target.value.length",
+						"@input":    "charCount = $event.target.value.length",
 					},
 				})
 				<span class="form-hint">
 					<span x-text="charCount"></span>/160 { pc.T("seo.chars_recommended") }
-					<span x-show="charCount > 160" class="text-warning"> - { pc.T("seo.may_be_truncated") }</span>
+					<span x-show="charCount > 160" class="text-warning">- { pc.T("seo.may_be_truncated") }</span>
 				</span>
 			</div>
 			<!-- Meta Keywords -->
 			<div class="form-group">
-				@label.Label(label.Props{For: "meta_keywords", Class: "block mb-1"}) { { pc.T("seo.meta_keywords") } }
+				@label.Label(label.Props{For: "meta_keywords", Class: "block mb-1"}) {
+					{ pc.T("seo.meta_keywords") }
+				}
 				@input.Input(input.Props{
 					ID:          "meta_keywords",
 					Name:        "meta_keywords",
@@ -1506,7 +1583,9 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 					data-mode="select"
 					data-initial-image={ featuredImageJSON(data.OgImage) }
 				>
-					@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.og_image") } }
+					@label.Label(label.Props{Class: "block mb-1"}) {
+						{ pc.T("seo.og_image") }
+					}
 					@mediaDropzoneSelectArea(pc)
 					<span class="form-hint">{ pc.T("seo.og_image_hint") }</span>
 					<input type="hidden" name="og_image_id" x-bind:value="selectedImage ? selectedImage.id : ''"/>
@@ -1515,7 +1594,9 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 			<!-- Canonical URL -->
 			<div class="form-group">
-				@label.Label(label.Props{For: "canonical_url", Class: "block mb-1"}) { { pc.T("seo.canonical_url") } }
+				@label.Label(label.Props{For: "canonical_url", Class: "block mb-1"}) {
+					{ pc.T("seo.canonical_url") }
+				}
 				@input.Input(input.Props{
 					ID:          "canonical_url",
 					Name:        "canonical_url",
@@ -1528,7 +1609,9 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 			<!-- Robots Settings -->
 			<div class="form-group">
-				@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.directives") } }
+				@label.Label(label.Props{Class: "block mb-1"}) {
+					{ pc.T("seo.directives") }
+				}
 				<div class="checkbox-group">
 					<label class="checkbox-label">
 						<input
@@ -1566,12 +1649,16 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 			@iconChevronRight()
 			<span>{ pc.T("schedule.title") }</span>
 			if data.HasScheduledAt {
-				@badge.Badge(badge.Props{Class: "badge-info ml-2"}) { { pc.T("schedule.scheduled") } }
+				@badge.Badge(badge.Props{Class: "badge-info ml-2"}) {
+					{ pc.T("schedule.scheduled") }
+				}
 			}
 		</summary>
 		<div class="collapsible-content">
 			<div class="form-group">
-				@label.Label(label.Props{For: "scheduled_at", Class: "block mb-1"}) { { pc.T("schedule.datetime") } }
+				@label.Label(label.Props{For: "scheduled_at", Class: "block mb-1"}) {
+					{ pc.T("schedule.datetime") }
+				}
 				@input.Input(input.Props{
 					ID:    "scheduled_at",
 					Name:  "scheduled_at",
@@ -1587,7 +1674,9 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 				</span>
 			</div>
 			<div class="form-group">
-				@label.Label(label.Props{For: "created_at", Class: "block mb-1"}) { { pc.T("pages.created_at") } }
+				@label.Label(label.Props{For: "created_at", Class: "block mb-1"}) {
+					{ pc.T("pages.created_at") }
+				}
 				@input.Input(input.Props{
 					ID:    "created_at",
 					Name:  "created_at",
@@ -1604,7 +1693,9 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 			</div>
 			if data.HasPublishedAt {
 				<div class="form-group">
-					@label.Label(label.Props{For: "published_at", Class: "block mb-1"}) { { pc.T("pages.published_at") } }
+					@label.Label(label.Props{For: "published_at", Class: "block mb-1"}) {
+						{ pc.T("pages.published_at") }
+					}
 					@input.Input(input.Props{
 						ID:    "published_at",
 						Name:  "published_at",
@@ -1632,7 +1723,6 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 // =============================================================================
 // MEDIA DROPZONE (select mode) - inline for the page form
 // =============================================================================
-
 templ mediaDropzoneSelectArea(pc *PageContext) {
 	<div
 		class="media-dropzone-area"
@@ -1774,7 +1864,6 @@ templ mediaDropzoneSelectModal(pc *PageContext) {
 // =============================================================================
 // EDITOR IMAGE MODAL
 // =============================================================================
-
 templ editorImageModal(pc *PageContext) {
 	<div id="editor-image-modal" class="editor-image-modal" style="display: none;">
 		<div class="editor-image-modal-overlay"></div>
@@ -1806,15 +1895,23 @@ templ editorImageModal(pc *PageContext) {
 					})
 				</div>
 				<div class="form-group">
-					@label.Label(label.Props{For: "editor-image-size", Class: "block mb-1"}) { { pc.T("editor.image_size") } }
+					@label.Label(label.Props{For: "editor-image-size", Class: "block mb-1"}) {
+						{ pc.T("editor.image_size") }
+					}
 					@selectbox.SelectBox(selectbox.Props{ID: "editor-image-size", Class: "select-no-clear"}) {
 						@selectbox.Trigger(selectbox.TriggerProps{Name: "editor-image-size"}) {
 							@selectbox.Value(selectbox.ValueProps{})
 						}
 						@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
-							@selectbox.Item(selectbox.ItemProps{Value: "full"}) { { pc.T("editor.size_full") } }
-							@selectbox.Item(selectbox.ItemProps{Value: "medium", Selected: true}) { { pc.T("editor.size_medium") } }
-							@selectbox.Item(selectbox.ItemProps{Value: "small"}) { { pc.T("editor.size_small") } }
+							@selectbox.Item(selectbox.ItemProps{Value: "full"}) {
+								{ pc.T("editor.size_full") }
+							}
+							@selectbox.Item(selectbox.ItemProps{Value: "medium", Selected: true}) {
+								{ pc.T("editor.size_medium") }
+							}
+							@selectbox.Item(selectbox.ItemProps{Value: "small"}) {
+								{ pc.T("editor.size_small") }
+							}
 						}
 					}
 				</div>
@@ -1834,7 +1931,6 @@ templ editorImageModal(pc *PageContext) {
 // =============================================================================
 // PAGE FORM SCRIPTS
 // =============================================================================
-
 templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	<!-- TinyMCE Editor Scripts -->
 	<div id="tinymce-config" data-cache-suffix={ "?v=" + utils.ScriptVersion } style="display:none"></div>
@@ -2160,7 +2256,6 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 // =============================================================================
 // PAGE VERSIONS PAGE
 // =============================================================================
-
 templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 	@AdminLayout(pc) {
 		@PageHeader(pc.T("versions.title"), "") {
@@ -2175,11 +2270,21 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
-								@table.Head() { { pc.T("versions.version") } }
-								@table.Head() { { pc.T("label.title") } }
-								@table.Head() { { pc.T("versions.changed_by") } }
-								@table.Head() { { pc.T("versions.date") } }
-								@table.Head() { { pc.T("label.actions") } }
+								@table.Head() {
+									{ pc.T("versions.version") }
+								}
+								@table.Head() {
+									{ pc.T("label.title") }
+								}
+								@table.Head() {
+									{ pc.T("versions.changed_by") }
+								}
+								@table.Head() {
+									{ pc.T("versions.date") }
+								}
+								@table.Head() {
+									{ pc.T("label.actions") }
+								}
 							}
 						}
 						@table.Body() {
@@ -2208,15 +2313,22 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionView) {
 	@table.Row() {
 		@table.Cell() {
-			@badge.Badge(badge.Props{Class: "badge-info"}) { #{ fmt.Sprintf("%d", version.ID) } }
+			@badge.Badge(badge.Props{Class: "badge-info"}) {
+				#{ fmt.Sprintf("%d", version.ID) }
+			}
 		}
 		@table.Cell() {
 			<span class="version-title">{ version.Title }</span>
+			if version.Legacy {
+				<span class="text-muted">{ pc.T("versions.legacy") }</span>
+			}
 		}
 		@table.Cell() {
 			<span class="user-name">{ version.ChangedByName }</span>
 		}
-		@table.Cell() { { version.CreatedAt } }
+		@table.Cell() {
+			{ version.CreatedAt }
+		}
 		@table.Cell() {
 			<div class="action-buttons">
 				<div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
@@ -2245,8 +2357,10 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 							<div class="modal-body">
 								<div class="version-preview">
 									<div class="version-meta">
-										<strong>{ pc.T("label.title") }:</strong> { version.Title }<br/>
-										<strong>{ pc.T("versions.changed_by") }:</strong> { version.ChangedByName }<br/>
+										<strong>{ pc.T("label.title") }:</strong> { version.Title }
+										<br/>
+										<strong>{ pc.T("versions.changed_by") }:</strong> { version.ChangedByName }
+										<br/>
 										<strong>{ pc.T("versions.date") }:</strong> { version.CreatedAt }
 									</div>
 									<div class="version-content">
@@ -2267,6 +2381,7 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 								}
 								<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)) } method="POST" class="inline-form">
 									@csrfField()
+									<input type="hidden" name="base_revision" value={ fmt.Sprint(data.BaseRevision) }/>
 									@button.Button(button.Props{Type: button.TypeSubmit}) {
 										{ pc.T("versions.restore_this") }
 									}
@@ -2298,6 +2413,7 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 								}
 								<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)) } method="POST" class="inline-form">
 									@csrfField()
+									<input type="hidden" name="base_revision" value={ fmt.Sprint(data.BaseRevision) }/>
 									@button.Button(button.Props{Type: button.TypeSubmit}) {
 										{ pc.T("versions.restore_version") }
 									}
@@ -2314,7 +2430,6 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 // =============================================================================
 // ICON COMPONENTS (pages-specific)
 // =============================================================================
-
 templ iconFilePlus() {
 	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><line x1="12" x2="12" y1="11" y2="17"></line><line x1="9" x2="15" y1="14" y2="14"></line></svg>
 }

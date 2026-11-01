@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -626,7 +627,7 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete media (files and DB records)
-	err = h.mediaService.Delete(r.Context(), id)
+	err = h.mediaService.DeleteWithPrincipal(r.Context(), id, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
 	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 		slog.Error("failed to delete media", "error", err, "media_id", id)
 		http.Error(w, "Error deleting media", http.StatusInternalServerError)
@@ -701,7 +702,7 @@ func (h *MediaHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		err = h.mediaService.Delete(r.Context(), id)
+		err = h.mediaService.DeleteWithPrincipal(r.Context(), id, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
 		if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 			slog.Error("failed to bulk delete media", "error", err, "media_id", id)
 			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting media"})

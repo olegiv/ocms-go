@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -1087,15 +1088,7 @@ func importedEntityRouteCandidates(
 // its files can be deleted after the transaction commits rather than during it.
 // It may be nil.
 func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
-	deletePage := func(ctx context.Context, q *store.Queries, id int64) error {
-		if err := q.ClearPageTags(ctx, id); err != nil {
-			return err
-		}
-		if err := q.ClearPageCategories(ctx, id); err != nil {
-			return err
-		}
-		return q.DeletePage(ctx, id)
-	}
+	deletePage := pagewrite.DeleteFromQueries
 
 	// The UUID is queued only after the row is gone. Queuing it up front meant a
 	// failed DeleteMedia kept the media row — correctly, and retryably — while
@@ -1112,12 +1105,10 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 			}
 			return fmt.Errorf("failed to read media %d before deleting it: %w", id, err)
 		}
-		if err := q.DeleteMediaVariants(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete media variants", "id", id, "error", err)
-		}
-		if err := q.DeleteMedia(ctx, id); err != nil {
+		if err := pagewrite.DeleteMediaFromQueries(ctx, q, id); err != nil {
 			return err
 		}
+
 		if collectMediaUUID != nil {
 			collectMediaUUID(media.Uuid)
 		}
@@ -1216,18 +1207,16 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 		{entityType: types.EntityRedirect, del: func(ctx context.Context, q *store.Queries, id int64) error {
 			return q.DeleteRedirect(ctx, id)
 		}},
-		{entityType: types.EntityAlias, del: func(ctx context.Context, q *store.Queries, id int64) error {
-			return q.DeletePageAlias(ctx, id)
-		}},
+		{entityType: types.EntityAlias, del: pagewrite.DeleteAliasFromQueries},
 		{entityType: types.EntityPost, del: deletePage, beforeDelete: detachMenuItems},
 		{entityType: types.EntityPage, del: deletePage, beforeDelete: detachMenuItems},
 		{entityType: types.EntityTag, del: func(ctx context.Context, q *store.Queries, id int64) error {
-			return q.DeleteTag(ctx, id)
+			return pagewrite.DeleteTermFromQueries(ctx, q, "tag", id)
 		}, beforeDelete: keepIfReferenced(func(ctx context.Context, q *store.Queries, id int64) (int64, error) {
 			return q.CountPagesForTag(ctx, id)
 		})},
 		{entityType: types.EntityCategory, del: func(ctx context.Context, q *store.Queries, id int64) error {
-			return q.DeleteCategory(ctx, id)
+			return pagewrite.DeleteTermFromQueries(ctx, q, "category", id)
 		}, beforeDelete: func(ctx context.Context, q *store.Queries, id int64) (bool, error) {
 			refs, err := q.CountPagesByCategory(ctx, id)
 			if err != nil || refs > 0 {

@@ -272,7 +272,7 @@ func (q *Queries) GetPendingDeliveries(ctx context.Context, arg GetPendingDelive
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []WebhookDelivery{}
 	for rows.Next() {
 		var i WebhookDelivery
@@ -314,7 +314,7 @@ func (q *Queries) GetRecentDeliveries(ctx context.Context, limit int64) ([]Webho
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []WebhookDelivery{}
 	for rows.Next() {
 		var i WebhookDelivery
@@ -357,7 +357,7 @@ func (q *Queries) GetRecentFailedDeliveries(ctx context.Context, limit int64) ([
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []WebhookDelivery{}
 	for rows.Next() {
 		var i WebhookDelivery
@@ -421,7 +421,7 @@ func (q *Queries) GetRecentFailedDeliveriesWithWebhook(ctx context.Context, limi
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetRecentFailedDeliveriesWithWebhookRow{}
 	for rows.Next() {
 		var i GetRecentFailedDeliveriesWithWebhookRow
@@ -531,7 +531,7 @@ func (q *Queries) GetWebhookHealthSummary(ctx context.Context, createdAt time.Ti
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetWebhookHealthSummaryRow{}
 	for rows.Next() {
 		var i GetWebhookHealthSummaryRow
@@ -566,7 +566,7 @@ func (q *Queries) ListActiveWebhooks(ctx context.Context) ([]Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Webhook{}
 	for rows.Next() {
 		var i Webhook
@@ -611,7 +611,7 @@ func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeli
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []WebhookDelivery{}
 	for rows.Next() {
 		var i WebhookDelivery
@@ -652,7 +652,7 @@ func (q *Queries) ListWebhooks(ctx context.Context) ([]Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Webhook{}
 	for rows.Next() {
 		var i Webhook
@@ -691,7 +691,7 @@ func (q *Queries) ListWebhooksForEvent(ctx context.Context, dollar_1 sql.NullStr
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Webhook{}
 	for rows.Next() {
 		var i Webhook
@@ -734,7 +734,7 @@ func (q *Queries) ListWebhooksPaginated(ctx context.Context, arg ListWebhooksPag
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Webhook{}
 	for rows.Next() {
 		var i Webhook

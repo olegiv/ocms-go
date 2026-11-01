@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Atomic page-write foundations (R1.2).** Complete page revisions and
+  provenance, editor conflict handling, owner/admin AI-edit consent, retained
+  idempotency and revision tracking across API, scheduler, imports and cleanup.
+  REST updates to AI-editable pages require `base_revision`. This is foundation
+  work; MCP page-authoring tools remain scheduled for R1.5. See
+  `docs/page-writes.md`.
 - **Opt-in MCP OAuth (R1.1).** Authorization code with S256 PKCE, scoped
   browser consent after fresh password/MFA sign-in, issuer/resource discovery,
   bounded client metadata and optional public-client registration. SQLite
@@ -16,8 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Connections can be revoked from Account → Security. A development/staging
   flag adds bounded, temporary scratch tools with no CMS page writes;
   production/demo refuse it. Existing API key policies remain in force.
-  Real Claude Desktop and ChatGPT account acceptance is pending; see
-  `docs/oauth.md`.
+  R1.1 real-client acceptance is complete; see `docs/oauth.md` and the
+  current client matrix in `.claude/docs/PHASE5.md`.
 - **Status page link.** The new **Status Page URL** setting in
   `/admin/config` (for example, an UptimeRobot public status page) adds a
   "Status" link (`rel="nofollow noopener noreferrer"`) to the footer of the

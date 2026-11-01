@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -59,7 +60,13 @@ func TestTogglePublishAppliesOnlyToTheStatusItRead(t *testing.T) {
 	toggle := func() {
 		t.Helper()
 		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/admin/pages/"+strconv.FormatInt(page.ID, 10)+"/publish", nil))
+		current, err := queries.GetPageByID(ctx, page.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/admin/pages/"+strconv.FormatInt(page.ID, 10)+"/publish", strings.NewReader("base_revision="+strconv.FormatInt(current.Revision, 10)))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		router.ServeHTTP(rr, req)
 		if rr.Code != http.StatusSeeOther {
 			t.Fatalf("toggle: status %d, want a redirect", rr.Code)
 		}

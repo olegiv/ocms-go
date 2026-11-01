@@ -621,7 +621,8 @@ See Implementation Notes §0.1–0.9.
 **Status: complete (2026-11-01).** The real-client matrix and external public
 IPv6/TLS/forwarding acceptance are recorded in R1.1M–R1.1N. The deployed runtime
 remains `c885da9071eb`; the shared development authenticator and acceptance
-records accompany this closeout. R1.2 has not started.
+records accompany this closeout. R1.2 is implemented locally; see its status and
+verification notes below.
 
 Goal: prove with **my real accounts** that Claude Desktop and ChatGPT (plus Claude Code and Codex) can
 connect, read context and invoke an approved write **before** the full authoring flow is built. The
@@ -713,6 +714,12 @@ spike writes isolated scratch data; actual CMS draft persistence is first proven
   local SDK passes and a successful staging deployment do not satisfy client acceptance.
 
 ### Iteration R1.2: Write Foundations — Shared Path, Ownership, Revisions, Idempotency, Provenance
+
+**Status: implemented locally (2026-11-01), uncommitted.** The shared boundary,
+legacy writers, admin conflict flow and storage contracts are covered by local
+checks. See `docs/page-writes.md` and the R1.2 implementation notes. No R1.2
+push/deployment has been authorized; MCP page-authoring tools remain R1.5.
+
 - §0.2 in full:
   - `internal/pagewrite`;
   - admin `Translate` fixed;
@@ -2367,3 +2374,55 @@ or deployment was needed for verification. Evidence is in `ipv6-external-verific
 existing ignored deployment-evidence directory. The shared helper and acceptance
 records are separate from the deployed runtime. The existing wiki work is
 excluded from this closeout.
+
+
+### Iteration R1.2 — Atomic write foundations (2026-11-01)
+
+Implemented locally on `codex/phase5-r1.2-foundations`, based on R1.1 closeout
+`f92e57161790d063ae127fd2e4d70dcfa698f8da`. No new dependency, commit, push or
+deployment. The existing staging runtime remains `c885da9071eb`.
+
+- Added core revision-1 backfill, honest legacy history, AI-access flags,
+  complete snapshots, per-revision verified/validated/reported provenance and
+  retained idempotency records. New page operations and related state share
+  one transaction; no-op saves and replays add no versions or webhooks.
+- Added neutral `pagewrite` validation, CAS, translation, restore and deletion
+  helpers; query adapters join legacy transactions through savepoints and reject
+  autocommit handles. Converted admin/v2, scheduler, media and language changes,
+  oCMS imports, PHP-Nuke/Elefant/Drupal imports, generator and rollback writers.
+  The complete writer inventory and its behavioral evidence are in
+  `docs/page-writes.md`.
+- Admin forms carry displayed revisions, preserve unsaved conflict inputs and
+  offer a new CAS on confirmed overwrite. Owner/admin AI-edit toggle and legacy
+  version labels are localized in English/Russian. REST preserves ordinary
+  unconditional updates but requires `base_revision` on AI-editable pages.
+- `CreateWith`/`UpdateWith` support trusted `ForceDraft` and `TranslationOf`.
+  Draft writes require current app identity, ownership, scopes, opt-in, lifecycle,
+  request ID and transaction-bound policy callback. Explicit lifecycle nulls
+  cannot bypass validation. API-key creator mapping has one actor helper.
+- Wired optional module webhooks, shared featured-image checks and suspicious
+  content events. Actual HTTP verification found and fixed Huma's error-envelope
+  transformation so conflict codes/details reach REST clients.
+- Preserved the fixed demo seed as a storage-layer exception (a pagewrite import
+  would create a package cycle). It uses a single transaction and records complete
+  initial versions/provenance; it never overwrites existing pages. Source imports
+  retain separate alias stages, with each alias operation now revisioned.
+- Five negative regression probes plus actor/dependency probes demonstrated
+  failure when safeguards were removed and success after restoration. Full suite,
+  race, lint/tool, HTTP and browser evidence is retained under ignored
+  `output/r12-validation/`; the final source manifest identifies the tested tree.
+  GolangCI retains five pre-existing findings in unchanged layout/MFA tests and
+  local weather code. Govulncheck has no reachable finding; one module advisory
+  is uncalled. These limits do not imply that all repository lint is green.
+- Updated source documentation and local wiki pages, preserving prior wiki work.
+  Wiki publication is not authorized. No new MCP authoring tools are exposed.
+
+Before deployment: back up the real site's database and verify the migration on
+its disposable copy. R1.2 remains local. Next iteration is R1.3 (draft contract,
+validation issues, safe HTML and link policy); stop here for human review.
+
+Final R1.2 verification: 59 packages, 7489 test/subtest results,
+23 live HTTP checks and the confirmed-overwrite browser flow passed. Focused
+race checks passed. Runtime/test source fingerprint: `98a70310f78e07fe41dba453c5ff0b2f108c506880d7ff115f5aac6304341d3d`.
+The full evidence record and remaining staged-authoring scope are in
+`docs/page-writes.md`. No commit, push or deployment was performed.

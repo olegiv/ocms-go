@@ -513,3 +513,12 @@ for REST and MCP together:
   plugs into.
 - MCP resources and prompts.
 - A language filter for list and search tools (needs v2 service support).
+
+
+## Page authoring foundations (R1.2 development)
+
+R1.2 adds shared atomic page writes, user-owned AI-edit consent, complete
+revisions/provenance and retained idempotency in core. It does not expose CMS
+write tools through MCP yet; those remain R1.5. REST updates to AI-editable
+pages now require `base_revision`. See [Page writes](page-writes.md) for the
+compatibility rule, writer inventory, local verification and migration notes.

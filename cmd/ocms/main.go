@@ -1962,6 +1962,7 @@ func run() (runErr error) {
 		}
 	}
 	moduleCtx := &module.Context{
+		Webhooks:                 webhookDispatcher,
 		DB:                       db,
 		Store:                    store.New(db),
 		Logger:                   logger,
@@ -2614,6 +2615,7 @@ func run() (runErr error) {
 		mediaSvc.SetWebhookDispatcher(webhookDispatcher)
 		apiv2media.Register(apiV2.API, mediaSvc)
 		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries, v2Events)
+		taxonomySvc.SetCacheManager(cacheManager)
 		apiv2taxonomy.Register(apiV2.API, taxonomySvc)
 		apiV2Docs, err := apiv2.NewDocsServer(templatesFS, apiV2)
 		if err != nil {

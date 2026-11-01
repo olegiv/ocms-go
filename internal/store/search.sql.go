@@ -67,7 +67,7 @@ func (q *Queries) SearchAdminPages(ctx context.Context, arg SearchAdminPagesPara
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []SearchAdminPagesRow{}
 	for rows.Next() {
 		var i SearchAdminPagesRow

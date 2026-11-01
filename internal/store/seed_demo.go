@@ -44,7 +44,13 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 	}
 
 	slog.Info("seeding demo content")
-	queries := New(db)
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin demo seed: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	queries := New(db).WithTx(tx)
 
 	// Get default language
 	defaultLang, err := queries.GetDefaultLanguage(ctx)
@@ -90,6 +96,9 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("seeding demo menu items: %w", err)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit demo seed: %w", err)
+	}
 	slog.Info("demo content seeded successfully")
 	return nil
 }
@@ -452,7 +461,7 @@ func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCo
 					PageID:     created.ID,
 					CategoryID: catID,
 				}); err != nil {
-					slog.Warn("failed to add category to page", "page", page.Slug, "category", catSlug, "error", err)
+					return fmt.Errorf("seed page category: %w", err)
 				}
 			}
 		}
@@ -464,10 +473,21 @@ func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCo
 					PageID: created.ID,
 					TagID:  tagID,
 				}); err != nil {
-					slog.Warn("failed to add tag to page", "page", page.Slug, "tag", tagSlug, "error", err)
+					return fmt.Errorf("seed page tag: %w", err)
 				}
 			}
 		}
+		snapshot, err := queries.GetPageSnapshot(ctx, created.ID)
+		if err != nil {
+			return err
+		}
+		if _, err = queries.CreateCompletePageVersion(ctx, CreateCompletePageVersionParams{PageID: created.ID, Title: created.Title, Body: created.Body, ChangedBy: authorID, CreatedAt: now, Revision: sql.NullInt64{Int64: created.Revision, Valid: true}, SnapshotJson: sql.NullString{String: snapshot, Valid: true}}); err != nil {
+			return err
+		}
+		if err = queries.CreateContentProvenance(ctx, CreateContentProvenanceParams{PageID: created.ID, Revision: created.Revision, Source: "system", Transport: "demo_seed", ValidatedJson: "{}", ReportedJson: "{}", CreatedAt: now}); err != nil {
+			return err
+		}
+
 	}
 
 	slog.Info("seeded demo pages", "count", len(pages))

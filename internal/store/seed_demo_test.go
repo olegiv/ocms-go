@@ -4,6 +4,7 @@
 package store
 
 import (
+	"database/sql"
 	"image"
 	"testing"
 	"time"
@@ -78,6 +79,26 @@ func TestSeedDemo(t *testing.T) {
 	if pageCount < 9 {
 		t.Errorf("page count = %d, want >= 9", pageCount)
 	}
+	pages, err := q.ListPages(ctx, ListPagesParams{Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, page := range pages {
+		version, err := q.GetPageVersionByRevision(ctx, GetPageVersionByRevisionParams{PageID: page.ID, Revision: sql.NullInt64{Int64: 1, Valid: true}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot, err := q.GetPageSnapshot(ctx, page.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Revision != 1 || version.Legacy || version.SnapshotJson.String != snapshot {
+			t.Fatalf("demo page %d lacks a complete initial revision", page.ID)
+		}
+		if _, err = q.GetContentProvenance(ctx, GetContentProvenanceParams{PageID: page.ID, Revision: 1}); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	// Verify media was created
 	mediaCount, err := q.CountMedia(ctx)
@@ -99,6 +120,34 @@ func TestSeedDemo(t *testing.T) {
 	}
 	if len(items) < 6 {
 		t.Errorf("menu items count = %d, want >= 6", len(items))
+	}
+}
+
+func TestSeedDemoSnapshotFailureRollsBackDatabase(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	t.Cleanup(cleanup)
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OCMS_DEMO_MODE", "true")
+	t.Setenv("OCMS_UPLOADS_DIR", t.TempDir())
+	if _, err := db.Exec(`CREATE TRIGGER fail_demo_snapshot BEFORE INSERT ON page_versions
+		BEGIN SELECT RAISE(FAIL, 'injected demo snapshot failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err := SeedDemo(ctx, db); err == nil {
+		t.Fatal("injected snapshot failure succeeded")
+	}
+	count, err := q.CountPages(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var records int
+	if err = db.QueryRow(`SELECT (SELECT COUNT(*) FROM page_versions) + (SELECT COUNT(*) FROM content_provenance)`).Scan(&records); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 || records != 0 {
+		t.Fatalf("demo database partially committed: pages=%d history/provenance=%d", count, records)
 	}
 }
 

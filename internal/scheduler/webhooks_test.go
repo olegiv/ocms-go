@@ -52,6 +52,22 @@ func TestScheduledPublishingSendsWebhookEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	current, err := queries.GetPageByID(ctx, page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Revision != page.Revision+1 {
+		t.Fatalf("scheduled publish revision=%d", current.Revision)
+	}
+	version, err := queries.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{PageID: page.ID, Revision: sql.NullInt64{Int64: current.Revision, Valid: true}})
+	if err != nil || version.Legacy || !version.SnapshotJson.Valid {
+		t.Fatalf("scheduled publish snapshot: %+v %v", version, err)
+	}
+	prov, err := queries.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: page.ID, Revision: current.Revision})
+	if err != nil || prov.Source != "system" || prov.UserID.Valid {
+		t.Fatalf("scheduler provenance: %+v %v", prov, err)
+	}
+
 	if len(recorder.Events()) != 1 {
 		t.Fatalf("sent %d events, want page.published: %+v", len(recorder.Events()), recorder.Events())
 	}

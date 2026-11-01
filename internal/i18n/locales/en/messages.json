@@ -7741,6 +7741,36 @@
             "id": "oauth.local_registration",
             "message": "Registered on this site; no client metadata host",
             "translation": "Registered on this site; no client metadata host"
+        },
+        {
+            "id": "pages.revision_conflict",
+            "message": "This page changed after you opened it. Your edits are preserved. Review the latest version, or confirm saving your edits over the revision shown here.",
+            "translation": "This page changed after you opened it. Your edits are preserved. Review the latest version, or confirm saving your edits over the revision shown here."
+        },
+        {
+            "id": "pages.view_latest",
+            "message": "View latest",
+            "translation": "View latest"
+        },
+        {
+            "id": "pages.confirm_overwrite",
+            "message": "Confirm overwrite",
+            "translation": "Confirm overwrite"
+        },
+        {
+            "id": "pages.allow_ai_edits",
+            "message": "Allow AI edits",
+            "translation": "Allow AI edits"
+        },
+        {
+            "id": "versions.legacy",
+            "message": "Legacy version: only title and body were recorded",
+            "translation": "Legacy version: only title and body were recorded"
+        },
+        {
+            "id": "pages.revision_conflict_title",
+            "message": "Page changed",
+            "translation": "Page changed"
         }
     ]
 }

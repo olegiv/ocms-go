@@ -7,11 +7,15 @@
 // output or error. No HTTP types leak into the service layer.
 package pages
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Page is the DTO returned by every page response. Derived from the sqlc
 // store.Page but with nullable columns replaced by pointers for clean JSON.
 type Page struct {
+	Revision          int64      `json:"revision"`
 	ID                int64      `json:"id"`
 	Title             string     `json:"title"`
 	Slug              string     `json:"slug"`
@@ -68,6 +72,7 @@ type Tag struct {
 // CreatePageBody is the validated service-level input for creating a page. The
 // huma operation parses the request body into this type via its struct tags.
 type CreatePageBody struct {
+	supplied          map[string]json.RawMessage
 	Title             string   `json:"title" required:"true" minLength:"1" maxLength:"255"`
 	Slug              string   `json:"slug" required:"true" minLength:"1" maxLength:"255" pattern:"^[a-z0-9]+(?:-[a-z0-9]+)*$" doc:"Lowercase alphanumeric with dashes. Must be unique."`
 	Body              string   `json:"body"`
@@ -97,6 +102,8 @@ type CreatePageBody struct {
 // distinguish "not provided" from zero values. CategoryIDs / TagIDs / TagNames
 // pointers let callers explicitly clear collections by sending an empty array.
 type UpdatePageBody struct {
+	supplied          map[string]json.RawMessage
+	BaseRevision      *int64    `json:"base_revision,omitempty" minimum:"1" doc:"Required for AI-editable pages; enforced whenever supplied."`
 	Title             *string   `json:"title,omitempty" minLength:"1" maxLength:"255"`
 	Slug              *string   `json:"slug,omitempty" minLength:"1" maxLength:"255" pattern:"^[a-z0-9]+(?:-[a-z0-9]+)*$"`
 	Body              *string   `json:"body,omitempty"`

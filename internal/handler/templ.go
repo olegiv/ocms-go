@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1427,7 +1428,8 @@ func convertPageCategoryNodes(nodes []PageCategoryNode) []adminviews.PageCategor
 // convertPageFormViewData converts handler PageFormData to view PageFormViewData.
 func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang string) adminviews.PageFormViewData {
 	viewData := adminviews.PageFormViewData{
-		IsEdit:               data.IsEdit,
+		IsEdit:       data.IsEdit,
+		BaseRevision: data.BaseRevision, ConflictRevision: data.ConflictRevision, AIEditable: data.AIEditable, CanManageAI: data.CanManageAI,
 		PublicURL:            data.PublicURL,
 		Statuses:             data.Statuses,
 		PageTypes:            data.PageTypes,
@@ -1442,6 +1444,12 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 
 	if data.Page != nil {
 		viewData.PageID = data.Page.ID
+		if viewData.BaseRevision == 0 {
+			viewData.BaseRevision = data.Page.Revision
+		}
+		if raw, ok := data.FormValues["base_revision"]; ok {
+			viewData.BaseRevision, _ = strconv.ParseInt(raw, 10, 64)
+		}
 		viewData.PageTitle = data.Page.Title
 		viewData.PageSlug = data.Page.Slug
 		viewData.PageBody = data.Page.Body
@@ -1556,7 +1564,8 @@ func convertPageVersionsViewData(data PageVersionsData, renderer *render.Rendere
 	var versions []adminviews.PageVersionView
 	for _, v := range data.Versions {
 		versions = append(versions, adminviews.PageVersionView{
-			ID:            v.ID,
+			ID:     v.ID,
+			Legacy: v.Legacy, Revision: v.Revision.Int64,
 			Title:         v.Title,
 			Body:          v.Body,
 			ChangedByName: v.ChangedByName,
@@ -1565,11 +1574,12 @@ func convertPageVersionsViewData(data PageVersionsData, renderer *render.Rendere
 	}
 
 	return adminviews.PageVersionsViewData{
-		PageID:     data.Page.ID,
-		PageTitle:  data.Page.Title,
-		TotalCount: data.TotalCount,
-		Versions:   versions,
-		Pagination: convertPagination(data.Pagination),
+		PageID:       data.Page.ID,
+		BaseRevision: data.Page.Revision,
+		PageTitle:    data.Page.Title,
+		TotalCount:   data.TotalCount,
+		Versions:     versions,
+		Pagination:   convertPagination(data.Pagination),
 	}
 }
 

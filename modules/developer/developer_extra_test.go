@@ -214,7 +214,7 @@ func TestAssignTranslatedTaxonomyEmptyIDs(t *testing.T) {
 
 	// Use real queries but empty origIDs — should do nothing.
 	callCount := 0
-	assignTranslatedTaxonomy(
+	if err := assignTranslatedTaxonomy(
 		ctx,
 		nil, // queries not needed for empty list
 		"tag",
@@ -225,7 +225,9 @@ func TestAssignTranslatedTaxonomyEmptyIDs(t *testing.T) {
 			return nil
 		},
 		func(msg string, args ...any) {},
-	)
+	); err != nil {
+		t.Fatal(err)
+	}
 	if callCount != 0 {
 		t.Errorf("assignFn should not be called with empty origIDs, got %d", callCount)
 	}
@@ -240,7 +242,7 @@ func TestAssignTranslatedTaxonomyMissingTranslation(t *testing.T) {
 	_ = m
 
 	warnCalls := 0
-	assignTranslatedTaxonomy(
+	if err := assignTranslatedTaxonomy(
 		ctx,
 		// Use a real queries instance pointing to the test DB
 		newTestQueries(t, db),
@@ -249,7 +251,9 @@ func TestAssignTranslatedTaxonomyMissingTranslation(t *testing.T) {
 		1,
 		func(id int64) error { return nil },
 		func(msg string, args ...any) { warnCalls++ },
-	)
+	); err != nil {
+		t.Fatal(err)
+	}
 	// warnFn should have been called once (GetTranslatedEntityID fails)
 	if warnCalls != 1 {
 		t.Errorf("expected 1 warn call for missing translation, got %d", warnCalls)
@@ -692,4 +696,12 @@ func TestGeneratePagesMultipleLanguages(t *testing.T) {
 	if len(pages) == 0 {
 		t.Error("expected pages to be created")
 	}
+	for _, saved := range pages {
+		want := int64(1)
+		if saved.LanguageCode == fixtures.Language.Code {
+			want = 2
+		}
+		testutil.AssertPageRevision(t, q, saved.ID, want)
+	}
+
 }

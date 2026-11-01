@@ -19,6 +19,7 @@ import (
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -279,7 +280,7 @@ func (s *Service) Upload(ctx context.Context, a v2.Actor, in UploadMediaMetadata
 	if file.ContentType != "" {
 		header.Header.Set("Content-Type", file.ContentType)
 	}
-	result, err := s.uploader.Upload(ctx, file.Reader, header, a.APIKey.CreatedBy, in.FolderID, defaultLang.Code)
+	result, err := s.uploader.Upload(ctx, file.Reader, header, a.ActingUserID(), in.FolderID, defaultLang.Code)
 	if err != nil {
 		var clientErr *service.ClientError
 		if errors.As(err, &clientErr) {
@@ -423,7 +424,7 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		return v2.NewInternalError("Failed to load media", err)
 	}
 	// Files left on disk do not undo the delete: the records are gone.
-	err = s.uploader.Delete(ctx, id)
+	err = s.uploader.DeleteWithPrincipal(ctx, id, provenance.Principal{UserID: a.ActingUserID(), Source: "api", APIKeyID: a.APIKey.ID, Transport: "rest"})
 	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 		return v2.NewInternalError("Failed to delete media", err)
 	}
@@ -444,7 +445,7 @@ func (s *Service) logMediaAudit(ctx context.Context, a v2.Actor, message string,
 	if s.events == nil || a.APIKey == nil {
 		return
 	}
-	userID := a.APIKey.CreatedBy
+	userID := a.ActingUserID()
 	_ = s.events.LogMediaEvent(ctx, model.EventLevelInfo, message, &userID, "", "", meta)
 }
 

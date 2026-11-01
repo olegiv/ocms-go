@@ -21,6 +21,8 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -230,7 +232,12 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 
 // Delete removes a media item and its files. An error wrapping
 // ErrMediaFilesNotRemoved means the records are gone but files remain.
-func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr error) {
+func (s *MediaService) Delete(ctx context.Context, mediaID int64) error {
+	return s.DeleteWithPrincipal(ctx, mediaID, provenance.Principal{Source: "system", Transport: "media_cleanup"})
+}
+
+// DeleteWithPrincipal records the authenticated initiator of page media cleanup.
+func (s *MediaService) DeleteWithPrincipal(ctx context.Context, mediaID int64, principal provenance.Principal) (resultErr error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to start media deletion: %w", err)
@@ -271,6 +278,20 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr err
 		return fmt.Errorf("failed to validate media cleanup target: %w", err)
 	}
 
+	work, err := pagewrite.NewTx(queries, principal)
+	if err != nil {
+		return err
+	}
+	if principal.UserID > 0 {
+		if err = pagewrite.RequireEditor(ctx, queries, principal.UserID); err != nil {
+			return err
+		}
+	}
+
+	if err = work.TrackMedia(ctx, mediaID); err != nil {
+		return err
+	}
+
 	// Delete variants from DB
 	if err := queries.DeleteMediaVariants(ctx, mediaID); err != nil {
 		return fmt.Errorf("failed to delete variant records: %w", err)
@@ -279,6 +300,10 @@ func (s *MediaService) Delete(ctx context.Context, mediaID int64) (resultErr err
 	// Delete media record from DB
 	if err := queries.DeleteMedia(ctx, mediaID); err != nil {
 		return fmt.Errorf("failed to delete media record: %w", err)
+	}
+
+	if err = work.Finish(ctx); err != nil {
+		return err
 	}
 
 	if s.beforeMediaCommit != nil {

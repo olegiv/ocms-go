@@ -253,6 +253,9 @@ const (
 
 // ImportOptions configures what to import and how to handle conflicts.
 type ImportOptions struct {
+	// BaseRevisions are destination revisions captured by an importing editor.
+	// AI-editable pages cannot be overwritten without an explicit matching entry.
+	BaseRevisions    map[string]int64 `json:"base_revisions,omitempty"`
 	DryRun           bool             `json:"dry_run"`
 	ConflictStrategy ConflictStrategy `json:"conflict_strategy"`
 	ImportUsers      bool             `json:"import_users"`

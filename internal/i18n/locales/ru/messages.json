@@ -7741,6 +7741,36 @@
             "id": "oauth.local_registration",
             "message": "Registered on this site; no client metadata host",
             "translation": "Зарегистрировано на этом сайте; хост метаданных не указан"
+        },
+        {
+            "id": "pages.revision_conflict",
+            "message": "This page changed after you opened it. Your edits are preserved. Review the latest version, or confirm saving your edits over the revision shown here.",
+            "translation": "Страница изменилась после открытия. Ваши правки сохранены в форме. Просмотрите последнюю версию или подтвердите перезапись показанной версии."
+        },
+        {
+            "id": "pages.view_latest",
+            "message": "View latest",
+            "translation": "Последняя версия"
+        },
+        {
+            "id": "pages.confirm_overwrite",
+            "message": "Confirm overwrite",
+            "translation": "Подтвердить перезапись"
+        },
+        {
+            "id": "pages.allow_ai_edits",
+            "message": "Allow AI edits",
+            "translation": "Разрешить редактирование ИИ"
+        },
+        {
+            "id": "versions.legacy",
+            "message": "Legacy version: only title and body were recorded",
+            "translation": "Старая версия: сохранены только заголовок и текст"
+        },
+        {
+            "id": "pages.revision_conflict_title",
+            "message": "Page changed",
+            "translation": "Страница изменилась"
         }
     ]
 }

@@ -178,8 +178,12 @@ func (h *Handler) OpenAPI() *huma.OpenAPI { return h.API.OpenAPI() }
 // unauthenticated callers; Permissions is parsed once so services can make
 // authorization decisions without re-querying the key.
 type Actor struct {
-	APIKey      *store.ApiKey
-	Permissions []string
+	UserID        int64
+	OAuthGrantID  string
+	OAuthClientID string
+	Transport     string
+	APIKey        *store.ApiKey
+	Permissions   []string
 }
 
 // HasPermission reports whether the actor's API key grants a permission.
@@ -201,6 +205,31 @@ func ActorFromContext(ctx context.Context) Actor {
 	}
 	return Actor{
 		APIKey:      &key,
+		Transport:   "rest",
 		Permissions: middleware.ParseAPIKeyPermissions(&key),
 	}
+}
+
+// ActingUserID is the sole mapping from credentials to a page/audit owner.
+func (a Actor) ActingUserID() int64 {
+	if a.APIKey != nil {
+		return a.APIKey.CreatedBy
+	}
+	return a.UserID
+}
+
+// ActorForUser narrows explicit permissions to the current editor/admin role.
+// The user and permission set must come from authentication, never draft input.
+func ActorForUser(user store.User, perms []string) Actor {
+	a := Actor{UserID: user.ID}
+	if user.Role != "admin" && user.Role != "editor" {
+		return a
+	}
+	for _, perm := range perms {
+		switch perm {
+		case "pages:read", "pages:write", "media:read", "media:write", "taxonomy:read", "taxonomy:write", "mcp:access", "mcp:drafts":
+			a.Permissions = append(a.Permissions, perm)
+		}
+	}
+	return a
 }

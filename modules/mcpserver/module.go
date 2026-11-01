@@ -209,7 +209,7 @@ func newServices(ctx *module.Context) *services {
 		}
 		uploadsDir = ctx.Config.UploadsDir
 	}
-	return &services{
+	svc := &services{
 		queries:  queries,
 		pages:    pages.NewService(ctx.DB, queries, ctx.Cache, ctx.Events, policy),
 		media:    media.NewService(ctx.DB, queries, ctx.Events, uploadsDir),
@@ -217,6 +217,9 @@ func newServices(ctx *module.Context) *services {
 		search:   service.NewSearchService(ctx.DB),
 		cache:    ctx.Cache,
 	}
+	svc.pages.SetWebhookDispatcher(ctx.Webhooks)
+	svc.taxonomy.SetCacheManager(ctx.Cache)
+	return svc
 }
 
 // Shutdown performs cleanup when the module is shutting down. The endpoint

@@ -11,7 +11,10 @@ import (
 	"time"
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -19,6 +22,7 @@ import (
 
 // Service owns TaxonomyTag and TaxonomyCategory operations end-to-end.
 type Service struct {
+	cache   *cache.Manager
 	db      *sql.DB
 	queries *store.Queries
 	events  *service.EventService
@@ -229,7 +233,7 @@ func (s *Service) DeleteTag(ctx context.Context, a v2.Actor, id int64) error {
 		}
 		return v2.NewInternalError("Failed to load tag", err)
 	}
-	if err := s.queries.DeleteTag(ctx, id); err != nil {
+	if err := s.deleteTerm(ctx, a, "tag", id); err != nil {
 		return v2.NewInternalError("Failed to delete tag", err)
 	}
 	s.logTagAudit(ctx, a, "API: Tag deleted", map[string]any{"tag_id": id})
@@ -439,7 +443,7 @@ func (s *Service) DeleteCategory(ctx context.Context, a v2.Actor, id int64) erro
 	if children, err := s.queries.ListChildCategories(ctx, util.NullInt64FromValue(cat.ID)); err == nil && len(children) > 0 {
 		return v2.NewError(v2.ErrConflict, "Cannot delete category with child categories. Delete or reassign children first.")
 	}
-	if err := s.queries.DeleteCategory(ctx, cat.ID); err != nil {
+	if err := s.deleteTerm(ctx, a, "category", cat.ID); err != nil {
 		return v2.NewInternalError("Failed to delete category", err)
 	}
 	s.logCategoryAudit(ctx, a, "API: Category deleted", map[string]any{"category_id": cat.ID})
@@ -452,7 +456,7 @@ func (s *Service) logTagAudit(ctx context.Context, a v2.Actor, message string, m
 	if s.events == nil || a.APIKey == nil {
 		return
 	}
-	userID := a.APIKey.CreatedBy
+	userID := a.ActingUserID()
 	_ = s.events.LogTagEvent(ctx, model.EventLevelInfo, message, &userID, "", "", meta)
 }
 
@@ -462,7 +466,7 @@ func (s *Service) logCategoryAudit(ctx context.Context, a v2.Actor, message stri
 	if s.events == nil || a.APIKey == nil {
 		return
 	}
-	userID := a.APIKey.CreatedBy
+	userID := a.ActingUserID()
 	_ = s.events.LogCategoryEvent(ctx, model.EventLevelInfo, message, &userID, "", "", meta)
 }
 
@@ -551,4 +555,24 @@ func buildCategoryTree(rows []store.GetCategoryUsageCountsRow) []*TaxonomyCatego
 		}
 	}
 	return roots
+}
+
+// SetCacheManager enables invalidation after taxonomy assignment changes.
+func (s *Service) SetCacheManager(manager *cache.Manager) { s.cache = manager }
+func (s *Service) deleteTerm(ctx context.Context, a v2.Actor, kind string, id int64) error {
+	work, err := pagewrite.InTx(ctx, s.db, provenance.Principal{UserID: a.ActingUserID(), Source: "api", Transport: "rest", APIKeyID: a.APIKey.ID}, func(work *pagewrite.Tx) error {
+		if err := pagewrite.RequireEditor(ctx, work.Q, a.ActingUserID()); err != nil {
+			return err
+		}
+		return work.DeleteTerm(ctx, kind, id)
+	})
+	if err != nil {
+		return err
+	}
+	if s.cache != nil {
+		for pageID := range work.Pages {
+			s.cache.InvalidatePage(pageID)
+		}
+	}
+	return nil
 }
