@@ -6,6 +6,11 @@ deploy when **you** run them. Preparing this guide does not execute them.
 The existing `ocms-demo`, `fly.toml`, demo deployment script and the production host are
 outside this procedure.
 
+Current runtime: `39d82c94`, verified 2026-11-02. See the
+[R1.7 acceptance record](launch/r17-acceptance.md) for image identity,
+multilingual clients, cleanup and the inline alt fix that is tested locally
+but not deployed. Historical client tables below retain their original builds.
+
 | File | Role |
 |---|---|
 | `fly.staging.bootstrap.toml` | Fresh app only: private first boot, seeding and MFA enrollment; no public service |

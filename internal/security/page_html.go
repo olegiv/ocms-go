@@ -92,6 +92,10 @@ func buildPageHTMLSanitizer() *bluemonday.Policy {
 	// reviewed keep policy every time the v2 service or frontend sanitizes again.
 	p.RequireNoFollowOnLinks(false)
 	p.AllowAttrs("rel").Matching(regexp.MustCompile(`^(?:noopener|noreferrer|nofollow)(?: (?:noopener|noreferrer|nofollow))*$`)).OnElements("a")
+	// Alt is plain text, escaped by the HTML serializer. The UGC default drops
+	// the entire attribute for common punctuation such as colons or ampersands,
+	// losing accessible descriptions in both generated and human-authored images.
+	p.AllowAttrs("alt").OnElements("img")
 	// Generated draft media uses existing local uploads only. Do not accept
 	// arbitrary remote srcsets or CSS in responsive-image attributes.
 	asset := `/uploads/(?:small|medium|large)/[a-fA-F0-9-]{36}/[^\s"'<>,]+ [1-9][0-9]*w`

@@ -7,12 +7,13 @@ R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
 the browser traces confirmed token-free HTTP request URLs. R1.7's current
 client coverage and remaining release gates are recorded below.
 
-R1.7's bounded Claude web/ChatGPT web checks now pass on `df6e5d86`
-(2026-11-02), including connected-app revocation, fresh MFA/consent reconnects
-and cross-client draft reads. Native Desktop authoring and both CLIs' OAuth
-and bearer authoring checks subsequently passed on the same build. Desktop
-reconnect required Chrome; native-only reconnect remains unverified.
-See the current matrix below.
+R1.7 is now deployed at `39d82c94` (2026-11-02). Fresh web OAuth/sharing
+checks and full EN/RU/DE draft authoring with existing taxonomy/media ran in
+native Desktop, ChatGPT and both CLIs' OAuth/bearer modes. The full-media run
+found punctuation-dependent inline alt loss; the local fix passes tests/lint/
+NilAway but is not deployed. See the [current acceptance record](launch/r17-acceptance.md)
+and [release decisions](launch/release-decisions.md). Desktop reconnect
+requires the documented Chrome workaround; native-only reconnect is unverified.
 
 ## Workflow
 
@@ -86,11 +87,14 @@ below; earlier-build results do not establish that coverage.
 
 ## R1.7 release acceptance (partial)
 
-The connected-app management and retention changes are deployed on Fly staging
-at `df6e5d86`. Use [Connected apps](connected-apps.md) for access management and
-the [author skill](skills/ocms-author/SKILL.md) for the draft workflow. The
-prepared [demo script](launch/demo-script.md) defines the multilingual recording; it
-has not been recorded or published.
+The latest [39d82c94 acceptance matrix](launch/r17-acceptance.md#client-results)
+includes complete EN/RU/DE draft fields, taxonomy/media, retries and linked
+translations. Human publication and its final recording segment are pending;
+the discovered alt-text fix still needs an authorized rollout and readback.
+The table below retains the earlier bounded `df6e5d86` evidence.
+Use [Connected apps](connected-apps.md) for access management and
+the [author skill](skills/ocms-author/SKILL.md) for the draft workflow. Follow
+the [demo script](launch/demo-script.md) for the remaining human-publication shot.
 
 | Client | Authoring path | R1.7 result (2026-11-02) |
 |---|---|---|
@@ -124,10 +128,13 @@ including the `mcp:drafts` upgrade. Fresh native site-info/draft calls then
 confirmed user 2, exactly both scopes and revision 4. The root cause is
 unestablished; this is not an unconditional native-only reconnect pass.
 
-Only English/Russian were enabled, with no taxonomy/media fixtures. The full
-demo with two translation target languages and existing taxonomy/image cases,
-native-only Desktop reconnect, the publish/schedule failure matrix, audit and
-release recording remain open. See the
+Those earlier runs enabled only English/Russian without taxonomy/media.
+The [new run](launch/r17-acceptance.md) adds German, full catalog fixtures,
+all six client/mode flows and 15 publication/lifecycle test roots. Audit
+findings and first-party NilAway diagnostics were fixed before deployment.
+The remaining [release decisions](launch/release-decisions.md) are concrete:
+alt-fix rollout, dependency dispositions, Desktop workaround and human
+publication/recording. See the earlier
 [web staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
 and [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02)
 for build identity, evidence limits, cleanup and remaining gates.

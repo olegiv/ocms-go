@@ -4,9 +4,31 @@
 package security
 
 import (
+	"html"
 	"strings"
 	"testing"
 )
+
+func TestPageHTMLPreservesImageAltText(t *testing.T) {
+	for _, alt := range []string{
+		"Workflow diagram: AI draft, editorial review, then human publication.",
+		"Схема: черновик ИИ → редакционная проверка → публикация человеком.",
+		"Ablauf: KI-Entwurf → Prüfung & Veröffentlichung durch einen Menschen.",
+		`A "quoted" label <with brackets>`,
+		"", // A deliberately decorative image still needs an empty alt.
+	} {
+		t.Run(alt, func(t *testing.T) {
+			attr := `alt="` + html.EscapeString(alt) + `"`
+			got := SanitizePageHTML(`<img src="/uploads/test.png" ` + attr + ` onerror="alert(1)">`)
+			if !strings.Contains(got, attr) || strings.Contains(got, "onerror") {
+				t.Fatalf("image description lost or handler retained: %s", got)
+			}
+			if twice := SanitizePageHTML(got); twice != got {
+				t.Fatalf("render sanitization changed the saved image: %s", twice)
+			}
+		})
+	}
+}
 
 func TestJavascriptURIPattern(t *testing.T) {
 	tests := []struct {

@@ -1,12 +1,12 @@
 # Article outline: From an AI brief to a reviewed multilingual article
 
 Status: local outline for a future production draft. No article has been
-created, published or cross-posted by this file. Bounded R1.7 Claude web/ChatGPT
-web, native Desktop authoring and Claude Code/Codex OAuth/bearer staging
-checks passed on `df6e5d86`. Desktop reconnect required Chrome; native-only
-reconnect, the full two-target demo with existing taxonomy/media, recording
-and human publication remain pending. See the
-[client matrix](../desktop-authoring.md#r17-release-acceptance-partial).
+created, published or cross-posted by this file. The
+[39d82c94 staging record](r17-acceptance.md) now supplies full EN/RU/DE draft
+examples, existing taxonomy/media and four-client continuation. Its inline
+alt-text failure has a tested local fix awaiting rollout. Desktop reconnect
+uses Chrome; human publication and the recording's final segment remain
+pending. Use the recorded evidence limits in any future article.
 
 ## Proposed structure
 

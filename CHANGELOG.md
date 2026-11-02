@@ -12,12 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and MCP API-key metadata/revocation, administrator oversight, and bounded
   transactional cleanup that preserves active-family refresh-replay evidence.
   Adds a bundled author workflow and prepared launch/acceptance documents.
-  Deployed as `df6e5d86` on MCP staging; bounded Claude/ChatGPT web authoring,
-  revocation/reconnect and retention checks passed. Native Desktop authoring
-  and Claude Code/Codex OAuth and bearer checks also passed; Desktop reconnect
-  required Chrome and native-only reconnect remains unverified. The full
-  multilingual demo and remaining release gates stay open. See
-  `docs/connected-apps.md`.
+  Current staging build `39d82c94` passed fresh web OAuth/sharing checks and
+  full EN/RU/DE draft workflows with taxonomy/media in native Desktop,
+  ChatGPT and Claude Code/Codex OAuth/bearer modes. Desktop reconnect uses
+  Chrome. A newly found alt-text fix awaits rollout; human publication and
+  release decisions remain open. See `docs/launch/r17-acceptance.md`.
 - **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
   translations and private reads over MCP, with original-input retries, revision
   checks, rolling user quotas and separate provenance. Removes compatibility
@@ -56,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepted; an empty value hides the link.
 
 ### Fixed
+- Preserve punctuation and localized text in inline-image alt attributes
+  through sanitization, draft reads and Markdown resaves. The regression
+  reproduced on staging; this fix has passed local verification only.
+- Resolve R1.7 audit and first-party NilAway findings: constrain custom CSS
+  rendering, ZIP imports, redirect resolution, OAuth client capacity, page
+  cache invalidation, API-key policy transactions and site-owner execution
+  of backup/process helpers. Hardening is deployed at `39d82c94`.
 - Reject malformed API-key permission arrays instead of retaining partial
   permissions after JSON decoding fails or encounters a non-string entry.
 - Update `golang.org/x/net` to v0.62.0 for GO-2026-6860 and GO-2026-6866,

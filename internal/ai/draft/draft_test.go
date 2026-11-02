@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -232,6 +233,44 @@ func TestNormalizationMetadataMediaAndOriginalInput(t *testing.T) {
 	derived, err := draft.DeriveMarkdown(context.Background(), page.BodyHTML, opt)
 	if err != nil || !strings.Contains(derived.Markdown, "media:1") || !strings.Contains(derived.Markdown, "Chosen alt") {
 		t.Fatalf("reverse media: %+v %v", derived, err)
+	}
+}
+
+func TestImageAltSurvivesDraftAndMarkdownRoundTrip(t *testing.T) {
+	for _, alt := range []string{
+		"Workflow diagram: AI draft, editorial review, then human publication.",
+		"Схема: черновик ИИ → проверка → публикация.",
+		"KI-Entwurf: Prüfung & Veröffentlichung.",
+	} {
+		for _, useLibraryAlt := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/library=%t", alt, useLibraryAlt), func(t *testing.T) {
+				opt, resolver := options()
+				markdownAlt := alt
+				if useLibraryAlt {
+					media := resolver.media[1]
+					media.Alt = alt
+					resolver.media[1] = media
+					markdownAlt = ""
+				}
+				result, err := draft.NormalizeCreate(t.Context(), draft.PageDraft{
+					Title: "Accessible image", Summary: "Synthetic workflow", BodyMarkdown: "![" + markdownAlt + "](media:1)",
+				}, opt)
+				if err != nil || result.HasErrors() || result.Content == nil {
+					t.Fatalf("save failed: %+v %v", result, err)
+				}
+				if !strings.Contains(result.Content.BodyHTML, `alt="`+html.EscapeString(alt)+`"`) {
+					t.Fatalf("saved image lost its description: %s", result.Content.BodyHTML)
+				}
+				derived, err := draft.DeriveMarkdown(t.Context(), result.Content.BodyHTML, opt)
+				if err != nil || !strings.Contains(derived.Markdown, alt) {
+					t.Fatalf("read-back lost the description: %+v %v", derived, err)
+				}
+				rendered, err := draft.RenderMarkdown(t.Context(), derived.Markdown, opt)
+				if err != nil || rendered.HTML != result.Content.BodyHTML {
+					t.Fatalf("subsequent body update changed the image: %+v %v", rendered, err)
+				}
+			})
+		}
 	}
 }
 

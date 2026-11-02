@@ -894,19 +894,25 @@ release hardening and independent security audit remain R1.7 work.
 
 ### Iteration R1.7: Connected Apps, Hardening and Release
 
-**Status, 2026-11-02:** implementation commit `df6e5d86` is deployed to Fly
-staging. Bounded Claude web and ChatGPT web authoring, account revocation,
-reconnect and retention checks passed; see the
+**Status, 2026-11-02:** hardening commit `39d82c94` is deployed to Fly
+staging. Fresh Claude/ChatGPT web OAuth/share/revocation checks and the full
+EN/RU/DE draft workflow in native Desktop, ChatGPT and both CLI modes are
+recorded in [release acceptance](../../docs/launch/r17-acceptance.md).
+The full-media test found silent punctuation-dependent inline alt-text loss;
+its local fix passes all 68 test packages, lint and first-party NilAway but
+remains undeployed. Human publication, the recording's final
+segment and the [release decisions](../../docs/launch/release-decisions.md)
+remain pending. R1.7 is not complete. Earlier bounded results remain in the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
-The later [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
+The earlier [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
 adds bounded native Desktop authoring and both CLIs' OAuth/bearer passes on
-the same build. Desktop reconnect required Chrome; native-only reconnect is
+`df6e5d86`. Desktop reconnect required Chrome; native-only reconnect is
 unverified. The [implementation notes](#r17-implementation-notes--2026-11-02)
 retain local checks and benchmarks; the
 [local quality follow-up](#r17-local-quality-follow-up--2026-11-02) records
 the completed findings repairs, passing analyzer checks and remaining
-dependency dispositions. The full multilingual demo, publication matrix,
-recording and release closure remain pending. R1.7 is not complete.
+dependency dispositions. The newer acceptance record supersedes the earlier
+EN/RU-only fixture limitation and records publication-check coverage precisely.
 
 - `/account/connected-apps`: the user's OAuth grants and MCP-capable API keys, with app name, client
   host, scopes, created, last used, revoke. Admin overview and revoke in `/admin/mcp`.
@@ -3667,3 +3673,48 @@ Dependency manifests and wiki edits are unchanged. The dependency dispositions
 and other release items above are unchanged; this closes the reported code
 findings and NilAway gate, not R1.7 as a whole. No commit, push, deployment or
 live-client acceptance was performed during these repairs.
+
+
+### R1.7 full multilingual acceptance follow-up — 2026-11-02
+
+[Current acceptance](../../docs/launch/r17-acceptance.md) records the deployed
+`39d82c94` image, fresh bounded web OAuth/share/revocation checks and full
+EN/RU/DE draft fields, existing taxonomy/media and linked translations in
+native Claude Desktop, ChatGPT and both CLI OAuth/bearer modes. The selected
+component is pages 27/43/44, revisions 5/3/2. ChatGPT's update/replay/conflict,
+Codex's exact source restoration, Claude Code's localized target captions
+and native final readback passed. Both translations are current. A revision
+4 test claim acknowledgment did not carry into revision 5.
+
+The image path exposed silent punctuation-dependent inline alt loss on
+staging. The local sanitizer fix retains escaped text, with failing-before
+and passing-after supplied/library fallback and Markdown round-trip tests.
+All 68 candidate test packages, golangci-lint and first-party NilAway pass.
+The full publication/lifecycle selection (15 test roots) also passed on the
+clean deployed commit; the record distinguishes HTTP, guarded-helper and
+scheduler coverage from pending human staging publication.
+
+All 18 new drafts remain private/unscheduled. The original 26 page identity,
+revision and lifecycle fingerprints and ten owner grants are unchanged.
+Only the revision 4 test
+claim is checked; the current revision needs fresh review. Both temporary
+90-minute bearer keys are inactive and subsequent initialization returned
+401. Temporary remote fixture/inspection helpers were removed. Pre-existing
+wiki edits were backed up before reconciling transport and release status.
+
+Evidence: ignored `output/r17-validation/release-closure/`, including
+`verification.json`, `cli-matrix.json`, `preservation-checks.json`, sanitized
+GUI/CLI readbacks and the 40-second `r17-draft-workflow-partial.mp4`. The
+video assembles actual screenshots; it is not continuous screen capture and
+does not show publication. The original core snapshot is the test base;
+the three modified Go files match the candidate's recorded SHA-256 hashes.
+The author skill's media-readback instruction was manually traced against
+these stored results: punctuation cases fail, while the plain-alt Codex
+bearer fixtures pass. It does not treat an empty issues array as proof of
+accessibility. Existing body resave/review is required after rollout.
+
+No commit, push or further application deployment occurred in this run. The
+[release decision record](../../docs/launch/release-decisions.md) proposes
+scoped advisory dispositions and a documented Desktop Chrome handoff; none
+is an accepted waiver. Alt-fix rollout/readback, human publication and the
+recording's final shot still require their corresponding authorization.

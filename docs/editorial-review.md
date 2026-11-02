@@ -3,7 +3,9 @@
 R1.6 is deployed on Fly staging. Claude web and ChatGPT web passed the tested
 draft/review flows on `ff4de3b1368c` and fresh fragment/POST sharing checks on
 `31c55f8c9f67` (2026-11-02). The broader client matrix and release hardening
-remain R1.7 work. Publishing remains an explicit human action; MCP cannot
+are recorded in the [R1.7 acceptance record](launch/r17-acceptance.md),
+including the discovered inline alt-text release blocker. Publishing remains
+an explicit human action; MCP cannot
 publish, schedule, delete or transfer pages.
 
 ## Review a draft

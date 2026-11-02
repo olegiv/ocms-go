@@ -10,9 +10,11 @@ owned draft creation/update/translation with `mcp:drafts`, retained retries,
 CAS, provenance and existing taxonomy/media. Publishing and deletion remain
 human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
 [OAuth](oauth.md) records the completed R1.1 authentication acceptance and
-PHASE5 notes record R1.5/R1.6 staging results, including fresh Claude/ChatGPT
-fragment/POST sharing on `31c55f8c9f67` (2026-11-02). The broader client
-matrix and release hardening remain R1.7 work.
+PHASE5 notes retain R1.5/R1.6 results. R1.7 hardening is deployed at
+`39d82c94`; the [current acceptance record](launch/r17-acceptance.md)
+includes fresh web sharing/revocation and native/CLI multilingual drafts.
+The discovered inline alt-text fix is verified locally, not deployed;
+[release decisions](launch/release-decisions.md) and human publication remain.
 
 ## Features
 
@@ -540,15 +542,18 @@ OAuth acceptance is complete for R1.1; see [OAuth](oauth.md). Real CMS draft
 creation/update/translation tools have R1.5 staging results. R1.6 editorial
 review/previews are deployed on staging, with tested Claude/ChatGPT web flows
 and the [transport rollout checks](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
-Native Desktop/CLI authoring acceptance and release hardening remain R1.7.
+Current native Desktop/CLI draft coverage is in the
+[R1.7 record](launch/r17-acceptance.md).
 This section grants no deployment or remote Git action.
 
-R1.7 adds the local [connected-app overview](connected-apps.md): account-owned
+R1.7 adds the [connected-app overview](connected-apps.md): account-owned
 OAuth/API-key metadata and revocation at `/account/connected-apps`, with an
 administrator overview/revoke in `/admin/mcp`. Credential hashes/values are
 absent from these views. Core maintenance drains retired OAuth evidence in
 bounded transactions while retaining all active-family replay evidence.
-The new management/retention paths are not deployed or release-accepted yet.
+Management/retention is deployed on staging; the current hardening build is
+`39d82c94`. This does not mark the pending release decisions or manual
+publication as complete.
 
 
 ## Page authoring foundations (R1.2 development)

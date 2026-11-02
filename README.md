@@ -739,12 +739,13 @@ R1.6 Claude/ChatGPT web draft/review and fragment/POST sharing checks also
 passed on `31c55f8c9f67` (2026-11-02).
 R1.7 adds [connected-app management and bounded OAuth retention](docs/connected-apps.md),
 plus an [oCMS author workflow](docs/skills/ocms-author/SKILL.md). It is deployed
-on MCP staging at `df6e5d86`, with bounded Claude web/ChatGPT web authoring,
-scoped reconnect, revocation and retention checks passed. Native Desktop
-authoring and both CLIs' OAuth/bearer authoring checks also passed on that
-build; Desktop reconnect required Chrome and remains unverified without that
-workaround. The full multilingual demo, complete publication matrix,
-independent audit and remaining release gates stay open. See [OAuth](docs/oauth.md),
+on MCP staging at `39d82c94`. Fresh web OAuth/sharing checks and full
+EN/RU/DE draft workflows ran in native Desktop, ChatGPT and both CLIs'
+OAuth/bearer modes. Audit repairs and local publication/lifecycle tests pass.
+The full-media run found inline alt-text loss; its fix is tested locally and
+awaits rollout. Desktop reconnect uses Chrome. Human publication/recording
+and the [release decisions](docs/launch/release-decisions.md) remain open;
+see the [current acceptance record](docs/launch/r17-acceptance.md), [OAuth](docs/oauth.md),
 the [web staging record](.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
 and [native/CLI record](.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
 See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.

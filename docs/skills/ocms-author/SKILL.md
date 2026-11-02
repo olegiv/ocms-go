@@ -47,6 +47,10 @@ a save only after a successful result, with page ID, revision, editor URL,
 session preview URL and unresolved issues. Return a rejected write as a
 rejected write. Do not claim factual verification from structural validation
 or convert agent-reported sources/model details into verified provenance.
+When images are used, read back authoritative HTML and check the expected
+localized alt text and caption as well as the media ID. Report silent text
+loss as a failed check even when the save has no validation issues; do not
+claim accessibility from the submitted Markdown alone.
 
 ## Preview, sharing and review
 

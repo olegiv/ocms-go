@@ -1,7 +1,10 @@
 # Connected apps and OAuth retention
 
-R1.7 is deployed to MCP staging at `df6e5d86` (2026-11-02). Bounded Claude web
-and ChatGPT web checks passed for these management/maintenance paths; see the
+R1.7 hardening is deployed to MCP staging at `39d82c94` (2026-11-02).
+The [current acceptance record](launch/r17-acceptance.md) adds full EN/RU/DE
+draft flows and fresh web revocation/reconnect evidence. An inline alt-text
+fix is tested locally and remains undeployed. Earlier bounded Claude web
+and ChatGPT web checks passed on `df6e5d86` for these paths; see the
 [staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 Native Desktop authoring and Claude Code/Codex OAuth and bearer checks also
 passed on that build, with a Chrome workaround for Desktop reconnect; see the

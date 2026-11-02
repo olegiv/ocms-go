@@ -1,15 +1,12 @@
 # Multilingual authoring demo
 
-Status: prepared for the full R1.7 multilingual recording; not yet recorded
-or completed. Bounded web/native Desktop authoring and Claude Code/Codex
-OAuth/bearer staging checks passed on `df6e5d86`; see the
-[client matrix](../desktop-authoring.md#r17-release-acceptance-partial).
-Desktop reconnect required Chrome; native-only reconnect remains unverified.
-Only English/Russian were enabled, without taxonomy/media fixtures, so these
-passes do not complete this script's two-target translation, existing
-taxonomy/image or human-publication steps. Use synthetic drafts and the
-dedicated agent account/shared development authenticator. Preserve owner
-connections.
+Status: the full EN/RU/DE draft preparation ran on `39d82c94`; see the
+[acceptance record](r17-acceptance.md). A partial screenshot walkthrough
+captures real draft/review/preview states; it is not a continuous recording
+of completed publication. The image test found inline alt loss. Its tested
+local fix must be authorized for rollout, then the selected bodies resaved
+and checked before human publication and the final recording shot. Desktop
+reconnect uses the documented Chrome handoff. Preserve owner connections.
 
 ## Before recording
 
@@ -25,7 +22,10 @@ Use the [author workflow](../skills/ocms-author/SKILL.md) and
 
 1. Show Account → Connected apps, the app's scopes and registration metadata.
    Keep credentials, authenticator codes and share fragments out of capture.
-2. In Claude Desktop, provide a brief and two selected published references.
+2. In Claude Desktop, provide a brief and selected visible references. This
+   staging run used published page 1/revision 1 and the dedicated user's
+   opted-in draft 23/revision 4, both with the source role. Do not imply both
+   are published or treat the empty probe as substantive factual evidence.
    Ask for an English draft with title, summary, body, SEO, existing taxonomy
    and an existing image. Read context/schema before saving; record the saved
    page ID, revision, issues, editor URL and session-preview URL.
