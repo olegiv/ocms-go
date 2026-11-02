@@ -1,7 +1,9 @@
 # Connected apps and OAuth retention
 
-R1.7 is implemented locally and has not been deployed. Earlier R1.6 staging
-results do not establish acceptance of these new management/maintenance paths.
+R1.7 is deployed to MCP staging at `df6e5d86` (2026-11-02). Bounded Claude web
+and ChatGPT web checks passed for these management/maintenance paths; see the
+[staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
+Full release acceptance remains open.
 
 ## Account and administrator controls
 
@@ -79,9 +81,21 @@ pagination, metadata projections, strict form parsing, CSRF, repeat revocation,
 normal and revoked MCP access, preview invalidation, retention boundaries,
 bounded child draining, concurrent refresh, replay after cleanup, cancellation,
 statement/commit rollback and index down/up preservation. English/Russian
-browser checks use synthetic local accounts, not owner or staging credentials.
+browser checks in that local suite used synthetic accounts, not staging
+credentials.
 
-The full R1.7 staging client matrix, publication by the human editor, independent
-security audit and release recording remain pending. See the
+On Fly staging, the dedicated Editor's English/Russian account views, language
+return path, administrator denial, own-grant revocation/share invalidation and
+fresh Claude/ChatGPT reconnects passed. Both restored clients read existing
+drafts with exactly `mcp:access mcp:drafts`; owner connections were unchanged.
+Manual cleanup removed nine expired codes, its repeat removed none, and an
+automatic batch removed one more; 32 active-family token rows were unchanged.
+Live aged-family draining, refresh replay and administrative cross-account or
+API-key revocation were not exercised by those web checks; local coverage is
+listed above. Both test shares and the temporary base grant were revoked.
+
+Native Desktop/CLI authoring, the complete publish/schedule failure matrix,
+publication by the human editor, independent security audit and release
+recording remain pending. See the
 [phase notes](../.claude/docs/PHASE5.md), [client checklist](desktop-authoring.md),
 [OAuth contract](oauth.md) and [demo script](launch/demo-script.md).

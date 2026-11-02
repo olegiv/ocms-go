@@ -8,11 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Connected apps and OAuth retention (R1.7, local).** Account-owned OAuth
+- **Connected apps and OAuth retention (R1.7).** Account-owned OAuth
   and MCP API-key metadata/revocation, administrator oversight, and bounded
   transactional cleanup that preserves active-family refresh-replay evidence.
   Adds a bundled author workflow and prepared launch/acceptance documents.
-  Staging acceptance and release remain pending. See `docs/connected-apps.md`.
+  Deployed as `df6e5d86` on MCP staging; bounded Claude/ChatGPT web authoring,
+  revocation/reconnect and retention checks passed. Native/CLI acceptance and
+  remaining release gates stay open. See `docs/connected-apps.md`.
 - **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
   translations and private reads over MCP, with original-input retries, revision
   checks, rolling user quotas and separate provenance. Removes compatibility

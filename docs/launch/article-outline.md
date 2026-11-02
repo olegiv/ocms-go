@@ -1,8 +1,10 @@
 # Article outline: From an AI brief to a reviewed multilingual article
 
 Status: local outline for a future production draft. No article has been
-created, published or cross-posted by this file. The R1.7 recording, current-build
-client matrix and human publication step remain pending.
+created, published or cross-posted by this file. Bounded R1.7 Claude web/ChatGPT
+web staging checks passed on `df6e5d86`; the native/CLI matrix, full recording
+and human publication step remain pending. See the
+[client matrix](../desktop-authoring.md#r17-release-acceptance-partial).
 
 ## Proposed structure
 

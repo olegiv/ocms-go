@@ -348,17 +348,17 @@ Admin → MCP Server, grant only required scopes and follow
 sign-in/MFA → consent → context → owned draft save/read/update/translation
 → revoke → next request fails → reconnect. Use stable request IDs and current
 revisions. Check anonymous preview denial; explicit sharing is available from
-R1.6. Staging now runs `31c55f8c9f67` (2026-11-02), including the fragment/POST
-transport fix and startup legacy-link revocation migration. Earlier web-client
-draft/review results on `ff4de3b1368c` and fresh sharing results on the current
-build are recorded in PHASE5. The earlier error-canary check showed Fly Proxy
-recording a full legacy preview path before oCMS redaction; the new transport
-keeps bearer credentials out of that request target.
+R1.6. Staging now runs R1.7 commit `df6e5d86` (2026-11-02), retaining the
+fragment/POST transport fix and legacy-link revocation migration introduced
+by `31c55f8c9f67`. Earlier draft/review results on `ff4de3b1368c` and sharing
+results on `31c55f8c9f67` are recorded in PHASE5. The earlier error-canary check
+showed Fly Proxy recording a full legacy preview path before oCMS redaction;
+the new transport keeps bearer credentials out of that request target.
 
-Fresh Claude web and ChatGPT web links rendered their pinned snapshots in an
-anonymous browser, including ChatGPT's tracking-query link. Browser requests
-contained no bearer in URLs or referrers; redemption used a fixed-endpoint
-POST body. Session previews stayed private. Revocation and controlled expiry
+On the `31c55f8c9f67` rollout, fresh Claude web and ChatGPT web links rendered
+their pinned snapshots anonymously, including ChatGPT's tracking-query link.
+Browser requests contained no bearer in URLs or referrers; redemption used a
+fixed-endpoint POST body. Session previews stayed private. Revocation and controlled expiry
 returned 404, and both new links are revoked. Eight real proxy errors and
 all 247 captured app/proxy records contained neither test bearer. The proxy
 records had empty URL fields; this does not prove proxy redaction. The error
@@ -366,6 +366,17 @@ probes replayed the observed targets with non-credential content because the
 browser controller could not inject the Fly test header. See the
 [rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
 for exact image/snapshot identity, evidence limits and cleanup.
+
+The current `df6e5d86` rollout passed bounded Claude web/ChatGPT web context,
+draft/translation, replay/conflict, pinned sharing and own-grant revocation
+checks. Both clients reconnected with the dedicated Editor and shared MFA,
+then read the existing drafts under exactly `mcp:access mcp:drafts`.
+English/Russian account management, Editor denial from the admin overview,
+manual/scheduled retention and owner-connection preservation were checked.
+Both test shares and the temporary base grant were revoked. An exact-value
+log-buffer check found neither test share bearer nor password; no new
+upstream-error probe or full-release pass is claimed. See the
+[R1.7 staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 
 For subsequent approved deployments, exclude concurrent old URL-issuing
 writers, let startup migrate first, and repeat the fixed-path upstream-error

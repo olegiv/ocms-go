@@ -365,7 +365,9 @@ The spec is derived from Go types via [huma v2](https://huma.rocks/); domain ser
 
 Tools are thin adapters over the v2 domain services; their input/output schemas come from the same huma struct tags. `modules/mcpserver/catalog.go` is the single source of truth: every REST v2 operation needs a tool or an entry in `restOperationsNotExposed` (`TestEveryRESTOperationHasMCPDecision`). The catalog classifies read/create/update/share operations (`TestEveryRegisteredToolHasTheExpectedMutationClass`). R1.5 adds gated owned draft tools over `internal/ai/authoring`, retained idempotency, CAS and translation fingerprints; no tool publishes or deletes. `internal/oauth` owns the opt-in code/refresh server, hashed SQLite storage, bounded CIMD, fresh-login consent and grant revocation. Claude Desktop, claude.ai and ChatGPT web passed full GUI OAuth flows on `f66bd7b4d5fa` (2026-10-31) and fresh reads on `c885da9071eb` (2026-11-01). Both CLI OAuth lifecycles and bearer modes passed on `c885da9071eb`; test keys were deactivated afterward. External public IPv6/TLS and forwarding-spoof resistance also passed from an independent probe on 2026-11-01, closing R1.1. See `docs/oauth.md` and the current R1.1 matrix in `.claude/docs/PHASE5.md`. R1.2 adds the local shared page-write boundary, complete revisions/provenance, editor CAS/AI consent and retained idempotency. See `docs/page-writes.md` for the contract and writer inventory. R1.3 adds `internal/ai/draft` for strict presence/null schemas, validation issues, Markdown/media conversion and link policy; see `docs/draft-contract.md`. R1.4 adds shared `internal/contentpath` routing, `internal/ai/grounding`/`prompts`, core editorial guidance and MCP context/resource/prompt parity; see `docs/authoring-context.md`. R1.5 exposes the draft operations and removes the retired compatibility probe; see `docs/draft-authoring.md`. R1.6 adds editorial review, claim acknowledgments, revision comparisons, isolated recorded previews and explicit expiring share links; see `docs/editorial-review.md`. R1.6 is deployed on staging: tested Claude/ChatGPT web draft/review flows passed on `ff4de3b1368c`, and fresh fragment/POST sharing checks passed on `31c55f8c9f67` (2026-11-02), including anonymous pinned rendering, revocation/expiry and Fly proxy-log inspection. Proxy error URL fields were empty; browser traces provide the direct proof that share bearers stay out of request targets. See the R1.6 transport rollout record in `.claude/docs/PHASE5.md`. Native Desktop/CLI authoring acceptance, the broader client matrix and release hardening remain R1.7 work.
 
-R1.7 is local and undeployed. `internal/connectedapps` provides safe, paginated
+R1.7 is deployed to MCP staging at `df6e5d86` (2026-11-02), with bounded
+Claude web/ChatGPT web authoring, own-grant revoke/reconnect and retention
+checks passed. `internal/connectedapps` provides safe, paginated
 OAuth/MCP-key metadata and transaction-checked owner/admin revocation through
 `/account/connected-apps` and `/admin/mcp`. `internal/oauth/retention.go` and
 `core:oauth_cleanup` drain retired families in bounded atomic batches, retaining
@@ -373,6 +375,9 @@ every token/spent-refresh hash of active families. API-key permission parsing
 rejects malformed/non-string arrays. See `docs/connected-apps.md`, the bundled
 `docs/skills/ocms-author/SKILL.md` and the R1.7 phase notes for verification and
 remaining release gates. This status does not authorize deployment or Git writes.
+Native Desktop/CLI authoring, the full publication/scheduling matrix,
+independent audit, human publication and recording remain pending; the web
+passes do not close Release 1.
 
 ### Health Check Routes
 

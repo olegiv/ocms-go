@@ -894,11 +894,14 @@ release hardening and independent security audit remain R1.7 work.
 
 ### Iteration R1.7: Connected Apps, Hardening and Release
 
-**Status, 2026-11-02:** connected-app management, bounded OAuth retention and
-local release hardening are implemented but undeployed. See the
-[R1.7 implementation notes](#r17-implementation-notes--2026-11-02) for direct
-checks, benchmark baselines and unresolved quality/dependency gates. Fresh
-staging acceptance, independent audit, recording and release remain pending.
+**Status, 2026-11-02:** implementation commit `df6e5d86` is deployed to Fly
+staging. Bounded Claude web and ChatGPT web authoring, account revocation,
+reconnect and retention checks passed; see the
+[staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
+The [implementation notes](#r17-implementation-notes--2026-11-02) retain local
+checks, benchmarks and unresolved quality/dependency gates. Native Desktop/CLI
+acceptance, the full publication matrix, independent audit, recording and
+release closure remain pending. R1.7 is not complete.
 
 - `/account/connected-apps`: the user's OAuth grants and MCP-capable API keys, with app name, client
   host, scopes, created, last used, revoke. Admin overview and revoke in `/admin/mcp`.
@@ -3185,11 +3188,13 @@ commit, Git push or repository edit, and preserved the pre-existing dirty wiki.
 
 ## R1.7 Implementation Notes — 2026-11-02
 
-Local work is based on `5ae249ea6ff40be06603e542f1434e55cb4e3ec9`, in the
-existing checkout. The owner authorized starting R1.7 with no commit, push or
-deployment. Fly staging remains on the previously verified R1.6 runtime;
-none of the new paths below has fresh staging acceptance. The pre-existing
-dirty wiki and ignored custom-module sources were left untouched.
+The local implementation checkpoint below was based on
+`5ae249ea6ff40be06603e542f1434e55cb4e3ec9`, in the existing checkout. At that
+checkpoint the owner had authorized no commit, push or deployment, and staging
+still ran R1.6. The pre-existing dirty wiki and ignored custom-module sources
+were left untouched. The later approved `df6e5d86` commit, Fly deployment and
+bounded web-client checks are recorded in the
+[staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 
 ### Connected-app management
 
@@ -3315,13 +3320,126 @@ iterations per benchmark (not production load tests or release SLOs):
   1.26 and could not load Go 1.27 source; a private rebuild of the same pinned
   tool runs but reports broader model/test-fixture diagnostics. No clean
   whole-project nil-safety check is claimed; those diagnostics need disposition.
-- Fresh current-build Claude Desktop/web, ChatGPT web, Claude Code and Codex
+- Fresh current-build native Claude Desktop, Claude Code and Codex authoring
   acceptance, the complete publish/schedule failure matrix, independent
   security audit, human publication and demo recording remain pending. The
-  prepared per-client matrix labels every R1.7 row pending. Wiki synchronization
+  later bounded Claude web/ChatGPT web passes are recorded below and in the
+  per-client matrix; they do not close those release gates. Wiki synchronization
   and release preparation are not complete.
 
 Sanitized local results, screenshots, source fingerprints and detailed
 verification are kept under ignored `output/r17-validation/`. Raw credentials
-are excluded. No commit, Git push, deployment, site publication or external
-message was performed. R1.7 remains open for release closure.
+are excluded. This local checkpoint performed no commit, Git push, deployment,
+site publication or external message. Subsequent authorized staging work is
+recorded below. R1.7 remains open for release closure.
+
+## R1.7 Fly staging and web-client acceptance — 2026-11-02
+
+The owner separately approved the implementation commit and its deployment to
+`https://ocms-mcp-staging.fly.dev`, with no Git push. The exact reviewed commit
+was archived for the build; ignored modules, credentials and dirty wiki work
+were excluded. Asset generation and all 68 uncached archived Go test packages
+passed, with the archived source blobs unchanged after asset generation.
+
+- Commit: `df6e5d8687eabaeca4f978f33ad6fa3da86aadeb`.
+- Runtime: `mcp-staging-df6e5d8687ea`, built `2026-11-02T04:30:42Z`.
+- Image: `[deployment ID redacted]`, digest
+  `[image digest redacted]`.
+- Pre-deployment volume snapshot: `[snapshot ID redacted]`.
+- The existing Frankfurt machine, two shared CPUs, 1 GB RAM and original
+  volume were preserved. Startup installed all six retention indexes.
+  Public HTTPS health/readiness, issuer/resource metadata and anonymous MCP
+  denial passed; all three final Fly checks were passing.
+
+### Tested clients and settings
+
+Claude web (Pro; UI model Opus 5.5 Extra) and ChatGPT web (UI model Instant)
+used the existing dedicated acceptance connectors in Chrome on macOS. Exact
+browser/web build versions and ChatGPT's account tier were not recorded.
+These are web-client results, not native Claude Desktop or CLI authoring
+passes. Client-reported protocol names remain unverified metadata.
+
+The acting account was `ocms-agent@example.test`, Editor user 2. Normal fresh
+password/MFA/consent used the shared Keychain authenticator without owner code
+entry. Both restored grants have exactly `mcp:access mcp:drafts` and a 30-day
+refresh-family lifetime. MCP draft authoring was enabled, ordinary draft
+visibility remained off, external links used `nofollow`, and English/Russian
+were active. MFA, OAuth, sanitization and existing API-key restrictions stayed
+enabled; seeding, demo mode and DCR stayed off.
+
+### Direct web-client results
+
+- Both clients read site/schema/context, resolved published reference page 1
+  at revision 1, created an English draft, replayed the identical create
+  without a duplicate, and created/read a linked Russian translation.
+- ChatGPT continued Claude's draft with a summary-only update. A stale base
+  revision returned `revision_conflict`; an identical successful update replay
+  returned the same revision. The original body survived and its Russian
+  translation became stale after the source summary changed. Linking a
+  translation had advanced source membership revisions without making an
+  unchanged source fingerprint stale.
+- The editor showed recorded OAuth principal/app, separate validated/reported
+  information and translation freshness. No publication or scheduling occurred.
+  Final synthetic fixtures were:
+
+  | Fixture | Page | Language | Final revision |
+  |---|---|---|---|
+  | Claude source, continued in ChatGPT | 9 | en | 3 |
+  | ChatGPT source | 10 | en | 2 |
+  | Claude translation | 11 | ru | 1 |
+  | ChatGPT translation | 12 | ru | 1 |
+
+- Ordinary revision previews denied anonymous access. Each client issued one
+  explicitly requested share. Claude's page 9/revision 2 snapshot retained its
+  original summary after the current draft reached revision 3; ChatGPT's
+  page 10/revision 2 link also rendered with its tracking query intact.
+- English/Russian Account → Connected apps displayed the dedicated account's
+  metadata and preserved the language-switch return path. The Editor was
+  forbidden from `/admin/mcp`. Revoking each own web grant produced the native
+  client reconnect gate and invalidated that grant's share link (404).
+- Fresh reconnects restored both clients with the intended account/scopes.
+  Claude read page 9/revision 3; ChatGPT read pages 10/revision 2 and 9/revision 3,
+  including the cross-client summary. New caller grant identities matched
+  active database rows and successful MCP events. Historical save provenance
+  retained the original grant identity, separately from current authorization.
+
+The first scope-upgrade attempt expired while the Mac was locked; fresh
+sign-ins completed after it was unlocked. ChatGPT's paused revocation-check
+call resumed after the planned reconnect and was initially described by the
+client as unexpected access. The explicit new-identity/readback checks above
+confirmed the new grant; this was not evidence that the revoked grant worked.
+
+### Retention, logs and preservation
+
+A temporary staging maintenance helper invoked the deployed source's normal
+`oauth.Cleanup` twice. The first batch removed nine expired authorization codes;
+the immediate second batch removed nothing. The fingerprint of 32 active-family
+token rows was unchanged. An automatic scheduler batch at `04:45:00Z` removed
+one additional expired code. No token, preview, grant or client row was removed
+by these batches; aged-family draining, rollback, batching limits and refresh
+replay/concurrency remain local-test coverage, not live replay experiments.
+
+An exact-value check of a captured Fly log buffer found neither test share
+bearer nor the dedicated password. The final 100-record scan found no
+credential patterns, and current client grant hashes matched successful MCP
+events. Captures were bounded; raw logs were not retained and no new
+upstream-error probe was run. This does not extend the earlier R1.6 proxy-error
+coverage or establish proxy redaction.
+
+Final database checks preserved all six owner grants and six older dedicated
+pages, confirmed five successful content-write receipts with no persisted
+stale-write marker, and returned SQLite quick check `ok`. All four new pages
+remain unscheduled drafts. Both test shares remain revoked. The temporary
+Claude base grant was revoked; both restored web grants and the pre-existing
+Claude Code grant remain active. Temporary Fly helpers and private MFA-code
+files were removed. Closing one expired browser MFA window could not be
+confirmed after a controller timeout; it is not a pending consent for either
+restored connection.
+
+Sanitized records and screenshots are in ignored
+`output/r17-validation/staging-acceptance/`, including `acceptance-summary.json`,
+`deployment.json`, `final-preservation.json`, `retention-staging.json`,
+`scheduled-retention.json` and the client readback/log records. No credentials,
+share tokens or machine-specific paths enter these status notes. The rollout
+made no Git push, publication or release. The open release gates above remain
+in force; the complete multilingual demo and native/CLI matrix are unfinished.

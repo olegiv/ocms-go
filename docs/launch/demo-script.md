@@ -1,8 +1,11 @@
 # Multilingual authoring demo
 
-Status: prepared for the R1.7 acceptance recording; not yet recorded or run
-against an R1.7 staging deployment. Use synthetic drafts and the dedicated
-agent account/shared development authenticator. Preserve owner connections.
+Status: prepared for the full R1.7 multilingual recording; not yet recorded
+or completed. Bounded Claude web/ChatGPT web staging checks passed on
+`df6e5d86`; see the [client matrix](../desktop-authoring.md#r17-release-acceptance-partial).
+Those checks do not complete this script's native/CLI, two-target translation
+or human-publication steps. Use synthetic drafts and the dedicated agent
+account/shared development authenticator. Preserve owner connections.
 
 ## Before recording
 

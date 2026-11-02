@@ -7,6 +7,10 @@ R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
 the browser traces confirmed token-free HTTP request URLs. Native Desktop/CLI
 authoring acceptance and broader release hardening remain R1.7 work.
 
+R1.7's bounded Claude web/ChatGPT web checks now pass on `df6e5d86`
+(2026-11-02), including connected-app revocation, fresh MFA/consent reconnects
+and cross-client draft reads. See the current matrix below.
+
 ## Workflow
 
 1. An administrator enables MCP Server and **Enable draft authoring**. Connect
@@ -77,21 +81,32 @@ were preserved. See the [rollout record](../.claude/docs/PHASE5.md#r16-preview-t
 Native Desktop and CLI coverage of this build remains part of the R1.7 matrix;
 earlier-build results do not establish that coverage.
 
-## R1.7 release acceptance (pending)
+## R1.7 release acceptance (partial)
 
-The connected-app management and retention changes are local, undeployed
-work. Use [Connected apps](connected-apps.md) for access management and the
-[author skill](skills/ocms-author/SKILL.md) for the draft workflow. The prepared
-[demo script](launch/demo-script.md) defines the multilingual recording; it
+The connected-app management and retention changes are deployed on Fly staging
+at `df6e5d86`. Use [Connected apps](connected-apps.md) for access management and
+the [author skill](skills/ocms-author/SKILL.md) for the draft workflow. The
+prepared [demo script](launch/demo-script.md) defines the multilingual recording; it
 has not been recorded or published.
 
-| Client | Authoring path to exercise after approved deployment | R1.7 result |
+| Client | Authoring path | R1.7 result (2026-11-02) |
 |---|---|---|
 | Claude Desktop | OAuth; brief/context → draft → two translations → editor/review/preview | Pending |
-| Claude web | OAuth; cross-client continuation, revision conflict and explicit share | Pending |
-| ChatGPT web | OAuth; same full draft/translation/review flow and tracking-query share | Pending |
+| Claude web | Context/schema → EN draft/replay → RU translation; cross-client readback, pinned share, own-grant revoke/reconnect | Passed, bounded web flow on `df6e5d86` |
+| ChatGPT web | Context/schema → EN draft/replay → RU translation; cross-client update/replay/conflict, stale translation, tracking-query share, revoke/reconnect | Passed, bounded web flow on `df6e5d86` |
 | Claude Code | OAuth and scoped bearer modes; same tools and denied next request after revoke | Pending |
 | Codex | OAuth and scoped bearer modes; same tools and denied next request after revoke | Pending |
+
+Both web clients used dedicated Editor user 2 and the shared authenticator,
+with exactly `mcp:access mcp:drafts`. Fresh caller identities matched new
+database grants and successful MCP events; draft save provenance retained its
+historical identity. Test shares and the temporary base grant were revoked;
+owner connections and older fixtures were preserved. The full multilingual
+demo with two translation target languages and existing taxonomy/image cases,
+the publish/schedule failure matrix, native/CLI matrix, audit and release
+recording remain open.
+See the [staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
+for build identity, exact scope, client metadata limits and retention/log checks.
 
 Record actual client/version/tier, build/tree, settings, capabilities and date
 per row. Follow normal authentication with the dedicated staging account and
