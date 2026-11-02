@@ -13,8 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transactional cleanup that preserves active-family refresh-replay evidence.
   Adds a bundled author workflow and prepared launch/acceptance documents.
   Deployed as `df6e5d86` on MCP staging; bounded Claude/ChatGPT web authoring,
-  revocation/reconnect and retention checks passed. Native/CLI acceptance and
-  remaining release gates stay open. See `docs/connected-apps.md`.
+  revocation/reconnect and retention checks passed. Native Desktop authoring
+  and Claude Code/Codex OAuth and bearer checks also passed; Desktop reconnect
+  required Chrome and native-only reconnect remains unverified. The full
+  multilingual demo and remaining release gates stay open. See
+  `docs/connected-apps.md`.
 - **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
   translations and private reads over MCP, with original-input retries, revision
   checks, rolling user quotas and separate provenance. Removes compatibility

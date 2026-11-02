@@ -4,12 +4,15 @@ R1.5 and R1.6 staging acceptance is recorded in PHASE5 implementation notes.
 R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
 `ff4de3b1368c` and fresh fragment/POST sharing checks on `31c55f8c9f67`
 (2026-11-02). Both clients' links opened anonymously at the pinned revision;
-the browser traces confirmed token-free HTTP request URLs. Native Desktop/CLI
-authoring acceptance and broader release hardening remain R1.7 work.
+the browser traces confirmed token-free HTTP request URLs. R1.7's current
+client coverage and remaining release gates are recorded below.
 
 R1.7's bounded Claude web/ChatGPT web checks now pass on `df6e5d86`
 (2026-11-02), including connected-app revocation, fresh MFA/consent reconnects
-and cross-client draft reads. See the current matrix below.
+and cross-client draft reads. Native Desktop authoring and both CLIs' OAuth
+and bearer authoring checks subsequently passed on the same build. Desktop
+reconnect required Chrome; native-only reconnect remains unverified.
+See the current matrix below.
 
 ## Workflow
 
@@ -78,8 +81,8 @@ The proxy probes replayed the browser-observed targets with non-credential
 content; the browser traces establish the URL-safety property directly.
 Both new links were revoked and existing drafts, reviews and OAuth grants
 were preserved. See the [rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
-Native Desktop and CLI coverage of this build remains part of the R1.7 matrix;
-earlier-build results do not establish that coverage.
+Later native Desktop and CLI results on `df6e5d86` appear in the R1.7 matrix
+below; earlier-build results do not establish that coverage.
 
 ## R1.7 release acceptance (partial)
 
@@ -91,22 +94,43 @@ has not been recorded or published.
 
 | Client | Authoring path | R1.7 result (2026-11-02) |
 |---|---|---|
-| Claude Desktop | OAuth; brief/context → draft → two translations → editor/review/preview | Pending |
+| Claude Desktop 4.4212.0 | OAuth; context/schema → EN draft/replay/update/conflict → RU translation → editor/review/pinned preview; cross-client readback | Bounded authoring passed on `df6e5d86`; reconnect completed through Chrome, native-only reconnect unverified |
 | Claude web | Context/schema → EN draft/replay → RU translation; cross-client readback, pinned share, own-grant revoke/reconnect | Passed, bounded web flow on `df6e5d86` |
 | ChatGPT web | Context/schema → EN draft/replay → RU translation; cross-client update/replay/conflict, stale translation, tracking-query share, revoke/reconnect | Passed, bounded web flow on `df6e5d86` |
-| Claude Code | OAuth and scoped bearer modes; same tools and denied next request after revoke | Pending |
-| Codex | OAuth and scoped bearer modes; same tools and denied next request after revoke | Pending |
+| Claude Code 2.1.316 | OAuth and scoped bearer; context/schema → draft/replay/update/conflict → RU translation; revoked startup denial and fresh OAuth reconnect/read | Passed, both bounded modes on `df6e5d86` |
+| Codex 0.166.0 | OAuth and scoped bearer; context/schema → draft/replay/update/conflict → RU translation; cross-client update, revoked startup denial and fresh OAuth reconnect/read | Passed, both bounded modes on `df6e5d86` |
 
 Both web clients used dedicated Editor user 2 and the shared authenticator,
 with exactly `mcp:access mcp:drafts`. Fresh caller identities matched new
 database grants and successful MCP events; draft save provenance retained its
 historical identity. Test shares and the temporary base grant were revoked;
-owner connections and older fixtures were preserved. The full multilingual
+owner connections and older fixtures were preserved.
+
+The native/CLI follow-up used the same dedicated Editor and shared
+authenticator. Desktop created pages 13/14; Codex continued page 13 to revision
+4, and Desktop/Claude Code read it back. A stale edit was rejected, its Russian
+translation became stale, and the explicit share stayed pinned to revision 2
+until grant revocation made it return 404. Both CLI modes verified identical
+create/update retries, preserved bodies/reports and linked translations.
+Revoked CLI credentials received 401 during MCP startup; missing tools alone
+were not treated as refusal evidence. Both OAuth reconnects produced new
+grants and fresh reads. The two 90-minute bearer keys, each restricted to the
+Mac's public IPv4 `/32`, were deactivated after testing.
+
+**Desktop reconnect caveat:** native Connect/Reconnect did not open an
+observable sign-in in the controlled native/Chrome surfaces. Chrome web
+settings and Connect in the shared chat completed normal password/MFA/consent,
+including the `mcp:drafts` upgrade. Fresh native site-info/draft calls then
+confirmed user 2, exactly both scopes and revision 4. The root cause is
+unestablished; this is not an unconditional native-only reconnect pass.
+
+Only English/Russian were enabled, with no taxonomy/media fixtures. The full
 demo with two translation target languages and existing taxonomy/image cases,
-the publish/schedule failure matrix, native/CLI matrix, audit and release
-recording remain open.
-See the [staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
-for build identity, exact scope, client metadata limits and retention/log checks.
+native-only Desktop reconnect, the publish/schedule failure matrix, audit and
+release recording remain open. See the
+[web staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
+and [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02)
+for build identity, evidence limits, cleanup and remaining gates.
 
 Record actual client/version/tier, build/tree, settings, capabilities and date
 per row. Follow normal authentication with the dedicated staging account and

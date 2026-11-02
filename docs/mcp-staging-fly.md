@@ -378,13 +378,28 @@ log-buffer check found neither test share bearer nor password; no new
 upstream-error probe or full-release pass is claimed. See the
 [R1.7 staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 
+The subsequent native/CLI acceptance used the same `df6e5d86` binary, without
+another deployment. Claude Code 2.1.316 and Codex 0.166.0 passed bounded draft
+authoring in OAuth and bearer modes, revoked startup 401 denial and fresh
+OAuth reconnect/readback. Both 90-minute, IPv4 `/32`-restricted keys were
+deactivated. Native Desktop 4.4212.0 passed authoring, cross-client readback
+and pinned sharing, but reconnect required Chrome web settings/shared-chat
+consent; native-only reconnect remains unverified. The dedicated Editor and
+shared authenticator were used throughout, with exactly
+`mcp:access mcp:drafts`; owner connections and older drafts were preserved.
+Test shares and the temporary base grant are revoked. Six overlapping bounded
+log slices showed no credential patterns; no new proxy-error experiment was
+run. See the
+[native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
+
 For subsequent approved deployments, exclude concurrent old URL-issuing
 writers, let startup migrate first, and repeat the fixed-path upstream-error
 and real-client sharing checks. Keep HTTP body dumps disabled. Record actual
 client/version/build/results in PHASE5 and mark unavailable capabilities
-pending. Native Desktop/CLI authoring acceptance and the broader release
-matrix remain R1.7 work. DCR and unsupported authentication methods remain
-off. Do not reuse the historical R1.1 probe result as a CMS-write pass.
+pending. Native-only Desktop reconnect, the full two-target demo with existing
+taxonomy/media and the broader publication/release matrix remain R1.7 work.
+DCR and unsupported authentication methods remain off. Do not reuse the
+historical R1.1 probe result as a CMS-write pass.
 
 ## Subsequent source updates
 

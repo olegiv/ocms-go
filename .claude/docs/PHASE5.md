@@ -898,9 +898,12 @@ release hardening and independent security audit remain R1.7 work.
 staging. Bounded Claude web and ChatGPT web authoring, account revocation,
 reconnect and retention checks passed; see the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
-The [implementation notes](#r17-implementation-notes--2026-11-02) retain local
-checks, benchmarks and unresolved quality/dependency gates. Native Desktop/CLI
-acceptance, the full publication matrix, independent audit, recording and
+The later [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
+adds bounded native Desktop authoring and both CLIs' OAuth/bearer passes on
+the same build. Desktop reconnect required Chrome; native-only reconnect is
+unverified. The [implementation notes](#r17-implementation-notes--2026-11-02)
+retain local checks, benchmarks and unresolved quality/dependency gates. The
+full multilingual demo, publication matrix, independent audit, recording and
 release closure remain pending. R1.7 is not complete.
 
 - `/account/connected-apps`: the user's OAuth grants and MCP-capable API keys, with app name, client
@@ -3320,12 +3323,12 @@ iterations per benchmark (not production load tests or release SLOs):
   1.26 and could not load Go 1.27 source; a private rebuild of the same pinned
   tool runs but reports broader model/test-fixture diagnostics. No clean
   whole-project nil-safety check is claimed; those diagnostics need disposition.
-- Fresh current-build native Claude Desktop, Claude Code and Codex authoring
-  acceptance, the complete publish/schedule failure matrix, independent
-  security audit, human publication and demo recording remain pending. The
-  later bounded Claude web/ChatGPT web passes are recorded below and in the
-  per-client matrix; they do not close those release gates. Wiki synchronization
-  and release preparation are not complete.
+- At this local checkpoint, fresh native/CLI authoring acceptance was pending.
+  Later web and native/CLI passes are recorded below and in the per-client
+  matrix. Native-only Desktop reconnect, the full two-target multilingual
+  demo with existing taxonomy/media, the complete publish/schedule failure
+  matrix, independent security audit, human publication and demo recording
+  remain open. Wiki synchronization and release preparation are not complete.
 
 Sanitized local results, screenshots, source fingerprints and detailed
 verification are kept under ignored `output/r17-validation/`. Raw credentials
@@ -3441,5 +3444,129 @@ Sanitized records and screenshots are in ignored
 `deployment.json`, `final-preservation.json`, `retention-staging.json`,
 `scheduled-retention.json` and the client readback/log records. No credentials,
 share tokens or machine-specific paths enter these status notes. The rollout
-made no Git push, publication or release. The open release gates above remain
-in force; the complete multilingual demo and native/CLI matrix are unfinished.
+made no Git push, publication or release. At this checkpoint the native/CLI
+matrix was unfinished; the follow-up below records those later results and
+the Desktop reconnect caveat. The complete multilingual demo and remaining
+release gates stay open.
+
+## R1.7 native Desktop and CLI acceptance — 2026-11-02
+
+The owner authorized native Claude Desktop, Claude Code and Codex acceptance
+on the existing `ocms-mcp-staging` deployment, including CLI OAuth and bearer
+modes, with no commit, push or deployment. The live binary reported
+`mcp-staging-df6e5d8687ea`, commit
+`df6e5d8687eabaeca4f978f33ad6fa3da86aadeb`, built
+`2026-11-02T04:30:42Z`. The image is the one recorded in the web rollout above;
+no application rebuild or deployment occurred during this pass.
+
+### Clients, identity and scope
+
+- Native Claude Desktop **4.4212.0**, Pro, visible model **Opus 5.5 Extra**;
+  the dedicated acceptance connector shared with Claude web.
+- Claude Code **2.1.316**, observed model `claude-opus-5-5`, and Codex CLI
+  **0.166.0**. CLI subscription tiers and Codex's model were not freshly
+  recorded; older R1.1 tier observations are not new measurements.
+- Dedicated account `ocms-agent@example.test`, Editor user **2**, with the
+  shared Keychain password and generated MFA codes. Normal fresh sign-in and
+  consent were preserved. OAuth reconnects used 30-day refresh families and
+  exactly `mcp:access mcp:drafts`; no broader permission was granted.
+- Each CLI used an isolated staging configuration with other connectors and
+  command/file/web tools disabled. Its bearer mode used a separate 90-minute
+  Keychain-held test key, restricted to the Mac's public IPv4 `/32` and the
+  same two permissions. Both keys were deactivated after testing.
+- Draft authoring stayed enabled, ordinary draft visibility off and external
+  links `nofollow`. Only English/Russian were active; no existing categories,
+  tags or media were available. No settings, roles or owner connections changed.
+
+### Direct native and CLI results
+
+| Client/mode | English page | Russian translation | Final revisions (EN / RU) | Bounded result |
+|---|---|---|---|---|
+| Native Claude Desktop / OAuth | 13 | 14 | 4 / 1 | Authoring/readback passed; reconnect needed Chrome |
+| Codex / OAuth | 15 | 16 | 3 / 1 | Passed |
+| Claude Code / OAuth | 17 | 18 | 3 / 1 | Passed |
+| Codex / bearer | 19 | 20 | 3 / 1 | Passed |
+| Claude Code / bearer | 21 | 22 | 3 / 1 | Passed |
+
+- All five paths read site/schema/context, created an English draft, repeated
+  identical create/update requests, read their drafts and linked one Russian
+  translation. Retries returned identical successful payloads and revisions;
+  the API does not expose a `replayed` flag. Stale updates returned structured
+  `revision_conflict` and did not persist the intentional marker. CLI checks
+  compared actual requests/results, matching text fallbacks and preserved
+  body/agent reports after summary-only edits, not model verdicts alone.
+- Translation membership advanced the source from revision 2 to 3 without
+  changing its text fingerprint; the new translation stayed current. Membership
+  revisions have their own provenance. Historical reports/claims remained
+  visible in revision review; they were not inherited from the target draft.
+- Codex OAuth continued Desktop's page 13 with a summary-only update to
+  revision 4, including an identical replay. Native Desktop and Claude Code
+  read that revision; Claude Code's stale revision-3 update was rejected.
+  Russian page 14 became stale. Native Desktop and Claude Code received generic
+  `not_found` when requesting published/foreign page 1 through `get_my_draft`.
+- The editor showed the native draft's body/SEO fields, writer identity,
+  separated verified/validated/reported blocks, historical unacknowledged
+  claim and translation freshness. No claim acknowledgment, restore, publish
+  or schedule action was executed in this follow-up.
+- Desktop explicitly issued one share pinned to page 13/revision 2. It
+  rendered in the browser and in cookie-free HTTP checks (200), retaining its
+  earlier summary after the source reached revision 4. Anonymous ordinary
+  previews returned 404. Revoking its issuing grant made the old share return
+  404; it remained revoked after reconnect.
+- Revocation rejected both CLIs' OAuth/bearer startup requests with MCP 401;
+  OAuth refresh attempts also returned 400. No model-level tool ran after the
+  failed handshake, so missing tools alone were not counted as refusal proof.
+  Both CLI OAuth reconnects issued new grants and successfully read Desktop's
+  page 13/revision 4. Independent revoked-bearer probes also returned 401.
+
+### Desktop reconnect caveat
+
+Native Connect/Reconnect did not open an observable sign-in in the controlled
+native/Chrome surfaces. Chrome web settings and Connect in the same shared
+chat launched the normal OAuth flow. Password, shared MFA and consent restored
+the connector, first at `mcp:access`, then through the normal `mcp:drafts`
+scope upgrade. The final fresh native `get_site_info` and `get_my_draft` calls
+confirmed user 2, exactly both scopes and page 13/revision 4. Database grant
+metadata and successful MCP events corroborated the new caller; saved revision
+provenance still identified the earlier Codex writer. The temporary access-only
+grant was revoked.
+
+The scope upgrade explains the draft read after the earlier access-only
+site-info response; it is not a scope-enforcement bypass. The cause of the
+native reconnect behavior was not established. Native authoring/readback
+passed with this Chrome workaround; **native-only reconnect remains
+unverified**, not an unconditional OAuth UX pass.
+
+### Logs, preservation and remaining gates
+
+Six overlapping Fly log slices of up to 100 records had no credential-pattern
+matches. An exact-value scan of the current raw buffer found neither the two
+test bearer keys nor the share token; retained text evidence also contained
+none. Raw logs were not retained. These bounded captures do not cover every
+historic request, and no new proxy-error experiment was run or proxy-redaction
+claim established. A consumed single-use Codex callback code appeared in one
+intermediate accessibility tool snapshot; callback redaction was corrected.
+No reusable credential or MFA code was exposed or retained in evidence.
+
+Final database checks preserved all **six owner grants**, all **ten older
+dedicated-account pages** and site settings. All **ten new pages** remain
+unscheduled drafts, every test share is revoked, no intentional stale-write
+marker persisted and SQLite quick check returned `ok`. Both test bearer keys
+are inactive; the restored two-scope OAuth connections remain active.
+Temporary Fly helpers, private MFA delivery files and nine temporary Chrome
+tabs were removed. The native acceptance chat remains available. Pre-existing
+seed/demo source and dirty wiki work were preserved.
+
+Sanitized evidence is in ignored
+`output/r17-validation/native-cli-acceptance/`: `acceptance-summary.json`,
+`cli-assertions.json`, per-run tool events/summaries, `final-preservation.json`,
+`credential-redaction-check.json`, preview checks, native screenshots and
+accessibility records. These records, credentials and machine-specific paths
+are excluded from the documentation commit.
+
+The two-target multilingual demo and successful existing taxonomy/media cases
+remain unexecuted because staging had only English/Russian and no such
+fixtures. Native-only Desktop reconnect, the full publish/schedule failure
+matrix, independent audit, unresolved quality/dependency dispositions, human
+publication, recording, wiki synchronization and release preparation remain
+open. This bounded pass does not complete R1.7 or authorize Release 2.

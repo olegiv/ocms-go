@@ -3,7 +3,10 @@
 R1.7 is deployed to MCP staging at `df6e5d86` (2026-11-02). Bounded Claude web
 and ChatGPT web checks passed for these management/maintenance paths; see the
 [staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
-Full release acceptance remains open.
+Native Desktop authoring and Claude Code/Codex OAuth and bearer checks also
+passed on that build, with a Chrome workaround for Desktop reconnect; see the
+[native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
+Native-only Desktop reconnect and full release acceptance remain open.
 
 ## Account and administrator controls
 
@@ -94,8 +97,19 @@ Live aged-family draining, refresh replay and administrative cross-account or
 API-key revocation were not exercised by those web checks; local coverage is
 listed above. Both test shares and the temporary base grant were revoked.
 
-Native Desktop/CLI authoring, the complete publish/schedule failure matrix,
-publication by the human editor, independent security audit and release
-recording remain pending. See the
+The later native/CLI pass confirmed revoked MCP startup requests received 401
+in both CLIs' OAuth and bearer modes. Fresh OAuth reconnects issued new grants
+and restored draft reads. Two dedicated 90-minute keys with exactly
+`mcp:access mcp:drafts` and the Mac's public IPv4 `/32` restriction were
+deactivated; independent probes also returned 401. Native Desktop's own-grant
+revocation rejected its read and invalidated its share. Chrome web settings
+and shared-chat consent restored the connection, including the draft-scope
+upgrade; fresh native reads passed. Its native-only reconnect remains
+unverified. Owner grants, older drafts and site settings were preserved.
+
+The full two-target multilingual demo with existing taxonomy/media, native-only
+Desktop reconnect, the complete publish/schedule failure matrix, publication
+by the human editor, independent security audit and release recording remain
+pending. See the
 [phase notes](../.claude/docs/PHASE5.md), [client checklist](desktop-authoring.md),
 [OAuth contract](oauth.md) and [demo script](launch/demo-script.md).

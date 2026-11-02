@@ -740,10 +740,13 @@ passed on `31c55f8c9f67` (2026-11-02).
 R1.7 adds [connected-app management and bounded OAuth retention](docs/connected-apps.md),
 plus an [oCMS author workflow](docs/skills/ocms-author/SKILL.md). It is deployed
 on MCP staging at `df6e5d86`, with bounded Claude web/ChatGPT web authoring,
-scoped reconnect, revocation and retention checks passed. Native Desktop/CLI
-authoring, the complete publication matrix, independent audit and remaining
-release gates stay open. See [OAuth](docs/oauth.md) and the
-[R1.7 staging record](.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
+scoped reconnect, revocation and retention checks passed. Native Desktop
+authoring and both CLIs' OAuth/bearer authoring checks also passed on that
+build; Desktop reconnect required Chrome and remains unverified without that
+workaround. The full multilingual demo, complete publication matrix,
+independent audit and remaining release gates stay open. See [OAuth](docs/oauth.md),
+the [web staging record](.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
+and [native/CLI record](.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
 See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.
 
 ## Theme Development
