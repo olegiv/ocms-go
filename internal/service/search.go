@@ -30,6 +30,7 @@ type SearchResult struct {
 	Excerpt         string
 	Highlight       string
 	Status          string
+	PageType        string
 	PublishedAt     sql.NullTime
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
@@ -143,6 +144,7 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 			p.slug,
 			p.body,
 			p.status,
+			p.page_type,
 			p.published_at,
 			p.created_at,
 			p.updated_at,
@@ -174,6 +176,7 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 			&r.Slug,
 			&r.Body,
 			&r.Status,
+			&r.PageType,
 			&r.PublishedAt,
 			&r.CreatedAt,
 			&r.UpdatedAt,
