@@ -4,9 +4,12 @@ The full EN/RU/DE draft workflow ran on `39d82c94` in native Claude Desktop,
 ChatGPT, Claude Code and Codex. The inline-image alt-text fix is now deployed
 at `16ac7161`: Claude web and ChatGPT web verified the resaved demo drafts,
 and signed-in browser previews retained the exact localized descriptions.
-**R1.7 is not release-complete:** fresh editorial/translation review, the
-dependency and Desktop reconnect decisions, human publication and the final
-publication segment of the demo remain pending.
+**R1.7 is not release-complete:** fresh editorial/translation review,
+dependency-fix staging rollout, the Desktop reconnect decision, human
+publication and the final publication segment of the demo remain pending.
+The owner accepted the unimported OpenPGP advisory as not applicable to the
+reviewed local build; the Klaro/minimatch fix is verified locally. See the
+[scoped dependency dispositions](release-decisions.md#dependency-advisory-dispositions).
 
 ## Tested identities
 
@@ -201,8 +204,9 @@ issued for the multilingual demo.
 The screenshot walkthrough is partial evidence, not a continuous recording
 of publication. See [the demo script](demo-script.md) for its remaining shot.
 The exact release decisions are in [release decisions](release-decisions.md):
-the alt-fix rollout/readback is complete; decide the scoped dependency
-dispositions and Desktop reconnect caveat, then have the human review the
+the alt-fix rollout/readback is complete; the OpenPGP disposition is accepted
+for the reviewed local build, and the Klaro/minimatch rollout remains pending.
+Decide the Desktop reconnect caveat, then have the human review the
 current drafts/translations and, after separate publication approval,
 publish and finish the recording. Production
 authoring/publication remains a separate request under the

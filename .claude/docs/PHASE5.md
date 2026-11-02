@@ -902,9 +902,12 @@ recorded for `39d82c94` in
 The inline alt-text repair passes all 68 test packages, lint and first-party
 NilAway and is verified on `16ac7161`: both web clients read the repaired
 demo pages 27/43/44 at revisions 6/4/3, with matching rendered previews.
-Fresh editorial/stale-translation review, human publication, the recording's
-final segment and the [release decisions](../../docs/launch/release-decisions.md)
-remain pending. R1.7 is not complete. Earlier bounded results remain in the
+The owner accepted the unimported OpenPGP advisory for the reviewed local
+build. The Klaro/minimatch fix is verified locally; its staging rollout,
+the Desktop reconnect decision, fresh editorial/stale-translation review,
+human publication and the recording's final segment remain pending. See the
+[release decisions](../../docs/launch/release-decisions.md).
+R1.7 is not complete. Earlier bounded results remain in the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 The earlier [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
 adds bounded native Desktop authoring and both CLIs' OAuth/bearer passes on
@@ -912,8 +915,8 @@ adds bounded native Desktop authoring and both CLIs' OAuth/bearer passes on
 unverified. The [implementation notes](#r17-implementation-notes--2026-11-02)
 retain local checks and benchmarks; the
 [local quality follow-up](#r17-local-quality-follow-up--2026-11-02) records
-the completed findings repairs, passing analyzer checks and remaining
-dependency dispositions. The newer acceptance record supersedes the earlier
+the completed findings repairs, passing analyzer checks and earlier
+dependency findings. The newer acceptance record supersedes the earlier
 EN/RU-only fixture limitation and records publication-check coverage precisely.
 
 - `/account/connected-apps`: the user's OAuth grants and MCP-capable API keys, with app name, client
@@ -3759,3 +3762,14 @@ probes were not rerun; their earlier build-specific evidence remains above.
 No new Git commit, push, publication or scheduling occurred in this rollout.
 The advisory and Desktop workaround decisions, fresh editorial review,
 human publication and final demo segment remain open; R1.7 is not closed.
+
+### R1.7 local dependency disposition — 2026-11-02
+
+The owner accepted GO-2026-5932 as not applicable to the reviewed local build:
+retain `golang.org/x/crypto v0.58.0` for Argon2/bcrypt, with no OpenPGP
+imports. Existing vulnerability checks and the module-only warning remain;
+revalidate after import, dependency or build-target changes and before release.
+The [decision record](../../docs/launch/release-decisions.md#dependency-advisory-dispositions)
+binds this acceptance to the tested candidate. Klaro/minimatch is fixed
+locally by the six-file import from master `a325de44`; staging rollout remains
+pending. No commit, push or deployment occurred for this documentation update.

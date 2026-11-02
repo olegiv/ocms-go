@@ -1,7 +1,8 @@
 # R1 release decisions
 
-Prepared 2026-11-02. These are proposed dispositions, not accepted waivers
-or authorization to commit, push, deploy or publish. The
+Updated 2026-11-02. The OpenPGP disposition below is owner-approved for the
+reviewed local build; other decisions retain their stated status. This
+record does not authorize commit, push, deployment or publication. The
 [acceptance record](r17-acceptance.md) binds results to the tested build.
 
 ## Inline-image accessibility
@@ -21,41 +22,50 @@ establish a whole-site accessibility pass or authorize publication.
 
 ## Dependency advisory dispositions
 
-| Advisory | Actual exposure and proposal | Decision status |
+| Advisory | Actual exposure and disposition | Decision status |
 |---|---|---|
-| GO-2026-5932 / `golang.org/x/crypto/openpgp` | Required module contains an unmaintained OpenPGP package; oCMS does not import it. Keep the needed non-OpenPGP crypto dependency and prohibit adding OpenPGP imports. Accept this unimported-module finding only for the reviewed tree. | Proposed; owner decision pending |
-| GHSA-g3hv-75wg-m249 / transitive `minimatch` | Installed 3.1.5 is reported under the advisory's broad `<11.0.1` range. The installed dependency is in Klaro's Babel/ESLint chain, which oCMS does not invoke when copying Klaro's prebuilt assets. Accept only this unused tooling path for the reviewed lockfile, pending a compatible upstream resolution. | Proposed; owner decision pending |
+| GO-2026-5932 / `golang.org/x/crypto/openpgp` | Keep `golang.org/x/crypto v0.58.0` for Argon2 password hashing and bcrypt imports. oCMS does not import OpenPGP; the reviewed build has no affected imported packages. OpenPGP imports are outside this disposition. | Accepted by owner on 2026-11-02: not applicable to the reviewed local build; revalidation required |
+| GHSA-g3hv-75wg-m249 / transitive `minimatch` | The local candidate imports master fix `a325de44`: vendor the existing Klaro 0.7.22 browser JS/CSS and BSD license, removing its unused Babel/ESLint/minimatch npm chain. No major override or advisory suppression. | Removed from the local lockfile; staging rollout pending |
 
-The Go advisory lists no known fixed OpenPGP version and directs users away
-from the unmaintained package. A called/imported-symbol scan returned no
-reachable vulnerabilities; that does not erase the required-module finding.
-See the [Go vulnerability record](https://pkg.go.dev/vuln/GO-2026-5932).
+The owner approved retaining the required crypto module and recording this
+advisory as not applicable to the reviewed local build. The scope is the
+Linux ARM64 R1.7 candidate based on `fad98d1a`, with the six-file Klaro import
+from master `a325de44` and unchanged Go dependencies. The fresh Go 1.27.3 /
+govulncheck 1.9.0 package scan returned zero imported-package vulnerabilities
+and retained the module-only warning. oCMS imports `x/crypto/argon2` in
+`internal/auth/password.go` and `x/crypto/bcrypt` in
+`internal/transfer/importer.go`, with no OpenPGP imports in the tested build.
 
-The minimatch advisory describes quadratic worklist amplification in 10.2.6
-at optimization level 2 or greater, while its published affected range also
-includes 3.1.5. That installed implementation has none of the described
-preprocessing/worklist symbols, and the bounded reproduction did not show
-that mechanism. This is exposure evidence, not an upstream withdrawal or
-proof that every ReDoS pattern is safe. See the
-[GitHub advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+The advisory has no known fixed OpenPGP version. It remains visible in
+dependency reports; no scanner exclusion or CI bypass is part of this
+decision. Keep the existing local, CI and release vulnerability checks.
+Revalidate the disposition when imports, dependency versions, build tags
+or target platforms change, and against the release candidate before a tag.
+Any proposed OpenPGP use needs a new assessment. See the
+[Go vulnerability record](https://pkg.go.dev/vuln/GO-2026-5932).
 
-The existing npm audit reports seven moderate affected package entries in
-the same chain, with no high/critical entry. Registry metadata checked at
-`2026-11-02T16:09:45Z` has minimatch 11.0.4 as latest and 3.1.5 as the latest
-3.x release; Klaro's `latest` tag points to 0.7.21, older than installed
-0.7.22. Neither a forced major minimatch override nor a Klaro downgrade is a
-verified compatible repair. Klaro has no install lifecycle script; this
-project copies its shipped JS/CSS, whose hashes match the bundled assets,
-and does not run its Babel/ESLint tasks. npm's dependency classification
-alone is not used to claim absence of runtime exposure. Primary metadata:
-[minimatch registry](https://registry.npmjs.org/minimatch),
-[Klaro registry](https://registry.npmjs.org/klaro).
+The R1.7 baseline audit reported seven moderate entries in Klaro's unused
+tooling chain. Applying the six-file master fix removes 136 package entries,
+including Klaro's npm package, ESLint and minimatch, without changing any
+retained package version or integrity value. The previous proposed minimatch
+waiver is superseded for this local candidate, rather than accepted. The
+[advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249) itself remains.
 
-Invalidate either proposed disposition when imports, the lockfile, Klaro
-build/lint use, install scripts or shipped artifacts change, or an upstream
-advisory/fix changes the exposure analysis. Run dependency scans against the
-candidate tree before a release tag. No broad all-dependency waiver is
-proposed, and no package manifest was changed in this acceptance run.
+The vendored browser files preserve the existing asset URLs, consent API,
+SRI and cache busting. The BSD license is included in the generated assets
+and embedded binary. Exact upstream hashes, source integrity and the manual
+update process are recorded in the
+[vendor provenance](../../web/static/vendor/klaro/README.md). npm audit no
+longer tracks this browser library; future Klaro updates and advisories need
+explicit review.
+
+These are local source changes, not a staging deployment. Staging remains
+at `16ac7161`; record the candidate's local checks and any later separately
+authorized rollout before claiming release closure. Revalidate this asset
+assessment when vendor bytes, the lockfile or copy/build paths change.
+The accepted OpenPGP disposition remains limited to the reviewed build
+and the revalidation conditions above. Run dependency scans against the
+candidate before a release tag. No broad dependency waiver is accepted.
 
 ## Native Desktop reconnect
 
