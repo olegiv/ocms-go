@@ -894,14 +894,16 @@ release hardening and independent security audit remain R1.7 work.
 
 ### Iteration R1.7: Connected Apps, Hardening and Release
 
-**Status, 2026-11-02:** hardening commit `39d82c94` is deployed to Fly
-staging. Fresh Claude/ChatGPT web OAuth/share/revocation checks and the full
+**Status, 2026-11-02:** commit `16ac7161` is deployed to Fly staging.
+Fresh Claude/ChatGPT web OAuth/share/revocation checks and the full
 EN/RU/DE draft workflow in native Desktop, ChatGPT and both CLI modes are
-recorded in [release acceptance](../../docs/launch/r17-acceptance.md).
-The full-media test found silent punctuation-dependent inline alt-text loss;
-its local fix passes all 68 test packages, lint and first-party NilAway but
-remains undeployed. Human publication, the recording's final
-segment and the [release decisions](../../docs/launch/release-decisions.md)
+recorded for `39d82c94` in
+[release acceptance](../../docs/launch/r17-acceptance.md).
+The inline alt-text repair passes all 68 test packages, lint and first-party
+NilAway and is verified on `16ac7161`: both web clients read the repaired
+demo pages 27/43/44 at revisions 6/4/3, with matching rendered previews.
+Fresh editorial/stale-translation review, human publication, the recording's
+final segment and the [release decisions](../../docs/launch/release-decisions.md)
 remain pending. R1.7 is not complete. Earlier bounded results remain in the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 The earlier [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
@@ -3677,7 +3679,8 @@ live-client acceptance was performed during these repairs.
 
 ### R1.7 full multilingual acceptance follow-up — 2026-11-02
 
-[Current acceptance](../../docs/launch/r17-acceptance.md) records the deployed
+Before the alt-text rollout, [acceptance](../../docs/launch/r17-acceptance.md)
+recorded the deployed
 `39d82c94` image, fresh bounded web OAuth/share/revocation checks and full
 EN/RU/DE draft fields, existing taxonomy/media and linked translations in
 native Claude Desktop, ChatGPT and both CLI OAuth/bearer modes. The selected
@@ -3716,5 +3719,43 @@ accessibility. Existing body resave/review is required after rollout.
 No commit, push or further application deployment occurred in this run. The
 [release decision record](../../docs/launch/release-decisions.md) proposes
 scoped advisory dispositions and a documented Desktop Chrome handoff; none
-is an accepted waiver. Alt-fix rollout/readback, human publication and the
-recording's final shot still require their corresponding authorization.
+is an accepted waiver. At that handoff, alt-fix rollout/readback, human
+publication and the recording's final shot still required their
+corresponding authorization. The subsequent alt-text rollout is below.
+
+### R1.7 alt-text staging verification — 2026-11-02
+
+After explicit authorization, `16ac71611e2e82e8a5789f0bf13145ef844301ef`
+was deployed from a clean Git archive to `ocms-mcp-staging`. The host binary
+reported build time `2026-11-02T19:40:19Z`; its image digest is
+`[image digest redacted]`.
+The existing Machine/volume were retained, a volume snapshot preceded the
+rollout and all Fly/public health checks passed. MFA stayed required and
+seeding disabled.
+
+Claude web saved EN 27 once, revision 5 → 6. ChatGPT web saved RU 43 once,
+3 → 4, and DE 44 once, 2 → 3. Both clients then freshly read all three
+drafts under dedicated Editor user 2 and exactly `mcp:access mcp:drafts`.
+The shared authenticator refreshed the expired staff browser session.
+Exact EN/RU/DE inline alt text, punctuation and captions survived stored
+HTML, derived Markdown and signed-in revision previews. Only inline alt
+changed in the bodies; metadata and agent reports were preserved. Issues
+and conversion warnings were empty. See the
+[focused verification](../../docs/launch/r17-acceptance.md#alt-text-staging-verification).
+
+The English body fingerprint changed, so both translations now report
+`stale`; their existing source bases were preserved. All three are still
+unscheduled drafts and need fresh human claim/content and translation
+review. Read-only database checks preserved 44 pages, the published count,
+all other page identity/revision/lifecycle fingerprints, ten owner grants
+and preview links, with SQLite quick-check success. Both prior temporary
+keys remain inactive and inspection files were removed. Wiki was untouched.
+
+Evidence: ignored `output/r17-validation/alt-text-staging/`, including
+deployment identity, before/after drafts, exact body comparisons, both
+clients' final readbacks/screenshots, rendered previews and preservation
+checks. Native Desktop/CLI modes, web revocation/reconnect and proxy-error
+probes were not rerun; their earlier build-specific evidence remains above.
+No new Git commit, push, publication or scheduling occurred in this rollout.
+The advisory and Desktop workaround decisions, fresh editorial review,
+human publication and final demo segment remain open; R1.7 is not closed.

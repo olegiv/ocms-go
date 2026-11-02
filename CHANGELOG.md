@@ -12,11 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and MCP API-key metadata/revocation, administrator oversight, and bounded
   transactional cleanup that preserves active-family refresh-replay evidence.
   Adds a bundled author workflow and prepared launch/acceptance documents.
-  Current staging build `39d82c94` passed fresh web OAuth/sharing checks and
+  Build `39d82c94` passed fresh web OAuth/sharing checks and
   full EN/RU/DE draft workflows with taxonomy/media in native Desktop,
   ChatGPT and Claude Code/Codex OAuth/bearer modes. Desktop reconnect uses
-  Chrome. A newly found alt-text fix awaits rollout; human publication and
-  release decisions remain open. See `docs/launch/r17-acceptance.md`.
+  Chrome. Current staging build `16ac7161` repairs inline alt text; both web
+  clients verified resaved EN/RU/DE drafts, with matching browser previews. Fresh
+  editorial/stale-translation review, human publication and release
+  decisions remain open. See `docs/launch/r17-acceptance.md`.
 - **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
   translations and private reads over MCP, with original-input retries, revision
   checks, rolling user quotas and separate provenance. Removes compatibility

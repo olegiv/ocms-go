@@ -7,11 +7,13 @@ R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
 the browser traces confirmed token-free HTTP request URLs. R1.7's current
 client coverage and remaining release gates are recorded below.
 
-R1.7 is now deployed at `39d82c94` (2026-11-02). Fresh web OAuth/sharing
-checks and full EN/RU/DE draft authoring with existing taxonomy/media ran in
-native Desktop, ChatGPT and both CLIs' OAuth/bearer modes. The full-media run
-found punctuation-dependent inline alt loss; the local fix passes tests/lint/
-NilAway but is not deployed. See the [current acceptance record](launch/r17-acceptance.md)
+R1.7 is now deployed at `16ac7161` (2026-11-02). Fresh web OAuth/sharing
+checks and full EN/RU/DE draft authoring with existing taxonomy/media ran on
+`39d82c94` in native Desktop, ChatGPT and both CLIs' OAuth/bearer modes.
+The inline alt-text repair passed Claude web/ChatGPT web resaves and
+readbacks on `16ac7161`, with matching rendered previews. This focused
+follow-up did not rerun native/CLI modes. See the
+[current acceptance record](launch/r17-acceptance.md)
 and [release decisions](launch/release-decisions.md). Desktop reconnect
 requires the documented Chrome workaround; native-only reconnect is unverified.
 
@@ -87,10 +89,12 @@ below; earlier-build results do not establish that coverage.
 
 ## R1.7 release acceptance (partial)
 
-The latest [39d82c94 acceptance matrix](launch/r17-acceptance.md#client-results)
+The [39d82c94 acceptance matrix](launch/r17-acceptance.md#client-results)
 includes complete EN/RU/DE draft fields, taxonomy/media, retries and linked
-translations. Human publication and its final recording segment are pending;
-the discovered alt-text fix still needs an authorized rollout and readback.
+translations. The [16ac7161 alt-text verification](launch/r17-acceptance.md#alt-text-staging-verification)
+records web checks of resaved pages 27/43/44 at revisions 6/4/3. Fresh
+editorial/stale-translation review, human publication and its final
+recording segment are pending.
 The table below retains the earlier bounded `df6e5d86` evidence.
 Use [Connected apps](connected-apps.md) for access management and
 the [author skill](skills/ocms-author/SKILL.md) for the draft workflow. Follow
@@ -133,8 +137,9 @@ The [new run](launch/r17-acceptance.md) adds German, full catalog fixtures,
 all six client/mode flows and 15 publication/lifecycle test roots. Audit
 findings and first-party NilAway diagnostics were fixed before deployment.
 The remaining [release decisions](launch/release-decisions.md) are concrete:
-alt-fix rollout, dependency dispositions, Desktop workaround and human
-publication/recording. See the earlier
+dependency dispositions and the Desktop workaround, followed by fresh
+editorial/stale-translation review and human publication/recording. See the
+earlier
 [web staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
 and [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02)
 for build identity, evidence limits, cleanup and remaining gates.

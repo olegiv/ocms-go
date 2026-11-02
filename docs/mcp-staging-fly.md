@@ -6,10 +6,12 @@ deploy when **you** run them. Preparing this guide does not execute them.
 The existing `ocms-demo`, `fly.toml`, demo deployment script and the production host are
 outside this procedure.
 
-Current runtime: `39d82c94`, verified 2026-11-02. See the
+Current runtime: `16ac7161`, verified 2026-11-02. See the
 [R1.7 acceptance record](launch/r17-acceptance.md) for image identity,
-multilingual clients, cleanup and the inline alt fix that is tested locally
-but not deployed. Historical client tables below retain their original builds.
+multilingual clients, cleanup and the deployed inline alt-text repair.
+Claude web and ChatGPT web verified the resaved demo drafts and rendered
+previews. Historical client tables below retain their original builds;
+editorial/stale-translation review and release decisions remain open.
 
 | File | Role |
 |---|---|
@@ -353,7 +355,7 @@ Admin → MCP Server, grant only required scopes and follow
 sign-in/MFA → consent → context → owned draft save/read/update/translation
 → revoke → next request fails → reconnect. Use stable request IDs and current
 revisions. Check anonymous preview denial; explicit sharing is available from
-R1.6. Staging now runs R1.7 commit `df6e5d86` (2026-11-02), retaining the
+R1.6. The earlier R1.7 rollout at `df6e5d86` (2026-11-02) retained the
 fragment/POST transport fix and legacy-link revocation migration introduced
 by `31c55f8c9f67`. Earlier draft/review results on `ff4de3b1368c` and sharing
 results on `31c55f8c9f67` are recorded in PHASE5. The earlier error-canary check
@@ -372,7 +374,7 @@ browser controller could not inject the Fly test header. See the
 [rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
 for exact image/snapshot identity, evidence limits and cleanup.
 
-The current `df6e5d86` rollout passed bounded Claude web/ChatGPT web context,
+The `df6e5d86` rollout passed bounded Claude web/ChatGPT web context,
 draft/translation, replay/conflict, pinned sharing and own-grant revocation
 checks. Both clients reconnected with the dedicated Editor and shared MFA,
 then read the existing drafts under exactly `mcp:access mcp:drafts`.
@@ -401,8 +403,11 @@ For subsequent approved deployments, exclude concurrent old URL-issuing
 writers, let startup migrate first, and repeat the fixed-path upstream-error
 and real-client sharing checks. Keep HTTP body dumps disabled. Record actual
 client/version/build/results in PHASE5 and mark unavailable capabilities
-pending. Native-only Desktop reconnect, the full two-target demo with existing
-taxonomy/media and the broader publication/release matrix remain R1.7 work.
+pending. The [current acceptance record](launch/r17-acceptance.md) covers
+the later full EN/RU/DE draft demo, taxonomy/media, publication/lifecycle
+tests and `16ac7161` alt-text verification. Native-only Desktop reconnect
+remains unverified; editorial/stale-translation review, human publication,
+the final demo segment and release decisions remain open.
 DCR and unsupported authentication methods remain off. Do not reuse the
 historical R1.1 probe result as a CMS-write pass.
 

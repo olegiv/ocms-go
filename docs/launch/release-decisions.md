@@ -6,14 +6,18 @@ or authorization to commit, push, deploy or publish. The
 
 ## Inline-image accessibility
 
-Release blocker: staging `39d82c94` silently loses inline alt descriptions
-containing common punctuation. The local fix passes the full suite, lint and
-NilAway. Commit approval does not authorize staging deployment. After an
-authorized rollout, resave
-the selected EN/RU/DE bodies from the retained author input, verify stored
-and rendered alt text in both target GUI clients, and review the new
-revisions. Old pinned snapshots correctly remain unchanged. Do not publish
-the demo as a completed accessibility pass before this verification.
+Resolved on staging `16ac7161` after the separately authorized deployment
+and resaves. Claude web saved EN 27/revision 6; ChatGPT web saved RU
+43/revision 4 and DE 44/revision 3. Both clients freshly read all three
+drafts: exact localized descriptions survived in HTML and Markdown, and
+signed-in revision previews retained their rendered alt values. Captions
+and other content metadata were preserved. See the
+[verification record](r17-acceptance.md#alt-text-staging-verification).
+
+Fresh editorial review is still required at these new revisions. RU/DE are
+now `stale` after the English body changed; their source bases were left
+intact. Old pinned snapshots remain unchanged. This focused check does not
+establish a whole-site accessibility pass or authorize publication.
 
 ## Dependency advisory dispositions
 
@@ -69,11 +73,14 @@ fresh native verification. Do not remove MFA or expand scopes to bypass it.
 
 ## Human publication and launch material
 
-After the alt fix is authorized and verified, review the selected staging
-component (pages 27/43/44) at its then-current revisions. Only the human
-editor performs the final Publish action. Capture the published page and
-translation state to finish the demo. The current screenshot walkthrough
-ends before that action and is labelled partial.
+The alt fix is deployed and verified. Review the selected staging component,
+currently EN 27/revision 6, RU 43/revision 4 and DE 44/revision 3, including
+fresh claim acknowledgments and stale translation review. Re-read current
+revisions before any lifecycle action. All remain unscheduled drafts.
+Only the human editor performs the final Publish action after separate
+publication approval. Capture the published page and translation state to
+finish the demo. The current screenshot walkthrough ends before that action
+and is labelled partial.
 
 The production outline is prepared; creating or publishing a real article
 on that production site needs its separate authoring request. No production

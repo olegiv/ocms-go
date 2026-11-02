@@ -4,9 +4,11 @@ Status: local outline for a future production draft. No article has been
 created, published or cross-posted by this file. The
 [39d82c94 staging record](r17-acceptance.md) now supplies full EN/RU/DE draft
 examples, existing taxonomy/media and four-client continuation. Its inline
-alt-text failure has a tested local fix awaiting rollout. Desktop reconnect
-uses Chrome; human publication and the recording's final segment remain
-pending. Use the recorded evidence limits in any future article.
+alt-text failure is repaired on staging `16ac7161`: Claude web and ChatGPT
+web verified resaved demo drafts, with matching rendered previews. Fresh
+editorial/stale-translation review remains. Desktop reconnect uses Chrome;
+human publication and the recording's final segment remain pending. Use
+the recorded build-specific evidence limits in any future article.
 
 ## Proposed structure
 

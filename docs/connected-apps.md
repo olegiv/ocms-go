@@ -1,9 +1,11 @@
 # Connected apps and OAuth retention
 
-R1.7 hardening is deployed to MCP staging at `39d82c94` (2026-11-02).
-The [current acceptance record](launch/r17-acceptance.md) adds full EN/RU/DE
-draft flows and fresh web revocation/reconnect evidence. An inline alt-text
-fix is tested locally and remains undeployed. Earlier bounded Claude web
+R1.7 is deployed to MCP staging at `16ac7161` (2026-11-02).
+The [current acceptance record](launch/r17-acceptance.md) retains full
+EN/RU/DE draft flows and fresh web revocation/reconnect evidence on
+`39d82c94`. The `16ac7161` follow-up verified repaired inline alt text through
+Claude web, ChatGPT web and rendered previews of the resaved demo drafts;
+fresh editorial/stale-translation review remains. Earlier bounded Claude web
 and ChatGPT web checks passed on `df6e5d86` for these paths; see the
 [staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 Native Desktop authoring and Claude Code/Codex OAuth and bearer checks also
