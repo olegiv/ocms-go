@@ -10,7 +10,9 @@ owned draft creation/update/translation with `mcp:drafts`, retained retries,
 CAS, provenance and existing taxonomy/media. Publishing and deletion remain
 human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
 [OAuth](oauth.md) records the completed R1.1 authentication acceptance and
-R1.5 staging results and pending R1.6 acceptance in PHASE5 notes.
+PHASE5 notes record R1.5/R1.6 staging results, including fresh Claude/ChatGPT
+fragment/POST sharing on `31c55f8c9f67` (2026-11-02). The broader client
+matrix and release hardening remain R1.7 work.
 
 ## Features
 
@@ -21,7 +23,7 @@ R1.5 staging results and pending R1.6 acceptance in PHASE5 notes.
   ([`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk)
   v1.8.0). It speaks protocol versions `2026-07-28`, `2025-11-25`,
   `2025-06-18`, `2025-03-26` and `2024-11-05`.
-- **21 registrations** over core authoring and REST v2 services (14 existing reads, six available draft operations and reserved unavailable share issuance). Existing content tools share one
+- **21 registrations** over core authoring and REST v2 services (14 existing reads, six draft operations and explicit share issuance). Existing content tools share one
   set of visibility rules, validation and caching, and the tool input schemas
   come from the same struct tags as the REST parameters.
 - **API key authentication.** Keys need the `mcp:access` permission and are
@@ -536,7 +538,10 @@ policy; authoring context also supports the caller's own opted-in plain drafts.
 
 OAuth acceptance is complete for R1.1; see [OAuth](oauth.md). Real CMS draft
 creation/update/translation tools have R1.5 staging results. R1.6 editorial
-review/previews are implemented locally; release hardening remains R1.7. This section grants no deployment or remote Git action.
+review/previews are deployed on staging, with tested Claude/ChatGPT web flows
+and the [transport rollout checks](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
+Native Desktop/CLI authoring acceptance and release hardening remain R1.7.
+This section grants no deployment or remote Git action.
 
 
 ## Page authoring foundations (R1.2 development)

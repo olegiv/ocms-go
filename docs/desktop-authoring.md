@@ -2,11 +2,10 @@
 
 R1.5 and R1.6 staging acceptance is recorded in PHASE5 implementation notes.
 R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
-`ff4de3b1368c`. Public share-link release remains blocked: Fly Proxy error logs
-retain the request path before application redaction. Use session previews
-for private content until the bearer transport or hosting boundary is corrected.
-The fragment/POST transport fix is prepared and verified locally, but is not
-deployed; staging still needs the later authorized deployment and retest.
+`ff4de3b1368c` and fresh fragment/POST sharing checks on `31c55f8c9f67`
+(2026-11-02). Both clients' links opened anonymously at the pinned revision;
+the browser traces confirmed token-free HTTP request URLs. Native Desktop/CLI
+authoring acceptance and broader release hardening remain R1.7 work.
 
 ## Workflow
 
@@ -61,11 +60,19 @@ session-preview denial, explicit sharing only, anonymous share rendering,
 revocation/expiry and publication invalidation. Check theme/privacy headers,
 private sibling isolation, claim acknowledgment, revision comparison,
 translation freshness and stale publish/schedule rejection. Confirm upstream
-request logs redact bearer paths before issuing a public share link.
+request URLs and referrers contain no share credential, inspect application
+and proxy error logs, and keep HTTP body dumps disabled.
 
-The 2026-11-02 Fly check used only synthetic drafts and a non-credential error
-canary. Application logs redacted real bearer paths, query and referrer markers;
-Fly Proxy recorded the canary path in `meta.URL.Full`. Every test share was
-revoked afterward. This is a failed upstream-redaction check, not a complete
-secure-sharing pass. Native Desktop and CLI coverage of this build remains
-part of the R1.7 matrix; earlier-build results do not establish that coverage.
+The earlier `ff4de3b1368c` Fly check failed upstream redaction: Fly Proxy
+recorded a non-credential canary path in `meta.URL.Full`. The later
+`31c55f8c9f67` rollout removed bearer credentials from request targets and
+passed fresh dedicated-account Claude/ChatGPT sharing, session-preview denial,
+revocation and controlled expiry checks. Eight induced proxy errors and all
+247 captured app/proxy records contained neither real test bearer; those
+proxy records had empty URL fields, so they do not establish proxy redaction.
+The proxy probes replayed the browser-observed targets with non-credential
+content; the browser traces establish the URL-safety property directly.
+Both new links were revoked and existing drafts, reviews and OAuth grants
+were preserved. See the [rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
+Native Desktop and CLI coverage of this build remains part of the R1.7 matrix;
+earlier-build results do not establish that coverage.

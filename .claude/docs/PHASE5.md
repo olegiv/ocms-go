@@ -852,6 +852,14 @@ session-only draft URLs. See `docs/draft-authoring.md`.
 - **Manual check:** the full flow in Claude Desktop and ChatGPT on staging.
 
 ### Iteration R1.6: Editorial Review
+
+**Status, 2026-11-02:** implemented and deployed on Fly staging. Claude web
+and ChatGPT web draft/review checks passed on `ff4de3b1368c`; fresh
+fragment/POST sharing checks passed on `31c55f8c9f67`, closing the tested
+preview-URL leakage gate. See the [transport rollout record](#r16-preview-transport-fly-rollout--2026-11-02)
+for direct evidence and the proxy-log limitation. The broader client matrix,
+release hardening and independent security audit remain R1.7 work.
+
 - **Preview:**
   - implement Preview Access above: editor-session previews first, explicit revision-pinned share links;
   - active-theme layout, language prefix and featured image; preview mode filters other private content
@@ -3073,8 +3081,97 @@ concrete bypass or regression in this boundary. The existing unrelated MFA
 `unparam` lint finding remains; no new scoped lint issue remains. Browser
 fixtures and private token-delivery files were removed after verification.
 
-This closes the leak in the locally tested transport, not the deployed Fly
-gate. Staging remains on `ff4de3b1368c`; its controlled upstream-error and
-fresh Claude/ChatGPT sharing checks still require a separately authorized
-deployment. An old URL-issuing binary must not run concurrently against the
-upgraded database. Request/response body dumps remain prohibited.
+At this local-only checkpoint the deployed Fly gate was still open; staging
+remained on `ff4de3b1368c`. The separately authorized rollout and fresh checks
+are recorded below. An old URL-issuing binary must not run concurrently
+against the upgraded database. Request/response body dumps remain prohibited.
+
+## R1.6 preview transport Fly rollout — 2026-11-02
+
+The owner authorized deployment of exact commit
+`31c55f8c9f67b1d7f07854b29dd4255a5ef6cb1f` to `ocms-mcp-staging` and fresh
+Claude/ChatGPT preview-link verification, with no push. This supersedes the
+undeployed status above and closes the tested staging URL-leakage gate;
+it does not establish full R1.7 release readiness.
+
+### Deployment and baseline checks
+
+- The exact Git archive contained 1,293 source blobs, unchanged after asset
+  generation. The full archived Go suite passed uncached across 66 test
+  packages; these are baseline checks, separate from direct client evidence.
+- Volume snapshot `[snapshot ID redacted]` completed before deployment.
+  Image `[deployment ID redacted]`, digest
+  `[image digest redacted]`,
+  runs version `mcp-staging-31c55f8c9f67`, built at `2026-11-02T00:00:41Z`.
+  Runtime version output confirmed the full requested commit.
+- Startup applied `20261102010000_preview_fragment_transport.sql`. The four
+  previously revoked legacy links retained their revocation records. This
+  rollout did not have an active legacy link to invalidate; migration
+  invalidation and repeated-startup behavior were exercised locally above.
+- The single Frankfurt machine and encrypted volume, 2 shared CPUs/1,024 MB,
+  canonical HTTPS origin, MFA and disabled DCR were preserved. Public
+  liveness/readiness and all three Fly checks passed after rollout.
+
+### Direct client and anonymous-browser results
+
+- Claude web (Pro, Opus 5.5 Extra) and ChatGPT web (Instant) used the existing
+  dedicated Editor, `ocms-agent@example.test`, user 2, and the dedicated
+  acceptance connectors. A fresh normal staging login used the shared
+  authenticator. Existing `mcp:access mcp:drafts` grants were retained; no
+  owner MFA, recovery code, seed extraction or authentication reset was used.
+- Both clients freshly read their own existing draft, explicitly issued
+  exactly one share link, then read again. Claude selected page 6 revision 1
+  while its current revision remained 5; ChatGPT selected page 7 revision 1
+  while its current revision remained 3. Both returned `/preview/share#<bearer>`.
+  Subsequent draft reads returned only session-preview URLs and no bearer.
+  No content mutation, publication or implicit share issuance occurred.
+- A separate anonymous browser first reached login when opening account
+  security. The ordinary session-preview URL returned 404 there. Both actual
+  client share URLs then rendered the selected original snapshot with the
+  revision banner, not the latest edited body. ChatGPT's rendered link added
+  `?utm_source=chatgpt.com` before the fragment; that exact link also passed.
+- Browser network capture recorded 13 requests, with no bearer in request
+  URLs, referrers or response Location headers. Landing GETs used fixed
+  `/preview/share`, with only the benign ChatGPT tracking query when present;
+  the browser cleared fragment/query before POST to `/preview/share/open`.
+  The bearer appeared only in the form body. Successful redemption returned
+  200 with private/no-store, no-referrer and restrictive preview CSP.
+- Editor revocation of Claude's link and controlled expiry of ChatGPT's link
+  each changed successful redemption from 200 to 404 in that anonymous
+  browser. The capture included all four body redemptions and was not
+  truncated. Revocation and expiry changed no page revision.
+
+### Fly proxy-error evidence and limits
+
+Eight controlled requests with invalid force-instance headers produced HTTP
+400 and real Fly provider=`proxy` error records (`PU01`). They included a
+non-credential legacy-path control and replays of the observed Claude landing,
+ChatGPT tracking-query landing and POST redemption targets. The browser
+controller did not support injecting the Fly test header, so the error probes
+used a separate HTTP client with non-credential content; no live bearer was
+put into an error-probe URL or body.
+
+All 247 complete captured application/proxy records contained neither of the
+two real test bearer strings nor the non-credential POST-body canary. The
+capture was not truncated. These proxy errors had empty `meta.URL.Full`
+fields, so they do **not** prove that Fly redacts paths or every telemetry
+surface. The direct URL-safety evidence is the actual browser GET/POST trace:
+new credentials never enter the HTTP request target. The earlier canary
+failure on the URL-token build remains valid historical evidence. No Fly
+logging policy was changed; body dumps must remain disabled because the
+credential necessarily travels in the HTTPS POST body.
+
+### Cleanup and remaining scope
+
+Both new test links (IDs 5 and 6) are revoked. Existing draft revisions,
+review/claim data and all nine active OAuth grants, including all six owner
+grants, matched the pre-deployment metadata. SQLite quick check returned
+`ok`. The temporary remote inspector and private MFA delivery files were
+removed, the log capture stopped and its private buffers released. Raw log
+streams and bearer values were not saved in the repository.
+
+The full draft/review matrix was not repeated on this transport-only build.
+Native Desktop/CLI authoring acceptance, the full stale publish/schedule
+matrix, connected-app release work and an independent security audit remain
+R1.7 work. The runtime commit was already approved; this rollout made no new
+commit, Git push or repository edit, and preserved the pre-existing dirty wiki.

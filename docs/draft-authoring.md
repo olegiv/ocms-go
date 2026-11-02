@@ -4,7 +4,9 @@ R1.5 lets connected agents save drafts for review through the same atomic page
 writer as the editor and REST API. oCMS does no text generation. No MCP tool
 can publish, schedule, delete, change ownership or enable AI access to a page.
 R1.5 staging acceptance is recorded in PHASE5 implementation notes. R1.6 adds
-local editorial review and secure previews; its fresh cloud acceptance is pending.
+editorial review and secure previews. Claude web and ChatGPT web draft/review
+checks passed on `ff4de3b1368c`; fresh fragment/POST sharing passed on
+`31c55f8c9f67` (2026-11-02). Broader release acceptance remains R1.7 work.
 
 ## Enable and authorize
 
@@ -29,8 +31,8 @@ input. Turning a feature on does not expand an app's granted scopes.
 
 ## Tools and annotations
 
-The catalog has 21 registrations: 14 existing reads, six available authoring
-operations and one explicitly unavailable share-link operation.
+The catalog has 21 registrations: 14 existing reads, six draft operations
+and explicit share-link issuance.
 
 | Tool | Input | Behavior |
 |---|---|---|
@@ -44,7 +46,7 @@ operations and one explicitly unavailable share-link operation.
 
 Reads are read-only, non-destructive and idempotent. Creates/translations are
 additive, non-read-only and idempotent under their retained request key.
-Updates are replacing/destructive and idempotent. Reserved share issuance is
+Updates are replacing/destructive and idempotent. Share issuance is
 additive/non-idempotent. All declare a closed world; none grants publication.
 `get_site_info.server.read_only` reports the current draft-authoring setting.
 
@@ -173,6 +175,9 @@ HTTP/browser evidence and exact tested source are recorded under ignored
 `output/r15-validation/` and in PHASE5 implementation notes.
 R1.5 cloud authoring acceptance is recorded in PHASE5 implementation notes.
 R1.6 local tests and browser evidence are under `output/r16-validation/`.
-Fresh connected-client preview/review acceptance and public proxy-log checks
-require a separately authorized deployment. No deployment or Git publication
-is authorized by these instructions.
+The [R1.6 transport rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
+records fresh Claude/ChatGPT sharing, anonymous pinned rendering, revocation,
+expiry and Fly proxy-log checks on `31c55f8c9f67`, including the empty proxy URL
+fields and the browser evidence for token-free request targets. Native
+Desktop/CLI authoring and broader release checks remain R1.7 work. No further
+deployment or Git publication is authorized by these instructions.

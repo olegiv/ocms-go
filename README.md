@@ -730,7 +730,10 @@ are available in R1.6; see [editorial review](docs/editorial-review.md) and
 Set `OCMS_OAUTH_ENABLED=true` and a canonical HTTPS `OCMS_SITE_URL` for browser
 authorization alongside API keys. Connections can be revoked at
 `/account/security`. R1.1 OAuth and R1.5 staging authoring results are recorded;
-R1.6 changes still need fresh staging acceptance. See [OAuth](docs/oauth.md).
+R1.6 Claude/ChatGPT web draft/review and fragment/POST sharing checks also
+passed on staging, most recently on `31c55f8c9f67` (2026-11-02). The broader
+client matrix and release hardening remain R1.7 work. See [OAuth](docs/oauth.md)
+and the [rollout record](.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
 See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.
 
 ## Theme Development

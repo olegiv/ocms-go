@@ -347,22 +347,33 @@ Admin → MCP Server, grant only required scopes and follow
 [desktop authoring acceptance](desktop-authoring.md). Test connect → fresh
 sign-in/MFA → consent → context → owned draft save/read/update/translation
 → revoke → next request fails → reconnect. Use stable request IDs and current
-revisions. Check anonymous preview denial; share links remain unavailable
-until R1.6. R1.6 is deployed at `ff4de3b1368c`; its tested web-client results
-are recorded in PHASE5. **Public secure sharing is blocked on Fly:** the
-2026-11-02 error-canary test proved that Fly Proxy records a full preview path
-in `meta.URL.Full`, before oCMS redaction. Keep private content on
-session-authenticated previews until the bearer transport or ingress is
-corrected and retested. All acceptance links were revoked.
+revisions. Check anonymous preview denial; explicit sharing is available from
+R1.6. Staging now runs `31c55f8c9f67` (2026-11-02), including the fragment/POST
+transport fix and startup legacy-link revocation migration. Earlier web-client
+draft/review results on `ff4de3b1368c` and fresh sharing results on the current
+build are recorded in PHASE5. The earlier error-canary check showed Fly Proxy
+recording a full legacy preview path before oCMS redaction; the new transport
+keeps bearer credentials out of that request target.
 
-The fragment/POST fix and one-time legacy-link revocation migration are now
-verified locally and remain undeployed. On a later approved deployment,
-exclude concurrent old URL-issuing writers, let startup migrate first, and
-repeat the fixed-path upstream-error and real-client sharing checks. Keep
-HTTP body dumps disabled. Record actual client/version/build/results in
-PHASE5 and mark any
-unavailable capability pending. DCR and unsupported authentication methods
-remain off. Do not reuse the historical R1.1 probe result as a CMS-write pass.
+Fresh Claude web and ChatGPT web links rendered their pinned snapshots in an
+anonymous browser, including ChatGPT's tracking-query link. Browser requests
+contained no bearer in URLs or referrers; redemption used a fixed-endpoint
+POST body. Session previews stayed private. Revocation and controlled expiry
+returned 404, and both new links are revoked. Eight real proxy errors and
+all 247 captured app/proxy records contained neither test bearer. The proxy
+records had empty URL fields; this does not prove proxy redaction. The error
+probes replayed the observed targets with non-credential content because the
+browser controller could not inject the Fly test header. See the
+[rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
+for exact image/snapshot identity, evidence limits and cleanup.
+
+For subsequent approved deployments, exclude concurrent old URL-issuing
+writers, let startup migrate first, and repeat the fixed-path upstream-error
+and real-client sharing checks. Keep HTTP body dumps disabled. Record actual
+client/version/build/results in PHASE5 and mark unavailable capabilities
+pending. Native Desktop/CLI authoring acceptance and the broader release
+matrix remain R1.7 work. DCR and unsupported authentication methods remain
+off. Do not reuse the historical R1.1 probe result as a CMS-write pass.
 
 ## Subsequent source updates
 

@@ -1,8 +1,10 @@
 # Editorial review and revision previews
 
-R1.6 is implemented for local verification. It has not been deployed or
-accepted in connected cloud clients. Publishing remains an explicit human
-action; MCP cannot publish, schedule, delete or transfer pages.
+R1.6 is deployed on Fly staging. Claude web and ChatGPT web passed the tested
+draft/review flows on `ff4de3b1368c` and fresh fragment/POST sharing checks on
+`31c55f8c9f67` (2026-11-02). The broader client matrix and release hardening
+remain R1.7 work. Publishing remains an explicit human action; MCP cannot
+publish, schedule, delete or transfer pages.
 
 ## Review a draft
 
@@ -135,28 +137,41 @@ Apply equivalent redaction/exclusion to error logs, CDN/WAF tracing, APM and
 hosting request logs; do not enable request dumps. The nginx example is
 configuration guidance, not proof about an existing host's logs.
 
-**Fly staging check, 2026-11-02 (`ff4de3b1368c`):** application logs redacted
+**Earlier Fly staging check, 2026-11-02 (`ff4de3b1368c`):** application logs redacted
 real test bearer paths, query and referrer markers. A controlled proxy-error
 request using a non-credential canary recorded the full path in
 `meta.URL.Full` with provider `proxy`. No real bearer was used for that error
 probe, and all synthetic test links were revoked afterward. Fly also
 [documents request-path logging on proxy errors](https://fly.io/legal/security-questionnaire/)
 under COMPLIANCE-12. An application logger or nginx inside the machine cannot
-redact an earlier Fly Proxy record. Secure public sharing on this ingress is
-therefore blocked until the credential is removed from the proxy-visible URL
-or the ingress is changed and verified. Use session previews for private
-content in the meantime. Claude web and ChatGPT web acceptance of the tested
-draft/review flows passed; the full R1.7 client matrix remains separate.
+redact an earlier Fly Proxy record. This blocked public sharing on that
+URL-token build until its credential transport was replaced.
 
-The fragment/POST transport above is a **local, undeployed fix**. Local browser
-checks observed 24 requests through a simulated upstream, including an error
-before application handling: none contained either test bearer in URL or
-referrer fields. Pinned content, reopening, tracking queries, revocation and
-expiry also passed. Fly staging still runs the earlier URL-token build; its
-error-path check and fresh client-link acceptance must be repeated after a
-separately authorized deployment. Keep request/response body dumps and external
-telemetry capturing credentials disabled: the token necessarily travels in
-the HTTPS POST body, rather than in a proxy-visible URL.
+**Fragment/POST rollout, 2026-11-02 (`31c55f8c9f67`):** the exact commit is
+deployed and the transport migration applied. Fresh Claude web and ChatGPT
+web calls through the dedicated Editor connectors issued fragment links.
+Both opened anonymously at the pinned revision, including ChatGPT's actual
+tracking-query link. Session-preview denial, explicit revocation and
+controlled expiry returned 404. All 13 captured browser requests excluded
+bearers from URLs and referrers; response Location headers also excluded
+them. The bearer appeared only in the fixed-endpoint POST body.
+
+Eight induced Fly proxy errors and 247 complete application/proxy log records
+contained neither real test bearer; the non-credential POST-body canary was
+also absent. These proxy records had empty URL fields, so this is not proof
+of proxy redaction. Error probes replayed the observed HTTP targets with
+non-credential content because browser header injection was unsupported.
+Browser network traces provide the direct evidence that the new transport
+keeps credentials out of request targets. Both disposable links are revoked;
+content, review data and existing OAuth grants were preserved. See the
+[rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02)
+for build identity, direct checks and remaining R1.7 coverage.
+
+Local browser checks additionally covered 24 requests through a simulated
+upstream, including a pre-application 503, with no bearer in URL or referrer
+fields. No Fly logging policy was changed. Keep request/response body dumps
+and external telemetry capturing credentials disabled: the token necessarily
+travels in the HTTPS POST body.
 
 See [draft authoring](draft-authoring.md), [page writes](page-writes.md) and
 [connected-app acceptance](desktop-authoring.md).
