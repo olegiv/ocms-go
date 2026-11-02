@@ -1933,7 +1933,7 @@ func run() (runErr error) {
 	schedulerRegistry := scheduler.NewRegistry(db, logger)
 	sched := scheduler.New(db, logger, schedulerRegistry)
 	sched.SetWebhookDispatcher(webhookDispatcher)
-	if err := sched.Start(); err != nil {
+	if err := startCoreScheduler(sched); err != nil {
 		return fmt.Errorf("starting scheduler: %w", err)
 	}
 	defer cleanup.within("scheduler", sched.Stop)
@@ -2326,6 +2326,8 @@ func run() (runErr error) {
 			middleware.LoadSiteConfig(db, nil),
 		)
 		r.Get(handler.RouteAccount, authHandler.Account)
+		r.Get(handler.RouteAccountConnectedApps, authHandler.ConnectedApps)
+		r.Post(handler.RouteAccountConnectedApps+"/revoke", authHandler.RevokeConnectedApp)
 		r.Get(handler.RouteAccountSecurity, authHandler.Security)
 		r.Post("/account/security/oauth/revoke", authHandler.RevokeOAuthGrant)
 		r.Get(handler.RouteAccountSecurityTOTP, authHandler.TOTPSetupForm)

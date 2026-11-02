@@ -17,6 +17,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/olegiv/ocms-go/internal/auth"
+	"github.com/olegiv/ocms-go/internal/connectedapps"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -40,6 +41,7 @@ type AuthHandler struct {
 	hookRegistry    *module.HookRegistry
 	mfa             *mfa.Service
 	oauth           *oauth.Service
+	connections     *connectedapps.Service
 }
 
 // NewAuthHandler creates a new AuthHandler. mfaService decides which sign-ins
@@ -47,6 +49,7 @@ type AuthHandler struct {
 func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, lp *middleware.LoginProtection, hr *module.HookRegistry, mfaService *mfa.Service) *AuthHandler {
 	return &AuthHandler{
 		queries:         store.New(db),
+		connections:     connectedapps.New(db),
 		renderer:        renderer,
 		sessionManager:  sm,
 		eventService:    service.NewEventService(db),

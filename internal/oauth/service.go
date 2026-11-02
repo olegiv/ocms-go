@@ -182,6 +182,14 @@ func (s *Service) VerifyAccess(ctx context.Context, raw string) (Principal, erro
 	if err != nil {
 		return Principal{}, problem("invalid_token")
 	}
+	// Last-used metadata follows access validation as well as token exchange.
+	// Throttle durable touches so ordinary reads do not all acquire a writer.
+	now := s.now().Unix()
+	if g.LastUsedAt < now-60 {
+		if err := s.q.TouchOAuthGrantIfDue(ctx, store.TouchOAuthGrantIfDueParams{ID: g.ID, LastUsedAt: now, BeforeTime: now - 60}); err != nil {
+			return Principal{}, problem("invalid_token")
+		}
+	}
 	return Principal{TokenID: t.ID, UserID: g.UserID, GrantID: g.ID, ClientID: g.ClientID, Scopes: intersectGranted(t.Scopes, g.Scopes),
 		ExpiresAt: time.Unix(t.AccessExpiresAt, 0)}, nil
 }

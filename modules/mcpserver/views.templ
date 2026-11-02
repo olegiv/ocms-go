@@ -6,6 +6,7 @@ package mcpserver
 import (
 	"fmt"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	accountviews "github.com/olegiv/ocms-go/internal/views/account"
 	"github.com/olegiv/ocms-go/internal/views/components/alert"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
@@ -42,6 +43,7 @@ type DashboardData struct {
 	OAuthEnabled      bool
 	DraftToolsEnabled bool
 	ExternalLinks     string
+	Connections       *accountviews.ConnectionsData
 }
 
 // ToolRow is one tool in the catalog table.
@@ -95,7 +97,11 @@ templ DashboardPage(pc *adminviews.PageContext, data DashboardData) {
 			@connectCard(pc, data)
 			@settingsCard(pc, data)
 			@toolsCard(pc, data)
-			@keysCard(pc, data)
+			if data.Connections != nil {
+				@accountviews.ConnectionsPanel(pc, *data.Connections)
+			} else {
+				@keysCard(pc, data)
+			}
 		</div>
 	}
 }
@@ -146,7 +152,7 @@ templ connectCard(pc *adminviews.PageContext, data DashboardData) {
 		@card.Content() {
 			<div class="space-y-4">
 				if data.OAuthEnabled {
-					<p>{ pc.T("mcp.oauth_connect") } <a class="underline" href="/account/security">{ pc.T("oauth.connections") }</a></p>
+					<p>{ pc.T("mcp.oauth_connect") } <a class="underline" href="/account/connected-apps">{ pc.T("connected.title") }</a></p>
 				}
 				<div class="space-y-2">
 					<h3 class="text-sm font-medium">{ pc.T("mcp.connect_claude_code") }</h3>

@@ -59,6 +59,8 @@ const (
 	RouteLoginMFASetup = RouteLoginMFA + "/setup"
 	// RouteAccount is the authenticated account overview route.
 	RouteAccount = "/account"
+	// RouteAccountConnectedApps lists and revokes the account's app access.
+	RouteAccountConnectedApps = RouteAccount + "/connected-apps"
 	// RouteAccountSecurity is the two-factor authentication overview.
 	RouteAccountSecurity = RouteAccount + "/security"
 	// RouteAccountSecurityTOTP enrolls or replaces an authenticator app.

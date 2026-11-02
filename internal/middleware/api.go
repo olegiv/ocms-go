@@ -854,8 +854,18 @@ func ParseAPIKeyPermissions(apiKey *store.ApiKey) []string {
 	if apiKey == nil || apiKey.Permissions == "" || apiKey.Permissions == "[]" {
 		return nil
 	}
-	var permissions []string
-	_ = json.Unmarshal([]byte(apiKey.Permissions), &permissions)
+	var entries []any
+	if err := json.Unmarshal([]byte(apiKey.Permissions), &entries); err != nil {
+		return nil
+	}
+	permissions := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		permission, ok := entry.(string)
+		if !ok {
+			return nil
+		}
+		permissions = append(permissions, permission)
+	}
 	return permissions
 }
 

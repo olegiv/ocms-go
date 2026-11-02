@@ -543,6 +543,13 @@ and the [transport rollout checks](../.claude/docs/PHASE5.md#r16-preview-transpo
 Native Desktop/CLI authoring acceptance and release hardening remain R1.7.
 This section grants no deployment or remote Git action.
 
+R1.7 adds the local [connected-app overview](connected-apps.md): account-owned
+OAuth/API-key metadata and revocation at `/account/connected-apps`, with an
+administrator overview/revoke in `/admin/mcp`. Credential hashes/values are
+absent from these views. Core maintenance drains retired OAuth evidence in
+bounded transactions while retaining all active-family replay evidence.
+The new management/retention paths are not deployed or release-accepted yet.
+
 
 ## Page authoring foundations (R1.2 development)
 

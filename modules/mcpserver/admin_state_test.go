@@ -40,12 +40,12 @@ func renderDashboard(t *testing.T, data DashboardData) string {
 func TestDashboardSettingsLoadFailure(t *testing.T) {
 	env := newTestEnv(t)
 	env.setSettings(Settings{AllowDrafts: true, Instructions: "Keep me."})
-	healthy := renderDashboard(t, env.module.dashboardData(context.Background()))
+	healthy := renderDashboard(t, env.module.dashboardData(context.Background(), true))
 
 	if _, err := env.db.Exec(`DROP TABLE mcp_settings`); err != nil {
 		t.Fatalf("drop settings: %v", err)
 	}
-	data := env.module.dashboardData(context.Background())
+	data := env.module.dashboardData(context.Background(), true)
 	if !data.SettingsError {
 		t.Fatal("an unreadable settings table must be reported")
 	}
@@ -82,7 +82,7 @@ func TestDashboardReloadsStoredSettings(t *testing.T) {
 	if _, err := env.db.Exec(`UPDATE mcp_settings SET allow_drafts = 1, instructions = 'From another instance.' WHERE id = 1`); err != nil {
 		t.Fatalf("update settings: %v", err)
 	}
-	data := env.module.dashboardData(context.Background())
+	data := env.module.dashboardData(context.Background(), true)
 	if data.SettingsError || !data.AllowDrafts || data.Instructions != "From another instance." {
 		t.Errorf("dashboard settings = %+v, want the stored ones", data)
 	}
@@ -173,7 +173,7 @@ func TestEndpointReloadsSharedState(t *testing.T) {
 func TestDashboardSiteURLStates(t *testing.T) {
 	env := newTestEnv(t)
 	env.setConfig(model.ConfigKeySiteURL, "example.com")
-	data := env.module.dashboardData(context.Background())
+	data := env.module.dashboardData(context.Background(), true)
 	if data.SiteURLInvalid != "example.com" || data.SiteURLMissing || data.ConfigError || data.EndpointURL != EndpointPath {
 		t.Errorf("invalid site URL: %+v", data)
 	}
@@ -184,7 +184,7 @@ func TestDashboardSiteURLStates(t *testing.T) {
 	if _, err := env.db.Exec(`ALTER TABLE config RENAME TO config_gone`); err != nil {
 		t.Fatalf("rename config: %v", err)
 	}
-	if data := env.module.dashboardData(context.Background()); !data.ConfigError {
+	if data := env.module.dashboardData(context.Background(), true); !data.ConfigError {
 		t.Error("an unreadable site configuration must be reported")
 	}
 }

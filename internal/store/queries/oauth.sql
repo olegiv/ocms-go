@@ -36,6 +36,10 @@ UPDATE oauth_grants SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_
 -- name: TouchOAuthGrant :exec
 UPDATE oauth_grants SET last_used_at = ? WHERE id = ?;
 
+-- name: TouchOAuthGrantIfDue :exec
+UPDATE oauth_grants SET last_used_at = sqlc.arg(last_used_at)
+WHERE id = sqlc.arg(id) AND revoked_at = 0 AND last_used_at < sqlc.arg(before_time);
+
 -- name: CreateOAuthCode :exec
 INSERT INTO oauth_codes (code_hash, grant_id, redirect_uri, challenge, created_at, expires_at)
 VALUES (?, ?, ?, ?, ?, ?);

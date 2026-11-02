@@ -118,7 +118,7 @@ func TestDashboardData(t *testing.T) {
 		}, model.PermissionMCPAccess),
 	}
 
-	data := env.module.dashboardData(context.Background())
+	data := env.module.dashboardData(context.Background(), true)
 	if !data.SiteURLMissing || data.EndpointURL != EndpointPath {
 		t.Errorf("without a site URL: missing=%v endpoint=%q", data.SiteURLMissing, data.EndpointURL)
 	}
@@ -151,7 +151,7 @@ func TestDashboardData(t *testing.T) {
 	}
 
 	env.setConfig(model.ConfigKeySiteURL, "https://example.com")
-	data = env.module.dashboardData(context.Background())
+	data = env.module.dashboardData(context.Background(), true)
 	if data.SiteURLMissing || data.EndpointURL != "https://example.com"+EndpointPath {
 		t.Errorf("with a site URL: missing=%v endpoint=%q", data.SiteURLMissing, data.EndpointURL)
 	}
@@ -163,7 +163,7 @@ func TestDashboardData(t *testing.T) {
 func TestDashboardPageRenders(t *testing.T) {
 	env := newTestEnv(t)
 	env.createKey(model.PermissionMCPAccess)
-	data := env.module.dashboardData(context.Background())
+	data := env.module.dashboardData(context.Background(), true)
 
 	var sb strings.Builder
 	if err := DashboardPage(&adminviews.PageContext{}, data).Render(context.Background(), &sb); err != nil {

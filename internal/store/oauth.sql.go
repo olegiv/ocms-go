@@ -391,6 +391,22 @@ func (q *Queries) TouchOAuthGrant(ctx context.Context, arg TouchOAuthGrantParams
 	return err
 }
 
+const touchOAuthGrantIfDue = `-- name: TouchOAuthGrantIfDue :exec
+UPDATE oauth_grants SET last_used_at = ?1
+WHERE id = ?2 AND revoked_at = 0 AND last_used_at < ?3
+`
+
+type TouchOAuthGrantIfDueParams struct {
+	LastUsedAt int64  `json:"last_used_at"`
+	ID         string `json:"id"`
+	BeforeTime int64  `json:"before_time"`
+}
+
+func (q *Queries) TouchOAuthGrantIfDue(ctx context.Context, arg TouchOAuthGrantIfDueParams) error {
+	_, err := q.db.ExecContext(ctx, touchOAuthGrantIfDue, arg.LastUsedAt, arg.ID, arg.BeforeTime)
+	return err
+}
+
 const upsertOAuthClient = `-- name: UpsertOAuthClient :exec
 INSERT INTO oauth_clients (id, name, redirect_uris, source, expires_at)
 VALUES (?, ?, ?, ?, ?)

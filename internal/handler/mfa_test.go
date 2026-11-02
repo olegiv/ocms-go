@@ -679,7 +679,7 @@ func TestLoginMFALockout(t *testing.T) {
 		if get(middleware.SessionKeyUserID) != nil || get(sessionKeyMFAPendingUserID) != nil {
 			t.Errorf("locked account: user %v, pending %v; want neither", get(middleware.SessionKeyUserID), get(sessionKeyMFAPendingUserID))
 		}
-		assertEventCount(t, env, "Login attempt on locked account", user.ID, 1)
+		assertOneEvent(t, env, "Login attempt on locked account", user.ID)
 	})
 	t.Run("a locked account cannot change its second factor", func(t *testing.T) {
 		env := newMFATestEnv(t, false)
@@ -699,7 +699,7 @@ func TestLoginMFALockout(t *testing.T) {
 		if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || !enrolled {
 			t.Fatalf("a locked account turned its second factor off: %t, %v", enrolled, err)
 		}
-		assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+		assertOneEvent(t, env, "Two-factor change refused: account locked", user.ID)
 	})
 	t.Run("a locked account hears the lockout when replacing its authenticator", func(t *testing.T) {
 		env := newMFATestEnv(t, false)
@@ -727,7 +727,7 @@ func TestLoginMFALockout(t *testing.T) {
 		if get(sessionKeyMFASetupSecret) == nil {
 			t.Error("the refusal dropped the new authenticator's secret; the user could not retry with the same QR code")
 		}
-		assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+		assertOneEvent(t, env, "Two-factor change refused: account locked", user.ID)
 	})
 	t.Run("a locked account cannot finish setup at sign-in", func(t *testing.T) {
 		env := newMFATestEnv(t, true)
@@ -755,17 +755,16 @@ func TestLoginMFALockout(t *testing.T) {
 		if enrolled, err := env.svc.Enrolled(t.Context(), user.ID); err != nil || enrolled {
 			t.Fatalf("a locked account enrolled an authenticator: %t, %v", enrolled, err)
 		}
-		assertEventCount(t, env, "Login attempt on locked account", user.ID, 1)
+		assertOneEvent(t, env, "Login attempt on locked account", user.ID)
 	})
 }
 
-// assertEventCount fails unless exactly want events with message were
-// logged for userID.
-func assertEventCount(t *testing.T, env *mfaTestEnv, message string, userID int64, want int) {
+// assertOneEvent requires exactly one security event for this account.
+func assertOneEvent(t *testing.T, env *mfaTestEnv, message string, userID int64) {
 	t.Helper()
 	var got int
-	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = ? AND user_id = ?`, message, userID).Scan(&got); err != nil || got != want {
-		t.Errorf("events %q = %d, %v; want %d", message, got, err, want)
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = ? AND user_id = ?`, message, userID).Scan(&got); err != nil || got != 1 {
+		t.Errorf("events %q = %d, %v; want 1", message, got, err)
 	}
 }
 
@@ -935,7 +934,7 @@ func TestFirstSetupWithoutPasswordIsNotCounted(t *testing.T) {
 	if rr.Header().Get("Location") != RouteAccountSecurityTOTP || env.session(t, cookie)("flash") != i18n.T("en", "mfa.password_required") {
 		t.Fatalf("setup without a password field = %d %q", rr.Code, rr.Header().Get("Location"))
 	}
-	assertEventCount(t, env, "Two-factor change refused: no password", user.ID, 1)
+	assertOneEvent(t, env, "Two-factor change refused: no password", user.ID)
 	// With a lockout after one failure, a counted attempt would refuse this.
 	rr = authRequest(env.router, http.MethodPost, RouteAccountSecurityTOTP, url.Values{"password": {mfaTestPassword}, "code": {totpCode(t, secret, 0)}}, cookie)
 	if rr.Code != http.StatusOK {
@@ -1089,7 +1088,7 @@ func TestActorPasswordLockout(t *testing.T) {
 	if ok, _ := auth.CheckPassword(mfaTestPassword, mustPasswordHash(t, env.db, admin.ID)); !ok {
 		t.Error("the password changed while the account was locked")
 	}
-	assertEventCount(t, env, "Account locked due to failed attempts", admin.ID, 1)
+	assertOneEvent(t, env, "Account locked due to failed attempts", admin.ID)
 }
 
 // TestActorPasswordCountsAcrossConfirmations checks that a correct
@@ -1198,7 +1197,7 @@ func TestLockedFirstSetupIsLogged(t *testing.T) {
 	if got := env.session(t, cookie)("flash"); got == nil || !strings.Contains(got.(string), "locked") {
 		t.Fatalf("flash after the right password on a locked account = %v, want the lockout message", got)
 	}
-	assertEventCount(t, env, "Two-factor change refused: account locked", user.ID, 1)
+	assertOneEvent(t, env, "Two-factor change refused: account locked", user.ID)
 }
 
 // TestOffServiceSignsInWithoutSecondFactor checks sign-in in demo mode: an

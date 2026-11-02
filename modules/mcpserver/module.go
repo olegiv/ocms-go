@@ -268,6 +268,7 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAdmin())
 		r.Get("/mcp", m.handleDashboard)
+		r.Post("/mcp/revoke", m.handleRevokeConnection)
 		r.Post("/mcp", m.handleSaveSettings)
 	})
 }

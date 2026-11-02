@@ -6,6 +6,7 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -15,12 +16,14 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/olegiv/ocms-go/internal/connectedapps"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	accountviews "github.com/olegiv/ocms-go/internal/views/account"
 )
 
 // keysPageSize is how many API keys the admin overview reads per query. It
@@ -34,17 +37,36 @@ const keyPlaceholder = "<YOUR_API_KEY>"
 
 // handleDashboard handles GET /admin/mcp.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	pages, err := connectedapps.ParsePagination(r.URL.Query())
+	if err != nil {
+		http.Error(w, "Invalid page", http.StatusBadRequest)
+		return
+	}
+	page, err := connectedapps.New(m.ctx.DB).List(r.Context(), connectedapps.Actor{UserID: user.ID, SessionVersion: user.SessionVersion}, true, pages, m.ctx.OAuth != nil)
+	if err != nil {
+		m.connectionError(w, err)
+		return
+	}
 	lang := m.ctx.Render.GetAdminLang(r)
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "mcp.title"), []render.Breadcrumb{
 		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "mcp.title"), URL: adminPath, Active: true},
 	})
-	render.Templ(w, r, DashboardPage(pc, m.dashboardData(r.Context())))
+	data := m.dashboardData(r.Context(), false)
+	data.Connections = &accountviews.ConnectionsData{Page: page, Admin: true, BasePath: adminPath}
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Referrer-Policy", "same-origin")
+	render.Templ(w, r, DashboardPage(pc, data))
 }
 
 // dashboardData collects everything the admin page shows.
-func (m *Module) dashboardData(ctx context.Context) DashboardData {
+func (m *Module) dashboardData(ctx context.Context, includeKeys bool) DashboardData {
 	data := DashboardData{
 		ProtocolVersions: strings.Join(mcp.SupportedProtocolVersions(), ", "),
 		Version:          moduleVersion,
@@ -90,13 +112,60 @@ func (m *Module) dashboardData(ctx context.Context) DashboardData {
 	for _, spec := range m.catalog() {
 		data.Tools = append(data.Tools, ToolRow{Name: spec.Name, Title: spec.Title, Description: spec.Description})
 	}
-	keys, err := m.mcpKeys(ctx)
-	if err != nil {
-		m.logger.Error("failed to list API keys for the MCP page", "error", err)
-		data.KeysError = true
+	// The connected-app overview supplies its own bounded, paginated metadata.
+	// Standalone key-summary callers retain the existing complete key list.
+	if includeKeys {
+		keys, err := m.mcpKeys(ctx)
+		if err != nil {
+			m.logger.Error("failed to list API keys for the MCP page", "error", err)
+			data.KeysError = true
+		}
+		data.Keys = keys
 	}
-	data.Keys = keys
 	return data
+}
+
+func (m *Module) handleRevokeConnection(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys), http.StatusForbidden)
+		return
+	}
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	kind, id, err := connectedapps.ParseRevoke(w, r)
+	if err == nil {
+		err = connectedapps.New(m.ctx.DB).Revoke(r.Context(), connectedapps.Actor{UserID: user.ID, SessionVersion: user.SessionVersion}, true, kind, id)
+	}
+	if err != nil {
+		m.connectionError(w, err)
+		return
+	}
+	if m.ctx.Events != nil {
+		if err := m.ctx.Events.LogEvent(r.Context(), model.EventLevelInfo, model.EventCategorySecurity,
+			"Administrator revoked connected app access", &user.ID, middleware.GetClientIP(r), r.URL.Path,
+			map[string]any{"kind": kind, "connection_id": id}); err != nil {
+			m.logger.WarnContext(service.WithoutEventLog(r.Context()), "failed to record connection revocation", "error", err)
+		}
+	}
+	http.Redirect(w, r, adminPath, http.StatusSeeOther)
+}
+
+func (m *Module) connectionError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, connectedapps.ErrForbidden):
+		http.Error(w, "Forbidden", http.StatusForbidden)
+	case errors.Is(err, connectedapps.ErrInvalid):
+		http.Error(w, "Invalid connection request", http.StatusBadRequest)
+	case errors.Is(err, connectedapps.ErrNotFound):
+		http.Error(w, "Not found", http.StatusNotFound)
+	default:
+		m.logger.Error("connected app operation failed", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
 
 // mcpKeys lists the API keys holding mcp:access. Only display metadata is

@@ -321,6 +321,11 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 
 ## Environment Variables
 
+The local R1.7 OAuth retention job has a fixed, bounded
+[maintenance policy](docs/connected-apps.md#retention-policy), with no new
+environment setting. It runs independently of `OCMS_OAUTH_ENABLED`; that flag
+controls the issuer, not cleanup of previously stored evidence.
+
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `OCMS_SESSION_SECRET` | Required server secret, validated at startup; nothing is keyed with it today: sessions are stored server-side and CSRF protection checks Fetch metadata headers (min 32 bytes; placeholder values from example files are refused, and the public test-suite secret is refused in production) | - | Yes |
@@ -734,6 +739,9 @@ R1.6 Claude/ChatGPT web draft/review and fragment/POST sharing checks also
 passed on staging, most recently on `31c55f8c9f67` (2026-11-02). The broader
 client matrix and release hardening remain R1.7 work. See [OAuth](docs/oauth.md)
 and the [rollout record](.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
+R1.7 locally adds [connected-app management and bounded OAuth retention](docs/connected-apps.md),
+plus an [oCMS author workflow](docs/skills/ocms-author/SKILL.md). These new
+paths still need their own staging acceptance before release.
 See [docs/mcp-module.md](docs/mcp-module.md) for visibility rules, limits and logging.
 
 ## Theme Development

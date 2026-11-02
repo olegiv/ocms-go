@@ -893,6 +893,13 @@ release hardening and independent security audit remain R1.7 work.
   translation fingerprints; publish/schedule after an intervening edit.
 
 ### Iteration R1.7: Connected Apps, Hardening and Release
+
+**Status, 2026-11-02:** connected-app management, bounded OAuth retention and
+local release hardening are implemented but undeployed. See the
+[R1.7 implementation notes](#r17-implementation-notes--2026-11-02) for direct
+checks, benchmark baselines and unresolved quality/dependency gates. Fresh
+staging acceptance, independent audit, recording and release remain pending.
+
 - `/account/connected-apps`: the user's OAuth grants and MCP-capable API keys, with app name, client
   host, scopes, created, last used, revoke. Admin overview and revoke in `/admin/mcp`.
 - **OAuth retention:** add bounded, repeatable sqlc cleanup of expired codes and eligible expired or
@@ -3175,3 +3182,146 @@ Native Desktop/CLI authoring acceptance, the full stale publish/schedule
 matrix, connected-app release work and an independent security audit remain
 R1.7 work. The runtime commit was already approved; this rollout made no new
 commit, Git push or repository edit, and preserved the pre-existing dirty wiki.
+
+## R1.7 Implementation Notes — 2026-11-02
+
+Local work is based on `5ae249ea6ff40be06603e542f1434e55cb4e3ec9`, in the
+existing checkout. The owner authorized starting R1.7 with no commit, push or
+deployment. Fly staging remains on the previously verified R1.6 runtime;
+none of the new paths below has fresh staging acceptance. The pre-existing
+dirty wiki and ignored custom-module sources were left untouched.
+
+### Connected-app management
+
+- Added `/account/connected-apps` for own OAuth grants and MCP-capable API
+  keys, with registered name/host, scopes, created/last-used/expiry metadata,
+  status and revocation. Both credential classes paginate independently at
+  25 rows; SQL projections omit hashes, lookups and key prefixes. Invalid
+  key permission documents are excluded consistently with authentication.
+- `/admin/mcp` uses the shared panel with account attribution and explicit
+  administrative revocation. The live overview uses bounded metadata queries,
+  rather than materializing the legacy complete key list. Personal account
+  management remains owner-only even when the account is an administrator.
+- The shared service rechecks the actor's current account role and session
+  version inside a transaction. Forms are body-only, bounded and reject
+  duplicate/query selectors. Normal session/CSRF and demo-mode restrictions
+  apply. Revocation is repeatable, preserves the first grant revocation time,
+  deactivates keys and records a security event. It creates no credentials,
+  changes no scopes and deletes no content/review data.
+- Existing grant/key lifecycle triggers invalidate shares; the next MCP
+  request rechecks revocation. OAuth validation now updates last-used metadata
+  at most once per minute; token exchange keeps its existing timestamp touch.
+  Registered names/hosts remain explicitly unverified and API keys have no
+  asserted client host. The management page works with the issuer disabled.
+- Added English/Russian labels and account navigation. Same-origin referrers
+  preserve the validated language-switch return path without disclosing that
+  path cross-origin. Reserved alias routes and the scheduler/webhook startup
+  drift checks include the new entry points. The old security-page revoke
+  route remains compatible. MCP settings no longer call sharing a future
+  R1.6 feature; they retain the explicit-request requirement.
+
+### OAuth retention
+
+- `core:oauth_cleanup` is registered before scheduler startup, every 15
+  minutes, even with OAuth disabled. Scheduler overrides/manual triggering
+  are supported. No retention environment knob or security-policy weakening
+  was introduced; [the policy](../../docs/connected-apps.md#retention-policy)
+  documents the constants and recovery boundary.
+- One five-second transaction deletes at most 250 records in each class:
+  codes expired for 24 hours; tokens/previews in grant families expired or
+  first revoked for 30 days; empty eligible grants; unused client metadata
+  expired for 24 hours. Child records are drained explicitly before family
+  deletion, bounding cascades to at most 1,250 deletions per run.
+- No token of a still-active family is pruned, including spent refresh hashes
+  and expired access rows. Recent terminal families retain evidence. A large
+  retired family drains over repeated runs. Any statement or commit failure
+  rolls back the whole batch and reports no committed deletions.
+- Migration `20261102020000_oauth_retention.sql` adds query/dependency indexes
+  only. Down/up preserves active credentials and content; already completed
+  retention deletions are not reversed. The existing registration-cap cleanup
+  may still evict unused expired client metadata earlier.
+
+### Direct local verification
+
+Service/HTTP tests pass for own/admin isolation, stale role/session denial,
+foreign/non-MCP target refusal, pagination through older keys, safe display
+projection, escaped app names, duplicate/query selector denial, CSRF, repeated
+revocation and demo-mode refusal. Current OAuth access succeeds before revoke
+and fails afterward; linked previews are durably invalidated.
+
+Retention tests pass at exact 24-hour/30-day boundaries, across repeated runs,
+with oversized token/preview/code/grant/client batches, cancellation, statement
+failure and deferred commit failure. An active family's expired access/spent
+refresh rows survive cleanup; replay still revokes its current credential.
+Concurrent cleanup and normal refresh also preserve replay detection. The
+index migration's down/up path retains a usable credential.
+
+A real loopback app used a new isolated database and synthetic Editor/admin
+accounts. Its English/Russian connected-app views, metadata, account
+attribution, revocation and language switching passed in a separate browser.
+The Editor could not enter the administrator overview. Local MCP
+`get_site_info` returned 200 under both credentials using the negotiated
+`2025-11-25` protocol; after GUI revocation each next request returned 401.
+Both synthetic grants are revoked, the key inactive and SQLite quick check
+`ok`. Server logs contained none of the private password/key/access strings.
+The browser session was signed out/closed, its server stopped and the private
+credential-delivery file removed. No owner or staging credential was used.
+
+The bundled `docs/skills/ocms-author/SKILL.md` validates structurally. Its
+normal save, retained retry, stale revision, foreign draft and explicit-share
+instructions were manually traced against the actual schemas/services and
+existing SDK tests; this is not an independent agent/client forward test.
+The launch script and article outline are prepared files, not a recorded demo,
+published article or authorization for an external action.
+
+### Baseline checks and measurements
+
+The full current-checkout uncached Go suite passes across 69 test packages,
+including installed ignored custom modules. Focused race checks pass for
+OAuth, connected apps, handler, scheduler and MCP management paths. Core
+golangci-lint and `go vet ./...` pass; asset generation, application build,
+sqlc/templ regeneration, skill validation, absolute-path and diff checks pass.
+These are local results, not an archived release-build or independent audit.
+Three earlier core test-helper lint issues were corrected without changing
+runtime MFA behavior. Ignored custom sources were not edited to clear lint.
+
+Small-fixture measurements on darwin/arm64, Apple M3 Ultra, Go 1.27.3, ten
+iterations per benchmark (not production load tests or release SLOs):
+
+| Operation | Time per operation |
+|---|---|
+| Connected-app first page, 100 grants and 100 keys | 0.724 ms |
+| Retention, 250 tokens plus one retired grant | 1.042 ms |
+| Draft create | 0.827 ms |
+| Draft update | 1.291 ms |
+| Authoring context | 0.729 ms |
+| Draft validation | 0.165 ms |
+| Markdown pipeline | 0.560 ms |
+
+### Open release gates
+
+- `govulncheck ./...` reports zero affected/called vulnerabilities and zero in
+  imported packages; one advisory remains only in an uncalled required module.
+  This is a dependency analysis result, not a complete security audit.
+- `npm audit` reports seven moderate package entries rooted in the
+  [minimatch advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249),
+  through Klaro's ESLint/parser dependency tree; no high/critical entry.
+  The asset script copies Klaro's prebuilt browser JS/CSS, not those Node lint
+  dependencies; copied JS bytes match that distribution. No forced Klaro
+  downgrade or incompatible minimatch-major override was applied. A safe
+  dependency fix or an explicit documented release disposition is still needed.
+- Full-workspace golangci-lint retains two findings in the ignored installed
+  weather module. Core lint passes. The installed NilAway was built for Go
+  1.26 and could not load Go 1.27 source; a private rebuild of the same pinned
+  tool runs but reports broader model/test-fixture diagnostics. No clean
+  whole-project nil-safety check is claimed; those diagnostics need disposition.
+- Fresh current-build Claude Desktop/web, ChatGPT web, Claude Code and Codex
+  acceptance, the complete publish/schedule failure matrix, independent
+  security audit, human publication and demo recording remain pending. The
+  prepared per-client matrix labels every R1.7 row pending. Wiki synchronization
+  and release preparation are not complete.
+
+Sanitized local results, screenshots, source fingerprints and detailed
+verification are kept under ignored `output/r17-validation/`. Raw credentials
+are excluded. No commit, Git push, deployment, site publication or external
+message was performed. R1.7 remains open for release closure.

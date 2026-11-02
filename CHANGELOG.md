@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Connected apps and OAuth retention (R1.7, local).** Account-owned OAuth
+  and MCP API-key metadata/revocation, administrator oversight, and bounded
+  transactional cleanup that preserves active-family refresh-replay evidence.
+  Adds a bundled author workflow and prepared launch/acceptance documents.
+  Staging acceptance and release remain pending. See `docs/connected-apps.md`.
 - **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
   translations and private reads over MCP, with original-input retries, revision
   checks, rolling user quotas and separate provenance. Removes compatibility
@@ -46,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepted; an empty value hides the link.
 
 ### Fixed
+- Reject malformed API-key permission arrays instead of retaining partial
+  permissions after JSON decoding fails or encounters a non-string entry.
 - Update `golang.org/x/net` to v0.62.0 for GO-2026-6860 and GO-2026-6866,
   reachable through HTML-to-Markdown conversion.
 - Since 0.23.0, draft titles in `/admin/pages` were plain text and a

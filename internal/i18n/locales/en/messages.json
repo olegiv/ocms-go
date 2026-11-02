@@ -8546,6 +8546,96 @@
             "id": "review.system",
             "message": "System action; no acting account was recorded.",
             "translation": "System action; no acting account was recorded."
+        },
+        {
+            "id": "connected.title",
+            "message": "Connected apps",
+            "translation": "Connected apps"
+        },
+        {
+            "id": "connected.description",
+            "message": "Review apps and MCP API keys. Revoking access does not delete drafts.",
+            "translation": "Review apps and MCP API keys. Revoking access does not delete drafts."
+        },
+        {
+            "id": "connected.policy_note",
+            "message": "Access also depends on current site policies, account permissions and API-key restrictions.",
+            "translation": "Access also depends on current site policies, account permissions and API-key restrictions."
+        },
+        {
+            "id": "connected.oauth",
+            "message": "OAuth connections",
+            "translation": "OAuth connections"
+        },
+        {
+            "id": "connected.keys",
+            "message": "MCP API keys",
+            "translation": "MCP API keys"
+        },
+        {
+            "id": "connected.metadata_note",
+            "message": "App names and client hosts are registered metadata, not verified vendor identities.",
+            "translation": "App names and client hosts are registered metadata, not verified vendor identities."
+        },
+        {
+            "id": "connected.key_note",
+            "message": "API keys are not bound to a client host. Only keys with MCP access are listed.",
+            "translation": "API keys are not bound to a client host. Only keys with MCP access are listed."
+        },
+        {
+            "id": "connected.empty",
+            "message": "No connections on this page.",
+            "translation": "No connections on this page."
+        },
+        {
+            "id": "connected.owner",
+            "message": "Account",
+            "translation": "Account"
+        },
+        {
+            "id": "connected.created",
+            "message": "Created",
+            "translation": "Created"
+        },
+        {
+            "id": "connected.not_recorded",
+            "message": "Not recorded",
+            "translation": "Not recorded"
+        },
+        {
+            "id": "connected.never_used",
+            "message": "Never used",
+            "translation": "Never used"
+        },
+        {
+            "id": "connected.no_expiry",
+            "message": "No stored expiry",
+            "translation": "No stored expiry"
+        },
+        {
+            "id": "connected.revoke",
+            "message": "Revoke access",
+            "translation": "Revoke access"
+        },
+        {
+            "id": "connected.status_active",
+            "message": "Active",
+            "translation": "Active"
+        },
+        {
+            "id": "connected.status_revoked",
+            "message": "Revoked",
+            "translation": "Revoked"
+        },
+        {
+            "id": "connected.status_expired",
+            "message": "Expired",
+            "translation": "Expired"
+        },
+        {
+            "id": "connected.status_unavailable",
+            "message": "Unavailable under current account or server policy",
+            "translation": "Unavailable under current account or server policy"
         }
     ]
 }

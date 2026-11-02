@@ -76,3 +76,26 @@ Both new links were revoked and existing drafts, reviews and OAuth grants
 were preserved. See the [rollout record](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
 Native Desktop and CLI coverage of this build remains part of the R1.7 matrix;
 earlier-build results do not establish that coverage.
+
+## R1.7 release acceptance (pending)
+
+The connected-app management and retention changes are local, undeployed
+work. Use [Connected apps](connected-apps.md) for access management and the
+[author skill](skills/ocms-author/SKILL.md) for the draft workflow. The prepared
+[demo script](launch/demo-script.md) defines the multilingual recording; it
+has not been recorded or published.
+
+| Client | Authoring path to exercise after approved deployment | R1.7 result |
+|---|---|---|
+| Claude Desktop | OAuth; brief/context → draft → two translations → editor/review/preview | Pending |
+| Claude web | OAuth; cross-client continuation, revision conflict and explicit share | Pending |
+| ChatGPT web | OAuth; same full draft/translation/review flow and tracking-query share | Pending |
+| Claude Code | OAuth and scoped bearer modes; same tools and denied next request after revoke | Pending |
+| Codex | OAuth and scoped bearer modes; same tools and denied next request after revoke | Pending |
+
+Record actual client/version/tier, build/tree, settings, capabilities and date
+per row. Follow normal authentication with the dedicated staging account and
+shared authenticator; preserve owner connections. Exercise the connected-app
+page's own/admin boundaries and cleanup while active-family replay detection
+still works. The final publish step needs the human editor's explicit action.
+Do not mark these rows passed from local SDK tests or older staging builds.

@@ -107,8 +107,18 @@ expiry; rotation does not extend it. Reuse by the matching client and resource
 revokes the entire family durably, including when the response is
 `invalid_grant`. A different client cannot revoke a family by presenting its
 refresh token. Keep SQLite and its normal backup policy; there is no token
-encryption key to rotate. Expired/revoked rows currently remain as evidence;
-automatic retention/maintenance is not implemented in R1.1.
+encryption key to rotate. R1.7 adds bounded retention locally: codes expire
+from storage after a 24-hour evidence window; retired grant families after
+30 days. Every token/spent-refresh row of an active family is retained.
+The [retention policy](connected-apps.md#retention-policy) describes atomic
+batches, preview dependencies, scheduling and rollback. This maintenance is
+not deployed yet; R1.1's retained-row staging limitation remains until rollout.
+
+Account → Connected apps lists the user's OAuth grants and MCP-capable API
+keys with scopes, creation, last use, expiry and revoke. Administrators can
+review/revoke across accounts in `/admin/mcp`. Registered metadata does not
+verify app identity. The earlier `/account/security` grant list/revoke path
+remains compatible. See [connected apps](connected-apps.md).
 
 ## Client metadata and registration
 
