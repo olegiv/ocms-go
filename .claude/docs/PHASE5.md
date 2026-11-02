@@ -894,8 +894,12 @@ release hardening and independent security audit remain R1.7 work.
 
 ### Iteration R1.7: Connected Apps, Hardening and Release
 
-**Status, 2026-11-02:** commit `16ac7161` is deployed to Fly staging.
-Fresh Claude/ChatGPT web OAuth/share/revocation checks and the full
+**Status updated 2026-11-03:** the latest verified Fly staging build is
+`035ac1dd`. Klaro consent, SRI/license delivery and fresh Claude/ChatGPT
+read-only checks passed; original privacy settings were restored exactly.
+See the [focused staging follow-up](../../docs/launch/r17-acceptance.md#klarominimatch-staging-verification--2026-11-02).
+
+The earlier Claude/ChatGPT web OAuth/share/revocation checks and the full
 EN/RU/DE draft workflow in native Desktop, ChatGPT and both CLI modes are
 recorded for `39d82c94` in
 [release acceptance](../../docs/launch/r17-acceptance.md).
@@ -903,9 +907,11 @@ The inline alt-text repair passes all 68 test packages, lint and first-party
 NilAway and is verified on `16ac7161`: both web clients read the repaired
 demo pages 27/43/44 at revisions 6/4/3, with matching rendered previews.
 The owner accepted the unimported OpenPGP advisory for the reviewed local
-build. The Klaro/minimatch fix is verified locally; its staging rollout,
-the Desktop reconnect decision, fresh editorial/stale-translation review,
-human publication and the recording's final segment remain pending. See the
+build. The Klaro/minimatch rollout is complete, and a Linux/amd64 package
+recheck retained zero imported-package vulnerabilities and the module-only
+warning. The Desktop reconnect decision, fresh editorial/stale-translation
+review, human publication, the recording's final segment and the planned
+production article draft remain pending. See the
 [release decisions](../../docs/launch/release-decisions.md).
 R1.7 is not complete. Earlier bounded results remain in the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
@@ -3773,3 +3779,46 @@ The [decision record](../../docs/launch/release-decisions.md#dependency-advisory
 binds this acceptance to the tested candidate. Klaro/minimatch is fixed
 locally by the six-file import from master `a325de44`; staging rollout remains
 pending. No commit, push or deployment occurred for this documentation update.
+
+### R1.7 Klaro staging verification — 2026-11-02
+
+After separate approval, `035ac1ddf9b3a9abb6e4289d8545ec246cea1ac3` was
+deployed from a clean Git archive to `ocms-mcp-staging`, built at
+`2026-11-02T22:25:49Z`, image
+`[image digest redacted]`.
+The existing Machine/volume were retained and recovery snapshot
+`[snapshot ID redacted]` preceded rollout. All Fly/public health checks
+and canonical OAuth discovery passed; MFA stayed required and seeding off.
+
+Klaro JS/CSS and the new BSD license returned 200 with exact committed bytes.
+The rendered script retained matching SRI, defer, nonce, anonymous crossorigin
+and cache busting. A temporary Russian consent fixture passed notice reject,
+required-service lock, optional opt-in/out persistence and footer reopen.
+Both synthetic services and the separate cookie name were test settings;
+the original disabled privacy row was restored exactly, and the temporary
+SQLite verifier was removed. All 44 page rows, the published count of one,
+ten owner grants and module settings matched pre/post-fixture fingerprints;
+SQLite quick_check passed.
+
+Claude web and ChatGPT web freshly read schema/context and EN 27/revision 6,
+RU 43/revision 4 and DE 44/revision 3 as OAuth Editor user 2 with exactly
+`mcp:access mcp:drafts`. Alt text/captions and empty warnings/issues were
+preserved; RU/DE remained stale. Normal dedicated-account password/shared MFA
+and the signed-in pinned preview passed. After final restoration/restart,
+both clients freshly read site info and page 27 again; the final log buffer
+independently corroborated those two successful calls per client.
+
+The controlled proxy-spoof pair retained the same resolved client. A bounded
+100-record log slice had no checked credential patterns; raw logs were not
+saved. No new upstream-error/share probe ran. Linux/amd64 CGO-disabled package
+analysis with Go 1.27.3 / govulncheck 1.9.0 returned zero imported-package
+vulnerabilities, retaining the module-only OpenPGP warning. This is source
+analysis for the staging target, not a deployed-binary scan or wider waiver.
+
+Evidence: ignored `output/r17-validation/klaro-staging/`. The
+[acceptance follow-up](../../docs/launch/r17-acceptance.md#klarominimatch-staging-verification--2026-11-02)
+records exact identity, restoration and limits. Earlier native/CLI authoring,
+revocation/reconnect, sharing and full Go tests were not rerun in this focused
+web/read-only check. No content edits, publication, scheduling, new commit
+or Git push occurred; wiki was unchanged. Desktop reconnect disposition,
+human review/publication, the final demo shot and launch drafting remain open.

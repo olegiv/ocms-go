@@ -1,8 +1,9 @@
 # R1 release decisions
 
-Updated 2026-11-02. The OpenPGP disposition below is owner-approved for the
-reviewed local build; other decisions retain their stated status. This
-record does not authorize commit, push, deployment or publication. The
+Updated 2026-11-03. The OpenPGP disposition below is owner-approved for the
+reviewed build, with the staging-target recheck recorded below; other
+decisions retain their stated status. This record does not authorize
+commit, push, deployment or publication. The
 [acceptance record](r17-acceptance.md) binds results to the tested build.
 
 ## Inline-image accessibility
@@ -25,7 +26,7 @@ establish a whole-site accessibility pass or authorize publication.
 | Advisory | Actual exposure and disposition | Decision status |
 |---|---|---|
 | GO-2026-5932 / `golang.org/x/crypto/openpgp` | Keep `golang.org/x/crypto v0.58.0` for Argon2 password hashing and bcrypt imports. oCMS does not import OpenPGP; the reviewed build has no affected imported packages. OpenPGP imports are outside this disposition. | Accepted by owner on 2026-11-02: not applicable to the reviewed local build; revalidation required |
-| GHSA-g3hv-75wg-m249 / transitive `minimatch` | The local candidate imports master fix `a325de44`: vendor the existing Klaro 0.7.22 browser JS/CSS and BSD license, removing its unused Babel/ESLint/minimatch npm chain. No major override or advisory suppression. | Removed from the local lockfile; staging rollout pending |
+| GHSA-g3hv-75wg-m249 / transitive `minimatch` | Deployed commit `035ac1dd` imports master fix `a325de44`: vendor the existing Klaro 0.7.22 browser JS/CSS and BSD license, removing its unused Babel/ESLint/minimatch npm chain. No major override or advisory suppression. | Resolved in `035ac1dd`; focused staging verification passed |
 
 The owner approved retaining the required crypto module and recording this
 advisory as not applicable to the reviewed local build. The scope is the
@@ -35,6 +36,13 @@ govulncheck 1.9.0 package scan returned zero imported-package vulnerabilities
 and retained the module-only warning. oCMS imports `x/crypto/argon2` in
 `internal/auth/password.go` and `x/crypto/bcrypt` in
 `internal/transfer/importer.go`, with no OpenPGP imports in the tested build.
+
+The subsequent `035ac1dd` rollout rechecked source packages for the staging
+target, Linux/amd64 with CGO disabled, using Go 1.27.3 / govulncheck 1.9.0.
+It again reported zero imported-package vulnerabilities and retained the
+module-only warning. This is source package analysis, not a scan of the
+deployed binary or a broader waiver. See the
+[staging follow-up](r17-acceptance.md#klarominimatch-staging-verification--2026-11-02).
 
 The advisory has no known fixed OpenPGP version. It remains visible in
 dependency reports; no scanner exclusion or CI bypass is part of this
@@ -47,8 +55,8 @@ Any proposed OpenPGP use needs a new assessment. See the
 The R1.7 baseline audit reported seven moderate entries in Klaro's unused
 tooling chain. Applying the six-file master fix removes 136 package entries,
 including Klaro's npm package, ESLint and minimatch, without changing any
-retained package version or integrity value. The previous proposed minimatch
-waiver is superseded for this local candidate, rather than accepted. The
+retained package version or integrity value. The dependency removal
+supersedes the proposed minimatch waiver. The
 [advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249) itself remains.
 
 The vendored browser files preserve the existing asset URLs, consent API,
@@ -59,10 +67,13 @@ update process are recorded in the
 longer tracks this browser library; future Klaro updates and advisories need
 explicit review.
 
-These are local source changes, not a staging deployment. Staging remains
-at `16ac7161`; record the candidate's local checks and any later separately
-authorized rollout before claiming release closure. Revalidate this asset
-assessment when vendor bytes, the lockfile or copy/build paths change.
+`035ac1dd` is deployed and verified on `ocms-mcp-staging`: asset/SRI/license
+delivery, the temporary Russian consent fixture and focused Claude/ChatGPT
+read-only checks passed. Original privacy settings were restored exactly;
+privacy consent remains disabled as before the fixture. The dependency-fix
+rollout is complete; the remaining release gates are below. Revalidate this asset
+assessment when vendor bytes, the lockfile, copy/build paths or relevant
+upstream advisories change.
 The accepted OpenPGP disposition remains limited to the reviewed build
 and the revalidation conditions above. Run dependency scans against the
 candidate before a release tag. No broad dependency waiver is accepted.

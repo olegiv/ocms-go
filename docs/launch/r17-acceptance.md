@@ -1,25 +1,30 @@
-# R1.7 release acceptance — 2026-11-02
+# R1.7 release acceptance — updated 2026-11-03
 
-The full EN/RU/DE draft workflow ran on `39d82c94` in native Claude Desktop,
-ChatGPT, Claude Code and Codex. The inline-image alt-text fix is now deployed
-at `16ac7161`: Claude web and ChatGPT web verified the resaved demo drafts,
-and signed-in browser previews retained the exact localized descriptions.
-**R1.7 is not release-complete:** fresh editorial/translation review,
-dependency-fix staging rollout, the Desktop reconnect decision, human
-publication and the final publication segment of the demo remain pending.
-The owner accepted the unimported OpenPGP advisory as not applicable to the
-reviewed local build; the Klaro/minimatch fix is verified locally. See the
+The latest verified staging build is `035ac1dd`: Klaro consent, asset/SRI and
+license delivery, plus fresh Claude/ChatGPT read-only checks passed. The
+full EN/RU/DE draft workflow ran on `39d82c94` in native Claude Desktop,
+ChatGPT, Claude Code and Codex; alt-text resaves were verified on `16ac7161`.
+Those earlier results retain their build-specific scope.
+**R1.7 is not release-complete:** the Desktop reconnect decision, fresh
+editorial/translation review, human publication, the final demo segment and
+the planned production article draft remain pending. The approved
+OpenPGP disposition has a fresh Linux/amd64 package recheck; the module-only
+warning remains visible. See the
 [scoped dependency dispositions](release-decisions.md#dependency-advisory-dispositions).
 
 ## Tested identities
 
 - Fly app: `ocms-mcp-staging`, canonical origin
   `https://ocms-mcp-staging.fly.dev`.
-- Current deployed commit: `16ac71611e2e82e8a5789f0bf13145ef844301ef`;
-  binary build time `2026-11-02T19:40:19Z`, checked directly on the host.
+- Latest verified deployed commit: `035ac1ddf9b3a9abb6e4289d8545ec246cea1ac3`;
+  binary build time `2026-11-02T22:25:49Z`, checked directly on the host.
   Fly readiness/liveness and both public health endpoints passed. MCP's
   generic server version `1.0.0` does not attest to a Git commit.
 - Image digest:
+  `[image digest redacted]`.
+- Earlier alt-text resaves/previews ran on
+  `16ac71611e2e82e8a5789f0bf13145ef844301ef`, built at
+  `2026-11-02T19:40:19Z`, image
   `[image digest redacted]`.
 - The full multilingual client matrix and web sharing/revocation results
   below ran on `39d82c94f164452fed68157b77232815889403ba`, built at
@@ -170,6 +175,66 @@ Native Desktop/CLI modes, web revocation/reconnect and proxy-error probes
 were not rerun in this focused alt-text check; their earlier build-specific
 evidence remains above.
 
+## Klaro/minimatch staging verification — 2026-11-02
+
+After separate deployment approval, `035ac1dd` was built from a clean Git
+archive and deployed to `ocms-mcp-staging`. The exact binary/image identity
+is above. The existing Machine `[machine ID redacted]` and volume
+`[volume ID redacted]` were retained; recovery snapshot
+`[snapshot ID redacted]` preceded the rollout. All three Machine checks
+and both public health endpoints passed. OAuth discovery retained the HTTPS
+issuer/resource; anonymous MCP returned 401 with resource metadata. Required
+MFA stayed enabled and seeding stayed disabled.
+
+| Check | Result on `035ac1dd` |
+|---|---|
+| Klaro JS/CSS/BSD license | All three public assets returned 200 and matched the committed vendor bytes |
+| Script integrity | Rendered sha384 SRI matched the served JS; defer, CSP nonce, anonymous crossorigin and cache busting were present |
+| Consent in Chrome | Russian notice rejection, footer reopen, required-service lock, optional opt-in/save/reload and later opt-out/save/reload passed |
+| Claude web | Fresh schema/context and drafts 27/43/44 readbacks passed with OAuth Editor user 2 and exactly `mcp:access mcp:drafts` |
+| ChatGPT web | The same focused read-only checks passed under its own existing grant and the same user/scopes |
+| Dedicated-account login/preview | Normal password and shared-authenticator MFA passed; anonymous page 27/revision 6 returned 404, while the signed-in pinned preview rendered before and after final restart |
+
+Asset destinations remained `/static/dist/js/klaro.min.js` and
+`/static/dist/css/klaro.css`; the new license was delivered at
+`/static/dist/licenses/klaro-LICENSE.txt`. Browser rendering confirmed that
+the consent UI loaded with the served script and stylesheet.
+
+Privacy was originally disabled with no configured services. The test used
+two synthetic local preference services and a separate cookie name; no real
+analytics/ad service was added. The original privacy row was restored
+exactly and is disabled again. Pre/post-fixture database fingerprints
+matched for all 44 page rows, the published count of one, ten owner grants
+and module settings; SQLite quick_check returned ok. The temporary SQLite
+verifier was removed. The helper's private MFA code files were removed;
+owner credentials and MFA were unchanged.
+
+Both clients freshly read EN 27/revision 6, RU 43/revision 4 and DE 44/revision
+3. Localized alt text and captions survived in HTML and Markdown, with empty
+issues/warnings. RU/DE remained stale and their source bases were unchanged.
+After restoration/restart, each client freshly called site info and page
+27 once more. The final server log buffer independently corroborated these
+two successful OAuth user-2 calls per client under the existing grants.
+Initial schema/context/readback evidence is in the actual web UI captures;
+that final buffer does not corroborate the entire earlier call set.
+
+A controlled normal/spoof request pair kept the same resolved client and
+did not trust the spoofed address. A bounded 100-record log slice contained
+none of the checked credential patterns; raw logs were not saved. No new
+upstream-error/share probe ran, and universal log redaction is not claimed.
+
+Go 1.27.3 / govulncheck 1.9.0 package analysis for Linux/amd64, CGO disabled,
+returned zero imported-package vulnerabilities and retained the module-only
+OpenPGP warning. This rechecks source packages for the staging target; it
+does not scan the deployed binary or suppress the approved scoped finding.
+
+This was a focused web/read-only follow-up. Native Desktop/CLI authoring,
+OAuth revocation/reconnect, new draft saves and sharing were not rerun;
+their earlier results remain tied to their recorded builds. The full Go
+suite was not repeated during rollout; the unchanged runtime source had
+already passed 68 test packages and Docker builds locally. No CMS content
+edit, publication, scheduling, new commit or Git push occurred in this run.
+
 ## Evidence, cleanup and remaining decisions
 
 Local evidence is under ignored `output/r17-validation/release-closure/`:
@@ -190,6 +255,14 @@ Temporary inspection files were removed; both prior test keys stayed
 inactive. No new Git commit, Git push, publication or scheduling occurred
 in this rollout. Existing wiki work was untouched.
 
+The `035ac1dd` follow-up evidence is under ignored
+`output/r17-validation/klaro-staging/`: archive/deployment/image and snapshot
+receipts, asset/SRI checks, consent and client AX captures/screenshots,
+pre/post-fixture fingerprints, exact restoration, the Linux/amd64 package
+scan and sanitized final tool/log records. `acceptance-summary.json` and
+`verification.md` record the scope and limits. Core HEAD stayed `035ac1dd`,
+the core working tree stayed clean and wiki metadata was unchanged.
+
 `r17-draft-workflow-partial.mp4` is a 40-second H.264 screenshot walkthrough
 of the actual captured states. Its captions explicitly retain the alt-text
 and human-publication limitations. The original 26 page identity/revision/
@@ -204,8 +277,9 @@ issued for the multilingual demo.
 The screenshot walkthrough is partial evidence, not a continuous recording
 of publication. See [the demo script](demo-script.md) for its remaining shot.
 The exact release decisions are in [release decisions](release-decisions.md):
-the alt-fix rollout/readback is complete; the OpenPGP disposition is accepted
-for the reviewed local build, and the Klaro/minimatch rollout remains pending.
+the alt-fix and Klaro/minimatch staging checks are complete; the approved
+OpenPGP disposition retains its module-only warning and staging-target
+package revalidation.
 Decide the Desktop reconnect caveat, then have the human review the
 current drafts/translations and, after separate publication approval,
 publish and finish the recording. Production
