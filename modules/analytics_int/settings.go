@@ -104,6 +104,9 @@ func (m *Module) updateSettings(change func(*Settings)) error {
 
 // saveSettings saves settings to the database.
 func (m *Module) saveSettings(settings *Settings) error {
+	if settings == nil {
+		return errors.New("analytics settings are required")
+	}
 	excludePathsJSON, err := json.Marshal(settings.ExcludePaths)
 	if err != nil {
 		excludePathsJSON = []byte("[]")

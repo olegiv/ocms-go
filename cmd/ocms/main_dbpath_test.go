@@ -422,6 +422,9 @@ func TestRunServerLifecycle(t *testing.T) {
 	// The server stops with the shared timeout; the start is recorded by the
 	// callback serveUntilStopped runs, the stop after it returns.
 	serve := calls["serveUntilStopped"]
+	if serve == nil || runDecl == nil {
+		t.Fatal("run must exist and call serveUntilStopped")
+	}
 	if len(serve.Args) != 5 {
 		t.Fatalf("serveUntilStopped takes %d arguments in run, want 5", len(serve.Args))
 	}

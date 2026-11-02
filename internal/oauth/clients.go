@@ -50,12 +50,12 @@ func loopbackRedirectHost(host string) bool {
 
 func validDCRRedirect(raw string) bool {
 	u, err := url.Parse(raw)
-	return err == nil && validRedirect(raw) && (u.Scheme != "http" || u.Hostname() != "localhost")
+	return err == nil && u != nil && validRedirect(raw) && (u.Scheme != "http" || u.Hostname() != "localhost")
 }
 
 func validRedirect(raw string) bool {
 	u, err := url.Parse(raw)
-	return err == nil && len(raw) <= 2048 && u.Host != "" && u.User == nil && u.Fragment == "" &&
+	return err == nil && u != nil && len(raw) <= 2048 && u.Host != "" && u.User == nil && u.Fragment == "" &&
 		(u.Scheme == "https" || (u.Scheme == "http" && loopbackRedirectHost(u.Hostname())))
 }
 
@@ -275,7 +275,9 @@ func (s *Service) saveClient(ctx context.Context, c registeredClient, source str
 		return problem("invalid_client")
 	}
 	isNew := errors.Is(err, sql.ErrNoRows)
-	count, err := q.CountOAuthClients(ctx)
+	// Public DCR registrations have their own budget, so exhausting that
+	// optional endpoint cannot deny first-use CIMD or owner-pinned clients.
+	count, err := q.CountOAuthClientsBySource(ctx, source)
 	if err != nil {
 		return err
 	}
@@ -283,7 +285,7 @@ func (s *Service) saveClient(ctx context.Context, c registeredClient, source str
 		if err := q.DeleteExpiredUnusedOAuthClients(ctx, s.now().Unix()); err != nil {
 			return err
 		}
-		count, err = q.CountOAuthClients(ctx)
+		count, err = q.CountOAuthClientsBySource(ctx, source)
 		if err != nil || count >= 1000 {
 			return problem("temporarily_unavailable")
 		}

@@ -554,11 +554,56 @@ func RecheckAPIKeyPolicy(ctx context.Context, q *store.Queries, key store.ApiKey
 	if maximum := getAPIKeyMaxTTL(); maximum > 0 && (!key.ExpiresAt.Valid || key.ExpiresAt.Time.After(key.CreatedAt.Add(maximum))) {
 		return false, nil
 	}
-	allowed, configured, err := isAPIKeySourceAllowed(ctx, q, key.ID, clientIP)
+	allowed, configured, err := checkAPIKeySourcePolicy(ctx, q, key, clientIP)
 	if err != nil {
 		return false, err
 	}
 	return allowed && (!isAPIKeySourceCIDRsRequired() || configured), nil
+}
+
+// Check the source rules and authenticated authority in one database snapshot.
+// Hash verification stays outside the transaction; an intervening permission,
+// activation, expiry or owner change rejects this attempt instead of combining
+// an old authority row with a newly widened source policy.
+func checkAPIKeySourcePolicy(ctx context.Context, q *store.Queries, verified store.ApiKey, clientIP string) (bool, bool, error) {
+	queries := q
+	var transaction *sql.Tx
+	switch db := q.DBHandle().(type) {
+	case *sql.DB:
+		var err error
+		transaction, err = db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if err != nil {
+			return false, false, err
+		}
+		defer func() { _ = transaction.Rollback() }()
+		queries = q.WithTx(transaction)
+	case *sql.Tx:
+		// Queued writers already hold their authorization snapshot.
+	default:
+		return false, false, errors.New("API key source policy requires a database or transaction")
+	}
+	current, err := queries.GetAPIKeyByID(ctx, verified.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	if current.KeyHash != verified.KeyHash || current.Permissions != verified.Permissions || current.IsActive != verified.IsActive ||
+		current.CreatedBy != verified.CreatedBy || !current.CreatedAt.Equal(verified.CreatedAt) || current.ExpiresAt.Valid != verified.ExpiresAt.Valid ||
+		current.ExpiresAt.Valid && !current.ExpiresAt.Time.Equal(verified.ExpiresAt.Time) {
+		return false, false, nil
+	}
+	allowed, configured, err := isAPIKeySourceAllowed(ctx, queries, verified.ID, clientIP)
+	if err != nil {
+		return false, false, err
+	}
+	if transaction != nil {
+		if err := transaction.Commit(); err != nil {
+			return false, false, err
+		}
+	}
+	return allowed, configured, nil
 }
 
 // WriteAPIError writes a JSON error response.
@@ -715,7 +760,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		}
 	}
 
-	allowed, hasSourceCIDRs, err := isAPIKeySourceAllowed(r.Context(), queries, matchedKey.ID, clientIP)
+	allowed, hasSourceCIDRs, err := checkAPIKeySourcePolicy(r.Context(), queries, *matchedKey, clientIP)
 	if err != nil {
 		if required {
 			slog.Error("failed to load API key source CIDR allowlist", "error", err, "key_id", matchedKey.ID)
@@ -891,9 +936,17 @@ func addAPIKeyToContext(next http.Handler, w http.ResponseWriter, r *http.Reques
 // APIKeyAuth applies, the key policies and source CIDR rules included, or
 // nil. It writes nothing: validateAPIKey writes only when auth is required.
 func ValidAPIKey(r *http.Request, queries *store.Queries) *store.ApiKey {
-	key, _ := validateAPIKey(nil, r, queries, false)
+	key, _ := validateAPIKey(discardAPIResponseWriter{}, r, queries, false)
 	return key
 }
+
+// Read-only policy callers have no HTTP response to emit. Supply a real sink
+// rather than passing a nil writer through the shared validator.
+type discardAPIResponseWriter struct{}
+
+func (discardAPIResponseWriter) Header() http.Header         { return make(http.Header) }
+func (discardAPIResponseWriter) WriteHeader(int)             {}
+func (discardAPIResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 // OptionalAPIKeyAuth creates middleware that optionally validates API key authentication.
 // Unlike APIKeyAuth, this middleware does not require authentication - it simply

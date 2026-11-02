@@ -17,6 +17,14 @@ import (
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
 
+func TestDashboardBeforeInitializationIsUnavailable(t *testing.T) {
+	rr := httptest.NewRecorder()
+	New().handleDashboard(rr, httptest.NewRequest(http.MethodGet, "/admin/hcaptcha", nil))
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("uninitialized dashboard status = %d, want 503", rr.Code)
+	}
+}
+
 // TestSettingsLoadFailureKeepsEnvKeyProtection checks the fallback when the
 // stored settings cannot be read at startup: login protection is turned on
 // with the environment keys, the settings form refuses to save while the row

@@ -21,6 +21,19 @@ import (
 	"golang.org/x/net/html"
 )
 
+func TestConsentURLHost(t *testing.T) {
+	for _, tc := range []struct{ raw, host string }{
+		{"https://client.test:8443/callback", "client.test:8443"},
+		{"http://127.0.0.1:8100/callback", "127.0.0.1:8100"},
+		{"opaque-client-id", ""},
+		{"https://client.test/%zz", ""},
+	} {
+		if got := consentURLHost(tc.raw); got != tc.host {
+			t.Errorf("consentURLHost(%q) = %q, want %q", tc.raw, got, tc.host)
+		}
+	}
+}
+
 func enableTestOAuth(t *testing.T, env *mfaTestEnv) url.Values {
 	t.Helper()
 	// The shared handler fixture has a minimal schema rather than goose's

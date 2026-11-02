@@ -10,6 +10,9 @@ SELECT * FROM oauth_clients WHERE id = ?;
 -- name: CountOAuthClients :one
 SELECT COUNT(*) FROM oauth_clients;
 
+-- name: CountOAuthClientsBySource :one
+SELECT COUNT(*) FROM oauth_clients WHERE source = ?;
+
 -- name: DeleteExpiredUnusedOAuthClients :exec
 DELETE FROM oauth_clients WHERE expires_at < ?
 AND NOT EXISTS (SELECT 1 FROM oauth_grants WHERE client_id = oauth_clients.id);

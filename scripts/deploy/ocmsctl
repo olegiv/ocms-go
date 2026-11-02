@@ -67,7 +67,22 @@ resolve_site() {
 
 is_pid_running() {
     local pid="$1"
-    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
+signal_site_process() {
+    local signal="$1" pid="$2"
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+    local site_uid
+    site_uid=$(id -u "$SITE_USER") || return 1
+    # Let the kernel enforce account ownership at signal time, including PID
+    # reuse between the liveness probe and the signal. Never signal as root
+    # merely because a site-controlled PID file named an existing process.
+    if [ "$EUID" -eq "$site_uid" ]; then
+        /bin/kill -s "$signal" -- "$pid"
+    else
+        sudo -u "$SITE_USER" -- /bin/kill -s "$signal" -- "$pid"
+    fi
 }
 
 get_pid() {
@@ -195,13 +210,16 @@ cmd_stop() {
     fi
 
     if ! is_pid_running "$pid"; then
-        echo_warn "Site '$site_id' is not running (stale PID: $pid)"
+        echo_warn "Site '$site_id' is not running (stale or invalid PID file)"
         rm -f "$SITE_PID"
         return 0
     fi
 
     echo_info "Stopping site '$site_id' (PID: $pid)..."
-    kill -SIGTERM "$pid"
+    if ! signal_site_process SIGTERM "$pid"; then
+        echo_error "Cannot stop PID $pid as $SITE_USER"
+        return 1
+    fi
 
     # Wait for graceful shutdown (up to 60 seconds: the app drains requests
     # for up to 30, waits up to 5 more for handlers still running, records
@@ -215,7 +233,7 @@ cmd_stop() {
 
     if is_pid_running "$pid"; then
         echo_warn "Process didn't stop gracefully, sending SIGKILL..."
-        kill -SIGKILL "$pid" 2>/dev/null || true
+        signal_site_process SIGKILL "$pid" || return 1
         sleep 1
     fi
 
@@ -236,7 +254,7 @@ cmd_restart() {
         return
     fi
 
-    cmd_stop "$site_id" 2>/dev/null || true
+    cmd_stop "$site_id" || return 1
     sleep 1
     cmd_start "$site_id"
 }

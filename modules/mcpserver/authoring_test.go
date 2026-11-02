@@ -316,7 +316,11 @@ func TestOfferedPresetSlugsMatchInputSchemaAndSeedRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	enumeration := schema.Properties["preset"].Enum
+	presetSchema := schema.Properties["preset"]
+	if presetSchema == nil {
+		t.Fatal("grounding schema has no preset property")
+	}
+	enumeration := presetSchema.Enum
 	if len(offered) != len(enumeration) || len(rows) != len(offered) {
 		t.Fatal("seed, service and schema preset catalogs differ")
 	}

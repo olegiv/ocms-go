@@ -35,6 +35,18 @@ FILTER_SITE="${1:-}"
 
 # --- Functions ---
 
+as_site_user() {
+    local user="$1"
+    shift
+    local site_uid
+    site_uid=$(id -u "$user") || return 1
+    if [ "$EUID" -eq "$site_uid" ]; then
+        "$@"
+    else
+        sudo -n -u "$user" -- "$@"
+    fi
+}
+
 backup_site() {
     local site_id="$1"
     local instance_dir="$2"
@@ -51,22 +63,24 @@ backup_site() {
         return 1
     fi
 
-    mkdir -p "$backup_dir"
+    # All site-path writes (including retention) use the site's authority.
+    # A replaced directory or output symlink must never gain root's access.
+    as_site_user "$user" mkdir -p "$backup_dir" || return 1
 
     # Backup database
     if [ -f "$db_path" ]; then
         local db_backup="$backup_dir/ocms_${TIMESTAMP}.db"
         echo "  Database: $db_path"
 
-        sqlite3 "$db_path" ".backup '$db_backup'"
+        as_site_user "$user" sqlite3 "$db_path" ".backup '$db_backup'" || return 1
 
         if [ -f "$db_backup" ]; then
-            if sqlite3 "$db_backup" "PRAGMA integrity_check;" 2>/dev/null | grep -q "ok"; then
+            if as_site_user "$user" sqlite3 "$db_backup" "PRAGMA integrity_check;" 2>/dev/null | grep -q "ok"; then
                 echo "  Integrity: OK"
             else
                 echo_warn "  Integrity check failed!"
             fi
-            gzip "$db_backup"
+            as_site_user "$user" gzip "$db_backup" || return 1
             echo "  Saved: ${db_backup}.gz ($(ls -lh "${db_backup}.gz" | awk '{print $5}'))"
         else
             echo_error "  Failed to create database backup"
@@ -79,7 +93,7 @@ backup_site() {
     # Backup uploads
     if [ -d "$uploads_path" ] && [ "$(ls -A "$uploads_path" 2>/dev/null)" ]; then
         local uploads_backup="$backup_dir/uploads_${TIMESTAMP}.tar.gz"
-        tar -czf "$uploads_backup" -C "$instance_dir" uploads
+        as_site_user "$user" tar -czf "$uploads_backup" -C "$instance_dir" uploads || return 1
         echo "  Uploads: $uploads_backup ($(ls -lh "$uploads_backup" | awk '{print $5}'))"
     else
         echo "  Uploads: empty (skipping)"
@@ -88,19 +102,16 @@ backup_site() {
     # Backup custom content (themes, modules)
     if [ -d "$custom_path" ] && [ "$(find "$custom_path" -mindepth 2 -type f 2>/dev/null | head -1)" ]; then
         local custom_backup="$backup_dir/custom_${TIMESTAMP}.tar.gz"
-        tar -czf "$custom_backup" -C "$instance_dir" custom
+        as_site_user "$user" tar -czf "$custom_backup" -C "$instance_dir" custom || return 1
         echo "  Custom: $custom_backup ($(ls -lh "$custom_backup" | awk '{print $5}'))"
     else
         echo "  Custom: empty (skipping)"
     fi
 
-    # Set ownership
-    chown -R "$user" "$backup_dir" 2>/dev/null || true
-
     # Cleanup old backups
-    find "$backup_dir" -name "ocms_*.db.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
-    find "$backup_dir" -name "uploads_*.tar.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
-    find "$backup_dir" -name "custom_*.tar.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+    as_site_user "$user" find "$backup_dir" -name "ocms_*.db.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+    as_site_user "$user" find "$backup_dir" -name "uploads_*.tar.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+    as_site_user "$user" find "$backup_dir" -name "custom_*.tar.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
 
     echo_info "  Done."
     return 0

@@ -213,6 +213,9 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 		if err != nil {
 			return err
 		}
+		if result == nil {
+			return errors.New("page mutation returned no result")
+		}
 		if stored, err := work.Q.GetPageByID(ctx, result.ID); err != nil {
 			return err
 		} else if stored.Status == "published" || stored.ScheduledAt.Valid {
@@ -251,6 +254,9 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 			domain.Fields = map[string]string{"request_id": request.ID}
 		}
 		return nil, mapped
+	}
+	if result == nil {
+		return nil, writeError(errors.New("page transaction returned no result"))
 	}
 	if !replayed && work.Changed[result.ID] {
 		page := work.Pages[result.ID]

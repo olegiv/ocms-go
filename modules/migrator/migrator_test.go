@@ -327,7 +327,7 @@ func TestSourceRegistry_RegisterAndGet(t *testing.T) {
 	})
 
 	s, ok := GetSource(name)
-	if !ok {
+	if !ok || s == nil {
 		t.Fatal("GetSource should return true for registered source")
 	}
 	if s.Name() != name {

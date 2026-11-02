@@ -197,10 +197,10 @@ func (m *Module) resolveSiteURL(ctx context.Context) (string, siteURLStatus, err
 	}
 	u, err := url.Parse(value)
 	port := uint16(1)
-	if err == nil && u.Port() != "" {
+	if err == nil && u != nil && u.Port() != "" {
 		_, err = fmt.Sscanf(u.Port(), "%d", &port)
 	}
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || port == 0 ||
+	if err != nil || u == nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || port == 0 ||
 		u.User != nil || u.RawQuery != "" || u.ForceQuery || strings.Contains(value, "#") || strings.Trim(u.EscapedPath(), "/") != "" {
 		if prev := m.invalidSiteURL.Swap(&value); prev == nil || *prev != value {
 			m.logger.Warn("configured site URL is not an absolute http(s) URL; MCP results omit page URLs")

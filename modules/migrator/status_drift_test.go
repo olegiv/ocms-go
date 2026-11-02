@@ -187,6 +187,9 @@ func TestFinishJobPreservesCountersWithoutResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestJob: %v", err)
 	}
+	if job == nil {
+		t.Fatal("latestJob() returned no persisted job")
+	}
 	if job.Status != JobFailed {
 		t.Errorf("status = %q, want %q", job.Status, JobFailed)
 	}
@@ -241,6 +244,9 @@ func TestFailedProgressFlushRemainsRecoverableAfterPanic(t *testing.T) {
 	job, err := m.latestJob(ctx, "drupal")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if job == nil {
+		t.Fatal("latestJob() returned no persisted job")
 	}
 	if got := job.Counters[string(types.EntityPage)]; got != 17 {
 		t.Fatalf("persisted page count after failed tick and panic = %d, want 17", got)
@@ -342,6 +348,9 @@ func TestFailedRunFlushesPendingProgressBeforeFinalizing(t *testing.T) {
 	job, err := m.latestJob(ctx, "drupal")
 	if err != nil {
 		t.Fatalf("latestJob: %v", err)
+	}
+	if job == nil {
+		t.Fatal("latestJob() returned no persisted job")
 	}
 	if job.Status != JobFailed {
 		t.Fatalf("status = %q, want %q", job.Status, JobFailed)

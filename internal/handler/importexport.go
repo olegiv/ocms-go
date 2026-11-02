@@ -4,8 +4,6 @@
 package handler
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -401,32 +399,7 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 
 // extractExportDataFromZip extracts the ExportData from a zip file bytes.
 func (h *ImportExportHandler) extractExportDataFromZip(zipData []byte) (transfer.ExportData, error) {
-	var data transfer.ExportData
-
-	reader := bytes.NewReader(zipData)
-	zipReader, err := zip.NewReader(reader, int64(len(zipData)))
-	if err != nil {
-		return data, fmt.Errorf("failed to read zip: %w", err)
-	}
-
-	for _, f := range zipReader.File {
-		if f.Name == "export.json" {
-			rc, err := f.Open()
-			if err != nil {
-				return data, fmt.Errorf("failed to open export.json: %w", err)
-			}
-
-			decoder := json.NewDecoder(rc)
-			if err := decoder.Decode(&data); err != nil {
-				_ = rc.Close()
-				return data, fmt.Errorf("failed to decode export.json: %w", err)
-			}
-			_ = rc.Close()
-			return data, nil
-		}
-	}
-
-	return data, fmt.Errorf("export.json not found in zip")
+	return transfer.ReadZipExportDataBytes(zipData)
 }
 
 type suspiciousImportPage struct {

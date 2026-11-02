@@ -4,6 +4,7 @@
 package transfer
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"database/sql"
@@ -21,6 +22,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMissingImportDataIsRejected(t *testing.T) {
+	// These failures must precede any database access, including dry runs.
+	importer := NewImporter(nil, nil, nil)
+	for _, dryRun := range []bool{false, true} {
+		result, err := importer.Import(context.Background(), nil, ImportOptions{DryRun: dryRun})
+		if err == nil || result == nil || result.Success || len(result.Errors) == 0 || result.DryRun != dryRun {
+			t.Fatalf("Import(nil), dry_run=%v: %+v, %v", dryRun, result, err)
+		}
+	}
+	validation, err := importer.ValidateData(context.Background(), nil)
+	if err != nil || validation == nil || validation.Valid || len(validation.Errors) == 0 {
+		t.Fatalf("ValidateData(nil) = %+v, %v", validation, err)
+	}
+	if _, err := buildMediaZipManifest(&zip.Reader{}, nil); err == nil {
+		t.Fatal("ZIP manifest accepted missing export data")
+	}
+}
 
 func TestImportOptions_Defaults(t *testing.T) {
 	opts := DefaultImportOptions()
@@ -408,6 +427,7 @@ func TestImporter_LegacyReservedLanguageCanOnlyBeImportedInactive(t *testing.T) 
 	data.Languages[1].IsActive = true
 	result, err = importer.Import(ts.Ctx, data, opts)
 	require.ErrorContains(t, err, "validation failed")
+	require.NotNil(t, result)
 	require.False(t, result.Success)
 	updated, err = ts.Queries.GetLanguageByID(ts.Ctx, legacy.ID)
 	require.NoError(t, err)

@@ -56,6 +56,17 @@ func (q *Queries) CountOAuthClients(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countOAuthClientsBySource = `-- name: CountOAuthClientsBySource :one
+SELECT COUNT(*) FROM oauth_clients WHERE source = ?
+`
+
+func (q *Queries) CountOAuthClientsBySource(ctx context.Context, source string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOAuthClientsBySource, source)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createOAuthCode = `-- name: CreateOAuthCode :exec
 INSERT INTO oauth_codes (code_hash, grant_id, redirect_uri, challenge, created_at, expires_at)
 VALUES (?, ?, ?, ?, ?, ?)

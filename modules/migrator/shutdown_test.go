@@ -49,6 +49,9 @@ func TestShutdownLeavesStuckImportsBehind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if job == nil {
+		t.Fatal("latestJob() returned no persisted job")
+	}
 	if job.Status != JobInterrupted {
 		t.Errorf("Status = %q after Shutdown, want %q", job.Status, JobInterrupted)
 	}

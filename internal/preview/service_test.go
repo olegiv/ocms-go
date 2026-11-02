@@ -72,8 +72,12 @@ func (f *fixture) issue(t *testing.T, principal ...provenance.Principal) preview
 	}
 	return link
 }
-func token(link preview.Link) string {
-	u, _ := url.Parse(link.URL)
+func token(t *testing.T, link preview.Link) string {
+	t.Helper()
+	u, err := url.Parse(link.URL)
+	if err != nil || u == nil || u.Fragment == "" {
+		t.Fatalf("preview URL has no valid token: %v", err)
+	}
 	return u.Fragment
 }
 
@@ -101,7 +105,7 @@ func (f *fixture) exec(t *testing.T, query string, args ...any) {
 func TestPreviewPinsRecordedRevisionAndStoresOnlyHash(t *testing.T) {
 	f := setup(t)
 	link := f.issue(t)
-	raw := token(link)
+	raw := token(t, link)
 	decoded, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil || len(decoded) != 32 {
 		t.Fatal("token must contain 32 random bytes")
@@ -179,7 +183,7 @@ func TestPreviewLifecycleDoesNotResurrect(t *testing.T) {
 			case "legacy_snapshot":
 				f.exec(t, "UPDATE page_versions SET legacy=1 WHERE page_id=?", f.page.ID)
 			}
-			if _, err := f.svc.Resolve(f.ctx, token(link)); !errors.Is(err, preview.ErrUnavailable) {
+			if _, err := f.svc.Resolve(f.ctx, token(t, link)); !errors.Is(err, preview.ErrUnavailable) {
 				t.Fatal("unavailable link remained usable")
 			}
 		})
@@ -206,7 +210,7 @@ func TestPreviewCredentialRevocationAndExpiry(t *testing.T) {
 			if link.ExpiresAt.After(f.now.Add(time.Hour)) {
 				t.Fatal("link outlives issuing credential")
 			}
-			if _, err := f.svc.Resolve(f.ctx, token(link)); err != nil {
+			if _, err := f.svc.Resolve(f.ctx, token(t, link)); err != nil {
 				t.Fatal(err)
 			}
 			if kind == "key" {
@@ -216,7 +220,7 @@ func TestPreviewCredentialRevocationAndExpiry(t *testing.T) {
 				f.exec(t, "UPDATE oauth_grants SET revoked_at=1 WHERE id='fixture-grant'")
 				f.exec(t, "UPDATE oauth_grants SET revoked_at=0 WHERE id='fixture-grant'")
 			}
-			if _, err := f.svc.Resolve(f.ctx, token(link)); !errors.Is(err, preview.ErrUnavailable) {
+			if _, err := f.svc.Resolve(f.ctx, token(t, link)); !errors.Is(err, preview.ErrUnavailable) {
 				t.Fatal("revoked credential link resurrected")
 			}
 		})

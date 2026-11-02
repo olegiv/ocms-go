@@ -233,6 +233,17 @@ func TestAssignTranslatedTaxonomyEmptyIDs(t *testing.T) {
 	}
 }
 
+func TestAssignTranslatedTaxonomyRequiresQueriesForIDs(t *testing.T) {
+	err := assignTranslatedTaxonomy(context.Background(), nil, "tag", []int64{1}, 1,
+		func(int64) error {
+			t.Fatal("taxonomy assignment ran without a database")
+			return nil
+		}, func(string, ...any) {})
+	if err == nil {
+		t.Fatal("nonempty taxonomy translation must require queries")
+	}
+}
+
 func TestAssignTranslatedTaxonomyMissingTranslation(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()

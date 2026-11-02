@@ -44,6 +44,7 @@ var apiKeysSortableFields = map[string]SortConfig{
 
 // APIKeysHandler handles API key management routes.
 type APIKeysHandler struct {
+	db                 *sql.DB
 	queries            *store.Queries
 	renderer           *render.Renderer
 	sessionManager     *scs.SessionManager
@@ -56,6 +57,7 @@ type APIKeysHandler struct {
 // NewAPIKeysHandler creates a new APIKeysHandler.
 func NewAPIKeysHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *APIKeysHandler {
 	return &APIKeysHandler{
+		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
@@ -347,9 +349,18 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Convert permissions to JSON
 	permissionsJSON := model.PermissionsToJSON(input.Permissions)
 
-	// Update API key
+	// Commit metadata and its source policy together. In particular, a newly
+	// enabled permission must not become visible under the previous policy.
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		slog.Error("failed to begin API key update", "error", err)
+		flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+	queries := h.queries.WithTx(tx)
 	now := time.Now()
-	_, err := h.queries.UpdateAPIKey(r.Context(), store.UpdateAPIKeyParams{
+	_, err = queries.UpdateAPIKey(r.Context(), store.UpdateAPIKeyParams{
 		Name:        input.Name,
 		Permissions: permissionsJSON,
 		ExpiresAt:   input.ExpiresAt,
@@ -363,7 +374,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.queries.ReplaceAPIKeySourceCIDRs(r.Context(), id, input.SourceCIDRs); err != nil {
+	if err := queries.ReplaceAPIKeySourceCIDRs(r.Context(), id, input.SourceCIDRs); err != nil {
 		if isMissingAPIKeySourceCIDRTable(err) {
 			slog.Warn("api key source CIDR table missing; skipping per-key source allowlist", "key_id", id)
 		} else {
@@ -371,6 +382,11 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 			flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
 			return
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		slog.Error("failed to commit API key update", "error", err, "key_id", id)
+		flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
+		return
 	}
 
 	slog.Info("API key updated", "key_id", id, "updated_by", middleware.GetUserID(r))

@@ -105,6 +105,9 @@ func TestFinishJobPersistsCountersAndErrors(t *testing.T) {
 		t.Fatalf("latestJob() error = %v", err)
 	}
 	if job == nil {
+		t.Fatal("latestJob() returned no persisted job")
+	}
+	if job == nil {
 		t.Fatal("latestJob() returned nil")
 	}
 	if job.Status != JobCompleted {
@@ -142,6 +145,9 @@ func TestFinishJobRecordsFatalError(t *testing.T) {
 	job, err := m.latestJob(ctx, "drupal")
 	if err != nil {
 		t.Fatalf("latestJob() error = %v", err)
+	}
+	if job == nil {
+		t.Fatal("latestJob() returned no persisted job")
 	}
 	if job.Status != JobFailed {
 		t.Errorf("Status = %q, want %q", job.Status, JobFailed)
@@ -187,7 +193,10 @@ func TestReapStaleJobsLeavesOwnLiveJobs(t *testing.T) {
 		t.Errorf("reaped %d jobs owned by this run; a live sibling import would have been killed", reaped)
 	}
 
-	job, _ := m.latestJob(ctx, "drupal")
+	job, err := m.latestJob(ctx, "drupal")
+	if err != nil || job == nil {
+		t.Fatalf("latestJob() = %+v, %v; want the persisted job", job, err)
+	}
 	if job.Status != JobRunning {
 		t.Errorf("Status = %q, want it left %q", job.Status, JobRunning)
 	}
@@ -214,7 +223,10 @@ func TestReapStaleJobsMarksForeignRunningJobsInterrupted(t *testing.T) {
 		t.Errorf("reaped %d jobs, want 1", reaped)
 	}
 
-	job, _ := m.latestJob(ctx, "drupal")
+	job, err := m.latestJob(ctx, "drupal")
+	if err != nil || job == nil {
+		t.Fatalf("latestJob() = %+v, %v; want the persisted job", job, err)
+	}
 	if job.Status != JobInterrupted {
 		t.Errorf("Status = %q, want %q", job.Status, JobInterrupted)
 	}
@@ -799,6 +811,9 @@ func TestFinishJobKeepsNoticesSeparateFromErrors(t *testing.T) {
 	job, err := m.latestJob(ctx, "drupal")
 	if err != nil {
 		t.Fatalf("latestJob() error = %v", err)
+	}
+	if job == nil {
+		t.Fatal("latestJob() returned no persisted job")
 	}
 	if len(job.Errors) != 0 {
 		t.Errorf("job reports %d errors, want 0: %v", len(job.Errors), job.Errors)

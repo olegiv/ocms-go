@@ -60,7 +60,11 @@ func TestToolCallCancelledWithRequest(t *testing.T) {
 	eventually(t, "the cancelled call's log line", func() bool {
 		return slices.Equal(env.logs.toolCallOutcomes(), []string{outcomeCancelled})
 	})
-	if line := env.logs.find("MCP tool call")[0]; line.Level != slog.LevelWarn {
+	lines := env.logs.find("MCP tool call")
+	if len(lines) != 1 {
+		t.Fatalf("call log lines = %d, want 1", len(lines))
+	}
+	if line := lines[0]; line.Level != slog.LevelWarn {
 		t.Errorf("level = %v, want Warn for a cancelled call", line.Level)
 	}
 }
@@ -140,6 +144,9 @@ func TestToolCallLoggedOnceWithRealOutcome(t *testing.T) {
 		t.Fatalf("logged outcomes = %v, want %v (one line per call)", got, want)
 	}
 	lines := env.logs.find("MCP tool call")
+	if len(lines) != len(want) {
+		t.Fatalf("call log lines = %d, want %d", len(lines), len(want))
+	}
 	if code, _ := recordAttr(lines[2], "error_code"); code.String() != "invalid_params" {
 		t.Errorf("unknown tool error_code = %q, want invalid_params", code.String())
 	}
@@ -189,10 +196,11 @@ func TestSDKLoggerKeepsWarningsOnly(t *testing.T) {
 	logger := sdkLogger(slog.New(logs), "mcp-server").With("session", "x")
 	logger.Info("noise")
 	logger.Warn("worth knowing")
-	if len(logs.find("noise")) != 0 || len(logs.find("worth knowing")) != 1 {
-		t.Errorf("the SDK logger must drop Info and keep Warn:\n%s", logs.text())
+	warnings := logs.find("worth knowing")
+	if len(logs.find("noise")) != 0 || len(warnings) != 1 {
+		t.Fatalf("the SDK logger must drop Info and keep Warn:\n%s", logs.text())
 	}
-	if v, ok := recordAttr(logs.find("worth knowing")[0], "component"); !ok || v.String() != "mcp-server" {
+	if v, ok := recordAttr(warnings[0], "component"); !ok || v.String() != "mcp-server" {
 		t.Error("SDK log lines must carry their component")
 	}
 }

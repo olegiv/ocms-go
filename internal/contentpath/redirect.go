@@ -5,11 +5,16 @@ package contentpath
 
 import (
 	"errors"
-	"github.com/olegiv/ocms-go/internal/store"
-	"github.com/olegiv/ocms-go/internal/util"
 	"net/url"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
+
+// Bound both memory and work for public wildcard matching. Over-budget rules
+// do not match; exact and trailing-prefix redirects remain linear scans.
+const maxRedirectMatchStates = 1 << 20
 
 func MatchRedirect(requestPath, sourcePath string, isWildcard bool) (bool, []string) {
 	if !isWildcard {
@@ -41,76 +46,49 @@ func MatchRedirect(requestPath, sourcePath string, isWildcard bool) (bool, []str
 	sourceParts := strings.Split(strings.Trim(sourcePath, "/"), "/")
 	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
 
-	var captures []string
-	matched := matchPathPartsWithCaptures(sourceParts, requestParts, 0, 0, &captures)
-	return matched, captures
+	return matchPathPartsWithCaptures(sourceParts, requestParts)
 }
 
-// matchPathPartsWithCaptures recursively matches path parts with wildcard support and captures matched segments.
-func matchPathPartsWithCaptures(sourceParts, requestParts []string, si, ri int, captures *[]string) bool {
-	// Both exhausted - match
-	if si >= len(sourceParts) && ri >= len(requestParts) {
-		return true
+// Match suffix states once, then materialize only successful captures. Choosing
+// the first viable end offset preserves shortest-first ** capture semantics.
+func matchPathPartsWithCaptures(sourceParts, requestParts []string) (bool, []string) {
+	width := len(requestParts) + 1
+	if len(sourceParts)+1 > maxRedirectMatchStates/width {
+		return false, nil
 	}
-
-	// Source exhausted but request has more - no match
-	if si >= len(sourceParts) {
-		return false
-	}
-
-	// Request exhausted but source has more - check for ** only
-	if ri >= len(requestParts) {
-		// Only match if remaining source parts are all **
-		for i := si; i < len(sourceParts); i++ {
-			if sourceParts[i] != "**" {
-				return false
+	matched := make([]bool, (len(sourceParts)+1)*width)
+	matched[len(sourceParts)*width+len(requestParts)] = true
+	for si := len(sourceParts) - 1; si >= 0; si-- {
+		for ri := len(requestParts); ri >= 0; ri-- {
+			index := si*width + ri
+			if sourceParts[si] == "**" {
+				matched[index] = matched[index+width] || (ri < len(requestParts) && matched[index+1])
+			} else if ri < len(requestParts) && (sourceParts[si] == "*" || sourceParts[si] == requestParts[ri]) {
+				matched[index] = matched[index+width+1]
 			}
-			// ** matching zero segments captures empty string
-			*captures = append(*captures, "")
 		}
-		return true
 	}
-
-	part := sourceParts[si]
-
-	switch part {
-	case "*":
-		// Single wildcard - matches exactly one segment, capture it
-		*captures = append(*captures, requestParts[ri])
-		return matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri+1, captures)
-
-	case "**":
-		// Double wildcard - matches zero or more segments
-		// Try matching zero segments first (move source forward)
-		capturesBefore := len(*captures)
-		*captures = append(*captures, "") // Capture empty for zero match
-		if matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri, captures) {
-			return true
-		}
-		// Backtrack: remove captures added during failed attempt
-		*captures = (*captures)[:capturesBefore]
-
-		// Try matching one or more segments
-		// Collect all segments that ** should match
-		for endIdx := ri; endIdx <= len(requestParts); endIdx++ {
-			capturesBefore := len(*captures)
-			captured := strings.Join(requestParts[ri:endIdx], "/")
-			*captures = append(*captures, captured)
-			if matchPathPartsWithCaptures(sourceParts, requestParts, si+1, endIdx, captures) {
-				return true
+	if !matched[0] {
+		return false, nil
+	}
+	var captures []string
+	ri := 0
+	for si, part := range sourceParts {
+		switch part {
+		case "**":
+			start := ri
+			for !matched[(si+1)*width+ri] {
+				ri++
 			}
-			// Backtrack
-			*captures = (*captures)[:capturesBefore]
+			captures = append(captures, strings.Join(requestParts[start:ri], "/"))
+		case "*":
+			captures = append(captures, requestParts[ri])
+			ri++
+		default:
+			ri++
 		}
-		return false
-
-	default:
-		// Literal match
-		if part == requestParts[ri] {
-			return matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri+1, captures)
-		}
-		return false
 	}
+	return true, captures
 }
 
 // buildTargetURL builds the final target URL by substituting captured wildcard segments.

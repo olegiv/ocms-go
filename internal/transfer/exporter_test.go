@@ -445,6 +445,9 @@ func TestMenuOnlyExportMissingDestinationPageRejectsWithoutWrites(t *testing.T) 
 		if importErr == nil {
 			t.Fatalf("dry_run=%t accepted missing destination page: %+v", dryRun, result)
 		}
+		if result == nil {
+			t.Fatalf("dry_run=%t returned no validation result: %v", dryRun, importErr)
+		}
 		if !importErrorsContain(result.Errors, `referenced page "menu-parent-page"`) ||
 			!importErrorsContain(result.Errors, `referenced page "menu-child-page"`) {
 			t.Fatalf("dry_run=%t errors = %+v, want missing destination page", dryRun, result.Errors)

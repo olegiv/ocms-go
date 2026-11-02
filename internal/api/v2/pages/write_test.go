@@ -53,6 +53,30 @@ func setupWrites(t *testing.T) writeFixture {
 func draftOptions() pages.WriteOptions {
 	return pages.WriteOptions{ForceDraft: true, RequestID: uuid.NewString(), Authorize: func(context.Context, *store.Queries) error { return nil }}
 }
+
+func TestNullReplayResultFailsWithoutAnotherWrite(t *testing.T) {
+	f := setupWrites(t)
+	ctx := context.Background()
+	options := draftOptions()
+	input := pages.CreatePageBody{Title: "Retained draft", Slug: "retained-draft"}
+	if _, err := f.svc.CreateWith(ctx, f.actor, input, options); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`UPDATE idempotency_keys SET result_json = 'null' WHERE request_id = ?`, options.RequestID); err != nil {
+		t.Fatal(err)
+	}
+	result, err := f.svc.CreateWith(ctx, f.actor, input, options)
+	if err == nil || result != nil {
+		t.Fatalf("null replay = %+v, %v; want a failed write", result, err)
+	}
+	var count int
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM pages WHERE slug = ?`, input.Slug).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("null replay left %d pages, want the original draft only", count)
+	}
+}
 func requireCode(t *testing.T, err error, want string) {
 	t.Helper()
 	var domain *v2.Error

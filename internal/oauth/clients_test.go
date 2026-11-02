@@ -406,7 +406,8 @@ func TestCIMDURLAndNetworkRestrictions(t *testing.T) {
 func TestClientCapAllowsRefreshButRefusesNewRegistration(t *testing.T) {
 	f := newFixture(t)
 	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<999)
-		INSERT INTO oauth_clients SELECT 'cap' || x, 'Client', '["https://client.test/callback"]', 'dcr', 9999999999 FROM n`); err != nil {
+		INSERT INTO oauth_clients SELECT 'cap' || x, 'Client', '["https://client.test/callback"]', 'dcr', 9999999999 FROM n
+		UNION ALL SELECT 'cap1000', 'Client', '["https://client.test/callback"]', 'dcr', 9999999999`); err != nil {
 		t.Fatal(err)
 	}
 	c := registeredClient{ID: f.values.Get("client_id"), Name: "Updated", AuthMethod: "none", Redirects: []string{f.values.Get("redirect_uri")}}

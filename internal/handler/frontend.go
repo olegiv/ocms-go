@@ -1830,10 +1830,10 @@ func (h *FrontendHandler) MCPServerCard(w http.ResponseWriter, r *http.Request) 
 	siteURL = strings.TrimSpace(siteURL)
 	u, err := url.Parse(siteURL)
 	port := uint16(1)
-	if err == nil && u.Port() != "" {
+	if err == nil && u != nil && u.Port() != "" {
 		_, err = fmt.Sscanf(u.Port(), "%d", &port)
 	}
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || port == 0 ||
+	if err != nil || u == nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || port == 0 ||
 		u.User != nil || u.RawQuery != "" || u.ForceQuery || strings.Contains(siteURL, "#") || strings.Trim(u.EscapedPath(), "/") != "" {
 		w.Header().Set("Cache-Control", "no-store")
 		http.Error(w, "MCP server card is unavailable until site_url is a valid HTTP(S) origin", http.StatusServiceUnavailable)

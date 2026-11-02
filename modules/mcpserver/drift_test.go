@@ -144,7 +144,11 @@ func TestToolInputConstraintsMatchREST(t *testing.T) {
 	for _, spec := range toolCatalog() {
 		props := inputs[spec.Name]
 		for _, opID := range spec.RESTOperations {
-			for _, param := range ops[opID].Parameters {
+			operation := ops[opID]
+			if operation == nil {
+				t.Fatalf("tool %q references missing REST operation %q", spec.Name, opID)
+			}
+			for _, param := range operation.Parameters {
 				if _, skip := restParamsNotMirrored[opID+"."+param.Name]; skip {
 					continue
 				}

@@ -32,13 +32,13 @@ func TestFragmentMigrationRevokesDisclosedLinksWithoutRevokingIssuers(t *testing
 	f.exec(t, "UPDATE preview_links SET revoked_at=123 WHERE id=2")
 	f.issue(t, principal)
 	f.exec(t, "UPDATE preview_links SET expires_at=1 WHERE id=3")
-	if _, err := f.svc.Resolve(f.ctx, token(legacy)); err != nil {
+	if _, err := f.svc.Resolve(f.ctx, token(t, legacy)); err != nil {
 		t.Fatal("pre-upgrade control did not resolve")
 	}
 	if err := store.Migrate(f.db); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Resolve(f.ctx, token(legacy)); !errors.Is(err, preview.ErrUnavailable) {
+	if _, err := f.svc.Resolve(f.ctx, token(t, legacy)); !errors.Is(err, preview.ErrUnavailable) {
 		t.Fatal("disclosed credential could be repackaged into the new transport")
 	}
 	var active, retainedRevocation, revokedExpired int
@@ -67,16 +67,16 @@ func TestFragmentMigrationRevokesDisclosedLinksWithoutRevokingIssuers(t *testing
 	if err := store.Migrate(f.db); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Resolve(f.ctx, token(fresh)); err != nil {
+	if _, err := f.svc.Resolve(f.ctx, token(t, fresh)); err != nil {
 		t.Fatal("a normal subsequent startup revoked a fresh link or its issuers")
 	}
 	if err := store.RunMigrationCommand(f.ctx, f.db, "down"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Resolve(f.ctx, token(legacy)); !errors.Is(err, preview.ErrUnavailable) {
+	if _, err := f.svc.Resolve(f.ctx, token(t, legacy)); !errors.Is(err, preview.ErrUnavailable) {
 		t.Fatal("rollback resurrected a disclosed credential")
 	}
-	if _, err := f.svc.Resolve(f.ctx, token(fresh)); err != nil {
+	if _, err := f.svc.Resolve(f.ctx, token(t, fresh)); err != nil {
 		t.Fatal("rollback changed a fresh link or its issuers")
 	}
 }

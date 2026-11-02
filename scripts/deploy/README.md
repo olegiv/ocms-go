@@ -477,6 +477,11 @@ Backups include:
 - Custom content (`custom_TIMESTAMP.tar.gz`) — only if `custom/` contains files (themes or modules)
 
 Backups are stored in each site's `backups/` directory with 30-day retention.
+Database, compression, archive and retention commands run as the registered
+site account, including when root starts the cron job. Existing backup outputs
+must be writable by that account; the job fails rather than repairing ownership
+through a site-controlled path. PID-mode stops likewise signal as the site
+account. Active systemd instances continue to use unit-bound service control.
 
 ## Health Checks
 

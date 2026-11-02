@@ -571,7 +571,7 @@ func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
 	svc := NewMediaService(db, uploadRoot)
 	svc.deleteMediaFiles = func(*os.Root, string) error { return errors.New("injected cleanup failure") }
 	err = svc.Delete(ctx, media.ID)
-	if !errors.Is(err, ErrMediaFilesNotRemoved) || !strings.Contains(err.Error(), "injected cleanup failure") {
+	if err == nil || !errors.Is(err, ErrMediaFilesNotRemoved) || !strings.Contains(err.Error(), "injected cleanup failure") {
 		t.Fatalf("Delete() error = %v, want ErrMediaFilesNotRemoved with the cleanup failure", err)
 	}
 	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {

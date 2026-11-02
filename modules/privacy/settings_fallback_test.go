@@ -19,6 +19,14 @@ import (
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
 
+func TestDashboardBeforeInitializationIsUnavailable(t *testing.T) {
+	rr := httptest.NewRecorder()
+	New().handleDashboard(rr, httptest.NewRequest(http.MethodGet, "/admin/privacy", nil))
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("uninitialized dashboard status = %d, want 503", rr.Code)
+	}
+}
+
 // TestSettingsLoadFailureDeniesConsent checks the fallback when the stored
 // settings cannot be read at startup: the consent banner is turned on with
 // ad and analytics storage denied, the settings form refuses to save while the

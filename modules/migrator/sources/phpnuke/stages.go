@@ -276,12 +276,12 @@ func (s *Source) creditedAuthors(ctx context.Context, reader sourceReader,
 	}
 
 	byKey := make(map[string]int, len(registered))
-	for i := range registered {
-		byKey[authorKey(registered[i].Login())] = i
+	for index, user := range registered {
+		byKey[authorKey(user.Login())] = index
 	}
 	for i := range admins {
 		index, matched := byKey[authorKey(admins[i].Login())]
-		if !matched {
+		if !matched || registered == nil {
 			registered = append(registered, admins[i])
 			byKey[authorKey(admins[i].Login())] = len(registered) - 1
 			continue
@@ -992,6 +992,11 @@ func (s *Source) importOneFile(ctx context.Context, queries *store.Queries, medi
 	if err := errors.Join(processErr, closeErr); err != nil {
 		cleanupErr := s.cleanupMediaFiles(ctx, tracker, canonicalUploadRoot, fileUUID)
 		result.AddError("Failed to process %q: %v", relPath, errors.Join(err, cleanupErr))
+		return "", mediaFailed
+	}
+	if processResult == nil {
+		cleanupErr := s.cleanupMediaFiles(ctx, tracker, canonicalUploadRoot, fileUUID)
+		result.AddError("Failed to process %q: no image result; cleanup: %v", relPath, cleanupErr)
 		return "", mediaFailed
 	}
 

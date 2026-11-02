@@ -1026,7 +1026,7 @@ func TestPageCache_store_and_Invalidate(t *testing.T) {
 	// Manually store a fake page through the internal store method.
 	page := &store.Page{ID: 1, Slug: "about-us"}
 	ctx := NewContext("en", "anonymous")
-	c.store(page, ctx)
+	c.store(page, ctx, c.generation)
 
 	if c.Count() != 1 {
 		t.Errorf("Count() = %d, want 1 after store", c.Count())
@@ -1049,8 +1049,8 @@ func TestPageCache_store_and_InvalidateBySlug(t *testing.T) {
 
 	page := &store.Page{ID: 2, Slug: "contact"}
 	ctx := NewContext("en", "anonymous")
-	c.store(page, ctx)
-	c.store(page, NewContext("fr", "anonymous"))
+	c.store(page, ctx, c.generation)
+	c.store(page, NewContext("fr", "anonymous"), c.generation)
 
 	// Both language variants should be cached.
 	if c.Count() != 1 {
@@ -1069,7 +1069,7 @@ func TestPageCache_Invalidate_ClearsAll(t *testing.T) {
 	c := NewPageCache(q)
 
 	for i := int64(1); i <= 5; i++ {
-		c.store(&store.Page{ID: i, Slug: "page-" + string(rune('a'+i-1))}, NewContext("en", "anonymous"))
+		c.store(&store.Page{ID: i, Slug: "page-" + string(rune('a'+i-1))}, NewContext("en", "anonymous"), c.generation)
 	}
 
 	if c.Count() != 5 {

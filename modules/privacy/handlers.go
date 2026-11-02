@@ -17,6 +17,10 @@ import (
 // handleDashboard handles GET /admin/privacy - shows the privacy settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	current, fromFallback := m.settingsForForm()
+	if current == nil {
+		http.Error(w, "Privacy settings are unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Serialize services to JSON

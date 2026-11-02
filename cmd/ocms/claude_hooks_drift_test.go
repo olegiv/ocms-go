@@ -87,6 +87,8 @@ func TestClaudeHooksAreWired(t *testing.T) {
 				switch {
 				case err != nil:
 					t.Errorf("%s hook runs %s: %v", event, name, err)
+				case info == nil:
+					t.Errorf("%s hook runs %s: missing file information", event, name)
 				case info.Mode().IsRegular() && info.Mode().Perm()&0o111 == 0:
 					t.Errorf("%s hook runs %s, which is not executable", event, name)
 				}

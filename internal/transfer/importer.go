@@ -410,6 +410,10 @@ func (i *Importer) importWithPreCommit(
 		opts.ConflictStrategy = ConflictSkip
 	}
 	result := NewImportResult(opts.DryRun)
+	if data == nil {
+		result.AddError("import", "data", "import data is required")
+		return result, errors.New("import data is required")
+	}
 	if !isValidConflictStrategy(opts.ConflictStrategy) {
 		result.AddError("import", "conflict_strategy", fmt.Sprintf("invalid conflict strategy %q", opts.ConflictStrategy))
 		return result, errors.New("invalid conflict strategy")
@@ -1037,7 +1041,7 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 				return nil, errors.New("duplicate export.json entry")
 			}
 			var err error
-			exportData, err = readZipExportData(f)
+			exportData, err = ReadZipExportData(f)
 			if err != nil {
 				return nil, err
 			}
@@ -1048,7 +1052,11 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 	if !exportFound {
 		return nil, errors.New("export.json not found in zip archive")
 	}
-	exportData = *normalizedTransferMediaIdentities(&exportData, opts.ImportMedia || opts.ImportMediaFiles)
+	normalizedData := normalizedTransferMediaIdentities(&exportData, opts.ImportMedia || opts.ImportMediaFiles)
+	if normalizedData == nil {
+		return nil, errors.New("import data is required")
+	}
+	exportData = *normalizedData
 	manifest, err := buildMediaZipManifest(zipReader, &exportData)
 	if err != nil {
 		return nil, fmt.Errorf("invalid media manifest: %w", err)
@@ -1208,7 +1216,36 @@ func (i *Importer) ImportFromZipBytes(ctx context.Context, data []byte, opts Imp
 	return i.ImportFromZip(ctx, zipReader, opts)
 }
 
-func readZipExportData(file *zip.File) (ExportData, error) {
+// ReadZipExportDataBytes rejects oversized, entry-dense and unsupported archive
+// containers before allocating the ZIP directory, then reads bounded metadata.
+// Media validation stays separate so previews can offer viable partial imports.
+func ReadZipExportDataBytes(data []byte) (ExportData, error) {
+	reader := bytes.NewReader(data)
+	if err := validateZipContainer(reader, int64(len(data))); err != nil {
+		return ExportData{}, err
+	}
+	archive, err := zip.NewReader(reader, int64(len(data)))
+	if err != nil {
+		return ExportData{}, err
+	}
+	var metadata *zip.File
+	for _, file := range archive.File {
+		if file.Name == "export.json" {
+			if metadata != nil {
+				return ExportData{}, errors.New("duplicate export.json entry")
+			}
+			metadata = file
+		}
+	}
+	if metadata == nil {
+		return ExportData{}, errors.New("export.json not found in zip")
+	}
+	return ReadZipExportData(metadata)
+}
+
+// ReadZipExportData applies the same declared-size, decompressed-byte and strict
+// JSON limits to archive metadata in validation, browser previews and imports.
+func ReadZipExportData(file *zip.File) (ExportData, error) {
 	if file.UncompressedSize64 > uint64(maxZipExportJSONUncompressedBytes) {
 		return ExportData{}, fmt.Errorf("export.json exceeds max size (%d bytes)", maxZipExportJSONUncompressedBytes)
 	}
@@ -1268,6 +1305,9 @@ func buildMediaZipManifest(zipReader *zip.Reader, data *ExportData) (mediaZipMan
 		return mediaZipManifest{}, err
 	}
 	data = normalizedTransferMediaIdentities(data, false)
+	if data == nil {
+		return mediaZipManifest{}, errors.New("import data is required")
+	}
 	manifest := mediaZipManifest{
 		mediaByUUID:   make(map[string]ExportMedia),
 		entryPaths:    make(map[string]struct{}),
@@ -2021,6 +2061,9 @@ func (i *Importer) generateMissingVariantsBeforeImport(
 			if variant == nil {
 				continue
 			}
+			if creation == nil {
+				return fmt.Errorf("generated %q variant for media %q has no ownership record", variantType, medium.UUID)
+			}
 			if creation.Directory != nil {
 				if err := ownedFiles.recordDirectory(medium.UUID, creation.Directory); err != nil {
 					return fmt.Errorf("record generated %q directory for media %q: %w", variantType, medium.UUID, err)
@@ -2353,7 +2396,7 @@ func (i *Importer) ValidateZip(ctx context.Context, zipReader *zip.Reader) (*Val
 				}, nil
 			}
 			var err error
-			data, err = readZipExportData(f)
+			data, err = ReadZipExportData(f)
 			if err != nil {
 				return &ValidationResult{
 					Valid:  false,
@@ -3320,6 +3363,9 @@ func (i *Importer) ValidateReader(ctx context.Context, r io.Reader) (*Validation
 func (i *Importer) ValidateData(ctx context.Context, data *ExportData) (*ValidationResult, error) {
 	mediaDeselectedData := normalizedTransferMediaIdentities(data, false)
 	data = normalizedTransferMediaIdentities(data, true)
+	if data == nil || mediaDeselectedData == nil {
+		return &ValidationResult{Valid: false, Errors: []ImportError{{Entity: "import", ID: "data", Message: "import data is required"}}}, nil
+	}
 	result := &ValidationResult{
 		Valid:     true,
 		Version:   data.Version,
@@ -4961,11 +5007,11 @@ func validateTranslationGraph(
 		languages map[int64]string
 		edges     map[int64]map[int64]struct{}
 	}
-	graphs := make(map[string]*componentGraph)
+	graphs := make(map[string]componentGraph)
 	for _, set := range sets {
 		graph := graphs[set.entityType]
-		if graph == nil {
-			graph = &componentGraph{languages: set.languages, edges: make(map[int64]map[int64]struct{})}
+		if graph.edges == nil {
+			graph = componentGraph{languages: set.languages, edges: make(map[int64]map[int64]struct{})}
 			graphs[set.entityType] = graph
 		}
 		if graph.edges[set.sourceOldID] == nil {
@@ -5105,22 +5151,23 @@ func validateTranslationComponentMerge(
 }
 
 func translationEntitySlugs(data *ExportData) map[string]map[int64]string {
-	slugs := map[string]map[int64]string{
-		"page": {}, "category": {}, "tag": {}, "form": {},
-	}
+	pages := make(map[int64]string)
+	categories := make(map[int64]string)
+	tags := make(map[int64]string)
+	forms := make(map[int64]string)
 	for _, entity := range data.Pages {
-		slugs["page"][entity.ID] = entity.Slug
+		pages[entity.ID] = entity.Slug
 	}
 	for _, entity := range data.Categories {
-		slugs["category"][entity.ID] = entity.Slug
+		categories[entity.ID] = entity.Slug
 	}
 	for _, entity := range data.Tags {
-		slugs["tag"][entity.ID] = entity.Slug
+		tags[entity.ID] = entity.Slug
 	}
 	for _, entity := range data.Forms {
-		slugs["form"][entity.ID] = entity.Slug
+		forms[entity.ID] = entity.Slug
 	}
-	return slugs
+	return map[string]map[int64]string{"page": pages, "category": categories, "tag": tags, "form": forms}
 }
 
 func lookupExistingTranslationEntity(
@@ -5160,11 +5207,11 @@ func (i *Importer) validateExistingTranslationComponentMerges(
 		languages map[int64]string
 		edges     map[int64]map[int64]struct{}
 	}
-	graphs := make(map[string]*archiveGraph)
+	graphs := make(map[string]archiveGraph)
 	for _, set := range sets {
 		graph := graphs[set.entityType]
-		if graph == nil {
-			graph = &archiveGraph{languages: set.languages, edges: make(map[int64]map[int64]struct{})}
+		if graph.edges == nil {
+			graph = archiveGraph{languages: set.languages, edges: make(map[int64]map[int64]struct{})}
 			graphs[set.entityType] = graph
 		}
 		if graph.edges[set.sourceOldID] == nil {

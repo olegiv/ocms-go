@@ -67,7 +67,11 @@ func TestReturnedSchemasCannotChangeCachedValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	schema.Required = nil
-	schema.Properties["title"].MaxLength = nil
+	title := schema.Properties["title"]
+	if title == nil {
+		t.Fatal("create schema has no title property")
+	}
+	title.MaxLength = nil
 	delete(schema.Properties, "title")
 	if _, err := draft.DecodeCreate([]byte(`{"summary":"","body_markdown":""}`), "en"); err == nil {
 		t.Fatal("caller mutated the server's required fields")

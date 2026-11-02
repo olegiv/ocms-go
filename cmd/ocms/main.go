@@ -1183,7 +1183,7 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 	}
 	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
-	if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) {
+	if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) || info == nil {
 		return
 	}
 	w.Header().Set("Cache-Control", themeStaticCacheControl)
@@ -1221,7 +1221,7 @@ func serveEmbeddedThemeFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, 
 // is not mistaken for a missing asset.
 func themeStaticFileServable(w http.ResponseWriter, r *http.Request, info fs.FileInfo, err error, themeName, file string) bool {
 	switch {
-	case err == nil && !info.IsDir():
+	case err == nil && info != nil && !info.IsDir():
 		return true
 	case err == nil, errors.Is(err, fs.ErrNotExist), errors.Is(err, fs.ErrInvalid),
 		errors.Is(err, syscall.ENOTDIR), errors.Is(err, syscall.EINVAL),

@@ -128,8 +128,10 @@ guard, no environment proxy, a five-second timeout, a 64 KiB body cap and no
 redirects. The document's `client_id` must equal its URL; callbacks and public
 client authentication are validated. Metadata is cached in SQLite for fifteen
 minutes, concurrent fetches for one URL are coalesced, and registration/cache
-storage is capped at 1,000 clients. Unused expired clients can be removed when
-the cap is reached. A cache refresh cannot exceed that cap.
+storage has separate capacity limits for CIMD and DCR clients.
+Public registrations cannot consume CIMD admission capacity. Unused expired
+clients can be removed when a source's cap is reached; existing rows can still
+refresh at capacity.
 
 The default hosts cover the planned Claude and ChatGPT CIMD clients. This is
 an allowlist, not proof of account compatibility. Add another exact hostname

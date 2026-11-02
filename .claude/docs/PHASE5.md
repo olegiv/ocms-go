@@ -902,9 +902,11 @@ The later [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02
 adds bounded native Desktop authoring and both CLIs' OAuth/bearer passes on
 the same build. Desktop reconnect required Chrome; native-only reconnect is
 unverified. The [implementation notes](#r17-implementation-notes--2026-11-02)
-retain local checks, benchmarks and unresolved quality/dependency gates. The
-full multilingual demo, publication matrix, independent audit, recording and
-release closure remain pending. R1.7 is not complete.
+retain local checks and benchmarks; the
+[local quality follow-up](#r17-local-quality-follow-up--2026-11-02) records
+the completed findings repairs, passing analyzer checks and remaining
+dependency dispositions. The full multilingual demo, publication matrix,
+recording and release closure remain pending. R1.7 is not complete.
 
 - `/account/connected-apps`: the user's OAuth grants and MCP-capable API keys, with app name, client
   host, scopes, created, last used, revoke. Admin overview and revoke in `/admin/mcp`.
@@ -3570,3 +3572,98 @@ fixtures. Native-only Desktop reconnect, the full publish/schedule failure
 matrix, independent audit, unresolved quality/dependency dispositions, human
 publication, recording, wiki synchronization and release preparation remain
 open. This bounded pass does not complete R1.7 or authorize Release 2.
+
+## R1.7 local quality follow-up — 2026-11-02
+
+This follow-up starts from core HEAD `1ac771a2a379842b69959da10b345aa7e8340e72`
+and includes uncommitted local quality changes. The deployed staging binary
+remains `df6e5d86`. No commit, push, deployment or live-client test was made.
+
+### Verified local changes and checks
+
+- Fixed the two weather lint findings in its owning site repository, then
+  copied those files to the ignored installed module. The rendering change
+  writes the same precipitation text directly; the test helper stops returning
+  an unused database handle. The site changes need their own later review.
+- Full-workspace golangci-lint 2.14.0 reports **zero issues**. `go test ./...`
+  passes across **69 test packages**, including installed custom modules;
+  `go vet ./...` passes. Go and its compiler both report **1.27.3**.
+- Rebuilt and installed NilAway `v0.0.0-20260918162853-acb8859b9031` using
+  Go 1.27.3, retaining a private backup of the previous executable. The local
+  quality wrapper now uses the module's first-party package prefix, as
+  [recommended upstream](https://github.com/uber-go/nilaway).
+- Disposable fixtures verified a guarded normal case and detection of an
+  actual nil dereference. A separate wrapper fixture verified successful
+  execution, nonzero overall status on analyzer failure and continued test
+  execution after that failure. No broad diagnostic suppression was added.
+
+### Initial gates before findings repairs
+
+- **NilAway:** the real quality wrapper still exits **1**. The diagnostic
+  inventory contains 142 entries, or 92 distinct position/message pairs,
+  including test variants. JSON diagnostic output returned status 0 despite
+  findings; that status is not a clean analyzer result. Some reports involve
+  custom return contracts, callbacks and test helpers, but classification of
+  the full inventory is unfinished. No whole-project nil-safety pass is claimed.
+- **Go dependencies:** fresh govulncheck 1.8.0 reports zero called or imported
+  package vulnerabilities. [GO-2026-5932](https://pkg.go.dev/vuln/GO-2026-5932)
+  remains in a required module's unimported OpenPGP package. This does not
+  establish source security or remove the independent audit requirement.
+- **npm dependencies:** fresh audit still exits **1**, with seven moderate
+  package entries and no high/critical entries, rooted in
+  [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+  The chain runs through Klaro's ESLint/parser dependencies; shipped Klaro
+  browser JS/CSS exactly match its prebuilt distribution, and the asset
+  pipeline copies those files without running that lint chain. The installed
+  minimatch 3.1.5 lacks the advisory's described worklist implementation; a
+  bounded check did not reproduce that mechanism. This is exposure evidence,
+  not proof of general ReDoS safety or an upstream advisory withdrawal.
+  No compatible patched legacy version was available in the registry check.
+  No forced Klaro downgrade or incompatible minimatch override was applied.
+  A safe fix or reviewed release disposition remains pending.
+- **Independent audit:** Codex Security refused to create a scan because the
+  `wiki` submodule is dirty. Its Desktop workflow prohibits silently starting
+  a replacement after a failed launch. A core-only source snapshot is prepared;
+  starting an audit on that new target is awaiting the owner's instruction.
+  No scan ID, independent source-review result or security approval exists.
+
+The dependency manifests and existing wiki changes are preserved. Sanitized
+logs, analyzer inventories and fixture results are in ignored
+`output/r17-validation/release-hardening/`. These are baseline quality and
+targeted wrapper checks, not completion of R1.7 or release authorization.
+
+### Findings closure follow-up — 2026-11-02
+
+The NilAway and independent-audit status above records the initial baseline;
+this follow-up supersedes those two pending entries.
+
+- The core security audit is complete and its follow-up was verified.
+- Resolved the first-party NilAway inventory across runtime code, tests and the
+  installed weather module. The original 92 distinct reports included one in
+  a third-party Go example under `node_modules`; the wrapper excludes that
+  directory explicitly. First-party tests remain in scope, with no package or
+  diagnostic suppression added for them.
+- NilAway now exits **0**, with no diagnostics on macOS or Linux. The actual
+  quality wrapper exits **0** in an isolated Linux copy: golangci-lint 2.14.0
+  reports **zero issues**, and all **69 test packages** pass. `go vet ./...`
+  also passes. Both Go and its compiler are 1.27.3.
+- Added regression coverage for missing import data, absent mutation results
+  and transaction rollback, null replay receipts, malformed consent URLs and
+  unavailable dashboard settings. Existing translation, media, OAuth and MCP
+  tests pass through the affected consumers.
+- A fixture using the real NilAway executable verifies that a first-party nil
+  dereference still makes the wrapper exit **1**, while Go tests continue.
+  The guarded normal case passes, including with a broken third-party example
+  present under the excluded directory. Only lint is stubbed in this fixture;
+  the full quality run uses the real linter.
+- Fixed a weather test setup race by waiting for startup warm-up before seeding
+  fixtures. Its stale-cache regression passes 20 repetitions. Both this change
+  and the weather form guard are in the owning site repository and installed
+  copy; those site changes still require their own commit review.
+
+Evidence is in ignored `output/r17-validation/nilaway-fixes/`. The core tests
+and analyzers ran without network access, credentials or unrelated host files.
+Dependency manifests and wiki edits are unchanged. The dependency dispositions
+and other release items above are unchanged; this closes the reported code
+findings and NilAway gate, not R1.7 as a whole. No commit, push, deployment or
+live-client acceptance was performed during these repairs.

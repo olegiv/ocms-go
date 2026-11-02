@@ -185,7 +185,10 @@ func TestSchemaConstraintsFromHumaTags(t *testing.T) {
 		t.Fatalf("schemaFor: %v", err)
 	}
 	perPage := s.Properties["per_page"]
-	if perPage == nil || perPage.Minimum == nil || *perPage.Minimum != 1 || perPage.Maximum == nil || *perPage.Maximum != 100 {
+	if perPage == nil {
+		t.Fatal("list pages schema has no per_page property")
+	}
+	if perPage.Minimum == nil || *perPage.Minimum != 1 || perPage.Maximum == nil || *perPage.Maximum != 100 {
 		t.Errorf("per_page = %+v, want minimum 1 maximum 100", perPage)
 	}
 	if string(perPage.Default) != "20" {
@@ -427,6 +430,9 @@ func TestWrapToolLogsInternalErrors(t *testing.T) {
 		return SiteInfo{}, errors.New("database exploded at /var/lib/ocms")
 	})
 	_, _, err := handler(context.Background(), requestWithIdentity(model.PermissionMCPAccess), IDInput{})
+	if err == nil {
+		t.Fatal("failing handler returned no error")
+	}
 	if strings.Contains(err.Error(), "/var/lib") {
 		t.Errorf("internal detail leaked: %v", err)
 	}

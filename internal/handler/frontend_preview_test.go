@@ -110,7 +110,10 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 			}
 		})
 	}
-	u, _ := neturl.Parse(link.URL)
+	u, err := neturl.Parse(link.URL)
+	if err != nil || u == nil {
+		t.Fatalf("parse preview URL: %v", err)
+	}
 	secret := u.Fragment
 	u.Fragment = ""
 	t.Run("resource-free landing", func(t *testing.T) {

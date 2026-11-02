@@ -166,6 +166,12 @@ func assignTranslatedTaxonomy(
 	assignFn func(translatedID int64) error,
 	warnFn func(msg string, args ...any),
 ) error {
+	if len(origIDs) == 0 {
+		return nil
+	}
+	if queries == nil {
+		return errors.New("taxonomy translation requires database queries")
+	}
 	var failures error
 	for _, origID := range origIDs {
 		translatedID, err := queries.GetTranslatedEntityID(ctx, store.GetTranslatedEntityIDParams{

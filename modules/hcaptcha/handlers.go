@@ -15,6 +15,10 @@ import (
 // handleDashboard handles GET /admin/hcaptcha - shows the hCaptcha settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	current, fromFallback := m.settingsForForm()
+	if current == nil {
+		http.Error(w, "Captcha settings are unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	displaySettings := HCaptchaViewData{

@@ -44,10 +44,6 @@ const SessionKeyAdminLang = "admin_lang"
 // blankLinesRegex matches two or more consecutive newlines (with optional whitespace between).
 var blankLinesRegex = regexp.MustCompile(`(\r?\n\s*){2,}`)
 
-// styleCloseTagRegex matches any </style closing-tag sequence case-insensitively.
-// Used by sanitizeCustomCSS to prevent breakout from an enclosing <style> element.
-var styleCloseTagRegex = regexp.MustCompile(`(?i)</style`)
-
 var (
 	footerHTMLPolicyOnce sync.Once
 	footerHTMLPolicy     *bluemonday.Policy
@@ -57,11 +53,11 @@ var (
 )
 
 // sanitizeCustomCSS returns admin-supplied stylesheet content as template.CSS
-// after stripping any </style closing-tag sequence that would let an attacker
-// break out of the surrounding <style> element. See the safeCSS template
-// helper for usage constraints.
+// after escaping HTML end-tag openers. Unlike deleting matched text, this
+// transformation cannot join surrounding bytes into a new closing tag.
+// CSS treats the escaped slash literally in strings and URLs.
 func sanitizeCustomCSS(s string) template.CSS {
-	sanitized := styleCloseTagRegex.ReplaceAllString(s, "")
+	sanitized := strings.ReplaceAll(s, "</", `<\/`)
 	return template.CSS(sanitized) //nolint:gosec // Sanitized for <style> context above
 }
 
@@ -362,7 +358,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		// safeCSS returns an admin-supplied stylesheet body as template.CSS so
 		// html/template does not apply CSS-value filtering (which replaces
 		// structured CSS like selectors and braces with "ZgotmplZ"). Before
-		// casting, any </style closing sequence is stripped case-insensitively
+		// casting, HTML end-tag openers are escaped without deleting bytes
 		// so stored values cannot break out of the enclosing <style> element
 		// (e.g. `body{}</style><script>alert(1)</script>`).
 		// SECURITY: Only use inside <style> contexts and only for admin-

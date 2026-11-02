@@ -424,6 +424,10 @@ func (m *Module) runImportJob(ctx context.Context, run jobRun) {
 	case JobFailed:
 		m.ctx.Logger.Error("import failed", "source", run.SourceName, "job_id", run.ID, "error", err)
 	case JobPartial:
+		if result == nil {
+			m.finalizeJob(ctx, run, JobFailed, nil, errors.New("partial import returned no result"))
+			return
+		}
 		m.ctx.Logger.Warn("import completed with errors",
 			"source", run.SourceName, "job_id", run.ID,
 			"errors", len(result.Errors), "imported", result.TotalImported())
@@ -761,7 +765,7 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		hasCleanupPending := errors.As(err, &cleanupPending)
-		hasRowsPending := errors.As(err, &rowsPending)
+		hasRowsPending := errors.As(err, &rowsPending) && rowsPending != nil
 		if hasCleanupPending || hasRowsPending {
 			if hasRowsPending {
 				m.ctx.Logger.Warn("some imported database rows remain tracked for retry",

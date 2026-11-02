@@ -91,8 +91,8 @@ func (m *Module) Init(ctx *module.Context) error {
 	// The hourly aggregation, the expiry cleanup, the dashboard and settings
 	// saves retry the load (see reload).
 	settings, err := m.loadSettings()
-	loaded := err == nil
-	if loaded {
+	loaded := err == nil && settings != nil
+	if err == nil && settings != nil {
 		m.reload.MarkLoaded()
 	} else {
 		ctx.Logger.Error("failed to load analytics_int settings; tracking is off until they load", "error", err)

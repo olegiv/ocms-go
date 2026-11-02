@@ -44,7 +44,12 @@ fi
 echo
 echo "== nilaway =="
 if command -v nilaway >/dev/null 2>&1; then
-  if ! nilaway ./...; then
+  # NilAway recommends first-party analysis: inferring the entire standard
+  # library and dependencies adds non-actionable diagnostics and model noise.
+  # node_modules contains third-party Go examples under our module path.
+  module_path="$(go list -m)"
+  if ! nilaway -include-pkgs="$module_path" \
+    -exclude-pkgs="$module_path/node_modules/" ./...; then
     failures=1
   fi
 else

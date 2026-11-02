@@ -82,11 +82,17 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	nonce := rand.Text()
 	h.sessionManager.Put(ctx, oauthNonce, nonce)
-	clientURL, _ := url.Parse(req.ClientID)
-	redirectURL, _ := url.Parse(req.RedirectURI)
 	renderTempl(w, r, accountviews.OAuthConsent(h.accountPageContext(r, &user, "oauth.consent_title"),
-		accountviews.ConsentData{Name: req.ClientName, ClientID: req.ClientID, ClientHost: clientURL.Host,
-			RedirectHost: redirectURL.Host, Scopes: strings.Fields(req.Scope), Nonce: nonce}))
+		accountviews.ConsentData{Name: req.ClientName, ClientID: req.ClientID, ClientHost: consentURLHost(req.ClientID),
+			RedirectHost: consentURLHost(req.RedirectURI), Scopes: strings.Fields(req.Scope), Nonce: nonce}))
+}
+
+func consentURLHost(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil {
+		return ""
+	}
+	return parsed.Host
 }
 
 func protocolErrorCode(err error) string {

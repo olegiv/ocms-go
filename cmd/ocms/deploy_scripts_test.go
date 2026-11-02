@@ -928,8 +928,10 @@ fi
 
 	// Other users must not reach the state: in /tmp, a planted .down marker
 	// or count silenced a site's alerts and restarts.
-	if info, err := os.Stat(stateDir); err != nil || info.Mode().Perm() != 0o700 {
-		t.Errorf("state directory mode = %v, %v; want 0700", info.Mode().Perm(), err)
+	if info, err := os.Stat(stateDir); err != nil || info == nil {
+		t.Fatalf("state directory is unavailable: %v", err)
+	} else if info.Mode().Perm() != 0o700 {
+		t.Errorf("state directory mode = %v; want 0700", info.Mode().Perm())
 	}
 	linked := filepath.Join(tmp, "linked-state")
 	if err := os.Symlink(stateDir, linked); err != nil {
