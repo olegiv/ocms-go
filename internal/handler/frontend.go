@@ -1551,7 +1551,7 @@ func (h *FrontendHandler) searchResultToPageView(ctx context.Context, sr service
 		Highlight: h.stripHTMLPreserveMark(sr.Highlight),
 		URL:       languagePrefixedURL(langPrefix, "/"+sr.Slug),
 		Status:    sr.Status,
-		Type:      "page",
+		Type:      sr.PageType,
 		CreatedAt: sr.CreatedAt,
 		UpdatedAt: sr.UpdatedAt,
 	}
