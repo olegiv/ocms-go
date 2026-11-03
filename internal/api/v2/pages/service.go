@@ -480,8 +480,8 @@ func (s *Service) update(ctx context.Context, a v2.Actor, id int64, in UpdatePag
 		return nil, v2.NewInternalError("Failed to load page", err)
 	}
 
-	if _, err := work.Track(ctx, id, in.BaseRevision, false); err != nil {
-		return nil, writeError(err)
+	if _, trackErr := work.Track(ctx, id, in.BaseRevision, false); trackErr != nil {
+		return nil, writeError(trackErr)
 	}
 	params := store.UpdatePageParams{
 		ID:                existing.ID,
@@ -706,8 +706,8 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		return v2.NewInternalError("Failed to load page", err)
 	}
 	work, err := pagewrite.InTx(ctx, s.db, principalFor(a), func(work *pagewrite.Tx) error {
-		if err := s.authorizeWrite(ctx, work.Q, a, WriteOptions{}); err != nil {
-			return err
+		if authorizeErr := s.authorizeWrite(ctx, work.Q, a, WriteOptions{}); authorizeErr != nil {
+			return authorizeErr
 		}
 		return work.Delete(ctx, id)
 	})
@@ -788,8 +788,8 @@ func (s *Service) List(ctx context.Context, a v2.Actor, f ListFilter) (*ListResu
 	var total int64
 	var err error
 	if f.LanguageCode != "" {
-		if _, err := s.resolveLanguageCode(ctx, &f.LanguageCode); err != nil {
-			return nil, err
+		if _, languageErr := s.resolveLanguageCode(ctx, &f.LanguageCode); languageErr != nil {
+			return nil, languageErr
 		}
 	}
 	switch {

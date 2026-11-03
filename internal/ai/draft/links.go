@@ -152,8 +152,8 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 	walk = func(parent *html.Node) error {
 		for node := parent.FirstChild; node != nil; {
 			next := node.NextSibling
-			if err := ctx.Err(); err != nil {
-				return err
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
 			}
 			if node.Type == html.ElementNode && node.Data == "a" {
 				raw := attribute(node, "href")
@@ -212,8 +212,8 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 					node.Attr = append(node.Attr, html.Attribute{Key: "rel", Val: rel})
 				}
 			}
-			if err := walk(node); err != nil {
-				return err
+			if walkErr := walk(node); walkErr != nil {
+				return walkErr
 			}
 			node = next
 		}

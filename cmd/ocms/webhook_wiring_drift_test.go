@@ -20,41 +20,7 @@ import (
 // and this fails.
 func TestRunWiresWebhooksIntoEveryWriter(t *testing.T) {
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "main.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	positions := map[string]token.Pos{} // receiver.method -> first call in run
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "run" {
-			continue
-		}
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			call, ok := n.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "startCoreScheduler" {
-				if len(call.Args) == 1 {
-					if arg, ok := call.Args[0].(*ast.Ident); ok && arg.Name == "sched" {
-						positions[name.Name] = call.Pos()
-					}
-				}
-			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			if recv, ok := sel.X.(*ast.Ident); ok {
-				name := recv.Name + "." + sel.Sel.Name
-				if _, seen := positions[name]; !seen {
-					positions[name] = call.Pos()
-				}
-			}
-			return true
-		})
-	}
+	positions := runCallPositions(t, fset)
 	for _, writer := range []string{"pagesSvc", "mediaSvc", "sched"} {
 		if _, ok := positions[writer+".SetWebhookDispatcher"]; !ok {
 			t.Errorf("run does not call %s.SetWebhookDispatcher, so its writes send no webhook events", writer)
@@ -90,5 +56,66 @@ func TestRunWiresWebhooksIntoEveryWriter(t *testing.T) {
 	}
 	if !starts {
 		t.Fatal("startCoreScheduler no longer starts its scheduler; the ordering check is vacuous")
+	}
+}
+
+// runCallPositions parses main.go and returns the position of the first call
+// in run of each receiver.method, plus startCoreScheduler(sched).
+func runCallPositions(t *testing.T, fset *token.FileSet) map[string]token.Pos {
+	t.Helper()
+	file, err := parser.ParseFile(fset, "main.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	positions := map[string]token.Pos{} // receiver.method -> first call in run
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "run" {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if name, isIdent := call.Fun.(*ast.Ident); isIdent && name.Name == "startCoreScheduler" {
+				if len(call.Args) == 1 {
+					if arg, isSchedArg := call.Args[0].(*ast.Ident); isSchedArg && arg.Name == "sched" {
+						positions[name.Name] = call.Pos()
+					}
+				}
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if recv, ok := sel.X.(*ast.Ident); ok {
+				name := recv.Name + "." + sel.Sel.Name
+				if _, seen := positions[name]; !seen {
+					positions[name] = call.Pos()
+				}
+			}
+			return true
+		})
+	}
+	if len(positions) == 0 {
+		t.Fatal("found no calls in run; the layout changed and the wiring tests are vacuous")
+	}
+	return positions
+}
+
+// TestRunWiresThePageCacheIntoEveryPageWriter fails when run does not give
+// the page cache to a writer that changes pages: deleting media rewrites the
+// pages that used it, and without the cache manager visitors kept seeing the
+// removed image (2026-11-03 review R2 P3-8).
+//
+// Bug state: drop mediaHandler.SetCacheManager or mediaSvc.SetCacheManager
+// from run and this fails.
+func TestRunWiresThePageCacheIntoEveryPageWriter(t *testing.T) {
+	positions := runCallPositions(t, token.NewFileSet())
+	for _, writer := range []string{"pagesHandler", "mediaHandler", "mediaSvc", "taxonomySvc"} {
+		if _, ok := positions[writer+".SetCacheManager"]; !ok {
+			t.Errorf("run does not call %s.SetCacheManager, so its page changes leave stale cached pages", writer)
+		}
 	}
 }

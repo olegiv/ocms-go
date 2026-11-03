@@ -36,19 +36,20 @@ func migrateSettingsColumns(db *sql.DB, up bool, wanted []settingsColumn) error 
 	if err != nil {
 		return err
 	}
+	// Close on every path, including a panic in Scan. The explicit Close below
+	// is still needed: the ALTERs must not run while the cursor is open.
+	defer func() { _ = rows.Close() }()
 	columns := map[string]bool{}
 	for rows.Next() {
 		var cid, required, primary int
 		var name, kind string
 		var fallback sql.NullString
 		if err = rows.Scan(&cid, &name, &kind, &required, &fallback, &primary); err != nil {
-			_ = rows.Close()
 			return err
 		}
 		columns[name] = true
 	}
 	if err = rows.Err(); err != nil {
-		_ = rows.Close()
 		return err
 	}
 	if err = rows.Close(); err != nil {

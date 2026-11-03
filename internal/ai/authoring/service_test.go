@@ -400,18 +400,18 @@ func TestTranslationAndEditorConcurrencyLeaveNoOrphans(t *testing.T) {
 	for range 2 {
 		go func() {
 			<-start
-			_, err := f.svc.Translate(f.ctx, f.actor, authoring.TranslateInput{RequestID: uuid.NewString(), SourcePageID: source.PageID, SourceRevision: source.Revision, LanguageCode: "ru", Draft: input("Concurrent translation").Draft})
-			results <- err
+			_, translateErr := f.svc.Translate(f.ctx, f.actor, authoring.TranslateInput{RequestID: uuid.NewString(), SourcePageID: source.PageID, SourceRevision: source.Revision, LanguageCode: "ru", Draft: input("Concurrent translation").Draft})
+			results <- translateErr
 		}()
 	}
 	close(start)
 	success := 0
 	for range 2 {
-		err := <-results
-		if err == nil {
+		resultErr := <-results
+		if resultErr == nil {
 			success++
-		} else if code(err) != "translation_exists" && code(err) != "write_retryable" {
-			t.Fatal(err)
+		} else if code(resultErr) != "translation_exists" && code(resultErr) != "write_retryable" {
+			t.Fatal(resultErr)
 		}
 	}
 	if success != 1 {

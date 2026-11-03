@@ -182,9 +182,9 @@ func (s *Service) TranslationStatus(ctx context.Context, a v2.Actor, in PageInpu
 			entry.PageID, entry.Revision, entry.Status = p.ID, p.Revision, p.Status
 			if p.Status == "draft" {
 				entry.Status = "draft"
-				access, err := s.Q.GetPageAIAccess(ctx, p.ID)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
-					return out, err
+				access, accessErr := s.Q.GetPageAIAccess(ctx, p.ID)
+				if accessErr != nil && !errors.Is(accessErr, sql.ErrNoRows) {
+					return out, accessErr
 				}
 				if access.AiEditable {
 					entry.Status = "ai_draft"

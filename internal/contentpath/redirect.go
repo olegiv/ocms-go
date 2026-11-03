@@ -121,6 +121,21 @@ func BuildRedirectTarget(rd store.Redirect, captures []string) string {
 // ErrUnsafeRedirect is returned for a redirect target rejected by the frontend.
 var ErrUnsafeRedirect = errors.New("unsafe content redirect")
 
+// UnsafeRedirectError names the rejected target and, when the target did not
+// parse, why. It matches ErrUnsafeRedirect with errors.Is.
+type UnsafeRedirectError struct {
+	Target string
+	Err    error
+}
+
+func (e *UnsafeRedirectError) Error() string { return ErrUnsafeRedirect.Error() + ": " + e.Target }
+
+// Is reports whether target is ErrUnsafeRedirect.
+func (e *UnsafeRedirectError) Is(target error) bool { return target == ErrUnsafeRedirect }
+
+// Unwrap returns the parse error, if any.
+func (e *UnsafeRedirectError) Unwrap() error { return e.Err }
+
 // FirstRedirect preserves database ordering, query propagation and private-route exclusions.
 func FirstRedirect(redirects []store.Redirect, path, query string) (string, int, bool, error) {
 	if util.IsPrivateRoutePath(path) {
@@ -141,7 +156,7 @@ func FirstRedirect(redirects []store.Redirect, path, query string) (string, int,
 		}
 		parsed, err := url.Parse(strings.ReplaceAll(target, "\\", "/"))
 		if err != nil || parsed.Hostname() != "" {
-			return "", 0, true, ErrUnsafeRedirect
+			return "", 0, true, &UnsafeRedirectError{Target: target, Err: err}
 		}
 		return parsed.String(), int(rd.StatusCode), true, nil
 	}

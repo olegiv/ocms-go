@@ -4,9 +4,11 @@
 package handler
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -43,7 +45,7 @@ func enableTestOAuth(t *testing.T, env *mfaTestEnv) url.Values {
 		t.Fatal(err)
 	}
 	up, _, _ := strings.Cut(string(migration), "-- +goose Down")
-	if _, err := env.db.Exec(up); err != nil {
+	if _, err = env.db.Exec(up); err != nil {
 		t.Fatal(err)
 	}
 	s, err := oauth.New(env.db, oauth.Options{Issuer: "https://cms.test", AllowDCR: true})
@@ -142,8 +144,8 @@ func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {
 		t.Fatalf("old session bypassed fresh login: %d", rr.Code)
 	}
 	cookie = sessionCookie(t, rr, env.sm)
-	if rr := authRequest(env.router, http.MethodGet, RouteLogin, nil, cookie); rr.Code != 200 {
-		t.Fatalf("fresh login form=%d", rr.Code)
+	if formRR := authRequest(env.router, http.MethodGet, RouteLogin, nil, cookie); formRR.Code != 200 {
+		t.Fatalf("fresh login form=%d", formRR.Code)
 	}
 	// The existing mfa_verified bit and a password-only attempt are insufficient.
 	rr = authRequest(env.router, http.MethodPost, RouteLogin, url.Values{"email": {user.Email}, "password": {mfaTestPassword}}, cookie)
@@ -151,7 +153,7 @@ func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {
 		t.Fatal("OAuth sign-in skipped second factor")
 	}
 	cookie = sessionCookie(t, rr, env.sm)
-	if rr := authRequest(env.router, http.MethodGet, target, nil, cookie); rr.Header().Get("Location") != RouteLogin {
+	if pendingRR := authRequest(env.router, http.MethodGet, target, nil, cookie); pendingRR.Header().Get("Location") != RouteLogin {
 		t.Fatal("pending MFA reached consent")
 	}
 	// Enrollment used period -1, the first login period 0; use period +1 now.
@@ -176,7 +178,7 @@ func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {
 		t.Fatal("rendered consent token differs from the session token")
 	}
 	bad := url.Values{"consent_token": {"wrong"}, "decision": {"allow"}}
-	if rr := authRequest(env.router, http.MethodPost, "/oauth/authorize", bad, cookie); rr.Code != 403 {
+	if badRR := authRequest(env.router, http.MethodPost, "/oauth/authorize", bad, cookie); badRR.Code != 403 {
 		t.Fatal("bad consent nonce accepted")
 	}
 	form := url.Values{"consent_token": {nonce}, "decision": {"allow"}, "redirect_uri": {"https://attacker.test"}, "scope": {"pages:write"}}
@@ -196,7 +198,7 @@ func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {
 		t.Fatalf("consent response status=%d (invalid redirect)", rr.Code)
 	}
 	cookie = sessionCookie(t, rr, env.sm)
-	if rr := authRequest(env.router, http.MethodPost, "/oauth/authorize", form, cookie); rr.Code != 403 {
+	if reuseRR := authRequest(env.router, http.MethodPost, "/oauth/authorize", form, cookie); reuseRR.Code != 403 {
 		t.Fatal("consent nonce reused")
 	}
 	var consented, consentedScopes string
@@ -272,5 +274,56 @@ func TestOAuthConsentDenialPublicRoleAndUnregisteredRedirect(t *testing.T) {
 				t.Fatal("unregistered URI received redirect")
 			}
 		})
+	}
+}
+
+// TestRevokeOAuthGrantReportsAConnectionThatIsNotTheAccounts pins R1 P3-5: a
+// revoke of a connection that does not exist, or belongs to another account,
+// used to look like a success, and a storage failure was logged without its
+// cause. The first now redirects with an error message and leaves the other
+// account's connection alone; the second is a 500 whose log carries the error.
+func TestRevokeOAuthGrantReportsAConnectionThatIsNotTheAccounts(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	enableTestOAuth(t, env)
+	owner := env.createUser(t, model.RoleEditor)
+	other := env.createUser(t, model.RoleAdmin)
+	if _, err := env.db.Exec(`INSERT INTO oauth_clients (id, name, redirect_uris, source, expires_at) VALUES ('client', 'Client', '[]', 'dcr', 9999999999)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.db.Exec(`INSERT INTO oauth_grants (id, user_id, client_id, scopes, resource, session_version, created_at, expires_at)
+		VALUES ('foreign-grant', ?, 'client', 'mcp:access', 'https://cms.test/api/mcp', 0, 1, 9999999999)`, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	cookie, _ := env.signInWithPassword(t, owner)
+
+	for name, grantID := range map[string]string{"unknown": "no-such-grant", "another account's": "foreign-grant"} {
+		rr := authRequest(env.router, http.MethodPost, "/account/security/oauth/revoke", url.Values{"grant_id": {grantID}}, cookie)
+		if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != RouteAccountSecurity {
+			t.Fatalf("%s grant: status=%d location=%q, want a redirect to the security page", name, rr.Code, rr.Header().Get("Location"))
+		}
+		flashed := env.session(t, sessionCookie(t, rr, env.sm))
+		if flashed("flash_type") != "error" || flashed("flash") == "" {
+			t.Fatalf("%s grant: revoke was reported as a success (flash %v %v)", name, flashed("flash_type"), flashed("flash"))
+		}
+	}
+	var revoked int64
+	if err := env.db.QueryRow(`SELECT revoked_at FROM oauth_grants WHERE id = 'foreign-grant'`).Scan(&revoked); err != nil || revoked != 0 {
+		t.Fatalf("another account's connection was revoked: revoked_at=%d err=%v", revoked, err)
+	}
+
+	// A storage failure is an internal error, and its cause is logged.
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(previous)
+	if _, err := env.db.Exec(`ALTER TABLE oauth_grants RENAME TO oauth_grants_gone`); err != nil {
+		t.Fatal(err)
+	}
+	rr := authRequest(env.router, http.MethodPost, "/account/security/oauth/revoke", url.Values{"grant_id": {"foreign-grant"}}, cookie)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("storage failure status=%d, want 500", rr.Code)
+	}
+	if !strings.Contains(logs.String(), "oauth_grants") || !strings.Contains(logs.String(), "error=") {
+		t.Fatalf("the revoke failure was logged without its error: %q", logs.String())
 	}
 }

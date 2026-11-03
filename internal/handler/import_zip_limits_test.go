@@ -94,7 +94,7 @@ func TestImportZipMetadataLimitsAcrossPreviewAndStagedImport(t *testing.T) {
 				t.Fatal(err)
 			}
 			h := NewImportExportHandler(db, renderer, sm)
-			if _, err := h.extractExportDataFromZip(archive); err == nil {
+			if _, extractErr := h.extractExportDataFromZip(archive); extractErr == nil {
 				t.Fatal("unsafe metadata accepted by browser reader")
 			}
 			var body bytes.Buffer

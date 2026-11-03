@@ -1276,13 +1276,7 @@ func (m *Module) deleters(collectMediaUUID func(uuid string)) []entityDeleter {
 			// ordinary way to reach this: the second reuses the account the
 			// first created, and deleting the first import then hit a foreign
 			// key error that was logged and otherwise ignored.
-			return q.CountUserOwnedContent(ctx, store.CountUserOwnedContentParams{
-				AuthorID:    id,
-				ChangedBy:   id,
-				UploadedBy:  id,
-				CreatedBy:   id,
-				CreatedBy_2: id,
-			})
+			return q.CountUserOwnedContent(ctx, id)
 		})},
 	}
 }

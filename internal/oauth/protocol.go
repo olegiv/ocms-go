@@ -215,7 +215,8 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rollback(tx)
-	ts := &tokenStore{s: s, q: s.q.WithTx(tx), clientID: client.ID, resource: s.Resource(), scope: r.PostForm.Get("scope")}
+	ts := &tokenStore{s: s, q: s.q.WithTx(tx), clientID: client.ID, resource: s.Resource(), scope: r.PostForm.Get("scope"),
+		verifier: r.PostForm.Get("code_verifier"), redirectURI: r.PostForm.Get("redirect_uri")}
 	_, engine := s.engine(ts, client)
 	gt, request, err := engine.ValidationTokenRequest(r)
 	if err != nil {

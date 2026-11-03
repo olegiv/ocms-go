@@ -164,8 +164,8 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 	var result *Page
 	replayed := false
 	work, err := pagewrite.InTx(ctx, s.db, principal, func(work *pagewrite.Tx) error {
-		if err := s.authorizeWrite(ctx, work.Q, a, opt); err != nil {
-			return err
+		if authorizeErr := s.authorizeWrite(ctx, work.Q, a, opt); authorizeErr != nil {
+			return authorizeErr
 		}
 		if request.ID != "" {
 			record, lookupErr := idempotency.Lookup(ctx, work.Q, request, time.Now().UTC(), func(entity string, id int64) error {
@@ -194,10 +194,10 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 		}
 		evidence := opt.Evidence
 		if opt.PrepareMutation != nil {
-			var err error
-			evidence, err = opt.PrepareMutation(ctx, work.Q)
-			if err != nil {
-				return err
+			var prepareErr error
+			evidence, prepareErr = opt.PrepareMutation(ctx, work.Q)
+			if prepareErr != nil {
+				return prepareErr
 			}
 		}
 		transactional := *s
@@ -216,17 +216,17 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 		if result == nil {
 			return errors.New("page mutation returned no result")
 		}
-		if stored, err := work.Q.GetPageByID(ctx, result.ID); err != nil {
-			return err
+		if stored, storedErr := work.Q.GetPageByID(ctx, result.ID); storedErr != nil {
+			return storedErr
 		} else if stored.Status == "published" || stored.ScheduledAt.Valid {
-			if err := review.ValidatePublication(ctx, work.Q, stored); err != nil {
-				if errors.Is(err, review.ErrHardValidation) {
+			if validateErr := review.ValidatePublication(ctx, work.Q, stored); validateErr != nil {
+				if errors.Is(validateErr, review.ErrHardValidation) {
 					return v2.NewValidationError(map[string]string{"body": "Draft failed publication validation"}, "Draft failed publication validation")
 				}
-				if errors.Is(err, review.ErrSiteURLRequired) {
+				if errors.Is(validateErr, review.ErrSiteURLRequired) {
 					return v2.NewError(v2.ErrConflict, "Configure the site URL before publishing AI drafts")
 				}
-				return err
+				return validateErr
 			}
 		}
 		if opt.ForceDraft {
@@ -292,22 +292,22 @@ func (s *Service) ReplayDraft(ctx context.Context, a v2.Actor, opt WriteOptions)
 	}
 	var result *Page
 	_, err = pagewrite.InTx(ctx, s.db, principalFor(a), func(work *pagewrite.Tx) error {
-		if err := s.authorizeWrite(ctx, work.Q, a, opt); err != nil {
-			return err
+		if authorizeErr := s.authorizeWrite(ctx, work.Q, a, opt); authorizeErr != nil {
+			return authorizeErr
 		}
-		record, err := idempotency.Lookup(ctx, work.Q, request, time.Now().UTC(), func(entity string, id int64) error {
+		record, lookupErr := idempotency.Lookup(ctx, work.Q, request, time.Now().UTC(), func(entity string, id int64) error {
 			if entity != "page" {
 				return v2.NewError(v2.ErrForbidden, "Invalid replay entity")
 			}
-			if _, err := work.Q.GetPageByID(ctx, id); errors.Is(err, sql.ErrNoRows) {
+			if _, readErr := work.Q.GetPageByID(ctx, id); errors.Is(readErr, sql.ErrNoRows) {
 				return idempotency.ErrExpired
-			} else if err != nil {
-				return err
+			} else if readErr != nil {
+				return readErr
 			}
 			return authorizeDraft(ctx, work.Q, a.ActingUserID(), id)
 		})
-		if err != nil || record == nil {
-			return err
+		if lookupErr != nil || record == nil {
+			return lookupErr
 		}
 		return json.Unmarshal([]byte(record.ResultJson.String), &result)
 	})
@@ -346,18 +346,17 @@ func (s *Service) authorizeWrite(ctx context.Context, q *store.Queries, a v2.Act
 	if middleware.IsDemoMode() {
 		return v2.NewError(v2.ErrForbidden, v2.DemoReadOnlyMessage)
 	}
-	if a.ActingUserID() <= 0 {
-		return v2.NewError(v2.ErrUnauthorized, "Authenticated user required")
-	}
-	user, err := q.GetUserByID(ctx, a.ActingUserID())
-	if err != nil {
-		return v2.NewError(v2.ErrUnauthorized, "Account unavailable")
-	}
-	if user.Role != model.RoleAdmin && user.Role != model.RoleEditor {
-		return v2.NewError(v2.ErrForbidden, "Editor role required")
+	// 401 for a missing account, 403 for a role that lost write access and 500
+	// for a storage fault: a failed read must not look like a bad credential.
+	if err := v2.RequireEditor(ctx, q, a); err != nil {
+		return err
 	}
 	if !opt.ForceDraft {
 		return s.requireWritePerm(a)
+	}
+	user, err := q.GetUserByID(ctx, a.ActingUserID())
+	if err != nil {
+		return v2.EditorError(err, "Failed to load account")
 	}
 	if !a.HasPermission(model.PermissionMCPAccess) || !a.HasPermission(model.PermissionMCPDrafts) {
 		return v2.NewError(v2.ErrForbidden, "mcp:access and mcp:drafts required")

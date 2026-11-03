@@ -285,8 +285,8 @@ func TestDifferentAppRequestsRaceOnOneUserDraft(t *testing.T) {
 		writers.Go(func() {
 			<-start
 			title := []string{"First app edit", "Second app edit"}[index]
-			_, err := f.svc.UpdateWith(ctx, actor, page.ID, pages.UpdatePageBody{Title: &title, BaseRevision: &page.Revision}, draftOptions())
-			results <- err
+			_, updateErr := f.svc.UpdateWith(ctx, actor, page.ID, pages.UpdatePageBody{Title: &title, BaseRevision: &page.Revision}, draftOptions())
+			results <- updateErr
 		})
 	}
 	close(start)

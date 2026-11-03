@@ -38,7 +38,7 @@ func newFixture(t testing.TB) *fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if err := store.Migrate(db); err != nil {
+	if err = store.Migrate(db); err != nil {
 		t.Fatal(err)
 	}
 	user, err := store.New(db).CreateUser(context.Background(), store.CreateUserParams{
@@ -156,7 +156,7 @@ func TestRefreshRotationScopeBindingAndDurableReuseRevocation(t *testing.T) {
 	if status != 400 || denied["error"] != "invalid_grant" {
 		t.Fatalf("replay status=%d", status)
 	}
-	if err := f.db.Close(); err != nil {
+	if err = f.db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	reopened, err := store.NewDB(f.dbPath)

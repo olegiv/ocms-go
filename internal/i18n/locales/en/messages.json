@@ -3188,6 +3188,11 @@
             "translation": "Change your own two-factor authentication on your account security page."
         },
         {
+            "id": "users.delete_owns_content",
+            "message": "This user still owns pages, media or other content and cannot be deleted.",
+            "translation": "This user still owns pages, media or other content and cannot be deleted."
+        },
+        {
             "id": "widgets.title",
             "message": "Widgets",
             "translation": "Widgets"
@@ -7716,6 +7721,11 @@
             "id": "oauth.revoke",
             "message": "Revoke access",
             "translation": "Revoke access"
+        },
+        {
+            "id": "oauth.connection_not_found",
+            "message": "That connection was not found or is no longer active.",
+            "translation": "That connection was not found or is no longer active."
         },
         {
             "id": "oauth.scope.mcp:access",

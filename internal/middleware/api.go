@@ -555,16 +555,25 @@ func RecheckAPIKeyPolicy(ctx context.Context, q *store.Queries, key store.ApiKey
 		return false, nil
 	}
 	allowed, configured, err := checkAPIKeySourcePolicy(ctx, q, key, clientIP)
+	if errors.Is(err, errAPIKeyChanged) {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
 	return allowed && (!isAPIKeySourceCIDRsRequired() || configured), nil
 }
 
+// errAPIKeyChanged is returned by checkAPIKeySourcePolicy when the key row was
+// changed or removed after the key was verified. The attempt is denied, but
+// not for lacking source CIDRs or for the client address, which is what a
+// plain "not allowed" result would be reported as.
+var errAPIKeyChanged = errors.New("API key changed while it was being authenticated")
+
 // Check the source rules and authenticated authority in one database snapshot.
 // Hash verification stays outside the transaction; an intervening permission,
-// activation, expiry or owner change rejects this attempt instead of combining
-// an old authority row with a newly widened source policy.
+// activation, expiry or owner change rejects this attempt (errAPIKeyChanged)
+// instead of combining an old authority row with a newly widened source policy.
 func checkAPIKeySourcePolicy(ctx context.Context, q *store.Queries, verified store.ApiKey, clientIP string) (bool, bool, error) {
 	queries := q
 	var transaction *sql.Tx
@@ -584,7 +593,7 @@ func checkAPIKeySourcePolicy(ctx context.Context, q *store.Queries, verified sto
 	}
 	current, err := queries.GetAPIKeyByID(ctx, verified.ID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, false, nil
+		return false, false, errAPIKeyChanged
 	}
 	if err != nil {
 		return false, false, err
@@ -592,7 +601,7 @@ func checkAPIKeySourcePolicy(ctx context.Context, q *store.Queries, verified sto
 	if current.KeyHash != verified.KeyHash || current.Permissions != verified.Permissions || current.IsActive != verified.IsActive ||
 		current.CreatedBy != verified.CreatedBy || !current.CreatedAt.Equal(verified.CreatedAt) || current.ExpiresAt.Valid != verified.ExpiresAt.Valid ||
 		current.ExpiresAt.Valid && !current.ExpiresAt.Time.Equal(verified.ExpiresAt.Time) {
-		return false, false, nil
+		return false, false, errAPIKeyChanged
 	}
 	allowed, configured, err := isAPIKeySourceAllowed(ctx, queries, verified.ID, clientIP)
 	if err != nil {
@@ -761,6 +770,17 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	}
 
 	allowed, hasSourceCIDRs, err := checkAPIKeySourcePolicy(r.Context(), queries, *matchedKey, clientIP)
+	if errors.Is(err, errAPIKeyChanged) {
+		slog.Warn("API key auth blocked: key changed while it was being authenticated",
+			"key_id", matchedKey.ID,
+			"path", r.URL.Path,
+			"ip", clientIP)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key changed while it was being authenticated; retry the request", nil)
+			return nil, true
+		}
+		return nil, false
+	}
 	if err != nil {
 		if required {
 			slog.Error("failed to load API key source CIDR allowlist", "error", err, "key_id", matchedKey.ID)

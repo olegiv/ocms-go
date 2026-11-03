@@ -47,14 +47,14 @@ func TestAuthoringPromptsResourcesAndToolParity(t *testing.T) {
 			t.Fatalf("prompt %s has no tool equivalent", def.Name)
 		}
 		args := map[string]string{"refs": fmt.Sprintf("%d:source", id), "language": "en"}
-		prompt, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{Name: def.Name, Arguments: args})
-		if err != nil {
-			t.Fatal(err)
+		prompt, promptErr := session.GetPrompt(context.Background(), &mcp.GetPromptParams{Name: def.Name, Arguments: args})
+		if promptErr != nil {
+			t.Fatal(promptErr)
 		}
 		tool := decodeResult[AuthoringResult](t, call(t, session, def.Tool, map[string]any{"task": def.Task, "language_code": "en", "references": []map[string]any{{"ref": fmt.Sprint(id), "role": "source"}}}))
-		expected, err := prompts.Render(tool.Context)
-		if err != nil {
-			t.Fatal(err)
+		expected, renderErr := prompts.Render(tool.Context)
+		if renderErr != nil {
+			t.Fatal(renderErr)
 		}
 		if len(prompt.Messages) != 1 || prompt.Messages[0].Content.(*mcp.TextContent).Text != expected || tool.PromptVersion != prompts.Version {
 			t.Fatalf("prompt/tool drift: %s", def.Name)

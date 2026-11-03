@@ -52,8 +52,8 @@ func TestTaxonomyDeletionRevisionsAssignmentsAtomically(t *testing.T) {
 				t.Fatal(err)
 			}
 			remove := func() error {
-				_, err := pagewrite.InTx(ctx, f.db, principal, func(work *pagewrite.Tx) error { return work.DeleteTerm(ctx, kind, id) })
-				return err
+				_, removeErr := pagewrite.InTx(ctx, f.db, principal, func(work *pagewrite.Tx) error { return work.DeleteTerm(ctx, kind, id) })
+				return removeErr
 			}
 			if err = remove(); err == nil {
 				t.Fatal("injected provenance failure succeeded")

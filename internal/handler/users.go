@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -780,6 +781,19 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Business rule: Cannot delete a user who still owns content. The database
+	// refuses it anyway (ON DELETE RESTRICT); say why instead of a generic error.
+	owns, err := h.userOwnsContent(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to check content owned by user", "error", err, "user_id", id)
+		h.sendDeleteError(w, "Error deleting user")
+		return
+	}
+	if owns {
+		h.sendDeleteError(w, i18n.T(h.deleteLang(r), "users.delete_owns_content"))
+		return
+	}
+
 	// Delete user
 	err = h.queries.DeleteUser(r.Context(), id)
 	if err != nil {
@@ -858,6 +872,17 @@ func (h *UsersHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		owns, err := h.userOwnsContent(r.Context(), id)
+		if err != nil {
+			slog.Error("failed to check content owned by user for bulk delete", "error", err, "user_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting user"})
+			continue
+		}
+		if owns {
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: i18n.T(h.deleteLang(r), "users.delete_owns_content")})
+			continue
+		}
+
 		if err := h.queries.DeleteUser(r.Context(), id); err != nil {
 			slog.Error("failed to bulk delete user", "error", err, "user_id", id)
 			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting user"})
@@ -873,11 +898,32 @@ func (h *UsersHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	writeBulkActionSuccess(w, deleted, failed)
 }
 
-// sendDeleteError sends an error response for delete operations.
+// userOwnsContent reports whether rows still name the user in a column that
+// restricts deleting them: pages, versions, media, API keys, webhooks,
+// scheduled tasks and the AI-access setting of a page.
+func (h *UsersHandler) userOwnsContent(ctx context.Context, id int64) (bool, error) {
+	owned, err := h.queries.CountUserOwnedContent(ctx, id)
+	return owned > 0, err
+}
+
+// deleteLang is the language of the delete refusals; tests build the handler
+// without a renderer.
+func (h *UsersHandler) deleteLang(r *http.Request) string {
+	if h.renderer == nil {
+		return i18n.GetDefaultLanguage()
+	}
+	return h.renderer.GetAdminLang(r)
+}
+
+// sendDeleteError sends an error response for delete operations. The
+// message is the plain-text body, which the admin's htmx error handler shows
+// as the toast; a header could not carry translated (non-ASCII) text, and no
+// listener read the former showToast trigger.
 func (h *UsersHandler) sendDeleteError(w http.ResponseWriter, message string) {
 	w.Header().Set("HX-Reswap", "none")
-	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusBadRequest)
+	_, _ = io.WriteString(w, message)
 }
 
 // MaxBioLength is the maximum allowed length for a user bio.

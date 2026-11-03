@@ -47,42 +47,42 @@ func TestSeededGuidanceLanguageOverridesAndAdministratorBoundary(t *testing.T) {
 		t.Fatalf("seeded presets %+v %v", presets, err)
 	}
 	for _, id := range []int64{0, editor.ID} {
-		if err := service.SaveGuide(ctx, id, "", "Changed policy"); !errors.Is(err, editorial.ErrForbidden) {
+		if err = service.SaveGuide(ctx, id, "", "Changed policy"); !errors.Is(err, editorial.ErrForbidden) {
 			t.Fatalf("non-admin changed guidance: %v", err)
 		}
 	}
-	if err := service.SaveGuide(ctx, admin.ID, "de", "Eine lokale Richtlinie."); err != nil {
+	if err = service.SaveGuide(ctx, admin.ID, "de", "Eine lokale Richtlinie."); err != nil {
 		t.Fatal(err)
 	}
 	guide, err = service.Guide(ctx, "de")
 	if err != nil || guide.Inherited || guide.Body != "Eine lokale Richtlinie." {
 		t.Fatalf("override not used: %+v %v", guide, err)
 	}
-	if err := service.SaveGuide(ctx, admin.ID, "de", ""); err != nil {
+	if err = service.SaveGuide(ctx, admin.ID, "de", ""); err != nil {
 		t.Fatal(err)
 	}
 	if guide, err = service.Guide(ctx, "de"); err != nil || !guide.Inherited {
 		t.Fatalf("fallback not restored: %+v %v", guide, err)
 	}
-	if err := service.SavePreset(ctx, admin.ID, "de", "blog-post", "Beitrag", "Eine klare Gliederung."); err != nil {
+	if err = service.SavePreset(ctx, admin.ID, "de", "blog-post", "Beitrag", "Eine klare Gliederung."); err != nil {
 		t.Fatal(err)
 	}
 	presets, err = service.Presets(ctx, "de")
 	if err != nil || presets[0].Name != "Beitrag" || presets[0].SourceLanguageCode != "de" {
 		t.Fatalf("preset override %+v %v", presets, err)
 	}
-	if err := service.SavePreset(ctx, admin.ID, "de", "blog-post", "", ""); err != nil {
+	if err = service.SavePreset(ctx, admin.ID, "de", "blog-post", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if presets, err = service.Presets(ctx, "de"); err != nil || presets[0].SourceLanguageCode != "" {
 		t.Fatalf("preset fallback %+v %v", presets, err)
 	}
 	for _, tc := range []struct{ language, body string }{{"", ""}, {"", strings.Repeat("a", 8001)}, {"xx", "Unknown language"}} {
-		if err := service.SaveGuide(ctx, admin.ID, tc.language, tc.body); !errors.Is(err, editorial.ErrInvalid) {
+		if err = service.SaveGuide(ctx, admin.ID, tc.language, tc.body); !errors.Is(err, editorial.ErrInvalid) {
 			t.Fatalf("invalid guide accepted: %v", err)
 		}
 	}
-	if err := service.SavePreset(ctx, admin.ID, "", "unknown", "Unknown", "Instructions"); !errors.Is(err, editorial.ErrInvalid) {
+	if err = service.SavePreset(ctx, admin.ID, "", "unknown", "Unknown", "Instructions"); !errors.Is(err, editorial.ErrInvalid) {
 		t.Fatalf("unknown preset accepted: %v", err)
 	}
 	if _, err = db.Exec("UPDATE users SET role='editor' WHERE id=?", admin.ID); err != nil {

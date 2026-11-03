@@ -63,8 +63,8 @@ func ValidatePublication(ctx context.Context, q *store.Queries, page store.Page)
 	origin := validation.SiteURL
 	if origin == "" && historyErr == nil {
 		var saved Validation
-		if err := json.Unmarshal([]byte(original.ValidatedJson), &saved); err != nil {
-			return err
+		if unmarshalErr := json.Unmarshal([]byte(original.ValidatedJson), &saved); unmarshalErr != nil {
+			return unmarshalErr
 		}
 		origin = saved.SiteURL
 	}
@@ -112,9 +112,9 @@ func ValidatePublication(ctx context.Context, q *store.Queries, page store.Page)
 		return err
 	}
 	for _, category := range categories {
-		ok, err := options.Resolver.Category(ctx, category.ID, page.LanguageCode)
-		if err != nil {
-			return err
+		ok, categoryErr := options.Resolver.Category(ctx, category.ID, page.LanguageCode)
+		if categoryErr != nil {
+			return categoryErr
 		}
 		if !ok {
 			return ErrHardValidation

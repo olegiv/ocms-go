@@ -104,36 +104,42 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 	raw := base64.RawURLEncoding.EncodeToString(secret)
 	var result Link
 	_, err = pagewrite.InQueriesTx(ctx, s.Q, principal, func(work *pagewrite.Tx) error {
-		if err := pagewrite.RequireEditor(ctx, work.Q, principal.UserID); err != nil {
-			return ErrUnavailable
+		if editorErr := pagewrite.RequireEditor(ctx, work.Q, principal.UserID); editorErr != nil {
+			if errors.Is(editorErr, pagewrite.ErrEditorRequired) {
+				return ErrUnavailable
+			}
+			return fmt.Errorf("check issuer role: %w", editorErr)
 		}
 		if authorize != nil {
-			if err := authorize(ctx, work.Q); err != nil {
-				return err
+			if authorizeErr := authorize(ctx, work.Q); authorizeErr != nil {
+				return authorizeErr
 			}
 		}
-		user, err := work.Q.GetUserByID(ctx, principal.UserID)
-		if err != nil {
-			return err
+		user, workErr := work.Q.GetUserByID(ctx, principal.UserID)
+		if workErr != nil {
+			return workErr
 		}
-		page, err := work.Q.GetPageByID(ctx, pageID)
-		if err != nil {
+		page, workErr := work.Q.GetPageByID(ctx, pageID)
+		if workErr != nil {
+			return unavailable(workErr, "load page")
+		}
+		access, workErr := work.Q.GetPageAIAccess(ctx, pageID)
+		if workErr != nil {
+			return unavailable(workErr, "load page AI access")
+		}
+		if !access.AiEditable || page.AuthorID != principal.UserID || page.Status != "draft" || page.ScheduledAt.Valid {
 			return ErrUnavailable
 		}
-		access, err := work.Q.GetPageAIAccess(ctx, pageID)
-		if err != nil || !access.AiEditable || page.AuthorID != principal.UserID || page.Status != "draft" || page.ScheduledAt.Valid {
-			return ErrUnavailable
+		if _, workErr = Load(ctx, work.Q, pageID, revision); workErr != nil {
+			return workErr
 		}
-		if _, err = Load(ctx, work.Q, pageID, revision); err != nil {
-			return err
+		count, workErr := work.Q.CountActivePreviewLinks(ctx, store.CountActivePreviewLinksParams{CreatedBy: user.ID, ExpiresAt: now.Unix()})
+		if workErr != nil {
+			return workErr
 		}
-		count, err := work.Q.CountActivePreviewLinks(ctx, store.CountActivePreviewLinksParams{CreatedBy: user.ID, ExpiresAt: now.Unix()})
-		if err != nil {
-			return err
-		}
-		issued, err := work.Q.CountIssuedPreviewLinks(ctx, store.CountIssuedPreviewLinksParams{CreatedBy: user.ID, CreatedAt: now.Add(-time.Hour).Unix()})
-		if err != nil {
-			return err
+		issued, workErr := work.Q.CountIssuedPreviewLinks(ctx, store.CountIssuedPreviewLinksParams{CreatedBy: user.ID, CreatedAt: now.Add(-time.Hour).Unix()})
+		if workErr != nil {
+			return workErr
 		}
 		if issued >= MaxIssuedPerHour {
 			return ErrLimit
@@ -145,7 +151,7 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 		if principal.OAuthGrantID != "" {
 			grant, e := work.Q.GetOAuthGrant(ctx, principal.OAuthGrantID)
 			if e != nil {
-				return ErrUnavailable
+				return unavailable(e, "load issuing grant")
 			}
 			if until := time.Unix(grant.ExpiresAt, 0); until.Before(expires) {
 				expires = until
@@ -154,38 +160,48 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 		if principal.APIKeyID > 0 {
 			key, e := work.Q.GetAPIKeyByID(ctx, principal.APIKeyID)
 			if e != nil {
-				return ErrUnavailable
+				return unavailable(e, "load issuing key")
 			}
 			if key.ExpiresAt.Valid && key.ExpiresAt.Time.Before(expires) {
 				expires = key.ExpiresAt.Time
 			}
 		}
-		created, err := work.Q.CreatePreviewLink(ctx, store.CreatePreviewLinkParams{TokenHash: hashToken(raw), PageID: pageID, Revision: revision, CreatedBy: user.ID, SessionVersion: user.SessionVersion,
+		created, workErr := work.Q.CreatePreviewLink(ctx, store.CreatePreviewLinkParams{TokenHash: hashToken(raw), PageID: pageID, Revision: revision, CreatedBy: user.ID, SessionVersion: user.SessionVersion,
 			IssuingGrantID: sql.NullString{String: principal.OAuthGrantID, Valid: principal.OAuthGrantID != ""}, IssuingKeyID: sql.NullInt64{Int64: principal.APIKeyID, Valid: principal.APIKeyID > 0}, CreatedAt: now.Unix(), ExpiresAt: expires.Unix()})
-		if err != nil {
-			return err
+		if workErr != nil {
+			return workErr
 		}
 		// Validate the stored grant/key binding as well as the adapter's checks.
-		if _, err = work.Q.GetPreviewLinkByHash(ctx, store.GetPreviewLinkByHashParams{TokenHash: created.TokenHash, ExpiresAt: now.Unix()}); err != nil {
-			return ErrUnavailable
+		if _, workErr = work.Q.GetPreviewLinkByHash(ctx, store.GetPreviewLinkByHashParams{TokenHash: created.TokenHash, ExpiresAt: now.Unix()}); workErr != nil {
+			return unavailable(workErr, "check preview link binding")
 		}
 		// Issuing a bearer link is recorded with the issuance itself: no link
 		// exists without its audit event. The token never enters the event.
-		metadata, err := json.Marshal(map[string]any{"page_id": pageID, "revision": revision, "link_id": created.ID,
+		metadata, workErr := json.Marshal(map[string]any{"page_id": pageID, "revision": revision, "link_id": created.ID,
 			"expires_at": time.Unix(created.ExpiresAt, 0).UTC().Format(time.RFC3339), "transport": principal.Transport,
 			"oauth_grant_id": principal.OAuthGrantID, "api_key_id": principal.APIKeyID})
-		if err != nil {
-			return err
+		if workErr != nil {
+			return workErr
 		}
-		if _, err = work.Q.CreateEvent(ctx, store.CreateEventParams{Level: model.EventLevelInfo, Category: model.EventCategoryPage,
-			Message: "Preview share link created", UserID: sql.NullInt64{Int64: user.ID, Valid: true}, Metadata: string(metadata), CreatedAt: now}); err != nil {
-			return fmt.Errorf("record preview link: %w", err)
+		if _, workErr = work.Q.CreateEvent(ctx, store.CreateEventParams{Level: model.EventLevelInfo, Category: model.EventCategoryPage,
+			Message: "Preview share link created", UserID: sql.NullInt64{Int64: user.ID, Valid: true}, Metadata: string(metadata), CreatedAt: now}); workErr != nil {
+			return fmt.Errorf("record preview link: %w", workErr)
 		}
 		base.Path, base.RawPath, base.Fragment = SharePath, "", raw
 		result = Link{PageID: pageID, Revision: revision, URL: base.String(), ExpiresAt: time.Unix(created.ExpiresAt, 0).UTC(), Warning: "Anyone holding this link can read this revision until it expires or is revoked."}
 		return nil
 	})
 	return result, err
+}
+
+// unavailable keeps a missing row as ErrUnavailable and returns any other
+// lookup error as a fault, so a storage problem is logged and retried rather
+// than reported as a draft that cannot be shared (2026-11-03 review S11).
+func unavailable(err error, what string) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUnavailable
+	}
+	return fmt.Errorf("%s: %w", what, err)
 }
 
 // Resolve never returns a token or its URL and always checks current lifecycle/issuer state.

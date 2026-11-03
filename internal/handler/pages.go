@@ -1179,11 +1179,11 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	work, err := pagewrite.InTx(r.Context(), h.db, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
-		if err := pagewrite.RequireEditor(r.Context(), work.Q, middleware.GetUserID(r)); err != nil {
-			return err
+		if editorErr := pagewrite.RequireEditor(r.Context(), work.Q, middleware.GetUserID(r)); editorErr != nil {
+			return editorErr
 		}
-		if _, err := work.Track(r.Context(), id, base, true); err != nil {
-			return err
+		if _, trackErr := work.Track(r.Context(), id, base, true); trackErr != nil {
+			return trackErr
 		}
 		// Both updates apply only while the page still has the status read
 		// above, so a toggle racing the scheduler cannot publish it twice.
@@ -1194,8 +1194,8 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 				UpdatedAt: now,
 			})
 		} else {
-			if err := review.ValidatePublication(r.Context(), work.Q, page); err != nil {
-				return err
+			if validateErr := review.ValidatePublication(r.Context(), work.Q, page); validateErr != nil {
+				return validateErr
 			}
 			updatedPage, err = work.Q.PublishUnpublishedPage(r.Context(), store.PublishUnpublishedPageParams{
 				ID:          id,
@@ -1372,24 +1372,24 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	work, err := pagewrite.InTx(r.Context(), h.db, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
-		if err := pagewrite.RequireEditor(r.Context(), work.Q, middleware.GetUserID(r)); err != nil {
-			return err
+		if editorErr := pagewrite.RequireEditor(r.Context(), work.Q, middleware.GetUserID(r)); editorErr != nil {
+			return editorErr
 		}
-		current, err := work.Track(r.Context(), id, base, true)
-		if err != nil {
-			return err
+		current, workErr := work.Track(r.Context(), id, base, true)
+		if workErr != nil {
+			return workErr
 		}
-		recorded, err := work.Q.GetPageVersion(r.Context(), versionId)
-		if err != nil {
-			return err
+		recorded, workErr := work.Q.GetPageVersion(r.Context(), versionId)
+		if workErr != nil {
+			return workErr
 		}
-		if err = work.Restore(r.Context(), current, recorded, normalizedBody); err != nil {
-			return err
+		if workErr = work.Restore(r.Context(), current, recorded, normalizedBody); workErr != nil {
+			return workErr
 		}
 		if current.Status == "published" || current.ScheduledAt.Valid {
-			restored, err := work.Q.GetPageByID(r.Context(), id)
-			if err != nil {
-				return err
+			restored, restoredErr := work.Q.GetPageByID(r.Context(), id)
+			if restoredErr != nil {
+				return restoredErr
 			}
 			return review.ValidatePublication(r.Context(), work.Q, restored)
 		}
@@ -1467,17 +1467,17 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	}
 	var translatedPage store.Page
 	work, err := pagewrite.InTx(r.Context(), h.db, provenance.Principal{UserID: userID, Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
-		if err := pagewrite.RequireEditor(r.Context(), work.Q, userID); err != nil {
-			return err
+		if editorErr := pagewrite.RequireEditor(r.Context(), work.Q, userID); editorErr != nil {
+			return editorErr
 		}
-		if _, err := work.Track(r.Context(), id, base, true); err != nil {
-			return err
+		if _, trackErr := work.Track(r.Context(), id, base, true); trackErr != nil {
+			return trackErr
 		}
-		if err := pagewrite.SlugAvailable(r.Context(), work.Q, translatedSlug, 0); err != nil {
-			return err
+		if slugErr := pagewrite.SlugAvailable(r.Context(), work.Q, translatedSlug, 0); slugErr != nil {
+			return slugErr
 		}
-		var err error
-		translatedPage, err = work.Q.CreatePage(r.Context(), store.CreatePageParams{
+		var createErr error
+		translatedPage, createErr = work.Q.CreatePage(r.Context(), store.CreatePageParams{
 			Title:             sourcePage.Title, // Keep same title (user will translate)
 			Slug:              translatedSlug,
 			Body:              "",              // Empty body for translation
@@ -1503,8 +1503,8 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 			VideoUrl:          sourcePage.VideoUrl,   // Inherit video from source
 			VideoTitle:        sourcePage.VideoTitle, // Inherit video title from source
 		})
-		if err != nil {
-			return err
+		if createErr != nil {
+			return createErr
 		}
 		work.Created(translatedPage)
 		return work.LinkTranslation(r.Context(), id, tc.TargetLang.Code, translatedPage.ID)
@@ -2022,20 +2022,4 @@ func (h *PagesHandler) normalizePageBodyForStorage(raw string) string {
 		return raw
 	}
 	return security.SanitizePageHTML(raw)
-}
-
-// savePageAliases saves URL aliases for a page from form values.
-// Aliases can be simple slugs or path-like strings with slashes (e.g., "blog/post/55").
-func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliases []string) {
-	for _, raw := range aliases {
-		alias := strings.TrimSpace(raw)
-		if alias == "" || !util.IsValidAlias(alias) {
-			continue
-		}
-		if _, err := pagewrite.AddImportedAlias(ctx, h.queries, pageID, alias, time.Now().UTC()); err != nil {
-			slog.Warn("page alias was not saved", "error", err, "page_id", pageID)
-			continue
-		}
-		h.invalidatePageCache(pageID)
-	}
 }

@@ -54,7 +54,7 @@ func TestAPIKeyAuthCannotMixOldPermissionsWithNewSourcePolicy(t *testing.T) {
 			close(resume)
 		}
 	}()
-	if err := store.Migrate(db); err != nil {
+	if err = store.Migrate(db); err != nil {
 		t.Fatal(err)
 	}
 	user := createTestAdminUser(t, db)

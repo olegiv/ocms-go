@@ -1044,8 +1044,8 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 		return fmt.Errorf("failed to get tracked pages: %w", err)
 	}
 	for _, id := range pageIDs {
-		if err := pagewrite.DeleteFromQueries(ctx, queries, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete page", "id", id, "error", err)
+		if deleteErr := pagewrite.DeleteFromQueries(ctx, queries, id); deleteErr != nil {
+			m.ctx.Logger.Warn("failed to delete page", "id", id, "error", deleteErr)
 		}
 	}
 

@@ -37,11 +37,11 @@ func TestAPIKeySourceReplacementCancellationPreservesCallerTransaction(t *testin
 		t.Fatal(err)
 	}
 	old := []string{"198.51.100.4/32"}
-	if err := q.ReplaceAPIKeySourceCIDRs(parent, key.ID, old); err != nil {
-		t.Fatal(err)
+	if replaceErr := q.ReplaceAPIKeySourceCIDRs(parent, key.ID, old); replaceErr != nil {
+		t.Fatal(replaceErr)
 	}
-	if _, err := db.Exec(`CREATE TRIGGER cancel_source_insert BEFORE INSERT ON api_key_source_cidrs BEGIN SELECT ` + function + `(); END`); err != nil {
-		t.Fatal(err)
+	if _, execErr := db.Exec(`CREATE TRIGGER cancel_source_insert BEFORE INSERT ON api_key_source_cidrs BEGIN SELECT ` + function + `(); END`); execErr != nil {
+		t.Fatal(execErr)
 	}
 	tx, err := db.BeginTx(parent, nil)
 	if err != nil {
@@ -127,33 +127,33 @@ func TestAPIKeySourceReplacementRollsBackFailuresAndRespectsCallerTransaction(t 
 		t.Fatal(err)
 	}
 	old := []string{"198.51.100.2/32"}
-	if err := q.ReplaceAPIKeySourceCIDRs(ctx, key.ID, old); err != nil {
-		t.Fatal(err)
+	if replaceErr := q.ReplaceAPIKeySourceCIDRs(ctx, key.ID, old); replaceErr != nil {
+		t.Fatal(replaceErr)
 	}
-	if _, err := db.Exec(`CREATE TRIGGER reject_source BEFORE INSERT ON api_key_source_cidrs WHEN NEW.cidr = 'reject' BEGIN SELECT RAISE(ABORT, 'test insertion failure'); END`); err != nil {
-		t.Fatal(err)
+	if _, execErr := db.Exec(`CREATE TRIGGER reject_source BEFORE INSERT ON api_key_source_cidrs WHEN NEW.cidr = 'reject' BEGIN SELECT RAISE(ABORT, 'test insertion failure'); END`); execErr != nil {
+		t.Fatal(execErr)
 	}
 	for _, inCallerTransaction := range []bool{false, true} {
 		t.Run(fmt.Sprintf("caller_transaction_%v", inCallerTransaction), func(t *testing.T) {
 			writer := q
 			if inCallerTransaction {
-				tx, err := db.BeginTx(ctx, nil)
-				if err != nil {
-					t.Fatal(err)
+				tx, beginErr := db.BeginTx(ctx, nil)
+				if beginErr != nil {
+					t.Fatal(beginErr)
 				}
 				defer func() { _ = tx.Rollback() }()
 				writer = q.WithTx(tx)
-				if err := writer.ReplaceAPIKeySourceCIDRs(ctx, key.ID, []string{"203.0.113.2/32", "reject"}); err == nil {
+				if replaceErr := writer.ReplaceAPIKeySourceCIDRs(ctx, key.ID, []string{"203.0.113.2/32", "reject"}); replaceErr == nil {
 					t.Fatal("insertion failure was ignored")
 				}
-				if err := tx.Commit(); err != nil {
-					t.Fatal(err)
+				if commitErr := tx.Commit(); commitErr != nil {
+					t.Fatal(commitErr)
 				}
-			} else if err := writer.ReplaceAPIKeySourceCIDRs(ctx, key.ID, []string{"203.0.113.2/32", "reject"}); err == nil {
+			} else if replaceErr := writer.ReplaceAPIKeySourceCIDRs(ctx, key.ID, []string{"203.0.113.2/32", "reject"}); replaceErr == nil {
 				t.Fatal("insertion failure was ignored")
 			}
-			if got, err := q.ListAPIKeySourceCIDRs(ctx, key.ID); err != nil || !reflect.DeepEqual(got, old) {
-				t.Fatalf("failed replacement changed policy: %v, %v", got, err)
+			if got, listErr := q.ListAPIKeySourceCIDRs(ctx, key.ID); listErr != nil || !reflect.DeepEqual(got, old) {
+				t.Fatalf("failed replacement changed policy: %v, %v", got, listErr)
 			}
 		})
 	}

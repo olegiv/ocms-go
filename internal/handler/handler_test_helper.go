@@ -252,6 +252,18 @@ func testDB(t *testing.T) *sql.DB {
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 
+		CREATE TABLE scheduled_tasks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			url TEXT NOT NULL,
+			schedule TEXT NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			timeout_seconds INTEGER NOT NULL DEFAULT 30,
+			created_by INTEGER REFERENCES users(id),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
 		CREATE TABLE webhook_deliveries (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,

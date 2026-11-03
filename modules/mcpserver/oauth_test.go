@@ -77,7 +77,7 @@ func oauthToken(t *testing.T, s *oauth.Service, userID int64, scopes string) (st
 	var body struct {
 		Access string `json:"access_token"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+	if err = json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
 	p, err := s.VerifyAccess(t.Context(), body.Access)

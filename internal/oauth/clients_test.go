@@ -273,7 +273,7 @@ func TestPreRegisteredClientSurvivesMetadataFetchFailure(t *testing.T) {
 	service.clients.http.Transport = denyFetch
 	f.values.Set("client_id", client.ID)
 	f.values.Set("redirect_uri", client.Redirects[0])
-	if _, err := service.Prepare(t.Context(), f.values); err == nil || calls.Load() != 1 {
+	if _, err = service.Prepare(t.Context(), f.values); err == nil || calls.Load() != 1 {
 		t.Fatal("failed live discovery did not fail closed")
 	}
 	raw, err := json.Marshal([]registeredClient{client})
@@ -297,10 +297,10 @@ func TestPreRegisteredClientSurvivesMetadataFetchFailure(t *testing.T) {
 	if status != http.StatusOK || access(next) == "" || calls.Load() != 1 {
 		t.Fatalf("pinned refresh failed or performed live discovery: status=%d calls=%d", status, calls.Load())
 	}
-	if err := f.s.RevokeGrant(t.Context(), f.user.ID, p.GrantID); err != nil {
+	if err = f.s.RevokeGrant(t.Context(), f.user.ID, p.GrantID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.s.VerifyAccess(t.Context(), access(next)); err == nil {
+	if _, err = f.s.VerifyAccess(t.Context(), access(next)); err == nil {
 		t.Fatal("pinned client token survived grant revocation")
 	}
 	options.PreRegisteredClients = ""

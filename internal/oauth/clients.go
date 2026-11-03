@@ -166,8 +166,8 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 		redirects, _ := json.Marshal(client.Redirects)
 		if err != nil || cached.Source != "cimd" || cached.Name != client.Name ||
 			cached.RedirectUris != string(redirects) || cached.ExpiresAt <= c.service.now().Unix() {
-			if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
-				return registeredClient{}, storageProblem(ctx, "failed to refresh pre-registered OAuth client", err, "client_id", id)
+			if saveErr := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); saveErr != nil {
+				return registeredClient{}, storageProblem(ctx, "failed to refresh pre-registered OAuth client", saveErr, "client_id", id)
 			}
 		}
 		return client, nil
@@ -431,8 +431,8 @@ func (s *Service) saveClient(ctx context.Context, c registeredClient, source str
 		return err
 	}
 	if isNew && count >= 1000 {
-		if err := q.DeleteExpiredUnusedOAuthClients(ctx, s.now().Unix()); err != nil {
-			return err
+		if deleteErr := q.DeleteExpiredUnusedOAuthClients(ctx, s.now().Unix()); deleteErr != nil {
+			return deleteErr
 		}
 		count, err = q.CountOAuthClientsBySource(ctx, source)
 		if err != nil || count >= 1000 {

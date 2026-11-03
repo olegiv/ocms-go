@@ -6,6 +6,7 @@ package middleware
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -90,7 +91,12 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 		}
 		target, status, matched, err := contentpath.FirstRedirect(rm.getRedirects(), r.URL.Path, r.URL.RawQuery)
 		if err != nil {
-			slog.Warn("blocked unsafe redirect target", "source", r.URL.Path)
+			attrs := []any{"source", r.URL.Path, "error", err}
+			var unsafe *contentpath.UnsafeRedirectError
+			if errors.As(err, &unsafe) {
+				attrs = append(attrs, "target", unsafe.Target)
+			}
+			slog.Warn("blocked unsafe redirect target", attrs...)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

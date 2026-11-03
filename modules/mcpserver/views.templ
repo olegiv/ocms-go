@@ -38,8 +38,6 @@ type DashboardData struct {
 	ClaudeCodeCommand string
 	ClientConfigJSON  string
 	Tools             []ToolRow
-	Keys              []KeyRow
-	KeysError         bool
 	OAuthEnabled      bool
 	DraftToolsEnabled bool
 	ExternalLinks     string
@@ -70,18 +68,6 @@ type ToolRow struct {
 	Name        string
 	Title       string
 	Description string
-}
-
-// KeyRow is one API key holding the mcp:access permission.
-type KeyRow struct {
-	ID          int64
-	Name        string
-	Prefix      string
-	Permissions []string
-	Active      bool
-	Expired     bool
-	LastUsed    string
-	Expires     string
 }
 
 // DashboardPage renders /admin/mcp.
@@ -119,8 +105,6 @@ templ DashboardPage(pc *adminviews.PageContext, data DashboardData) {
 			@toolsCard(pc, data)
 			if data.Connections != nil {
 				@accountviews.ConnectionsPanel(pc, *data.Connections)
-			} else {
-				@keysCard(pc, data)
 			}
 		</div>
 	}
@@ -392,111 +376,6 @@ templ toolsCard(pc *adminviews.PageContext, data DashboardData) {
 					}
 				}
 			</div>
-		}
-	}
-}
-
-templ keysCard(pc *adminviews.PageContext, data DashboardData) {
-	@card.Card(card.Props{ID: "mcp-keys"}) {
-		@card.Header() {
-			@card.Title() {
-				{ pc.T("mcp.keys_title") }
-			}
-			@card.Description() {
-				{ pc.T("mcp.keys_description") }
-			}
-		}
-		@card.Content() {
-			if data.KeysError {
-				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
-					@alert.Description() {
-						{ pc.T("mcp.keys_error") }
-					}
-				}
-			} else if len(data.Keys) == 0 {
-				<p class="text-sm text-muted-foreground">{ pc.T("mcp.keys_empty") }</p>
-			} else {
-				<div class="overflow-x-auto">
-					@table.Table() {
-						@table.Header() {
-							@table.Row() {
-								@table.Head() {
-									{ pc.T("label.name") }
-								}
-								@table.Head() {
-									{ pc.T("api_keys.key_prefix") }
-								}
-								@table.Head() {
-									{ pc.T("api_keys.permissions") }
-								}
-								@table.Head() {
-									{ pc.T("label.status") }
-								}
-								@table.Head() {
-									{ pc.T("api_keys.last_used") }
-								}
-								@table.Head() {
-									{ pc.T("api_keys.expires") }
-								}
-							}
-						}
-						@table.Body() {
-							for _, key := range data.Keys {
-								@table.Row() {
-									@table.Cell() {
-										<a href={ templ.SafeURL(fmt.Sprintf("/admin/api-keys/%d", key.ID)) } class="font-medium hover:underline">{ key.Name }</a>
-									}
-									@table.Cell() {
-										<code class="font-mono text-xs">{ key.Prefix }…</code>
-									}
-									@table.Cell() {
-										<div class="flex flex-wrap gap-1">
-											for _, perm := range key.Permissions {
-												@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
-													{ perm }
-												}
-											}
-										</div>
-									}
-									@table.Cell() {
-										@keyStatusBadge(pc, key)
-									}
-									@table.Cell() {
-										if key.LastUsed != "" {
-											{ key.LastUsed }
-										} else {
-											<span class="text-muted-foreground">{ pc.T("mcp.never") }</span>
-										}
-									}
-									@table.Cell() {
-										if key.Expires != "" {
-											{ key.Expires }
-										} else {
-											<span class="text-muted-foreground">{ pc.T("mcp.never") }</span>
-										}
-									}
-								}
-							}
-						}
-					}
-				</div>
-			}
-		}
-	}
-}
-
-templ keyStatusBadge(pc *adminviews.PageContext, key KeyRow) {
-	if !key.Active {
-		@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-			{ pc.T("label.inactive") }
-		}
-	} else if key.Expired {
-		@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
-			{ pc.T("api_keys.expired") }
-		}
-	} else {
-		@badge.Badge() {
-			{ pc.T("label.active") }
 		}
 	}
 }

@@ -194,6 +194,8 @@ When importing content that already exists (matched by slug or email):
 | **Overwrite** | Replace existing with imported |
 | **Rename** | Import with modified slug (adds `-1`, `-2`, etc.); users are skipped instead, since the email is their identity |
 
+Overwriting a page replaces it as the import finds it, including a page with **Allow AI edits** on: the import needs no revision from you, saves one new complete revision recorded as the import's (your account for an admin import) and leaves the AI-access setting as it was. An overwrite that leaves such a page published or scheduled must pass the same publication checks as the editor, and fails the whole import if it does not.
+
 Users that do not exist yet are created with a random, unknown password; an administrator must set a new one under **Admin > Users** before they can sign in. Overwriting an existing user updates the name and role, but never grants or removes the admin role: that is changed on the user form, which asks for the acting administrator's password. Users whose role was kept are listed under **Notes** in the import result. When users are imported, an archive with a role other than `admin`, `editor`, `public` or the older name `viewer` (imported as `public`) fails validation; an import that leaves users out ignores their roles.
 
 ### Import Order

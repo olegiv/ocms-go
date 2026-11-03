@@ -84,13 +84,13 @@ func TestSeedDemo(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, page := range pages {
-		version, err := q.GetPageVersionByRevision(ctx, GetPageVersionByRevisionParams{PageID: page.ID, Revision: sql.NullInt64{Int64: 1, Valid: true}})
-		if err != nil {
-			t.Fatal(err)
+		version, versionErr := q.GetPageVersionByRevision(ctx, GetPageVersionByRevisionParams{PageID: page.ID, Revision: sql.NullInt64{Int64: 1, Valid: true}})
+		if versionErr != nil {
+			t.Fatal(versionErr)
 		}
-		snapshot, err := q.GetPageSnapshot(ctx, page.ID)
-		if err != nil {
-			t.Fatal(err)
+		snapshot, snapshotErr := q.GetPageSnapshot(ctx, page.ID)
+		if snapshotErr != nil {
+			t.Fatal(snapshotErr)
 		}
 		if page.Revision != 1 || version.Legacy || version.SnapshotJson.String != snapshot {
 			t.Fatalf("demo page %d lacks a complete initial revision", page.ID)

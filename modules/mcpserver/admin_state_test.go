@@ -13,11 +13,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
-	"github.com/olegiv/ocms-go/internal/store"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
@@ -50,12 +48,12 @@ func renderDashboard(t *testing.T, data DashboardData) string {
 func TestDashboardSettingsLoadFailure(t *testing.T) {
 	env := newTestEnv(t)
 	env.setSettings(Settings{AllowDrafts: true, Instructions: "Keep me."})
-	healthy := renderDashboard(t, env.module.dashboardData(context.Background(), true))
+	healthy := renderDashboard(t, env.module.dashboardData(context.Background()))
 
 	if _, err := env.db.Exec(`DROP TABLE mcp_settings`); err != nil {
 		t.Fatalf("drop settings: %v", err)
 	}
-	data := env.module.dashboardData(context.Background(), true)
+	data := env.module.dashboardData(context.Background())
 	if !data.SettingsError {
 		t.Fatal("an unreadable settings table must be reported")
 	}
@@ -92,7 +90,7 @@ func TestDashboardReloadsStoredSettings(t *testing.T) {
 	if _, err := env.db.Exec(`UPDATE mcp_settings SET allow_drafts = 1, instructions = 'From another instance.' WHERE id = 1`); err != nil {
 		t.Fatalf("update settings: %v", err)
 	}
-	data := env.module.dashboardData(context.Background(), true)
+	data := env.module.dashboardData(context.Background())
 	if data.SettingsError || !data.AllowDrafts || data.Instructions != "From another instance." {
 		t.Errorf("dashboard settings = %+v, want the stored ones", data)
 	}
@@ -183,7 +181,7 @@ func TestEndpointReloadsSharedState(t *testing.T) {
 func TestDashboardSiteURLStates(t *testing.T) {
 	env := newTestEnv(t)
 	env.setConfig(model.ConfigKeySiteURL, "example.com")
-	data := env.module.dashboardData(context.Background(), true)
+	data := env.module.dashboardData(context.Background())
 	if data.SiteURLInvalid != "example.com" || data.SiteURLMissing || data.ConfigError || data.EndpointURL != EndpointPath {
 		t.Errorf("invalid site URL: %+v", data)
 	}
@@ -194,7 +192,7 @@ func TestDashboardSiteURLStates(t *testing.T) {
 	if _, err := env.db.Exec(`ALTER TABLE config RENAME TO config_gone`); err != nil {
 		t.Fatalf("rename config: %v", err)
 	}
-	if data := env.module.dashboardData(context.Background(), true); !data.ConfigError {
+	if data := env.module.dashboardData(context.Background()); !data.ConfigError {
 		t.Error("an unreadable site configuration must be reported")
 	}
 }
@@ -217,40 +215,6 @@ func TestSiteInfoReportsConfigFailure(t *testing.T) {
 	}
 	if cause, _ := recordAttr(lines[0], "error"); !strings.Contains(cause.String(), "reading config") {
 		t.Errorf("logged cause = %q, want the config read failure", cause.String())
-	}
-}
-
-// TestMCPKeysPagesThroughAllKeys verifies the overview lists every key with
-// MCP access, however many newer keys exist.
-func TestMCPKeysPagesThroughAllKeys(t *testing.T) {
-	env := newTestEnv(t)
-	base := time.Now().Add(-time.Hour)
-	insert := func(i int, perms ...string) {
-		created := base.Add(time.Duration(i) * time.Millisecond)
-		if _, err := env.q.CreateAPIKey(context.Background(), store.CreateAPIKeyParams{
-			Name:        fmt.Sprintf("key %d", i),
-			KeyHash:     fmt.Sprintf("hash-%d", i),
-			KeyPrefix:   fmt.Sprintf("%04d", i),
-			Permissions: model.PermissionsToJSON(perms),
-			IsActive:    true,
-			CreatedBy:   env.userID,
-			CreatedAt:   created,
-			UpdatedAt:   created,
-		}); err != nil {
-			t.Fatalf("CreateAPIKey: %v", err)
-		}
-	}
-	insert(0, model.PermissionMCPAccess) // the oldest key
-	for i := 1; i <= keysPageSize; i++ {
-		insert(i, model.PermissionPagesRead)
-	}
-
-	rows, err := env.module.mcpKeys(context.Background())
-	if err != nil {
-		t.Fatalf("mcpKeys: %v", err)
-	}
-	if len(rows) != 1 || rows[0].Name != "key 0" {
-		t.Errorf("rows = %+v, want the oldest key, which holds mcp:access", rows)
 	}
 }
 

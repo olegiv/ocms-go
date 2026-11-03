@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -349,42 +350,18 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Convert permissions to JSON
 	permissionsJSON := model.PermissionsToJSON(input.Permissions)
 
-	// Commit metadata and its source policy together. In particular, a newly
-	// enabled permission must not become visible under the previous policy.
-	tx, err := h.db.BeginTx(r.Context(), nil)
-	if err != nil {
-		slog.Error("failed to begin API key update", "error", err)
-		flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
-		return
-	}
-	defer func() { _ = tx.Rollback() }()
-	queries := h.queries.WithTx(tx)
-	now := time.Now()
-	_, err = queries.UpdateAPIKey(r.Context(), store.UpdateAPIKeyParams{
+	// The transaction lives in updateAPIKey, so it is finished before any
+	// flash or redirect below: the session commit that answering triggers
+	// needs the SQLite write lock the transaction holds.
+	if err := h.updateAPIKey(r.Context(), store.UpdateAPIKeyParams{
 		Name:        input.Name,
 		Permissions: permissionsJSON,
 		ExpiresAt:   input.ExpiresAt,
 		IsActive:    isActive,
-		UpdatedAt:   now,
+		UpdatedAt:   time.Now(),
 		ID:          id,
-	})
-	if err != nil {
-		slog.Error("failed to update API key", "error", err)
-		flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
-		return
-	}
-
-	if err := queries.ReplaceAPIKeySourceCIDRs(r.Context(), id, input.SourceCIDRs); err != nil {
-		if isMissingAPIKeySourceCIDRTable(err) {
-			slog.Warn("api key source CIDR table missing; skipping per-key source allowlist", "key_id", id)
-		} else {
-			slog.Error("failed to update API key source CIDRs", "error", err, "key_id", id)
-			flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
-			return
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		slog.Error("failed to commit API key update", "error", err, "key_id", id)
+	}, input.SourceCIDRs); err != nil {
+		slog.Error("failed to update API key", "error", err, "key_id", id)
 		flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
 		return
 	}
@@ -396,6 +373,33 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"source_cidr_restricted": len(input.SourceCIDRs) > 0,
 	})
 	flashSuccess(w, r, h.renderer, redirectAdminAPIKeys, "API key updated successfully")
+}
+
+// updateAPIKey commits a key's metadata and its source policy together. In
+// particular, a newly enabled permission must not become visible under the
+// previous policy. The transaction is committed or rolled back when it
+// returns, so callers may answer the request right after: an open write
+// transaction would make the session commit of that answer wait for the lock.
+func (h *APIKeysHandler) updateAPIKey(ctx context.Context, params store.UpdateAPIKeyParams, sourceCIDRs []string) error {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin API key update: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	queries := h.queries.WithTx(tx)
+	if _, err = queries.UpdateAPIKey(ctx, params); err != nil {
+		return fmt.Errorf("update API key: %w", err)
+	}
+	if err = queries.ReplaceAPIKeySourceCIDRs(ctx, params.ID, sourceCIDRs); err != nil {
+		if !isMissingAPIKeySourceCIDRTable(err) {
+			return fmt.Errorf("update API key source CIDRs: %w", err)
+		}
+		slog.Warn("api key source CIDR table missing; skipping per-key source allowlist", "key_id", params.ID)
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit API key update: %w", err)
+	}
+	return nil
 }
 
 // Delete handles DELETE /admin/api-keys/{id} - deletes (deactivates) an API key.

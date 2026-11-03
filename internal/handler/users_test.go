@@ -108,9 +108,9 @@ func TestUsersHandler_Delete_SelfDelete(t *testing.T) {
 	// Should return error - cannot delete self
 	assertStatus(t, w.Code, http.StatusBadRequest)
 
-	// Check HTMX error header
-	if trigger := w.Header().Get("HX-Trigger"); trigger == "" {
-		t.Error("expected HX-Trigger header")
+	// The refusal is the plain-text body the admin's htmx error handler shows.
+	if strings.TrimSpace(w.Body.String()) == "" || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("refusal body %q (%s), want the message as text", w.Body.String(), w.Header().Get("Content-Type"))
 	}
 }
 

@@ -240,9 +240,19 @@ func TestEveryRegisteredToolHasTheExpectedMutationClass(t *testing.T) {
 	if len(listed.Tools) != len(toolCatalog()) {
 		t.Errorf("server registers %d tools, catalog has %d", len(listed.Tools), len(toolCatalog()))
 	}
-	mutations := map[string]string{"create_draft_page": mutationCreate, "create_translation_draft": mutationCreate, "update_draft_page": mutationReplace, "create_preview_link": mutationShare}
+	// The expected class comes from the catalog, not from a second list that
+	// has to be kept in step with it. TestMutatingToolsAreExactlyTheClassified
+	// keeps the catalog itself honest against what the handlers do.
+	mutations := make(map[string]string)
+	for _, spec := range toolCatalog() {
+		mutations[spec.Name] = spec.mutation
+	}
 	for _, tool := range listed.Tools {
-		kind := mutations[tool.Name]
+		kind, ok := mutations[tool.Name]
+		if !ok {
+			t.Errorf("server registers %s, which the catalog does not list", tool.Name)
+			continue
+		}
 		annotations := tool.Annotations
 		if annotations == nil || annotations.DestructiveHint == nil || annotations.OpenWorldHint == nil || *annotations.OpenWorldHint {
 			t.Fatalf("%s: incomplete annotations", tool.Name)
@@ -313,6 +323,13 @@ func TestTranslationsCompleteAndUsedKeysExist(t *testing.T) {
 	used := usedMessageKeys(t)
 	if len(used) == 0 {
 		t.Fatal("no message keys found in module sources; the scan is broken")
+	}
+	// The other direction: a key left behind when its UI was removed (the API
+	// key card, once) keeps being translated and shipped for nothing.
+	for key := range catalogs["en"] {
+		if !slices.Contains(used, key) {
+			t.Errorf("the module catalogs define %s, which no module code or template uses; delete it from en and ru together", key)
+		}
 	}
 	for _, key := range used {
 		if strings.HasPrefix(key, ModuleName+".") && !catalogs["en"][key] {

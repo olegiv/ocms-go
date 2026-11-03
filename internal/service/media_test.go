@@ -454,7 +454,7 @@ func TestMediaServiceDeleteRejectsMalformedUUIDBeforeDatabaseMutation(t *testing
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	err = NewMediaService(db, uploadRoot).Delete(ctx, media.ID)
+	_, err = NewMediaService(db, uploadRoot).Delete(ctx, media.ID)
 	if err == nil || !strings.Contains(err.Error(), "invalid media UUID") {
 		t.Fatalf("Delete() error = %v, want malformed UUID rejection", err)
 	}
@@ -518,7 +518,7 @@ func TestMediaServiceDeleteKeepsCapturedRootAcrossReplacement(t *testing.T) {
 			t.Fatalf("WriteFile(replacement): %v", err)
 		}
 	}
-	if err := svc.Delete(ctx, media.ID); err != nil {
+	if _, err := svc.Delete(ctx, media.ID); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {
@@ -570,9 +570,14 @@ func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
 	uploadRoot := t.TempDir()
 	svc := NewMediaService(db, uploadRoot)
 	svc.deleteMediaFiles = func(*os.Root, string) error { return errors.New("injected cleanup failure") }
-	err = svc.Delete(ctx, media.ID)
+	pages, err := svc.Delete(ctx, media.ID)
 	if err == nil || !errors.Is(err, ErrMediaFilesNotRemoved) || !strings.Contains(err.Error(), "injected cleanup failure") {
 		t.Fatalf("Delete() error = %v, want ErrMediaFilesNotRemoved with the cleanup failure", err)
+	}
+	// The records are gone, so the caller still owes the page its after-commit
+	// side effects (R2 P3-8): the changed page comes back with the error.
+	if len(pages) != 1 || pages[0].ID != page.ID || pages[0].Revision != 2 || pages[0].FeaturedImageID.Valid {
+		t.Fatalf("Delete() returned %+v, want the one page it revisioned, as committed", pages)
 	}
 	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("media row lookup = %v, want committed deletion", err)
@@ -636,9 +641,12 @@ func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *test
 
 	svc := NewMediaService(db, uploadRoot)
 	svc.beforeMediaCommit = cancel
-	err = svc.Delete(ctx, media.ID)
+	pages, err := svc.Delete(ctx, media.ID)
 	if err == nil || !errors.Is(err, context.Canceled) || errors.Is(err, ErrMediaFilesNotRemoved) {
 		t.Fatalf("Delete() error = %v, want context.Canceled, not a completed delete", err)
+	}
+	if len(pages) != 0 {
+		t.Fatalf("Delete() returned pages %+v for a rolled-back delete", pages)
 	}
 	if _, err := queries.GetMediaByID(context.Background(), media.ID); err != nil {
 		t.Fatalf("media row was not rolled back: %v", err)

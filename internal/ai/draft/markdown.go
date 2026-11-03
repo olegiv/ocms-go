@@ -58,8 +58,8 @@ func RenderMarkdown(ctx context.Context, body string, options Options) (Rendered
 		if !entering {
 			return ast.WalkContinue, nil
 		}
-		if err := ctx.Err(); err != nil {
-			return ast.WalkStop, err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ast.WalkStop, ctxErr
 		}
 		switch typed := node.(type) {
 		case *ast.HTMLBlock, *ast.RawHTML:
@@ -95,8 +95,8 @@ func RenderMarkdown(ctx context.Context, body string, options Options) (Rendered
 			images[node] = inlineImage{html: imageHTML(media, alt), caption: caption}
 			return ast.WalkSkipChildren, nil
 		case *ast.Link:
-			target, err := targetURL(markdownDestination(typed.Destination), base)
-			if err != nil {
+			target, targetErr := targetURL(markdownDestination(typed.Destination), base)
+			if targetErr != nil {
 				result.Issues = append(result.Issues, NewIssue("link_not_allowed", "body_markdown", options.UILanguage))
 				return ast.WalkStop, nil
 			}
@@ -106,8 +106,8 @@ func RenderMarkdown(ctx context.Context, body string, options Options) (Rendered
 			if typed.AutoLinkType == ast.AutoLinkEmail {
 				value = "mailto:" + value
 			}
-			target, err := targetURL(markdownDestination([]byte(value)), base)
-			if err != nil {
+			target, targetErr := targetURL(markdownDestination([]byte(value)), base)
+			if targetErr != nil {
 				result.Issues = append(result.Issues, NewIssue("link_not_allowed", "body_markdown", options.UILanguage))
 				return ast.WalkStop, nil
 			}

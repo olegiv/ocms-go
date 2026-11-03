@@ -1981,8 +1981,8 @@ func run() (runErr error) {
 	schedulerRegistry := scheduler.NewRegistry(db, logger)
 	sched := scheduler.New(db, logger, schedulerRegistry)
 	sched.SetWebhookDispatcher(webhookDispatcher)
-	if err := startCoreScheduler(sched); err != nil {
-		return fmt.Errorf("starting scheduler: %w", err)
+	if startErr := startCoreScheduler(sched); startErr != nil {
+		return fmt.Errorf("starting scheduler: %w", startErr)
 	}
 	defer cleanup.within("scheduler", sched.Stop)
 
@@ -2269,6 +2269,8 @@ func run() (runErr error) {
 
 	// Set cache manager on handlers that need cache invalidation
 	pagesHandler.SetCacheManager(cacheManager)
+	// Deleting media rewrites the pages that used it.
+	mediaHandler.SetCacheManager(cacheManager)
 
 	// Health check routes (public, returns additional details for authenticated callers)
 	r.Get("/health", healthHandler.Health)
@@ -2688,6 +2690,7 @@ func run() (runErr error) {
 		apiv2pages.Register(apiV2.API, pagesSvc)
 		mediaSvc := apiv2media.NewService(db, v2Queries, v2Events, cfg.UploadsDir)
 		mediaSvc.SetWebhookDispatcher(webhookDispatcher)
+		mediaSvc.SetCacheManager(cacheManager)
 		apiv2media.Register(apiV2.API, mediaSvc)
 		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries, v2Events)
 		taxonomySvc.SetCacheManager(cacheManager)

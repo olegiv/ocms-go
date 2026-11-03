@@ -124,6 +124,60 @@ func TestReplayedAuthorizationCodeRevokesTheGrantItIssued(t *testing.T) {
 	}
 }
 
+// TestReplayWithoutProofOfPossessionDoesNotRevoke pins the review finding on
+// A-1: authorization codes travel in redirect URLs, so a spent code plus the
+// public client_id is knowable by an observer. Revoking on that alone lets
+// anyone disconnect the user. Only a replay that also carries the PKCE
+// verifier and the redirect_uri the code was issued for revokes the grant;
+// every other presentation is a plain invalid_grant that leaves the grant and
+// its tokens working.
+func TestReplayWithoutProofOfPossessionDoesNotRevoke(t *testing.T) {
+	f := newFixture(t)
+	code := f.code(t)
+	first := f.redeem(t, code)
+
+	wrong := url.Values{"code_verifier": {f.verifier[:50] + "b"}}
+	missing := url.Values{"code_verifier": {""}}
+	otherRedirect := url.Values{"redirect_uri": {"https://cms.test/not-the-redirect"}}
+	for name, extra := range map[string]url.Values{
+		"wrong verifier":      wrong,
+		"missing verifier":    missing,
+		"mismatched redirect": otherRedirect,
+	} {
+		status, body := f.exchangeCode(code, extra)
+		if status != http.StatusBadRequest || body["error"] != "invalid_grant" {
+			t.Fatalf("%s: status=%d error=%v", name, status, body["error"])
+		}
+		if _, err := f.s.VerifyAccess(t.Context(), access(first)); err != nil {
+			t.Fatalf("%s: a replay without proof of possession revoked the access token: %v", name, err)
+		}
+		var revoked int64
+		if err := f.db.QueryRowContext(t.Context(), `SELECT revoked_at FROM oauth_grants`).Scan(&revoked); err != nil || revoked != 0 {
+			t.Fatalf("%s: grant revoked_at=%d err=%v", name, revoked, err)
+		}
+	}
+	// The family still refreshes.
+	status, body := f.exchange(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh(first)}})
+	if status != http.StatusOK {
+		t.Fatalf("refresh after the unproven replays: status=%d error=%v", status, body["error"])
+	}
+	for _, e := range authEvents(t, f) {
+		if e.level == "warning" {
+			t.Fatalf("an unproven replay recorded a reuse event: %+v", e)
+		}
+	}
+
+	// The same code replayed with the verifier and redirect_uri still revokes.
+	second := f.code(t)
+	secondTokens := f.redeem(t, second)
+	if status, _ = f.exchangeCode(second, nil); status != http.StatusBadRequest {
+		t.Fatalf("proven replay status=%d", status)
+	}
+	if _, err := f.s.VerifyAccess(t.Context(), access(secondTokens)); err == nil {
+		t.Fatal("a replay with the verifier and redirect_uri did not revoke the grant")
+	}
+}
+
 // TestReplayedCodeFromAnotherClientCannotRevoke keeps the revocation tied to
 // the client the grant belongs to, as for refresh tokens.
 func TestReplayedCodeFromAnotherClientCannotRevoke(t *testing.T) {

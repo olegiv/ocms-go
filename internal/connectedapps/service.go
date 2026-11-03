@@ -117,8 +117,8 @@ func (s *Service) List(ctx context.Context, actor Actor, allUsers bool, pages Pa
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := store.New(tx)
-	if err := checkActor(ctx, q, actor, allUsers); err != nil {
-		return Page{}, err
+	if actorErr := checkActor(ctx, q, actor, allUsers); actorErr != nil {
+		return Page{}, actorErr
 	}
 	grants, err := q.ListConnectedOAuthGrants(ctx, store.ListConnectedOAuthGrantsParams{
 		AllUsers: allFlag(allUsers), UserID: actor.UserID, PageLimit: PageSize + 1, PageOffset: (pages.OAuthPage - 1) * PageSize,
@@ -210,8 +210,8 @@ func (s *Service) Revoke(ctx context.Context, actor Actor, allUsers bool, kind, 
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := store.New(tx)
-	if err := checkActor(ctx, q, actor, allUsers); err != nil {
-		return err
+	if actorErr := checkActor(ctx, q, actor, allUsers); actorErr != nil {
+		return actorErr
 	}
 	var affected int64
 	if kind == "oauth" {

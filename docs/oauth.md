@@ -112,7 +112,13 @@ was already redeemed fails with `invalid_grant` and, as RFC 6749 section 4.1.2
 recommends, revokes the grant that code issued, access and refresh tokens
 alike, durably and with a warning event. Only the client the grant belongs to,
 for this resource, can trigger that; any other client's attempt only fails.
-A concurrent second redemption of one code therefore leaves no working token.
+The replaying request must also prove possession: a PKCE `code_verifier` whose
+S256 transform is the code's stored challenge and the `redirect_uri` the code was
+issued for. Authorization codes travel in redirect URLs (history, logs,
+referrers), so someone who merely saw a spent code and the public `client_id`
+cannot disconnect the user; their request fails with `invalid_grant` and revokes
+nothing. A concurrent second redemption of one code by the real client therefore
+leaves no working token.
 Codes, access and
 refresh credentials contain 32 random bytes; SQLite stores SHA-256 hashes,
 not their plaintext. An immediate SQLite transaction covers code consumption,
@@ -150,7 +156,16 @@ token: grants that never issued one (an abandoned consent, a repeated consent)
 are not listed, and the retention job removes them after a day. Administrators can
 review/revoke across accounts in `/admin/mcp`. Registered metadata does not
 verify app identity. The earlier `/account/security` grant list/revoke path
-remains compatible. See [connected apps](connected-apps.md).
+remains compatible. Revoking a connection that does not exist or belongs to
+another account (a stale form, a forged ID) redirects back with an error
+message and changes nothing; repeating a revoke of your own, already revoked
+connection is a harmless success, and a storage failure is a logged 500. See
+[connected apps](connected-apps.md).
+
+A dynamically registered client is valid for one day until a consent creates a
+grant for it, then for 90 days from that consent. That covers the longest
+refresh family (`OCMS_OAUTH_REFRESH_TTL_DAYS` is at most 90, `MaxRefreshTTL`), so
+a used client never lapses before its grants.
 
 ## Client metadata and registration
 

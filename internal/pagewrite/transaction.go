@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"time"
 
@@ -243,9 +244,9 @@ func (t *Tx) Finish(ctx context.Context) error {
 			if len(fields) == 0 {
 				changed := false
 				if t.evidenceChanges[id] {
-					previous, err := t.Q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: id, Revision: page.Revision})
-					if err != nil && !errors.Is(err, sql.ErrNoRows) {
-						return err
+					previous, provenanceErr := t.Q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: id, Revision: page.Revision})
+					if provenanceErr != nil && !errors.Is(provenanceErr, sql.ErrNoRows) {
+						return provenanceErr
 					}
 					evidence := t.pageEvidence[id]
 					changed = !equalJSON(previous.ValidatedJson, evidence.Validated) || !equalJSON(previous.ReportedJson, evidence.Reported)
@@ -343,6 +344,24 @@ func changedFields(before, after string) ([]string, error) {
 	}
 	sort.Strings(fields)
 	return fields, nil
+}
+
+// ChangedPages returns, in ID order, the committed state of every page this
+// transaction gave a new revision. Callers run the after-commit side effects
+// (page cache invalidation, the page.updated webhook) for exactly these pages:
+// a tracked page whose content did not change is not in it. Call it after
+// Finish, or after InTx returns.
+func (t *Tx) ChangedPages() []store.Page {
+	ids := make([]int64, 0, len(t.Changed))
+	for id := range t.Changed {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	pages := make([]store.Page, 0, len(ids))
+	for _, id := range ids {
+		pages = append(pages, t.Pages[id])
+	}
+	return pages
 }
 
 // IsTracked reports whether state was captured before a compound mutation.

@@ -104,9 +104,9 @@ func (h *PagesHandler) CreatePreviewLink(w http.ResponseWriter, r *http.Request)
 	}
 	userID := middleware.GetUserID(r)
 	link, err := (preview.Service{Q: h.queries, TTL: h.previewTTL}).Issue(r.Context(), provenance.Principal{UserID: userID, Source: "human", Transport: "admin"}, id, revision, cfg.Value, func(ctx context.Context, q *store.Queries) error {
-		page, err := q.GetPageByID(ctx, id)
-		if err != nil {
-			return err
+		page, loadErr := q.GetPageByID(ctx, id)
+		if loadErr != nil {
+			return loadErr
 		}
 		if page.Revision != *base {
 			return &pagewrite.Conflict{CurrentRevision: page.Revision}

@@ -50,9 +50,16 @@ SELECT COUNT(*) FROM users WHERE role = ?;
 -- Everything that blocks or would be silently re-attributed by deleting a user.
 -- pages.author_id and page_versions.changed_by are ON DELETE RESTRICT, and
 -- media.uploaded_by has no action clause, which enforces the same way.
+-- page_ai_access.set_by is ON DELETE RESTRICT too: the user who last changed a
+-- page's AI access cannot be deleted while that row names them. One named
+-- parameter serves every count, so a count added here needs no change from
+-- callers; TestEveryRestrictingUserForeignKeyIsCountedAsOwnedContent lists the
+-- columns that must appear.
 SELECT
-    (SELECT COUNT(*) FROM pages WHERE author_id = ?) +
-    (SELECT COUNT(*) FROM page_versions WHERE changed_by = ?) +
-    (SELECT COUNT(*) FROM media WHERE uploaded_by = ?) +
-    (SELECT COUNT(*) FROM api_keys k WHERE k.created_by = ?) +
-    (SELECT COUNT(*) FROM webhooks w WHERE w.created_by = ?);
+    (SELECT COUNT(*) FROM pages WHERE author_id = sqlc.arg(user_id)) +
+    (SELECT COUNT(*) FROM page_versions WHERE changed_by = sqlc.arg(user_id)) +
+    (SELECT COUNT(*) FROM media WHERE uploaded_by = sqlc.arg(user_id)) +
+    (SELECT COUNT(*) FROM api_keys k WHERE k.created_by = sqlc.arg(user_id)) +
+    (SELECT COUNT(*) FROM webhooks w WHERE w.created_by = sqlc.arg(user_id)) +
+    (SELECT COUNT(*) FROM scheduled_tasks WHERE created_by = sqlc.arg(user_id)) +
+    (SELECT COUNT(*) FROM page_ai_access WHERE set_by = sqlc.arg(user_id));

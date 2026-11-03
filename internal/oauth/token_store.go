@@ -5,7 +5,10 @@ package oauth
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -26,8 +29,13 @@ type tokenStore struct {
 	clientID string
 	scope    string
 	resource string
-	refresh  *store.OauthToken
-	rotated  bool
+	// verifier and redirectURI are the PKCE code_verifier and redirect_uri
+	// of an authorization_code request. A replayed code revokes its grant
+	// only when both match what the code was issued for.
+	verifier    string
+	redirectURI string
+	refresh     *store.OauthToken
+	rotated     bool
 	// reused marks a spent credential presented again; reuseEvent names it in
 	// the audit event Token writes once the revocation is committed.
 	reused     bool
@@ -114,6 +122,13 @@ func (t *tokenStore) GetByCode(ctx context.Context, raw string) (lib.TokenInfo, 
 // code cannot revoke a family it does not own. A grant that is already
 // revoked needs nothing more.
 //
+// Codes travel in redirect URLs, so someone who merely saw a spent code and
+// the public client_id must not be able to revoke the connection: the
+// replaying request has to prove possession by presenting the PKCE
+// code_verifier that matches the stored challenge and the redirect_uri the
+// code was issued for, which is what the first redemption needed. Anything
+// less is a plain invalid_grant that revokes nothing.
+//
 // The revocation must outlive the invalid_grant response, so the caller
 // commits it, as it does for a replayed refresh token.
 func (t *tokenStore) revokeReplayedCode(ctx context.Context, c store.OauthCode) error {
@@ -124,6 +139,9 @@ func (t *tokenStore) revokeReplayedCode(ctx context.Context, c store.OauthCode) 
 	if err != nil || g.ClientID != t.clientID || g.Resource != t.resource || g.RevokedAt != 0 {
 		return liberrors.ErrInvalidAuthorizeCode
 	}
+	if !t.provesCodePossession(c) {
+		return liberrors.ErrInvalidAuthorizeCode
+	}
 	if err := t.q.RevokeOAuthGrant(ctx, store.RevokeOAuthGrantParams{RevokedAt: t.s.now().Unix(), ID: g.ID}); err != nil {
 		return storageProblem(ctx, "failed to revoke the grant of a replayed authorization code", err, "grant_id", g.ID)
 	}
@@ -131,6 +149,18 @@ func (t *tokenStore) revokeReplayedCode(ctx context.Context, c store.OauthCode) 
 	t.reused = true
 	t.reuseEvent = "OAuth authorization code reuse revoked connection"
 	return liberrors.ErrInvalidAuthorizeCode
+}
+
+// provesCodePossession reports whether the request carries the redirect_uri
+// the code was issued for and the PKCE code_verifier whose S256 transform is
+// the code's stored challenge: the proof the first redemption required.
+func (t *tokenStore) provesCodePossession(c store.OauthCode) bool {
+	if c.Challenge == "" || t.verifier == "" || t.redirectURI != c.RedirectUri {
+		return false
+	}
+	sum := sha256.Sum256([]byte(t.verifier))
+	got := base64.RawURLEncoding.EncodeToString(sum[:])
+	return subtle.ConstantTimeCompare([]byte(got), []byte(c.Challenge)) == 1
 }
 
 func (t *tokenStore) RemoveByCode(ctx context.Context, raw string) error {

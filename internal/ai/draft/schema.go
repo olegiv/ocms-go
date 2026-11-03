@@ -175,9 +175,9 @@ func inspectJSON(decoder *json.Decoder, depth int) error {
 	seen := make(map[string]bool)
 	for decoder.More() {
 		if delimiter == '{' {
-			key, err := decoder.Token()
-			if err != nil {
-				return err
+			key, keyErr := decoder.Token()
+			if keyErr != nil {
+				return keyErr
 			}
 			name, ok := key.(string)
 			if !ok || seen[name] {

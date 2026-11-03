@@ -132,6 +132,14 @@ func TestRefusedPageWritesExplainWhy(t *testing.T) {
 	if want := i18n.T("en", "pages.error_version_not_restored") + " " + checks; flash != want {
 		t.Errorf("restore: flash %q, want %q", flash, want)
 	}
+
+	// A restore against a stale revision is told the page changed meanwhile:
+	// the restore's conflict message (the editor's full conflict form belongs to
+	// the edit screen, which a restore does not come from).
+	post(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", published.ID, bad.ID), url.Values{"base_revision": {strconv.FormatInt(published.Revision+5, 10)}})
+	if want := i18n.T("en", "pages.error_version_not_restored") + " " + changed; flash != want {
+		t.Errorf("restore with a stale revision: flash %q, want %q", flash, want)
+	}
 }
 
 // TestPageWriteMessageExplainsOnlyRefusals pins which page-write errors the

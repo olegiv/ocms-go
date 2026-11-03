@@ -117,10 +117,10 @@ func TestImportStatusAndBinding(t *testing.T) {
 	if err != nil || status.Configured {
 		t.Fatal("missing enrollment must report configured=false")
 	}
-	if err := s.importSeed(t.Context(), target, fixtureSeed); err != nil {
+	if err = s.importSeed(t.Context(), target, fixtureSeed); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.importSeed(t.Context(), target, fixtureSeed); err == nil {
+	if err = s.importSeed(t.Context(), target, fixtureSeed); err == nil {
 		t.Fatal("replacement was allowed")
 	}
 	status, err = s.status(t.Context(), target)
@@ -265,7 +265,7 @@ func TestRealMFAEnrollmentAndOneUseVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if err := cmsstore.Migrate(db); err != nil {
+	if err = cmsstore.Migrate(db); err != nil {
 		t.Fatal(err)
 	}
 	result, err := db.Exec(`INSERT INTO users (email,password_hash,role,name,created_at,updated_at) VALUES (?, 'fixture', 'editor', 'Agent', ?, ?)`, "ocms-agent@example.test", time.Now(), time.Now())
@@ -285,7 +285,7 @@ func TestRealMFAEnrollmentAndOneUseVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 	s, target, _ := fixture(t)
-	if err := s.importSeed(t.Context(), target, enrollment.URI); err != nil {
+	if err = s.importSeed(t.Context(), target, enrollment.URI); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(30 * time.Second).Add(time.Second)
@@ -295,7 +295,7 @@ func TestRealMFAEnrollmentAndOneUseVerification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ConfirmEnrollmentAt(t.Context(), userID, enrollment.Sealed, readPrivateCode(t, first), now); err != nil {
+	if _, err = service.ConfirmEnrollmentAt(t.Context(), userID, enrollment.Sealed, readPrivateCode(t, first), now); err != nil {
 		t.Fatal("the server rejected helper-generated enrollment code")
 	}
 	second, err := s.issue(t.Context(), target)

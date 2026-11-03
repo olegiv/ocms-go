@@ -18,6 +18,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -52,7 +53,8 @@ type MediaHandler struct {
 	mediaService   *service.MediaService
 	eventService   *service.EventService
 	uploadDir      string
-	dispatcher     *webhook.Dispatcher
+	dispatcher     webhook.EventDispatcher
+	cacheManager   *cache.Manager
 }
 
 // NewMediaHandler creates a new MediaHandler.
@@ -73,7 +75,17 @@ func NewMediaHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 
 // SetDispatcher sets the webhook dispatcher for event dispatching.
 func (h *MediaHandler) SetDispatcher(d *webhook.Dispatcher) {
+	if d == nil {
+		h.dispatcher = nil // not a typed nil, which h.dispatcher == nil would miss
+		return
+	}
 	h.dispatcher = d
+}
+
+// SetCacheManager sets the cache manager that deleting media uses to
+// invalidate the cached pages whose images it clears.
+func (h *MediaHandler) SetCacheManager(cm *cache.Manager) {
+	h.cacheManager = cm
 }
 
 // dispatchMediaEvent dispatches a media-related webhook event.
@@ -627,13 +639,13 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete media (files and DB records)
-	err = h.mediaService.DeleteWithPrincipal(r.Context(), id, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
+	changed, err := h.mediaService.DeleteWithPrincipal(r.Context(), id, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
 	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 		slog.Error("failed to delete media", "error", err, "media_id", id)
 		http.Error(w, "Error deleting media", http.StatusInternalServerError)
 		return
 	}
-	h.recordMediaDelete(r, media, err)
+	h.recordMediaDelete(r, media, changed, err)
 
 	// For HTMX requests, return empty response
 	if r.Header.Get("HX-Request") == "true" {
@@ -660,18 +672,34 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 const mediaFilesLeftMessage = "Media deleted, but its files could not be removed from disk"
 
 // recordMediaDelete logs, records and announces a delete whose database
-// records are gone. deleteErr is what MediaService.Delete returned: nil, or
-// an ErrMediaFilesNotRemoved error when the files stayed on disk, which is
-// logged as an error and so also reaches the Event Log.
-func (h *MediaHandler) recordMediaDelete(r *http.Request, media store.Medium, deleteErr error) {
+// records are gone. changed is the pages the delete gave a new revision (they
+// used the media as an image) and deleteErr is what MediaService.Delete
+// returned: nil, or an ErrMediaFilesNotRemoved error when the files stayed on
+// disk, which is logged as an error and so also reaches the Event Log.
+func (h *MediaHandler) recordMediaDelete(r *http.Request, media store.Medium, changed []store.Page, deleteErr error) {
 	if deleteErr != nil {
 		slog.Error("media deleted but its files were not removed", "error", deleteErr, "media_id", media.ID, "uuid", media.Uuid)
 	}
+	h.pagesChanged(r, changed)
 	slog.Info("media deleted", "media_id", media.ID, "filename", media.Filename, "deleted_by", middleware.GetUserID(r))
 	_ = h.eventService.LogMediaEvent(r.Context(), model.EventLevelInfo, "Media deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"media_id": media.ID, "filename": media.Filename})
 
 	// Dispatch media.deleted webhook event
 	h.dispatchMediaEvent(r.Context(), model.EventMediaDeleted, media)
+}
+
+// pagesChanged runs, for each page a media delete gave a new revision, the
+// after-commit side effects every other page write runs: the cached copies of
+// the page go, and the page.updated webhook reports the saved change.
+func (h *MediaHandler) pagesChanged(r *http.Request, pages []store.Page) {
+	for _, page := range pages {
+		if h.cacheManager != nil {
+			h.cacheManager.InvalidatePage(page.ID)
+		}
+		if h.dispatcher != nil {
+			webhook.DispatchPageEvent(r.Context(), h.dispatcher, model.EventPageUpdated, page, middleware.GetUserEmail(r))
+		}
+	}
 }
 
 // BulkDelete handles POST /admin/media/bulk-delete - deletes multiple media items.
@@ -702,13 +730,13 @@ func (h *MediaHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		err = h.mediaService.DeleteWithPrincipal(r.Context(), id, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
+		changed, err := h.mediaService.DeleteWithPrincipal(r.Context(), id, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
 		if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 			slog.Error("failed to bulk delete media", "error", err, "media_id", id)
 			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting media"})
 			continue
 		}
-		h.recordMediaDelete(r, media, err)
+		h.recordMediaDelete(r, media, changed, err)
 		if err != nil {
 			filesLeft++
 		}

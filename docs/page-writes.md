@@ -32,6 +32,11 @@ REST v2 page responses include `revision`. `PUT /api/v2/pages/{id}` accepts
 | Any page, stale revision supplied | HTTP 409, `revision_conflict` |
 | Matching revision | Save atomically; a no-op retains the revision |
 
+The account that acts for a REST or agent write is checked inside the
+transaction through `v2.RequireEditor`: a deleted account is 401, an account
+that lost the editor or admin role is 403, and a failed account read is a
+server error, never a 401 (`TestPageWritesTellCredentialFailuresFromStorageFaults`).
+
 Conflict details contain `current_revision` and changed field names, never
 intervening content. The normal authorization check runs before these details.
 The existing `{ "error": { "code", "message", "details" } }` envelope is
@@ -42,7 +47,15 @@ the displayed revision. A stale editor retains its unsaved inputs and offers
 **View latest** or **Confirm overwrite**. Confirmation submits a new CAS against
 the revision displayed on the conflict form; another intervening edit conflicts
 again. The owner or an administrator can toggle **Allow AI edits**. That toggle
-also advances the page revision when its value changes.
+also advances the page revision when its value changes. A save that leaves it
+as it was does not touch `page_ai_access`, so `set_by` and `set_at` keep naming
+whoever last changed the setting. That user cannot be deleted while the row
+names them (`ON DELETE RESTRICT`): the admin user list, single or bulk, refuses
+with "This user still owns pages, media or other content", and the Migrator's
+rollback keeps the user, exactly as for pages, versions, media, API keys,
+webhooks and scheduled tasks. `TestEveryRestrictingUserForeignKeyIsCountedAsOwnedContent`
+derives every restricting reference to `users` from the migrated schema and
+requires `CountUserOwnedContent` to count it.
 
 ## Draft service contract
 
@@ -116,24 +129,52 @@ be stored in replay results. SQLite busy/locked failures return
 ## Writer inventory and direct verification
 
 The inventory includes relationship and foreign-key effects, not just content
-updates. `TestPageWritersUseTransactionQueries` follows transaction query
-receivers and closures across `internal`, `modules` and `custom`, and scans
-literal SQL mutations. It supplements these behavioral fixtures; it is not a
+updates. Three source scans supplement the behavioral fixtures below. None is a
 general proof of dynamically constructed SQL or arbitrary external modules.
+
+- `TestPageWritersUseTransactionQueries` (`internal/pagewrite/writer_drift_test.go`)
+  follows transaction query receivers and closures across `internal`,
+  `modules` and `custom`. It checks only that a call to one of the listed
+  page-mutating queries (`CreatePage`, `UpdatePage`, `PublishPage`, tag,
+  category, alias, translation and media queries, and so on) uses queries bound
+  to a `pagewrite.Tx` or a manually managed transaction, and that no literal
+  SQL outside the language rename mutates a page table. It does not check that
+  the page was tracked before the change, that `Finish` ran, that a revision or
+  provenance row was recorded, or that publication was validated: an
+  unconditional `PublishPage` call through `work.Q` passes it.
+- `TestPagePublicationUsesLifecycleGuards` (`cmd/ocms/publish_page_drift_test.go`)
+  is the test that forbids the unconditional `PublishPage` query, in every git-tracked
+  non-test Go file (outside a git checkout, every such file outside the directories the shared repository walker skips).
+- `TestEveryPublicationPathIsInventoriedAndValidated`
+  (`internal/pagewrite/publication_drift_test.go`) lists every runtime function
+  that calls `CreatePage`, `UpdatePage`, `PublishUnpublishedPage`,
+  `PublishScheduledPage`, `PublishPage` or `pagewrite.Insert`, and requires each
+  to reach `review.ValidatePublication` or carry a written reason it cannot
+  publish an AI draft. An unlisted function, a stale entry or a deleted call
+  fails it. `TestPageFormWritersAlwaysCarryTheFormWrite` and
+  `TestRESTPageMutationsOnlyRunInsideTheValidatingWrite` pin the two indirect
+  routes: the admin writers always receive `formWrite`, and the REST `create`
+  and `update` run only inside `Service.write`.
+
+Publication is validated by the admin editor save (`formWrite`), the publish
+toggle, a restore, the scheduler, the REST and agent write, and an import that
+overwrites a page. Insert-only paths (importers, generators, the demo seed)
+cannot publish an AI draft because a new page has no AI access or authoring
+history.
 
 | Writer | Boundary and revision coverage | Direct checks |
 |---|---|---|
 | v2 create/update, trusted agent options | Shared transaction; initial taxonomy, flag, translation, history, provenance, retry result | `internal/api/v2/pages/write_test.go`: lost responses, duplicates, ownership/role/key/policy changes, rollback, lifecycle fields, compatibility, no-op and webhook count |
-| Admin create/edit, dates, taxonomy, aliases, AI toggle | `createPageGuarded` / `writePageGuarded` callbacks use `Tx.Q`; displayed CAS | Actual local HTTP saves and AI toggle; two-browser conflict and confirmed overwrite; existing handler tests |
+| Admin create/edit, dates, taxonomy, aliases, AI toggle | `createPageGuarded` / `writePageGuarded` callbacks use `Tx.Q`; displayed CAS; `set_by` rewritten only when the AI setting changes | Actual local HTTP saves and AI toggle; two-browser conflict and confirmed overwrite; `TestUnchangedSaveKeepsAIAccessAttribution`; existing handler tests |
 | Admin translate | Source CAS, target insert, guarded namespace and component link in one transaction | Shared translation fixtures; local HTTP acceptance; existing route tests |
 | Admin publish/schedule | Displayed CAS plus existing lifecycle predicates | `TestTogglePublishAppliesOnlyToTheStatusItRead`, local HTTP; form scheduling goes through the same editor save |
 | Admin restore | Shared transaction; complete or legacy content; current policy retained | `TestRestoreCompleteAndLegacyVersionsPreservesCurrentPolicy`, local HTTP |
 | Admin and REST delete/bulk delete | Shared deletion, survivor component tracking, replay compaction | Existing delete/bulk fixtures; `TestExpiredAndDeletedRequestsNeverWriteAgain` |
 | Taxonomy delete/bulk delete, REST and rollback | Track assignments, unlink, delete term, finish once per affected page | `TestTaxonomyDeletionRevisionsAssignmentsAtomically`: tag/category normal and provenance-failure rollback; existing taxonomy/bulk tests |
 | Scheduled publish | Fresh transactional page, narrow lifecycle update and system provenance | `internal/scheduler/webhooks_test.go`: publication revision/snapshot/provenance and event counts |
-| Media deletion and FK image clearing | Existing media transaction joins shared tracking before deletion | `internal/service/media_test.go`: both image fields cleared in one revision; cancellation/failure retains rows and files |
+| Media deletion and FK image clearing | Existing media transaction joins shared tracking before deletion; `MediaService.Delete` returns the pages it revisioned and the admin handler (single and bulk) and REST service run the after-commit page side effects: cache invalidation and the `page.updated` webhook, once per changed page | `internal/service/media_test.go`: both image fields cleared in one revision, changed pages returned with a file-cleanup error, none on rollback; `TestMediaDeleteRunsPageSideEffects` in `internal/handler` and `internal/api/v2/media`; `TestMediaDeleteCallersKeepTheChangedPages`, `TestChangedPagesListsOnlyPagesWithANewRevision` |
 | Language rename | Existing language transaction tracks all affected pages/components | `internal/handler/languages_test.go`: propagation, revision and snapshot; deletion still refuses referenced languages |
-| oCMS JSON/ZIP import | One enclosing transaction; existing pages/components captured before mutation; finish before commit | `TestImportOverwriteRequiresCapturedAIRevision`, complete import/language/rollback suite |
+| oCMS JSON/ZIP import | One enclosing transaction; existing pages/components captured before mutation (an overwrite is tracked as a system capture unless the caller supplies `BaseRevisions`, so an AI-editable page can be overwritten and gets the import's own revision and provenance); an overwritten page that ends published or scheduled is validated; finish before commit | `TestImportOverwritesAIEditablePage`, `TestImportOverwriteWithoutPrincipalIsRecordedAsImport`, `TestImportOverwriteHonorsAnExplicitBaseRevision`, `TestImportOverwriteValidatesPublication`, complete import/language/rollback suite |
 | PHP-Nuke import | Shared insert with initial taxonomy for stories, static pages and encyclopedia entries | Source importer tests verify complete revision 1 for each kind; association failure leaves no page |
 | Elefant import | Shared post/page insert; initial tags/publication; separate alias operations are revisioned | Safe legacy-alias fixture verifies revision 2, complete snapshot and provenance; import/rollback suite |
 | Drupal import | Shared insert/taxonomy; each later alias operation is revisioned | Redundant-alias fixture verifies revision 2; multilingual route/menu tests; failure/rollback suite |
@@ -142,8 +183,8 @@ general proof of dynamically constructed SQL or arbitrary external modules.
 | Fixed demo seed | Storage-layer exception to avoid a package cycle: one startup transaction, complete initial versions and provenance; skips existing pages | `TestSeedDemo`, `TestSeedDemoSnapshotFailureRollsBackDatabase`; no updates to existing pages |
 
 No production caller uses unconditional `PublishPage`; importers/generators set
-publication fields on the initial insert. The publication drift test now
-forbids that query everywhere. Direct store queries remain available for
+publication fields on the initial insert. `TestPagePublicationUsesLifecycleGuards`
+forbids that query in every git-tracked non-test Go file. Direct store queries remain available for
 fixtures/generated storage, but runtime page mutations must use this boundary.
 
 ## Local validation record

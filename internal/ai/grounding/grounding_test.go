@@ -35,8 +35,8 @@ func seedFixture(t testing.TB) fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
+		if closeErr := db.Close(); closeErr != nil {
+			t.Error(closeErr)
 		}
 	})
 	if err = store.Migrate(db); err != nil {
@@ -47,9 +47,9 @@ func seedFixture(t testing.TB) fixture {
 	now := time.Unix(1700000000, 0)
 	users := []int64{}
 	for i, role := range []string{"admin", "editor", "editor"} {
-		u, err := q.CreateUser(ctx, store.CreateUserParams{Email: fmt.Sprintf("ground-%d@example.test", i), Name: role, Role: role, PasswordHash: "unused", CreatedAt: now, UpdatedAt: now})
-		if err != nil {
-			t.Fatal(err)
+		u, userErr := q.CreateUser(ctx, store.CreateUserParams{Email: fmt.Sprintf("ground-%d@example.test", i), Name: role, Role: role, PasswordHash: "unused", CreatedAt: now, UpdatedAt: now})
+		if userErr != nil {
+			t.Fatal(userErr)
 		}
 		users = append(users, u.ID)
 	}
@@ -320,9 +320,9 @@ func TestExampleOverlapIsAWarningOnlyForSubstantialReuse(t *testing.T) {
 }
 
 func FuzzReferenceResolver(f *testing.F) {
-	fixture := seedFixture(f)
-	page := fixture.page(f, "fuzz-page", "en", "published", fixture.owner)
-	resolver := fixture.resolver(f, grounding.Access{})
+	fx := seedFixture(f)
+	page := fx.page(f, "fuzz-page", "en", "published", fx.owner)
+	resolver := fx.resolver(f, grounding.Access{})
 	for _, value := range []string{"fuzz-page", "/en/fuzz-page", "https://example.test/fuzz-page", "http://127.0.0.1/private", "javascript:alert(1)", "/api/secret", "//outside.test/x", "/ru/fuzz-page", "%zz"} {
 		f.Add(value)
 	}

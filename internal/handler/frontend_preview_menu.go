@@ -59,8 +59,8 @@ func (h *FrontendHandler) publicPreviewMenuURL(ctx context.Context, raw string) 
 		return false
 	}
 	if u.Host != "" {
-		base, err := contentpath.SiteURL(h.getConfiguredSiteURL(ctx))
-		if err != nil {
+		base, siteErr := contentpath.SiteURL(h.getConfiguredSiteURL(ctx))
+		if siteErr != nil {
 			return false
 		}
 		target := *u

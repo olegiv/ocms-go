@@ -34,6 +34,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
+	"github.com/olegiv/ocms-go/internal/review"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -639,9 +640,9 @@ func (i *Importer) importSelectedEntities(
 		}
 	}
 	if opts.ImportPages && len(data.Pages) > 0 {
-		if err := i.importPages(ctx, work, data.Pages, userMap, categoryMap, tagMap, mediaMap,
-			defaultLangCode, opts, result); err != nil {
-			return fmt.Errorf("failed to import pages: %w", err)
+		if importErr := i.importPages(ctx, work, data.Pages, userMap, categoryMap, tagMap, mediaMap,
+			defaultLangCode, opts, result); importErr != nil {
+			return fmt.Errorf("failed to import pages: %w", importErr)
 		}
 	}
 
@@ -4388,6 +4389,14 @@ func (i *Importer) importPages(
 				return err
 			}
 		}
+		if updatedPage {
+			// An overwrite can publish an AI draft, so it takes the check every
+			// other publish path runs before the page leaves draft.
+			if err := validateOverwrittenPublication(ctx, queries, pageID); err != nil {
+				result.AddError("page", page.Slug, err.Error())
+				return fmt.Errorf("import page %q: %w", page.Slug, err)
+			}
+		}
 		pageOldToNew[page.ID] = pageID
 		if createdPage {
 			result.IncrementCreated("pages")
@@ -4402,6 +4411,21 @@ func (i *Importer) importPages(
 		result.GetIDMap("pages")[oldID] = newID
 	}
 	return nil
+}
+
+// validateOverwrittenPublication runs review.ValidatePublication on a page the
+// import just overwrote, with its imported taxonomy, when it ends up published
+// or scheduled. Pages without AI access or authoring history pass unchecked, as
+// they do in the editor.
+func validateOverwrittenPublication(ctx context.Context, q *store.Queries, pageID int64) error {
+	page, err := q.GetPageByID(ctx, pageID)
+	if err != nil {
+		return err
+	}
+	if page.Status != "published" && !page.ScheduledAt.Valid {
+		return nil
+	}
+	return review.ValidatePublication(ctx, q, page)
 }
 
 // pageImportFields holds common fields extracted from an ExportPage.

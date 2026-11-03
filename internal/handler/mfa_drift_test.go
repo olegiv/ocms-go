@@ -53,6 +53,70 @@ func TestOnlyGrantSessionSignsIn(t *testing.T) {
 	}
 }
 
+// TestOnlyGrantSessionStampsAuthenticatedAt fails when code outside
+// AuthHandler.grantSession writes the session's authenticated_at time.
+//
+// authenticated_at is what an OAuth consent compares with the moment the
+// authorization request began: only a sign-in that completed after it counts
+// as the fresh login (and second factor) consent demands. A second writer, a
+// "refresh the session" shortcut or a module's own login, would make an old
+// session look freshly authenticated and let a consent skip the sign-in. The
+// key is matched by value, like the user ID key above.
+//
+// Bug state: Put the key in the OAuth authorize handler or in
+// Login, and this names the call.
+func TestOnlyGrantSessionStampsAuthenticatedAt(t *testing.T) {
+	const keyValue = "authenticated_at"
+	fset, files := parseRepoGoFiles(t)
+	keys := sessionKeyNames(files, keyValue)
+	if !keys["SessionKeyAuthenticatedAt"] {
+		t.Fatalf(`no constant named SessionKeyAuthenticatedAt holds %q; the scan no longer knows the session key`, keyValue)
+	}
+	var allowed int
+	for rel, file := range files {
+		for _, put := range sessionKeyCalls(file, keys, keyValue, isSessionPut) {
+			if rel == "internal/handler/mfa.go" && put.fn != nil && isAuthHandlerMethod(put.fn, "grantSession") {
+				allowed++
+				continue
+			}
+			t.Errorf("%s: %s writes the authenticated_at session key; only AuthHandler.grantSession may, after the password and second factor",
+				fset.Position(put.pos), put.where)
+		}
+	}
+	if allowed != 1 {
+		t.Errorf("found %d authenticated_at writes in AuthHandler.grantSession, want 1; the scan no longer sees the sign-in", allowed)
+	}
+}
+
+// TestSessionKeyPutScanFindsAnotherKey runs the scan behind
+// TestOnlyGrantSessionStampsAuthenticatedAt on a fixture: the key is found by
+// its literal, a constant, a qualified constant and an alias, while the user ID
+// key and others are not.
+func TestSessionKeyPutScanFindsAnotherKey(t *testing.T) {
+	const src = `package p
+const SessionKeyAuthenticatedAt = "authenticated_at"
+const alias = middleware.SessionKeyAuthenticatedAt
+func f() {
+	sm.Put(ctx, "authenticated_at", 1)
+	sm.Put(ctx, SessionKeyAuthenticatedAt, 1)
+	sm.Put(ctx, middleware.SessionKeyAuthenticatedAt, 1)
+	sm.Put(ctx, alias, 1)
+	sm.Get(ctx, alias)
+	sm.Put(ctx, "user_id", 1)
+	sm.Put(ctx, "admin_lang", "en")
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "p.go", src, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := sessionKeyNames(map[string]*ast.File{"p.go": file}, "authenticated_at")
+	if got := len(sessionKeyCalls(file, keys, "authenticated_at", isSessionPut)); got != 4 {
+		t.Fatalf("found %d authenticated_at writes, want 4", got)
+	}
+}
+
 // sessionUserReadExceptions are the functions allowed to read the session's
 // user ID directly: the middleware that judges sessions, and callers that
 // need not know whether the session is stale, with why.
@@ -180,11 +244,16 @@ func f() {
 	}
 }
 
-// userIDKeyNames returns the names of the constants and variables, at any
-// level and bound with const, var, := or =, that hold the session's user ID
-// key "user_id", directly or as an alias of another such name. Names are
-// matched across the repository, not per scope, which errs toward flagging.
+// userIDKeyNames returns the names that hold the session's user ID key.
 func userIDKeyNames(files map[string]*ast.File) map[string]bool {
+	return sessionKeyNames(files, "user_id")
+}
+
+// sessionKeyNames returns the names of the constants and variables, at any
+// level and bound with const, var, := or =, that hold the session key value,
+// directly or as an alias of another such name. Names are matched across the
+// repository, not per scope, which errs toward flagging.
+func sessionKeyNames(files map[string]*ast.File, value string) map[string]bool {
 	type binding struct {
 		name  string
 		value ast.Expr
@@ -223,7 +292,7 @@ func userIDKeyNames(files map[string]*ast.File) map[string]bool {
 	for changed := true; changed; {
 		changed = false
 		for _, b := range bindings {
-			if !names[b.name] && isUserIDKey(b.value, names) {
+			if !names[b.name] && isSessionKey(b.value, names, value) {
 				names[b.name] = true
 				changed = true
 			}
@@ -232,8 +301,8 @@ func userIDKeyNames(files map[string]*ast.File) map[string]bool {
 	return names
 }
 
-// userIDCall is a session call whose key is the user ID key.
-type userIDCall struct {
+// sessionKeyCall is a session call whose key is the session key scanned for.
+type sessionKeyCall struct {
 	pos   token.Pos
 	fn    *ast.FuncDecl // nil for a package-level declaration
 	where string
@@ -241,22 +310,25 @@ type userIDCall struct {
 
 // userIDPuts returns every x.Put(ctx, key, v) in file whose key is the user
 // ID key.
-func userIDPuts(file *ast.File, keys map[string]bool) []userIDCall {
-	return userIDCalls(file, keys, func(method string) bool { return method == "Put" })
+func userIDPuts(file *ast.File, keys map[string]bool) []sessionKeyCall {
+	return sessionKeyCalls(file, keys, "user_id", isSessionPut)
 }
+
+// isSessionPut matches the session method that writes a value.
+func isSessionPut(method string) bool { return method == "Put" }
 
 // userIDReads returns every session read in file, x.Get*(ctx, key),
 // x.Pop*(ctx, key) or x.Exists(ctx, key), whose key is the user ID key.
-func userIDReads(file *ast.File, keys map[string]bool) []userIDCall {
-	return userIDCalls(file, keys, func(method string) bool {
+func userIDReads(file *ast.File, keys map[string]bool) []sessionKeyCall {
+	return sessionKeyCalls(file, keys, "user_id", func(method string) bool {
 		return strings.HasPrefix(method, "Get") || strings.HasPrefix(method, "Pop") || method == "Exists"
 	})
 }
 
-// userIDCalls returns every x.M(ctx, key, ...) in file, for a method M that
-// method accepts, whose key is the user ID key.
-func userIDCalls(file *ast.File, keys map[string]bool, method func(string) bool) []userIDCall {
-	var calls []userIDCall
+// sessionKeyCalls returns every x.M(ctx, key, ...) in file, for a method M that
+// method accepts, whose key is the session key value.
+func sessionKeyCalls(file *ast.File, keys map[string]bool, value string, method func(string) bool) []sessionKeyCall {
+	var calls []sessionKeyCall
 	for _, decl := range file.Decls {
 		fn, _ := decl.(*ast.FuncDecl)
 		where := "a package-level declaration"
@@ -268,8 +340,8 @@ func userIDCalls(file *ast.File, keys map[string]bool, method func(string) bool)
 			if !ok || len(call.Args) < 2 {
 				return true
 			}
-			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && method(sel.Sel.Name) && isUserIDKey(call.Args[1], keys) {
-				calls = append(calls, userIDCall{pos: call.Pos(), fn: fn, where: where})
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && method(sel.Sel.Name) && isSessionKey(call.Args[1], keys, value) {
+				calls = append(calls, sessionKeyCall{pos: call.Pos(), fn: fn, where: where})
 			}
 			return true
 		})
@@ -277,17 +349,17 @@ func userIDCalls(file *ast.File, keys map[string]bool, method func(string) bool)
 	return calls
 }
 
-// isUserIDKey reports whether expr is the user ID key: a constant named in
-// keys, or a string expression whose value is "user_id".
-func isUserIDKey(expr ast.Expr, keys map[string]bool) bool {
+// isSessionKey reports whether expr is the session key: a constant named in
+// keys, or a string expression whose value is value.
+func isSessionKey(expr ast.Expr, keys map[string]bool, value string) bool {
 	switch e := ast.Unparen(expr).(type) {
 	case *ast.Ident:
 		return keys[e.Name]
 	case *ast.SelectorExpr:
 		return keys[e.Sel.Name]
 	}
-	value, ok := stringValue(expr)
-	return ok && value == "user_id"
+	got, ok := stringValue(expr)
+	return ok && got == value
 }
 
 // stringValue folds a string literal, or a + of string literals, to its

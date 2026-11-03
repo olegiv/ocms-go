@@ -5,6 +5,7 @@ package oauth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -116,8 +117,8 @@ func TestGrantOwnershipAndStoredDataContainNoCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.s.RevokeGrant(t.Context(), f.user.ID+1, p.GrantID); err != nil {
-		t.Fatal(err)
+	if err := f.s.RevokeGrant(t.Context(), f.user.ID+1, p.GrantID); !errors.Is(err, ErrGrantNotFound) {
+		t.Fatalf("a foreign account's revoke = %v, want ErrGrantNotFound", err)
 	}
 	if _, err := f.s.VerifyAccess(t.Context(), access(body)); err != nil {
 		t.Fatal("foreign account revoked grant")
@@ -152,5 +153,44 @@ func TestGrantOwnershipAndStoredDataContainNoCredentials(t *testing.T) {
 			t.Fatal(err)
 		}
 		_ = rows.Close()
+	}
+}
+
+// TestRevokeGrantSaysWhenThereIsNothingToRevoke pins R1 P3-5: RevokeGrant
+// reported success when no row was revoked, so the account page claimed a
+// revocation of a connection that was never the account's. A connection that
+// is unknown or another account's is ErrGrantNotFound (and stays untouched),
+// the owner's repeat of a revoke stays a quiet success, and only the real
+// revocation is audited.
+func TestRevokeGrantSaysWhenThereIsNothingToRevoke(t *testing.T) {
+	f := newFixture(t)
+	body := f.redeem(t, f.code(t))
+	p, err := f.s.VerifyAccess(t.Context(), access(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.s.RevokeGrant(t.Context(), f.user.ID, "no-such-grant"); !errors.Is(err, ErrGrantNotFound) {
+		t.Fatalf("unknown grant = %v, want ErrGrantNotFound", err)
+	}
+	if err = f.s.RevokeGrant(t.Context(), f.user.ID+1, p.GrantID); !errors.Is(err, ErrGrantNotFound) {
+		t.Fatalf("another account's grant = %v, want ErrGrantNotFound", err)
+	}
+	if _, err = f.s.VerifyAccess(t.Context(), access(body)); err != nil {
+		t.Fatalf("a refused revoke changed the grant: %v", err)
+	}
+	if err = f.s.RevokeGrant(t.Context(), f.user.ID, p.GrantID); err != nil {
+		t.Fatalf("owner revoke = %v", err)
+	}
+	if err = f.s.RevokeGrant(t.Context(), f.user.ID, p.GrantID); err != nil {
+		t.Fatalf("owner's repeated revoke = %v, want a quiet success", err)
+	}
+	audited := 0
+	for _, e := range authEvents(t, f) {
+		if e.message == "OAuth connection revoked by account" {
+			audited++
+		}
+	}
+	if audited != 1 {
+		t.Fatalf("revocation audit events = %d, want 1", audited)
 	}
 }

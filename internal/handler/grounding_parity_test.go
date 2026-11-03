@@ -38,9 +38,9 @@ func TestGroundingMatchesFrontendLanguageAliasIDAndRedirectRoutes(t *testing.T) 
 	}
 	ids := map[string]int64{}
 	for slug, language := range map[string]string{"published": "en", "russian": "ru"} {
-		page, err := q.CreatePage(ctx, store.CreatePageParams{Title: "Marker " + slug, Slug: slug, Body: "<p>Published body marker " + slug + "</p>", Summary: "Reference", Status: "published", AuthorID: user.ID, LanguageCode: language, PageType: "post", CreatedAt: now, UpdatedAt: now})
-		if err != nil {
-			t.Fatal(err)
+		page, pageErr := q.CreatePage(ctx, store.CreatePageParams{Title: "Marker " + slug, Slug: slug, Body: "<p>Published body marker " + slug + "</p>", Summary: "Reference", Status: "published", AuthorID: user.ID, LanguageCode: language, PageType: "post", CreatedAt: now, UpdatedAt: now})
+		if pageErr != nil {
+			t.Fatal(pageErr)
 		}
 		ids[slug] = page.ID
 	}

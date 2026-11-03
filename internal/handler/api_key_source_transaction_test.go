@@ -30,10 +30,10 @@ func TestAPIKeyUpdateRollsBackMetadataWhenSourcePolicyFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := q.ReplaceAPIKeySourceCIDRs(t.Context(), key.ID, []string{"198.51.100.1/32"}); err != nil {
+	if err = q.ReplaceAPIKeySourceCIDRs(t.Context(), key.ID, []string{"198.51.100.1/32"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`CREATE TRIGGER reject_source_update BEFORE INSERT ON api_key_source_cidrs BEGIN SELECT RAISE(ABORT, 'test source failure'); END`); err != nil {
+	if _, err = db.Exec(`CREATE TRIGGER reject_source_update BEFORE INSERT ON api_key_source_cidrs BEGIN SELECT RAISE(ABORT, 'test source failure'); END`); err != nil {
 		t.Fatal(err)
 	}
 	h := NewAPIKeysHandler(db, newStatusTestRenderer(t, db, sm), sm)
@@ -60,7 +60,7 @@ func TestAPIKeyUpdateRollsBackMetadataWhenSourcePolicyFails(t *testing.T) {
 	if sm.GetString(req.Context(), "flash_type") != "error" || sm.GetString(req.Context(), "flash") == "" {
 		t.Fatal("failed update did not report an error")
 	}
-	if _, err := db.Exec(`DROP TRIGGER reject_source_update`); err != nil {
+	if _, err = db.Exec(`DROP TRIGGER reject_source_update`); err != nil {
 		t.Fatal(err)
 	}
 	req = sendUpdate()
@@ -72,7 +72,7 @@ func TestAPIKeyUpdateRollsBackMetadataWhenSourcePolicyFails(t *testing.T) {
 	if err != nil || len(policy) != 1 || policy[0] != "203.0.113.1/32" {
 		t.Fatalf("normal source update failed: %v, %v", policy, err)
 	}
-	if _, err := db.Exec(`DROP TABLE api_key_source_cidrs`); err != nil {
+	if _, err = db.Exec(`DROP TABLE api_key_source_cidrs`); err != nil {
 		t.Fatal(err)
 	}
 	form.Set("name", "Legacy")

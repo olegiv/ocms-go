@@ -5,6 +5,8 @@ package mcpserver
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,6 +42,15 @@ func (m *Module) keyAccountGuard(next http.Handler) http.Handler {
 			return
 		}
 		user, err := m.svc.queries.GetUserByID(r.Context(), key.CreatedBy)
+		// A missing account or a role without MCP scopes is a key that cannot
+		// be used. A storage fault says nothing about the key: 401 would tell
+		// the agent to drop it, so it is a logged 500 instead, as in the
+		// API-key middleware.
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			m.logger.ErrorContext(r.Context(), "failed to load the account of an MCP API key", "error", err, "api_key_id", key.ID, "user_id", key.CreatedBy)
+			middleware.WriteAPIError(w, http.StatusInternalServerError, codeInternal, msgInternal, nil)
+			return
+		}
 		if err != nil || len(oauth.RoleScopes(user.Role)) == 0 {
 			middleware.WriteAPIError(w, 401, codeUnauthorized, msgUnauthenticated, nil)
 			return

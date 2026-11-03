@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/ai/draft"
@@ -78,6 +79,17 @@ func decodeReport(raw string) (Report, error) {
 	return result, err
 }
 
+// actorLookup interprets the lookup of who or what made a revision. A missing
+// row means the actor is gone, which the panel shows as no name; any other
+// error is a fault to report, not an actor to omit.
+func actorLookup(kind string, err error) error {
+	if err == nil || errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	return fmt.Errorf("load revision %s: %w", kind, err)
+}
+
+// Load reads the evidence recorded for the page's current revision.
 func Load(ctx context.Context, q *store.Queries, page store.Page, viewer int64) (Review, error) {
 	if err := pagewrite.RequireEditor(ctx, q, viewer); err != nil {
 		return Review{}, err
@@ -95,19 +107,25 @@ func Load(ctx context.Context, q *store.Queries, page store.Page, viewer int64) 
 			return Review{}, err
 		}
 		if fact.UserID.Valid {
-			if user, e := q.GetUserByID(ctx, fact.UserID.Int64); e == nil {
-				result.ActorName = user.Name
+			user, lookupErr := q.GetUserByID(ctx, fact.UserID.Int64)
+			if err = actorLookup("account", lookupErr); err != nil {
+				return Review{}, err
 			}
+			result.ActorName = user.Name
 		}
 		if fact.OauthClientID != "" {
-			if client, e := q.GetOAuthClient(ctx, fact.OauthClientID); e == nil {
-				result.RegisteredApp = client.Name
+			client, lookupErr := q.GetOAuthClient(ctx, fact.OauthClientID)
+			if err = actorLookup("OAuth client", lookupErr); err != nil {
+				return Review{}, err
 			}
+			result.RegisteredApp = client.Name
 		}
 		if fact.ApiKeyID.Valid {
-			if key, e := q.GetAPIKeyByID(ctx, fact.ApiKeyID.Int64); e == nil {
-				result.RegisteredApp = key.Name
+			key, lookupErr := q.GetAPIKeyByID(ctx, fact.ApiKeyID.Int64)
+			if err = actorLookup("API key", lookupErr); err != nil {
+				return Review{}, err
 			}
+			result.RegisteredApp = key.Name
 		}
 		checks, e := q.ListClaimChecks(ctx, fact.ID)
 		if e != nil {
@@ -193,7 +211,7 @@ func Translations(ctx context.Context, q *store.Queries, page store.Page) ([]Tra
 			item.Revision = p.Revision
 			item.Title = p.Title
 			item.Status = p.Status
-			if access, e := q.GetPageAIAccess(ctx, p.ID); e == nil && access.AiEditable && p.Status == "draft" {
+			if access, accessErr := q.GetPageAIAccess(ctx, p.ID); accessErr == nil && access.AiEditable && p.Status == "draft" {
 				item.Status = "ai_draft"
 			}
 			fact, e := q.GetLatestTranslationProvenance(ctx, store.GetLatestTranslationProvenanceParams{PageID: p.ID, Revision: p.Revision})

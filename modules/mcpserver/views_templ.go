@@ -47,8 +47,6 @@ type DashboardData struct {
 	ClaudeCodeCommand string
 	ClientConfigJSON  string
 	Tools             []ToolRow
-	Keys              []KeyRow
-	KeysError         bool
 	OAuthEnabled      bool
 	DraftToolsEnabled bool
 	ExternalLinks     string
@@ -79,18 +77,6 @@ type ToolRow struct {
 	Name        string
 	Title       string
 	Description string
-}
-
-// KeyRow is one API key holding the mcp:access permission.
-type KeyRow struct {
-	ID          int64
-	Name        string
-	Prefix      string
-	Permissions []string
-	Active      bool
-	Expired     bool
-	LastUsed    string
-	Expires     string
 }
 
 // DashboardPage renders /admin/mcp.
@@ -154,7 +140,7 @@ func DashboardPage(pc *adminviews.PageContext, data DashboardData) templ.Compone
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.create_key"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 92, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 78, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -204,7 +190,7 @@ func DashboardPage(pc *adminviews.PageContext, data DashboardData) templ.Compone
 						var templ_7745c5c3_Var8 string
 						templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.config_error"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 99, Col: 32}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 85, Col: 32}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 						if templ_7745c5c3_Err != nil {
@@ -250,7 +236,7 @@ func DashboardPage(pc *adminviews.PageContext, data DashboardData) templ.Compone
 						var templ_7745c5c3_Var11 string
 						templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.site_url_invalid", data.SiteURLInvalid))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 105, Col: 57}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 91, Col: 57}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 						if templ_7745c5c3_Err != nil {
@@ -296,7 +282,7 @@ func DashboardPage(pc *adminviews.PageContext, data DashboardData) templ.Compone
 						var templ_7745c5c3_Var14 string
 						templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.site_url_missing"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 111, Col: 36}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 97, Col: 36}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 						if templ_7745c5c3_Err != nil {
@@ -337,11 +323,6 @@ func DashboardPage(pc *adminviews.PageContext, data DashboardData) templ.Compone
 			}
 			if data.Connections != nil {
 				templ_7745c5c3_Err = accountviews.ConnectionsPanel(pc, *data.Connections).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = keysCard(pc, data).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -420,7 +401,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var19 string
 					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.endpoint_title"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 133, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 117, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 					if templ_7745c5c3_Err != nil {
@@ -447,7 +428,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var21 string
 					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.endpoint_help"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 136, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 120, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 					if templ_7745c5c3_Err != nil {
@@ -484,7 +465,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.endpoint_label"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 141, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 125, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
@@ -497,7 +478,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(data.EndpointURL)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 142, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 126, Col: 60}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 				if templ_7745c5c3_Err != nil {
@@ -510,7 +491,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.mode_label"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 143, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 127, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
@@ -536,7 +517,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 						var templ_7745c5c3_Var27 string
 						templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.authoring_enabled"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 147, Col: 38}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 131, Col: 38}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 						if templ_7745c5c3_Err != nil {
@@ -546,7 +527,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 						var templ_7745c5c3_Var28 string
 						templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.read_only"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 149, Col: 30}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 133, Col: 30}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 						if templ_7745c5c3_Err != nil {
@@ -566,7 +547,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.protocol_versions"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 153, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 137, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {
@@ -579,7 +560,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(data.ProtocolVersions)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 154, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 138, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {
@@ -592,7 +573,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.server_version"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 155, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 139, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -605,7 +586,7 @@ func endpointCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var32 string
 				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(data.Version)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 156, Col: 22}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 140, Col: 22}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
@@ -691,7 +672,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 					var templ_7745c5c3_Var37 string
 					templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.connect_title"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 166, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 150, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 					if templ_7745c5c3_Err != nil {
@@ -718,7 +699,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 					var templ_7745c5c3_Var39 string
 					templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.connect_description"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 169, Col: 37}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 153, Col: 37}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 					if templ_7745c5c3_Err != nil {
@@ -760,7 +741,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 					var templ_7745c5c3_Var41 string
 					templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.oauth_connect"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 175, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 159, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 					if templ_7745c5c3_Err != nil {
@@ -773,7 +754,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 					var templ_7745c5c3_Var42 string
 					templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("connected.title"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 175, Col: 115}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 159, Col: 115}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 					if templ_7745c5c3_Err != nil {
@@ -791,7 +772,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.connect_claude_code"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 178, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 162, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
@@ -804,7 +785,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 				var templ_7745c5c3_Var44 string
 				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(data.ClaudeCodeCommand)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 179, Col: 96}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 163, Col: 96}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 				if templ_7745c5c3_Err != nil {
@@ -817,7 +798,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 				var templ_7745c5c3_Var45 string
 				templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.connect_json"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 182, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 166, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 				if templ_7745c5c3_Err != nil {
@@ -830,7 +811,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 				var templ_7745c5c3_Var46 string
 				templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(data.ClientConfigJSON)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 183, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 167, Col: 95}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 				if templ_7745c5c3_Err != nil {
@@ -843,7 +824,7 @@ func connectCard(pc *adminviews.PageContext, data DashboardData) templ.Component
 				var templ_7745c5c3_Var47 string
 				templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.connect_key_warning"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 185, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 169, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 				if templ_7745c5c3_Err != nil {
@@ -929,7 +910,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var52 string
 					templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.settings_title"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 195, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 179, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 					if templ_7745c5c3_Err != nil {
@@ -991,7 +972,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 							var templ_7745c5c3_Var56 string
 							templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.settings_load_error"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 203, Col: 40}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 187, Col: 40}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 							if templ_7745c5c3_Err != nil {
@@ -1041,7 +1022,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var58 string
 					templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.draft_tools_enabled"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 213, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 197, Col: 40}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 					if templ_7745c5c3_Err != nil {
@@ -1060,7 +1041,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var59 string
 				templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.draft_tools_help"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 215, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 199, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 				if templ_7745c5c3_Err != nil {
@@ -1093,7 +1074,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var61 string
 					templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.agent_share_links"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 222, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 206, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 					if templ_7745c5c3_Err != nil {
@@ -1112,7 +1093,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var62 string
 				templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.agent_share_links_help"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 224, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 208, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 				if templ_7745c5c3_Err != nil {
@@ -1137,7 +1118,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var64 string
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.external_links"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 229, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 213, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 					if templ_7745c5c3_Err != nil {
@@ -1210,7 +1191,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 							var templ_7745c5c3_Var69 string
 							templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.links_keep"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 237, Col: 32}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 221, Col: 32}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 							if templ_7745c5c3_Err != nil {
@@ -1237,7 +1218,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 							var templ_7745c5c3_Var71 string
 							templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.links_nofollow"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 240, Col: 36}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 224, Col: 36}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 							if templ_7745c5c3_Err != nil {
@@ -1264,7 +1245,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 							var templ_7745c5c3_Var73 string
 							templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.links_strip"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 243, Col: 33}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 227, Col: 33}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 							if templ_7745c5c3_Err != nil {
@@ -1295,7 +1276,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var74 string
 				templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.external_links_help"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 247, Col: 79}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 231, Col: 79}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 				if templ_7745c5c3_Err != nil {
@@ -1328,7 +1309,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var76 string
 					templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.allow_drafts"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 253, Col: 33}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 237, Col: 33}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 					if templ_7745c5c3_Err != nil {
@@ -1347,7 +1328,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var77 string
 				templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.allow_drafts_help"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 255, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 239, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
 				if templ_7745c5c3_Err != nil {
@@ -1372,7 +1353,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var79 string
 					templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.instructions"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 260, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 244, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 					if templ_7745c5c3_Err != nil {
@@ -1403,7 +1384,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 				var templ_7745c5c3_Var80 string
 				templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.instructions_help", data.MaxInstructions))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 271, Col: 99}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 255, Col: 99}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 				if templ_7745c5c3_Err != nil {
@@ -1428,7 +1409,7 @@ func settingsCard(pc *adminviews.PageContext, data DashboardData) templ.Componen
 					var templ_7745c5c3_Var82 string
 					templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.save_button"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 274, Col: 30}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 258, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 					if templ_7745c5c3_Err != nil {
@@ -1520,7 +1501,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 					var templ_7745c5c3_Var87 string
 					templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_title"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 285, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 269, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
 					if templ_7745c5c3_Err != nil {
@@ -1547,7 +1528,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 					var templ_7745c5c3_Var89 string
 					templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_description"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 288, Col: 41}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 272, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 					if templ_7745c5c3_Err != nil {
@@ -1605,7 +1586,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 							var templ_7745c5c3_Var93 string
 							templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_error"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 295, Col: 37}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 279, Col: 37}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 							if templ_7745c5c3_Err != nil {
@@ -1631,7 +1612,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 					var templ_7745c5c3_Var94 string
 					templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_empty"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 299, Col: 76}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 283, Col: 76}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var94))
 					if templ_7745c5c3_Err != nil {
@@ -1693,7 +1674,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 									var templ_7745c5c3_Var99 string
 									templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_page"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 305, Col: 38}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 289, Col: 38}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 									if templ_7745c5c3_Err != nil {
@@ -1720,7 +1701,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 									var templ_7745c5c3_Var101 string
 									templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_issued_by"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 308, Col: 43}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 292, Col: 43}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
 									if templ_7745c5c3_Err != nil {
@@ -1747,7 +1728,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 									var templ_7745c5c3_Var103 string
 									templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_expires"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 311, Col: 41}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 295, Col: 41}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
 									if templ_7745c5c3_Err != nil {
@@ -1833,7 +1814,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 										var templ_7745c5c3_Var108 templ.SafeURL
 										templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/pages/%d", link.PageID)))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 321, Col: 95}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 305, Col: 95}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
 										if templ_7745c5c3_Err != nil {
@@ -1846,7 +1827,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 										var templ_7745c5c3_Var109 string
 										templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinStringErrs(link.PageTitle)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 321, Col: 114}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 305, Col: 114}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var109))
 										if templ_7745c5c3_Err != nil {
@@ -1859,7 +1840,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 										var templ_7745c5c3_Var110 string
 										templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_revision", link.Revision))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 322, Col: 102}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 306, Col: 102}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var110))
 										if templ_7745c5c3_Err != nil {
@@ -1890,7 +1871,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 										var templ_7745c5c3_Var112 string
 										templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinStringErrs(link.Creator)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 325, Col: 23}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 309, Col: 23}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 										if templ_7745c5c3_Err != nil {
@@ -1903,7 +1884,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 										var templ_7745c5c3_Var113 string
 										templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(link.CreatorEmail)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 326, Col: 72}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 310, Col: 72}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 										if templ_7745c5c3_Err != nil {
@@ -1952,7 +1933,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 												var templ_7745c5c3_Var116 string
 												templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_api_key"))
 												if templ_7745c5c3_Err != nil {
-													return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 333, Col: 44}
+													return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 317, Col: 44}
 												}
 												_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var116))
 												if templ_7745c5c3_Err != nil {
@@ -1986,7 +1967,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 										var templ_7745c5c3_Var118 string
 										templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(link.Expires)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 338, Col: 23}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 322, Col: 23}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
 										if templ_7745c5c3_Err != nil {
@@ -2017,7 +1998,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 										var templ_7745c5c3_Var120 templ.SafeURL
 										templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/mcp/share-links/%d/revoke", link.ID)))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 341, Col: 109}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 325, Col: 109}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var120))
 										if templ_7745c5c3_Err != nil {
@@ -2046,7 +2027,7 @@ func shareLinksCard(pc *adminviews.PageContext, data DashboardData) templ.Compon
 											var templ_7745c5c3_Var122 string
 											templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.share_links_revoke"))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 344, Col: 43}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 328, Col: 43}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
 											if templ_7745c5c3_Err != nil {
@@ -2164,7 +2145,7 @@ func toolsCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
 					var templ_7745c5c3_Var127 string
 					templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.tools_title"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 361, Col: 29}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 345, Col: 29}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
 					if templ_7745c5c3_Err != nil {
@@ -2191,7 +2172,7 @@ func toolsCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
 					var templ_7745c5c3_Var129 string
 					templ_7745c5c3_Var129, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.tools_description"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 364, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 348, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var129))
 					if templ_7745c5c3_Err != nil {
@@ -2276,7 +2257,7 @@ func toolsCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
 								var templ_7745c5c3_Var135 string
 								templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.tool_name"))
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 373, Col: 31}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 357, Col: 31}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var135))
 								if templ_7745c5c3_Err != nil {
@@ -2303,7 +2284,7 @@ func toolsCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
 								var templ_7745c5c3_Var137 string
 								templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.tool_description"))
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 376, Col: 38}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 360, Col: 38}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var137))
 								if templ_7745c5c3_Err != nil {
@@ -2371,7 +2352,7 @@ func toolsCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
 									var templ_7745c5c3_Var141 string
 									templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.JoinStringErrs(tool.Name)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 384, Col: 52}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 368, Col: 52}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var141))
 									if templ_7745c5c3_Err != nil {
@@ -2384,7 +2365,7 @@ func toolsCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
 									var templ_7745c5c3_Var142 string
 									templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(tool.Title)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 385, Col: 64}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 369, Col: 64}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 									if templ_7745c5c3_Err != nil {
@@ -2419,7 +2400,7 @@ func toolsCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
 									var templ_7745c5c3_Var144 string
 									templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinStringErrs(tool.Description)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 388, Col: 49}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 372, Col: 49}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var144))
 									if templ_7745c5c3_Err != nil {
@@ -2469,831 +2450,6 @@ func toolsCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
 		templ_7745c5c3_Err = card.Card(card.Props{ID: "mcp-tools"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var124), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
-		}
-		return nil
-	})
-}
-
-func keysCard(pc *adminviews.PageContext, data DashboardData) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
-		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
-		}
-		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var145 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var145 == nil {
-			templ_7745c5c3_Var145 = templ.NopComponent
-		}
-		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var146 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var147 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-				if !templ_7745c5c3_IsBuffer {
-					defer func() {
-						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err == nil {
-							templ_7745c5c3_Err = templ_7745c5c3_BufErr
-						}
-					}()
-				}
-				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Var148 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-					if !templ_7745c5c3_IsBuffer {
-						defer func() {
-							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err == nil {
-								templ_7745c5c3_Err = templ_7745c5c3_BufErr
-							}
-						}()
-					}
-					ctx = templ.InitializeContext(ctx)
-					var templ_7745c5c3_Var149 string
-					templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.keys_title"))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 403, Col: 28}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					return nil
-				})
-				templ_7745c5c3_Err = card.Title().Render(templ.WithChildren(ctx, templ_7745c5c3_Var148), templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Var150 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-					if !templ_7745c5c3_IsBuffer {
-						defer func() {
-							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err == nil {
-								templ_7745c5c3_Err = templ_7745c5c3_BufErr
-							}
-						}()
-					}
-					ctx = templ.InitializeContext(ctx)
-					var templ_7745c5c3_Var151 string
-					templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.keys_description"))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 406, Col: 34}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var151))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					return nil
-				})
-				templ_7745c5c3_Err = card.Description().Render(templ.WithChildren(ctx, templ_7745c5c3_Var150), templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				return nil
-			})
-			templ_7745c5c3_Err = card.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var147), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Var152 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-				if !templ_7745c5c3_IsBuffer {
-					defer func() {
-						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err == nil {
-							templ_7745c5c3_Err = templ_7745c5c3_BufErr
-						}
-					}()
-				}
-				ctx = templ.InitializeContext(ctx)
-				if data.KeysError {
-					templ_7745c5c3_Var153 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-						if !templ_7745c5c3_IsBuffer {
-							defer func() {
-								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err == nil {
-									templ_7745c5c3_Err = templ_7745c5c3_BufErr
-								}
-							}()
-						}
-						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Var154 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-							if !templ_7745c5c3_IsBuffer {
-								defer func() {
-									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err == nil {
-										templ_7745c5c3_Err = templ_7745c5c3_BufErr
-									}
-								}()
-							}
-							ctx = templ.InitializeContext(ctx)
-							var templ_7745c5c3_Var155 string
-							templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.keys_error"))
-							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 413, Col: 30}
-							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var155))
-							if templ_7745c5c3_Err != nil {
-								return templ_7745c5c3_Err
-							}
-							return nil
-						})
-						templ_7745c5c3_Err = alert.Description().Render(templ.WithChildren(ctx, templ_7745c5c3_Var154), templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						return nil
-					})
-					templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDestructive}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var153), templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else if len(data.Keys) == 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<p class=\"text-sm text-muted-foreground\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var156 string
-					templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.keys_empty"))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 417, Col: 69}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "</p>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<div class=\"overflow-x-auto\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Var157 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-						if !templ_7745c5c3_IsBuffer {
-							defer func() {
-								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err == nil {
-									templ_7745c5c3_Err = templ_7745c5c3_BufErr
-								}
-							}()
-						}
-						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Var158 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-							if !templ_7745c5c3_IsBuffer {
-								defer func() {
-									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err == nil {
-										templ_7745c5c3_Err = templ_7745c5c3_BufErr
-									}
-								}()
-							}
-							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Var159 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-								templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-								templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-								if !templ_7745c5c3_IsBuffer {
-									defer func() {
-										templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-										if templ_7745c5c3_Err == nil {
-											templ_7745c5c3_Err = templ_7745c5c3_BufErr
-										}
-									}()
-								}
-								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Var160 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-									if !templ_7745c5c3_IsBuffer {
-										defer func() {
-											templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-											if templ_7745c5c3_Err == nil {
-												templ_7745c5c3_Err = templ_7745c5c3_BufErr
-											}
-										}()
-									}
-									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var161 string
-									templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.name"))
-									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 424, Col: 29}
-									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var161))
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									return nil
-								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var160), templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err != nil {
-									return templ_7745c5c3_Err
-								}
-								templ_7745c5c3_Var162 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-									if !templ_7745c5c3_IsBuffer {
-										defer func() {
-											templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-											if templ_7745c5c3_Err == nil {
-												templ_7745c5c3_Err = templ_7745c5c3_BufErr
-											}
-										}()
-									}
-									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var163 string
-									templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.key_prefix"))
-									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 427, Col: 38}
-									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var163))
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									return nil
-								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var162), templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err != nil {
-									return templ_7745c5c3_Err
-								}
-								templ_7745c5c3_Var164 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-									if !templ_7745c5c3_IsBuffer {
-										defer func() {
-											templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-											if templ_7745c5c3_Err == nil {
-												templ_7745c5c3_Err = templ_7745c5c3_BufErr
-											}
-										}()
-									}
-									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var165 string
-									templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.permissions"))
-									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 430, Col: 39}
-									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									return nil
-								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var164), templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err != nil {
-									return templ_7745c5c3_Err
-								}
-								templ_7745c5c3_Var166 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-									if !templ_7745c5c3_IsBuffer {
-										defer func() {
-											templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-											if templ_7745c5c3_Err == nil {
-												templ_7745c5c3_Err = templ_7745c5c3_BufErr
-											}
-										}()
-									}
-									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var167 string
-									templ_7745c5c3_Var167, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.status"))
-									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 433, Col: 31}
-									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var167))
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									return nil
-								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var166), templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err != nil {
-									return templ_7745c5c3_Err
-								}
-								templ_7745c5c3_Var168 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-									if !templ_7745c5c3_IsBuffer {
-										defer func() {
-											templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-											if templ_7745c5c3_Err == nil {
-												templ_7745c5c3_Err = templ_7745c5c3_BufErr
-											}
-										}()
-									}
-									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var169 string
-									templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.last_used"))
-									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 436, Col: 37}
-									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									return nil
-								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var168), templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err != nil {
-									return templ_7745c5c3_Err
-								}
-								templ_7745c5c3_Var170 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-									if !templ_7745c5c3_IsBuffer {
-										defer func() {
-											templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-											if templ_7745c5c3_Err == nil {
-												templ_7745c5c3_Err = templ_7745c5c3_BufErr
-											}
-										}()
-									}
-									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var171 string
-									templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.expires"))
-									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 439, Col: 35}
-									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var171))
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									return nil
-								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var170), templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err != nil {
-									return templ_7745c5c3_Err
-								}
-								return nil
-							})
-							templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var159), templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err != nil {
-								return templ_7745c5c3_Err
-							}
-							return nil
-						})
-						templ_7745c5c3_Err = table.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var158), templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Var172 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-							if !templ_7745c5c3_IsBuffer {
-								defer func() {
-									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err == nil {
-										templ_7745c5c3_Err = templ_7745c5c3_BufErr
-									}
-								}()
-							}
-							ctx = templ.InitializeContext(ctx)
-							for _, key := range data.Keys {
-								templ_7745c5c3_Var173 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-									if !templ_7745c5c3_IsBuffer {
-										defer func() {
-											templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-											if templ_7745c5c3_Err == nil {
-												templ_7745c5c3_Err = templ_7745c5c3_BufErr
-											}
-										}()
-									}
-									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Var174 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-										if !templ_7745c5c3_IsBuffer {
-											defer func() {
-												templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-												if templ_7745c5c3_Err == nil {
-													templ_7745c5c3_Err = templ_7745c5c3_BufErr
-												}
-											}()
-										}
-										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "<a href=\"")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										var templ_7745c5c3_Var175 templ.SafeURL
-										templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/api-keys/%d", key.ID)))
-										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 447, Col: 76}
-										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var175))
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\" class=\"font-medium hover:underline\">")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										var templ_7745c5c3_Var176 string
-										templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.JoinStringErrs(key.Name)
-										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 447, Col: 125}
-										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var176))
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</a>")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										return nil
-									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var174), templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									templ_7745c5c3_Var177 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-										if !templ_7745c5c3_IsBuffer {
-											defer func() {
-												templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-												if templ_7745c5c3_Err == nil {
-													templ_7745c5c3_Err = templ_7745c5c3_BufErr
-												}
-											}()
-										}
-										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<code class=\"font-mono text-xs\">")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										var templ_7745c5c3_Var178 string
-										templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.JoinStringErrs(key.Prefix)
-										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 450, Col: 54}
-										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var178))
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "…</code>")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										return nil
-									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var177), templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									templ_7745c5c3_Var179 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-										if !templ_7745c5c3_IsBuffer {
-											defer func() {
-												templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-												if templ_7745c5c3_Err == nil {
-													templ_7745c5c3_Err = templ_7745c5c3_BufErr
-												}
-											}()
-										}
-										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<div class=\"flex flex-wrap gap-1\">")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										for _, perm := range key.Permissions {
-											templ_7745c5c3_Var180 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-												templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-												templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-												if !templ_7745c5c3_IsBuffer {
-													defer func() {
-														templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-														if templ_7745c5c3_Err == nil {
-															templ_7745c5c3_Err = templ_7745c5c3_BufErr
-														}
-													}()
-												}
-												ctx = templ.InitializeContext(ctx)
-												var templ_7745c5c3_Var181 string
-												templ_7745c5c3_Var181, templ_7745c5c3_Err = templ.JoinStringErrs(perm)
-												if templ_7745c5c3_Err != nil {
-													return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 456, Col: 19}
-												}
-												_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var181))
-												if templ_7745c5c3_Err != nil {
-													return templ_7745c5c3_Err
-												}
-												return nil
-											})
-											templ_7745c5c3_Err = badge.Badge(badge.Props{Variant: badge.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var180), templ_7745c5c3_Buffer)
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "</div>")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										return nil
-									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var179), templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									templ_7745c5c3_Var182 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-										if !templ_7745c5c3_IsBuffer {
-											defer func() {
-												templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-												if templ_7745c5c3_Err == nil {
-													templ_7745c5c3_Err = templ_7745c5c3_BufErr
-												}
-											}()
-										}
-										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Err = keyStatusBadge(pc, key).Render(ctx, templ_7745c5c3_Buffer)
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										return nil
-									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var182), templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									templ_7745c5c3_Var183 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-										if !templ_7745c5c3_IsBuffer {
-											defer func() {
-												templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-												if templ_7745c5c3_Err == nil {
-													templ_7745c5c3_Err = templ_7745c5c3_BufErr
-												}
-											}()
-										}
-										ctx = templ.InitializeContext(ctx)
-										if key.LastUsed != "" {
-											var templ_7745c5c3_Var184 string
-											templ_7745c5c3_Var184, templ_7745c5c3_Err = templ.JoinStringErrs(key.LastUsed)
-											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 466, Col: 25}
-											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var184))
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-										} else {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "<span class=\"text-muted-foreground\">")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											var templ_7745c5c3_Var185 string
-											templ_7745c5c3_Var185, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.never"))
-											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 468, Col: 66}
-											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var185))
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</span>")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-										}
-										return nil
-									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var183), templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									templ_7745c5c3_Var186 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-										if !templ_7745c5c3_IsBuffer {
-											defer func() {
-												templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-												if templ_7745c5c3_Err == nil {
-													templ_7745c5c3_Err = templ_7745c5c3_BufErr
-												}
-											}()
-										}
-										ctx = templ.InitializeContext(ctx)
-										if key.Expires != "" {
-											var templ_7745c5c3_Var187 string
-											templ_7745c5c3_Var187, templ_7745c5c3_Err = templ.JoinStringErrs(key.Expires)
-											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 473, Col: 24}
-											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var187))
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-										} else {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<span class=\"text-muted-foreground\">")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											var templ_7745c5c3_Var188 string
-											templ_7745c5c3_Var188, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("mcp.never"))
-											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 475, Col: 66}
-											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var188))
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "</span>")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-										}
-										return nil
-									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var186), templ_7745c5c3_Buffer)
-									if templ_7745c5c3_Err != nil {
-										return templ_7745c5c3_Err
-									}
-									return nil
-								})
-								templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var173), templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err != nil {
-									return templ_7745c5c3_Err
-								}
-							}
-							return nil
-						})
-						templ_7745c5c3_Err = table.Body().Render(templ.WithChildren(ctx, templ_7745c5c3_Var172), templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						return nil
-					})
-					templ_7745c5c3_Err = table.Table().Render(templ.WithChildren(ctx, templ_7745c5c3_Var157), templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</div>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				return nil
-			})
-			templ_7745c5c3_Err = card.Content().Render(templ.WithChildren(ctx, templ_7745c5c3_Var152), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = card.Card(card.Props{ID: "mcp-keys"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var146), templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		return nil
-	})
-}
-
-func keyStatusBadge(pc *adminviews.PageContext, key KeyRow) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
-		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
-		}
-		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var189 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var189 == nil {
-			templ_7745c5c3_Var189 = templ.NopComponent
-		}
-		ctx = templ.ClearChildren(ctx)
-		if !key.Active {
-			templ_7745c5c3_Var190 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-				if !templ_7745c5c3_IsBuffer {
-					defer func() {
-						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err == nil {
-							templ_7745c5c3_Err = templ_7745c5c3_BufErr
-						}
-					}()
-				}
-				ctx = templ.InitializeContext(ctx)
-				var templ_7745c5c3_Var191 string
-				templ_7745c5c3_Var191, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.inactive"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 491, Col: 27}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var191))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				return nil
-			})
-			templ_7745c5c3_Err = badge.Badge(badge.Props{Variant: badge.VariantSecondary}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var190), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else if key.Expired {
-			templ_7745c5c3_Var192 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-				if !templ_7745c5c3_IsBuffer {
-					defer func() {
-						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err == nil {
-							templ_7745c5c3_Err = templ_7745c5c3_BufErr
-						}
-					}()
-				}
-				ctx = templ.InitializeContext(ctx)
-				var templ_7745c5c3_Var193 string
-				templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.expired"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 495, Col: 29}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var193))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				return nil
-			})
-			templ_7745c5c3_Err = badge.Badge(badge.Props{Variant: badge.VariantDestructive}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var192), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Var194 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-				if !templ_7745c5c3_IsBuffer {
-					defer func() {
-						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err == nil {
-							templ_7745c5c3_Err = templ_7745c5c3_BufErr
-						}
-					}()
-				}
-				ctx = templ.InitializeContext(ctx)
-				var templ_7745c5c3_Var195 string
-				templ_7745c5c3_Var195, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.active"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/mcpserver/views.templ`, Line: 499, Col: 25}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var195))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				return nil
-			})
-			templ_7745c5c3_Err = badge.Badge().Render(templ.WithChildren(ctx, templ_7745c5c3_Var194), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 		}
 		return nil
 	})

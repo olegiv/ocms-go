@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -27,11 +26,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	accountviews "github.com/olegiv/ocms-go/internal/views/account"
 )
-
-// keysPageSize is how many API keys the admin overview reads per query. It
-// pages through all of them: a key with MCP access must never drop off the
-// list just because many newer keys exist.
-const keysPageSize = 500
 
 // keyPlaceholder stands in for a real key in the client snippets: the admin
 // page never displays key material.
@@ -60,15 +54,17 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "mcp.title"), URL: adminPath, Active: true},
 	})
-	data := m.dashboardData(r.Context(), false)
+	data := m.dashboardData(r.Context())
 	data.Connections = &accountviews.ConnectionsData{Page: page, Admin: true, BasePath: adminPath}
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	render.Templ(w, r, DashboardPage(pc, data))
 }
 
-// dashboardData collects everything the admin page shows.
-func (m *Module) dashboardData(ctx context.Context, includeKeys bool) DashboardData {
+// dashboardData collects everything the admin page shows, except the
+// connected-app overview, which handleDashboard adds with its own bounded,
+// paginated metadata.
+func (m *Module) dashboardData(ctx context.Context) DashboardData {
 	data := DashboardData{
 		ProtocolVersions: strings.Join(mcp.SupportedProtocolVersions(), ", "),
 		Version:          moduleVersion,
@@ -124,16 +120,6 @@ func (m *Module) dashboardData(ctx context.Context, includeKeys bool) DashboardD
 
 	for _, spec := range m.catalog() {
 		data.Tools = append(data.Tools, ToolRow{Name: spec.Name, Title: spec.Title, Description: spec.Description})
-	}
-	// The connected-app overview supplies its own bounded, paginated metadata.
-	// Standalone key-summary callers retain the existing complete key list.
-	if includeKeys {
-		keys, err := m.mcpKeys(ctx)
-		if err != nil {
-			m.logger.Error("failed to list API keys for the MCP page", "error", err)
-			data.KeysError = true
-		}
-		data.Keys = keys
 	}
 	return data
 }
@@ -221,50 +207,6 @@ func (m *Module) connectionError(w http.ResponseWriter, err error) {
 		m.logger.Error("connected app operation failed", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
-}
-
-// mcpKeys lists the API keys holding mcp:access. Only display metadata is
-// returned; key hashes never leave the store layer.
-func (m *Module) mcpKeys(ctx context.Context) ([]KeyRow, error) {
-	now := time.Now()
-	var rows []KeyRow
-	for offset := int64(0); ; offset += keysPageSize {
-		keys, err := m.svc.queries.ListAPIKeys(ctx, store.ListAPIKeysParams{Limit: keysPageSize, Offset: offset})
-		if err != nil {
-			return nil, fmt.Errorf("listing API keys: %w", err)
-		}
-		for i := range keys {
-			if row, ok := mcpKeyRow(&keys[i], now); ok {
-				rows = append(rows, row)
-			}
-		}
-		if len(keys) < keysPageSize {
-			return rows, nil
-		}
-	}
-}
-
-// mcpKeyRow returns the overview row of a key holding mcp:access.
-func mcpKeyRow(key *store.ApiKey, now time.Time) (KeyRow, bool) {
-	permissions := middleware.ParseAPIKeyPermissions(key)
-	if !slices.Contains(permissions, model.PermissionMCPAccess) {
-		return KeyRow{}, false
-	}
-	row := KeyRow{
-		ID:          key.ID,
-		Name:        key.Name,
-		Prefix:      key.KeyPrefix,
-		Permissions: permissions,
-		Active:      key.IsActive,
-	}
-	if key.LastUsedAt.Valid {
-		row.LastUsed = key.LastUsedAt.Time.Format("2006-01-02 15:04")
-	}
-	if key.ExpiresAt.Valid {
-		row.Expires = key.ExpiresAt.Time.Format("2006-01-02")
-		row.Expired = key.ExpiresAt.Time.Before(now)
-	}
-	return row, true
 }
 
 // claudeCodeCommand renders the Claude Code CLI command for the endpoint.

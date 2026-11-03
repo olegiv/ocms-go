@@ -129,7 +129,7 @@ func TestConnectionsOwnerIsolationPaginationAndSafeProjection(t *testing.T) {
 	if err != nil || len(next.APIKeys) != 1 || next.KeysMore || next.APIKeys[0].Name != "MCP key 0" {
 		t.Fatalf("older key inaccessible: %+v %v", next, err)
 	}
-	if _, err := f.s.List(t.Context(), actor(f.owner), true, Pagination{1, 1}, true); !errors.Is(err, ErrForbidden) {
+	if _, err = f.s.List(t.Context(), actor(f.owner), true, Pagination{1, 1}, true); !errors.Is(err, ErrForbidden) {
 		t.Fatal("editor obtained admin overview")
 	}
 	all, err := f.s.List(t.Context(), actor(f.admin), true, Pagination{1, 1}, true)
@@ -196,7 +196,7 @@ func TestConnectionRevocationDeniesNextOAuthRequestAndInvalidatesShares(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.VerifyAccess(t.Context(), raw); err != nil {
+	if _, err = s.VerifyAccess(t.Context(), raw); err != nil {
 		t.Fatal("normal token access failed", err)
 	}
 	p, err := f.q.CreatePage(t.Context(), store.CreatePageParams{Title: "Synthetic", Slug: "connected-share", Status: "draft", AuthorID: f.owner.ID, LanguageCode: "en", PageType: "post", CreatedAt: f.now, UpdatedAt: f.now})
@@ -226,7 +226,7 @@ func TestConnectionsWithDisabledOAuthAndChangedRole(t *testing.T) {
 	if err != nil || page.OAuth[0].Status != "unavailable" || page.APIKeys[0].Status != "active" {
 		t.Fatalf("disabled issuer: %+v %v", page, err)
 	}
-	if _, err := f.db.Exec(`UPDATE users SET role='public' WHERE id=?`, f.owner.ID); err != nil {
+	if _, err = f.db.Exec(`UPDATE users SET role='public' WHERE id=?`, f.owner.ID); err != nil {
 		t.Fatal(err)
 	}
 	page, err = f.s.List(t.Context(), actor(f.owner), false, Pagination{1, 1}, true)

@@ -248,9 +248,9 @@ func (s *Service) prepare(a v2.Actor, validation Validation, report draft.AgentR
 			return provenance.Evidence{}, err
 		}
 		if count >= 60 {
-			first, err := q.EarliestRecentDraftMutation(ctx, store.EarliestRecentDraftMutationParams{UserID: a.ActingUserID(), Since: since})
-			if err != nil {
-				return provenance.Evidence{}, err
+			first, earliestErr := q.EarliestRecentDraftMutation(ctx, store.EarliestRecentDraftMutationParams{UserID: a.ActingUserID(), Since: since})
+			if earliestErr != nil {
+				return provenance.Evidence{}, earliestErr
 			}
 			return provenance.Evidence{}, &Error{Code: "mutation_rate_limited", Message: "Draft mutation limit reached; retry with the same request_id", Retryable: true, RetryAfterSeconds: max(1, int64(first.Add(time.Hour).Sub(s.now()).Seconds())+1)}
 		}
@@ -259,17 +259,17 @@ func (s *Service) prepare(a v2.Actor, validation Validation, report draft.AgentR
 			return provenance.Evidence{}, err
 		}
 		for i, reference := range requested {
-			p, err := r.Resolve(ctx, reference.Ref)
-			if errors.Is(err, grounding.ErrUnavailable) || err == nil && p.ID != validation.References[i].PageID {
+			p, resolveErr := r.Resolve(ctx, reference.Ref)
+			if errors.Is(resolveErr, grounding.ErrUnavailable) || resolveErr == nil && p.ID != validation.References[i].PageID {
 				return provenance.Evidence{}, invalid([]draft.Issue{draft.NewIssue("reference_unresolved", "references", "en")})
 			}
-			if err != nil {
-				return provenance.Evidence{}, err
+			if resolveErr != nil {
+				return provenance.Evidence{}, resolveErr
 			}
 		}
 		if validation.TranslationBasis != nil && requireSource {
-			if err := s.checkSource(ctx, q, *validation.TranslationBasis); err != nil {
-				return provenance.Evidence{}, err
+			if checkErr := s.checkSource(ctx, q, *validation.TranslationBasis); checkErr != nil {
+				return provenance.Evidence{}, checkErr
 			}
 		}
 		validation.TranslationStatus, err = s.basisStatus(ctx, q, validation.TranslationBasis)

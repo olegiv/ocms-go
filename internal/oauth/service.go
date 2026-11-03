@@ -37,6 +37,10 @@ const (
 	codePrefix    = "ocms.oauth.code."
 	// MetadataPath is the public protected-resource discovery URL for /api/mcp.
 	MetadataPath = "/.well-known/oauth-protected-resource/api/mcp"
+	// MaxRefreshTTL is the longest absolute lifetime of a refresh family New
+	// accepts (OCMS_OAUTH_REFRESH_TTL_DAYS, at most 90). DCRClientLifetime must
+	// cover it, or a used client would lapse before its family ends.
+	MaxRefreshTTL = 90 * 24 * time.Hour
 )
 
 // Options describes the configured issuer, independent of request Host headers.
@@ -92,7 +96,7 @@ func New(db *sql.DB, options Options) (*Service, error) {
 		options.RefreshTTL = 30 * 24 * time.Hour
 	}
 	if options.AccessTTL < time.Minute || options.AccessTTL > 24*time.Hour ||
-		options.RefreshTTL < 24*time.Hour || options.RefreshTTL > 90*24*time.Hour {
+		options.RefreshTTL < 24*time.Hour || options.RefreshTTL > MaxRefreshTTL {
 		return nil, fmt.Errorf("OAuth token lifetimes are outside supported bounds")
 	}
 	if options.AllowedHosts == nil {
@@ -299,16 +303,36 @@ func (s *Service) ListGrants(ctx context.Context, userID int64) ([]store.ListOAu
 	return s.q.ListOAuthGrantsForUser(ctx, store.ListOAuthGrantsForUserParams{UserID: userID, ExpiresAt: s.now().Unix()})
 }
 
-// RevokeGrant revokes only a connection owned by the signed-in account.
+// ErrGrantNotFound is returned by RevokeGrant when the connection does not
+// exist or belongs to another account. The two cases are indistinguishable to
+// the caller, so a signed-in account cannot probe for other accounts' grants.
+var ErrGrantNotFound = errors.New("OAuth connection not found")
+
+// RevokeGrant revokes only a connection owned by the signed-in account. It
+// returns ErrGrantNotFound when no such connection exists for that account.
+// Revoking a connection the account already revoked succeeds, so a repeated
+// submission is harmless.
 func (s *Service) RevokeGrant(ctx context.Context, userID int64, id string) error {
 	n, err := s.q.RevokeOwnedOAuthGrant(ctx, store.RevokeOwnedOAuthGrantParams{
 		RevokedAt: s.now().Unix(), ID: id, UserID: userID})
-	if err == nil && n == 1 {
-		if g, loadErr := s.q.GetOAuthGrant(ctx, id); loadErr == nil {
+	if err != nil {
+		return fmt.Errorf("revoking OAuth connection: %w", err)
+	}
+	g, err := s.q.GetOAuthGrant(ctx, id)
+	if n == 1 {
+		// The revocation is committed; a failed read only costs the audit event.
+		if err == nil {
 			s.audit(ctx, g, "OAuth connection revoked by account", false)
 		}
+		return nil
 	}
-	return err
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && g.UserID != userID) {
+		return ErrGrantNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("loading OAuth connection: %w", err)
+	}
+	return nil // Already revoked by its owner.
 }
 
 func (s *Service) engine(ts *tokenStore, client registeredClient) (*manage.Manager, *server.Server) {

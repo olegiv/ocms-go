@@ -32,23 +32,23 @@ func TestFragmentMigrationRevokesDisclosedLinksWithoutRevokingIssuers(t *testing
 	f.exec(t, "UPDATE preview_links SET revoked_at=123 WHERE id=2")
 	f.issue(t, principal)
 	f.exec(t, "UPDATE preview_links SET expires_at=1 WHERE id=3")
-	if _, err := f.svc.Resolve(f.ctx, token(t, legacy)); err != nil {
+	if _, err = f.svc.Resolve(f.ctx, token(t, legacy)); err != nil {
 		t.Fatal("pre-upgrade control did not resolve")
 	}
-	if err := store.Migrate(f.db); err != nil {
+	if err = store.Migrate(f.db); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Resolve(f.ctx, token(t, legacy)); !errors.Is(err, preview.ErrUnavailable) {
+	if _, err = f.svc.Resolve(f.ctx, token(t, legacy)); !errors.Is(err, preview.ErrUnavailable) {
 		t.Fatal("disclosed credential could be repackaged into the new transport")
 	}
 	var active, retainedRevocation, revokedExpired int
-	if err := f.db.QueryRow("SELECT count(*) FROM preview_links WHERE revoked_at=0").Scan(&active); err != nil || active != 0 {
+	if err = f.db.QueryRow("SELECT count(*) FROM preview_links WHERE revoked_at=0").Scan(&active); err != nil || active != 0 {
 		t.Fatal("upgrade retained a pre-upgrade credential")
 	}
-	if err := f.db.QueryRow("SELECT revoked_at FROM preview_links WHERE id=2").Scan(&retainedRevocation); err != nil || retainedRevocation != 123 {
+	if err = f.db.QueryRow("SELECT revoked_at FROM preview_links WHERE id=2").Scan(&retainedRevocation); err != nil || retainedRevocation != 123 {
 		t.Fatal("upgrade replaced an earlier revocation timestamp")
 	}
-	if err := f.db.QueryRow("SELECT count(*) FROM preview_links WHERE id=3 AND revoked_at>0").Scan(&revokedExpired); err != nil || revokedExpired != 1 {
+	if err = f.db.QueryRow("SELECT count(*) FROM preview_links WHERE id=3 AND revoked_at>0").Scan(&revokedExpired); err != nil || revokedExpired != 1 {
 		t.Fatal("upgrade left expired legacy credentials dependent on the host clock")
 	}
 	user, err := f.q.GetUserByID(f.ctx, f.user.ID)

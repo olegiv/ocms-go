@@ -34,8 +34,8 @@ func TestMissingMutationResultRollsBack(t *testing.T) {
 	result, err := svc.write(ctx, actor, WriteOptions{}, "create_page", nil,
 		func(_ *Service, _ v2.Actor, work *pagewrite.Tx) (*Page, error) {
 			called = true
-			if _, err := work.Q.DBHandle().ExecContext(ctx, `UPDATE users SET name = 'After' WHERE id = ?`, user.ID); err != nil {
-				return nil, err
+			if _, execErr := work.Q.DBHandle().ExecContext(ctx, `UPDATE users SET name = 'After' WHERE id = ?`, user.ID); execErr != nil {
+				return nil, execErr
 			}
 			return nil, nil
 		})

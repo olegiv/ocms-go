@@ -41,7 +41,8 @@ rendered previews on `16ac7161`. Fresh editorial/stale-translation review,
   turns the drafts policy on **and** the agent's key holds `pages:read`.
 - **Admin page** at `/admin/mcp`. It shows the endpoint and ready-made client
   configuration, and holds the drafts policy, instructions for agents, the tool
-  catalog and the keys that have MCP access.
+  catalog and the connected-apps overview (OAuth connections and the API keys
+  that have MCP access, paginated; there is no separate API key table).
 - **Server card.** `/.well-known/mcp/server-card.json` advertises the endpoint
   while the module is active.
 - **Structured logs:** one line per dispatched tool call, including calls the

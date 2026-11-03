@@ -17,6 +17,7 @@ import (
 	"time"
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/provenance"
@@ -36,6 +37,13 @@ type Service struct {
 	uploader  *service.MediaService
 	uploadDir string
 	webhooks  webhook.EventDispatcher
+	cache     *cache.Manager
+}
+
+// SetCacheManager makes deleting media invalidate the cached pages whose
+// images it clears. Call it before serving.
+func (s *Service) SetCacheManager(manager *cache.Manager) {
+	s.cache = manager
 }
 
 // SetWebhookDispatcher makes uploads and deletions send the media.uploaded and
@@ -426,10 +434,11 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		return v2.NewInternalError("Failed to load media", err)
 	}
 	// Files left on disk do not undo the delete: the records are gone.
-	err = s.uploader.DeleteWithPrincipal(ctx, id, provenance.Principal{UserID: a.ActingUserID(), Source: "api", APIKeyID: a.APIKey.ID, Transport: "rest"})
+	changed, err := s.uploader.DeleteWithPrincipal(ctx, id, provenance.Principal{UserID: a.ActingUserID(), Source: "api", APIKeyID: a.APIKey.ID, Transport: "rest"})
 	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 		return v2.EditorError(err, "Failed to delete media")
 	}
+	s.pagesChanged(ctx, changed)
 	audit := map[string]any{"media_id": id}
 	if err != nil {
 		slog.Error("media deleted but its files were not removed", "error", err, "media_id", id, "uuid", media.Uuid)
@@ -438,6 +447,21 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 	s.logMediaAudit(ctx, a, "API: Media deleted", audit)
 	s.dispatchMediaEvent(ctx, model.EventMediaDeleted, media)
 	return nil
+}
+
+// pagesChanged runs, for each page a media delete gave a new revision, the
+// after-commit side effects the page writers run: the cached copies of the
+// page go, and the page.updated webhook reports the saved change. Like the
+// pages service, the event carries no author_email: an API key acts.
+func (s *Service) pagesChanged(ctx context.Context, pages []store.Page) {
+	for _, page := range pages {
+		if s.cache != nil {
+			s.cache.InvalidatePage(page.ID)
+		}
+		if s.webhooks != nil {
+			webhook.DispatchPageEvent(ctx, s.webhooks, model.EventPageUpdated, page, "")
+		}
+	}
 }
 
 // logMediaAudit records an audit-level event for a successful Media mutation.

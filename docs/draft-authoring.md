@@ -26,7 +26,12 @@ OAuth scope upgrades use normal fresh sign-in/MFA and consent. API keys keep
 expiry, global/per-key CIDR, lifetime and anomaly policies. Current account,
 role, module/toggle, credential/scopes and source policy are checked again in
 the write transaction. A changed link/read policy makes a new write retryable
-with its original request ID. Credentials and consent never come from draft
+with its original request ID. So does a storage fault while re-reading the
+credential (`write_retryable`, logged server-side): only a credential that is
+gone, no longer the caller's or refused by policy is the 401 "Credential
+unavailable", so an agent never drops a working key over a database hiccup.
+Likewise the HTTP layer answers a failed lookup of an API key's owner with a
+500 instead of a 401. Credentials and consent never come from draft
 input. Turning a feature on does not expand an app's granted scopes.
 
 ## Tools and annotations

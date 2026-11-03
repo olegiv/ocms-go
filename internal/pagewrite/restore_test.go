@@ -26,14 +26,14 @@ func TestRestoreCompleteAndLegacyVersionsPreservesCurrentPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	work, err := pagewrite.InTx(ctx, f.db, principal, func(work *pagewrite.Tx) error {
-		if _, err := work.Track(ctx, f.page.ID, &f.page.Revision, true); err != nil {
-			return err
+		if _, trackErr := work.Track(ctx, f.page.ID, &f.page.Revision, true); trackErr != nil {
+			return trackErr
 		}
-		if err := work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: f.page.ID, TagID: tag.ID}); err != nil {
-			return err
+		if tagErr := work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: f.page.ID, TagID: tag.ID}); tagErr != nil {
+			return tagErr
 		}
-		_, err := work.Q.CreatePageAlias(ctx, store.CreatePageAliasParams{PageID: f.page.ID, Alias: "recorded-alias", CreatedAt: now})
-		return err
+		_, aliasErr := work.Q.CreatePageAlias(ctx, store.CreatePageAliasParams{PageID: f.page.ID, Alias: "recorded-alias", CreatedAt: now})
+		return aliasErr
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -53,23 +53,23 @@ func TestRestoreCompleteAndLegacyVersionsPreservesCurrentPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	work, err = pagewrite.InTx(ctx, f.db, principal, func(work *pagewrite.Tx) error {
-		current, err := work.Track(ctx, page.ID, &page.Revision, true)
-		if err != nil {
-			return err
+		current, workErr := work.Track(ctx, page.ID, &page.Revision, true)
+		if workErr != nil {
+			return workErr
 		}
 		params := pagewrite.ParamsFor(current)
 		params.Title, params.Summary, params.Slug = "Current title", "Current summary", "current-slug"
 		params.Status = "published"
 		params.PublishedAt = sql.NullTime{Time: now, Valid: true}
 		params.ScheduledAt = sql.NullTime{Time: now.Add(time.Hour), Valid: true}
-		if _, err = work.Q.UpdatePage(ctx, params); err != nil {
-			return err
+		if _, workErr = work.Q.UpdatePage(ctx, params); workErr != nil {
+			return workErr
 		}
-		if err = work.Q.ClearPageTags(ctx, page.ID); err != nil {
-			return err
+		if workErr = work.Q.ClearPageTags(ctx, page.ID); workErr != nil {
+			return workErr
 		}
-		if err = work.Q.ClearPageAliases(ctx, page.ID); err != nil {
-			return err
+		if workErr = work.Q.ClearPageAliases(ctx, page.ID); workErr != nil {
+			return workErr
 		}
 		return work.Q.SetPageAIAccess(ctx, store.SetPageAIAccessParams{PageID: page.ID, AiEditable: true, SetBy: f.user.ID, SetAt: now})
 	})
@@ -92,9 +92,9 @@ func TestRestoreCompleteAndLegacyVersionsPreservesCurrentPolicy(t *testing.T) {
 	}
 	restore := func(base int64, version store.PageVersion) (*pagewrite.Tx, error) {
 		return pagewrite.InTx(ctx, f.db, principal, func(work *pagewrite.Tx) error {
-			current, err := work.Track(ctx, page.ID, &base, true)
-			if err != nil {
-				return err
+			current, trackErr := work.Track(ctx, page.ID, &base, true)
+			if trackErr != nil {
+				return trackErr
 			}
 			return work.Restore(ctx, current, version, version.Body)
 		})

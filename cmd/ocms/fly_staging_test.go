@@ -187,7 +187,7 @@ func TestFlyStagingEnvironmentsLoad(t *testing.T) {
 					t.Fatal(err)
 				}
 				t.Cleanup(func() { _ = db.Close() })
-				if err := store.Migrate(db); err != nil {
+				if err = store.Migrate(db); err != nil {
 					t.Fatal(err)
 				}
 				service, err := oauth.New(db, oauth.Options{Issuer: cfg.SiteURL,

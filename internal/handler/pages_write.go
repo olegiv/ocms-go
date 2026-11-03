@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -105,8 +106,17 @@ func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int
 				return errors.New("only the owner or an administrator may change AI access")
 			}
 			enabled := r.FormValue("allow_ai_edits") == "on"
-			if err = work.Q.SetPageAIAccess(ctx, store.SetPageAIAccessParams{PageID: page.ID, AiEditable: enabled, SetBy: userID, SetAt: time.Now().UTC()}); err != nil {
+			// A save that leaves AI access as it was must not re-attribute it:
+			// set_by names the user who last changed it, and deleting that user
+			// is refused while the row exists.
+			current, err := work.Q.GetPageAIAccess(ctx, page.ID)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
+			}
+			if current.AiEditable != enabled {
+				if err = work.Q.SetPageAIAccess(ctx, store.SetPageAIAccessParams{PageID: page.ID, AiEditable: enabled, SetBy: userID, SetAt: time.Now().UTC()}); err != nil {
+					return err
+				}
 			}
 		}
 		if page.Status == "published" || page.ScheduledAt.Valid {

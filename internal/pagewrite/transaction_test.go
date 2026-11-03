@@ -37,9 +37,9 @@ func setup(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	work, err := pagewrite.InTx(ctx, db, provenance.Principal{UserID: u.ID, Source: "human"}, func(work *pagewrite.Tx) error {
-		p, err := work.Q.CreatePage(ctx, store.CreatePageParams{Title: "Original", Slug: "original", Body: "original body", Summary: "original summary", Status: "draft", AuthorID: u.ID, LanguageCode: "en", PageType: "post", CreatedAt: now, UpdatedAt: now})
-		if err != nil {
-			return err
+		p, createErr := work.Q.CreatePage(ctx, store.CreatePageParams{Title: "Original", Slug: "original", Body: "original body", Summary: "original summary", Status: "draft", AuthorID: u.ID, LanguageCode: "en", PageType: "post", CreatedAt: now, UpdatedAt: now})
+		if createErr != nil {
+			return createErr
 		}
 		work.Created(p)
 		return nil
@@ -63,8 +63,8 @@ func TestRevisionCoversRelationsNoOpsAndFreshProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	work, err := pagewrite.InTx(ctx, f.db, provenance.Principal{UserID: f.user.ID, Source: "oauth", OAuthGrantID: "authenticated-grant"}, func(work *pagewrite.Tx) error {
-		if _, err := work.Track(ctx, f.page.ID, &base, true); err != nil {
-			return err
+		if _, trackErr := work.Track(ctx, f.page.ID, &base, true); trackErr != nil {
+			return trackErr
 		}
 		work.SetEvidence(provenance.Evidence{Reported: json.RawMessage(`{"model":"reported-model"}`), Validated: json.RawMessage(`{"taxonomy":true}`)})
 		return work.Q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: f.page.ID, CategoryID: category.ID})
@@ -90,14 +90,14 @@ func TestRevisionCoversRelationsNoOpsAndFreshProvenance(t *testing.T) {
 		}
 	}
 	work, err = pagewrite.InTx(ctx, f.db, provenance.Principal{UserID: f.user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
-		current, err := work.Track(ctx, page.ID, &page.Revision, true)
-		if err != nil {
-			return err
+		current, workErr := work.Track(ctx, page.ID, &page.Revision, true)
+		if workErr != nil {
+			return workErr
 		}
 		params := pagewrite.ParamsFor(current)
 		params.MetaTitle = "SEO only"
-		_, err = work.Q.UpdatePage(ctx, params)
-		return err
+		_, workErr = work.Q.UpdatePage(ctx, params)
+		return workErr
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -111,12 +111,12 @@ func TestRevisionCoversRelationsNoOpsAndFreshProvenance(t *testing.T) {
 		t.Fatalf("human revision inherited agent claims: %+v", prov)
 	}
 	work, err = pagewrite.InTx(ctx, f.db, provenance.Principal{UserID: f.user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
-		current, err := work.Track(ctx, page.ID, &page.Revision, true)
-		if err != nil {
-			return err
+		current, workErr := work.Track(ctx, page.ID, &page.Revision, true)
+		if workErr != nil {
+			return workErr
 		}
-		_, err = work.Q.UpdatePage(ctx, pagewrite.ParamsFor(current))
-		return err
+		_, workErr = work.Q.UpdatePage(ctx, pagewrite.ParamsFor(current))
+		return workErr
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -221,10 +221,10 @@ func TestTranslationMembershipTracksBothPages(t *testing.T) {
 	}
 	var target store.Page
 	work, err := pagewrite.InTx(ctx, f.db, provenance.Principal{UserID: f.user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
-		var err error
-		target, err = work.Q.CreatePage(ctx, store.CreatePageParams{Title: "Translation", Slug: "translated", Status: "draft", AuthorID: f.user.ID, LanguageCode: "ru", PageType: "post", CreatedAt: now, UpdatedAt: now})
-		if err != nil {
-			return err
+		var createErr error
+		target, createErr = work.Q.CreatePage(ctx, store.CreatePageParams{Title: "Translation", Slug: "translated", Status: "draft", AuthorID: f.user.ID, LanguageCode: "ru", PageType: "post", CreatedAt: now, UpdatedAt: now})
+		if createErr != nil {
+			return createErr
 		}
 		work.Created(target)
 		return work.LinkTranslation(ctx, f.page.ID, "ru", target.ID)

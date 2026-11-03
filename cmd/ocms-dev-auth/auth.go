@@ -178,11 +178,11 @@ func (s *authenticator) importSeed(ctx context.Context, target authTarget, input
 		return err
 	}
 	defer unlock()
-	if _, err := s.store.get(ctx, target.id()); !errors.Is(err, errMissing) {
-		if err == nil {
+	if _, getErr := s.store.get(ctx, target.id()); !errors.Is(getErr, errMissing) {
+		if getErr == nil {
 			return errors.New("authenticator already exists; replacement is not supported")
 		}
-		return err
+		return getErr
 	}
 	record, err := json.Marshal(seedRecord{Version: 1, Origin: target.Origin, Account: target.Account, Secret: secret})
 	if err != nil {

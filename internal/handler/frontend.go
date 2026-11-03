@@ -1204,7 +1204,8 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get category
+	// Get category; contentpath finds it only in the route's language, so a
+	// row that comes back is already in that language.
 	category, err := contentpath.Category(ctx, h.queries, slug, routeLanguage.Code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1213,10 +1214,6 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		}
 		h.logger.Error("failed to get category", "slug", slug, "error", err)
 		h.renderInternalError(w)
-		return
-	}
-	if category.LanguageCode != routeLanguage.Code {
-		h.renderNotFound(w, r)
 		return
 	}
 	r = requestWithFrontendLanguage(r, routeLanguage)
@@ -1299,7 +1296,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get tag
+	// Get tag; as with categories, a row that comes back is in the route's language.
 	tag, err := contentpath.Tag(ctx, h.queries, slug, routeLanguage.Code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1308,10 +1305,6 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		}
 		h.logger.Error("failed to get tag", "slug", slug, "error", err)
 		h.renderInternalError(w)
-		return
-	}
-	if tag.LanguageCode != routeLanguage.Code {
-		h.renderNotFound(w, r)
 		return
 	}
 	r = requestWithFrontendLanguage(r, routeLanguage)

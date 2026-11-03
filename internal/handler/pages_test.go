@@ -15,8 +15,27 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
+
+// addImportedAliases stores aliases one at a time through
+// pagewrite.AddImportedAlias, as an importer does, and skips the ones its
+// grammar or the route and alias namespace refuses. The tests that use it
+// check which aliases were stored.
+func addImportedAliases(t *testing.T, ctx context.Context, queries *store.Queries, pageID int64, aliases []string) {
+	t.Helper()
+	for _, raw := range aliases {
+		alias := strings.TrimSpace(raw)
+		if alias == "" || !util.IsValidAlias(alias) {
+			continue
+		}
+		if _, err := pagewrite.AddImportedAlias(ctx, queries, pageID, alias, time.Now().UTC()); err != nil {
+			t.Logf("alias %q was not stored: %v", alias, err)
+		}
+	}
+}
 
 func TestNewPagesHandler(t *testing.T) {
 	db, sm := testHandlerSetup(t)
@@ -1004,7 +1023,7 @@ func TestPageSlugCannotClaimApplicationRoute(t *testing.T) {
 		t.Error("validatePageSlugUpdate() accepted a rename onto /login")
 	}
 
-	h.savePageAliases(ctx, legacy.ID, []string{"login", "account/settings", "about/team", "blog/post/55", "forms/contact", "blog/tag/news", "uploads/2016/report"})
+	addImportedAliases(t, ctx, queries, legacy.ID, []string{"login", "account/settings", "about/team", "blog/post/55", "forms/contact", "blog/tag/news", "uploads/2016/report"})
 	aliases, err := queries.GetAliasesForPage(ctx, legacy.ID)
 	if err != nil {
 		t.Fatalf("GetAliasesForPage failed: %v", err)
@@ -1100,7 +1119,7 @@ func TestValidatePageAliases(t *testing.T) {
 	if got := h.validatePageAliases(ctx, []string{"about/team"}, page.ID); !strings.Contains(got, "Error checking") {
 		t.Errorf("validatePageAliases() = %q on a failed lookup, want the error on the form", got)
 	}
-	h.savePageAliases(ctx, page.ID, []string{"about/team"})
+	addImportedAliases(t, ctx, queries, page.ID, []string{"about/team"})
 	aliases, err := queries.GetAliasesForPage(ctx, page.ID)
 	if err != nil {
 		t.Fatalf("GetAliasesForPage failed: %v", err)
@@ -1114,7 +1133,7 @@ func TestValidatePageAliases(t *testing.T) {
 // without going through slug validation. An alias under an active language's
 // segment resolves to nothing, so it is dropped rather than promised.
 func TestPageAliasesSkipLanguagePrefixCollisions(t *testing.T) {
-	db, sm := testHandlerSetup(t)
+	db, _ := testHandlerSetup(t)
 	user := createTestAdminUser(t, db)
 	queries := store.New(db)
 	ctx := context.Background()
@@ -1133,8 +1152,7 @@ func TestPageAliasesSkipLanguagePrefixCollisions(t *testing.T) {
 		t.Fatalf("CreatePage failed: %v", err)
 	}
 
-	h := NewPagesHandler(db, nil, sm)
-	h.savePageAliases(ctx, page.ID, []string{"eng", "eng/team", "about/team"})
+	addImportedAliases(t, ctx, queries, page.ID, []string{"eng", "eng/team", "about/team"})
 
 	aliases, err := queries.GetAliasesForPage(ctx, page.ID)
 	if err != nil {

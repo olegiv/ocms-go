@@ -120,14 +120,14 @@ func (r *Resolver) Build(ctx context.Context, in Input) (Context, error) {
 			return out, ErrInput
 		}
 		entry := Reference{Requested: ref.Ref, Role: ref.Role, Issues: []draft.Issue{}}
-		page, err := r.Resolve(ctx, ref.Ref)
-		if errors.Is(err, ErrUnavailable) {
+		page, refErr := r.Resolve(ctx, ref.Ref)
+		if errors.Is(refErr, ErrUnavailable) {
 			entry.Issues = append(entry.Issues, draft.NewIssue("reference_unresolved", "references", lang.Code))
 			out.References = append(out.References, entry)
 			continue
 		}
-		if err != nil {
-			return out, fmt.Errorf("resolve context reference: %w", err)
+		if refErr != nil {
+			return out, fmt.Errorf("resolve context reference: %w", refErr)
 		}
 		if prior, ok := seen[page.ID]; ok {
 			first := out.References[prior]
@@ -139,9 +139,9 @@ func (r *Resolver) Build(ctx context.Context, in Input) (Context, error) {
 		}
 		seen[page.ID] = len(out.References)
 		entry.PageID, entry.Revision, entry.Title, entry.LanguageCode, entry.Status = page.ID, page.Revision, clip(page.Title, 255), page.LanguageCode, page.Status
-		entry.URL, err = r.URL(ctx, page)
-		if err != nil {
-			return out, err
+		entry.URL, refErr = r.URL(ctx, page)
+		if refErr != nil {
+			return out, refErr
 		}
 		prefix, _, prefixErr := contentpath.PageLanguagePrefix(ctx, r.Queries, page)
 		if prefixErr != nil {

@@ -100,8 +100,8 @@ func TestQueuedDraftWritesRecheckCredentialAndModulePolicy(t *testing.T) {
 			original := svc.Authorize
 			checks := 0
 			svc.Authorize = func(ctx context.Context, q *store.Queries) error {
-				if err := original(ctx, q); err != nil {
-					return err
+				if originalErr := original(ctx, q); originalErr != nil {
+					return originalErr
 				}
 				checks++
 				if checks != 1 {
@@ -109,24 +109,24 @@ func TestQueuedDraftWritesRecheckCredentialAndModulePolicy(t *testing.T) {
 				}
 				// Commit a simulated policy change with preflight, after its fresh
 				// authorization. The actual mutation must load this state again.
-				var err error
+				var policyErr error
 				switch scenario {
 				case "key revoked":
-					_, err = q.DBHandle().ExecContext(ctx, "UPDATE api_keys SET is_active=0 WHERE id=?", key.ID)
+					_, policyErr = q.DBHandle().ExecContext(ctx, "UPDATE api_keys SET is_active=0 WHERE id=?", key.ID)
 				case "scope removed":
-					_, err = q.DBHandle().ExecContext(ctx, `UPDATE api_keys SET permissions='["mcp:access"]' WHERE id=?`, key.ID)
+					_, policyErr = q.DBHandle().ExecContext(ctx, `UPDATE api_keys SET permissions='["mcp:access"]' WHERE id=?`, key.ID)
 				case "role removed":
-					_, err = q.DBHandle().ExecContext(ctx, "UPDATE users SET role='public' WHERE id=?", env.userID)
+					_, policyErr = q.DBHandle().ExecContext(ctx, "UPDATE users SET role='public' WHERE id=?", env.userID)
 				case "module disabled":
-					_, err = q.DBHandle().ExecContext(ctx, "UPDATE modules SET is_active=0 WHERE name='mcp'")
+					_, policyErr = q.DBHandle().ExecContext(ctx, "UPDATE modules SET is_active=0 WHERE name='mcp'")
 				case "draft toggle disabled":
-					_, err = q.DBHandle().ExecContext(ctx, "UPDATE mcp_settings SET draft_tools_enabled=0 WHERE id=1")
+					_, policyErr = q.DBHandle().ExecContext(ctx, "UPDATE mcp_settings SET draft_tools_enabled=0 WHERE id=1")
 				case "link policy changed":
-					_, err = q.DBHandle().ExecContext(ctx, "UPDATE mcp_settings SET external_links='strip' WHERE id=1")
+					_, policyErr = q.DBHandle().ExecContext(ctx, "UPDATE mcp_settings SET external_links='strip' WHERE id=1")
 				case "source restriction changed":
-					err = q.ReplaceAPIKeySourceCIDRs(ctx, key.ID, []string{"203.0.113.1/32"})
+					policyErr = q.ReplaceAPIKeySourceCIDRs(ctx, key.ID, []string{"203.0.113.1/32"})
 				}
-				return err
+				return policyErr
 			}
 			in := authoring.CreateInput{RequestID: uuid.NewString()}
 			in.Draft.Title = "Queued policy check"

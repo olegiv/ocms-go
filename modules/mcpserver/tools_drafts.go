@@ -5,6 +5,8 @@ package mcpserver
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"slices"
 	"time"
 
@@ -39,44 +41,85 @@ func (m *Module) authorizeDraftCall(ctx context.Context, q *store.Queries, id *i
 	if !settings.DraftToolsEnabled {
 		return &v2.Error{Kind: v2.ErrForbidden, MachineCode: "draft_tools_disabled", Msg: "An administrator must enable draft authoring"}
 	}
-	if id.grantID != "" {
-		if m.ctx.OAuth == nil {
-			return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
-		}
-		p, err := m.ctx.OAuth.RecheckAccess(ctx, q, oauth.Principal{TokenID: id.tokenID, UserID: id.userID, GrantID: id.grantID, ClientID: id.clientID})
-		if err != nil {
-			return recheckError(err)
-		}
-		if !slices.Contains(p.Scopes, model.PermissionMCPAccess) || !slices.Contains(p.Scopes, model.PermissionMCPDrafts) {
-			return v2.NewError(v2.ErrForbidden, "Draft permission required")
-		}
-		return nil
-	}
-	key, err := q.GetAPIKeyByID(ctx, id.key.ID)
-	if err != nil || key.CreatedBy != id.userID {
-		return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
-	}
-	allowed, err := middleware.RecheckAPIKeyPolicy(ctx, q, key, id.sourceIP)
+	scopes, key, err := m.credentialScopes(ctx, q, id)
 	if err != nil {
 		return err
 	}
-	if !allowed {
-		return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
+	if key != nil {
+		allowed, policyErr := middleware.RecheckAPIKeyPolicy(ctx, q, *key, id.sourceIP)
+		if policyErr != nil {
+			return policyErr
+		}
+		if !allowed {
+			return credentialUnavailable()
+		}
 	}
-	scopes := middleware.ParseAPIKeyPermissions(&key)
 	if !slices.Contains(scopes, model.PermissionMCPAccess) || !slices.Contains(scopes, model.PermissionMCPDrafts) {
 		return v2.NewError(v2.ErrForbidden, "Draft permission required")
 	}
 	return nil
 }
 
+// credentialScopes re-reads, through q, the scopes the call's credential holds
+// now: an OAuth grant through the OAuth service, an API key from its row. The
+// draft authorization and the queued write's policy check both run it, so they
+// cannot disagree about what the credential may do. For an API key it also
+// returns the row, for callers that go on to apply the key policy.
+//
+// A credential that is gone, or is no longer this identity's, is an
+// unauthorized "Credential unavailable". A storage fault is not: answering 401
+// would tell the agent its credential was revoked, so it is logged and
+// reported as retryable.
+func (m *Module) credentialScopes(ctx context.Context, q *store.Queries, id *identity) ([]string, *store.ApiKey, error) {
+	if id.grantID != "" {
+		if m.ctx.OAuth == nil {
+			return nil, nil, credentialUnavailable()
+		}
+		p, err := m.ctx.OAuth.RecheckAccess(ctx, q, oauth.Principal{TokenID: id.tokenID, UserID: id.userID, GrantID: id.grantID, ClientID: id.clientID})
+		if err != nil {
+			return nil, nil, recheckError(err)
+		}
+		return p.Scopes, nil, nil
+	}
+	key, err := q.GetAPIKeyByID(ctx, id.key.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, credentialUnavailable()
+	}
+	if err != nil {
+		return nil, nil, m.credentialFault(ctx, "failed to re-check the MCP API key", err, "api_key_id", id.key.ID)
+	}
+	if key.CreatedBy != id.userID {
+		return nil, nil, credentialUnavailable()
+	}
+	return middleware.ParseAPIKeyPermissions(&key), &key, nil
+}
+
+// credentialUnavailable is the answer for a credential that is genuinely no
+// longer usable: revoked, deleted, expired or not this caller's.
+func credentialUnavailable() error {
+	return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
+}
+
+// credentialFault logs a storage fault met while checking the credential and
+// reports it as retryable, like recheckError does for the OAuth re-check.
+func (m *Module) credentialFault(ctx context.Context, msg string, err error, attrs ...any) error {
+	m.logger.ErrorContext(ctx, msg, append([]any{"error", err}, attrs...)...)
+	return retryableCredentialCheck(err)
+}
+
+// retryableCredentialCheck is the retryable answer for a credential check that
+// could not run: the credential may well be valid.
+func retryableCredentialCheck(cause error) error {
+	return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Credential check is temporarily unavailable; retry the call", Wrap: cause}
+}
+
 // recheckError keeps a storage fault during the OAuth re-check retryable: an
 // unauthorized answer would tell the agent its credential is gone.
 func recheckError(err error) error {
 	if oauth.Retryable(err) {
-		return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Credential check is temporarily unavailable; retry the call", Wrap: err}
+		return retryableCredentialCheck(err)
 	}
-	return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
+	return credentialUnavailable()
 }
 
 func (m *Module) authoringService(ctx context.Context, call *toolCall) (*authoring.Service, v2.Actor, error) {
@@ -100,19 +143,9 @@ func (m *Module) authoringService(ctx context.Context, call *toolCall) (*authori
 		if linkPolicy(settings) != linkPolicy(call.settings) || settings.AllowDrafts != call.settings.AllowDrafts {
 			return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Draft link policy changed; retry with the same request_id"}
 		}
-		var scopes []string
-		if call.identity.grantID != "" {
-			p, err := m.ctx.OAuth.RecheckAccess(ctx, q, oauth.Principal{TokenID: call.identity.tokenID, UserID: call.identity.userID, GrantID: call.identity.grantID, ClientID: call.identity.clientID})
-			if err != nil {
-				return recheckError(err)
-			}
-			scopes = p.Scopes
-		} else {
-			key, err := q.GetAPIKeyByID(ctx, call.identity.key.ID)
-			if err != nil {
-				return err
-			}
-			scopes = middleware.ParseAPIKeyPermissions(&key)
+		scopes, _, err := m.credentialScopes(ctx, q, call.identity)
+		if err != nil {
+			return err
 		}
 		if (settings.AllowDrafts && slices.Contains(scopes, model.PermissionPagesRead)) != service.Access.AllDrafts {
 			return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Draft read policy changed; retry with the same request_id"}

@@ -80,8 +80,8 @@ func run(ctx context.Context, args []string, input io.Reader, output io.Writer) 
 		if readErr != nil || len(data) > 4096 {
 			return errors.New("cannot read enrollment data (maximum 4096 bytes)")
 		}
-		if err := s.importSeed(ctx, target, string(data)); err != nil {
-			return err
+		if importErr := s.importSeed(ctx, target, string(data)); importErr != nil {
+			return importErr
 		}
 		result = statusResult{Configured: true, Origin: target.Origin, Account: target.Account}
 	case "status":

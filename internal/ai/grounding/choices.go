@@ -145,19 +145,19 @@ func (r *Resolver) choices(ctx context.Context, in Input, language string) (Offe
 		return out, err
 	}
 	for _, row := range media[:min(len(media), imageLimit)] {
-		image, err := library.Media(ctx, row.ID)
-		if errors.Is(err, draft.ErrUnavailable) {
+		image, rowErr := library.Media(ctx, row.ID)
+		if errors.Is(rowErr, draft.ErrUnavailable) {
 			continue
 		}
-		if err != nil {
-			return out, err
+		if rowErr != nil {
+			return out, rowErr
 		}
 		choice := Image{ID: row.ID, MarkdownReference: fmt.Sprintf("media:%d", row.ID), URL: model.MediaURL(model.VariantOriginal, row.Uuid, row.Filename), Alt: image.Alt, Caption: image.Caption, Width: image.Width, Height: image.Height, FeaturedEligible: !image.DimensionsKnown || image.Width >= model.MinFeaturedImageWidth && image.Height >= model.MinFeaturedImageHeight, Variants: []ImageVariant{}}
-		translation, err := r.Queries.GetMediaTranslation(ctx, store.GetMediaTranslationParams{MediaID: row.ID, LanguageID: lang.ID})
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return out, err
+		translation, rowErr := r.Queries.GetMediaTranslation(ctx, store.GetMediaTranslationParams{MediaID: row.ID, LanguageID: lang.ID})
+		if rowErr != nil && !errors.Is(rowErr, sql.ErrNoRows) {
+			return out, rowErr
 		}
-		if err == nil {
+		if rowErr == nil {
 			if translation.Alt != "" {
 				choice.Alt = translation.Alt
 			}

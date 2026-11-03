@@ -19,8 +19,10 @@ import (
 
 func TestDraftActorAndSharedWriterBoundary(t *testing.T) {
 	allowed := map[string]map[string]string{
-		".":                           {"createDraftPage": "draftActor", "updateDraftPage": "draftActor", "createTranslationDraft": "draftActor"},
-		"../../internal/ai/authoring": {"create": "CreateWith", "Update": "UpdateWith"},
+		// create_preview_link issues a bearer link, a write like the three
+		// content mutations: it too may be reached from one adapter only.
+		".":                           {"createDraftPage": "draftActor", "updateDraftPage": "draftActor", "createTranslationDraft": "draftActor", "createPreviewLink": "CreatePreviewLink"},
+		"../../internal/ai/authoring": {"create": "CreateWith", "Update": "UpdateWith", "CreatePreviewLink": "Issue"},
 	}
 	for root, expected := range allowed {
 		found := map[string]string{}
@@ -50,7 +52,7 @@ func TestDraftActorAndSharedWriterBoundary(t *testing.T) {
 						return true
 					}
 					switch selector.Sel.Name {
-					case "draftActor", "CreateWith", "UpdateWith":
+					case "draftActor", "CreateWith", "UpdateWith", "CreatePreviewLink", "Issue":
 						if expected[fn.Name.Name] != selector.Sel.Name {
 							t.Errorf("%s: unexpected write adapter %s in %s", path, selector.Sel.Name, fn.Name.Name)
 						}

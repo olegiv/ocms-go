@@ -83,7 +83,7 @@ func (s keychainStore) add(ctx context.Context, id string, value []byte) error {
 	}
 	input := "add-generic-password -a " + id + " -s " + keychainService +
 		" -l ocms-development-authenticator -w " + base64.StdEncoding.EncodeToString(value) + " " + quotedPath + "\n"
-	if _, err := s.invoke(ctx, []string{"-i"}, strings.NewReader(input)); err != nil {
+	if _, invokeErr := s.invoke(ctx, []string{"-i"}, strings.NewReader(input)); invokeErr != nil {
 		return errors.New("cannot store development authenticator in the login Keychain")
 	}
 	// Interactive security does not reliably propagate a subcommand's exit

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/oauth"
 	accountviews "github.com/olegiv/ocms-go/internal/views/account"
@@ -173,7 +174,13 @@ func (h *AuthHandler) RevokeOAuthGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.oauth.RevokeGrant(oauth.WithRequest(r.Context(), r), user.ID, r.PostForm.Get("grant_id")); err != nil {
-		logAndInternalError(w, "failed to revoke OAuth grant", "user_id", user.ID)
+		if errors.Is(err, oauth.ErrGrantNotFound) {
+			// Not an error of ours: the connection is gone, was never this
+			// account's, or the form is stale. Say so instead of claiming success.
+			flashError(w, r, h.renderer, RouteAccountSecurity, i18n.T(middleware.GetAdminLang(r), "oauth.connection_not_found"))
+			return
+		}
+		logAndInternalError(w, "failed to revoke OAuth grant", "error", err, "user_id", user.ID)
 		return
 	}
 	http.Redirect(w, r, RouteAccountSecurity, http.StatusSeeOther)

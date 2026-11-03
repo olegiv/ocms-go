@@ -40,8 +40,8 @@ func DeriveMarkdown(ctx context.Context, storedHTML string, options Options) (De
 	lossy, imageLossy := false, false
 	var walk func(*html.Node) error
 	walk = func(node *html.Node) error {
-		if err := ctx.Err(); err != nil {
-			return err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
 		}
 		if node.Type == html.ElementNode {
 			if !markdownElement(node.Data) {
@@ -53,12 +53,12 @@ func DeriveMarkdown(ctx context.Context, storedHTML string, options Options) (De
 				}
 			}
 			if node.Data == "img" {
-				media, err := imageFromHTML(ctx, node, base, options.Resolver)
+				media, imageErr := imageFromHTML(ctx, node, base, options.Resolver)
 				switch {
-				case errors.Is(err, ErrUnavailable):
+				case errors.Is(imageErr, ErrUnavailable):
 					imageLossy = true
-				case err != nil:
-					return err
+				case imageErr != nil:
+					return imageErr
 				default:
 					removeAttribute(node, "src")
 					removeAttribute(node, "srcset")
@@ -78,8 +78,8 @@ func DeriveMarkdown(ctx context.Context, storedHTML string, options Options) (De
 			}
 		}
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			if err := walk(child); err != nil {
-				return err
+			if walkErr := walk(child); walkErr != nil {
+				return walkErr
 			}
 		}
 		return nil
