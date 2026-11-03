@@ -144,8 +144,36 @@ func TestFlyStagingEnvironmentsLoad(t *testing.T) {
 			for key, value := range readFlyEnv(t, name) {
 				t.Setenv(key, value)
 			}
-			t.Setenv("OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
-			t.Setenv("OCMS_MFA_KEY", "k9Qw2xZt7Lp4Vn8sRb3Yh6Mc1Ud5Ef0Gj2Hx4Nz8Tq=")
+			// The owner-managed Fly secrets (docs/mcp-staging-fly.md). Each is
+			// required: dropping one must refuse startup.
+			secrets := map[string]string{
+				"OCMS_SESSION_SECRET": "Hq4Wz9Lx2Vb7Np3Rt6Yc1Mk8Df5Gs0Ja4Ue7Xi2Zo=",
+				"OCMS_MFA_KEY":        "k9Qw2xZt7Lp4Vn8sRb3Yh6Mc1Ud5Ef0Gj2Hx4Nz8Tq=",
+			}
+			if readFlyEnv(t, name)["OCMS_ENV"] == "development" {
+				secrets["OCMS_SEED_ADMIN_PASSWORD"] = "Owner-chosen bootstrap passphrase"
+			} else {
+				secrets["OCMS_TRUSTED_PROXIES"] = "172.16.0.0/16"
+				secrets["OCMS_API_ALLOWED_CIDRS"] = "203.0.113.10/32"
+			}
+			for key, value := range secrets {
+				t.Setenv(key, value)
+			}
+			for key := range secrets {
+				t.Setenv(key, "")
+				if _, err := config.Load(); err == nil {
+					t.Errorf("%s starts without its %s Fly secret", name, key)
+				}
+				t.Setenv(key, secrets[key])
+			}
+			if readFlyEnv(t, name)["OCMS_ENV"] != "development" {
+				// The public test-suite secret must not pass on the public profile.
+				t.Setenv("OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+				if _, err := config.Load(); err == nil {
+					t.Errorf("%s accepts the public test-suite session secret", name)
+				}
+				t.Setenv("OCMS_SESSION_SECRET", secrets["OCMS_SESSION_SECRET"])
+			}
 			cfg, err := config.Load()
 			if err != nil {
 				t.Fatal(err)
@@ -163,7 +191,7 @@ func TestFlyStagingEnvironmentsLoad(t *testing.T) {
 					t.Fatal(err)
 				}
 				service, err := oauth.New(db, oauth.Options{Issuer: cfg.SiteURL,
-					AllowedHosts: strings.Split(cfg.OAuthCIMDAllowedHosts, ","), PreRegisteredClients: cfg.OAuthPreRegisteredClients})
+					AllowedHosts: oauth.SplitAllowedHosts(cfg.OAuthCIMDAllowedHosts), PreRegisteredClients: cfg.OAuthPreRegisteredClients})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -177,10 +205,6 @@ func TestFlyStagingEnvironmentsLoad(t *testing.T) {
 				if err != nil || request.ClientName != "Claude" {
 					t.Fatalf("staging pin cannot prepare Claude authorization: %v", err)
 				}
-			}
-			t.Setenv("OCMS_MFA_KEY", "")
-			if _, err := config.Load(); err == nil {
-				t.Fatal("staging starts without its required MFA sealing key")
 			}
 		})
 	}
@@ -207,60 +231,75 @@ func loadIsolatedConfig(t *testing.T, vars map[string]string) *config.Config {
 	return cfg
 }
 
-// stagingHardeningExceptions lists the production hardening the public
-// staging profile cannot state yet, with the reason. The startup checks run
-// only when OCMS_ENV=production, so setting them for staging would change
-// nothing until they apply to every non-development environment (2026-11-03
-// audit C-1 follow-up).
-var stagingHardeningExceptions = map[string]string{
-	"OCMS_REQUIRE_TRUSTED_PROXIES":                "startup check, production only",
-	"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS":          "startup check, production only",
-	"OCMS_REQUIRE_SANITIZE_PAGE_HTML":             "startup check, production only",
-	"OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML":     "startup check, production only",
-	"OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION": "startup check, production only",
-	"OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS":      "the migrator checks it only in production",
-	"OCMS_REQUIRE_API_ALLOWED_CIDRS":              "refuses every API key until the owner sets OCMS_API_ALLOWED_CIDRS as a Fly secret",
+// bootstrapStartupOnlyChecks lists the production hardening the private
+// bootstrap profile does not state: startup refusals that never run in
+// development, which the bootstrap uses so it can seed the first admin.
+var bootstrapStartupOnlyChecks = map[string]string{
+	"OCMS_REQUIRE_TRUSTED_PROXIES":                "startup check, skipped in development",
+	"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS":          "startup check, skipped in development",
+	"OCMS_REQUIRE_SANITIZE_PAGE_HTML":             "startup check, skipped in development",
+	"OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML":     "startup check, skipped in development",
+	"OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION": "startup check, skipped in development",
+	"OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS":      "the migrator checks it only outside development",
+	"OCMS_REQUIRE_API_ALLOWED_CIDRS":              "startup check, skipped in development",
 }
 
-// TestFlyStagingMatchesProductionHardening checks that the public staging
-// profile turns on every hardening flag production turns on by default,
-// apart from the listed exceptions. OCMS_ENV=staging gets none of the
-// production defaults, so the profile has to state them; a new production
-// default fails this test until staging states it or it is listed above.
+// TestFlyStagingMatchesProductionHardening checks the effective posture of
+// both Fly staging profiles against production's defaults. The public
+// staging profile must match production with no exceptions: OCMS_ENV=staging
+// gets every production default and startup check (2026-11-03 audit C-1).
+// The development-mode bootstrap must state every runtime flag itself,
+// apart from the startup-only checks listed above.
 //
-// Bug state: remove OCMS_BLOCK_SUSPICIOUS_PAGE_HTML from fly.staging.toml and
+// Bug state: make Config.IsProductionLike true only for "production", or
+// remove OCMS_BLOCK_SUSPICIOUS_PAGE_HTML from fly.staging.bootstrap.toml, and
 // this fails.
 func TestFlyStagingMatchesProductionHardening(t *testing.T) {
-	staging := readFlyEnv(t, "fly.staging.toml")
-	staging["OCMS_SESSION_SECRET"] = "Hq4Wz9Lx2Vb7Np3Rt6Yc1Mk8Df5Gs0Ja4Ue7Xi2Zo="
-	staging["OCMS_MFA_KEY"] = "k9Qw2xZt7Lp4Vn8sRb3Yh6Mc1Ud5Ef0Gj2Hx4Nz8Tq="
-	stagingCfg := reflect.ValueOf(*loadIsolatedConfig(t, staging))
-	productionCfg := reflect.ValueOf(*loadIsolatedConfig(t, map[string]string{
-		"OCMS_ENV": "production", "OCMS_SESSION_SECRET": staging["OCMS_SESSION_SECRET"], "OCMS_MFA_KEY": staging["OCMS_MFA_KEY"],
-		"OCMS_TRUSTED_PROXIES": "127.0.0.1/32", "OCMS_API_ALLOWED_CIDRS": "203.0.113.10/32",
-		"OCMS_EMBED_ALLOWED_ORIGINS": "https://example.com", "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS": "api.dify.ai",
-		"OCMS_WEBHOOK_ALLOWED_HOSTS": "hooks.example.com",
-	}))
-	typeOf := stagingCfg.Type()
-	checked := 0
-	for i := range typeOf.NumField() {
-		key, _, _ := strings.Cut(typeOf.Field(i).Tag.Get("env"), ",")
-		if typeOf.Field(i).Type.Kind() != reflect.Bool || !productionCfg.Field(i).Bool() || !strings.HasPrefix(key, "OCMS_") {
-			continue
-		}
-		checked++
-		_, excepted := stagingHardeningExceptions[key]
-		switch got := stagingCfg.Field(i).Bool(); {
-		case !got && !excepted:
-			t.Errorf("production turns %s on; fly.staging.toml must set it or list an exception", key)
-		case got && excepted:
-			t.Errorf("staging now sets %s; remove it from stagingHardeningExceptions", key)
+	secrets := map[string]string{
+		"OCMS_SESSION_SECRET": "Hq4Wz9Lx2Vb7Np3Rt6Yc1Mk8Df5Gs0Ja4Ue7Xi2Zo=", "OCMS_MFA_KEY": "k9Qw2xZt7Lp4Vn8sRb3Yh6Mc1Ud5Ef0Gj2Hx4Nz8Tq=",
+		"OCMS_TRUSTED_PROXIES": "172.16.0.0/16", "OCMS_API_ALLOWED_CIDRS": "203.0.113.10/32",
+		"OCMS_SEED_ADMIN_PASSWORD": "Owner-chosen bootstrap passphrase",
+	}
+	production := map[string]string{
+		"OCMS_ENV": "production", "OCMS_EMBED_ALLOWED_ORIGINS": "https://example.com",
+		"OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS": "api.dify.ai", "OCMS_WEBHOOK_ALLOWED_HOSTS": "hooks.example.com",
+	}
+	for key, value := range secrets {
+		if key != "OCMS_SEED_ADMIN_PASSWORD" {
+			production[key] = value
 		}
 	}
-	if checked < 10 {
-		t.Fatalf("compared only %d production defaults", checked)
-	}
-	if got, want := stagingCfg.FieldByName("APIMaxTTLDays").Int(), productionCfg.FieldByName("APIMaxTTLDays").Int(); got == 0 || got > want {
-		t.Errorf("staging API key max TTL %d, production %d", got, want)
+	productionCfg := reflect.ValueOf(*loadIsolatedConfig(t, production))
+	for name, exceptions := range map[string]map[string]string{
+		"fly.staging.toml":           nil,
+		"fly.staging.bootstrap.toml": bootstrapStartupOnlyChecks,
+	} {
+		profile := readFlyEnv(t, name)
+		for key, value := range secrets {
+			profile[key] = value
+		}
+		stagingCfg := reflect.ValueOf(*loadIsolatedConfig(t, profile))
+		typeOf := stagingCfg.Type()
+		checked := 0
+		for i := range typeOf.NumField() {
+			key, _, _ := strings.Cut(typeOf.Field(i).Tag.Get("env"), ",")
+			if typeOf.Field(i).Type.Kind() != reflect.Bool || !productionCfg.Field(i).Bool() || !strings.HasPrefix(key, "OCMS_") {
+				continue
+			}
+			checked++
+			_, excepted := exceptions[key]
+			switch got := stagingCfg.Field(i).Bool(); {
+			case !got && !excepted:
+				t.Errorf("production turns %s on; %s does not get it", key, name)
+			case got && excepted:
+				t.Errorf("%s now sets %s; remove it from bootstrapStartupOnlyChecks", name, key)
+			}
+		}
+		if checked < 10 {
+			t.Fatalf("compared only %d production defaults", checked)
+		}
+		if got, want := stagingCfg.FieldByName("APIMaxTTLDays").Int(), productionCfg.FieldByName("APIMaxTTLDays").Int(); got == 0 || got > want {
+			t.Errorf("%s API key max TTL %d, production %d", name, got, want)
+		}
 	}
 }

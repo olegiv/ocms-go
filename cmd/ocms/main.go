@@ -113,12 +113,60 @@ func registerSettingsRoutes(r chi.Router, route string, get, update http.Handler
 	r.Post(route, update) // HTML forms can't send PUT
 }
 
+// oauthEndpoints are the OAuth authorization server handlers.
+type oauthEndpoints interface {
+	Discovery(http.ResponseWriter, *http.Request)
+	ProtectedResourceMetadata() http.Handler
+	Token(http.ResponseWriter, *http.Request)
+	Revoke(http.ResponseWriter, *http.Request)
+	Register(http.ResponseWriter, *http.Request)
+}
+
+// registerOAuthRoutes mounts the OAuth authorization server. Every route but
+// revocation answers only while mcpActive reports the MCP module active:
+// /api/mcp is the only resource the server protects, so with the module off
+// there is nothing to authorize, register a client for or issue a token for,
+// and an unauthenticated request must not reach client registration or the
+// client metadata fetch (2026-11-03 audit A-13). Revocation stays available
+// so a client can still retire the tokens it holds.
+func registerOAuthRoutes(r chi.Router, s oauthEndpoints, authorize http.HandlerFunc, mcpActive func(*http.Request) (bool, error),
+	apiLimit, htmlLimit, csrf func(http.Handler) http.Handler) {
+	gate := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			active, err := mcpActive(req)
+			if err != nil {
+				slog.Error("failed to check whether the MCP module is active", "error", err)
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+				return
+			}
+			if !active {
+				http.NotFound(w, req)
+				return
+			}
+			next.ServeHTTP(w, req)
+		})
+	}
+	r.Group(func(r chi.Router) {
+		r.Use(apiLimit)
+		r.Post("/oauth/revoke", s.Revoke)
+		r.Group(func(r chi.Router) {
+			r.Use(gate)
+			r.Get("/.well-known/oauth-authorization-server", s.Discovery)
+			r.Handle(oauth.MetadataPath, s.ProtectedResourceMetadata())
+			r.Post("/oauth/token", s.Token)
+			r.Post("/oauth/register", s.Register)
+		})
+	})
+	r.With(htmlLimit, gate, csrf).Get("/oauth/authorize", authorize)
+	r.With(htmlLimit, gate, csrf).Post("/oauth/authorize", authorize)
+}
+
 func registerPreviewRoutes(r chi.Router, h *handler.FrontendHandler) {
 	r.Route("/preview", func(pr chi.Router) {
 		pr.Get("/pages/{id}/revisions/{revision}", h.PreviewSession)
 		limiter := middleware.NewGlobalRateLimiter(2, 20)
-		pr.With(limiter.Middleware()).Get("/share", h.PreviewShareLanding)
-		pr.With(limiter.Middleware()).Post("/share/open", h.PreviewShare)
+		pr.With(limiter.HTMLMiddleware()).Get("/share", h.PreviewShareLanding)
+		pr.With(limiter.HTMLMiddleware()).Post("/share/open", h.PreviewShare)
 		pr.Get("/", http.NotFound)
 		pr.NotFound(http.NotFound)
 	})
@@ -287,7 +335,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_MFA       Require a second factor for every account (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|staging|production (default: development; only production applies the production defaults)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|staging|production (default: development; staging and production apply the production defaults)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_FORM_CAPTCHA  Require captcha for all public forms (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_WEBHOOK_FORM_DATA_MODE  form.submitted payload mode: redacted|none|full (default: redacted)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION  Reject production startup when webhook payload mode is full (default: false; production default when unset: true)\n")
@@ -1237,7 +1285,7 @@ func themeStaticFileServable(w http.ResponseWriter, r *http.Request, info fs.Fil
 
 // runPostModulePostureAudits runs production security posture checks that depend on module state.
 func runPostModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql.DB, moduleRegistry *module.Registry, hookRegistry *module.HookRegistry) error {
-	if cfg.Env != "production" {
+	if !cfg.IsProductionLike() {
 		return nil
 	}
 	if cfg.RequireEmbedAllowedOrigins && strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
@@ -1296,12 +1344,12 @@ func runPreModulePostureAudits(
 	allowedEmbedUpstreamHosts map[string]struct{},
 	allowedWebhookHosts map[string]struct{},
 ) error {
-	if cfg.Env != "production" {
+	if !cfg.IsProductionLike() {
 		return nil
 	}
 	if hasDefaultAdminCreds {
 		return fmt.Errorf(
-			"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
+			"refusing to start outside development: default seeded admin credentials are still active for %s; rotate credentials before startup",
 			store.DefaultAdminEmail,
 		)
 	}
@@ -1394,7 +1442,7 @@ func configureMiddlewareDefaults(cfg *config.Config) error {
 
 // logProductionSecurityWarnings logs slog warnings for disabled production security settings.
 func logProductionSecurityWarnings(cfg *config.Config) {
-	if cfg.Env != "production" {
+	if !cfg.IsProductionLike() {
 		return
 	}
 	if !cfg.RequireFormCaptcha {
@@ -1709,7 +1757,7 @@ func openDatabase(dsn string) (*sql.DB, error) {
 // and, in demo mode, rotates the demo and default admin passwords. It returns
 // the demo admin password for this startup, or "" when there is none.
 func seedDatabase(ctx context.Context, cfg *config.Config, db *sql.DB) (string, error) {
-	if err := store.Seed(ctx, db, cfg.DoSeed); err != nil {
+	if err := store.SeedWithAdminPassword(ctx, db, cfg.DoSeed, cfg.SeedAdminPassword); err != nil {
 		return "", fmt.Errorf("seeding database: %w", err)
 	}
 	// Seed demo content if both base seeding and demo mode are enabled
@@ -1965,7 +2013,7 @@ func run() (runErr error) {
 	if cfg.OAuthEnabled {
 		oauthService, err = oauth.New(db, oauth.Options{
 			Issuer: cfg.SiteURL, Development: cfg.IsDevelopment(),
-			AllowedHosts:         strings.FieldsFunc(strings.ToLower(cfg.OAuthCIMDAllowedHosts), func(r rune) bool { return r == ',' || r == ' ' }),
+			AllowedHosts:         oauth.SplitAllowedHosts(cfg.OAuthCIMDAllowedHosts),
 			PreRegisteredClients: cfg.OAuthPreRegisteredClients,
 			AllowDCR:             cfg.OAuthAllowDCR, AccessTTL: time.Duration(cfg.OAuthAccessTTL) * time.Second,
 			RefreshTTL: time.Duration(cfg.OAuthRefreshTTLDays) * 24 * time.Hour,
@@ -2305,16 +2353,13 @@ func run() (runErr error) {
 	})
 
 	if oauthService != nil {
-		r.Group(func(r chi.Router) {
-			r.Use(publicRateLimiter.Middleware())
-			r.Get("/.well-known/oauth-authorization-server", oauthService.Discovery)
-			r.Handle(oauth.MetadataPath, oauthService.ProtectedResourceMetadata())
-			r.Post("/oauth/token", oauthService.Token)
-			r.Post("/oauth/revoke", oauthService.Revoke)
-			r.Post("/oauth/register", oauthService.Register)
-		})
-		r.With(publicRateLimiter.HTMLMiddleware(), csrfMiddleware).Get("/oauth/authorize", authHandler.OAuthAuthorize)
-		r.With(publicRateLimiter.HTMLMiddleware(), csrfMiddleware).Post("/oauth/authorize", authHandler.OAuthAuthorize)
+		registerOAuthRoutes(r, oauthService, authHandler.OAuthAuthorize, func(req *http.Request) (bool, error) {
+			// Toggled at runtime from Admin > Modules, like the server card.
+			if !moduleRegistry.IsActive(mcpserver.ModuleName) {
+				return false, nil
+			}
+			return queries.IsModuleActive(req.Context(), mcpserver.ModuleName)
+		}, publicRateLimiter.Middleware(), publicRateLimiter.HTMLMiddleware(), csrfMiddleware)
 	}
 
 	// Account pages use the core layout and current database permissions.

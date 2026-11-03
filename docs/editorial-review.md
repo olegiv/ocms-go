@@ -72,6 +72,23 @@ CSP. Interactive integrations and historical asset bytes are outside the
 preview fidelity promise. Taxonomy/image assignments are pinned; referenced
 names and local media files use their current stored values.
 
+Preview routes are `/preview/...` and one language-prefix segment followed by
+`/preview/...`, such as `/ru/preview/pages/12/revisions/3`. Only those paths get
+the preview headers and request context, and only legacy
+`/preview/share/<bearer>` paths under them are redacted. A path with
+`/preview/` deeper in it is ordinary public content and is served unchanged.
+The middleware runs before the active languages are known, so it judges the
+first segment by the language-code grammar (2–10 lowercase letters, digits or
+hyphens, not a name an application route owns) and cannot tell `docs/preview/x`
+from `ru/preview/x`. Page slugs and aliases therefore cannot start with
+`preview`, or have it as the second segment after a language-code-shaped
+first one: every page write path refuses or skips them (see
+[multi-language](multi-language.md)). An alias stored before this rule, with a
+`preview` segment after a first segment that fits the language-code grammar,
+is still answered as a preview (no-store, noindex, no scripts), and one below
+`.../preview/share` is rewritten to a 404; rename it. Aliases such as
+`blog/preview/x` are not affected, because `blog` is never a language prefix.
+
 ## Explicit secure sharing
 
 Sharing is a separate action. The owner of a plain, unscheduled, AI-editable
@@ -91,6 +108,16 @@ submitting the bearer as a form body to fixed `/preview/share/open`. That
 response uses the ordinary isolated renderer and its script-blocking CSP.
 The two paths differ so reopening another share causes a fresh request rather
 than changing only the fragment of an already-rendered preview.
+
+The landing and its POST are rate limited per client address (two requests a
+second, burst of twenty). A limited request gets a plain-text 429 page, not the
+API's JSON error, because people open these URLs in a browser.
+
+An anonymous share shows the author box only when the recorded revision's
+author is the user who issued the link. If authorship was reassigned after the
+revision was recorded, the share omits the box, so a link never publishes
+another user's name, avatar, bio or links. Signed-in editor previews still show
+the recorded author.
 
 Opening share links requires JavaScript; the landing explains this when it is
 disabled. Copy the entire issued URL, including its fragment. Non-browser

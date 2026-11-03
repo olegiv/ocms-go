@@ -524,11 +524,20 @@ new tools are `create_draft_page`, `update_draft_page`,
 `get_translation_status`. R1.6 enables explicit revision-pinned
 `create_preview_link` with expiring bearer access and lifecycle revocation.
 Save/read results remain session-only; see [Editorial review](editorial-review.md).
+**Let AI clients create share links** (on by default) controls that tool:
+with it off, `create_preview_link` refuses with `share_links_disabled`. The
+**Share links issued by AI clients** card lists every usable link an OAuth
+grant or API key issued, with its page, account and expiry, and revokes one
+with a recorded `Preview share link revoked` event.
 Three content mutations require stable UUID request
 IDs; updates require the last-read revision. Own reads do not depend on the
 separate general drafts policy. All writes use the shared atomic service.
 The per-user rolling quota is 60 new successful content operations per hour;
-retained retries spend no additional quota. See [Draft authoring](draft-authoring.md).
+retained retries spend no additional quota. A user may hold at most 50
+unpublished AI drafts: creating another is refused with the non-retryable code
+`draft_limit_reached`, while updates continue. Each AI draft keeps its newest 20
+revisions; the `core:ai_revision_cleanup` scheduler job removes older ones that
+nothing still pins or references. See [Draft authoring](draft-authoring.md).
 
 ## Authoring context (R1.4 development)
 

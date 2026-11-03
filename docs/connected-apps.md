@@ -16,8 +16,11 @@ Native-only Desktop reconnect and full release acceptance remain open.
 ## Account and administrator controls
 
 Account → Connected apps (`/account/connected-apps`) lists the signed-in
-account's OAuth grants and API keys with `mcp:access`, including revoked,
-expired and currently unavailable entries. Each class has independent
+account's OAuth connections and API keys with `mcp:access`, including revoked,
+expired and currently unavailable entries. A grant is created at consent but is
+a connection only once its code has been exchanged for a token; grants that
+never issued one are not listed (nor in the `/admin/mcp` overview or the older
+account security list), though revoking one by ID still works. Each class has independent
 pagination, 25 rows per page. The view includes registered app/key name,
 client metadata host/ID for OAuth, granted scopes, creation, last use and
 expiry. API keys have no recorded client host. Registered names/hosts do not
@@ -62,6 +65,7 @@ One run has a five-second context deadline and one atomic transaction:
 | Token rows | Family expired or first revoked at least 30 days ago | 250 |
 | OAuth-issued preview links | Same retired-family condition | 250 |
 | Grant families | Same condition and no remaining code/token/preview children | 250 |
+| Unredeemed grants | Created at least 24 hours ago, no token and no preview link (the code row goes with it) | 250 |
 | Client metadata | Expired for at least 24 hours and no remaining grant | 250 |
 
 The terminal family boundary is the earlier of absolute expiry and first
@@ -76,6 +80,13 @@ may need several runs. Each run is repeatable; any statement/commit failure
 rolls back all phases and reports no committed deletions. Logs contain counts
 and failures, not credentials or article bodies. Unused expired client-cache
 entries may still be evicted earlier by the existing registration-cap guard.
+
+A dynamically registered client expires one day after registration unless a
+grant is created for it; consent extends it to 90 days. A client that is never
+used therefore stops resolving after a day, is reclaimed at once when the
+registry is full, and is removed by the client-metadata row above a day after
+that. Unredeemed grants are removed before client metadata, so an abandoned
+consent does not keep its client alive.
 
 The new migration adds indexes only; its rollback retains credentials and
 content. Cleanup deletions themselves are not undone by rolling that migration

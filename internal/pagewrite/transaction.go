@@ -34,6 +34,9 @@ type trackedPage struct {
 	before   string
 	revision int64
 	created  bool
+	// relationOnly marks a sibling tracked only because a translation link
+	// changes its component: its revision is recorded as a system change.
+	relationOnly bool
 }
 
 // Tx is a unit of work. Track existing pages before their first mutation, and
@@ -112,6 +115,16 @@ func (t *Tx) TrackEvidenceChanges(id int64) {
 // Track captures fresh state and enforces CAS before any mutation. Set required
 // for an editor/agent action; legacy REST updates may omit it on ordinary pages.
 func (t *Tx) Track(ctx context.Context, id int64, base *int64, required bool) (store.Page, error) {
+	page, err := t.track(ctx, id, base, required)
+	if tracked, ok := t.tracked[id]; err == nil && ok && tracked.relationOnly {
+		// The operation changes this page itself, not only its component.
+		tracked.relationOnly = false
+		t.tracked[id] = tracked
+	}
+	return page, err
+}
+
+func (t *Tx) track(ctx context.Context, id int64, base *int64, required bool) (store.Page, error) {
 	page, err := t.Q.GetPageByID(ctx, id)
 	if err != nil {
 		return store.Page{}, err
@@ -151,8 +164,12 @@ func (t *Tx) TrackSystem(ctx context.Context, id int64) (store.Page, error) {
 }
 
 // TrackComponent tracks every sibling whose translation membership may change.
+// A page this transaction does not otherwise change gets its new revision
+// recorded as a system change (RelationOnlyPrincipal), so a translation link
+// never credits the acting credential with an edit to a page it only read
+// (2026-11-03 audit B-4).
 func (t *Tx) TrackComponent(ctx context.Context, id int64) error {
-	if _, err := t.TrackSystem(ctx, id); err != nil {
+	if err := t.trackRelation(ctx, id); err != nil {
 		return err
 	}
 	members, err := t.Q.ListTranslationComponentMembers(ctx, store.ListTranslationComponentMembersParams{EntityType: "page", SourceEntityID: id})
@@ -160,11 +177,35 @@ func (t *Tx) TrackComponent(ctx context.Context, id int64) error {
 		return err
 	}
 	for _, member := range members {
-		if _, err := t.TrackSystem(ctx, member.EntityID); err != nil {
+		if err := t.trackRelation(ctx, member.EntityID); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (t *Tx) trackRelation(ctx context.Context, id int64) error {
+	_, already := t.tracked[id]
+	p, err := t.Q.GetPageByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if _, err = t.track(ctx, id, &p.Revision, false); err != nil {
+		return err
+	}
+	if !already {
+		tracked := t.tracked[id]
+		tracked.relationOnly = true
+		t.tracked[id] = tracked
+	}
+	return nil
+}
+
+// RelationOnlyPrincipal is the provenance of a revision that only records a
+// changed translation component. UserID names the account whose action
+// linked it; no credential is credited with the page's text.
+func RelationOnlyPrincipal(userID int64) provenance.Principal {
+	return provenance.Principal{UserID: userID, Source: "system", Transport: "translation_link"}
 }
 
 // Created registers an inserted page; its first committed revision is one.
@@ -230,7 +271,14 @@ func (t *Tx) Finish(ctx context.Context) error {
 				return err
 			}
 		}
-		changedBy := t.principal.UserID
+		principal, evidence := t.principal, t.evidence
+		if selected, ok := t.pageEvidence[id]; ok {
+			evidence = selected
+		}
+		if tracked.relationOnly {
+			principal, evidence = RelationOnlyPrincipal(t.principal.UserID), provenance.Evidence{}
+		}
+		changedBy := principal.UserID
 		// The legacy FK requires a user; provenance explicitly records system
 		// identity rather than pretending that this fallback user made the edit.
 		if changedBy == 0 {
@@ -240,11 +288,7 @@ func (t *Tx) Finish(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("record page snapshot: %w", err)
 		}
-		evidence := t.evidence
-		if selected, ok := t.pageEvidence[id]; ok {
-			evidence = selected
-		}
-		if err = provenance.Record(ctx, t.Q, page, t.principal, evidence); err != nil {
+		if err = provenance.Record(ctx, t.Q, page, principal, evidence); err != nil {
 			return fmt.Errorf("record page provenance: %w", err)
 		}
 		t.Pages[id] = page

@@ -22,7 +22,8 @@ func (s *Scheduler) AddOAuthCleanup() error {
 			return err
 		}
 		s.logger.Info("OAuth retention batch completed", "codes", result.Codes,
-			"tokens", result.Tokens, "previews", result.Previews, "grants", result.Grants, "clients", result.Clients)
+			"tokens", result.Tokens, "previews", result.Previews, "grants", result.Grants,
+			"unredeemed_grants", result.Unredeemed, "clients", result.Clients)
 		return nil
 	}
 	job := func() {

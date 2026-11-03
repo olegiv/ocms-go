@@ -97,6 +97,9 @@ func Register(r chi.Router, deps Deps) *Handler {
 	// forces multipart/temp-file parsing on POST /media and only then hits the
 	// service-layer auth check. See Codex P1 review on commit 024b94f.
 	api.UseMiddleware(requireAPIKeyWhenDeclared(api))
+	// Demo mode is read-only for every REST write, also before the body is
+	// parsed (TestDemoModeRefusesEveryWriteOperation).
+	api.UseMiddleware(refuseWritesInDemoMode(api))
 
 	h := &Handler{API: api, Deps: deps}
 	registerMeta(h)
@@ -138,6 +141,25 @@ func requireAPIKeyWhenDeclared(api huma.API) func(ctx huma.Context, next func(hu
 		next(ctx)
 	}
 }
+
+// refuseWritesInDemoMode returns a huma API middleware that answers every
+// operation other than GET or HEAD with 403 in demo mode. A demo site has no
+// API keys of its own, but a key created before demo mode was turned on must
+// not change content, taxonomy or media there either (2026-11-03 audit B-2).
+// Guarding the operation method, not each service method, covers every
+// current and future write operation.
+func refuseWritesInDemoMode(api huma.API) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		if middleware.IsDemoMode() && ctx.Method() != http.MethodGet && ctx.Method() != http.MethodHead {
+			_ = huma.WriteErr(api, ctx, http.StatusForbidden, DemoReadOnlyMessage)
+			return
+		}
+		next(ctx)
+	}
+}
+
+// DemoReadOnlyMessage is the refusal every REST write gets in demo mode.
+const DemoReadOnlyMessage = "Content is read-only in demo mode"
 
 // apiKeyScopesFor returns the scopes required by the ApiKeyAuth Security
 // alternative on an operation, and a flag indicating whether authentication is

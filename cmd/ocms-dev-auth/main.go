@@ -19,15 +19,23 @@ import (
 const usage = "usage: ocms-dev-auth import|status|code --profile mcp-staging|local --account EMAIL [--origin LOOPBACK_ORIGIN]"
 
 func main() {
-	os.Exit(mainExit())
+	os.Exit(mainExit(run))
 }
 
-func mainExit() int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+// mainExit runs execute under a context that ends on any of shutdownSignals or
+// after the 55-second deadline, and returns the process exit code.
+func mainExit(execute func(context.Context, []string, io.Reader, io.Writer) error) int {
+	signalCtx, stop := signal.NotifyContext(context.Background(), shutdownSignals...)
 	defer stop()
-	ctx, cancel := context.WithTimeout(ctx, 55*time.Second)
+	go func() {
+		// After the first signal, restore default handling so that a second one
+		// still ends a command that is blocked outside the context (stdin).
+		<-signalCtx.Done()
+		stop()
+	}()
+	ctx, cancel := context.WithTimeout(signalCtx, 55*time.Second)
 	defer cancel()
-	if err := run(ctx, os.Args[1:], os.Stdin, os.Stdout); err != nil {
+	if err := execute(ctx, os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -84,8 +92,20 @@ func run(ctx context.Context, args []string, input io.Reader, output io.Writer) 
 	if err != nil {
 		return err
 	}
+	return deliver(ctx, output, result)
+}
+
+// deliver writes the JSON result. A private code directory is removed again
+// when the consumer will never learn of it: the run was cancelled (signal or
+// deadline) after the code was written, or the result cannot be written.
+func deliver(ctx context.Context, output io.Writer, result any) error {
+	code, isCode := result.(codeResult)
+	if isCode && ctx.Err() != nil {
+		_ = os.RemoveAll(code.directory)
+		return errors.New("interrupted before the development code was delivered")
+	}
 	if err := json.NewEncoder(output).Encode(result); err != nil {
-		if code, ok := result.(codeResult); ok {
+		if isCode {
 			_ = os.RemoveAll(code.directory)
 		}
 		return errors.New("cannot write authenticator result")

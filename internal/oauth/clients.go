@@ -10,11 +10,14 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	lib "github.com/go-oauth2/oauth2/v4"
@@ -57,7 +60,19 @@ func validDCRRedirect(raw string) bool {
 func validRedirect(raw string) bool {
 	u, err := url.Parse(raw)
 	return err == nil && u != nil && len(raw) <= 2048 && u.Host != "" && u.User == nil && u.Fragment == "" &&
+		validRedirectPort(u.Port()) &&
 		(u.Scheme == "https" || (u.Scheme == "http" && loopbackRedirectHost(u.Hostname())))
+}
+
+// validRedirectPort accepts an absent port or one in 1-65535. url.Parse only
+// checks that a port is numeric, so ":0" and ":99999" would otherwise be
+// registered, matched against and redirected to.
+func validRedirectPort(port string) bool {
+	if port == "" {
+		return true
+	}
+	n, err := strconv.Atoi(port)
+	return err == nil && n >= 1 && n <= 65535
 }
 
 func (c registeredClient) acceptsRedirect(raw string) bool {
@@ -94,11 +109,34 @@ func (s clientStorage) GetByID(_ context.Context, id string) (lib.ClientInfo, er
 	return s.client, nil
 }
 
+const (
+	// cimdFetchTimeout bounds one metadata fetch, however many callers wait for it.
+	cimdFetchTimeout = 5 * time.Second
+	// cimdFailureTTL is how long a failed fetch of one metadata URL is
+	// remembered: unauthenticated requests naming an allowed host's URL would
+	// otherwise each cost an outbound request (security audit 2026-11-03, A-7).
+	cimdFailureTTL = 60 * time.Second
+	// cimdFailureCapacity bounds the remembered failures. When it is full of
+	// fresh entries a new failure is simply not remembered.
+	cimdFailureCapacity = 256
+)
+
 type clientResolver struct {
 	service       *Service
 	http          *http.Client
 	group         singleflight.Group
 	preRegistered map[string]registeredClient
+
+	failuresMu sync.Mutex
+	failures   map[string]cimdFailure
+}
+
+// cimdFailure is a failed metadata fetch. The protocol error is kept as it
+// was first answered, so a transport fault stays retryable
+// (temporarily_unavailable) while it is remembered.
+type cimdFailure struct {
+	problem *Problem
+	until   time.Time
 }
 
 func newClientResolver(s *Service) *clientResolver {
@@ -144,7 +182,17 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 	if !validCIMDID(id, c.service.options.AllowedHosts) {
 		return registeredClient{}, problem("invalid_client")
 	}
-	result := c.group.DoChan(id, func() (any, error) { return c.fetch(ctx, id) })
+	if p := c.recentFailure(id); p != nil {
+		return registeredClient{}, p
+	}
+	result := c.group.DoChan(id, func() (any, error) {
+		// One flight serves every caller waiting for this URL, so it must
+		// not end with the caller that happened to start it. It keeps that
+		// caller's values but not its cancellation, and has its own deadline.
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cimdFetchTimeout)
+		defer cancel()
+		return c.fetch(fetchCtx, id)
+	})
 	select {
 	case <-ctx.Done():
 		return registeredClient{}, problem("temporarily_unavailable")
@@ -161,14 +209,23 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 }
 
 func validCIMDID(id string, allowedHosts []string) bool {
+	host, ok := cimdHost(id)
+	return ok && slices.Contains(allowedHosts, host)
+}
+
+// cimdHost returns the lowercased host of a client ID that is a well-formed
+// metadata document URL: HTTPS on port 443, a path, no credentials, query or
+// fragment, and not a private address.
+func cimdHost(id string) (string, bool) {
 	u, err := url.Parse(id)
 	if err != nil || id == "" || len(id) > 2048 || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" ||
-		u.Fragment != "" || u.Path == "" || (u.Port() != "" && u.Port() != "443") ||
-		!slices.Contains(allowedHosts, strings.ToLower(u.Hostname())) {
-		return false
+		u.Fragment != "" || u.Path == "" || (u.Port() != "" && u.Port() != "443") {
+		return "", false
 	}
-	ip := net.ParseIP(u.Hostname())
-	return ip == nil || !util.IsPrivateIP(ip)
+	if ip := net.ParseIP(u.Hostname()); ip != nil && util.IsPrivateIP(ip) {
+		return "", false
+	}
+	return strings.ToLower(u.Hostname()), true
 }
 
 func (c *clientResolver) loadPreRegistered(raw string) error {
@@ -182,7 +239,7 @@ func (c *clientResolver) loadPreRegistered(raw string) error {
 	c.preRegistered = make(map[string]registeredClient, len(clients))
 	for _, client := range clients {
 		_, duplicate := c.preRegistered[client.ID]
-		if duplicate || !validCIMDID(client.ID, c.service.options.AllowedHosts) || !validCIMDClient(client) {
+		if duplicate || !c.pinnableID(client.ID) || !validCIMDClient(client) {
 			return errors.New("invalid pre-registered OAuth client configuration")
 		}
 		client.AuthMethod = "none"
@@ -191,7 +248,77 @@ func (c *clientResolver) loadPreRegistered(raw string) error {
 	return nil
 }
 
+// recentFailure returns the remembered answer for a metadata URL whose fetch
+// failed less than cimdFailureTTL ago, or nil.
+func (c *clientResolver) recentFailure(id string) *Problem {
+	c.failuresMu.Lock()
+	defer c.failuresMu.Unlock()
+	failure, ok := c.failures[id]
+	if !ok {
+		return nil
+	}
+	if !c.service.now().Before(failure.until) {
+		delete(c.failures, id)
+		return nil
+	}
+	return failure.problem
+}
+
+// rememberFailure records a failed fetch of the remote document. Only the
+// remote answer is remembered: a fault in this server's own storage says
+// nothing about the URL and is retried at once.
+func (c *clientResolver) rememberFailure(id string, err error) {
+	var p *Problem
+	if !errors.As(err, &p) {
+		return
+	}
+	now := c.service.now()
+	c.failuresMu.Lock()
+	defer c.failuresMu.Unlock()
+	if c.failures == nil {
+		c.failures = make(map[string]cimdFailure)
+	}
+	if _, known := c.failures[id]; !known && len(c.failures) >= cimdFailureCapacity {
+		for key, failure := range c.failures {
+			if !now.Before(failure.until) {
+				delete(c.failures, key)
+			}
+		}
+		if len(c.failures) >= cimdFailureCapacity {
+			return
+		}
+	}
+	c.failures[id] = cimdFailure{problem: p, until: now.Add(cimdFailureTTL)}
+}
+
+// pinnableID reports whether id may name a pre-registered client: a metadata
+// document URL on an allowed host. With an empty allowlist (no live
+// discovery) the owner-reviewed documents are the only CIMD clients, and
+// they are never fetched, so any well-formed URL is accepted.
+func (c *clientResolver) pinnableID(id string) bool {
+	hosts := c.service.options.AllowedHosts
+	if len(hosts) == 0 {
+		_, ok := cimdHost(id)
+		return ok
+	}
+	return validCIMDID(id, hosts)
+}
+
 func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient, error) {
+	client, err := c.download(ctx, id)
+	if err != nil {
+		c.rememberFailure(id, err)
+		return registeredClient{}, err
+	}
+	if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
+		logFault(ctx, "failed to cache OAuth client metadata", err, "client_id", id)
+		return registeredClient{}, problem("temporarily_unavailable")
+	}
+	return client, nil
+}
+
+// download retrieves and validates the metadata document at id.
+func (c *clientResolver) download(ctx context.Context, id string) (registeredClient, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, id, nil)
 	if err != nil {
 		return registeredClient{}, problem("invalid_client")
@@ -218,17 +345,24 @@ func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient
 		slog.WarnContext(ctx, "OAuth client metadata rejected", "client_id", id, "status", resp.StatusCode, "oversize", len(raw) > 64<<10)
 		return registeredClient{}, problem("invalid_client")
 	}
+	if !jsonContentType(resp.Header.Get("Content-Type")) {
+		slog.WarnContext(ctx, "OAuth client metadata is not served as JSON", "client_id", id)
+		return registeredClient{}, problem("invalid_client")
+	}
 	var client registeredClient
 	if json.Unmarshal(raw, &client) != nil || client.ID != id || !validCIMDClient(client) {
 		slog.WarnContext(ctx, "OAuth client metadata document invalid", "client_id", id)
 		return registeredClient{}, problem("invalid_client")
 	}
 	client.AuthMethod = "none"
-	if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
-		logFault(ctx, "failed to cache OAuth client metadata", err, "client_id", id)
-		return registeredClient{}, problem("temporarily_unavailable")
-	}
 	return client, nil
+}
+
+// jsonContentType reports whether a Content-Type header names JSON:
+// application/json or a structured-syntax suffix such as application/jrd+json.
+func jsonContentType(header string) bool {
+	mediaType, _, err := mime.ParseMediaType(header)
+	return err == nil && (mediaType == "application/json" || (strings.HasPrefix(mediaType, "application/") && strings.HasSuffix(mediaType, "+json")))
 }
 
 func validClient(c registeredClient) bool {

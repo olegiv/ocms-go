@@ -240,7 +240,7 @@ func JSON(value Context) (string, error) {
 
 // DraftResolver wires the same visible-content checker into R1.3 body validation.
 func (r *Resolver) DraftResolver() draft.StoreResolver {
-	return draft.StoreResolver{Queries: r.Queries, CheckLink: r.InternalLink}
+	return draft.StoreResolver{Queries: r.Queries, CheckLink: r.InternalLink, NewLinkCheck: r.LinkChecker}
 }
 
 // HasReferenceErrors makes inaccessible references a visible blocking issue for later authoring adapters.

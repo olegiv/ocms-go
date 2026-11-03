@@ -247,6 +247,11 @@ func (s *Service) inheritReferences(ctx context.Context, p store.Page, v *Valida
 			return nil, err
 		}
 		version, err := s.Q.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{PageID: ref.PageID, Revision: sql.NullInt64{Int64: ref.Revision, Valid: true}})
+		if errors.Is(err, sql.ErrNoRows) {
+			// Retention keeps referenced revisions; a missing one is reported like
+			// an unavailable reference, not as an internal error.
+			return nil, invalid([]draft.Issue{draft.NewIssue("reference_unresolved", "references", p.LanguageCode)})
+		}
 		if err != nil {
 			return nil, err
 		}

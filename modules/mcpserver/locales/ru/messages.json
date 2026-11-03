@@ -4,7 +4,7 @@
     "messages": [
         {"id": "mcp.authoring_enabled", "message": "Draft authoring enabled; publishing stays manual", "translation": "Черновики разрешены; публикация вручную"},
         {"id": "mcp.draft_tools_enabled", "message": "Enable draft authoring", "translation": "Разрешить подготовку черновиков"},
-        {"id": "mcp.draft_tools_help", "message": "Allow apps with mcp:drafts to create and edit their own AI-editable drafts. No publishing or deletion. Up to 60 new writes per user per hour; retries reuse their request ID.", "translation": "Приложения с mcp:drafts могут создавать и менять свои ИИ-черновики без публикации и удаления. До 60 новых записей на пользователя в час; при повторе используется тот же request_id."},
+        {"id": "mcp.draft_tools_help", "message": "Allow apps with mcp:drafts to create and edit their own AI-editable drafts. No publishing or deletion. Up to 60 new writes per user per hour and 50 unpublished AI drafts per user; retries reuse their request ID.", "translation": "Приложения с mcp:drafts могут создавать и менять свои ИИ-черновики без публикации и удаления. До 60 новых записей на пользователя в час и до 50 неопубликованных ИИ-черновиков на пользователя; при повторе используется тот же request_id."},
         {"id": "mcp.external_links", "message": "External links in new draft bodies", "translation": "Внешние ссылки в новых текстах"},
         {"id": "mcp.external_links_help", "message": "Applies when agents create or replace body content. Existing HTML is preserved during metadata-only changes. Sharing requires a separate explicit request.", "translation": "Действует при создании или замене текста агентом. Изменение метаданных сохраняет существующий HTML. Общедоступная ссылка создаётся только по отдельному явному запросу."},
         {"id": "mcp.links_keep", "message": "Keep external links for review", "translation": "Сохранить для проверки"},
@@ -51,6 +51,21 @@
         {"id": "mcp.keys_empty", "message": "No API key has the MCP permission yet.", "translation": "Пока ни у одного API-ключа нет разрешения MCP."},
         {"id": "mcp.keys_error", "message": "Failed to load API keys.", "translation": "Не удалось загрузить API-ключи."},
         {"id": "mcp.never", "message": "Never", "translation": "Никогда"},
-        {"id": "mcp.oauth_connect", "message": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in", "translation": "Для входа и подтверждения доступа в браузере подключитесь по URL сервера. Управление доступом:"}
+        {"id": "mcp.oauth_connect", "message": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in", "translation": "Для входа и подтверждения доступа в браузере подключитесь по URL сервера. Управление доступом:"},
+        {"id": "mcp.agent_share_links", "message": "Let AI clients create share links", "translation": "Разрешить ИИ-клиентам создавать ссылки для просмотра"},
+        {"id": "mcp.agent_share_links_help", "message": "Allow create_preview_link to issue anonymous links to one version of an agent's own draft, valid for up to 24 hours. Turning this off stops new links; revoke existing ones below.", "translation": "Позволяет инструменту create_preview_link выдавать анонимные ссылки на одну версию собственного черновика агента сроком до 24 часов. Отключение запрещает новые ссылки; уже выданные можно отозвать ниже."},
+        {"id": "mcp.share_links_title", "message": "Share links issued by AI clients", "translation": "Ссылки для просмотра, выданные ИИ-клиентами"},
+        {"id": "mcp.share_links_description", "message": "Usable links created with create_preview_link. Anyone holding one can read that draft version until it expires or is revoked.", "translation": "Действующие ссылки, созданные через create_preview_link. Любой обладатель ссылки может читать эту версию черновика до истечения срока или отзыва."},
+        {"id": "mcp.share_links_error", "message": "Share links could not be loaded.", "translation": "Не удалось загрузить ссылки для просмотра."},
+        {"id": "mcp.share_links_empty", "message": "AI clients have no usable share links.", "translation": "У ИИ-клиентов нет действующих ссылок для просмотра."},
+        {"id": "mcp.share_links_page", "message": "Page", "translation": "Страница"},
+        {"id": "mcp.share_links_issued_by", "message": "Issued for", "translation": "Выдана для"},
+        {"id": "mcp.share_links_expires", "message": "Expires", "translation": "Истекает"},
+        {"id": "mcp.share_links_revision", "message": "version %d", "translation": "версия %d"},
+        {"id": "mcp.share_links_api_key", "message": "API key", "translation": "API-ключ"},
+        {"id": "mcp.share_links_revoke", "message": "Revoke", "translation": "Отозвать"},
+        {"id": "mcp.share_revoked", "message": "The share link was revoked.", "translation": "Ссылка для просмотра отозвана."},
+        {"id": "mcp.share_revoke_missing", "message": "That share link was already revoked or has expired.", "translation": "Эта ссылка уже отозвана или истекла."},
+        {"id": "mcp.share_revoke_error", "message": "The share link could not be revoked. Try again.", "translation": "Не удалось отозвать ссылку. Попробуйте ещё раз."}
     ]
 }

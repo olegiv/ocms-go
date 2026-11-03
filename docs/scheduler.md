@@ -33,8 +33,33 @@ Built-in jobs:
 | Source | Name | Default schedule | Description |
 |--------|------|------------------|-------------|
 | `core` | `scheduled_pages` | `* * * * *` (every minute) | Publish pages scheduled for publishing; can be triggered manually |
+| `core` | `ai_revision_cleanup` | `*/15 * * * *` (every 15 minutes) | Keep the newest 20 revisions of each unpublished AI draft and remove older ones in atomic batches of at most 100 (see below); can be triggered manually |
 | `core` | `demo_reset` | `0 1 * * *` (daily at 01:00 server time, UTC on Fly.io) | Only in demo mode: reset the demo data and restart; no manual trigger |
 | `task` | `cleanup` | `0 3 * * *` (daily at 03:00 server time) | Delete custom-task runs older than 30 days; can be triggered manually |
+
+### AI Draft Revision Retention
+
+`core:ai_revision_cleanup` bounds the revision history that AI draft authoring
+(MCP `mcp:drafts`) writes. It is registered at startup whether or not the MCP
+module is active, honors schedule overrides and **Run Now**, and runs one atomic
+transaction per run with a five-second deadline. A run removes at most 100
+revisions, oldest first, so a backlog drains over several runs without holding
+the database write lock for long; a failed run rolls back completely and is
+logged and shown as an error when triggered manually.
+
+An AI draft is a page with AI access enabled, status `draft` and no schedule
+(for every owner). The job keeps its newest 20 revisions. Published pages,
+scheduled pages, pages without AI access, legacy title/body history and every
+current revision are never touched, and only revisions an agent or API key
+wrote are removed: an editor's saves and system revisions (a publication, a
+translation link) stay. An older revision is also kept while an
+unrevoked, unexpired share link pins it, while it is the latest authoring or
+translation evidence, or while an AI draft's current evidence references it.
+A removed revision's version, provenance and claim acknowledgments are deleted
+together; retained replay receipts of it become expired tombstones. See
+[Draft authoring](draft-authoring.md#revision-retention). No environment
+variable is needed; to pause the job, set its schedule to an impossible
+expression as described under [Disable a Job](#disable-a-job).
 
 ### Module Jobs
 

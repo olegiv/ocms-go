@@ -112,7 +112,7 @@ func (s *Service) create(ctx context.Context, a v2.Actor, input draft.PageDraft,
 		if err != nil {
 			return SaveResult{}, err
 		}
-		opt.PrepareMutation = s.prepare(a, validation, normal.Reported, input.References.Value, basis != nil)
+		opt.PrepareMutation = s.prepare(a, validation, normal.Reported, input.References.Value, basis != nil, true)
 		body, err := s.createBody(ctx, *normal.Content)
 		if err != nil {
 			return SaveResult{}, err
@@ -188,7 +188,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, in UpdateInput) (SaveR
 		}
 	}
 	opt.EvidenceChanges = in.Changes.References.Present || in.Changes.Reported.Present
-	opt.PrepareMutation = s.prepare(a, validation, normal.Reported, requested, false)
+	opt.PrepareMutation = s.prepare(a, validation, normal.Reported, requested, false, false)
 	body, err := s.updateBody(ctx, in, *normal.Content)
 	if err != nil {
 		return SaveResult{}, err
@@ -204,10 +204,41 @@ func invalid(issues []draft.Issue) *Error {
 	return &Error{Code: "validation_error", Message: "Draft validation failed", Issues: issues}
 }
 
-func (s *Service) prepare(a v2.Actor, validation Validation, report draft.AgentReport, requested []draft.Reference, requireSource bool) func(context.Context, *store.Queries) (provenance.Evidence, error) {
+// MaxOwnAIDrafts is how many unpublished AI drafts one user may hold. A new
+// draft beyond it is refused with draft_limit_reached; updates are unaffected.
+const MaxOwnAIDrafts = 50
+
+// checkDraftLimit refuses a new draft once the user holds MaxOwnAIDrafts. It
+// counts with the query behind list_my_drafts, so "an AI draft" has one
+// definition: owned by the user, AI access on, status draft, not scheduled.
+// It runs in the write transaction, ahead of the insert, which that
+// transaction serializes against concurrent creates.
+func checkDraftLimit(ctx context.Context, q *store.Queries, userID int64) error {
+	// The empty language means every language. It must not be left nil: the
+	// parameter is untyped, and a NULL matches no page, so the count would be 0.
+	count, err := q.CountOwnAIDrafts(ctx, store.CountOwnAIDraftsParams{UserID: userID, LanguageCode: ""})
+	if err != nil {
+		return err
+	}
+	if count >= MaxOwnAIDrafts {
+		return &Error{Code: "draft_limit_reached", Message: fmt.Sprintf("You already have %d AI drafts, the maximum. Keep working in an existing draft, or ask the editor to publish or delete one or turn off its AI access before creating another.", MaxOwnAIDrafts)}
+	}
+	return nil
+}
+
+// prepare builds the in-transaction checks of one write. newDraft is true only
+// for operations that insert a page, which are the ones the draft limit gates.
+func (s *Service) prepare(a v2.Actor, validation Validation, report draft.AgentReport, requested []draft.Reference, requireSource, newDraft bool) func(context.Context, *store.Queries) (provenance.Evidence, error) {
 	return func(ctx context.Context, q *store.Queries) (provenance.Evidence, error) {
 		if s.CheckPolicy != nil {
 			if err := s.CheckPolicy(ctx, q); err != nil {
+				return provenance.Evidence{}, err
+			}
+		}
+		// A refusal that waiting cannot clear is reported before the hourly
+		// quota, whose retry would only run into it.
+		if newDraft {
+			if err := checkDraftLimit(ctx, q, a.ActingUserID()); err != nil {
 				return provenance.Evidence{}, err
 			}
 		}

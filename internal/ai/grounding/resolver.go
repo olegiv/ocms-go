@@ -115,7 +115,7 @@ func (r *Resolver) Resolve(ctx context.Context, ref string) (store.Page, error) 
 	if err != nil {
 		return store.Page{}, ErrUnavailable
 	}
-	page, err := r.resolvePath(ctx, local, false)
+	page, err := r.resolvePath(ctx, local, false, nil)
 	if err != nil {
 		return store.Page{}, err
 	}
@@ -125,18 +125,37 @@ func (r *Resolver) Resolve(ctx context.Context, ref string) (store.Page, error) 
 	return *page, nil
 }
 
-// resolvePath shares one bounded walk between reference reads and inline-link checks.
-// Public page/alias selection precedes an authorized draft fallback, exactly as in the frontend.
-func (r *Resolver) resolvePath(ctx context.Context, local *url.URL, link bool) (*store.Page, error) {
+// siteFacts are the redirects and active languages one path walk reads. A run
+// that checks many links loads them once instead of once per link.
+type siteFacts struct {
+	redirects []store.Redirect
+	languages map[string]store.Language
+}
+
+func (r *Resolver) loadSiteFacts(ctx context.Context) (siteFacts, error) {
 	redirects, err := r.Queries.ListEnabledRedirects(ctx)
 	if err != nil {
-		return nil, err
+		return siteFacts{}, err
 	}
 	languages, err := r.Queries.ListActiveLanguages(ctx)
 	if err != nil {
-		return nil, err
+		return siteFacts{}, err
 	}
-	langMap := contentpath.ActiveLanguages(languages)
+	return siteFacts{redirects: redirects, languages: contentpath.ActiveLanguages(languages)}, nil
+}
+
+// resolvePath shares one bounded walk between reference reads and inline-link checks.
+// Public page/alias selection precedes an authorized draft fallback, exactly as in the frontend.
+// A nil facts loads the redirects and languages for this one walk.
+func (r *Resolver) resolvePath(ctx context.Context, local *url.URL, link bool, facts *siteFacts) (*store.Page, error) {
+	if facts == nil {
+		loaded, err := r.loadSiteFacts(ctx)
+		if err != nil {
+			return nil, err
+		}
+		facts = &loaded
+	}
+	redirects, langMap := facts.redirects, facts.languages
 	visited := map[string]bool{}
 	for hops := 0; ; hops++ {
 		if err := ctx.Err(); err != nil {
@@ -280,11 +299,28 @@ func (r *Resolver) URL(ctx context.Context, page store.Page) (string, error) {
 
 // InternalLink checks page links plus the shared language namespace's homepage.
 func (r *Resolver) InternalLink(ctx context.Context, path string) (bool, error) {
+	return r.internalLink(ctx, path, nil)
+}
+
+// LinkChecker loads the redirects and active languages once and returns a
+// checker equivalent to InternalLink for every link of one draft run. The
+// facts are a snapshot taken now, which is how one validation pass sees them.
+func (r *Resolver) LinkChecker(ctx context.Context) (func(context.Context, string) (bool, error), error) {
+	facts, err := r.loadSiteFacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context, path string) (bool, error) {
+		return r.internalLink(ctx, path, &facts)
+	}, nil
+}
+
+func (r *Resolver) internalLink(ctx context.Context, path string, facts *siteFacts) (bool, error) {
 	local, err := contentpath.LocalURL(r.base, path)
 	if err != nil {
 		return false, nil
 	}
-	_, err = r.resolvePath(ctx, local, true)
+	_, err = r.resolvePath(ctx, local, true, facts)
 	if errors.Is(err, ErrUnavailable) {
 		return false, nil
 	}

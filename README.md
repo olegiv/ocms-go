@@ -335,20 +335,22 @@ controls the issuer, not cleanup of previously stored evidence.
 | `OCMS_ENV_FILE` | Env file to read instead of `./.env` (site instance mode; `site.mk` sets it to the site's `.env`). The server and `ocms migrate` refuse to start if it is missing, unreadable or does not parse; a `./.env` that does not parse is refused too, a missing one ignored. Variables already in the environment win over the file | `./.env` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
-| `OCMS_ENV` | Environment mode: `development`, `staging` or `production`; any other value fails startup. Only `production` applies the production hardening defaults | `development` | No |
+| `OCMS_ENV` | Environment mode: `development`, `staging` or `production`; any other value fails startup. `staging` and `production` both get the production hardening: the secure defaults below, the startup refusals and the secret checks | `development` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
 | `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes (custom modules are compiled in) | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
 | `OCMS_SITE_URL` | Full site URL written into site config on startup (overrides DB/admin setting). Required for RSS/Atom feeds, the sitemap and agent-discovery documents, which answer 503 while it is unset. Must be scheme and host only, e.g. `https://example.com` — a path, query, fragment, credentials or an out-of-range port fails startup, because routes are served from the root | - | No |
 | `OCMS_OAUTH_ENABLED` | Enable the MCP OAuth server; requires canonical OCMS_SITE_URL (HTTPS outside development loopback) | `false` | No |
-| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | Exact HTTPS client metadata host allowlist | `claude.ai,chatgpt.com` | No |
+| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | Exact HTTPS client metadata host allowlist: bare lowercase hostnames, comma or space separated; unset uses the default, set empty allows no live discovery (pre-registered clients and DCR only) | `claude.ai,chatgpt.com` | No |
 | `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | JSON array of owner-reviewed public client metadata; at most 20 documents / 64 KiB | Empty | No |
 | `OCMS_OAUTH_ALLOW_DCR` | Allow bounded public-client dynamic registration | `false` | No |
 | `OCMS_OAUTH_ACCESS_TTL` | OAuth access lifetime in seconds (60–86400) | `3600` | No |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | Absolute rotating refresh-family lifetime (1–90 days) | `30` | No |
 | `OCMS_AI_DISABLED` | Disable draft authoring while retaining normal content reads | `false` | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
+| `OCMS_SEED_ADMIN_PASSWORD` | Password for the admin `OCMS_DO_SEED` creates instead of the documented default (min 12 characters) | - | No |
+| `OCMS_REQUIRE_SEED_ADMIN_PASSWORD` | Refuse to seed without `OCMS_SEED_ADMIN_PASSWORD` (the Fly staging bootstrap sets it) | `false` | No |
 | `OCMS_CACHE_TTL` | TTL in seconds for the Redis (or fallback) cache, which the caches do not use yet; the in-memory caches have fixed TTLs | `3600` | No |
 | `OCMS_REDIS_URL` | Redis URL; the connection shows in the cache admin, but the caches stay in memory per process | - | No |
 | `OCMS_CACHE_PREFIX` | Redis key prefix | `ocms:` | No |
@@ -447,6 +449,9 @@ make run
 On first run with `OCMS_DO_SEED=true`, the application seeds a default admin user:
 - **Email**: admin@example.com
 - **Password**: changeme1234
+
+Set `OCMS_SEED_ADMIN_PASSWORD` to seed that account with your own password
+instead, for example on a first boot reachable from other hosts.
 
 Change these credentials immediately after first login. Where a second factor
 is required (`OCMS_REQUIRE_MFA`, on by default in production), every account,

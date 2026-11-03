@@ -28,7 +28,10 @@ type tokenStore struct {
 	resource string
 	refresh  *store.OauthToken
 	rotated  bool
-	reused   bool
+	// reused marks a spent credential presented again; reuseEvent names it in
+	// the audit event Token writes once the revocation is committed.
+	reused     bool
+	reuseEvent string
 }
 
 func (t *tokenStore) Create(ctx context.Context, info lib.TokenInfo) error {
@@ -75,7 +78,10 @@ func (t *tokenStore) GetByCode(ctx context.Context, raw string) (lib.TokenInfo, 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, storageProblem(ctx, "failed to load OAuth authorization code", err, "client_id", t.clientID)
 	}
-	if err != nil || c.ConsumedAt != 0 || c.ExpiresAt <= t.s.now().Unix() {
+	if err == nil && c.ConsumedAt != 0 {
+		return nil, t.revokeReplayedCode(ctx, c)
+	}
+	if err != nil || c.ExpiresAt <= t.s.now().Unix() {
 		return nil, liberrors.ErrInvalidAuthorizeCode
 	}
 	g, err := t.s.activeGrant(ctx, t.q, c.GrantID)
@@ -97,6 +103,34 @@ func (t *tokenStore) GetByCode(ctx context.Context, raw string) (lib.TokenInfo, 
 	info.SetCodeCreateAt(time.Unix(c.CreatedAt, 0))
 	info.SetCodeExpiresIn(time.Duration(c.ExpiresAt-c.CreatedAt) * time.Second)
 	return info, nil
+}
+
+// revokeReplayedCode answers an authorization code that was already redeemed.
+// RFC 6749 4.1.2 says to deny the request and SHOULD revoke the tokens the
+// first redemption issued, because a code seen twice may have been stolen
+// (security audit 2026-11-03, A-1). The grant is the whole family: its access
+// token and refresh chain stop working. Only the client the grant was issued
+// to, for this resource, can trigger that, so another client presenting the
+// code cannot revoke a family it does not own. A grant that is already
+// revoked needs nothing more.
+//
+// The revocation must outlive the invalid_grant response, so the caller
+// commits it, as it does for a replayed refresh token.
+func (t *tokenStore) revokeReplayedCode(ctx context.Context, c store.OauthCode) error {
+	g, err := t.q.GetOAuthGrant(ctx, c.GrantID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return storageProblem(ctx, "failed to load OAuth grant of a replayed authorization code", err, "client_id", t.clientID)
+	}
+	if err != nil || g.ClientID != t.clientID || g.Resource != t.resource || g.RevokedAt != 0 {
+		return liberrors.ErrInvalidAuthorizeCode
+	}
+	if err := t.q.RevokeOAuthGrant(ctx, store.RevokeOAuthGrantParams{RevokedAt: t.s.now().Unix(), ID: g.ID}); err != nil {
+		return storageProblem(ctx, "failed to revoke the grant of a replayed authorization code", err, "grant_id", g.ID)
+	}
+	t.grant = g
+	t.reused = true
+	t.reuseEvent = "OAuth authorization code reuse revoked connection"
+	return liberrors.ErrInvalidAuthorizeCode
 }
 
 func (t *tokenStore) RemoveByCode(ctx context.Context, raw string) error {
@@ -134,6 +168,7 @@ func (t *tokenStore) GetByRefresh(ctx context.Context, raw string) (lib.TokenInf
 			return nil, err
 		}
 		t.reused = true
+		t.reuseEvent = "OAuth refresh reuse revoked connection"
 		return nil, liberrors.ErrInvalidRefreshToken
 	}
 	effectiveScopes := intersectGranted(row.Scopes, g.Scopes)

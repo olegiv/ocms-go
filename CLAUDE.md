@@ -209,7 +209,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_ENV_FILE` | No | `./.env` | Env file to read instead of `./.env` (site instance mode); missing, unreadable or unparsable fails startup and `ocms migrate` (a missing `./.env` is ignored). Read in `cmd/ocms` (`loadEnvFile`), not `config.go` |
 | `OCMS_SERVER_HOST` | No | `localhost` | Server bind host |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
-| `OCMS_ENV` | No | `development` | `development`, `staging` or `production` (anything else fails startup); only `production` gets the production hardening defaults |
+| `OCMS_ENV` | No | `development` | `development`, `staging` or `production` (anything else fails startup); `staging` and `production` both get the production hardening ("in prod" below means both; `Config.IsProductionLike`) |
 | `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes (custom modules are compiled in) |
@@ -217,13 +217,15 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
 | `OCMS_SITE_URL` | No | - | Full site URL written into site config on startup (overrides DB/admin setting); sitemap and agent-discovery docs 503 until set. Scheme and host only (`https://example.com`) — a path, query, fragment, credentials or an out-of-range port fails startup |
 | `OCMS_OAUTH_ENABLED` | No | `false` | Enable the MCP OAuth server; requires canonical OCMS_SITE_URL (HTTPS outside development loopback) |
-| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | No | `claude.ai,chatgpt.com` | Exact HTTPS client metadata host allowlist |
+| `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | No | `claude.ai,chatgpt.com` | Exact HTTPS client metadata host allowlist (bare lowercase hostnames; unset uses the default, set empty allows no live discovery: pre-registered clients and DCR only) |
 | `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | No | Empty | JSON array of owner-reviewed public client metadata; at most 20 documents / 64 KiB |
 | `OCMS_OAUTH_ALLOW_DCR` | No | `false` | Allow bounded public-client dynamic registration |
 | `OCMS_OAUTH_ACCESS_TTL` | No | `3600` | OAuth access lifetime in seconds (60–86400) |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | No | `30` | Absolute rotating refresh-family lifetime (1–90 days) |
 | `OCMS_AI_DISABLED` | No | `false` | Disable draft authoring while retaining normal reads |
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
+| `OCMS_SEED_ADMIN_PASSWORD` | No | - | Password for the seeded admin instead of the documented default (min 12 characters) |
+| `OCMS_REQUIRE_SEED_ADMIN_PASSWORD` | No | `false` | Refuse to seed without `OCMS_SEED_ADMIN_PASSWORD` (Fly staging bootstrap) |
 | `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
 
 ### Cache

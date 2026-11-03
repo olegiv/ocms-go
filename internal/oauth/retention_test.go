@@ -191,6 +191,10 @@ func TestRetentionBoundsCodeGrantAndClientBatches(t *testing.T) {
 		retentionExec(t, f, `INSERT INTO oauth_codes VALUES (?,?, 'https://client.test/callback','challenge',1,2,0)`, id, id)
 		retentionExec(t, f, `INSERT INTO oauth_clients VALUES (?, 'Unused','[]','dcr',1)`, id)
 	}
+	// These grants are retired families, not unredeemed ones: they were
+	// created just now, so the unredeemed-grant cleanup leaves them to the
+	// retired-grant batches this test measures.
+	retentionExec(t, f, `UPDATE oauth_grants SET created_at = ?`, now.Unix())
 	for i, want := range []int64{CleanupBatchSize, 3, 0} {
 		result, err := cleanupAt(t.Context(), f.db, now)
 		if err != nil || result.Codes != want || result.Grants != want || result.Clients != want {

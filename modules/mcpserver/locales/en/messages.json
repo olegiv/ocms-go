@@ -4,7 +4,7 @@
     "messages": [
         {"id": "mcp.authoring_enabled", "message": "Draft authoring enabled; publishing stays manual", "translation": "Draft authoring enabled; publishing stays manual"},
         {"id": "mcp.draft_tools_enabled", "message": "Enable draft authoring", "translation": "Enable draft authoring"},
-        {"id": "mcp.draft_tools_help", "message": "Allow apps with mcp:drafts to create and edit their own AI-editable drafts. No publishing or deletion. Up to 60 new writes per user per hour; retries reuse their request ID.", "translation": "Allow apps with mcp:drafts to create and edit their own AI-editable drafts. No publishing or deletion. Up to 60 new writes per user per hour; retries reuse their request ID."},
+        {"id": "mcp.draft_tools_help", "message": "Allow apps with mcp:drafts to create and edit their own AI-editable drafts. No publishing or deletion. Up to 60 new writes per user per hour and 50 unpublished AI drafts per user; retries reuse their request ID.", "translation": "Allow apps with mcp:drafts to create and edit their own AI-editable drafts. No publishing or deletion. Up to 60 new writes per user per hour and 50 unpublished AI drafts per user; retries reuse their request ID."},
         {"id": "mcp.external_links", "message": "External links in new draft bodies", "translation": "External links in new draft bodies"},
         {"id": "mcp.external_links_help", "message": "Applies when agents create or replace body content. Existing HTML is preserved during metadata-only changes. Sharing requires a separate explicit request.", "translation": "Applies when agents create or replace body content. Existing HTML is preserved during metadata-only changes. Sharing requires a separate explicit request."},
         {"id": "mcp.links_keep", "message": "Keep external links for review", "translation": "Keep external links for review"},
@@ -51,6 +51,21 @@
         {"id": "mcp.keys_empty", "message": "No API key has the MCP permission yet.", "translation": "No API key has the MCP permission yet."},
         {"id": "mcp.keys_error", "message": "Failed to load API keys.", "translation": "Failed to load API keys."},
         {"id": "mcp.never", "message": "Never", "translation": "Never"},
-        {"id": "mcp.oauth_connect", "message": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in", "translation": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in"}
+        {"id": "mcp.oauth_connect", "message": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in", "translation": "Connect with the endpoint URL to sign in and approve access in your browser. Manage access in"},
+        {"id": "mcp.agent_share_links", "message": "Let AI clients create share links", "translation": "Let AI clients create share links"},
+        {"id": "mcp.agent_share_links_help", "message": "Allow create_preview_link to issue anonymous links to one version of an agent's own draft, valid for up to 24 hours. Turning this off stops new links; revoke existing ones below.", "translation": "Allow create_preview_link to issue anonymous links to one version of an agent's own draft, valid for up to 24 hours. Turning this off stops new links; revoke existing ones below."},
+        {"id": "mcp.share_links_title", "message": "Share links issued by AI clients", "translation": "Share links issued by AI clients"},
+        {"id": "mcp.share_links_description", "message": "Usable links created with create_preview_link. Anyone holding one can read that draft version until it expires or is revoked.", "translation": "Usable links created with create_preview_link. Anyone holding one can read that draft version until it expires or is revoked."},
+        {"id": "mcp.share_links_error", "message": "Share links could not be loaded.", "translation": "Share links could not be loaded."},
+        {"id": "mcp.share_links_empty", "message": "AI clients have no usable share links.", "translation": "AI clients have no usable share links."},
+        {"id": "mcp.share_links_page", "message": "Page", "translation": "Page"},
+        {"id": "mcp.share_links_issued_by", "message": "Issued for", "translation": "Issued for"},
+        {"id": "mcp.share_links_expires", "message": "Expires", "translation": "Expires"},
+        {"id": "mcp.share_links_revision", "message": "version %d", "translation": "version %d"},
+        {"id": "mcp.share_links_api_key", "message": "API key", "translation": "API key"},
+        {"id": "mcp.share_links_revoke", "message": "Revoke", "translation": "Revoke"},
+        {"id": "mcp.share_revoked", "message": "The share link was revoked.", "translation": "The share link was revoked."},
+        {"id": "mcp.share_revoke_missing", "message": "That share link was already revoked or has expired.", "translation": "That share link was already revoked or has expired."},
+        {"id": "mcp.share_revoke_error", "message": "The share link could not be revoked. Try again.", "translation": "The share link could not be revoked. Try again."}
     ]
 }

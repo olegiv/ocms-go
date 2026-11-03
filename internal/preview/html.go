@@ -12,6 +12,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/olegiv/ocms-go/internal/util"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -29,9 +30,42 @@ func Headers(h http.Header) {
 	h.Del("Last-Modified")
 }
 
-// IsPath also recognizes prefixed requests before language middleware runs.
+// namespace is the path every preview route sits under, directly or below one
+// language-prefix segment (/preview/... and /{lang}/preview/...).
+const namespace = "/preview/"
+
+// routeOffset reports whether p is a preview route and where "/preview/"
+// begins in it: at 0, or after a single leading language-prefix segment. Both
+// middlewares run before the language middleware, so the segment is judged by
+// the grammar the router gives language codes (util.IsRoutableLanguageCode:
+// well-formed and not a segment an application route owns) and not by the
+// active languages. It must not match "/preview/" at any other depth: a page
+// served at /blog/preview/x is public content, not a preview, and treating it
+// as one hides it behind no-store/noindex headers and a script-blocking CSP.
+// Page slugs and aliases cannot have a "preview" segment
+// (util.ShadowsPreviewRoute), so no page can sit under a segment that passes
+// this grammar either.
+func routeOffset(p string) (int, bool) {
+	if strings.HasPrefix(p, namespace) {
+		return 0, true
+	}
+	rest, ok := strings.CutPrefix(p, "/")
+	if !ok {
+		return 0, false
+	}
+	code, _, found := strings.Cut(rest, "/")
+	if !found || !util.IsRoutableLanguageCode(code) {
+		return 0, false
+	}
+	offset := 1 + len(code)
+	return offset, strings.HasPrefix(p[offset:], namespace)
+}
+
+// IsPath reports whether p is one of the preview routes, which may carry a
+// language prefix. See routeOffset for what it does not match.
 func IsPath(p string) bool {
-	return strings.HasPrefix(p, "/preview/") || strings.Contains(p, "/preview/")
+	_, ok := routeOffset(p)
+	return ok
 }
 
 type unsafeShareURLKey struct{}
@@ -51,8 +85,8 @@ func ShareRequestAllowed(r *http.Request) bool {
 // are discarded, never resolved or redirected into the body-only transport.
 func RedactRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		index := strings.Index(r.URL.Path, SharePath)
-		if index >= 0 && (len(r.URL.Path) == index+len(SharePath) || r.URL.Path[index+len(SharePath)] == '/') {
+		index, anchored := routeOffset(r.URL.Path)
+		if tail := r.URL.Path[index:]; anchored && (tail == SharePath || strings.HasPrefix(tail, SharePath+"/")) {
 			unsafe := !ShareRequestAllowed(r)
 			clean := r.Clone(context.WithValue(r.Context(), unsafeShareURLKey{}, unsafe))
 			u := *r.URL

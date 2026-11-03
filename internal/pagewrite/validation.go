@@ -57,6 +57,9 @@ func RouteConflict(ctx context.Context, queries *store.Queries, path string) (st
 		}
 		return fmt.Sprintf("Conflicts with the application route /%s", pattern), nil
 	}
+	if util.ShadowsPreviewRoute(path) {
+		return "Conflicts with the preview routes: preview is reserved as the first segment, or the second after a language code", nil
+	}
 	if firstSegment == "" || !util.IsRoutableLanguageCode(firstSegment) {
 		return "", nil
 	}
@@ -111,7 +114,7 @@ func SlugAvailableInLanguage(ctx context.Context, q *store.Queries, slug, langua
 	if message := ValidateSlugFormat(slug); message != "" {
 		return refuse(message)
 	}
-	if util.ReservedRoutePath(language+"/"+slug) != "" {
+	if util.ReservedRoutePath(language+"/"+slug) != "" || util.ShadowsPreviewRoute(slug) || util.ShadowsPreviewRoute(language+"/"+slug) {
 		return refuse("canonical page route is reserved")
 	}
 	return slugUnique(ctx, q, slug, exceptID)

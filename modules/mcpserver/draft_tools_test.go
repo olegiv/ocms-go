@@ -150,7 +150,7 @@ func TestQueuedDraftWritesRecheckCredentialAndModulePolicy(t *testing.T) {
 	}
 }
 func enableDraftTools(env *testEnv) {
-	env.setSettings(Settings{DraftToolsEnabled: true, ExternalLinks: "keep"})
+	env.setSettings(Settings{DraftToolsEnabled: true, ExternalLinks: "keep", AgentShareLinks: true})
 	env.setConfig(model.ConfigKeySiteURL, "https://example.test")
 }
 

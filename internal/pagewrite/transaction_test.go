@@ -372,3 +372,55 @@ func TestTranslationMergeRejectsDuplicateSiblingLanguage(t *testing.T) {
 		t.Fatalf("rejected merge changed the graph: %d edges", edges)
 	}
 }
+
+// TestTranslationLinkRecordsTheSourceAsASystemChange checks that linking an
+// agent's translation draft credits the agent only with the new page: the
+// source page, whose text the agent did not change, gets its new revision
+// recorded as a system change by the acting account, with no credential and
+// none of the agent's evidence (2026-11-03 audit B-4).
+//
+// Bug state: record every tracked page with the transaction principal in
+// Tx.Finish and this fails.
+func TestTranslationLinkRecordsTheSourceAsASystemChange(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := f.q.CreateLanguage(ctx, store.CreateLanguageParams{Code: "ru", Name: "Russian", NativeName: "Русский", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	agent := provenance.Principal{UserID: f.user.ID, Source: "oauth", OAuthGrantID: "grant-1", OAuthClientID: "client-1", Transport: "mcp"}
+	var target store.Page
+	_, err := pagewrite.InTx(ctx, f.db, agent, func(work *pagewrite.Tx) error {
+		var createErr error
+		target, createErr = work.Q.CreatePage(ctx, store.CreatePageParams{Title: "Перевод", Slug: "perevod", Status: "draft", AuthorID: f.user.ID, LanguageCode: "ru", PageType: "post", CreatedAt: now, UpdatedAt: now})
+		if createErr != nil {
+			return createErr
+		}
+		work.Created(target)
+		work.SetEvidence(provenance.Evidence{Validated: []byte(`{"checked":true}`)})
+		return work.LinkTranslation(ctx, f.page.ID, "ru", target.ID)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := f.q.GetPageByID(ctx, f.page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		page                     store.Page
+		source, transport, grant string
+		evidence                 string
+	}{
+		{source, "system", "translation_link", "", "{}"},
+		{target, "oauth", "mcp", "grant-1", `{"checked":true}`},
+	} {
+		row, loadErr := f.q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: tc.page.ID, Revision: tc.page.Revision})
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		if row.Source != tc.source || row.Transport != tc.transport || row.OauthGrantID != tc.grant || row.ValidatedJson != tc.evidence || row.UserID.Int64 != f.user.ID {
+			t.Errorf("page %d provenance %+v, want source %s transport %s grant %q evidence %s by user %d", tc.page.ID, row, tc.source, tc.transport, tc.grant, tc.evidence, f.user.ID)
+		}
+	}
+}

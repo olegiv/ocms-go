@@ -17,6 +17,13 @@ SELECT COUNT(*) FROM oauth_clients WHERE source = ?;
 DELETE FROM oauth_clients WHERE expires_at < ?
 AND NOT EXISTS (SELECT 1 FROM oauth_grants WHERE client_id = oauth_clients.id);
 
+-- A dynamically registered client is created short-lived, so one that is never
+-- used lapses on its own. Creating a grant for it (consent) is its first use
+-- and gives it the full lifetime; a later grant never shortens it.
+-- name: ExtendDCROAuthClient :exec
+UPDATE oauth_clients SET expires_at = sqlc.arg(expires_at)
+WHERE id = sqlc.arg(id) AND source = 'dcr' AND expires_at < sqlc.arg(expires_at);
+
 -- name: CreateOAuthGrant :one
 INSERT INTO oauth_grants (id, user_id, client_id, scopes, resource, session_version, created_at, expires_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
@@ -28,6 +35,7 @@ SELECT * FROM oauth_grants WHERE id = ?;
 SELECT g.*, c.name AS client_name FROM oauth_grants g
 JOIN oauth_clients c ON c.id = g.client_id
 WHERE g.user_id = ? AND g.revoked_at = 0 AND g.expires_at > ?
+AND EXISTS (SELECT 1 FROM oauth_tokens t WHERE t.grant_id = g.id)
 ORDER BY g.created_at DESC LIMIT 100;
 
 -- name: RevokeOAuthGrant :exec

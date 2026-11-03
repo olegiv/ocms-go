@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/olegiv/ocms-go/internal/connectedapps"
@@ -85,6 +87,17 @@ func (m *Module) dashboardData(ctx context.Context, includeKeys bool) DashboardD
 	}
 	data.AllowDrafts, data.Instructions = settings.AllowDrafts, settings.Instructions
 	data.DraftToolsEnabled, data.ExternalLinks = settings.DraftToolsEnabled, linkPolicy(settings)
+	data.AgentShareLinks = settings.AgentShareLinks
+	links, err := store.New(m.ctx.DB).ListActiveAgentPreviewLinks(ctx, time.Now().Unix())
+	if err != nil {
+		m.logger.Error("failed to list agent share links for the MCP page", "error", err)
+		data.ShareLinksError = true
+	}
+	for _, link := range links {
+		data.ShareLinks = append(data.ShareLinks, ShareLinkRow{ID: link.ID, PageID: link.PageID, PageTitle: link.PageTitle, Revision: link.Revision,
+			Creator: link.CreatorName, CreatorEmail: link.CreatorEmail, ViaOAuth: link.ViaOauth == 1,
+			Created: time.Unix(link.CreatedAt, 0).UTC().Format("2006-01-02 15:04 UTC"), Expires: time.Unix(link.ExpiresAt, 0).UTC().Format("2006-01-02 15:04 UTC")})
+	}
 
 	endpoint := EndpointPath
 	siteURL, status, err := m.resolveSiteURL(ctx)
@@ -152,6 +165,48 @@ func (m *Module) handleRevokeConnection(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	http.Redirect(w, r, adminPath, http.StatusSeeOther)
+}
+
+// handleRevokeShareLink revokes one share link an AI client issued. Links
+// issued from the page editor are revoked there, not here.
+func (m *Module) handleRevokeShareLink(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys), http.StatusForbidden)
+		return
+	}
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	lang := m.ctx.Render.GetAdminLang(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		http.Error(w, "Invalid share link", http.StatusBadRequest)
+		return
+	}
+	revoked, err := store.New(m.ctx.DB).RevokeAgentPreviewLink(r.Context(), store.RevokeAgentPreviewLinkParams{RevokedAt: time.Now().Unix(), ID: id})
+	if err != nil {
+		m.logger.Error("failed to revoke agent share link", "error", err, "link_id", id)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "mcp.share_revoke_error"), "error")
+		http.Redirect(w, r, adminPath+"#mcp-share-links", http.StatusSeeOther)
+		return
+	}
+	if revoked == 0 {
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "mcp.share_revoke_missing"), "info")
+		http.Redirect(w, r, adminPath+"#mcp-share-links", http.StatusSeeOther)
+		return
+	}
+	if m.ctx.Events != nil {
+		if err := m.ctx.Events.LogEvent(r.Context(), model.EventLevelInfo, model.EventCategorySecurity,
+			"Preview share link revoked", &user.ID, middleware.GetClientIP(r), r.URL.Path,
+			map[string]any{"link_id": id, "revoked_from": "mcp_admin"}); err != nil {
+			m.logger.WarnContext(service.WithoutEventLog(r.Context()), "failed to record share link revocation", "error", err)
+		}
+	}
+	m.ctx.Render.SetFlash(r, i18n.T(lang, "mcp.share_revoked"), "success")
+	http.Redirect(w, r, adminPath+"#mcp-share-links", http.StatusSeeOther)
 }
 
 func (m *Module) connectionError(w http.ResponseWriter, err error) {
@@ -283,6 +338,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		Instructions:      instructions,
 		DraftToolsEnabled: r.FormValue("draft_tools_enabled") == "1",
 		ExternalLinks:     r.FormValue("external_links"),
+		AgentShareLinks:   r.FormValue("agent_share_links") == "1",
 	}
 	if next.ExternalLinks == "" {
 		next.ExternalLinks = linkPolicy(m.currentSettings())
@@ -300,6 +356,7 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	meta := map[string]any{
 		"draft_tools_enabled":   next.DraftToolsEnabled,
+		"agent_share_links":     next.AgentShareLinks,
 		"external_links":        next.ExternalLinks,
 		"allow_drafts":          next.AllowDrafts,
 		"previous_allow_drafts": prev.AllowDrafts,

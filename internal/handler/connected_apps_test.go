@@ -36,6 +36,12 @@ func TestConnectedAppsPageAndRevocationThroughSessionAndCSRF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Only a grant that issued a token is a connection.
+	if err = q.CreateOAuthToken(t.Context(), store.CreateOAuthTokenParams{ID: "own-connection-token", GrantID: grant.ID,
+		AccessHash: "own-access-hash", RefreshHash: "own-refresh-hash", Scopes: grant.Scopes, CreatedAt: now.Unix(),
+		AccessExpiresAt: grant.ExpiresAt}); err != nil {
+		t.Fatal(err)
+	}
 	key, err := q.CreateAPIKey(t.Context(), store.CreateAPIKeyParams{Name: "Own MCP key", KeyHash: "PRIVATE_CONNECTION_HASH", KeyPrefix: "PRIVATE_PREFIX", KeyLookup: sql.NullString{String: "PRIVATE_LOOKUP", Valid: true}, Permissions: `["mcp:access"]`, IsActive: true, CreatedBy: user.ID, CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)

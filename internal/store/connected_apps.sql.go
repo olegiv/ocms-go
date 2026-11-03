@@ -98,6 +98,7 @@ FROM oauth_grants g
 JOIN oauth_clients c ON c.id = g.client_id
 JOIN users u ON u.id = g.user_id
 WHERE (?1 = 1 OR g.user_id = ?2)
+AND EXISTS (SELECT 1 FROM oauth_tokens t WHERE t.grant_id = g.id)
 ORDER BY g.created_at DESC, g.id DESC
 LIMIT ?4 OFFSET ?3
 `
@@ -127,6 +128,9 @@ type ListConnectedOAuthGrantsRow struct {
 
 // These projections deliberately omit credential hashes, lookups and prefixes.
 // all_users is set only after checking the current actor's admin role.
+// A grant exists from consent, before any token does. One that never issued a
+// token is not a connection yet (it may never become one), so it is not listed;
+// revocation by ID still reaches it, and the retention job removes it.
 func (q *Queries) ListConnectedOAuthGrants(ctx context.Context, arg ListConnectedOAuthGrantsParams) ([]ListConnectedOAuthGrantsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listConnectedOAuthGrants,
 		arg.AllUsers,

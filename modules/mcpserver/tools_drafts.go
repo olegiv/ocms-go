@@ -176,5 +176,14 @@ func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in autho
 	if err != nil {
 		return preview.Link{}, err
 	}
+	// Read the policy from storage, never the server snapshot, so turning
+	// agent sharing off takes effect for the next call.
+	settings, err := loadSettings(ctx, m.ctx.DB)
+	if err != nil {
+		return preview.Link{}, err
+	}
+	if !settings.AgentShareLinks {
+		return preview.Link{}, &v2.Error{Kind: v2.ErrForbidden, MachineCode: "share_links_disabled", Msg: "An administrator has turned off share links for AI clients"}
+	}
 	return s.CreatePreviewLink(ctx, a, in)
 }

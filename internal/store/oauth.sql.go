@@ -174,6 +174,24 @@ func (q *Queries) DeleteExpiredUnusedOAuthClients(ctx context.Context, expiresAt
 	return err
 }
 
+const extendDCROAuthClient = `-- name: ExtendDCROAuthClient :exec
+UPDATE oauth_clients SET expires_at = ?1
+WHERE id = ?2 AND source = 'dcr' AND expires_at < ?1
+`
+
+type ExtendDCROAuthClientParams struct {
+	ExpiresAt int64  `json:"expires_at"`
+	ID        string `json:"id"`
+}
+
+// A dynamically registered client is created short-lived, so one that is never
+// used lapses on its own. Creating a grant for it (consent) is its first use
+// and gives it the full lifetime; a later grant never shortens it.
+func (q *Queries) ExtendDCROAuthClient(ctx context.Context, arg ExtendDCROAuthClientParams) error {
+	_, err := q.db.ExecContext(ctx, extendDCROAuthClient, arg.ExpiresAt, arg.ID)
+	return err
+}
+
 const getOAuthClient = `-- name: GetOAuthClient :one
 SELECT id, name, redirect_uris, source, expires_at FROM oauth_clients WHERE id = ?
 `
@@ -299,6 +317,7 @@ const listOAuthGrantsForUser = `-- name: ListOAuthGrantsForUser :many
 SELECT g.id, g.user_id, g.client_id, g.scopes, g.resource, g.session_version, g.created_at, g.expires_at, g.revoked_at, g.last_used_at, c.name AS client_name FROM oauth_grants g
 JOIN oauth_clients c ON c.id = g.client_id
 WHERE g.user_id = ? AND g.revoked_at = 0 AND g.expires_at > ?
+AND EXISTS (SELECT 1 FROM oauth_tokens t WHERE t.grant_id = g.id)
 ORDER BY g.created_at DESC LIMIT 100
 `
 

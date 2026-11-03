@@ -53,7 +53,7 @@ func (h *FrontendHandler) renderRevisionPreview(w http.ResponseWriter, r *http.R
 		previewFailure(w, r, err)
 		return
 	}
-	h.renderCapturedPreview(w, r, snapshot)
+	h.renderCapturedPreview(w, r, snapshot, true)
 }
 
 // previewFailure answers a preview that cannot be shown. A link or revision
@@ -90,12 +90,16 @@ func (h *FrontendHandler) PreviewShareLanding(w http.ResponseWriter, r *http.Req
 // redirects, bearer cookies or a stored redemption that could bypass revocation.
 func (h *FrontendHandler) PreviewShare(w http.ResponseWriter, r *http.Request) {
 	preview.Headers(w.Header())
-	snapshot, err := (preview.Service{Q: h.queries}).Resolve(r.Context(), postedPreviewToken(w, r))
+	snapshot, issuer, err := (preview.Service{Q: h.queries}).ResolveWithIssuer(r.Context(), postedPreviewToken(w, r))
 	if err != nil {
 		previewFailure(w, r, err)
 		return
 	}
-	h.renderCapturedPreview(w, r, snapshot)
+	// The recorded revision can predate an authorship reassignment. Only the
+	// person who issued the link answers for the profile it shows to anyone
+	// holding it, so another recorded author's name, avatar, bio and links
+	// stay out of the page (security audit 2026-11-03, C-8).
+	h.renderCapturedPreview(w, r, snapshot, snapshot.Page.AuthorID == issuer)
 }
 
 func postedPreviewToken(w http.ResponseWriter, r *http.Request) string {
@@ -117,7 +121,10 @@ func postedPreviewToken(w http.ResponseWriter, r *http.Request) string {
 	return r.PostForm["token"][0]
 }
 
-func (h *FrontendHandler) renderCapturedPreview(w http.ResponseWriter, r *http.Request, snapshot preview.Snapshot) {
+// renderCapturedPreview renders a recorded snapshot. showAuthor says whether
+// the recorded author's profile box may appear: signed-in editors always see
+// it, an anonymous share only when the author is the user who issued the link.
+func (h *FrontendHandler) renderCapturedPreview(w http.ResponseWriter, r *http.Request, snapshot preview.Snapshot, showAuthor bool) {
 	preview.Headers(w.Header())
 	page := snapshot.Page
 	language, err := contentpath.RouteLanguage(r.Context(), h.queries, page.LanguageCode)
@@ -171,13 +178,15 @@ func (h *FrontendHandler) renderCapturedPreview(w http.ResponseWriter, r *http.R
 	// Relations deleted since the revision are skipped; a lookup fault fails
 	// the preview instead of silently showing the revision without them.
 	view.Author = nil
-	author, err := h.queries.GetUserByID(ctx, page.AuthorID)
-	switch {
-	case err == nil:
-		view.Author = &AuthorView{ID: author.ID, Name: author.Name, Avatar: author.Avatar, Bio: author.Bio, WebsiteURL: author.WebsiteUrl, LinkedInURL: author.LinkedinUrl, GitHubURL: author.GithubUrl, TelegramURL: author.TelegramUrl}
-	case !errors.Is(err, sql.ErrNoRows):
-		previewFailure(w, r, err)
-		return
+	if showAuthor {
+		author, lookupErr := h.queries.GetUserByID(ctx, page.AuthorID)
+		switch {
+		case lookupErr == nil:
+			view.Author = &AuthorView{ID: author.ID, Name: author.Name, Avatar: author.Avatar, Bio: author.Bio, WebsiteURL: author.WebsiteUrl, LinkedInURL: author.LinkedinUrl, GitHubURL: author.GithubUrl, TelegramURL: author.TelegramUrl}
+		case !errors.Is(lookupErr, sql.ErrNoRows):
+			previewFailure(w, r, lookupErr)
+			return
+		}
 	}
 	view.Categories = nil
 	view.Category = nil
@@ -213,7 +222,7 @@ func (h *FrontendHandler) renderCapturedPreview(w http.ResponseWriter, r *http.R
 	base.Page = &view
 	base.FeaturedImage = view.FeaturedImage
 	base.BodyClass = "single-page preview-page"
-	data := PageData{BaseTemplateData: base, Page: &view, ShowAuthorBox: true}
+	data := PageData{BaseTemplateData: base, Page: &view, ShowAuthorBox: showAuthor}
 	var rendered bytes.Buffer
 	active := h.themeManager.GetActiveTheme()
 	if active != nil && active.RenderEngine() == theme.EngineHTML {

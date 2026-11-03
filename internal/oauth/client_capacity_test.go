@@ -17,6 +17,7 @@ import (
 
 func TestDCRCapacityCannotDenyTrustedClientAdmission(t *testing.T) {
 	f := metadataFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(registeredClient{ID: "https://client.test" + r.URL.Path, Name: "Fetched", AuthMethod: "none", Redirects: []string{"https://client.test/callback"}})
 	})
 	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<1000)

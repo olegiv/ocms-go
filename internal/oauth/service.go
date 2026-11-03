@@ -14,10 +14,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	lib "github.com/go-oauth2/oauth2/v4"
 	liberrors "github.com/go-oauth2/oauth2/v4/errors"
@@ -39,8 +41,13 @@ const (
 
 // Options describes the configured issuer, independent of request Host headers.
 type Options struct {
-	Issuer       string
-	Development  bool
+	Issuer      string
+	Development bool
+	// AllowedHosts are the exact hosts that may serve client metadata
+	// documents. nil selects DefaultAllowedHosts; an empty, non-nil slice
+	// allows no live fetch at all, leaving pre-registered clients and
+	// (when enabled) dynamic registration. Every entry must be a bare
+	// lowercase DNS hostname, or New refuses to start.
 	AllowedHosts []string
 	// PreRegisteredClients contains owner-reviewed public CIMD documents as a
 	// JSON array. Empty keeps live metadata discovery as the only CIMD source.
@@ -88,8 +95,11 @@ func New(db *sql.DB, options Options) (*Service, error) {
 		options.RefreshTTL < 24*time.Hour || options.RefreshTTL > 90*24*time.Hour {
 		return nil, fmt.Errorf("OAuth token lifetimes are outside supported bounds")
 	}
-	if len(options.AllowedHosts) == 0 {
-		options.AllowedHosts = []string{"claude.ai", "chatgpt.com"}
+	if options.AllowedHosts == nil {
+		options.AllowedHosts = DefaultAllowedHosts()
+	}
+	if err := validateAllowedHosts(options.AllowedHosts); err != nil {
+		return nil, err
 	}
 	s := &Service{db: db, q: store.New(db), options: options, now: time.Now}
 	s.clients = newClientResolver(s)
@@ -97,6 +107,63 @@ func New(db *sql.DB, options Options) (*Service, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// DefaultAllowedHosts returns the client metadata hosts trusted when none are
+// configured: the hosts of the verified Claude and ChatGPT clients.
+func DefaultAllowedHosts() []string { return []string{"claude.ai", "chatgpt.com"} }
+
+// SplitAllowedHosts reads a comma or space separated host list, lowercasing
+// each entry. It returns a non-nil slice even for empty input: an explicitly
+// empty setting means "no hosts", not "use the defaults" (see
+// Options.AllowedHosts). Entries are validated by New.
+func SplitAllowedHosts(raw string) []string {
+	hosts := strings.FieldsFunc(strings.ToLower(raw), func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	if hosts == nil {
+		hosts = []string{}
+	}
+	return hosts
+}
+
+// validateAllowedHosts rejects an allowlist entry that is not a bare
+// lowercase DNS hostname. An entry with a scheme, port, path or wildcard
+// never matches a request host, so it would silently allow less than the
+// operator meant, and an IP literal is never a client metadata host
+// (security audit 2026-11-03, A-4).
+func validateAllowedHosts(hosts []string) error {
+	for _, host := range hosts {
+		if !validHostname(host) {
+			return fmt.Errorf("OAuth client metadata host %q is not a bare lowercase DNS hostname (no scheme, port, path, wildcard or IP address)", host)
+		}
+	}
+	return nil
+}
+
+// validHostname reports whether host is a lowercase DNS name of at least two
+// labels, each of 1-63 letters, digits or inner hyphens, in at most 253
+// characters, and not an IP address.
+func validHostname(host string) bool {
+	if host == "" || len(host) > 253 || net.ParseIP(host) != nil {
+		return false
+	}
+	labels := strings.Split(host, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+				return false
+			}
+		}
+	}
+	// A purely numeric last label would make this an IPv4 literal in a
+	// short form such as "127.1".
+	last := labels[len(labels)-1]
+	return strings.Trim(last, "0123456789") != ""
 }
 
 // Issuer returns the canonical configured issuer.

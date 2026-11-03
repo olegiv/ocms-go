@@ -118,6 +118,52 @@ has `retryable=true` and `retry_after_seconds`. Existing transport/app limits
 also apply. Requests have a 512 KiB wire cap inside a 2 MiB SDK hard ceiling;
 Markdown and expanded HTML remain limited to 200,000 bytes each.
 
+### Draft limit
+
+A user may hold at most 50 unpublished AI drafts. "AI draft" has one
+definition, the one behind `list_my_drafts` and `get_my_draft`: a page the user
+owns, with AI access enabled, status `draft` and no schedule. Pages that are
+published, scheduled, without AI access, or owned by someone else do not count;
+publishing a draft, scheduling it or ending its AI access frees its slot.
+
+`create_draft_page` and `create_translation_draft`, the only paths that insert
+a page, are refused with `draft_limit_reached` when the user already holds 50.
+The code has `retryable=false`: waiting does not help, and the message tells the
+agent to continue in an existing draft or ask the editor to publish or delete
+one. The count runs in the write transaction ahead of the insert, so concurrent
+creates cannot pass 50; a refused create writes nothing and spends no quota.
+It is reported before `mutation_rate_limited`, whose retry would only run into
+it. Updates to existing drafts are not affected, and a replay of a create that
+already committed returns its receipt. The administrator's AI-access toggle in
+the page editor is a human action on an existing page and is not limited.
+
+### Revision retention
+
+Every save records a complete revision. The core scheduler job
+`core:ai_revision_cleanup` (every 15 minutes by default; see
+[Scheduler](scheduler.md)) keeps the newest 20 revisions of each AI draft, as
+defined above and for every owner, and removes older ones in atomic batches of
+at most 100. Published pages, scheduled pages, pages without AI access and
+legacy title/body history are never touched, and neither is the current revision.
+Only revisions an agent or API key wrote are removed; an editor's saves and
+system revisions stay, also on a page whose AI access was switched on later.
+
+Beyond the newest 20, a revision is kept while something still reads it:
+
+- an unrevoked, unexpired share link pins it;
+- it is the latest revision whose evidence carries the prompt contract version
+  or a translation basis (publication validation and translation status read
+  "the latest such revision at or before current");
+- the current evidence of an AI draft records it as a reference, because a
+  later update that inherits references re-reads that revision.
+
+A removed revision loses its version row, provenance row and claim
+acknowledgments together. Retained replay receipts of a removed revision become
+tombstones, as after their seven days: replaying that request returns
+`request_expired`, never re-executes the write, and the request still counts
+toward the hourly quota. A recorded reference whose revision is nonetheless
+missing is reported as `reference_unresolved` rather than an internal error.
+
 ## References, translation and provenance
 
 Selected references are resolved through shared site routing and current
@@ -135,6 +181,11 @@ when these text fields are unchanged. A changed source yields
 `source_revision_conflict`; a duplicate target language anywhere in the full
 component yields generic `translation_exists`. Concurrent attempts leave no
 orphan page. Source content/lifecycle is never replaced by the translation.
+Linking does add a revision to the source and each existing sibling, because
+their translation membership changes: an editor with one of them open must
+reload before saving. Those revisions are recorded as `system` changes with
+transport `translation_link` and the acting account, never as an edit by the
+agent's credential.
 
 The source page/revision/fingerprint is stored as the translation basis.
 Ordinary updates retain it; a later text change marks it stale rather than
@@ -145,6 +196,9 @@ sources/siblings return no unreadable page IDs, revisions, titles or bodies.
 
 - `verified`: authenticated user, grant/key, registered client ID, transport,
   revision timestamp; a public client registration is not vendor identity.
+  The user and credential identifiers appear only when the current revision
+  was saved by the caller's own account; otherwise only its source,
+  transport and time are shown.
 - `validated`: server issues, reference snapshots, link review, translation
   basis and contract version; this does not attest factual correctness.
 - `reported`: untrusted model, sources, claims, notes and MCP client name/version.

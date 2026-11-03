@@ -35,6 +35,20 @@ DELETE FROM oauth_grants WHERE id IN (
     ORDER BY g.id LIMIT sqlc.arg(batch_limit)
 );
 
+-- A grant is created at consent, before any token exists. One that never issued
+-- a token and is older than the cutoff will never be redeemed (its code lived
+-- 60 seconds), so it goes. Its single code row follows by cascade, which is
+-- why the batch limit still bounds the work. A grant with a token, or one that
+-- issued a preview link, is never touched here.
+-- name: DeleteUnredeemedOAuthGrants :execrows
+DELETE FROM oauth_grants WHERE id IN (
+    SELECT g.id FROM oauth_grants g
+    WHERE g.created_at <= sqlc.arg(cutoff)
+    AND NOT EXISTS (SELECT 1 FROM oauth_tokens t WHERE t.grant_id = g.id)
+    AND NOT EXISTS (SELECT 1 FROM preview_links p WHERE p.issuing_grant_id = g.id)
+    ORDER BY g.created_at, g.id LIMIT sqlc.arg(batch_limit)
+);
+
 -- name: DeleteRetainedOAuthClients :execrows
 DELETE FROM oauth_clients WHERE id IN (
     SELECT c.id FROM oauth_clients c WHERE c.expires_at <= sqlc.arg(cutoff)

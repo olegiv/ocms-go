@@ -32,6 +32,9 @@ kill_timeout = 60
   OCMS_LOG_LEVEL = 'info'
   OCMS_DEMO_MODE = 'false'
   OCMS_DO_SEED = 'true'
+  # The bootstrap seeds the first admin with the owner's Fly secret
+  # OCMS_SEED_ADMIN_PASSWORD, never the documented default password.
+  OCMS_REQUIRE_SEED_ADMIN_PASSWORD = 'true'
   OCMS_REQUIRE_MFA = 'true'
   OCMS_OAUTH_ENABLED = 'false'
   OCMS_OAUTH_CIMD_ALLOWED_HOSTS = 'claude.ai,chatgpt.com'
@@ -47,9 +50,9 @@ kill_timeout = 60
   OCMS_REQUIRE_API_KEY_EXPIRY = 'true'
   OCMS_REQUIRE_API_KEY_SOURCE_CIDRS = 'true'
   OCMS_API_KEY_MAX_TTL_DAYS = '90'
-  # Runtime hardening that OCMS_ENV=production turns on by default. Only
-  # production gets those defaults, so staging states them explicitly
-  # (TestFlyStagingMatchesProductionHardening).
+  # Runtime hardening that OCMS_ENV=production and staging turn on by
+  # default. Stated explicitly so the development-mode bootstrap keeps the
+  # same posture (TestFlyStagingMatchesProductionHardening).
   OCMS_BLOCK_SUSPICIOUS_PAGE_HTML = 'true'
   OCMS_REQUIRE_FORM_CAPTCHA = 'true'
   OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE = 'true'

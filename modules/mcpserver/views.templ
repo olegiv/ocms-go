@@ -44,6 +44,25 @@ type DashboardData struct {
 	DraftToolsEnabled bool
 	ExternalLinks     string
 	Connections       *accountviews.ConnectionsData
+	// AgentShareLinks is the create_preview_link policy; ShareLinks lists the
+	// usable links AI clients issued, ShareLinksError that they could not be
+	// read.
+	AgentShareLinks bool
+	ShareLinks      []ShareLinkRow
+	ShareLinksError bool
+}
+
+// ShareLinkRow is one usable share link an AI client issued.
+type ShareLinkRow struct {
+	ID           int64
+	PageID       int64
+	PageTitle    string
+	Revision     int64
+	Creator      string
+	CreatorEmail string
+	ViaOAuth     bool
+	Created      string
+	Expires      string
 }
 
 // ToolRow is one tool in the catalog table.
@@ -96,6 +115,7 @@ templ DashboardPage(pc *adminviews.PageContext, data DashboardData) {
 			@endpointCard(pc, data)
 			@connectCard(pc, data)
 			@settingsCard(pc, data)
+			@shareLinksCard(pc, data)
 			@toolsCard(pc, data)
 			if data.Connections != nil {
 				@accountviews.ConnectionsPanel(pc, *data.Connections)
@@ -195,6 +215,15 @@ templ settingsCard(pc *adminviews.PageContext, data DashboardData) {
 						<p class="text-sm text-muted-foreground">{ pc.T("mcp.draft_tools_help") }</p>
 					</div>
 				</div>
+				<div class="flex items-start gap-3">
+					@checkbox.Checkbox(checkbox.Props{ID: "agent_share_links", Name: "agent_share_links", Value: "1", Checked: data.AgentShareLinks, Disabled: data.SettingsError})
+					<div class="grid gap-1">
+						@label.Label(label.Props{For: "agent_share_links"}) {
+							{ pc.T("mcp.agent_share_links") }
+						}
+						<p class="text-sm text-muted-foreground">{ pc.T("mcp.agent_share_links_help") }</p>
+					</div>
+				</div>
 				<div class="grid gap-2">
 					@label.Label(label.Props{For: "external_links"}) {
 						{ pc.T("mcp.external_links") }
@@ -245,6 +274,82 @@ templ settingsCard(pc *adminviews.PageContext, data DashboardData) {
 					{ pc.T("mcp.save_button") }
 				}
 			</form>
+		}
+	}
+}
+
+templ shareLinksCard(pc *adminviews.PageContext, data DashboardData) {
+	@card.Card(card.Props{ID: "mcp-share-links"}) {
+		@card.Header() {
+			@card.Title() {
+				{ pc.T("mcp.share_links_title") }
+			}
+			@card.Description() {
+				{ pc.T("mcp.share_links_description") }
+			}
+		}
+		@card.Content() {
+			if data.ShareLinksError {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					@alert.Description() {
+						{ pc.T("mcp.share_links_error") }
+					}
+				}
+			} else if len(data.ShareLinks) == 0 {
+				<p class="text-sm text-muted-foreground">{ pc.T("mcp.share_links_empty") }</p>
+			} else {
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() {
+								{ pc.T("mcp.share_links_page") }
+							}
+							@table.Head() {
+								{ pc.T("mcp.share_links_issued_by") }
+							}
+							@table.Head() {
+								{ pc.T("mcp.share_links_expires") }
+							}
+							@table.Head() {
+							}
+						}
+					}
+					@table.Body() {
+						for _, link := range data.ShareLinks {
+							@table.Row() {
+								@table.Cell() {
+									<a class="underline" href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", link.PageID)) }>{ link.PageTitle }</a>
+									<span class="text-xs text-muted-foreground">{ pc.T("mcp.share_links_revision", link.Revision) }</span>
+								}
+								@table.Cell() {
+									{ link.Creator }
+									<span class="text-xs text-muted-foreground">{ link.CreatorEmail }</span>
+									if link.ViaOAuth {
+										@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+											OAuth
+										}
+									} else {
+										@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+											{ pc.T("mcp.share_links_api_key") }
+										}
+									}
+								}
+								@table.Cell() {
+									{ link.Expires }
+								}
+								@table.Cell() {
+									<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/mcp/share-links/%d/revoke", link.ID)) }>
+										@adminviews.CSRFField()
+										@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDestructive, Size: button.SizeSm}) {
+											{ pc.T("mcp.share_links_revoke") }
+										}
+									</form>
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 }

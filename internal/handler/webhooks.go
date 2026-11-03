@@ -537,6 +537,9 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 // Test handles POST /admin/webhooks/{id}/test - sends a test event.
 func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionWebhooks, redirectAdminWebhooks) {
+		return
+	}
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminWebhooks, "Invalid webhook ID")
@@ -585,6 +588,9 @@ func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 
 // RetryDelivery handles POST /admin/webhooks/{id}/deliveries/{did}/retry - retries a delivery.
 func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionWebhooks, redirectAdminWebhooks) {
+		return
+	}
 	webhookIDStr := chi.URLParam(r, "id")
 	webhookID, err := strconv.ParseInt(webhookIDStr, 10, 64)
 	if err != nil {

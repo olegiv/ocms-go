@@ -131,6 +131,12 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 	if err != nil {
 		return "", failure(ctx, "server_error", "failed to create OAuth grant", err, "client_id", req.ClientID)
 	}
+	// Consent is the first use of a dynamically registered client: it stops
+	// being the short-lived registration and gets the full lifetime.
+	if err = q.ExtendDCROAuthClient(ctx, store.ExtendDCROAuthClientParams{
+		ExpiresAt: s.now().Add(DCRClientLifetime).Unix(), ID: req.ClientID}); err != nil {
+		return "", failure(ctx, "server_error", "failed to extend OAuth client lifetime", err, "client_id", req.ClientID)
+	}
 	ts := &tokenStore{s: s, q: q, grant: g}
 	manager, _ := s.engine(ts, req.client)
 	info, err := manager.GenerateAuthToken(ctx, lib.Code, &lib.TokenGenerateRequest{
@@ -176,6 +182,7 @@ func WriteProblem(w http.ResponseWriter, err error) {
 
 // Token handles only form-encoded authorization_code and refresh_token grants.
 func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(WithRequest(r.Context(), r))
 	if !parseProtocolForm(w, r) {
 		return
 	}
@@ -220,10 +227,10 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 		if ts.reused {
 			// Replay revocation must survive the invalid_grant response.
 			if commitErr := tx.Commit(); commitErr != nil {
-				WriteProblem(w, failure(r.Context(), "server_error", "failed to commit OAuth refresh reuse revocation", commitErr, "grant_id", ts.grant.ID))
+				WriteProblem(w, failure(r.Context(), "server_error", "failed to commit OAuth credential reuse revocation", commitErr, "grant_id", ts.grant.ID))
 				return
 			}
-			s.audit(r.Context(), ts.grant, "OAuth refresh reuse revoked connection", true)
+			s.audit(r.Context(), ts.grant, ts.reuseEvent, true)
 		}
 		code := "server_error"
 		var p *Problem
@@ -287,6 +294,7 @@ func parseProtocolForm(w http.ResponseWriter, r *http.Request) bool {
 
 // Revoke implements public-client token revocation without exposing token existence.
 func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(WithRequest(r.Context(), r))
 	if !parseProtocolForm(w, r) {
 		return
 	}
@@ -390,7 +398,7 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, problem("invalid_client_metadata"))
 		return
 	}
-	if err := s.saveClient(r.Context(), c, "dcr", s.now().Add(90*24*time.Hour).Unix()); err != nil {
+	if err := s.saveClient(r.Context(), c, "dcr", s.now().Add(DCRUnusedClientLifetime).Unix()); err != nil {
 		logFault(r.Context(), "failed to register OAuth client", err)
 		WriteProblem(w, problem("temporarily_unavailable"))
 		return

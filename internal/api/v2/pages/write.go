@@ -344,7 +344,7 @@ func (s *Service) authorizeWrite(ctx context.Context, q *store.Queries, a v2.Act
 		}
 	}
 	if middleware.IsDemoMode() {
-		return v2.NewError(v2.ErrForbidden, "Content is read-only in demo mode")
+		return v2.NewError(v2.ErrForbidden, v2.DemoReadOnlyMessage)
 	}
 	if a.ActingUserID() <= 0 {
 		return v2.NewError(v2.ErrUnauthorized, "Authenticated user required")

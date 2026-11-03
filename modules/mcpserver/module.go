@@ -269,6 +269,7 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 		r.Use(middleware.RequireAdmin())
 		r.Get("/mcp", m.handleDashboard)
 		r.Post("/mcp/revoke", m.handleRevokeConnection)
+		r.Post("/mcp/share-links/{id}/revoke", m.handleRevokeShareLink)
 		r.Post("/mcp", m.handleSaveSettings)
 	})
 }
@@ -343,6 +344,16 @@ func (m *Module) Migrations() []module.Migration {
 			},
 			Down: func(db *sql.DB) error {
 				return migrateDraftSettings(db, false)
+			},
+		},
+		{
+			Version:     3,
+			Description: "Add agent share link policy",
+			Up: func(db *sql.DB) error {
+				return migrateSettingsColumns(db, true, shareLinkSettingsColumns)
+			},
+			Down: func(db *sql.DB) error {
+				return migrateSettingsColumns(db, false, shareLinkSettingsColumns)
 			},
 		},
 	}

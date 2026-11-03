@@ -52,6 +52,9 @@ func fixture(t *testing.T) (*authenticator, authTarget, *memoryStore) {
 	}
 	store := &memoryStore{items: make(map[string][]byte)}
 	s := newAuthenticator(store, t.TempDir())
+	// Code directories are created in, and pruned from, the temporary directory:
+	// keep both away from the developer's real one.
+	t.Setenv("TMPDIR", t.TempDir())
 	return s, target, store
 }
 

@@ -134,6 +134,9 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 	var links []Link
 	var issues []Issue
 	seen := make(map[string]Link)
+	// The checker loads redirects and languages once, on the first internal
+	// link, so link-heavy bodies do not repeat those reads per link.
+	var checkLink func(context.Context, string) (bool, error)
 	// Issues carry no URL, so a repeat of the same code and field is a
 	// duplicate; the per-link detail is in links. Reporting each kind once
 	// keeps the stored and returned feedback bounded.
@@ -177,9 +180,15 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 					case target.fragment:
 						link.Kind, link.Status = "fragment", "not_checked"
 					default:
-						found, err := resolver.InternalLink(ctx, target.path)
-						if err != nil {
-							return fmt.Errorf("check internal draft link: %w", err)
+						var checkErr error
+						if checkLink == nil {
+							if checkLink, checkErr = linkChecker(ctx, resolver); checkErr != nil {
+								return fmt.Errorf("check internal draft link: %w", checkErr)
+							}
+						}
+						found, checkErr := checkLink(ctx, target.path)
+						if checkErr != nil {
+							return fmt.Errorf("check internal draft link: %w", checkErr)
 						}
 						if !found {
 							link.Status = "unresolved"
@@ -220,6 +229,14 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 	}
 	result, err := renderFragment(root)
 	return result, links, issues, err
+}
+
+// linkChecker prefers a resolver's once-per-run checker over per-link lookups.
+func linkChecker(ctx context.Context, resolver Resolver) (func(context.Context, string) (bool, error), error) {
+	if source, ok := resolver.(LinkCheckerSource); ok {
+		return source.LinkChecker(ctx)
+	}
+	return resolver.InternalLink, nil
 }
 
 // errTooManyLinks stops the walk at the first destination past MaxLinks.

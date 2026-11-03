@@ -114,6 +114,19 @@ alias that a route answers, such as `blog/tag/news` or anything below
 already stored at a reserved slug stays editable as long as its slug is
 unchanged.
 
+No slug or alias may start with `preview` or have it as the second segment
+after a language-code-shaped first one (`preview/x`, `ru/preview`,
+`docs/preview/guide`); deeper occurrences such as `blog/preview/x` or
+`a/b/preview/c` are ordinary paths. The preview middleware recognizes `/preview/...` and
+`/<language-code-shaped segment>/preview/...` before the active languages are
+known, so such a page would be served as a preview. The admin form refuses
+them as slugs and aliases; the REST API, draft authoring and content import
+refuse a `preview` slug; the Migrator suffixes a `preview` slug and skips an
+alias with the segment (the Drupal source reports a notice; other sources
+report the refusal). Names that merely
+contain the word (`previews`, `preview-notes`) are fine. See
+[Editorial review](editorial-review.md#session-previews).
+
 ### Feed Language
 
 RSS and Atom subscriptions use the language in their URL. `/rss.xml` and

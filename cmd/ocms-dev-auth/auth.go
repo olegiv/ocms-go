@@ -230,6 +230,10 @@ type codeResult struct {
 }
 
 func (s *authenticator) issue(ctx context.Context, target authTarget) (codeResult, error) {
+	// Code files are normally removed by their consumer; sweep up the ones a
+	// crashed consumer or a killed run left behind. This uses the real clock
+	// because it is compared with file modification times.
+	pruneStaleCodeDirectories(os.TempDir(), time.Now())
 	unlock, directory, err := s.lock(ctx, target)
 	if err != nil {
 		return codeResult{}, err
@@ -284,20 +288,46 @@ func readLastStep(path string) (int64, error) {
 }
 
 func writeCode(target authTarget, statePath string, step int64, code string, expires time.Time) (codeResult, error) {
-	directory, err := os.MkdirTemp("", "ocms-dev-auth-")
+	directory, err := os.MkdirTemp("", codeDirPrefix)
 	if err != nil {
 		return codeResult{}, errors.New("cannot create private code directory")
 	}
-	result := codeResult{CodeFile: filepath.Join(directory, "code"), Origin: target.Origin, Account: target.Account, ExpiresAt: expires, directory: directory}
+	result := codeResult{CodeFile: filepath.Join(directory, codeFileName), Origin: target.Origin, Account: target.Account, ExpiresAt: expires, directory: directory}
 	if err := os.WriteFile(result.CodeFile, []byte(code), 0o600); err != nil {
 		_ = os.RemoveAll(directory)
 		return codeResult{}, errors.New("cannot write private code file")
 	}
 	// Store the reservation before returning a code to either agent. A failed
 	// delivery consumes this step locally, just as a submitted code would.
-	if err := os.WriteFile(statePath, fmt.Appendf(nil, "%d", step), 0o600); err != nil {
+	if err := writePrivateFileAtomic(statePath, fmt.Appendf(nil, "%d", step)); err != nil {
 		_ = os.RemoveAll(directory)
 		return codeResult{}, errors.New("cannot reserve development code step")
 	}
 	return result, nil
+}
+
+// writePrivateFileAtomic replaces path with data in a 0600 file. It writes and
+// syncs a temporary file in the same directory and renames it over path, so a
+// crash leaves the previous file instead of an empty or truncated one, which
+// readLastStep would reject until it was deleted by hand.
+func writePrivateFileAtomic(path string, data []byte) error {
+	temp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+"-*") // created 0600
+	if err != nil {
+		return err
+	}
+	name := temp.Name()
+	_, err = temp.Write(data)
+	if err == nil {
+		err = temp.Sync()
+	}
+	if closeErr := temp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(name, path)
+	}
+	if err != nil {
+		_ = os.Remove(name)
+	}
+	return err
 }

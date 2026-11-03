@@ -122,3 +122,31 @@ func (q *Queries) DeleteRetiredOAuthTokens(ctx context.Context, arg DeleteRetire
 	}
 	return result.RowsAffected()
 }
+
+const deleteUnredeemedOAuthGrants = `-- name: DeleteUnredeemedOAuthGrants :execrows
+DELETE FROM oauth_grants WHERE id IN (
+    SELECT g.id FROM oauth_grants g
+    WHERE g.created_at <= ?1
+    AND NOT EXISTS (SELECT 1 FROM oauth_tokens t WHERE t.grant_id = g.id)
+    AND NOT EXISTS (SELECT 1 FROM preview_links p WHERE p.issuing_grant_id = g.id)
+    ORDER BY g.created_at, g.id LIMIT ?2
+)
+`
+
+type DeleteUnredeemedOAuthGrantsParams struct {
+	Cutoff     int64 `json:"cutoff"`
+	BatchLimit int64 `json:"batch_limit"`
+}
+
+// A grant is created at consent, before any token exists. One that never issued
+// a token and is older than the cutoff will never be redeemed (its code lived
+// 60 seconds), so it goes. Its single code row follows by cascade, which is
+// why the batch limit still bounds the work. A grant with a token, or one that
+// issued a preview link, is never touched here.
+func (q *Queries) DeleteUnredeemedOAuthGrants(ctx context.Context, arg DeleteUnredeemedOAuthGrantsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUnredeemedOAuthGrants, arg.Cutoff, arg.BatchLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

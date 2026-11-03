@@ -37,10 +37,17 @@ var DefaultConfig = []struct {
 	{Key: model.ConfigKeyCopyright, Value: "", Type: model.ConfigTypeString, Description: "Footer copyright text (leave empty for automatic)"},
 }
 
-// Seed creates initial data in the database if doSeed is true.
-// When doSeed is false, seeding is skipped to prevent automatic recreation
-// of deleted data (e.g., default admin user) on application restart.
+// Seed creates initial data in the database if doSeed is true, with the
+// documented default admin password. When doSeed is false, seeding is
+// skipped to prevent automatic recreation of deleted data (e.g., default
+// admin user) on application restart.
 func Seed(ctx context.Context, db *sql.DB, doSeed bool) error {
+	return SeedWithAdminPassword(ctx, db, doSeed, "")
+}
+
+// SeedWithAdminPassword is Seed with the password of the created admin;
+// an empty password means DefaultAdminPassword.
+func SeedWithAdminPassword(ctx context.Context, db *sql.DB, doSeed bool, adminPassword string) error {
 	if !doSeed {
 		slog.Info("seeding disabled (set OCMS_DO_SEED=true to enable)")
 		return nil
@@ -73,8 +80,11 @@ func Seed(ctx context.Context, db *sql.DB, doSeed bool) error {
 		return seedMenus(ctx, queries)
 	}
 
-	// Hash the default password
-	passwordHash, err := auth.HashPassword(DefaultAdminPassword)
+	password := adminPassword
+	if password == "" {
+		password = DefaultAdminPassword
+	}
+	passwordHash, err := auth.HashPassword(password)
 	if err != nil {
 		return fmt.Errorf("hashing password: %w", err)
 	}
@@ -97,7 +107,11 @@ func Seed(ctx context.Context, db *sql.DB, doSeed bool) error {
 		"id", user.ID,
 		"email", user.Email,
 	)
-	slog.Warn("default admin password seeded; rotate immediately")
+	if adminPassword == "" {
+		slog.Warn("default admin password seeded; rotate immediately")
+	} else {
+		slog.Info("admin seeded with OCMS_SEED_ADMIN_PASSWORD")
+	}
 
 	// Seed config values
 	if err := seedConfig(ctx, queries); err != nil {

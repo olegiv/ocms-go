@@ -5,9 +5,28 @@ package mcpserver
 
 import "database/sql"
 
-// migrateDraftSettings is atomic and tolerates an already-applied schema when
-// module registration metadata is rebuilt independently from the settings table.
+// draftSettingsColumns are the columns of migration 2 (draft authoring).
+var draftSettingsColumns = []settingsColumn{
+	{"draft_tools_enabled", "INTEGER NOT NULL DEFAULT 0 CHECK(draft_tools_enabled IN (0,1))"},
+	{"external_links", "TEXT NOT NULL DEFAULT 'keep' CHECK(external_links IN ('keep','nofollow','strip'))"},
+}
+
+// shareLinkSettingsColumns are the columns of migration 3: whether agents may
+// issue share links, on by default so existing sites keep their behaviour.
+var shareLinkSettingsColumns = []settingsColumn{
+	{"agent_share_links", "INTEGER NOT NULL DEFAULT 1 CHECK(agent_share_links IN (0,1))"},
+}
+
+type settingsColumn struct{ name, definition string }
+
+// migrateDraftSettings adds or drops the draft authoring columns.
 func migrateDraftSettings(db *sql.DB, up bool) error {
+	return migrateSettingsColumns(db, up, draftSettingsColumns)
+}
+
+// migrateSettingsColumns is atomic and tolerates an already-applied schema when
+// module registration metadata is rebuilt independently from the settings table.
+func migrateSettingsColumns(db *sql.DB, up bool, wanted []settingsColumn) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -35,7 +54,7 @@ func migrateDraftSettings(db *sql.DB, up bool) error {
 	if err = rows.Close(); err != nil {
 		return err
 	}
-	for _, column := range []struct{ name, definition string }{{"draft_tools_enabled", "INTEGER NOT NULL DEFAULT 0 CHECK(draft_tools_enabled IN (0,1))"}, {"external_links", "TEXT NOT NULL DEFAULT 'keep' CHECK(external_links IN ('keep','nofollow','strip'))"}} {
+	for _, column := range wanted {
 		if up && !columns[column.name] {
 			_, err = tx.Exec("ALTER TABLE mcp_settings ADD COLUMN " + column.name + " " + column.definition)
 		} else if !up && columns[column.name] {

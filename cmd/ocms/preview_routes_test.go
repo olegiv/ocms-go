@@ -48,3 +48,45 @@ func TestRegisteredShareRoutesNeverAcceptURLCredentials(t *testing.T) {
 		})
 	}
 }
+
+// TestShareRateLimitAnswersBrowsersInPlainText fails when the share landing or
+// its POST answer a rate-limited visitor with the API's JSON error. Both are
+// pages people open in a browser; a person behind a shared NAT address saw a
+// JSON object instead of a message (security audit 2026-11-03, C-7).
+//
+// Bug state: use limiter.Middleware() instead of limiter.HTMLMiddleware() in
+// registerPreviewRoutes and this reports application/json for both routes.
+func TestShareRateLimitAnswersBrowsersInPlainText(t *testing.T) {
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, preview.SharePath},
+		{http.MethodPost, preview.ShareOpenPath},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			router := chi.NewRouter() // a fresh router has a fresh limiter
+			router.Use(preview.RedactRequest, middleware.SecurityHeaders(middleware.DefaultSecurityHeadersConfig(true)), preview.Middleware)
+			registerPreviewRoutes(router, &handler.FrontendHandler{})
+			var limited *httptest.ResponseRecorder
+			for range 100 { // the limiter's burst is 20
+				request := httptest.NewRequest(tc.method, tc.path, nil)
+				request.RemoteAddr = "192.0.2.77:4321"
+				response := httptest.NewRecorder()
+				router.ServeHTTP(response, request)
+				if response.Code == http.StatusTooManyRequests {
+					limited = response
+					break
+				}
+			}
+			if limited == nil {
+				t.Fatal("the share route was never rate limited, so this test no longer exercises the limiter")
+			}
+			contentType := limited.Header().Get("Content-Type")
+			body := limited.Body.String()
+			if strings.Contains(contentType, "json") || strings.HasPrefix(strings.TrimSpace(body), "{") || !strings.HasPrefix(contentType, "text/plain") || !strings.Contains(body, "Too many requests") {
+				t.Fatalf("rate-limited share request got %q %q, want the plain-text page answer", contentType, body)
+			}
+			if limited.Header().Get("Cache-Control") != "private, no-store" || limited.Header().Get("Referrer-Policy") != "no-referrer" {
+				t.Fatal("rate-limited share response lost its privacy headers")
+			}
+		})
+	}
+}

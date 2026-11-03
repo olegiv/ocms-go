@@ -73,6 +73,9 @@ services:
       - OCMS_ACTIVE_THEME=${OCMS_ACTIVE_THEME:-default}
       # Seeding (set to true for fresh installs)
       - OCMS_DO_SEED=${OCMS_DO_SEED:-false}
+      # Password for the seeded admin instead of the documented default
+      - OCMS_SEED_ADMIN_PASSWORD
+      - OCMS_REQUIRE_SEED_ADMIN_PASSWORD
       # Cache configuration (optional - uses in-memory by default)
       - OCMS_REDIS_URL=${OCMS_REDIS_URL:-}
       - OCMS_CACHE_PREFIX=${OCMS_CACHE_PREFIX:-ocms:}

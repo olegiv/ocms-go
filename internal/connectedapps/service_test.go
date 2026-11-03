@@ -62,11 +62,25 @@ func newConnectionFixture(t testing.TB) *connectionFixture {
 
 func actor(u store.User) Actor { return Actor{UserID: u.ID, SessionVersion: u.SessionVersion} }
 
-func (f *connectionFixture) grant(t testing.TB, u store.User, id string) store.OauthGrant {
+// unredeemedGrant is what consent leaves behind before the code is exchanged:
+// a grant that has issued no token.
+func (f *connectionFixture) unredeemedGrant(t testing.TB, u store.User, id string) store.OauthGrant {
 	t.Helper()
 	g, err := f.q.CreateOAuthGrant(t.Context(), store.CreateOAuthGrantParams{ID: id, UserID: u.ID, ClientID: "https://client.test/metadata",
 		Scopes: "mcp:access mcp:drafts", Resource: "https://cms.test/api/mcp", SessionVersion: u.SessionVersion, CreatedAt: f.now.Unix(), ExpiresAt: f.now.Add(time.Hour).Unix()})
 	if err != nil {
+		t.Fatal(err)
+	}
+	return g
+}
+
+// grant is a connection: a grant whose code was exchanged for a token.
+func (f *connectionFixture) grant(t testing.TB, u store.User, id string) store.OauthGrant {
+	t.Helper()
+	g := f.unredeemedGrant(t, u, id)
+	if err := f.q.CreateOAuthToken(t.Context(), store.CreateOAuthTokenParams{ID: "token-" + id, GrantID: id,
+		AccessHash: "access-hash-" + id, RefreshHash: "refresh-hash-" + id, Scopes: g.Scopes, CreatedAt: f.now.Unix(),
+		AccessExpiresAt: g.ExpiresAt}); err != nil {
 		t.Fatal(err)
 	}
 	return g

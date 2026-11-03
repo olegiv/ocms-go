@@ -190,19 +190,32 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 
 // Resolve never returns a token or its URL and always checks current lifecycle/issuer state.
 func (s Service) Resolve(ctx context.Context, raw string) (Snapshot, error) {
+	snapshot, _, err := s.ResolveWithIssuer(ctx, raw)
+	return snapshot, err
+}
+
+// ResolveWithIssuer is Resolve that also returns the ID of the user who issued
+// the link. The recorded revision can be older than the current page, so its
+// author need not be that user: an anonymous reader may see the issuer's
+// content, but the recorded author's profile is not the issuer's to share.
+func (s Service) ResolveWithIssuer(ctx context.Context, raw string) (Snapshot, int64, error) {
 	decoded, err := base64.RawURLEncoding.Strict().DecodeString(raw)
 	if err != nil || len(decoded) != 32 {
-		return Snapshot{}, ErrUnavailable
+		return Snapshot{}, 0, ErrUnavailable
 	}
 	link, err := s.Q.GetPreviewLinkByHash(ctx, store.GetPreviewLinkByHashParams{TokenHash: hashToken(raw), ExpiresAt: s.now().Unix()})
 	if errors.Is(err, sql.ErrNoRows) {
-		return Snapshot{}, ErrUnavailable
+		return Snapshot{}, 0, ErrUnavailable
 	}
 	if err != nil {
 		// A storage fault must not make a valid link look expired.
-		return Snapshot{}, fmt.Errorf("load preview link: %w", err)
+		return Snapshot{}, 0, fmt.Errorf("load preview link: %w", err)
 	}
-	return Load(ctx, s.Q, link.PageID, link.Revision)
+	snapshot, err := Load(ctx, s.Q, link.PageID, link.Revision)
+	if err != nil {
+		return Snapshot{}, 0, err
+	}
+	return snapshot, link.CreatedBy, nil
 }
 
 type requestKey struct{}

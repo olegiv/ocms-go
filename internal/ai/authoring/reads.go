@@ -52,7 +52,7 @@ func (s *Service) Get(ctx context.Context, a v2.Actor, in PageInput) (DraftDetai
 		return DraftDetail{}, err
 	}
 	if err == nil {
-		result.Verified = Verified{UserID: fact.UserID.Int64, Source: fact.Source, APIKeyID: fact.ApiKeyID.Int64, OAuthGrantID: fact.OauthGrantID, OAuthClientID: fact.OauthClientID, Transport: fact.Transport, SavedAt: fact.CreatedAt}
+		result.Verified = verifiedFor(a, fact)
 		if err = json.Unmarshal([]byte(fact.ValidatedJson), &result.Validated); err != nil {
 			return DraftDetail{}, err
 		}
@@ -205,4 +205,17 @@ func (s *Service) TranslationStatus(ctx context.Context, a v2.Actor, in PageInpu
 		out.Translations = append(out.Translations, entry)
 	}
 	return out, nil
+}
+
+// verifiedFor reports who saved a revision. The account and its credential
+// are named only when they are the caller's own: a draft another person saved
+// last tells the caller's agent the kind of change, never that person's user,
+// key or grant identifiers (2026-11-03 audit B-10).
+func verifiedFor(a v2.Actor, fact store.ContentProvenance) Verified {
+	v := Verified{Source: fact.Source, Transport: fact.Transport, SavedAt: fact.CreatedAt}
+	if fact.UserID.Valid && fact.UserID.Int64 == a.ActingUserID() {
+		v.UserID, v.APIKeyID = fact.UserID.Int64, fact.ApiKeyID.Int64
+		v.OAuthGrantID, v.OAuthClientID = fact.OauthGrantID, fact.OauthClientID
+	}
+	return v
 }

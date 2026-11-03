@@ -100,7 +100,7 @@ flyctl orgs list
 printf 'Fly organization slug: '
 IFS= read -r STAGING_ORG
 test -n "$STAGING_ORG"
-flyctl apps create "$STAGING_APP" --org "$STAGING_ORG"
+flyctl apps create "$STAGING_APP" --org "$STAGING_ORG" --network "$STAGING_APP"
 flyctl volumes create ocms_staging_data --app "$STAGING_APP" \
   --region fra --size 1 --count 1
 flyctl volumes list --app "$STAGING_APP"
@@ -109,14 +109,26 @@ flyctl ips list --app "$STAGING_APP"
 
 There must be one new volume, not a production/demo volume or snapshot.
 Public IPs are not needed for bootstrap. Absence of public service/port
-configuration is the bootstrap ingress boundary.
+configuration is the bootstrap ingress boundary. `--network` puts the app on
+its own private network, so other apps in the organization (such as the
+public `ocms-demo`) cannot reach the development-mode bootstrap over Fly's
+private 6PN addresses.
 
-## 3. Set and retain the two secrets
+## 3. Set and retain the secrets
 
 Generate and save **two distinct random 64-character values** in your password
 manager: a session secret and an MFA sealing key. Retain the MFA key with
 your staging recovery information; losing or replacing it breaks enrolled
-authenticators. Keep both values out of repository files and transcripts.
+authenticators. Also generate a **bootstrap admin password** of at least 12
+characters: the bootstrap seeds `admin@example.com` with it, never with the
+documented default, and refuses to seed without it
+(`OCMS_REQUIRE_SEED_ADMIN_PASSWORD`). Keep these values out of repository
+files and transcripts.
+
+Staging gets the production startup checks, so the public profile also
+needs `OCMS_API_ALLOWED_CIDRS`: the addresses or CIDRs your API-key (bearer)
+clients connect from. OAuth clients are not affected by it. The public
+profile refuses to start without it.
 
 This block reads hidden input directly from your terminal and sends it to
 Fly on stdin. Staging the secrets does not deploy. Run it once for this new
@@ -129,18 +141,24 @@ app; reuse the same secrets across bootstrap, public staging and updates.
   IFS= read -r -s STAGING_SESSION_SECRET </dev/tty
   printf '\nMFA sealing key from password manager: ' >&2
   IFS= read -r -s STAGING_MFA_KEY </dev/tty
+  printf '\nBootstrap admin password from password manager: ' >&2
+  IFS= read -r -s STAGING_SEED_PASSWORD </dev/tty
+  printf '\nAPI-key client IPs or CIDRs, comma separated: ' >&2
+  IFS= read -r STAGING_API_CIDRS </dev/tty
   printf '\n' >&2
   test "${#STAGING_SESSION_SECRET}" -ge 32
   test "${#STAGING_MFA_KEY}" -ge 32
   test "$STAGING_SESSION_SECRET" != "$STAGING_MFA_KEY"
-  printf 'OCMS_SESSION_SECRET=%s\nOCMS_MFA_KEY=%s\n' \
-    "$STAGING_SESSION_SECRET" "$STAGING_MFA_KEY" |
+  test "${#STAGING_SEED_PASSWORD}" -ge 12
+  test -n "$STAGING_API_CIDRS"
+  printf 'OCMS_SESSION_SECRET=%s\nOCMS_MFA_KEY=%s\nOCMS_SEED_ADMIN_PASSWORD=%s\nOCMS_API_ALLOWED_CIDRS=%s\n' \
+    "$STAGING_SESSION_SECRET" "$STAGING_MFA_KEY" "$STAGING_SEED_PASSWORD" "$STAGING_API_CIDRS" |
     flyctl secrets import --stage --app "$STAGING_APP"
 )
 flyctl secrets list --app "$STAGING_APP"
 ```
 
-At this point only those two secret names are expected. Later,
+At this point only those four secret names are expected. Later,
 `OCMS_TRUSTED_PROXIES` is added after observing ingress. Do not place env-mode,
 seeding, demo or MFA switches in secrets: they would override the TOML.
 
@@ -190,18 +208,29 @@ flyctl proxy 18081:8080 --app ocms-mcp-staging --bind-addr 127.0.0.1
 Open `http://127.0.0.1:18081/login` in your browser. Complete these private
 steps before enabling public routing:
 
-1. Sign in as `admin@example.com` / `changeme1234`. Enroll the required
-   authenticator and retain its recovery codes privately.
+1. Sign in as `admin@example.com` with the bootstrap admin password from
+   section 3. Enroll the required authenticator and retain its recovery
+   codes privately.
 2. In **Users**, change the seeded admin's email and password to your own
    non-default credentials. Enter the acting admin's current password when
-   requested. Sign out and verify the new login plus MFA; the default login
-   must fail.
+   requested. Sign out and verify the new login plus MFA; the bootstrap
+   login must fail. Then remove the bootstrap password from Fly:
+   `flyctl secrets unset OCMS_SEED_ADMIN_PASSWORD --stage --app "$STAGING_APP"`.
 3. Enable **MCP Server** under **Modules**. OAuth remains disabled and draft authoring stays off in
    the bootstrap profile even after module activation.
 4. Create a dedicated editor with a strong password; sign in as that editor
    in a separate browser session and enroll MFA. Add a small published test
    page and an ordinary draft, or import a reviewed content-only export.
    Use no production user/session/token database.
+5. Prepare for the staging startup checks, which match production's. The
+   development-mode first boot leaves **Developer**, **Embed** and
+   **Migrator** active: deactivate them under **Modules** (or configure
+   `OCMS_EMBED_PROXY_TOKEN` and the embed allowlists, or
+   `OCMS_MIGRATOR_ALLOWED_DB_HOSTS`). Form captcha is required: set the
+   hCaptcha keys (`OCMS_HCAPTCHA_SITE_KEY` and `OCMS_HCAPTCHA_SECRET_KEY` as
+   Fly secrets, or in the hCaptcha settings) and give every active public form
+   a captcha field, or deactivate those forms. Otherwise the public profile
+   refuses to start and names the first unmet check in `flyctl logs`.
 
 Both accounts and the MFA enrollment persist on the volume through promotion.
 Finish this bootstrap before the next deploy. Close the tunnel with Ctrl-C
@@ -233,11 +262,18 @@ deployments. Public routing begins when the public profile is deployed.
 The seeded credentials must already have been replaced. This changes the
 runtime profile, not the tested image or database. It enables public HTTPS,
 OAuth with MFA required and draft authoring off by default, demo/DCR/seeding off.
+`OCMS_ENV=staging` gets the production hardening: the app refuses to start
+with the documented default admin credentials, without
+`OCMS_API_ALLOWED_CIDRS`, or without `OCMS_TRUSTED_PROXIES`. The trusted
+proxies are only known after observing ingress (section 7), so this first
+public deploy alone waives that one check with `--env`; the section 7 deploy
+drops the waiver.
 
 ```bash
 flyctl deploy "$STAGING_CONTEXT" \
   --config "$STAGING_CONTEXT/fly.staging.toml" \
-  --app "$STAGING_APP" --ha=false --strategy rolling --image "$STAGING_IMAGE"
+  --app "$STAGING_APP" --ha=false --strategy rolling --image "$STAGING_IMAGE" \
+  --env OCMS_REQUIRE_TRUSTED_PROXIES=false
 
 flyctl machines list --app "$STAGING_APP"
 test "$(flyctl machines list --quiet --app "$STAGING_APP" | wc -w | tr -d '[:space:]')" -eq 1
@@ -414,6 +450,11 @@ historical R1.1 probe result as a CMS-write pass.
 ## Subsequent source updates
 
 Do not rerun first-install creation, seed/bootstrap or secret generation.
+An app created before staging got the production startup checks needs,
+before its next deploy: the `OCMS_API_ALLOWED_CIDRS` secret (section 3),
+and the module and form-captcha preparation of section 4, step 5. Without
+them the public profile refuses to start; check `flyctl logs` for the
+`refusing to start` line naming the unmet check.
 After the next separately approved commit, repeat section 1 to archive the
 new reviewed source, then build/deploy the **public** profile:
 

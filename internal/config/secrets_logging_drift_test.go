@@ -28,13 +28,16 @@ var secretConfigFields = map[string]bool{
 	"HCaptchaSecretKey": true,
 	"EmbedProxyToken":   true,
 	"MFAKey":            true,
+	"SeedAdminPassword": true,
 }
 
 // nonSecretConfigFields are fields whose names match secretNamePattern but hold
 // no credential, so TestSecretConfigFieldsAreClassified accepts them unguarded.
-// RequireEmbedProxyToken is a bool policy switch, not the token itself.
+// RequireEmbedProxyToken and RequireSeedAdminPassword are bool policy
+// switches, not the credentials themselves.
 var nonSecretConfigFields = map[string]bool{
-	"RequireEmbedProxyToken": true,
+	"RequireEmbedProxyToken":   true,
+	"RequireSeedAdminPassword": true,
 }
 
 // secretNamePattern matches field names that read as carrying a credential.

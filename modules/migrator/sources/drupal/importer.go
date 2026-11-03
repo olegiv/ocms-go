@@ -2065,7 +2065,9 @@ func reservedPublicPath(st *importState, path string) bool {
 		return true
 	}
 	first, _, _ := strings.Cut(path, "/")
-	if fixedPublicPaths[path] || util.IsReservedLanguageCode(first) {
+	// pagewrite.RouteConflict refuses a path the preview routes would take:
+	// the preview middleware cannot tell "news/preview/x" from "ru/preview/x".
+	if fixedPublicPaths[path] || util.IsReservedLanguageCode(first) || util.ShadowsPreviewRoute(path) {
 		return true
 	}
 	// Active language prefixes are stripped before public route matching, and

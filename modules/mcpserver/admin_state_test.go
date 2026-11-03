@@ -66,9 +66,9 @@ func TestDashboardSettingsLoadFailure(t *testing.T) {
 	if !strings.Contains(broken, dashboardText("mcp.settings_load_error")) {
 		t.Error("the page must show the load error")
 	}
-	// Two checkboxes, link-policy selector, textarea and submit button.
-	if got := len(disabledAttr.FindAllString(broken, -1)) - len(disabledAttr.FindAllString(healthy, -1)); got != 5 {
-		t.Errorf("disabled form controls = %d, want 5", got)
+	// Three checkboxes, link-policy selector, textarea and submit button.
+	if got := len(disabledAttr.FindAllString(broken, -1)) - len(disabledAttr.FindAllString(healthy, -1)); got != 6 {
+		t.Errorf("disabled form controls = %d, want 6", got)
 	}
 
 	logs := &logCapture{}

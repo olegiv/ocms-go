@@ -35,11 +35,21 @@ OCMS_OAUTH_ACCESS_TTL=3600
 OCMS_OAUTH_REFRESH_TTL_DAYS=30
 ```
 
+`OCMS_OAUTH_CIMD_ALLOWED_HOSTS` lists the hosts that may serve client metadata
+documents, separated by commas or spaces. Unset, it means `claude.ai,chatgpt.com`.
+Set to an empty value, it means no hosts: nothing is discovered live, and only
+[pre-registered clients](#client-metadata-and-registration) and, when enabled,
+DCR can connect. Every entry must be a bare lowercase DNS hostname of at least two
+labels (no scheme, port, path, wildcard or IP address; text is lowercased
+first), or OAuth startup refuses the configuration.
+
 The issuer must be a configured HTTPS origin, without a path, query,
 fragment or credentials. Development alone permits HTTP on an IP-literal
 loopback origin, such as `http://127.0.0.1:8080`. Request Host and forwarding
 headers never choose the issuer or token audience. OAuth startup does not
-activate the MCP module automatically.
+activate the MCP module automatically. While the module is off, discovery,
+client registration, authorization and the token endpoint answer 404;
+`/oauth/revoke` stays available so clients can retire their tokens.
 
 Use an editor or admin account. Authorization starts a fresh password sign-in
 and follows the site's existing MFA policy, even if the browser already has
@@ -80,7 +90,9 @@ or literal `localhost` HTTP callbacks with a variable port at authorization.
 The registered hostname, path and query must still match; `localhost` and
 `127.0.0.1` are distinct registrations. The token exchange binds to the exact
 redirect, including its port, used for its code. Other HTTP redirects are
-refused. DCR retains its IP-literal-only HTTP registration policy.
+refused. DCR retains its IP-literal-only HTTP registration policy. A port, where
+a redirect URI has one, must be between 1 and 65535 (`:0` and `:99999` are
+refused at registration and at authorization).
 
 | Scope | Current behavior |
 |---|---|
@@ -95,7 +107,13 @@ revoking the grant invalidates access. Grant scope reductions also take effect
 on existing access tokens and refreshes. API keys require a current editor/admin
 owner; they otherwise retain their existing policies.
 
-Codes last at most 60 seconds and can be consumed once. Codes, access and
+Codes last at most 60 seconds and can be consumed once. Presenting a code that
+was already redeemed fails with `invalid_grant` and, as RFC 6749 section 4.1.2
+recommends, revokes the grant that code issued, access and refresh tokens
+alike, durably and with a warning event. Only the client the grant belongs to,
+for this resource, can trigger that; any other client's attempt only fails.
+A concurrent second redemption of one code therefore leaves no working token.
+Codes, access and
 refresh credentials contain 32 random bytes; SQLite stores SHA-256 hashes,
 not their plaintext. An immediate SQLite transaction covers code consumption,
 PKCE validation and token creation. Credentials are returned only after commit.
@@ -125,8 +143,11 @@ client-metadata host that cannot be reached (network error, timeout, rate
 limiting or 5xx) is also `temporarily_unavailable`; any other non-200 answer
 or a document that fails validation is `invalid_client`.
 
-Account → Connected apps lists the user's OAuth grants and MCP-capable API
-keys with scopes, creation, last use, expiry and revoke. Administrators can
+Account → Connected apps lists the user's OAuth connections and MCP-capable API
+keys with scopes, creation, last use, expiry and revoke. A grant exists from
+consent, but is a connection only once its code has been exchanged for a
+token: grants that never issued one (an abandoned consent, a repeated consent)
+are not listed, and the retention job removes them after a day. Administrators can
 review/revoke across accounts in `/admin/mcp`. Registered metadata does not
 verify app identity. The earlier `/account/security` grant list/revoke path
 remains compatible. See [connected apps](connected-apps.md).
@@ -140,6 +161,12 @@ redirects. The document's `client_id` must equal its URL; callbacks and public
 client authentication are validated. Metadata is cached in SQLite for fifteen
 minutes, concurrent fetches for one URL are coalesced, and registration/cache
 storage has separate capacity limits for CIMD and DCR clients.
+The document must be served with a JSON `Content-Type` (`application/json` or
+a `+json` type). A failed fetch is remembered for sixty seconds (at most 256
+URLs), with the same error code, so unauthenticated requests naming one URL
+cannot trigger an outbound request each time; a transport fault stays
+`temporarily_unavailable`. A shared fetch has its own five-second deadline and
+is not cancelled when the caller that started it gives up.
 Public registrations cannot consume CIMD admission capacity. Unused expired
 clients can be removed when a source's cap is reached; existing rows can still
 refresh at capacity.
@@ -147,8 +174,11 @@ refresh at capacity.
 The default hosts cover the planned Claude and ChatGPT CIMD clients. This is
 an allowlist, not proof of account compatibility. Add another exact hostname
 only for a client you intend to support. DCR is a separate opt-in fallback for
-public clients; it creates a random client ID, no secret, and a ninety-day
-registration. DCR accepts only code/refresh grant metadata. CIMD documents
+public clients; it creates a random client ID and no secret. A registration is
+valid for one day; creating a grant for the client (consent) extends it to
+ninety days from that consent, so a client that is never used lapses, is
+reclaimed at once when the registry is full and is deleted by retention.
+DCR accepts only code/refresh grant metadata. CIMD documents
 must advertise authorization code support when `grant_types` is present;
 additional advertised grant types do not enable those flows in oCMS. Both
 paths still require public-client authentication and code response types.
@@ -164,7 +194,8 @@ existing request/body/concurrency guards and a per-user OAuth limit.
 owner-reviewed public client metadata. It defaults to empty, accepts at most
 20 documents within 64 KiB, and applies the same client-ID host allowlist,
 HTTPS identifier, callback, code-flow and `none` authentication checks.
-Invalid configuration refuses OAuth startup. Each exact configured identity
+With an empty allowlist the identifiers need not be on a host list: pinned
+documents are never fetched. Invalid configuration refuses OAuth startup. Each exact configured identity
 uses that registration instead of a live metadata fetch; unknown identities
 still use normal discovery. No client gains account access from registration.
 
@@ -300,7 +331,9 @@ Verify nginx separately from Fly acceptance.
 
 The oCMS access logger strips OAuth query strings, and CSP violation reports
 are logged without URL queries or fragments; events record only grant,
-client, user and scope identifiers. Do not enable HTTP body/header debug
+client, user and scope identifiers, the client address (forwarding headers
+count only from a trusted proxy) and the request path, never its query or
+fragment. Do not enable HTTP body/header debug
 logging. Reverse-proxy logs need the same protection. For nginx, define a
 path-only format in the `http` block and use it for OAuth routes:
 

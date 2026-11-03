@@ -31,6 +31,13 @@ type Resolver interface {
 	InternalLink(context.Context, string) (bool, error)
 }
 
+// LinkCheckerSource is optionally implemented by a Resolver that can load the
+// site facts behind internal-link checks (redirects, active languages) once and
+// reuse them for every link of one body, instead of reloading them per link.
+type LinkCheckerSource interface {
+	LinkChecker(context.Context) (func(context.Context, string) (bool, error), error)
+}
+
 // MediaURLResolver optionally resolves old editor image URLs during conversion.
 type MediaURLResolver interface {
 	MediaForURL(context.Context, string) (Media, error)
@@ -72,6 +79,9 @@ func (m Media) validImage() bool {
 type StoreResolver struct {
 	Queries   *store.Queries
 	CheckLink func(context.Context, string) (bool, error)
+	// NewLinkCheck, when set, returns a checker that has already loaded the
+	// shared site facts; applyLinks asks for one per run.
+	NewLinkCheck func(context.Context) (func(context.Context, string) (bool, error), error)
 }
 
 func (s StoreResolver) Language(ctx context.Context, code string) (bool, error) {
@@ -135,6 +145,14 @@ func (s StoreResolver) InternalLink(ctx context.Context, path string) (bool, err
 		return false, errors.New("draft link checking requires a site visibility resolver")
 	}
 	return s.CheckLink(ctx, path)
+}
+
+// LinkChecker returns the checker one body walk uses for all its internal links.
+func (s StoreResolver) LinkChecker(ctx context.Context) (func(context.Context, string) (bool, error), error) {
+	if s.NewLinkCheck != nil {
+		return s.NewLinkCheck(ctx)
+	}
+	return s.InternalLink, nil
 }
 
 // MediaForURL accepts only a canonical local uploads path. Origin checking is

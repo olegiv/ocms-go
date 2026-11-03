@@ -136,7 +136,7 @@ func (h *AuthHandler) oauthConsent(w http.ResponseWriter, r *http.Request) {
 		oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"error": {"access_denied"}}))
 		return
 	}
-	code, err := h.oauth.Authorize(ctx, req, user.ID)
+	code, err := h.oauth.Authorize(oauth.WithRequest(ctx, r), req, user.ID)
 	if err != nil {
 		oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"error": {protocolErrorCode(err)}}))
 		return
@@ -164,7 +164,7 @@ func (h *AuthHandler) RevokeOAuthGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := accountUser(w, r)
-	if user == nil {
+	if user == nil || demoGuard(w, r, h.renderer, middleware.RestrictionAPIKeys, RouteAccountSecurity) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -172,7 +172,7 @@ func (h *AuthHandler) RevokeOAuthGrant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid connection", 400)
 		return
 	}
-	if err := h.oauth.RevokeGrant(r.Context(), user.ID, r.PostForm.Get("grant_id")); err != nil {
+	if err := h.oauth.RevokeGrant(oauth.WithRequest(r.Context(), r), user.ID, r.PostForm.Get("grant_id")); err != nil {
 		logAndInternalError(w, "failed to revoke OAuth grant", "user_id", user.ID)
 		return
 	}

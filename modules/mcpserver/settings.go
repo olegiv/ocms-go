@@ -35,6 +35,11 @@ type Settings struct {
 	Instructions      string
 	DraftToolsEnabled bool
 	ExternalLinks     string
+	// AgentShareLinks lets create_preview_link issue anonymous share links.
+	// On by default; an administrator can stop agents from sharing drafts
+	// and revoke the links they issued on the admin page (2026-11-03 audit
+	// B-5).
+	AgentShareLinks bool
 }
 
 // loadSettings reads the settings row. A missing row yields the defaults.
@@ -48,10 +53,10 @@ func loadSettings(ctx context.Context, db settingsReader) (Settings, error) {
 		s           Settings
 	)
 	err := db.QueryRowContext(ctx,
-		`SELECT allow_drafts, instructions, draft_tools_enabled, external_links FROM mcp_settings WHERE id = 1`,
-	).Scan(&allowDrafts, &s.Instructions, &s.DraftToolsEnabled, &s.ExternalLinks)
+		`SELECT allow_drafts, instructions, draft_tools_enabled, external_links, agent_share_links FROM mcp_settings WHERE id = 1`,
+	).Scan(&allowDrafts, &s.Instructions, &s.DraftToolsEnabled, &s.ExternalLinks, &s.AgentShareLinks)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Settings{ExternalLinks: "keep"}, nil
+		return Settings{ExternalLinks: "keep", AgentShareLinks: true}, nil
 	}
 	if err != nil {
 		return Settings{}, fmt.Errorf("loading MCP settings: %w", err)
@@ -67,15 +72,16 @@ func saveSettings(ctx context.Context, db *sql.DB, s Settings) error {
 		allowDrafts = 1
 	}
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO mcp_settings (id, allow_drafts, instructions, draft_tools_enabled, external_links, updated_at)
-		VALUES (1, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO mcp_settings (id, allow_drafts, instructions, draft_tools_enabled, external_links, agent_share_links, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			allow_drafts = excluded.allow_drafts,
 			instructions = excluded.instructions,
 			draft_tools_enabled = excluded.draft_tools_enabled,
 			external_links = excluded.external_links,
+			agent_share_links = excluded.agent_share_links,
 			updated_at = CURRENT_TIMESTAMP
-	`, allowDrafts, s.Instructions, s.DraftToolsEnabled, linkPolicy(s))
+	`, allowDrafts, s.Instructions, s.DraftToolsEnabled, linkPolicy(s), s.AgentShareLinks)
 	if err != nil {
 		return fmt.Errorf("saving MCP settings: %w", err)
 	}

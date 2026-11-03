@@ -13,5 +13,8 @@ func startCoreScheduler(s *scheduler.Scheduler) error {
 	if err := s.AddOAuthCleanup(); err != nil {
 		return fmt.Errorf("registering OAuth retention: %w", err)
 	}
+	if err := s.AddRevisionRetention(); err != nil {
+		return fmt.Errorf("registering AI draft revision retention: %w", err)
+	}
 	return s.Start()
 }

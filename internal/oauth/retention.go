@@ -18,13 +18,26 @@ const (
 	EvidenceRetention = 30 * 24 * time.Hour
 	// CodeRetention retains expired code and unused client metadata for a day.
 	CodeRetention = 24 * time.Hour
-	// CleanupBatchSize bounds each of the five deletion classes per run.
+	// CleanupBatchSize bounds each of the six deletion classes per run.
 	CleanupBatchSize = 250
+	// DCRUnusedClientLifetime is how long a dynamically registered client is
+	// valid from its registration unless a grant is created for it. Registration
+	// is unauthenticated, so clients that are never used must not fill the
+	// registry for months: after this they stop resolving, are reclaimed at
+	// once when the registry is full, and are deleted by Cleanup
+	// (security audit 2026-11-03, A-6).
+	DCRUnusedClientLifetime = 24 * time.Hour
+	// DCRClientLifetime is how long such a client is valid once a grant has
+	// been created for it, counted from that consent. It covers the longest
+	// refresh lifetime, so a used client outlives its grants.
+	DCRClientLifetime = 90 * 24 * time.Hour
 )
 
 // CleanupResult contains counts only, never credential or account data.
+// Grants counts expired and revoked families; Unredeemed counts grants that
+// never issued a token.
 type CleanupResult struct {
-	Codes, Tokens, Previews, Grants, Clients int64
+	Codes, Tokens, Previews, Grants, Unredeemed, Clients int64
 }
 
 // Cleanup performs one repeatable, atomic, time-bounded maintenance batch.
@@ -56,6 +69,13 @@ func cleanupAt(ctx context.Context, db *sql.DB, now time.Time) (CleanupResult, e
 	}
 	if result.Grants, err = q.DeleteRetiredOAuthGrants(ctx, store.DeleteRetiredOAuthGrantsParams{Cutoff: familyCutoff, BatchLimit: CleanupBatchSize}); err != nil {
 		return CleanupResult{}, fmt.Errorf("clean OAuth grants: %w", err)
+	}
+	// A grant is created at consent and an authorization code lives 60
+	// seconds, so a grant that has issued no token a day later never will.
+	// Such grants are not listed as connections (internal/connectedapps); this
+	// removes them, before the client cleanup that they would otherwise block.
+	if result.Unredeemed, err = q.DeleteUnredeemedOAuthGrants(ctx, store.DeleteUnredeemedOAuthGrantsParams{Cutoff: shortCutoff, BatchLimit: CleanupBatchSize}); err != nil {
+		return CleanupResult{}, fmt.Errorf("clean unredeemed OAuth grants: %w", err)
 	}
 	if result.Clients, err = q.DeleteRetainedOAuthClients(ctx, store.DeleteRetainedOAuthClientsParams{Cutoff: shortCutoff, BatchLimit: CleanupBatchSize}); err != nil {
 		return CleanupResult{}, fmt.Errorf("clean OAuth clients: %w", err)

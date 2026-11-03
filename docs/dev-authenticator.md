@@ -98,6 +98,17 @@ and nonsecret last-step record under the user cache coordinate separate
 processes. The command has a 55-second deadline; clock rollback fails clearly.
 The server retains its independent replay checks, rate limits and required MFA.
 
+The consumer's `finally` block remains the primary cleanup of the code file; the
+command adds safety nets for when it never runs. Interrupt, SIGTERM and SIGHUP
+cancel the command, which then removes a code file it has not yet reported (a
+second signal terminates it immediately). Each `code` run also deletes
+`ocms-dev-auth-*` directories left in the temporary directory for more than two
+minutes. The sweep is best effort and silent, and removes only directories this
+tool creates: exact generated name, not a symlink, mode `0700`, owned by the
+current user and holding at most the `code` file. The last-step record is
+replaced atomically (temporary file in the same directory, fsync, rename), so a
+crash cannot leave an empty record that would block later runs.
+
 The seed and origin/account binding are stored only in the macOS login
 Keychain under service `tech.ocms.dev-auth.v1`, with a hashed account identifier.
 Both agents must run as the same macOS user. Keychain writes use `security`'s
@@ -116,7 +127,8 @@ OCMS_DEV_AUTH_KEYCHAIN_TEST=1 go test -count=1 -run '^TestLoginKeychainRoundTrip
 ```
 
 Tests cover RFC vectors, rejected parameters/targets, account binding, private
-delivery, shared reservations, cancellation, and a real disposable oCMS database
+delivery, shared reservations, cancellation, shutdown signals (subprocess tests),
+the stale-directory sweep, atomic reservation replacement, and a real disposable oCMS database
 enrollment/verification with replay rejection. The opt-in check exercises the
 actual login Keychain and CLI stdin-to-file flow. These checks do not establish
 the Claude Code OAuth lifecycle. The separately recorded live staging browser

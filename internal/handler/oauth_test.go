@@ -199,9 +199,28 @@ func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {
 	if rr := authRequest(env.router, http.MethodPost, "/oauth/authorize", form, cookie); rr.Code != 403 {
 		t.Fatal("consent nonce reused")
 	}
+	var consented, consentedScopes string
+	if err := env.db.QueryRow(`SELECT id, scopes FROM oauth_grants WHERE user_id = ?`, user.ID).Scan(&consented, &consentedScopes); err != nil ||
+		strings.Contains(consentedScopes, "pages:write") {
+		t.Fatalf("consent did not use server-held scopes: %v", err)
+	}
+	// Consent alone is not a connection: nothing is listed until the code is
+	// exchanged for a token (security audit 2026-11-03, A-3).
+	if grants, err := env.h.oauth.ListGrants(t.Context(), user.ID); err != nil || len(grants) != 0 {
+		t.Fatalf("a grant that issued no token is listed: %d %v", len(grants), err)
+	}
+	exchange := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(url.Values{
+		"grant_type": {"authorization_code"}, "code": {u.Query().Get("code")}, "client_id": {values.Get("client_id")},
+		"redirect_uri": {values.Get("redirect_uri")}, "resource": {values.Get("resource")}, "code_verifier": {strings.Repeat("a", 64)}}.Encode()))
+	exchange.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	issued := httptest.NewRecorder()
+	env.h.oauth.Token(issued, exchange)
+	if issued.Code != http.StatusOK {
+		t.Fatalf("code exchange status=%d", issued.Code)
+	}
 	grants, err := env.h.oauth.ListGrants(t.Context(), user.ID)
-	if err != nil || len(grants) != 1 || strings.Contains(grants[0].Scopes, "pages:write") {
-		t.Fatal("consent did not use server-held scopes")
+	if err != nil || len(grants) != 1 || grants[0].ID != consented {
+		t.Fatalf("redeemed grant not listed: %d %v", len(grants), err)
 	}
 	rr = authRequest(env.router, http.MethodGet, RouteAccountSecurity, nil, cookie)
 	if rr.Code != 200 || !strings.Contains(rr.Body.String(), grants[0].ID) {

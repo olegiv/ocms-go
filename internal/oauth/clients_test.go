@@ -43,6 +43,7 @@ func TestCIMDFetchCacheAndExpiry(t *testing.T) {
 	var calls atomic.Int64
 	f := metadataFixture(t, func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(registeredClient{ID: id, Name: "Client", AuthMethod: "none", Redirects: []string{"https://client.test/callback"}})
 	})
 	for range 2 {
@@ -333,7 +334,7 @@ func TestPreRegisteredClientConfigurationRejectsUnsafeMetadata(t *testing.T) {
 		"duplicate":         "[" + strings.Trim(valid, "[]") + "," + strings.Trim(valid, "[]") + "]",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := New(f.db, Options{Issuer: f.s.Issuer(), AllowedHosts: []string{"client.test", "127.0.0.1"}, PreRegisteredClients: raw})
+			_, err := New(f.db, Options{Issuer: f.s.Issuer(), AllowedHosts: []string{"client.test"}, PreRegisteredClients: raw})
 			if err == nil || strings.Contains(err.Error(), raw) {
 				t.Fatal("unsafe pin accepted or error disclosed raw configuration")
 			}
@@ -375,7 +376,12 @@ func TestCIMDRejectsUnsafeDocuments(t *testing.T) {
 		"slow":          func(_ http.ResponseWriter, r *http.Request) { <-r.Context().Done() },
 	} {
 		t.Run(name, func(t *testing.T) {
-			f := metadataFixture(t, handler)
+			// Every case is served as JSON, so each is refused for its own
+			// reason; TestCIMDRequiresJSONContentType covers the header.
+			f := metadataFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				handler(w, r)
+			})
 			if f.s.clients.http.Timeout != 5*time.Second {
 				t.Fatal("production timeout is not bounded at 5s")
 			}

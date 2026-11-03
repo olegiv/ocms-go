@@ -71,6 +71,18 @@ fields are stored separately from server validation JSON and agent report JSON.
 Human and system edits start with empty evidence; they do not inherit claims.
 Registered OAuth client IDs identify registrations, not verified vendors.
 
+History is not kept forever for AI drafts. The `core:ai_revision_cleanup`
+scheduler job keeps the newest 20 revisions of each unpublished, unscheduled
+page with AI access, plus any older revision still pinned by an active share
+link, still the latest authoring or translation evidence, or recorded as a
+reference by an AI draft's current evidence. A removed revision's version,
+provenance and claim acknowledgments go together, and its retained replay
+receipts become tombstones (`request_expired`). Other pages keep every
+revision. Every column that stores a revision number is inventoried by
+`TestEveryRevisionReferenceIsAccountedForByRetention`; a new one must be
+handled by `pagewrite.PruneAIDraftRevisions` first. See
+[Draft authoring](draft-authoring.md#revision-retention).
+
 Restoring a complete version recovers recorded content, taxonomy, aliases and
 media assignments. It retains current author, AI access, publication/scheduling
 and translation membership. A legacy restore changes only title and body.

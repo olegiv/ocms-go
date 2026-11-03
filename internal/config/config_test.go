@@ -1086,18 +1086,79 @@ func TestLoad_RejectsUnknownEnv(t *testing.T) {
 			}
 		})
 	}
-	for _, value := range []string{"development", "staging"} {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+	setEnv(t, "OCMS_ENV", "development")
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() rejected OCMS_ENV=development: %v", err)
+	}
+	for _, value := range []string{"staging", "production"} {
 		os.Clearenv()
 		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+		setProductionRequiredEnv(t)
 		setEnv(t, "OCMS_ENV", value)
 		if _, err := Load(); err != nil {
 			t.Fatalf("Load() rejected OCMS_ENV=%q: %v", value, err)
 		}
 	}
+}
+
+// TestLoad_StagingGetsProductionHardening checks that OCMS_ENV=staging gets
+// the production secure defaults, startup refusals and secret checks
+// (2026-11-03 audit C-1): staging serves the public Internet too.
+//
+// Bug state: make Config.IsProductionLike true only for "production" and
+// this fails.
+func TestLoad_StagingGetsProductionHardening(t *testing.T) {
+	os.Clearenv()
+	setProductionRequiredEnv(t)
+	setEnv(t, "OCMS_ENV", "staging")
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if !cfg.IsProductionLike() || !cfg.RequireTrustedProxies || !cfg.RequireAPIAllowedCIDRs || !cfg.RequireFormCaptcha || cfg.APIMaxTTLDays != DefaultProductionAPIMaxTTLDays {
+		t.Errorf("staging did not get the production defaults: %+v", cfg)
+	}
+	for key, value := range map[string]string{
+		"OCMS_DO_SEED":         "true",
+		"OCMS_SESSION_SECRET":  "test-secret-key-32-bytes-long!!!",
+		"OCMS_TRUSTED_PROXIES": "",
+	} {
+		t.Run(key, func(t *testing.T) {
+			setEnv(t, key, value)
+			if _, loadErr := Load(); loadErr == nil {
+				t.Errorf("staging starts with %s=%q", key, value)
+			}
+		})
+	}
+	setEnv(t, "OCMS_ENV", "development")
+	if cfg, err = Load(); err != nil || cfg.IsProductionLike() {
+		t.Errorf("development is production-like: %v", err)
+	}
+}
+
+// TestLoad_SeedAdminPassword checks OCMS_SEED_ADMIN_PASSWORD: a short value is
+// refused, and OCMS_REQUIRE_SEED_ADMIN_PASSWORD refuses to seed without one
+// (2026-11-03 audit C-2).
+func TestLoad_SeedAdminPassword(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
-	setProductionRequiredEnv(t)
+	setEnv(t, "OCMS_DO_SEED", "true")
 	if _, err := Load(); err != nil {
-		t.Fatalf("Load() rejected OCMS_ENV=production: %v", err)
+		t.Fatalf("seeding with the default password in development: %v", err)
+	}
+	setEnv(t, "OCMS_REQUIRE_SEED_ADMIN_PASSWORD", "true")
+	if _, err := Load(); err == nil {
+		t.Error("OCMS_REQUIRE_SEED_ADMIN_PASSWORD seeds without OCMS_SEED_ADMIN_PASSWORD")
+	}
+	setEnv(t, "OCMS_SEED_ADMIN_PASSWORD", "short")
+	if _, err := Load(); err == nil {
+		t.Error("a short OCMS_SEED_ADMIN_PASSWORD is accepted")
+	}
+	setEnv(t, "OCMS_SEED_ADMIN_PASSWORD", "Owner-chosen bootstrap passphrase")
+	if cfg, err := Load(); err != nil || cfg.SeedAdminPassword == "" {
+		t.Errorf("a valid OCMS_SEED_ADMIN_PASSWORD is refused: %v", err)
 	}
 }

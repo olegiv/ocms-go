@@ -1,5 +1,8 @@
 -- These projections deliberately omit credential hashes, lookups and prefixes.
 -- all_users is set only after checking the current actor's admin role.
+-- A grant exists from consent, before any token does. One that never issued a
+-- token is not a connection yet (it may never become one), so it is not listed;
+-- revocation by ID still reaches it, and the retention job removes it.
 -- name: ListConnectedOAuthGrants :many
 SELECT g.id, g.user_id, u.name AS owner_name, u.role AS owner_role,
     u.session_version AS owner_session_version, c.name AS client_name,
@@ -9,6 +12,7 @@ FROM oauth_grants g
 JOIN oauth_clients c ON c.id = g.client_id
 JOIN users u ON u.id = g.user_id
 WHERE (sqlc.arg(all_users) = 1 OR g.user_id = sqlc.arg(user_id))
+AND EXISTS (SELECT 1 FROM oauth_tokens t WHERE t.grant_id = g.id)
 ORDER BY g.created_at DESC, g.id DESC
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
