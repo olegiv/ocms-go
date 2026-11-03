@@ -567,6 +567,13 @@ func TestFrontendHandler_TrustedPageBody_SanitizesWhenEnabled(t *testing.T) {
 	if !strings.Contains(got, "<p>Hello</p>") {
 		t.Fatalf("trustedPageBody() should keep safe content, got %q", got)
 	}
+
+	// Issue #202: pages saved with editor formatting keep it when rendered.
+	styled := `<p style="text-align: right"><span style="color: #e03e2d; position: fixed">Hi</span></p>`
+	want := `<p style="text-align: right"><span style="color: #e03e2d">Hi</span></p>`
+	if styledGot := string(h.trustedPageBody(styled)); styledGot != want {
+		t.Fatalf("trustedPageBody() = %q, want %q", styledGot, want)
+	}
 }
 
 // createDraftPage inserts a draft page into the test database.

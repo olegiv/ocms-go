@@ -502,7 +502,7 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
-	viewData := convertPageFormViewData(data, h.renderer, lang)
+	viewData := convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)
 	renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 }
 
@@ -609,7 +609,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
-		viewData := convertPageFormViewData(data, h.renderer, lang)
+		viewData := convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)
 		renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 		return
 	}
@@ -786,7 +786,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "pages.edit"), pagesEditBreadcrumbs(adminLang, page.Title, page.ID))
-	viewData := convertPageFormViewData(data, h.renderer, adminLang)
+	viewData := convertPageFormViewData(data, h.renderer, adminLang, h.sanitizePageHTML)
 	renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 }
 
@@ -893,7 +893,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, id))
-		viewData := convertPageFormViewData(data, h.renderer, lang)
+		viewData := convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)
 		renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 		return
 	}

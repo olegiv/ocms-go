@@ -357,6 +357,18 @@ func TestPagesHandlerNormalizePageBodyForStorage(t *testing.T) {
 			t.Fatalf("normalizePageBodyForStorage() should keep safe markup, got %q", got)
 		}
 	})
+
+	// Issue #202: a production save used to strip the editor's alignment and
+	// text colour, so the editor reloaded the page without them.
+	t.Run("keeps editor formatting when enabled", func(t *testing.T) {
+		h := &PagesHandler{sanitizePageHTML: true}
+		styled := `<p style="text-align: center;"><span style="color: #e03e2d;">Hi</span></p>`
+		got := h.normalizePageBodyForStorage(styled)
+		want := `<p style="text-align: center"><span style="color: #e03e2d">Hi</span></p>`
+		if got != want {
+			t.Fatalf("normalizePageBodyForStorage() = %q, want %q", got, want)
+		}
+	})
 }
 
 // TestPageScheduling tests page scheduling logic

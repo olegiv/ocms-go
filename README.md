@@ -368,7 +368,7 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
 | `OCMS_MIGRATOR_ALLOWED_DB_HOSTS` | Allowed source-database hosts for the Migrator module (bare hostnames or IPs, no port). Empty = no restriction; migrator routes are admin-only regardless (see `docs/migrator-module.md`) | - | No |
 | `OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS` | Fail startup in production when the Migrator module is active without a source-database host allowlist | `false` (`true` in production when unset) | No |
 | `OCMS_MIGRATOR_ALLOWED_FILE_ROOTS` | Comma-separated absolute roots from which the Migrator may read local media. `DRUPAL_FILES`, `ELEFANT_FILES` and `PHPNUKE_FILES` are also trusted roots; media import fails closed when none are configured | - | No |
-| `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` (`true` in production when unset) | No |
+| `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML on save and before rendering to visitors; keeps the editor's value-checked inline formatting | `false` (`true` in production when unset) | No |
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` (`true` in production when unset) | No |
 | `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | Reject page writes containing suspicious HTML patterns | `false` (`true` in production when unset) | No |
 | `OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML` | Fail startup in production when suspicious page markup blocking is disabled or existing pages contain suspicious markers | `false` (`true` in production when unset) | No |

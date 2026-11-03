@@ -41,8 +41,8 @@ import (
 
 // PageView represents a page with computed fields for template rendering.
 // SECURITY: Body is rendered as trusted HTML from admin-authored CMS content.
-// Deployments can enable OCMS_SANITIZE_PAGE_HTML to sanitize page HTML before
-// rendering for additional defense in depth.
+// Deployments can enable OCMS_SANITIZE_PAGE_HTML to sanitize page HTML on save
+// and before rendering for additional defense in depth.
 type PageView struct {
 	ID                    int64
 	Title                 string

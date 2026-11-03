@@ -1348,8 +1348,8 @@ func (s *Source) prepareBody(body string, mediaMap map[string]string, altered *i
 	body = rewriteAssetRefs(body, mediaMap)
 	clean := security.SanitizePageHTML(body)
 	// A decade of hand-written markup meets a modern UGC policy, so <font>,
-	// inline styles and presentational table attributes are dropped from a lot
-	// of bodies. Sanitizing is right; doing it without telling anyone is not.
+	// most inline styles and presentational table attributes are dropped from a
+	// lot of bodies. Sanitizing is right; doing it without telling anyone is not.
 	if altered != nil && markupRemoved(body, clean) {
 		*altered++
 	}

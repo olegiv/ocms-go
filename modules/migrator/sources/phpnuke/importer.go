@@ -357,7 +357,7 @@ func (s *Source) importWithReader(ctx context.Context, db *sql.DB, reader source
 	}
 	if bodiesAltered > 0 {
 		result.AddSummary("%d imported bodies contained markup the oCMS page HTML policy does "+
-			"not allow (inline styles, <font>, <iframe> and similar) and it was removed. "+
+			"not allow (most inline styles, <font>, <iframe> and similar) and it was removed. "+
 			"Review those pages if the old site relied on it for layout.", bodiesAltered)
 	}
 

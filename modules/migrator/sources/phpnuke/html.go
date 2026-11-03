@@ -578,7 +578,10 @@ func markupRemoved(before, after string) bool {
 	return false
 }
 
-// markupCounts tallies every element and element+attribute pair in a fragment.
+// markupCounts tallies every element and element+attribute pair in a fragment,
+// and every property declared in a style attribute: the page policy keeps
+// style attributes that hold its allowlisted properties, so losing one
+// declaration leaves the attribute in place.
 func markupCounts(fragment string) map[string]int {
 	counts := make(map[string]int)
 	tokenizer := html.NewTokenizer(strings.NewReader(fragment))
@@ -591,9 +594,17 @@ func markupCounts(fragment string) map[string]int {
 			tag := string(name)
 			counts["<"+tag]++
 			for hasAttr {
-				var key []byte
-				key, _, hasAttr = tokenizer.TagAttr()
+				var key, val []byte
+				key, val, hasAttr = tokenizer.TagAttr()
 				counts["<"+tag+" "+string(key)]++
+				if string(key) == "style" {
+					for declaration := range strings.SplitSeq(string(val), ";") {
+						property, _, found := strings.Cut(declaration, ":")
+						if property = strings.ToLower(strings.TrimSpace(property)); found && property != "" {
+							counts["<"+tag+" style:"+property]++
+						}
+					}
+				}
 			}
 		}
 	}
