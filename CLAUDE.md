@@ -271,7 +271,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OCMS_REQUIRE_FORM_CAPTCHA` | No | `false` (effective `true` in prod) | Require captcha on all public form submissions |
-| `OCMS_SANITIZE_PAGE_HTML` | No | `false` (effective `true` in prod) | Sanitize page HTML before rendering to visitors |
+| `OCMS_SANITIZE_PAGE_HTML` | No | `false` (effective `true` in prod) | Sanitize page HTML on save and before rendering to visitors; keeps the editor's value-checked inline formatting (`security.PageEditorValidStyles`, handed to TinyMCE as `valid_styles` while it is on) |
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | No | `false` (effective `true` in prod) | Fail startup in production if page HTML sanitization is disabled |
 | `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | No | `false` (effective `true` in prod) | Reject page writes containing suspicious HTML patterns |
 | `OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML` | No | `false` (effective `true` in prod) | Fail startup in production if suspicious page HTML blocking is disabled |

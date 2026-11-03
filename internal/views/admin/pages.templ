@@ -123,6 +123,9 @@ type PageFormViewData struct {
 	HideFeaturedImage bool
 	ExcludeFromLists  bool
 	IsDemoMode        bool
+	// SanitizesPageHTML mirrors OCMS_SANITIZE_PAGE_HTML. While it is on, a save
+	// keeps only the page style allowlist, so the editor is given the same list.
+	SanitizesPageHTML bool
 }
 
 // PageFormTagView holds tag data for the form tag selector.
@@ -1837,7 +1840,14 @@ templ editorImageModal(pc *PageContext) {
 
 templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	<!-- TinyMCE Editor Scripts -->
-	<div id="tinymce-config" data-cache-suffix={ "?v=" + utils.ScriptVersion } style="display:none"></div>
+	<div
+		id="tinymce-config"
+		data-cache-suffix={ "?v=" + utils.ScriptVersion }
+		if data.SanitizesPageHTML {
+			data-valid-styles={ pageEditorValidStylesJSON }
+		}
+		style="display:none"
+	></div>
 	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/tinymce/tinymce.min.js") } integrity="sha384-3pPvcZXivf5neWCEl4OuvTIleT8Q1bA2hphqFEVWNXaxIWVBUJda+xujUu2WWWuz" crossorigin="anonymous"></script>
 	<script nonce={ templ.GetNonce(ctx) }>
 	// Store TinyMCE editor instance
@@ -2000,6 +2010,12 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			// freshly upgraded core with year-old plugin assets. cache_suffix
 			// is TinyMCE's own hook for exactly this.
 			cache_suffix: document.getElementById('tinymce-config').dataset.cacheSuffix,
+			// With OCMS_SANITIZE_PAGE_HTML on, a save keeps only the page style
+			// allowlist (security.PageEditorValidStyles), so the editor drops every
+			// other style property too instead of showing formatting that will vanish.
+			...(document.getElementById('tinymce-config').dataset.validStyles
+				? { valid_styles: JSON.parse(document.getElementById('tinymce-config').dataset.validStyles) }
+				: {}),
 			convert_urls: false,
 			codesample_languages: [
 				{ text: 'C', value: 'c' },

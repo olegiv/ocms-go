@@ -297,7 +297,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_WEBHOOK_ALLOWED_HOSTS   Comma-separated allowed destination hosts for webhooks (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS  Reject production startup when active webhooks exist without destination host allowlist (default: false; production default when unset: true)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML on save and before rendering to visitors (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_BLOCK_SUSPICIOUS_PAGE_HTML  Reject page writes with suspicious HTML markup (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML  Reject production startup when suspicious page markup blocking is disabled (default: false; production default when unset: true)\n")

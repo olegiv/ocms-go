@@ -368,6 +368,8 @@ func TestMarkupRemovedIgnoresRewrites(t *testing.T) {
 		{"element dropped", `<font color="red">x</font>`, `x`, true},
 		{"attribute dropped", `<p style="color:red">x</p>`, `<p>x</p>`, true},
 		{"one of several dropped", `<p><b>a</b><iframe src="x"></iframe></p>`, `<p><b>a</b></p>`, true},
+		{"style reformatted", `<p style="text-align:center;">x</p>`, `<p style="text-align: center">x</p>`, false},
+		{"style declaration dropped", `<p style="text-align:center;position:fixed">x</p>`, `<p style="text-align: center">x</p>`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := markupRemoved(tc.before, tc.after); got != tc.want {
@@ -392,6 +394,20 @@ func TestPrepareBodyTallyCountsOnlyRemovals(t *testing.T) {
 	source.prepareBody(`<font color="red">legacy</font>`, nil, &legacy)
 	if legacy != 1 {
 		t.Errorf("a body that lost <font> was not counted (%d)", legacy)
+	}
+
+	// The policy keeps allowlisted inline styles, so a body can lose one
+	// declaration while its style attribute survives.
+	partial := 0
+	source.prepareBody(`<p style="text-align: center; position: fixed">partly kept</p>`, nil, &partial)
+	if partial != 1 {
+		t.Errorf("a body that lost a style declaration was not counted (%d)", partial)
+	}
+
+	keptStyle := 0
+	source.prepareBody(`<p style="text-align: center;">kept</p>`, nil, &keptStyle)
+	if keptStyle != 0 {
+		t.Errorf("a body whose allowlisted style was only reformatted was counted (%d)", keptStyle)
 	}
 }
 

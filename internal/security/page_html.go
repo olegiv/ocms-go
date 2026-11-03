@@ -98,6 +98,9 @@ func buildPageHTMLSanitizer() *bluemonday.Policy {
 	p.AllowAttrs("class").Matching(
 		regexp.MustCompile(`^ocms-demo-pw$`),
 	).OnElements("strong")
+	// Keep the value-checked inline styles the admin editor writes (alignment,
+	// colours, fonts, indent, image and table layout); see pageStyleRules.
+	allowPageStyles(p)
 	return p
 }
 
@@ -124,7 +127,8 @@ func DetectSuspiciousHTMLTokens(body string) []string {
 	return matches
 }
 
-// SanitizePageHTML sanitizes rich-text page HTML with a conservative UGC policy.
+// SanitizePageHTML sanitizes rich-text page HTML with a conservative UGC policy
+// that also keeps the editor's allowlisted inline styles (pageStyleRules).
 func SanitizePageHTML(raw string) string {
 	return pageHTMLSanitizer.Sanitize(raw)
 }

@@ -103,7 +103,7 @@ type Config struct {
 	RequireWebhookFormDataMinimization bool   `env:"OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION" envDefault:"false"` // Reject startup in production when webhook form payload mode is full
 
 	// Frontend content hardening
-	SanitizePageHTML               bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"`                 // Sanitize page HTML before rendering to visitors
+	SanitizePageHTML               bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"`                 // Sanitize page HTML on save and before rendering to visitors
 	RequireSanitizePageHTML        bool `env:"OCMS_REQUIRE_SANITIZE_PAGE_HTML" envDefault:"false"`         // Reject startup in production if page HTML sanitization is disabled
 	BlockSuspiciousPageHTML        bool `env:"OCMS_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"`         // Reject page create/update when suspicious HTML patterns are detected
 	RequireBlockSuspiciousPageHTML bool `env:"OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"` // Reject startup in production if suspicious page HTML blocking is disabled
