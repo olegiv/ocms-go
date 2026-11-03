@@ -7768,6 +7768,41 @@
             "translation": "Legacy version: only title and body were recorded"
         },
         {
+            "id": "pages.error_changed_meanwhile",
+            "message": "The page changed after you opened it. Reload it and try again.",
+            "translation": "The page changed after you opened it. Reload it and try again."
+        },
+        {
+            "id": "pages.error_publication_checks",
+            "message": "This AI draft did not pass the publication checks. Fix the reported issues, then try again.",
+            "translation": "This AI draft did not pass the publication checks. Fix the reported issues, then try again."
+        },
+        {
+            "id": "pages.error_site_url_required",
+            "message": "Set the site URL in Site configuration before publishing AI drafts.",
+            "translation": "Set the site URL in Site configuration before publishing AI drafts."
+        },
+        {
+            "id": "pages.error_editor_required",
+            "message": "Your account no longer has editor access.",
+            "translation": "Your account no longer has editor access."
+        },
+        {
+            "id": "pages.error_translation_exists",
+            "message": "This page already has a translation in that language.",
+            "translation": "This page already has a translation in that language."
+        },
+        {
+            "id": "pages.error_version_not_restored",
+            "message": "The version was not restored.",
+            "translation": "The version was not restored."
+        },
+        {
+            "id": "pages.error_translation_not_created",
+            "message": "The translation was not created.",
+            "translation": "The translation was not created."
+        },
+        {
             "id": "pages.revision_conflict_title",
             "message": "Page changed",
             "translation": "Page changed"
@@ -8476,6 +8511,36 @@
             "id": "preview.share_url",
             "message": "Share URL",
             "translation": "Share URL"
+        },
+        {
+            "id": "preview.limit",
+            "message": "You have reached the share-link limit: at most %d active links and %d per hour. Revoke a link or wait before creating another.",
+            "translation": "You have reached the share-link limit: at most %d active links and %d per hour. Revoke a link or wait before creating another."
+        },
+        {
+            "id": "preview.revoked",
+            "message": "The share link was revoked.",
+            "translation": "The share link was revoked."
+        },
+        {
+            "id": "preview.revoke_missing",
+            "message": "That share link was already revoked or no longer exists.",
+            "translation": "That share link was already revoked or no longer exists."
+        },
+        {
+            "id": "preview.temporarily_unavailable",
+            "message": "The preview is temporarily unavailable. Try again shortly.",
+            "translation": "The preview is temporarily unavailable. Try again shortly."
+        },
+        {
+            "id": "review.check_failed",
+            "message": "The check could not be saved. Try again.",
+            "translation": "The check could not be saved. Try again."
+        },
+        {
+            "id": "preview.site_url_required",
+            "message": "Set the site URL in Site configuration before sharing previews.",
+            "translation": "Set the site URL in Site configuration before sharing previews."
         },
         {
             "id": "preview.unavailable",

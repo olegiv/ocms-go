@@ -28,14 +28,14 @@ func AddImportedAlias(ctx context.Context, q *store.Queries, pageID int64, alias
 			return err
 		}
 		if conflict != "" {
-			return errors.New(conflict)
+			return refuse(conflict)
 		}
 		exists, err := work.Q.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{Slug: alias, ID: pageID, Alias: alias, PageID: pageID})
 		if err != nil {
 			return err
 		}
 		if exists != 0 {
-			return errors.New("alias is occupied")
+			return refuse("alias is occupied")
 		}
 		created, err = work.Q.CreatePageAlias(ctx, store.CreatePageAliasParams{PageID: pageID, Alias: alias, CreatedAt: at})
 		return err

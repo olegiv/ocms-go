@@ -8,10 +8,14 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
+	"github.com/olegiv/ocms-go/internal/seo/markdown"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/webhook"
@@ -200,5 +204,157 @@ func TestScheduledPublishingSurvivesCompactionFailure(t *testing.T) {
 	}
 	if current.Status != model.PageStatusPublished {
 		t.Fatalf("due page not published after compaction failure: status=%s", current.Status)
+	}
+}
+
+// TestScheduledPublishingCancelsInvalidAIContent checks that a due AI draft
+// failing publication validation has its schedule cleared, stays a draft,
+// and gets one warning event. The scheduler logged the failure and retried
+// it every minute, with nothing in the event log (2026-11-03 review R2-4).
+//
+// Bug state: return review.ErrHardValidation from publishPage instead of
+// calling cancelSchedule and this fails.
+func TestScheduledPublishingCancelsInvalidAIContent(t *testing.T) {
+	for _, tc := range []struct{ name, title, body string }{
+		// An empty title fails the draft contract the AI content must meet.
+		{"empty title", "", "<p>Body</p>"},
+		// A body too large to check is content the editor must shorten.
+		{"oversized body", "Valid title", "<p>" + strings.Repeat("x", markdown.MaxHTMLBytes) + "</p>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) { testScheduledInvalidAIContent(t, tc.title, tc.body) })
+	}
+}
+
+func testScheduledInvalidAIContent(t *testing.T, title, body string) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "author@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "Author", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api"}, store.CreatePageParams{
+		Title: title, Slug: "invalid-ai", Body: body, Status: model.PageStatusDraft, AuthorID: author.ID,
+		ScheduledAt: sql.NullTime{Time: now.Add(-time.Minute), Valid: true}, LanguageCode: "en", PageType: "post",
+		CreatedAt: now, UpdatedAt: now,
+	}, func(tx *pagewrite.Tx, p store.Page) error {
+		tx.SetEvidence(provenance.Evidence{Validated: []byte(`{"site_url":"https://example.com"}`)})
+		return tx.Q.SetPageAIAccess(ctx, store.SetPageAIAccessParams{PageID: p.ID, AiEditable: true, SetBy: author.ID, SetAt: now})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(db, slog.Default(), nil)
+	recorder := &testutil.WebhookRecorder{}
+	s.SetWebhookDispatcher(recorder)
+	for range 2 {
+		if err = s.processScheduledPages(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	current, err := queries.GetPageByID(ctx, page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Status != model.PageStatusDraft || current.ScheduledAt.Valid {
+		t.Fatalf("invalid AI draft: status=%s scheduled=%v, want an unscheduled draft", current.Status, current.ScheduledAt.Valid)
+	}
+	var warnings int
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE level = 'warning' AND category = 'page' AND message LIKE 'Scheduled publication cancelled%'`).Scan(&warnings); err != nil {
+		t.Fatal(err)
+	}
+	if warnings != 1 || len(recorder.Events()) != 0 {
+		t.Fatalf("cancellation recorded %d warnings and sent %d webhooks, want 1 and 0", warnings, len(recorder.Events()))
+	}
+}
+
+// TestScheduledPublishingKeepsScheduleWithoutSiteURL checks that a missing
+// site URL, a configuration problem the draft cannot fix, does not cancel a
+// schedule: the page stays scheduled and publishes once the URL is set.
+//
+// Bug state: report the resolver failure in review.ValidatePublication as
+// ErrHardValidation again and this fails.
+func TestScheduledPublishingKeepsScheduleWithoutSiteURL(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "author@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "Author", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api"}, store.CreatePageParams{
+		Title: "Valid title", Slug: "valid-ai", Body: "<p>Body</p>", Status: model.PageStatusDraft, AuthorID: author.ID,
+		ScheduledAt: sql.NullTime{Time: now.Add(-time.Minute), Valid: true}, LanguageCode: "en", PageType: "post",
+		CreatedAt: now, UpdatedAt: now,
+	}, func(tx *pagewrite.Tx, p store.Page) error {
+		return tx.Q.SetPageAIAccess(ctx, store.SetPageAIAccessParams{PageID: p.ID, AiEditable: true, SetBy: author.ID, SetAt: now})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `DELETE FROM config WHERE key = 'site_url'`); err != nil {
+		t.Fatal(err)
+	}
+	s := New(db, slog.Default(), nil)
+	if err = s.processScheduledPages(); err != nil {
+		t.Fatal(err)
+	}
+	current, err := queries.GetPageByID(ctx, page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Status != model.PageStatusDraft || !current.ScheduledAt.Valid {
+		t.Fatalf("without a site URL: status=%s scheduled=%v, want a draft still scheduled", current.Status, current.ScheduledAt.Valid)
+	}
+	if _, err = queries.UpsertConfig(ctx, store.UpsertConfigParams{Key: "site_url", Value: "https://example.com", Type: "string", UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.processScheduledPages(); err != nil {
+		t.Fatal(err)
+	}
+	if current, err = queries.GetPageByID(ctx, page.ID); err != nil || current.Status != model.PageStatusPublished {
+		t.Fatalf("after setting the site URL: status=%s %v, want published", current.Status, err)
+	}
+}
+
+// TestCancelScheduleSkipsAPageChangedSinceTheAttempt checks that a save made
+// after the failed publish attempt, which may have fixed the content, keeps
+// its schedule: cancelSchedule only ends the schedule of the revision that
+// failed.
+func TestCancelScheduleSkipsAPageChangedSinceTheAttempt(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "author@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "Author", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api"}, store.CreatePageParams{
+		Title: "Fixed", Slug: "fixed", Body: "<p>Body</p>", Status: model.PageStatusDraft, AuthorID: author.ID,
+		ScheduledAt: sql.NullTime{Time: now.Add(-time.Minute), Valid: true}, LanguageCode: "en", PageType: "post",
+		CreatedAt: now, UpdatedAt: now,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempted := page
+	attempted.Revision--
+	if err = New(db, slog.Default(), nil).cancelSchedule(ctx, attempted, now); !errors.Is(err, errNoLongerDue) {
+		t.Fatalf("cancelSchedule for an older revision: %v, want errNoLongerDue", err)
+	}
+	if current, err := queries.GetPageByID(ctx, page.ID); err != nil || !current.ScheduledAt.Valid {
+		t.Fatalf("a page saved since the attempt lost its schedule: %v", err)
 	}
 }

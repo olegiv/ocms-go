@@ -7,6 +7,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
@@ -20,6 +22,9 @@ type Snapshot struct {
 
 func Load(ctx context.Context, q *store.Queries, id, revision int64) (Snapshot, error) {
 	version, err := q.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{PageID: id, Revision: sql.NullInt64{Int64: revision, Valid: true}})
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return Snapshot{}, fmt.Errorf("load preview revision: %w", err)
+	}
 	if err != nil || version.Legacy || !version.SnapshotJson.Valid {
 		return Snapshot{}, ErrUnavailable
 	}

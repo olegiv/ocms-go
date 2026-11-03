@@ -7768,6 +7768,41 @@
             "translation": "Старая версия: сохранены только заголовок и текст"
         },
         {
+            "id": "pages.error_changed_meanwhile",
+            "message": "The page changed after you opened it. Reload it and try again.",
+            "translation": "Страница изменилась после того, как вы её открыли. Обновите её и повторите попытку."
+        },
+        {
+            "id": "pages.error_publication_checks",
+            "message": "This AI draft did not pass the publication checks. Fix the reported issues, then try again.",
+            "translation": "Этот черновик ИИ не прошёл проверки перед публикацией. Исправьте указанные замечания и повторите попытку."
+        },
+        {
+            "id": "pages.error_site_url_required",
+            "message": "Set the site URL in Site configuration before publishing AI drafts.",
+            "translation": "Укажите URL сайта в настройках сайта перед публикацией черновиков ИИ."
+        },
+        {
+            "id": "pages.error_editor_required",
+            "message": "Your account no longer has editor access.",
+            "translation": "У вашей учётной записи больше нет прав редактора."
+        },
+        {
+            "id": "pages.error_translation_exists",
+            "message": "This page already has a translation in that language.",
+            "translation": "У этой страницы уже есть перевод на этот язык."
+        },
+        {
+            "id": "pages.error_version_not_restored",
+            "message": "The version was not restored.",
+            "translation": "Версия не восстановлена."
+        },
+        {
+            "id": "pages.error_translation_not_created",
+            "message": "The translation was not created.",
+            "translation": "Перевод не создан."
+        },
+        {
             "id": "pages.revision_conflict_title",
             "message": "Page changed",
             "translation": "Страница изменилась"
@@ -8476,6 +8511,36 @@
             "id": "preview.share_url",
             "message": "Share URL",
             "translation": "Ссылка общего доступа"
+        },
+        {
+            "id": "preview.limit",
+            "message": "You have reached the share-link limit: at most %d active links and %d per hour. Revoke a link or wait before creating another.",
+            "translation": "Достигнут лимит ссылок для просмотра: не более %d активных и %d в час. Отзовите ссылку или подождите, прежде чем создавать новую."
+        },
+        {
+            "id": "preview.revoked",
+            "message": "The share link was revoked.",
+            "translation": "Ссылка для просмотра отозвана."
+        },
+        {
+            "id": "preview.revoke_missing",
+            "message": "That share link was already revoked or no longer exists.",
+            "translation": "Эта ссылка уже отозвана или больше не существует."
+        },
+        {
+            "id": "preview.temporarily_unavailable",
+            "message": "The preview is temporarily unavailable. Try again shortly.",
+            "translation": "Предпросмотр временно недоступен. Повторите попытку позже."
+        },
+        {
+            "id": "review.check_failed",
+            "message": "The check could not be saved. Try again.",
+            "translation": "Не удалось сохранить отметку. Повторите попытку."
+        },
+        {
+            "id": "preview.site_url_required",
+            "message": "Set the site URL in Site configuration before sharing previews.",
+            "translation": "Укажите URL сайта в настройках сайта, прежде чем делиться предпросмотром."
         },
         {
             "id": "preview.unavailable",

@@ -6,7 +6,10 @@ package handler
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"log/slog"
 	"mime"
 	"net/http"
 	"strconv"
@@ -33,20 +36,37 @@ func (h *FrontendHandler) PreviewSession(w http.ResponseWriter, r *http.Request)
 func (h *FrontendHandler) renderRevisionPreview(w http.ResponseWriter, r *http.Request, id, revision int64) {
 	preview.Headers(w.Header())
 	user := middleware.GetUser(r)
-	if user == nil || pagewrite.RequireEditor(r.Context(), h.queries, user.ID) != nil {
+	if user == nil {
 		http.NotFound(w, r)
 		return
 	}
+	if err := pagewrite.RequireEditor(r.Context(), h.queries, user.ID); err != nil {
+		previewFailure(w, r, err)
+		return
+	}
 	if _, err := h.queries.GetPageByID(r.Context(), id); err != nil {
-		http.NotFound(w, r)
+		previewFailure(w, r, err)
 		return
 	}
 	snapshot, err := preview.Load(r.Context(), h.queries, id, revision)
 	if err != nil {
-		http.NotFound(w, r)
+		previewFailure(w, r, err)
 		return
 	}
 	h.renderCapturedPreview(w, r, snapshot)
+}
+
+// previewFailure answers a preview that cannot be shown. A link or revision
+// that is missing, revoked or not the viewer's to see is a 404; anything else
+// is a fault, logged and answered 503, so a valid link never looks expired.
+// The share token is in the request body, never in the logged path.
+func previewFailure(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, preview.ErrUnavailable) || errors.Is(err, sql.ErrNoRows) || errors.Is(err, pagewrite.ErrEditorRequired) {
+		http.NotFound(w, r)
+		return
+	}
+	slog.Error("preview unavailable", "error", err, "path", r.URL.Path)
+	http.Error(w, i18n.T(i18n.MatchLanguage(r.Header.Get("Accept-Language")), "preview.temporarily_unavailable"), http.StatusServiceUnavailable)
 }
 
 // PreviewShareLanding is deliberately independent of themes and integrations:
@@ -72,7 +92,7 @@ func (h *FrontendHandler) PreviewShare(w http.ResponseWriter, r *http.Request) {
 	preview.Headers(w.Header())
 	snapshot, err := (preview.Service{Q: h.queries}).Resolve(r.Context(), postedPreviewToken(w, r))
 	if err != nil {
-		http.NotFound(w, r)
+		previewFailure(w, r, err)
 		return
 	}
 	h.renderCapturedPreview(w, r, snapshot)
@@ -142,31 +162,50 @@ func (h *FrontendHandler) renderCapturedPreview(w http.ResponseWriter, r *http.R
 	base.ModuleBodyEndHTML = ""
 	page.Body, err = preview.PrepareBody(page.Body, i18n.T(language.Code, "preview.placeholder"))
 	if err != nil {
+		slog.Error("failed to prepare preview body", "error", err, "page_id", page.ID, "revision", page.Revision)
 		http.Error(w, i18n.T(language.Code, "preview.render_error"), http.StatusServiceUnavailable)
 		return
 	}
 	page.Body = security.SanitizePageHTML(page.Body)
 	view := h.pageToView(clean.Context(), page, base.LangCode, base.LangPrefix)
+	// Relations deleted since the revision are skipped; a lookup fault fails
+	// the preview instead of silently showing the revision without them.
 	view.Author = nil
-	if author, e := h.queries.GetUserByID(ctx, page.AuthorID); e == nil {
+	author, err := h.queries.GetUserByID(ctx, page.AuthorID)
+	switch {
+	case err == nil:
 		view.Author = &AuthorView{ID: author.ID, Name: author.Name, Avatar: author.Avatar, Bio: author.Bio, WebsiteURL: author.WebsiteUrl, LinkedInURL: author.LinkedinUrl, GitHubURL: author.GithubUrl, TelegramURL: author.TelegramUrl}
+	case !errors.Is(err, sql.ErrNoRows):
+		previewFailure(w, r, err)
+		return
 	}
 	view.Categories = nil
 	view.Category = nil
 	view.Tags = nil
 	for _, id := range snapshot.CategoryIDs {
-		if category, e := h.queries.GetCategoryByID(ctx, id); e == nil {
-			item := CategoryView{ID: category.ID, Name: category.Name, Slug: category.Slug, URL: languagePrefixedURL(base.LangPrefix, "/category/"+category.Slug)}
-			view.Categories = append(view.Categories, item)
-			if view.Category == nil {
-				view.Category = &view.Categories[0]
-			}
+		category, lookupErr := h.queries.GetCategoryByID(ctx, id)
+		if errors.Is(lookupErr, sql.ErrNoRows) {
+			continue
+		}
+		if lookupErr != nil {
+			previewFailure(w, r, lookupErr)
+			return
+		}
+		view.Categories = append(view.Categories, CategoryView{ID: category.ID, Name: category.Name, Slug: category.Slug, URL: languagePrefixedURL(base.LangPrefix, "/category/"+category.Slug)})
+		if view.Category == nil {
+			view.Category = &view.Categories[0]
 		}
 	}
 	for _, id := range snapshot.TagIDs {
-		if tag, e := h.queries.GetTagByID(ctx, id); e == nil {
-			view.Tags = append(view.Tags, TagView{ID: tag.ID, Name: tag.Name, Slug: tag.Slug, URL: languagePrefixedURL(base.LangPrefix, "/tag/"+tag.Slug)})
+		tag, lookupErr := h.queries.GetTagByID(ctx, id)
+		if errors.Is(lookupErr, sql.ErrNoRows) {
+			continue
 		}
+		if lookupErr != nil {
+			previewFailure(w, r, lookupErr)
+			return
+		}
+		view.Tags = append(view.Tags, TagView{ID: tag.ID, Name: tag.Name, Slug: tag.Slug, URL: languagePrefixedURL(base.LangPrefix, "/tag/"+tag.Slug)})
 	}
 	if view.FeaturedImageLarge != "" {
 		view.FeaturedImage = view.FeaturedImageLarge
@@ -190,11 +229,13 @@ func (h *FrontendHandler) renderCapturedPreview(w http.ResponseWriter, r *http.R
 		err = fmt.Errorf("preview theme has no page layout")
 	}
 	if err != nil {
+		slog.Error("failed to render preview", "error", err, "page_id", page.ID, "revision", page.Revision)
 		http.Error(w, i18n.T(language.Code, "preview.render_error"), http.StatusServiceUnavailable)
 		return
 	}
 	body, err := preview.SanitizeTheme(rendered.Bytes(), fmt.Sprintf(i18n.T(language.Code, "preview.banner"), page.ID, page.Revision), i18n.T(language.Code, "preview.placeholder"))
 	if err != nil {
+		slog.Error("failed to sanitize preview", "error", err, "page_id", page.ID, "revision", page.Revision)
 		http.Error(w, i18n.T(language.Code, "preview.render_error"), http.StatusServiceUnavailable)
 		return
 	}

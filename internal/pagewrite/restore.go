@@ -29,7 +29,7 @@ func ParamsFor(p store.Page) store.UpdatePageParams {
 // A legacy row can restore only its recorded title and body.
 func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVersion, body string) error {
 	if version.PageID != page.ID {
-		return errors.New("version does not belong to this page")
+		return refuse("version does not belong to this page")
 	}
 	params := ParamsFor(page)
 	params.Title = version.Title
@@ -68,7 +68,7 @@ func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVer
 		if saved.LanguageCode != page.LanguageCode {
 			member, err := t.Q.GetTranslationComponentEntityByLanguage(ctx, store.GetTranslationComponentEntityByLanguageParams{EntityType: "page", EntityID: page.ID, LanguageCode: saved.LanguageCode})
 			if err == nil && member != page.ID {
-				return errors.New("translation language already exists")
+				return ErrTranslationExists
 			}
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
@@ -82,7 +82,7 @@ func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVer
 			return err
 		}
 		if !language.IsActive {
-			return errors.New("recorded language is inactive")
+			return refuse("recorded language is inactive")
 		}
 		params.LanguageCode = saved.LanguageCode
 		params.FeaturedImageID = sql.NullInt64{}
@@ -129,14 +129,14 @@ func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVer
 			if conflict, err := RouteConflict(ctx, t.Q, alias); err != nil {
 				return err
 			} else if conflict != "" {
-				return errors.New(conflict)
+				return refuse(conflict)
 			}
 			exists, err := t.Q.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{Slug: alias, ID: page.ID, Alias: alias, PageID: page.ID})
 			if err != nil {
 				return err
 			}
 			if exists != 0 {
-				return errors.New("recorded alias is occupied")
+				return refuse("recorded alias is occupied")
 			}
 			if _, err = t.Q.CreatePageAlias(ctx, store.CreatePageAliasParams{PageID: page.ID, Alias: alias, CreatedAt: time.Now().UTC()}); err != nil {
 				return err

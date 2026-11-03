@@ -23,14 +23,14 @@ func (t *Tx) LinkTranslation(ctx context.Context, sourceID int64, langCode strin
 		return err
 	}
 	if !language.IsActive || !util.IsRoutableLanguageCode(language.Code) {
-		return errors.New("target language is not active and routable")
+		return refuse("target language is not active and routable")
 	}
 	target, err := t.Q.GetPageByID(ctx, targetID)
 	if err != nil {
 		return err
 	}
 	if target.LanguageCode != langCode || sourceID == targetID {
-		return errors.New("invalid translation target")
+		return refuse("invalid translation target")
 	}
 	source, err := t.Q.GetPageByID(ctx, sourceID)
 	if err != nil {

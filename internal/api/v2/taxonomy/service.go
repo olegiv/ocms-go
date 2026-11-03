@@ -35,14 +35,16 @@ func NewService(db *sql.DB, queries *store.Queries, events *service.EventService
 }
 
 // requireWritePerm returns a domain error when the actor cannot write taxonomy.
-func (s *Service) requireWritePerm(a v2.Actor) error {
+// requireWritePerm checks the key permission and, like the admin UI, that
+// the key's account still holds the editor or admin role.
+func (s *Service) requireWritePerm(ctx context.Context, a v2.Actor) error {
 	if a.APIKey == nil {
 		return v2.NewError(v2.ErrUnauthorized, "API key required")
 	}
 	if !a.HasPermission(model.PermissionTaxonomyWrite) {
 		return v2.NewError(v2.ErrForbidden, "taxonomy:write permission required")
 	}
-	return nil
+	return v2.RequireEditor(ctx, s.queries, a)
 }
 
 // resolveLanguageCode falls back to the system default language. Explicit
@@ -133,7 +135,7 @@ func (s *Service) GetTag(ctx context.Context, id int64) (*TaxonomyTag, error) {
 
 // CreateTag creates a new tag.
 func (s *Service) CreateTag(ctx context.Context, a v2.Actor, in CreateTagBody) (*TaxonomyTag, error) {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return nil, err
 	}
 	if err := s.ensureTagSlugUnique(ctx, in.Slug, 0); err != nil {
@@ -168,7 +170,7 @@ func (s *Service) CreateTag(ctx context.Context, a v2.Actor, in CreateTagBody) (
 
 // UpdateTag applies a partial update.
 func (s *Service) UpdateTag(ctx context.Context, a v2.Actor, id int64, in UpdateTagBody) (*TaxonomyTag, error) {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return nil, err
 	}
 	existing, err := s.queries.GetTagByID(ctx, id)
@@ -224,7 +226,7 @@ func (s *Service) UpdateTag(ctx context.Context, a v2.Actor, id int64, in Update
 
 // DeleteTag removes a tag. Page_tags associations fall to the DB cascade.
 func (s *Service) DeleteTag(ctx context.Context, a v2.Actor, id int64) error {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return err
 	}
 	if _, err := s.queries.GetTagByID(ctx, id); err != nil {
@@ -234,7 +236,7 @@ func (s *Service) DeleteTag(ctx context.Context, a v2.Actor, id int64) error {
 		return v2.NewInternalError("Failed to load tag", err)
 	}
 	if err := s.deleteTerm(ctx, a, "tag", id); err != nil {
-		return v2.NewInternalError("Failed to delete tag", err)
+		return v2.EditorError(err, "Failed to delete tag")
 	}
 	s.logTagAudit(ctx, a, "API: Tag deleted", map[string]any{"tag_id": id})
 	return nil
@@ -302,7 +304,7 @@ func (s *Service) GetCategory(ctx context.Context, id int64) (*TaxonomyCategory,
 
 // CreateCategory creates a category.
 func (s *Service) CreateCategory(ctx context.Context, a v2.Actor, in CreateCategoryBody) (*TaxonomyCategory, error) {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return nil, err
 	}
 	if err := s.ensureCategorySlugUnique(ctx, in.Slug, 0); err != nil {
@@ -349,7 +351,7 @@ func (s *Service) CreateCategory(ctx context.Context, a v2.Actor, in CreateCateg
 // UpdateCategory applies a partial update, including parent reassignment with
 // circular-reference detection.
 func (s *Service) UpdateCategory(ctx context.Context, a v2.Actor, id int64, in UpdateCategoryBody) (*TaxonomyCategory, error) {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return nil, err
 	}
 	existing, err := s.queries.GetCategoryByID(ctx, id)
@@ -430,7 +432,7 @@ func (s *Service) UpdateCategory(ctx context.Context, a v2.Actor, id int64, in U
 // DeleteCategory removes a category, rejecting the request if any child
 // categories still reference it.
 func (s *Service) DeleteCategory(ctx context.Context, a v2.Actor, id int64) error {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return err
 	}
 	cat, err := s.queries.GetCategoryByID(ctx, id)
@@ -444,7 +446,7 @@ func (s *Service) DeleteCategory(ctx context.Context, a v2.Actor, id int64) erro
 		return v2.NewError(v2.ErrConflict, "Cannot delete category with child categories. Delete or reassign children first.")
 	}
 	if err := s.deleteTerm(ctx, a, "category", cat.ID); err != nil {
-		return v2.NewInternalError("Failed to delete category", err)
+		return v2.EditorError(err, "Failed to delete category")
 	}
 	s.logCategoryAudit(ctx, a, "API: Category deleted", map[string]any{"category_id": cat.ID})
 	return nil

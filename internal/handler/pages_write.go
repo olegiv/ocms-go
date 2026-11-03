@@ -116,6 +116,33 @@ func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int
 	}}
 }
 
+// pageWriteMessage explains a refused page write the editor can act on, in
+// lang. ok is false for an unexpected failure, which the caller logs and
+// reports generically instead of showing its text.
+func pageWriteMessage(lang string, err error) (message string, ok bool) {
+	var conflict *pagewrite.Conflict
+	var refusal *pagewrite.Refusal
+	var size *pagewrite.FeaturedImageSizeError
+	switch {
+	case errors.Is(err, pagewrite.ErrEditorRequired):
+		return i18n.T(lang, "pages.error_editor_required"), true
+	case errors.As(err, &conflict), errors.Is(err, pagewrite.ErrRevisionRequired):
+		return i18n.T(lang, "pages.error_changed_meanwhile"), true
+	case errors.Is(err, review.ErrHardValidation):
+		return i18n.T(lang, "pages.error_publication_checks"), true
+	case errors.Is(err, review.ErrSiteURLRequired):
+		return i18n.T(lang, "pages.error_site_url_required"), true
+	case errors.Is(err, pagewrite.ErrTranslationExists):
+		return i18n.T(lang, "pages.error_translation_exists"), true
+	case errors.As(err, &size):
+		return i18n.T(lang, "pages.error.featured_image_too_small", model.MinFeaturedImageWidth, model.MinFeaturedImageHeight, size.Width, size.Height), true
+	case errors.As(err, &refusal):
+		// Fixed text written for people (pagewrite.Refusal), never storage text.
+		return refusal.Reason, true
+	}
+	return "", false
+}
+
 func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err error, page store.Page, input pageFormInput) bool {
 	var conflict *pagewrite.Conflict
 	if !errors.As(err, &conflict) && !errors.Is(err, pagewrite.ErrRevisionRequired) {
@@ -156,6 +183,7 @@ func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err 
 		AIEditable: r.FormValue("allow_ai_edits") == "on", CanManageAI: latest.AuthorID == user.ID || user.Role == model.RoleAdmin}
 	lang := h.renderer.GetAdminLang(r)
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.revision_conflict_title"), pagesEditBreadcrumbs(lang, latest.Title, latest.ID))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusConflict)
 	renderTempl(w, r, adminviews.PageFormPage(pc, convertPageFormViewData(data, h.renderer, lang)))
 	return true

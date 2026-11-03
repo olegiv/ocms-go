@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -61,7 +62,17 @@ func (h *PagesHandler) CheckClaim(w http.ResponseWriter, r *http.Request) {
 	}
 	err = review.SetClaim(r.Context(), h.queries, middleware.GetUserID(r), id, *base, index, r.FormValue("checked") == "on")
 	if err != nil {
-		http.Error(w, i18n.T(h.renderer.GetAdminLang(r), "review.check_conflict"), http.StatusConflict)
+		lang := h.renderer.GetAdminLang(r)
+		var conflict *pagewrite.Conflict
+		switch {
+		case errors.Is(err, pagewrite.ErrEditorRequired): // also matches sql.ErrNoRows for a deleted account
+			http.Error(w, i18n.T(lang, "pages.error_editor_required"), http.StatusForbidden)
+		case errors.As(err, &conflict), errors.Is(err, review.ErrClaimUnavailable), errors.Is(err, sql.ErrNoRows):
+			http.Error(w, i18n.T(lang, "review.check_conflict"), http.StatusConflict)
+		default:
+			slog.Error("failed to record claim check", "error", err, "page_id", id, "claim_index", index)
+			http.Error(w, i18n.T(lang, "review.check_failed"), http.StatusInternalServerError)
+		}
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
@@ -82,8 +93,13 @@ func (h *PagesHandler) CreatePreviewLink(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	cfg, err := h.queries.GetConfigByKey(r.Context(), model.ConfigKeySiteURL)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, i18n.T(h.renderer.GetAdminLang(r), "preview.site_url_required"), http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
-		http.Error(w, "Configure the site URL", http.StatusServiceUnavailable)
+		slog.Error("failed to load site URL for a preview link", "error", err, "page_id", id)
+		http.Error(w, i18n.T(h.renderer.GetAdminLang(r), "preview.temporarily_unavailable"), http.StatusServiceUnavailable)
 		return
 	}
 	userID := middleware.GetUserID(r)
@@ -98,7 +114,19 @@ func (h *PagesHandler) CreatePreviewLink(w http.ResponseWriter, r *http.Request)
 		return nil
 	})
 	if err != nil {
-		http.Error(w, i18n.T(h.renderer.GetAdminLang(r), "preview.unavailable"), http.StatusConflict)
+		lang := h.renderer.GetAdminLang(r)
+		var conflict *pagewrite.Conflict
+		switch {
+		case errors.Is(err, preview.ErrLimit):
+			http.Error(w, i18n.T(lang, "preview.limit", preview.MaxActiveLinks, preview.MaxIssuedPerHour), http.StatusTooManyRequests)
+		case errors.As(err, &conflict):
+			http.Error(w, i18n.T(lang, "pages.error_changed_meanwhile"), http.StatusConflict)
+		case errors.Is(err, preview.ErrUnavailable), errors.Is(err, sql.ErrNoRows):
+			http.Error(w, i18n.T(lang, "preview.unavailable"), http.StatusConflict)
+		default:
+			slog.Error("failed to create preview link", "error", err, "page_id", id, "revision", revision)
+			http.Error(w, i18n.T(lang, "preview.temporarily_unavailable"), http.StatusServiceUnavailable)
+		}
 		return
 	}
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(h.renderer.GetAdminLang(r), "preview.created"), nil)
@@ -118,11 +146,20 @@ func (h *PagesHandler) RevokePreviewLink(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
-	if _, err = h.queries.RevokePagePreviewLink(r.Context(), store.RevokePagePreviewLinkParams{RevokedAt: time.Now().Unix(), ID: linkID, PageID: id}); err != nil {
+	revoked, err := h.queries.RevokePagePreviewLink(r.Context(), store.RevokePagePreviewLinkParams{RevokedAt: time.Now().Unix(), ID: linkID, PageID: id})
+	if err != nil {
+		slog.Error("failed to revoke preview link", "error", err, "page_id", id, "link_id", linkID)
 		http.Error(w, "Cannot revoke preview", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+	lang := h.renderer.GetAdminLang(r)
+	target := fmt.Sprintf("/admin/pages/%d", id)
+	if revoked == 0 {
+		flashError(w, r, h.renderer, target, i18n.T(lang, "preview.revoke_missing"))
+		return
+	}
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Preview share link revoked", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "link_id": linkID})
+	flashSuccess(w, r, h.renderer, target, i18n.T(lang, "preview.revoked"))
 }
 
 // RevisionReview compares only recorded fields with the preceding recorded version.

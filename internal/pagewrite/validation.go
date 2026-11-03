@@ -15,14 +15,32 @@ import (
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
-// RequireEditor rechecks current role inside the mutation transaction.
+// Refusal is a write refused for a reason the editor can act on, such as a
+// taken slug or an inactive language. Its Reason is fixed text written for
+// people, never a storage error, so callers may show it; anything that is not
+// a Refusal (or another typed refusal) is a fault to log and report generically.
+type Refusal struct{ Reason string }
+
+func (r *Refusal) Error() string { return r.Reason }
+
+func refuse(reason string) error { return &Refusal{Reason: reason} }
+
+// ErrEditorRequired reports that the acting account no longer holds the
+// editor or admin role. Callers map it to a refusal, never a server error.
+var ErrEditorRequired = errors.New("editor role required")
+
+// RequireEditor rechecks current role inside the mutation transaction. A
+// missing account also matches sql.ErrNoRows; other errors are storage faults.
 func RequireEditor(ctx context.Context, q *store.Queries, userID int64) error {
 	user, err := q.GetUserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: %w", ErrEditorRequired, err)
+	}
 	if err != nil {
 		return err
 	}
 	if user.Role != model.RoleAdmin && user.Role != model.RoleEditor {
-		return errors.New("editor role required")
+		return ErrEditorRequired
 	}
 	return nil
 }
@@ -57,14 +75,14 @@ func RouteConflict(ctx context.Context, queries *store.Queries, path string) (st
 // SlugAvailable validates the route namespace using the transaction's queries.
 func SlugAvailable(ctx context.Context, q *store.Queries, slug string, exceptID int64) error {
 	if message := ValidateSlugFormat(slug); message != "" {
-		return fmt.Errorf("%s", message)
+		return refuse(message)
 	}
 	conflict, err := RouteConflict(ctx, q, slug)
 	if err != nil {
 		return err
 	}
 	if conflict != "" {
-		return fmt.Errorf("%s", conflict)
+		return refuse(conflict)
 	}
 	return slugUnique(ctx, q, slug, exceptID)
 }
@@ -81,7 +99,7 @@ func SlugAvailableInLanguage(ctx context.Context, q *store.Queries, slug, langua
 		return err
 	}
 	if !configured.IsActive || !util.IsRoutableLanguageCode(language) {
-		return errors.New("language is not active and routable")
+		return refuse("language is not active and routable")
 	}
 	defaultLanguage, err := q.GetDefaultLanguage(ctx)
 	if err != nil {
@@ -91,10 +109,10 @@ func SlugAvailableInLanguage(ctx context.Context, q *store.Queries, slug, langua
 		return SlugAvailable(ctx, q, slug, exceptID)
 	}
 	if message := ValidateSlugFormat(slug); message != "" {
-		return errors.New(message)
+		return refuse(message)
 	}
 	if util.ReservedRoutePath(language+"/"+slug) != "" {
-		return errors.New("canonical page route is reserved")
+		return refuse("canonical page route is reserved")
 	}
 	return slugUnique(ctx, q, slug, exceptID)
 }
@@ -105,7 +123,7 @@ func slugUnique(ctx context.Context, q *store.Queries, slug string, exceptID int
 		return err
 	}
 	if exists != 0 {
-		return errors.New("slug already exists or is used by an alias")
+		return refuse("slug already exists or is used by an alias")
 	}
 	return nil
 }
@@ -127,6 +145,9 @@ func FeaturedImageSize(ctx context.Context, q *store.Queries, id sql.NullInt64) 
 		return nil
 	}
 	media, err := q.GetMediaByID(ctx, id.Int64)
+	if errors.Is(err, sql.ErrNoRows) {
+		return refuse("featured image not found")
+	}
 	if err != nil {
 		return fmt.Errorf("featured image: %w", err)
 	}

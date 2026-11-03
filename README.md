@@ -129,7 +129,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Good f
 ### REST API
 - **Full CRUD API**: Complete REST API for pages, media, tags, and categories
 - **API Key Authentication**: Secure API access with bearer token authentication
-- **Permission-Based Access**: Fine-grained permissions (read/write per resource)
+- **Permission-Based Access**: Fine-grained permissions (read/write per resource); writes also need the key's owner to still be an editor or admin
 - **Rate Limiting**: Per-key and global rate limiting
 - **API Documentation**: Built-in API documentation page
 

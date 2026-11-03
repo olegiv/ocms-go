@@ -30,6 +30,10 @@ import (
 // later time after processScheduledPages listed it.
 var errNoLongerDue = errors.New("page no longer due for publishing")
 
+// errScheduleCancelled reports a due page whose content failed publication
+// validation: its schedule was cleared and a warning event recorded.
+var errScheduleCancelled = errors.New("scheduled publication cancelled")
+
 // Scheduler handles scheduled tasks like publishing pages.
 type Scheduler struct {
 	db       *sql.DB
@@ -140,6 +144,10 @@ func (s *Scheduler) processScheduledPages() error {
 				s.logger.Info("skipped scheduled page changed since it was listed", "page_id", page.ID)
 				continue
 			}
+			if errors.Is(err, errScheduleCancelled) {
+				s.logger.Warn("cancelled scheduled publication: page failed publication validation", "page_id", page.ID)
+				continue
+			}
 			s.logger.Error("failed to publish scheduled page",
 				"page_id", page.ID,
 				"page_title", page.Title,
@@ -160,7 +168,9 @@ func (s *Scheduler) processScheduledPages() error {
 
 // publishPage publishes a single scheduled page, logs the event and sends the
 // page.published webhook event. It returns errNoLongerDue, and does nothing
-// else, when the page is no longer a draft due by now.
+// else, when the page is no longer a draft due by now, and
+// errScheduleCancelled when its AI content failed publication validation and
+// cancelSchedule ended the schedule.
 func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, page store.Page, now time.Time) error {
 	work, err := pagewrite.InTx(ctx, s.db, provenance.Principal{Source: "system", Transport: "scheduler"}, func(work *pagewrite.Tx) error {
 		if _, err := work.TrackSystem(ctx, page.ID); err != nil {
@@ -185,40 +195,72 @@ func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, pag
 		return err
 
 	})
+	if errors.Is(err, review.ErrHardValidation) {
+		// Retrying cannot help until someone edits the page, so end the
+		// schedule and say why instead of failing again every minute.
+		return s.cancelSchedule(ctx, page, now)
+	}
 	if err != nil {
 		return err
 	}
 	published := work.Pages[page.ID]
 	_ = queries // retained parameter for existing callers; writes use the transaction.
 
-	// Log the event
-	metadata := map[string]any{
+	s.logPageEvent(ctx, queries, model.EventLevelInfo, "Page published automatically by scheduler: "+page.Title, map[string]any{
 		"page_id":      page.ID,
 		"page_title":   page.Title,
 		"page_slug":    page.Slug,
 		"scheduled_at": page.ScheduledAt.Time.Format(time.RFC3339),
 		"published_at": now.Format(time.RFC3339),
-	}
-	metadataJSON, _ := json.Marshal(metadata)
-
-	message := "Page published automatically by scheduler: " + page.Title
-	_, err = queries.CreateEvent(ctx, store.CreateEventParams{
-		Level:     "info",
-		Category:  "page",
-		Message:   message,
-		UserID:    sql.NullInt64{}, // System action, no user
-		Metadata:  string(metadataJSON),
-		CreatedAt: now,
-	})
-	if err != nil {
-		// Kept out of the Event Log it failed to write (service.WithoutEventLog).
-		s.logger.WarnContext(service.WithoutEventLog(ctx), "failed to log scheduled publish event", "event", message, "error", err)
-	}
+	}, now)
 	if s.webhooks != nil {
 		webhook.DispatchPageEvent(ctx, s.webhooks, model.EventPagePublished, published, "")
 	}
 
 	return nil
+}
+
+// cancelSchedule clears the schedule of a due page that failed publication
+// validation and records one warning event. The page stays a draft. It
+// returns errNoLongerDue when the page changed since it was listed.
+func (s *Scheduler) cancelSchedule(ctx context.Context, page store.Page, now time.Time) error {
+	_, err := pagewrite.InTx(ctx, s.db, provenance.Principal{Source: "system", Transport: "scheduler"}, func(work *pagewrite.Tx) error {
+		current, err := work.TrackSystem(ctx, page.ID)
+		if err != nil {
+			return err
+		}
+		// A save since the failed attempt may have fixed the content.
+		if current.Revision != page.Revision || current.Status != model.PageStatusDraft || !current.ScheduledAt.Valid || current.ScheduledAt.Time.After(now) {
+			return errNoLongerDue
+		}
+		return work.Q.ClearPageScheduledAt(ctx, store.ClearPageScheduledAtParams{UpdatedAt: now, ID: page.ID})
+	})
+	if err != nil {
+		return err
+	}
+	s.logPageEvent(ctx, store.New(s.db), model.EventLevelWarning, "Scheduled publication cancelled: the page failed publication validation: "+page.Title, map[string]any{
+		"page_id":      page.ID,
+		"page_title":   page.Title,
+		"scheduled_at": page.ScheduledAt.Time.Format(time.RFC3339),
+	}, now)
+	return errScheduleCancelled
+}
+
+// logPageEvent records a system page event (no user) in the Event Log. A
+// failure is logged outside the Event Log it failed to write.
+func (s *Scheduler) logPageEvent(ctx context.Context, queries *store.Queries, level, message string, metadata map[string]any, now time.Time) {
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		s.logger.Warn("failed to encode scheduler event metadata", "event", message, "error", err)
+		metadataJSON = []byte("{}")
+	}
+	if _, err = queries.CreateEvent(ctx, store.CreateEventParams{
+		Level: level, Category: model.EventCategoryPage, Message: message,
+		Metadata: string(metadataJSON), CreatedAt: now,
+	}); err != nil {
+		// Kept out of the Event Log it failed to write (service.WithoutEventLog).
+		s.logger.WarnContext(service.WithoutEventLog(ctx), "failed to log scheduler page event", "event", message, "error", err)
+	}
 }
 
 // AddDemoReset registers a daily job at 01:00 UTC that resets the demo

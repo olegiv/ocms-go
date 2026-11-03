@@ -6,6 +6,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -22,7 +23,16 @@ import (
 
 // disabledAttr matches a rendered boolean disabled attribute (not the
 // Tailwind "disabled:" class variants the components also carry).
-var disabledAttr = regexp.MustCompile(`\sdisabled(\s|>|/)`)
+// disabledAttr matches a disabled attribute inside a tag, never the word in
+// text: the translated settings alert says "saving is disabled".
+var disabledAttr = regexp.MustCompile(`<[a-zA-Z][^>]*\sdisabled(\s|>|/|=)`)
+
+// dashboardText is the escaped text the dashboard shows for key. It is the
+// raw key until a test loads translations and the translation afterwards, so
+// assertions hold whichever test ran first in the process.
+func dashboardText(key string, args ...any) string {
+	return html.EscapeString((&adminviews.PageContext{}).T(key, args...))
+}
 
 // renderDashboard renders the admin page for data.
 func renderDashboard(t *testing.T, data DashboardData) string {
@@ -53,7 +63,7 @@ func TestDashboardSettingsLoadFailure(t *testing.T) {
 		t.Errorf("the page must show the active settings, got %+v", data)
 	}
 	broken := renderDashboard(t, data)
-	if !strings.Contains(broken, "mcp.settings_load_error") {
+	if !strings.Contains(broken, dashboardText("mcp.settings_load_error")) {
 		t.Error("the page must show the load error")
 	}
 	// Two checkboxes, link-policy selector, textarea and submit button.
@@ -177,7 +187,7 @@ func TestDashboardSiteURLStates(t *testing.T) {
 	if data.SiteURLInvalid != "example.com" || data.SiteURLMissing || data.ConfigError || data.EndpointURL != EndpointPath {
 		t.Errorf("invalid site URL: %+v", data)
 	}
-	if html := renderDashboard(t, data); !strings.Contains(html, "mcp.site_url_invalid") {
+	if page := renderDashboard(t, data); !strings.Contains(page, dashboardText("mcp.site_url_invalid", "example.com")) {
 		t.Error("the page must show the invalid site URL alert")
 	}
 

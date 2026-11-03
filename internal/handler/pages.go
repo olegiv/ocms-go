@@ -896,32 +896,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		// Load all categories and preserve selected categories for re-rendering
-		allCategories, err := h.queries.ListCategories(r.Context())
-		if err != nil {
-			slog.Error("failed to list categories", "error", err)
-			allCategories = []store.Category{}
-		}
-		categoryTree := buildPageCategoryTree(allCategories, nil, 0)
-
-		data := PageFormData{
-			Page:          &existingPage,
-			PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
-			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
-			Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
-			AllCategories: categoryTree,
-			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
-			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
-			Statuses:      ValidPageStatuses,
-			PageTypes:     ValidPageTypes,
-			Errors:        validationErrors,
-			FormValues:    input.FormValues,
-			IsEdit:        true,
-		}
-
-		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, id))
-		viewData := convertPageFormViewData(data, h.renderer, lang)
-		renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
+		h.renderEditFormErrors(w, r, existingPage, input, validationErrors, http.StatusOK)
 		return
 	}
 
@@ -980,7 +955,15 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if h.pageConflict(w, r, err, existingPage, input) {
 		return
 	}
-
+	if errors.Is(err, review.ErrHardValidation) || errors.Is(err, review.ErrSiteURLRequired) {
+		message, _ := pageWriteMessage(lang, err)
+		h.renderEditFormErrors(w, r, existingPage, input, map[string]string{"body": message}, http.StatusUnprocessableEntity)
+		return
+	}
+	if message, ok := pageWriteMessage(lang, err); ok {
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), message)
+		return
+	}
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Error updating page")
@@ -1119,6 +1102,50 @@ func (h *PagesHandler) deletePageForBulk(r *http.Request, id int64) (store.Page,
 	return page, nil
 }
 
+// renderEditFormErrors re-renders the edit form with the submitted values and
+// errs, so a refused save keeps the editor's changes.
+func (h *PagesHandler) renderEditFormErrors(w http.ResponseWriter, r *http.Request, existingPage store.Page, input pageFormInput, errs map[string]string, status int) {
+	lang := h.renderer.GetAdminLang(r)
+	// Load all categories and preserve selected categories for re-rendering
+	allCategories, err := h.queries.ListCategories(r.Context())
+	if err != nil {
+		slog.Error("failed to list categories", "error", err)
+		allCategories = nil
+	}
+	data := PageFormData{
+		Page:          &existingPage,
+		PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
+		Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
+		Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
+		AllCategories: buildPageCategoryTree(allCategories, nil, 0),
+		FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
+		OgImage:       h.loadImageData(r.Context(), input.OgImageID),
+		Statuses:      ValidPageStatuses,
+		PageTypes:     ValidPageTypes,
+		Errors:        errs,
+		FormValues:    input.FormValues,
+		IsEdit:        true,
+	}
+	// Keep the AI-access control and the editor's choice, as the edit page does.
+	if user := middleware.GetUser(r); user != nil {
+		data.CanManageAI = existingPage.AuthorID == user.ID || user.Role == model.RoleAdmin
+	}
+	access, err := h.queries.GetPageAIAccess(r.Context(), existingPage.ID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		slog.Error("failed to load page AI access", "error", err, "page_id", existingPage.ID)
+	}
+	data.AIEditable = access.AiEditable
+	if data.CanManageAI && r.FormValue("ai_access_present") != "" {
+		data.AIEditable = r.FormValue("allow_ai_edits") == "on"
+	}
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, existingPage.ID))
+	if status != http.StatusOK {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+	}
+	renderTempl(w, r, adminviews.PageFormPage(pc, convertPageFormViewData(data, h.renderer, lang)))
+}
+
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
@@ -1183,6 +1210,12 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		updatedPage = work.Pages[id]
 	}
 
+	// Explained refusals first: a deleted account's ErrEditorRequired also
+	// matches sql.ErrNoRows.
+	if message, ok := pageWriteMessage(h.renderer.GetAdminLang(r), err); ok {
+		flashError(w, r, h.renderer, redirectAdminPages, message)
+		return
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		flashError(w, r, h.renderer, redirectAdminPages, "The page status changed meanwhile; check it and try again")
 		return
@@ -1363,7 +1396,14 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		flashError(w, r, h.renderer, versionsURL, "Version was not restored: "+err.Error())
+		lang := h.renderer.GetAdminLang(r)
+		message := i18n.T(lang, "pages.error_version_not_restored")
+		if reason, ok := pageWriteMessage(lang, err); ok {
+			message += " " + reason
+		} else {
+			slog.Error("failed to restore page version", "error", err, "page_id", id, "version_id", versionId)
+		}
+		flashError(w, r, h.renderer, versionsURL, message)
 		return
 	}
 	for changedID := range work.Pages {
@@ -1470,7 +1510,14 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		return work.LinkTranslation(r.Context(), id, tc.TargetLang.Code, translatedPage.ID)
 	})
 	if err != nil {
-		flashError(w, r, h.renderer, redirectURL, "Translation was not created: "+err.Error())
+		lang := h.renderer.GetAdminLang(r)
+		message := i18n.T(lang, "pages.error_translation_not_created")
+		if reason, ok := pageWriteMessage(lang, err); ok {
+			message += " " + reason
+		} else {
+			slog.Error("failed to create page translation", "error", err, "page_id", id, "language", langCode)
+		}
+		flashError(w, r, h.renderer, redirectURL, message)
 		return
 	}
 	translatedPage = work.Pages[translatedPage.ID]

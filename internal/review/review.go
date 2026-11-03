@@ -133,6 +133,9 @@ func Load(ctx context.Context, q *store.Queries, page store.Page, viewer int64) 
 	return result, err
 }
 
+// ErrClaimUnavailable reports a claim index the reviewed revision does not have.
+var ErrClaimUnavailable = errors.New("claim unavailable")
+
 // SetClaim records an editorial acknowledgment, without creating or changing content evidence.
 func SetClaim(ctx context.Context, q *store.Queries, viewer, pageID, revision, index int64, checked bool) error {
 	_, err := pagewrite.InQueriesTx(ctx, q, provenance.Principal{UserID: viewer, Source: "human", Transport: "editorial_review"}, func(work *pagewrite.Tx) error {
@@ -155,7 +158,7 @@ func SetClaim(ctx context.Context, q *store.Queries, viewer, pageID, revision, i
 			return err
 		}
 		if index < 0 || index >= int64(len(report.Agent.ClaimsToVerify.Value)) || index >= 50 {
-			return errors.New("claim unavailable")
+			return ErrClaimUnavailable
 		}
 		if checked {
 			return work.Q.CheckClaim(ctx, store.CheckClaimParams{ProvenanceID: fact.ID, ClaimIndex: index, CheckedBy: sql.NullInt64{Int64: viewer, Valid: true}, CheckedAt: time.Now().Unix()})

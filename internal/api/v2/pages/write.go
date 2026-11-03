@@ -223,6 +223,9 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 				if errors.Is(err, review.ErrHardValidation) {
 					return v2.NewValidationError(map[string]string{"body": "Draft failed publication validation"}, "Draft failed publication validation")
 				}
+				if errors.Is(err, review.ErrSiteURLRequired) {
+					return v2.NewError(v2.ErrConflict, "Configure the site URL before publishing AI drafts")
+				}
 				return err
 			}
 		}

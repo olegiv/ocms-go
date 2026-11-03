@@ -202,10 +202,24 @@ func validateRoutableLanguage(language store.Language) error {
 // it, or another page whose id is NOT exceptID already holds it. Pass 0 to
 // check against all pages.
 func (s *Service) ensureSlugAvailable(ctx context.Context, slug string, exceptID int64) error {
-	if err := pagewrite.SlugAvailable(ctx, s.queries, slug, exceptID); err != nil {
-		return v2.NewValidationError(map[string]string{"slug": err.Error()}, "Validation failed")
+	return refusalError(pagewrite.SlugAvailable(ctx, s.queries, slug, exceptID), "slug", "Failed to check slug")
+}
+
+// refusalError maps a pagewrite check: a refusal the caller can fix is a 422
+// on field, with its fixed text; anything else is a storage fault, reported
+// as an internal error so its text never reaches the client and a retryable
+// fault is not mistaken for a taken slug.
+func refusalError(err error, field, msg string) error {
+	var refusal *pagewrite.Refusal
+	var size *pagewrite.FeaturedImageSizeError
+	switch {
+	case err == nil:
+		return nil
+	case errors.As(err, &refusal), errors.As(err, &size):
+		return v2.NewValidationError(map[string]string{field: err.Error()}, "Validation failed")
+	default:
+		return v2.NewInternalError(msg, err)
 	}
-	return nil
 }
 
 // parseScheduledAt parses an RFC3339 timestamp. Empty string returns sql.NullTime{}.
@@ -350,8 +364,8 @@ func (s *Service) create(ctx context.Context, a v2.Actor, in CreatePageBody, wor
 	if err := validateEnums(in.Status, in.PageType); err != nil {
 		return nil, err
 	}
-	if err := pagewrite.FeaturedImageSize(ctx, s.queries, util.NullInt64FromPtr(in.FeaturedImageID)); err != nil {
-		return nil, v2.NewValidationError(map[string]string{"featured_image_id": err.Error()}, "Validation failed")
+	if err := refusalError(pagewrite.FeaturedImageSize(ctx, s.queries, util.NullInt64FromPtr(in.FeaturedImageID)), "featured_image_id", "Failed to check featured image"); err != nil {
+		return nil, err
 	}
 	summary, err := validateSummary(in.Summary)
 	if err != nil {
@@ -622,8 +636,8 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 	}
 	if in.FeaturedImageID != nil {
 		params.FeaturedImageID = util.NullInt64FromPtr(in.FeaturedImageID)
-		if err := pagewrite.FeaturedImageSize(ctx, s.queries, params.FeaturedImageID); err != nil {
-			return v2.NewValidationError(map[string]string{"featured_image_id": err.Error()}, "Validation failed")
+		if err := refusalError(pagewrite.FeaturedImageSize(ctx, s.queries, params.FeaturedImageID), "featured_image_id", "Failed to check featured image"); err != nil {
+			return err
 		}
 	}
 	if in.ClearFeaturedImage {

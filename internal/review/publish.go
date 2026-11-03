@@ -8,15 +8,24 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/olegiv/ocms-go/internal/ai/draft"
 	"github.com/olegiv/ocms-go/internal/ai/grounding"
 	"github.com/olegiv/ocms-go/internal/security"
+	"github.com/olegiv/ocms-go/internal/seo/markdown"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
+// ErrHardValidation reports AI content that fails the draft contract. Only
+// content problems use it: the editor can fix them in the draft.
 var ErrHardValidation = errors.New("draft failed publication validation")
+
+// ErrSiteURLRequired reports that the checks cannot run because the site URL
+// is unset or invalid. Publication is refused, but it is a configuration
+// problem the editor cannot fix in the draft, and it does not end a schedule.
+var ErrSiteURLRequired = errors.New("publication checks need a configured site URL")
 
 // ValidatePublication uses the shared draft contract for opted-in AI content.
 // It only checks: publication never replaces the authoritative stored HTML.
@@ -60,16 +69,22 @@ func ValidatePublication(ctx context.Context, q *store.Queries, page store.Page)
 		origin = saved.SiteURL
 	}
 	if origin == "" {
-		if cfg, e := q.GetConfigByKey(ctx, "site_url"); e == nil {
-			origin = cfg.Value
+		cfg, cfgErr := q.GetConfigByKey(ctx, "site_url")
+		if cfgErr != nil && !errors.Is(cfgErr, sql.ErrNoRows) {
+			return fmt.Errorf("load site URL: %w", cfgErr)
 		}
+		origin = cfg.Value
 	}
 	resolver, err := grounding.NewResolver(q, origin, grounding.Access{UserID: page.AuthorID, AllDrafts: true})
 	if err != nil {
-		return ErrHardValidation
+		return fmt.Errorf("%w: %w", ErrSiteURLRequired, err)
 	}
 	options := draft.Options{Resolver: resolver.DraftResolver(), DefaultLanguage: page.LanguageCode, UILanguage: page.LanguageCode, SiteURL: origin, LinkPolicy: draft.Keep}
 	derived, err := draft.DeriveMarkdown(ctx, page.Body, options)
+	if errors.Is(err, markdown.ErrBodyTooLarge) {
+		// Content the editor must shorten, not a fault to retry.
+		return fmt.Errorf("%w: %w", ErrHardValidation, err)
+	}
 	if err != nil {
 		return err
 	}

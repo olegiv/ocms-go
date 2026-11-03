@@ -46,6 +46,13 @@ rechecks AI-authored content, including current links, taxonomy and media,
 even after AI access is disabled. Unchecked claims and warning/info issues
 are visible notices and do not block otherwise valid publication.
 
+A refused publication says why: the editor form comes back with the reason and
+the unsaved changes, and the publish toggle names the reason instead of a
+generic error. A missing or invalid site URL also refuses publication, but as
+a configuration problem. When a scheduled AI page fails the publication gate,
+the scheduler clears its schedule, keeps it a draft and records one warning
+event; a missing site URL leaves the schedule in place.
+
 ## Session previews
 
 Save/read results return `/LANG/preview/pages/ID/revisions/REVISION`.
@@ -106,14 +113,17 @@ an old URL-issuing binary concurrently against the upgraded database.
 The default lifetime is 24 hours, bounded by the issuing credential's expiry.
 Set `OCMS_PREVIEW_LINK_TTL_HOURS` to 1–24 to shorten it. Limits are ten active
 links and sixty issuances per user per rolling hour; revocation does not reset
-the issuance limit. Revoke links from the editor's preview panel.
+the issuance limit, and a request past it is answered 429 with that reason.
+Revoke links from the editor's preview panel. Issuing and revoking a link are
+both recorded in the event log; the token never is.
 
 Each read rechecks current account/role, owner, AI opt-in, draft/schedule and
 issuing key/grant state. Explicit revocation, publication, scheduling, deletion,
 owner change, disabling page AI access, role loss, credential revocation and
 session-version rotation invalidate links. Durable invalidation prevents those
 links reappearing when a setting is reversed. Missing, expired, malformed or
-revoked links all return 404 on redemption. The fixed GET landing itself has
+revoked links all return 404 on redemption; a server-side fault returns 503, so
+a valid link never looks expired. The fixed GET landing itself has
 no credential or draft content. A link never grants editor or MCP permissions.
 
 ## Proxy and telemetry logging

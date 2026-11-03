@@ -65,14 +65,16 @@ func NewService(db *sql.DB, queries *store.Queries, events *service.EventService
 }
 
 // requireWritePerm returns a domain error when the actor cannot write media.
-func (s *Service) requireWritePerm(a v2.Actor) error {
+// requireWritePerm checks the key permission and, like the admin UI, that
+// the key's account still holds the editor or admin role.
+func (s *Service) requireWritePerm(ctx context.Context, a v2.Actor) error {
 	if a.APIKey == nil {
 		return v2.NewError(v2.ErrUnauthorized, "API key required")
 	}
 	if !a.HasPermission(model.PermissionMediaWrite) {
 		return v2.NewError(v2.ErrForbidden, "media:write permission required")
 	}
-	return nil
+	return v2.RequireEditor(ctx, s.queries, a)
 }
 
 // dtoFromStore converts a store.Medium to a Media DTO, populating URLs.
@@ -265,7 +267,7 @@ type UploadError struct {
 
 // Upload ingests a single file via the underlying MediaService.
 func (s *Service) Upload(ctx context.Context, a v2.Actor, in UploadMediaMetadata, file UploadedFile) (*Media, error) {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return nil, err
 	}
 	defaultLang, err := s.queries.GetDefaultLanguage(ctx)
@@ -327,7 +329,7 @@ func (s *Service) Upload(ctx context.Context, a v2.Actor, in UploadMediaMetadata
 // UploadBatch ingests multiple files, returning partial success with per-file
 // errors rather than failing the whole request on the first bad file.
 func (s *Service) UploadBatch(ctx context.Context, a v2.Actor, in UploadMediaMetadata, files []UploadedFile) (*UploadBatchResult, error) {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return nil, err
 	}
 	if len(files) == 0 {
@@ -357,7 +359,7 @@ func (s *Service) UploadBatch(ctx context.Context, a v2.Actor, in UploadMediaMet
 
 // Update changes metadata on a media item.
 func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateMediaBody) (*Media, error) {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return nil, err
 	}
 	existing, err := s.queries.GetMediaByID(ctx, id)
@@ -413,7 +415,7 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, id int64, in UpdateMed
 
 // Delete removes a media item and its variants via the underlying MediaService.
 func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
-	if err := s.requireWritePerm(a); err != nil {
+	if err := s.requireWritePerm(ctx, a); err != nil {
 		return err
 	}
 	media, err := s.queries.GetMediaByID(ctx, id)
@@ -426,7 +428,7 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 	// Files left on disk do not undo the delete: the records are gone.
 	err = s.uploader.DeleteWithPrincipal(ctx, id, provenance.Principal{UserID: a.ActingUserID(), Source: "api", APIKeyID: a.APIKey.ID, Transport: "rest"})
 	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
-		return v2.NewInternalError("Failed to delete media", err)
+		return v2.EditorError(err, "Failed to delete media")
 	}
 	audit := map[string]any{"media_id": id}
 	if err != nil {
