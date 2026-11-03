@@ -160,3 +160,45 @@ func TestScheduledPublishingSkipsPagesNoLongerDue(t *testing.T) {
 		})
 	}
 }
+
+// TestScheduledPublishingSurvivesCompactionFailure checks that a failed
+// idempotency-replay compaction, which is housekeeping, does not stop due
+// pages from being published in the same run.
+//
+// Bug state: return the CompactIdempotencyKeys error from
+// processScheduledPages and this fails.
+func TestScheduledPublishingSurvivesCompactionFailure(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	queries := store.New(db)
+	ctx := context.Background()
+	now := time.Now()
+	author, err := queries.CreateUser(ctx, store.CreateUserParams{
+		Email: "author@example.com", PasswordHash: "x", Role: model.RoleAdmin, Name: "Author", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		Title: "Later", Slug: "later", Body: "b", Status: model.PageStatusDraft, AuthorID: author.ID,
+		ScheduledAt: sql.NullTime{Time: now.Add(-time.Minute), Valid: true}, LanguageCode: "en",
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`ALTER TABLE idempotency_keys RENAME TO idempotency_keys_unavailable`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = New(db, slog.Default(), nil).processScheduledPages(); err != nil {
+		t.Fatalf("compaction failure stopped the run: %v", err)
+	}
+	current, err := queries.GetPageByID(ctx, page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Status != model.PageStatusPublished {
+		t.Fatalf("due page not published after compaction failure: status=%s", current.Status)
+	}
+}

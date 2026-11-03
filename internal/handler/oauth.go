@@ -76,8 +76,9 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(oauth.IntersectScopes(strings.Fields(req.Scope), user.Role)) != len(strings.Fields(req.Scope)) {
-		oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"error": {"access_denied"}}))
+		// Clear first: the session is saved on the response's first write.
 		h.clearOAuthConsent(r)
+		oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"error": {"access_denied"}}))
 		return
 	}
 	nonce := rand.Text()

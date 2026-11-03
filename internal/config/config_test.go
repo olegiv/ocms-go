@@ -1068,3 +1068,36 @@ func TestLoad_ValidatesMFAKey(t *testing.T) {
 		}
 	})
 }
+
+// TestLoad_RejectsUnknownEnv checks that OCMS_ENV accepts only the known
+// environments. Production hardening keys on the exact value "production",
+// so a typo used to start silently with the development posture (2026-11-03
+// audit C-1).
+//
+// Bug state: drop the validEnvs check from Load and this fails.
+func TestLoad_RejectsUnknownEnv(t *testing.T) {
+	for _, value := range []string{"prod", "Production", "PRODUCTION", "production ", "test", "dev", "stage"} {
+		t.Run(value, func(t *testing.T) {
+			os.Clearenv()
+			setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+			setEnv(t, "OCMS_ENV", value)
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), "OCMS_ENV must be one of") {
+				t.Fatalf("Load() accepted OCMS_ENV=%q: %v", value, err)
+			}
+		})
+	}
+	for _, value := range []string{"development", "staging"} {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+		setEnv(t, "OCMS_ENV", value)
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load() rejected OCMS_ENV=%q: %v", value, err)
+		}
+	}
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", testSessionSecret)
+	setProductionRequiredEnv(t)
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() rejected OCMS_ENV=production: %v", err)
+	}
+}

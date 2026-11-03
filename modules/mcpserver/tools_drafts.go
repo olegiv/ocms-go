@@ -20,7 +20,8 @@ import (
 )
 
 func (m *Module) authorizeDraftCall(ctx context.Context, q *store.Queries, id *identity) error {
-	if id == nil || m.ctx == nil || m.ctx.Config != nil && m.ctx.Config.AIDisabled || middleware.IsDemoMode() {
+	// Fail closed: without configuration the OCMS_AI_DISABLED switch is unknown.
+	if id == nil || m.ctx == nil || m.ctx.Config == nil || m.ctx.Config.AIDisabled || middleware.IsDemoMode() {
 		return v2.NewError(v2.ErrForbidden, "Draft authoring is unavailable")
 	}
 	active, err := q.IsModuleActive(ctx, ModuleName)
@@ -44,7 +45,7 @@ func (m *Module) authorizeDraftCall(ctx context.Context, q *store.Queries, id *i
 		}
 		p, err := m.ctx.OAuth.RecheckAccess(ctx, q, oauth.Principal{TokenID: id.tokenID, UserID: id.userID, GrantID: id.grantID, ClientID: id.clientID})
 		if err != nil {
-			return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
+			return recheckError(err)
 		}
 		if !slices.Contains(p.Scopes, model.PermissionMCPAccess) || !slices.Contains(p.Scopes, model.PermissionMCPDrafts) {
 			return v2.NewError(v2.ErrForbidden, "Draft permission required")
@@ -67,6 +68,15 @@ func (m *Module) authorizeDraftCall(ctx context.Context, q *store.Queries, id *i
 		return v2.NewError(v2.ErrForbidden, "Draft permission required")
 	}
 	return nil
+}
+
+// recheckError keeps a storage fault during the OAuth re-check retryable: an
+// unauthorized answer would tell the agent its credential is gone.
+func recheckError(err error) error {
+	if oauth.Retryable(err) {
+		return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Credential check is temporarily unavailable; retry the call", Wrap: err}
+	}
+	return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
 }
 
 func (m *Module) authoringService(ctx context.Context, call *toolCall) (*authoring.Service, v2.Actor, error) {
@@ -94,7 +104,7 @@ func (m *Module) authoringService(ctx context.Context, call *toolCall) (*authori
 		if call.identity.grantID != "" {
 			p, err := m.ctx.OAuth.RecheckAccess(ctx, q, oauth.Principal{TokenID: call.identity.tokenID, UserID: call.identity.userID, GrantID: call.identity.grantID, ClientID: call.identity.clientID})
 			if err != nil {
-				return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
+				return recheckError(err)
 			}
 			scopes = p.Scopes
 		} else {

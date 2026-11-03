@@ -57,6 +57,9 @@ that input.
 - Title: trimmed, 1–255 Unicode characters. Summary: at most 500 characters.
 - Markdown **and resulting HTML**: at most 200,000 bytes. The JSON parser has a
   separate 2 MiB transport-independent ceiling, allowing escaped Unicode.
+- At most 500 distinct link destinations per body; repeated links to the same
+  URL count once. Link issues are reported once per kind, since they carry no
+  URL; the per-link results are in the links list.
 - At most ten distinct existing tag slugs, with exact language matching. No
   taxonomy creation. Category and media IDs must exist. A tag in another
   language is unavailable, not an invitation to create a new one.
@@ -173,6 +176,7 @@ later iterations; their presence does not mean those checks run in R1.3.
 | `source_revision_conflict` | error | The translation source changed after it was read. |
 | `translation_exists` | error | This translation group already contains the target language. |
 | `body_too_large` | error | The Markdown or resulting HTML exceeds 200,000 bytes. |
+| `too_many_links` | error | The body links to more than 500 distinct destinations. |
 | `html_conversion_lossy` | warning | The stored rich HTML cannot be represented completely as Markdown. |
 | `media_conversion_lossy` | warning | An existing image could not be converted to a media:ID reference. |
 

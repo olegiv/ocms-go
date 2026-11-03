@@ -5,6 +5,8 @@ package oauth
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -67,11 +69,19 @@ func (t *tokenStore) GetByCode(ctx context.Context, raw string) (lib.TokenInfo, 
 	if !validCredential(raw, codePrefix) {
 		return nil, liberrors.ErrInvalidAuthorizeCode
 	}
+	// Storage faults return a non-library error, which Token answers as a
+	// retryable 5xx instead of telling the client the code is dead.
 	c, err := t.q.GetOAuthCode(ctx, tokenHash(raw))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, storageProblem(ctx, "failed to load OAuth authorization code", err, "client_id", t.clientID)
+	}
 	if err != nil || c.ConsumedAt != 0 || c.ExpiresAt <= t.s.now().Unix() {
 		return nil, liberrors.ErrInvalidAuthorizeCode
 	}
 	g, err := t.s.activeGrant(ctx, t.q, c.GrantID)
+	if Retryable(err) {
+		return nil, err
+	}
 	if err != nil || g.ClientID != t.clientID || g.Resource != t.resource {
 		return nil, liberrors.ErrInvalidAuthorizeCode
 	}
@@ -105,10 +115,16 @@ func (t *tokenStore) GetByRefresh(ctx context.Context, raw string) (lib.TokenInf
 		return nil, liberrors.ErrInvalidRefreshToken
 	}
 	row, err := t.q.GetOAuthTokenByRefresh(ctx, tokenHash(raw))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, storageProblem(ctx, "failed to load OAuth refresh token", err, "client_id", t.clientID)
+	}
 	if err != nil {
 		return nil, liberrors.ErrInvalidRefreshToken
 	}
 	g, err := t.s.activeGrant(ctx, t.q, row.GrantID)
+	if Retryable(err) {
+		return nil, err
+	}
 	if err != nil || g.ClientID != t.clientID || g.Resource != t.resource {
 		return nil, liberrors.ErrInvalidRefreshToken
 	}

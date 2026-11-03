@@ -18,6 +18,11 @@ import (
 
 func (m *Module) verifyOAuth(ctx context.Context, raw string, _ *http.Request) (*auth.TokenInfo, error) {
 	p, err := m.ctx.OAuth.VerifyAccess(ctx, raw)
+	if oauth.Retryable(err) {
+		// A storage fault: the SDK answers 500 with the bare protocol code, so
+		// the client retries instead of discarding a token that may be valid.
+		return nil, err
+	}
 	if err != nil {
 		return nil, auth.ErrInvalidToken
 	}

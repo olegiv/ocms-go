@@ -134,6 +134,17 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 	var links []Link
 	var issues []Issue
 	seen := make(map[string]Link)
+	// Issues carry no URL, so a repeat of the same code and field is a
+	// duplicate; the per-link detail is in links. Reporting each kind once
+	// keeps the stored and returned feedback bounded.
+	reported := make(map[string]bool)
+	report := func(issue Issue) {
+		key := issue.Code + "\x00" + issue.Field
+		if !reported[key] {
+			reported[key] = true
+			issues = append(issues, issue)
+		}
+	}
 	var walk func(*html.Node) error
 	walk = func(parent *html.Node) error {
 		for node := parent.FirstChild; node != nil; {
@@ -145,13 +156,16 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 				raw := attribute(node, "href")
 				target, targetErr := targetURL(raw, base)
 				if targetErr != nil {
-					issues = append(issues, NewIssue("link_not_allowed", "body_markdown", language))
+					report(NewIssue("link_not_allowed", "body_markdown", language))
 					unwrap(node)
 					node = next
 					continue
 				}
 				link, exists := seen[raw]
 				if !exists {
+					if len(seen) == MaxLinks {
+						return errTooManyLinks
+					}
 					link = Link{URL: target.url, Kind: "internal", Status: "existing"}
 					switch {
 					case target.external:
@@ -159,7 +173,7 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 						if policy == Strip {
 							link.Status = "removed"
 						}
-						issues = append(issues, NewIssue("external_link", "body_markdown", language))
+						report(NewIssue("external_link", "body_markdown", language))
 					case target.fragment:
 						link.Kind, link.Status = "fragment", "not_checked"
 					default:
@@ -169,7 +183,7 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 						}
 						if !found {
 							link.Status = "unresolved"
-							issues = append(issues, NewIssue("internal_link_broken", "body_markdown", language))
+							report(NewIssue("internal_link_broken", "body_markdown", language))
 						}
 					}
 					seen[raw] = link
@@ -196,12 +210,20 @@ func applyLinks(ctx context.Context, body string, base *url.URL, policy LinkPoli
 		}
 		return nil
 	}
-	if err = walk(root); err != nil {
+	if err = walk(root); errors.Is(err, errTooManyLinks) {
+		// A blocking issue: no HTML is returned, so nothing is saved.
+		report(NewIssue("too_many_links", "body_markdown", language))
+		return "", links, issues, nil
+	}
+	if err != nil {
 		return "", nil, nil, err
 	}
 	result, err := renderFragment(root)
 	return result, links, issues, err
 }
+
+// errTooManyLinks stops the walk at the first destination past MaxLinks.
+var errTooManyLinks = errors.New("too many distinct links")
 
 // InspectHTMLLinks reviews an existing body without returning replacement HTML.
 // Metadata-only edits preserve legacy markup; unsafe legacy anchors therefore

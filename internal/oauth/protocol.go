@@ -5,10 +5,12 @@ package oauth
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -111,11 +113,14 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return "", problem("temporarily_unavailable")
+		return "", failure(ctx, "temporarily_unavailable", "failed to begin OAuth authorization", err, "client_id", req.ClientID)
 	}
 	defer rollback(tx)
 	q := s.q.WithTx(tx)
 	user, err := q.GetUserByID(ctx, userID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", failure(ctx, "temporarily_unavailable", "failed to load OAuth consenting account", err, "client_id", req.ClientID)
+	}
 	if err != nil || len(IntersectScopes(strings.Fields(req.Scope), user.Role)) != len(strings.Fields(req.Scope)) {
 		return "", problem("access_denied")
 	}
@@ -124,7 +129,7 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 		UserID: user.ID, ClientID: req.ClientID, Scopes: req.Scope, Resource: s.Resource(),
 		SessionVersion: user.SessionVersion, CreatedAt: now, ExpiresAt: now + int64(s.options.RefreshTTL/time.Second)})
 	if err != nil {
-		return "", problem("server_error")
+		return "", failure(ctx, "server_error", "failed to create OAuth grant", err, "client_id", req.ClientID)
 	}
 	ts := &tokenStore{s: s, q: q, grant: g}
 	manager, _ := s.engine(ts, req.client)
@@ -132,10 +137,11 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 		ClientID: req.ClientID, UserID: strconv.FormatInt(user.ID, 10), RedirectURI: req.RedirectURI,
 		Scope: req.Scope, CodeChallenge: req.Challenge, CodeChallengeMethod: lib.CodeChallengeS256})
 	if err != nil {
+		slog.ErrorContext(ctx, "failed to issue OAuth authorization code", "error", err, "client_id", req.ClientID)
 		return "", protocolProblem(err)
 	}
 	if err := tx.Commit(); err != nil {
-		return "", problem("server_error")
+		return "", failure(ctx, "server_error", "failed to commit OAuth authorization", err, "client_id", req.ClientID)
 	}
 	s.audit(ctx, g, "OAuth connection authorized", false)
 	return info.GetCode(), nil
@@ -198,7 +204,7 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		WriteProblem(w, problem("temporarily_unavailable"))
+		WriteProblem(w, failure(r.Context(), "temporarily_unavailable", "failed to begin OAuth token exchange", err, "client_id", client.ID))
 		return
 	}
 	defer rollback(tx)
@@ -214,26 +220,33 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 		if ts.reused {
 			// Replay revocation must survive the invalid_grant response.
 			if commitErr := tx.Commit(); commitErr != nil {
-				WriteProblem(w, problem("server_error"))
+				WriteProblem(w, failure(r.Context(), "server_error", "failed to commit OAuth refresh reuse revocation", commitErr, "grant_id", ts.grant.ID))
 				return
 			}
 			s.audit(r.Context(), ts.grant, "OAuth refresh reuse revoked connection", true)
 		}
 		code := "server_error"
-		if errors.Is(err, liberrors.ErrInvalidAuthorizeCode) || errors.Is(err, liberrors.ErrInvalidRefreshToken) || errors.Is(err, liberrors.ErrInvalidRedirectURI) ||
+		var p *Problem
+		switch {
+		case errors.As(err, &p):
+			code = p.Code
+		case errors.Is(err, liberrors.ErrInvalidAuthorizeCode) || errors.Is(err, liberrors.ErrInvalidRefreshToken) || errors.Is(err, liberrors.ErrInvalidRedirectURI) ||
 			errors.Is(err, liberrors.ErrInvalidGrant) ||
 			errors.Is(err, liberrors.ErrExpiredRefreshToken) || errors.Is(err, liberrors.ErrInvalidCodeChallenge) ||
-			errors.Is(err, liberrors.ErrMissingCodeChallenge) || errors.Is(err, liberrors.ErrMissingCodeVerifier) {
+			errors.Is(err, liberrors.ErrMissingCodeChallenge) || errors.Is(err, liberrors.ErrMissingCodeVerifier):
 			code = "invalid_grant"
-		}
-		if errors.Is(err, liberrors.ErrInvalidScope) {
+		case errors.Is(err, liberrors.ErrInvalidScope):
 			code = "invalid_scope"
+		default:
+			// Storage faults were logged with their cause where they occurred;
+			// this records the rest (for example a failed code consumption).
+			slog.ErrorContext(r.Context(), "OAuth token exchange failed", "error", err, "grant_type", grant, "client_id", client.ID)
 		}
 		WriteProblem(w, problem(code))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		WriteProblem(w, problem("server_error"))
+		WriteProblem(w, failure(r.Context(), "server_error", "failed to commit OAuth token exchange", err, "client_id", client.ID))
 		return
 	}
 	writeJSON(w, http.StatusOK, engine.GetTokenData(info))
@@ -286,27 +299,44 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, err)
 		return
 	}
+	// RFC 7009 §2.2: an unknown token is answered 200, but a storage fault is
+	// a 503 so the client retries instead of discarding a still-active grant.
+	ctx := r.Context()
 	raw := r.PostForm.Get("token")
 	var row store.OauthToken
 	switch {
 	case validCredential(raw, refreshPrefix):
-		row, err = s.q.GetOAuthTokenByRefresh(r.Context(), tokenHash(raw))
+		row, err = s.q.GetOAuthTokenByRefresh(ctx, tokenHash(raw))
 	case validCredential(raw, AccessPrefix):
-		row, err = s.q.GetOAuthTokenByAccess(r.Context(), tokenHash(raw))
+		row, err = s.q.GetOAuthTokenByAccess(ctx, tokenHash(raw))
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{})
 		return
 	}
-	if err == nil {
-		g, loadErr := s.q.GetOAuthGrant(r.Context(), row.GrantID)
-		if loadErr == nil && g.ClientID == client.ID {
-			if err := s.q.RevokeOAuthGrant(r.Context(), store.RevokeOAuthGrantParams{ID: g.ID, RevokedAt: s.now().Unix()}); err != nil {
-				WriteProblem(w, problem("server_error"))
-				return
-			}
-			if g.RevokedAt == 0 {
-				s.audit(r.Context(), g, "OAuth connection revoked by client", false)
-			}
+	if errors.Is(err, sql.ErrNoRows) {
+		writeJSON(w, http.StatusOK, map[string]any{})
+		return
+	}
+	if err != nil {
+		WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to load OAuth token for revocation", err, "client_id", client.ID))
+		return
+	}
+	g, err := s.q.GetOAuthGrant(ctx, row.GrantID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeJSON(w, http.StatusOK, map[string]any{})
+		return
+	}
+	if err != nil {
+		WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to load OAuth grant for revocation", err, "client_id", client.ID))
+		return
+	}
+	if g.ClientID == client.ID {
+		if err := s.q.RevokeOAuthGrant(ctx, store.RevokeOAuthGrantParams{ID: g.ID, RevokedAt: s.now().Unix()}); err != nil {
+			WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to revoke OAuth grant", err, "grant_id", g.ID, "client_id", client.ID))
+			return
+		}
+		if g.RevokedAt == 0 {
+			s.audit(ctx, g, "OAuth connection revoked by client", false)
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{})
@@ -361,6 +391,7 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.saveClient(r.Context(), c, "dcr", s.now().Add(90*24*time.Hour).Unix()); err != nil {
+		logFault(r.Context(), "failed to register OAuth client", err)
 		WriteProblem(w, problem("temporarily_unavailable"))
 		return
 	}

@@ -8083,6 +8083,16 @@
             "translation": "Shorten the body and retry the same logical operation only with a new request ID."
         },
         {
+            "id": "draft.issues.too_many_links.message",
+            "message": "The body links to more than 500 distinct destinations.",
+            "translation": "The body links to more than 500 distinct destinations."
+        },
+        {
+            "id": "draft.issues.too_many_links.hint",
+            "message": "Keep at most 500 distinct link targets; repeated links to the same URL count once.",
+            "translation": "Keep at most 500 distinct link targets; repeated links to the same URL count once."
+        },
+        {
             "id": "draft.issues.html_conversion_lossy.message",
             "message": "The stored rich HTML cannot be represented completely as Markdown.",
             "translation": "The stored rich HTML cannot be represented completely as Markdown."

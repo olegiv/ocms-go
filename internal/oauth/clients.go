@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -121,14 +122,14 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 	}
 	cached, err := c.service.q.GetOAuthClient(ctx, id)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return registeredClient{}, problem("server_error")
+		return registeredClient{}, storageProblem(ctx, "failed to load OAuth client", err, "client_id", id)
 	}
 	if client, ok := c.preRegistered[id]; ok {
 		redirects, _ := json.Marshal(client.Redirects)
 		if err != nil || cached.Source != "cimd" || cached.Name != client.Name ||
 			cached.RedirectUris != string(redirects) || cached.ExpiresAt <= c.service.now().Unix() {
 			if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
-				return registeredClient{}, err
+				return registeredClient{}, storageProblem(ctx, "failed to refresh pre-registered OAuth client", err, "client_id", id)
 			}
 		}
 		return client, nil
@@ -196,21 +197,35 @@ func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient
 		return registeredClient{}, problem("invalid_client")
 	}
 	req.Header.Set("Accept", "application/json")
+	// A transport fault, a timeout, rate limiting or a 5xx says nothing about
+	// the client's identity, so it is retryable; any other non-200 answer
+	// (redirects are not followed) or a document that fails validation is
+	// invalid_client. Every failure is logged: the client sees only the code.
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return registeredClient{}, problem("invalid_client")
+		return registeredClient{}, failure(ctx, "temporarily_unavailable", "OAuth client metadata fetch failed", err, "client_id", id)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= http.StatusInternalServerError || resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests {
+		slog.WarnContext(ctx, "OAuth client metadata host unavailable", "client_id", id, "status", resp.StatusCode)
+		return registeredClient{}, problem("temporarily_unavailable")
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
-	if err != nil || len(raw) > 64<<10 || resp.StatusCode != http.StatusOK {
+	if err != nil {
+		return registeredClient{}, failure(ctx, "temporarily_unavailable", "OAuth client metadata read failed", err, "client_id", id)
+	}
+	if len(raw) > 64<<10 || resp.StatusCode != http.StatusOK {
+		slog.WarnContext(ctx, "OAuth client metadata rejected", "client_id", id, "status", resp.StatusCode, "oversize", len(raw) > 64<<10)
 		return registeredClient{}, problem("invalid_client")
 	}
 	var client registeredClient
 	if json.Unmarshal(raw, &client) != nil || client.ID != id || !validCIMDClient(client) {
+		slog.WarnContext(ctx, "OAuth client metadata document invalid", "client_id", id)
 		return registeredClient{}, problem("invalid_client")
 	}
 	client.AuthMethod = "none"
 	if err := c.service.saveClient(ctx, client, "cimd", c.service.now().Add(15*time.Minute).Unix()); err != nil {
+		logFault(ctx, "failed to cache OAuth client metadata", err, "client_id", id)
 		return registeredClient{}, problem("temporarily_unavailable")
 	}
 	return client, nil

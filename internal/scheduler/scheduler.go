@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"syscall"
@@ -114,8 +113,9 @@ func (s *Scheduler) processScheduledPages() error {
 
 	// Successful replay payloads expire after seven days. Compact them while
 	// retaining the permanent key/hash/entity tombstone; retries never re-execute.
+	// Compaction is housekeeping: a failure must not hold back due pages.
 	if err := queries.CompactIdempotencyKeys(ctx, time.Now().UTC().Add(-idempotency.ReplayWindow)); err != nil {
-		return fmt.Errorf("compact page write replays: %w", err)
+		s.logger.Error("failed to compact page write replays; publishing continues", "error", err)
 	}
 
 	// Get pages scheduled to be published up to now

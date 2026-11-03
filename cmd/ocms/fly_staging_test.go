@@ -185,3 +185,82 @@ func TestFlyStagingEnvironmentsLoad(t *testing.T) {
 		})
 	}
 }
+
+// loadIsolatedConfig loads config.Config from vars alone, so a developer's
+// own OCMS environment cannot change the result.
+func loadIsolatedConfig(t *testing.T, vars map[string]string) *config.Config {
+	t.Helper()
+	typeOf := reflect.TypeFor[config.Config]()
+	for i := range typeOf.NumField() {
+		key, _, _ := strings.Cut(typeOf.Field(i).Tag.Get("env"), ",")
+		if key != "" {
+			t.Setenv(key, "")
+		}
+	}
+	for key, value := range vars {
+		t.Setenv(key, value)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+// stagingHardeningExceptions lists the production hardening the public
+// staging profile cannot state yet, with the reason. The startup checks run
+// only when OCMS_ENV=production, so setting them for staging would change
+// nothing until they apply to every non-development environment (2026-11-03
+// audit C-1 follow-up).
+var stagingHardeningExceptions = map[string]string{
+	"OCMS_REQUIRE_TRUSTED_PROXIES":                "startup check, production only",
+	"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS":          "startup check, production only",
+	"OCMS_REQUIRE_SANITIZE_PAGE_HTML":             "startup check, production only",
+	"OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML":     "startup check, production only",
+	"OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION": "startup check, production only",
+	"OCMS_REQUIRE_MIGRATOR_ALLOWED_DB_HOSTS":      "the migrator checks it only in production",
+	"OCMS_REQUIRE_API_ALLOWED_CIDRS":              "refuses every API key until the owner sets OCMS_API_ALLOWED_CIDRS as a Fly secret",
+}
+
+// TestFlyStagingMatchesProductionHardening checks that the public staging
+// profile turns on every hardening flag production turns on by default,
+// apart from the listed exceptions. OCMS_ENV=staging gets none of the
+// production defaults, so the profile has to state them; a new production
+// default fails this test until staging states it or it is listed above.
+//
+// Bug state: remove OCMS_BLOCK_SUSPICIOUS_PAGE_HTML from fly.staging.toml and
+// this fails.
+func TestFlyStagingMatchesProductionHardening(t *testing.T) {
+	staging := readFlyEnv(t, "fly.staging.toml")
+	staging["OCMS_SESSION_SECRET"] = "Hq4Wz9Lx2Vb7Np3Rt6Yc1Mk8Df5Gs0Ja4Ue7Xi2Zo="
+	staging["OCMS_MFA_KEY"] = "k9Qw2xZt7Lp4Vn8sRb3Yh6Mc1Ud5Ef0Gj2Hx4Nz8Tq="
+	stagingCfg := reflect.ValueOf(*loadIsolatedConfig(t, staging))
+	productionCfg := reflect.ValueOf(*loadIsolatedConfig(t, map[string]string{
+		"OCMS_ENV": "production", "OCMS_SESSION_SECRET": staging["OCMS_SESSION_SECRET"], "OCMS_MFA_KEY": staging["OCMS_MFA_KEY"],
+		"OCMS_TRUSTED_PROXIES": "127.0.0.1/32", "OCMS_API_ALLOWED_CIDRS": "203.0.113.10/32",
+		"OCMS_EMBED_ALLOWED_ORIGINS": "https://example.com", "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS": "api.dify.ai",
+		"OCMS_WEBHOOK_ALLOWED_HOSTS": "hooks.example.com",
+	}))
+	typeOf := stagingCfg.Type()
+	checked := 0
+	for i := range typeOf.NumField() {
+		key, _, _ := strings.Cut(typeOf.Field(i).Tag.Get("env"), ",")
+		if typeOf.Field(i).Type.Kind() != reflect.Bool || !productionCfg.Field(i).Bool() || !strings.HasPrefix(key, "OCMS_") {
+			continue
+		}
+		checked++
+		_, excepted := stagingHardeningExceptions[key]
+		switch got := stagingCfg.Field(i).Bool(); {
+		case !got && !excepted:
+			t.Errorf("production turns %s on; fly.staging.toml must set it or list an exception", key)
+		case got && excepted:
+			t.Errorf("staging now sets %s; remove it from stagingHardeningExceptions", key)
+		}
+	}
+	if checked < 10 {
+		t.Fatalf("compared only %d production defaults", checked)
+	}
+	if got, want := stagingCfg.FieldByName("APIMaxTTLDays").Int(), productionCfg.FieldByName("APIMaxTTLDays").Int(); got == 0 || got > want {
+		t.Errorf("staging API key max TTL %d, production %d", got, want)
+	}
+}

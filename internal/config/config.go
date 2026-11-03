@@ -7,10 +7,15 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
 )
+
+// validEnvs lists the accepted OCMS_ENV values. Only "production" turns on
+// the production hardening; "staging" is accepted but gets none of it.
+var validEnvs = []string{"development", "staging", "production"}
 
 // placeholderSecretPrefixes mark values copied from documentation or example
 // files without being replaced; the repository's own example secrets
@@ -185,6 +190,13 @@ func Load() (*Config, error) {
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
+	// Production hardening keys on the exact value "production", so a typo
+	// such as "prod" or "Production" would silently start with the
+	// development posture. Refuse anything outside the known set instead.
+	if !slices.Contains(validEnvs, cfg.Env) {
+		return nil, fmt.Errorf("OCMS_ENV must be one of %s, got %q", strings.Join(validEnvs, ", "), cfg.Env)
 	}
 
 	applyProductionSecurityDefaults(cfg)

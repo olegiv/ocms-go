@@ -43,10 +43,10 @@ func CSPReport(w http.ResponseWriter, r *http.Request) {
 
 	for _, report := range cspReports(raw) {
 		slog.Warn("csp violation",
-			"document", cspReportField(report, "document-uri", "documentURL"),
+			"document", cspReportURL(report, "document-uri", "documentURL"),
 			"directive", cspReportField(report, "effective-directive", "effectiveDirective", "violated-directive"),
-			"blocked", cspReportField(report, "blocked-uri", "blockedURL"),
-			"source", cspReportField(report, "source-file", "sourceFile"),
+			"blocked", cspReportURL(report, "blocked-uri", "blockedURL"),
+			"source", cspReportURL(report, "source-file", "sourceFile"),
 			"line", cspReportField(report, "line-number", "lineNumber"),
 			"disposition", cspReportField(report, "disposition"),
 		)
@@ -82,6 +82,17 @@ func cspReports(raw json.RawMessage) []map[string]any {
 		}
 	}
 	return reports
+}
+
+// cspReportURL is cspReportField for URL-valued fields, without the query
+// and fragment: a page such as /oauth/authorize carries OAuth state and PKCE
+// values in its URL, and those must not reach the logs.
+func cspReportURL(report map[string]any, keys ...string) string {
+	value := cspReportField(report, keys...)
+	if i := strings.IndexAny(value, "?#"); i >= 0 {
+		value = value[:i]
+	}
+	return value
 }
 
 // cspReportField returns the first of keys present in report as a string

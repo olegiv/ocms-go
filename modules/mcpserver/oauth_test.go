@@ -181,3 +181,59 @@ func TestMCPRejectsChangedAccountAndInvalidOAuthWithoutKeyFallback(t *testing.T)
 		t.Fatal("invalid OAuth fell into API-key verifier")
 	}
 }
+
+// A storage fault while checking an OAuth token is a server error. Answering
+// 401 invalid_token would make the client discard a token that is still valid.
+func TestOAuthStorageFaultIsNotInvalidToken(t *testing.T) {
+	env := newTestEnv(t)
+	s := enableOAuth(t, env, false)
+	token, _ := oauthToken(t, s, env.userID, "mcp:access")
+	list := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+	bearer := map[string]string{"Authorization": "Bearer " + token}
+	if _, err := env.db.Exec(`ALTER TABLE oauth_grants RENAME TO oauth_grants_unavailable`); err != nil {
+		t.Fatal(err)
+	}
+	faulted := env.rawPost(list, bearer)
+	if _, err := env.db.Exec(`ALTER TABLE oauth_grants_unavailable RENAME TO oauth_grants`); err != nil {
+		t.Fatal(err)
+	}
+	if faulted.StatusCode != http.StatusInternalServerError || strings.Contains(faulted.Header.Get("WWW-Authenticate"), "invalid_token") {
+		t.Fatalf("storage fault answered %d %q", faulted.StatusCode, faulted.Header.Get("WWW-Authenticate"))
+	}
+	if body := readBody(t, faulted); strings.Contains(body, "oauth_grants") || strings.Contains(body, "no such table") {
+		t.Fatalf("storage fault leaked its cause: %s", body)
+	}
+	if recovered := env.rawPost(list, bearer); recovered.StatusCode != http.StatusOK {
+		t.Fatalf("token unusable after fault cleared: %d", recovered.StatusCode)
+	}
+}
+
+// A storage fault during the in-transaction OAuth re-check of a draft call
+// is retryable for the agent. Answering "Credential unavailable" told it the
+// credential was gone during a brief database lock.
+func TestDraftRecheckStorageFaultIsRetryable(t *testing.T) {
+	env := newTestEnv(t)
+	s := enableOAuth(t, env, true)
+	_, p := oauthToken(t, s, env.userID, "mcp:access mcp:drafts")
+	id := &identity{userID: p.UserID, grantID: p.GrantID, clientID: p.ClientID, tokenID: p.TokenID, scopes: p.Scopes, expiresAt: p.ExpiresAt}
+	if err := env.module.authorizeDraftCall(t.Context(), env.q, id); err != nil {
+		t.Fatalf("healthy re-check refused: %v", err)
+	}
+	if _, err := env.db.Exec(`ALTER TABLE oauth_tokens RENAME TO oauth_tokens_unavailable`); err != nil {
+		t.Fatal(err)
+	}
+	faulted, _ := toToolError(env.module.authorizeDraftCall(t.Context(), env.q, id))
+	if _, err := env.db.Exec(`ALTER TABLE oauth_tokens_unavailable RENAME TO oauth_tokens`); err != nil {
+		t.Fatal(err)
+	}
+	if faulted == nil || !faulted.Retryable {
+		t.Fatalf("re-check storage fault not retryable: %+v", faulted)
+	}
+	if err := s.RevokeGrant(t.Context(), env.userID, p.GrantID); err != nil {
+		t.Fatal(err)
+	}
+	revoked, _ := toToolError(env.module.authorizeDraftCall(t.Context(), env.q, id))
+	if revoked == nil || revoked.Retryable || revoked.Code != codeUnauthorized {
+		t.Fatalf("revoked grant answered %+v", revoked)
+	}
+}

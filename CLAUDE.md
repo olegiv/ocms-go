@@ -209,7 +209,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_ENV_FILE` | No | `./.env` | Env file to read instead of `./.env` (site instance mode); missing, unreadable or unparsable fails startup and `ocms migrate` (a missing `./.env` is ignored). Read in `cmd/ocms` (`loadEnvFile`), not `config.go` |
 | `OCMS_SERVER_HOST` | No | `localhost` | Server bind host |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
-| `OCMS_ENV` | No | `development` | Set to `production` for prod |
+| `OCMS_ENV` | No | `development` | `development`, `staging` or `production` (anything else fails startup); only `production` gets the production hardening defaults |
 | `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes (custom modules are compiled in) |

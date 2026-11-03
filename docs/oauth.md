@@ -114,6 +114,17 @@ The [retention policy](connected-apps.md#retention-policy) describes atomic
 batches, preview dependencies, scheduling and rollback. This maintenance is
 not deployed yet; R1.1's retained-row staging limitation remains until rollout.
 
+Storage faults are retryable. A database error while checking an access
+token, code or refresh token, or while revoking, is logged with its cause and
+answered `temporarily_unavailable` (HTTP 503; the MCP endpoint answers 500),
+never `invalid_token` or `invalid_grant`, so clients keep credentials that are
+still valid. `POST /oauth/revoke` answers 200 after revoking and, as RFC 7009
+requires, for an unknown or malformed token or another client's token, which
+it leaves alone; a storage fault that prevented the revocation is a 503. A
+client-metadata host that cannot be reached (network error, timeout, rate
+limiting or 5xx) is also `temporarily_unavailable`; any other non-200 answer
+or a document that fails validation is `invalid_client`.
+
 Account → Connected apps lists the user's OAuth grants and MCP-capable API
 keys with scopes, creation, last use, expiry and revoke. Administrators can
 review/revoke across accounts in `/admin/mcp`. Registered metadata does not
@@ -287,7 +298,8 @@ For nginx-hosted installations, use the normal
 OAuth log redaction during the later rollout to the production host as well.
 Verify nginx separately from Fly acceptance.
 
-The oCMS access logger strips OAuth query strings; events record only grant,
+The oCMS access logger strips OAuth query strings, and CSP violation reports
+are logged without URL queries or fragments; events record only grant,
 client, user and scope identifiers. Do not enable HTTP body/header debug
 logging. Reverse-proxy logs need the same protection. For nginx, define a
 path-only format in the `http` block and use it for OAuth routes:

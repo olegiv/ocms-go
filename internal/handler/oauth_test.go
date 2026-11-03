@@ -238,6 +238,11 @@ func TestOAuthConsentDenialPublicRoleAndUnregisteredRedirect(t *testing.T) {
 			if u.Query().Get("error") != "access_denied" || u.Query().Get("iss") != "https://cms.test" {
 				t.Fatalf("denied redirect=%d", rr.Code)
 			}
+			// A refused or denied consent is single-use: nothing of the pending
+			// request may survive in the stored session.
+			if pending, _ := env.session(t, cookie)(oauthPending).(string); pending != "" {
+				t.Fatal("refused consent left the pending authorization in the session")
+			}
 			grants, err := env.h.oauth.ListGrants(t.Context(), user.ID)
 			if err != nil || len(grants) != 0 {
 				t.Fatal("denied consent created grant")

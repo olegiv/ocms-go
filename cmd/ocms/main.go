@@ -287,7 +287,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_MFA       Require a second factor for every account (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|staging|production (default: development; only production applies the production defaults)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_FORM_CAPTCHA  Require captcha for all public forms (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_WEBHOOK_FORM_DATA_MODE  form.submitted payload mode: redacted|none|full (default: redacted)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION  Reject production startup when webhook payload mode is full (default: false; production default when unset: true)\n")

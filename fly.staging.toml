@@ -46,6 +46,14 @@ kill_timeout = 60
   OCMS_REQUIRE_API_KEY_EXPIRY = 'true'
   OCMS_REQUIRE_API_KEY_SOURCE_CIDRS = 'true'
   OCMS_API_KEY_MAX_TTL_DAYS = '90'
+  # Runtime hardening that OCMS_ENV=production turns on by default. Only
+  # production gets those defaults, so staging states them explicitly
+  # (TestFlyStagingMatchesProductionHardening).
+  OCMS_BLOCK_SUSPICIOUS_PAGE_HTML = 'true'
+  OCMS_REQUIRE_FORM_CAPTCHA = 'true'
+  OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE = 'true'
+  OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS = 'true'
+  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS = 'true'
   # Owner sets SESSION_SECRET and MFA_KEY through Fly secrets. The verified
   # TRUSTED_PROXIES value is also supplied there, after observing Fly ingress.
   # Do not copy the demo's disabled production posture settings here.

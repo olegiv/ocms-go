@@ -18,6 +18,7 @@ func (s *Service) audit(ctx context.Context, g store.OauthGrant, message string,
 	if warning {
 		level = model.EventLevelWarning
 	}
+	// LogAuthEvent logs its own write failures (service.LogEvent).
 	_ = service.NewEventService(s.db).LogAuthEvent(ctx, level, message, &g.UserID, "", "", map[string]any{
 		"grant_id": g.ID, "client_id": g.ClientID, "scopes": g.Scopes,
 	})

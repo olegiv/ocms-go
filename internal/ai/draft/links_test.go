@@ -68,3 +68,61 @@ func TestSlugDerivationIsBoundedAndExplicitSlugsStayExplicit(t *testing.T) {
 		t.Fatalf("transliteration exceeded slug limit: %+v %v", result, err)
 	}
 }
+
+func countIssues(issues []draft.Issue, code string) int {
+	n := 0
+	for _, issue := range issues {
+		if issue.Code == code {
+			n++
+		}
+	}
+	return n
+}
+
+// TestLinkEvidenceIsBounded checks that one body cannot make a save resolve,
+// list and store an unbounded number of links. A 70 KB body of distinct
+// links produced about 6,000 issues and 1.6 MB of stored evidence per
+// revision (2026-11-03 audit B-1).
+//
+// Bug state: remove the MaxLinks check or the per-kind issue deduplication
+// from applyLinks and this fails.
+func TestLinkEvidenceIsBounded(t *testing.T) {
+	body := func(n int, format string) string {
+		var b strings.Builder
+		for i := range n {
+			fmt.Fprintf(&b, format, i)
+		}
+		return b.String()
+	}
+
+	opt, resolver := options()
+	rendered, err := draft.RenderMarkdown(context.Background(), body(draft.MaxLinks/2, "[a](/p%d) ")+body(draft.MaxLinks/2, "[b](https://outside.test/%d) "), opt)
+	if err != nil || draft.HasErrors(rendered.Issues) || rendered.HTML == "" {
+		t.Fatalf("body at the link limit rejected: %v %+v", err, rendered.Issues)
+	}
+	if got := countIssues(rendered.Issues, "internal_link_broken"); got != 1 {
+		t.Errorf("internal_link_broken reported %d times, want once", got)
+	}
+	if got := countIssues(rendered.Issues, "external_link"); got != 1 {
+		t.Errorf("external_link reported %d times, want once", got)
+	}
+	if len(rendered.Links) != draft.MaxLinks || len(resolver.linkCalls) != draft.MaxLinks/2 {
+		t.Errorf("links listed %d, resolver calls %d", len(rendered.Links), len(resolver.linkCalls))
+	}
+
+	opt, resolver = options()
+	rendered, err = draft.RenderMarkdown(context.Background(), body(draft.MaxLinks+1, "[a](/p%d) "), opt)
+	if err != nil || !has(rendered.Issues, "too_many_links") || rendered.HTML != "" {
+		t.Fatalf("body past the link limit accepted: %v %+v", err, rendered.Issues)
+	}
+	if len(rendered.Links) > draft.MaxLinks || len(resolver.linkCalls) > draft.MaxLinks || len(rendered.Issues) > 3 {
+		t.Errorf("rejected body still produced links=%d calls=%d issues=%d", len(rendered.Links), len(resolver.linkCalls), len(rendered.Issues))
+	}
+
+	// Repeats of one destination count once toward the limit.
+	opt, _ = options()
+	rendered, err = draft.RenderMarkdown(context.Background(), strings.Repeat("[same](/existing) ", draft.MaxLinks+50), opt)
+	if err != nil || draft.HasErrors(rendered.Issues) || len(rendered.Links) != 1 {
+		t.Fatalf("repeated link counted per occurrence: %v %+v links=%d", err, rendered.Issues, len(rendered.Links))
+	}
+}

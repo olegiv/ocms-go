@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"slices"
 	"strings"
@@ -154,12 +155,20 @@ func validCredential(raw, prefix string) bool {
 // RecognizesAccessToken prevents failed OAuth authentication from falling through to API keys.
 func RecognizesAccessToken(raw string) bool { return strings.HasPrefix(raw, "ocms.oauth.") }
 
+// activeGrant reports a missing or unusable grant as invalid_grant and a
+// storage fault as temporarily_unavailable, so callers can keep the two apart.
 func (s *Service) activeGrant(ctx context.Context, q *store.Queries, id string) (store.OauthGrant, error) {
 	g, err := q.GetOAuthGrant(ctx, id)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return store.OauthGrant{}, storageProblem(ctx, "failed to load OAuth grant", err, "grant_id", id)
+	}
 	if err != nil || g.RevokedAt != 0 || g.ExpiresAt <= s.now().Unix() || g.Resource != s.Resource() {
 		return store.OauthGrant{}, problem("invalid_grant")
 	}
 	u, err := q.GetUserByID(ctx, g.UserID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return store.OauthGrant{}, storageProblem(ctx, "failed to load OAuth grant account", err, "grant_id", id)
+	}
 	if err != nil || u.SessionVersion != g.SessionVersion || len(RoleScopes(u.Role)) == 0 {
 		return store.OauthGrant{}, problem("invalid_grant")
 	}
@@ -175,19 +184,23 @@ func (s *Service) VerifyAccess(ctx context.Context, raw string) (Principal, erro
 		return Principal{}, problem("invalid_token")
 	}
 	t, err := s.q.GetOAuthTokenByAccess(ctx, tokenHash(raw))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return Principal{}, storageProblem(ctx, "failed to load OAuth access token", err)
+	}
 	if err != nil || t.AccessRevokedAt != 0 || t.AccessExpiresAt <= s.now().Unix() {
 		return Principal{}, problem("invalid_token")
 	}
 	g, err := s.activeGrant(ctx, s.q, t.GrantID)
 	if err != nil {
-		return Principal{}, problem("invalid_token")
+		return Principal{}, retryableOr(err, "invalid_token")
 	}
 	// Last-used metadata follows access validation as well as token exchange.
 	// Throttle durable touches so ordinary reads do not all acquire a writer.
+	// The touch is bookkeeping only: failing it must not reject a valid token.
 	now := s.now().Unix()
 	if g.LastUsedAt < now-60 {
 		if err := s.q.TouchOAuthGrantIfDue(ctx, store.TouchOAuthGrantIfDueParams{ID: g.ID, LastUsedAt: now, BeforeTime: now - 60}); err != nil {
-			return Principal{}, problem("invalid_token")
+			slog.WarnContext(ctx, "failed to record OAuth grant use", "error", err, "grant_id", g.ID)
 		}
 	}
 	return Principal{TokenID: t.ID, UserID: g.UserID, GrantID: g.ID, ClientID: g.ClientID, Scopes: intersectGranted(t.Scopes, g.Scopes),
@@ -198,11 +211,17 @@ func (s *Service) VerifyAccess(ctx context.Context, raw string) (Principal, erro
 // The token ID comes from VerifyAccess, never from a content request.
 func (s *Service) RecheckAccess(ctx context.Context, q *store.Queries, prior Principal) (Principal, error) {
 	t, err := q.GetOAuthTokenByID(ctx, prior.TokenID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return Principal{}, storageProblem(ctx, "failed to reload OAuth access token", err, "grant_id", prior.GrantID)
+	}
 	if err != nil || t.GrantID != prior.GrantID || t.AccessRevokedAt != 0 || t.AccessExpiresAt <= s.now().Unix() {
 		return Principal{}, problem("invalid_token")
 	}
 	g, err := s.activeGrant(ctx, q, t.GrantID)
-	if err != nil || g.UserID != prior.UserID || g.ClientID != prior.ClientID {
+	if err != nil {
+		return Principal{}, retryableOr(err, "invalid_token")
+	}
+	if g.UserID != prior.UserID || g.ClientID != prior.ClientID {
 		return Principal{}, problem("invalid_token")
 	}
 	return Principal{TokenID: t.ID, UserID: g.UserID, GrantID: g.ID, ClientID: g.ClientID, Scopes: intersectGranted(t.Scopes, g.Scopes), ExpiresAt: time.Unix(t.AccessExpiresAt, 0)}, nil
@@ -280,10 +299,53 @@ func intersectGranted(scopes, granted string) []string {
 
 func rollback(tx *sql.Tx) { _ = tx.Rollback() }
 
+// protocolProblem passes protocol decisions through. Anything else is a
+// server fault: reporting it as invalid_grant would make clients discard
+// credentials that are still valid.
 func protocolProblem(err error) *Problem {
 	var p *Problem
 	if errors.As(err, &p) {
 		return p
 	}
-	return problem("invalid_grant")
+	return problem("server_error")
+}
+
+// failure logs a server-side fault and returns the protocol error the client sees.
+// Callers never pass credentials, client state or request values in attrs.
+func failure(ctx context.Context, code, msg string, err error, attrs ...any) *Problem {
+	slog.ErrorContext(ctx, msg, append([]any{"error", err}, attrs...)...)
+	return problem(code)
+}
+
+// logFault logs err unless it is already a protocol decision.
+func logFault(ctx context.Context, msg string, err error, attrs ...any) {
+	var p *Problem
+	if !errors.As(err, &p) {
+		slog.ErrorContext(ctx, msg, append([]any{"error", err}, attrs...)...)
+	}
+}
+
+// storageProblem keeps protocol decisions and turns every other error into a
+// logged, retryable temporarily_unavailable.
+func storageProblem(ctx context.Context, msg string, err error, attrs ...any) *Problem {
+	var p *Problem
+	if errors.As(err, &p) {
+		return p
+	}
+	return failure(ctx, "temporarily_unavailable", msg, err, attrs...)
+}
+
+// retryableOr keeps a retryable fault and reports every other failure as code.
+func retryableOr(err error, code string) *Problem {
+	if Retryable(err) {
+		return protocolProblem(err)
+	}
+	return problem(code)
+}
+
+// Retryable reports a server-side fault after which the presented credential
+// may still be valid, so the caller must not answer invalid_token.
+func Retryable(err error) bool {
+	var p *Problem
+	return errors.As(err, &p) && (p.Code == "temporarily_unavailable" || p.Code == "server_error")
 }

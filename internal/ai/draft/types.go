@@ -13,6 +13,10 @@ const (
 	MaxBodyBytes    = 200_000
 	MaxTags         = 10
 	MaxInputBytes   = 2 * 1024 * 1024
+	// MaxLinks bounds the distinct link destinations in one body. Each one is
+	// resolved, listed and stored with the revision, so an unbounded count let
+	// a single save store megabytes of link evidence (2026-11-03 audit B-1).
+	MaxLinks = 500
 )
 
 // PageDraft is the create contract. Optional values retain omission and null

@@ -335,7 +335,7 @@ controls the issuer, not cleanup of previously stored evidence.
 | `OCMS_ENV_FILE` | Env file to read instead of `./.env` (site instance mode; `site.mk` sets it to the site's `.env`). The server and `ocms migrate` refuse to start if it is missing, unreadable or does not parse; a `./.env` that does not parse is refused too, a missing one ignored. Variables already in the environment win over the file | `./.env` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
-| `OCMS_ENV` | Environment mode (`development`/`production`) | `development` | No |
+| `OCMS_ENV` | Environment mode: `development`, `staging` or `production`; any other value fails startup. Only `production` applies the production hardening defaults | `development` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
 | `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes (custom modules are compiled in) | `./custom` | No |
