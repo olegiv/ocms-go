@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-04 - Editor formatting and page-text search
+
 ### Added
 - **Status page link.** The new **Status Page URL** setting in
   `/admin/config` (for example, an UptimeRobot public status page) adds a
@@ -15,8 +17,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   site" in the admin header. Custom themes can render it from
   `.StatusPageURL`. Only absolute `http`/`https` URLs are
   accepted; an empty value hides the link.
+- **A save that loses markup says so.** With `OCMS_SANITIZE_PAGE_HTML` on
+  (the production default), creating or updating a page in the admin
+  editor, or restoring a version, silently dropped any element, attribute
+  or inline style the site does not allow. The editor now reopens with a
+  warning naming what was removed (up to five items), and the Event Log
+  records it for the page.
+
+### Changed
+- **Site search matches the text visitors read, not the stored HTML.**
+  Public search and the MCP `search_pages` tool matched words found only
+  in markup (tag and attribute names, classes, inline styles, link URLs),
+  and result excerpts quoted raw HTML. Pages are now indexed by their
+  readable text in a new `page_search` full-text index, and excerpts are
+  plain text with the matched words highlighted. A migration creates the
+  index and queues every existing page; oCMS indexes the queue in batches
+  of 100 during searches and in the background, so on a large site the
+  first searches after the upgrade can miss pages not indexed yet. Nothing
+  has to be run by hand, and the old `pages_fts` index is kept, so an
+  earlier oCMS binary still runs on the upgraded database. Resolves
+  [#203](https://github.com/olegiv/ocms-go/issues/203), reported by @StratoNET.
+- The Privacy module's Klaro consent banner now ships from the unmodified
+  Klaro 0.7.22 browser files, vendored with their BSD-3-Clause license in
+  `web/static/vendor/klaro`, instead of the npm `klaro` package, which
+  pulled 138 unused build packages (an ESLint/minimatch chain) into
+  `make assets`. Consent behavior, asset URLs and integrity hashes are
+  unchanged.
+- GitHub releases are titled `vX.Y.Z - <title>` from the version's
+  CHANGELOG heading (`## [X.Y.Z] - YYYY-MM-DD - <title>`) instead of the
+  bare tag; the release workflow stops before building when the heading
+  has no title.
 
 ### Fixed
+- **Editor formatting survives page sanitization.** With
+  `OCMS_SANITIZE_PAGE_HTML` on (the production default), saving a page
+  removed every inline style, so alignment, text and background colours,
+  underline and strikethrough, font family and size, line height, indent,
+  and image and table layout vanished from the editor and the public page.
+  The sanitizer now keeps the styles the TinyMCE editor writes, each
+  limited to the elements that use it and value-checked (no positioning,
+  URLs, negative margins or out-of-range sizes), plus the table `border`
+  attribute. While sanitizing is on, the editor gets the same list as
+  TinyMCE's `valid_styles`, so it no longer shows formatting a save would
+  remove; a test keeps the two in step. Formatting already removed by an
+  earlier save cannot be recovered: format those pages again. Pages saved
+  with sanitizing off get their formatting back, because rendering no
+  longer strips it. Resolves
+  [#202](https://github.com/olegiv/ocms-go/issues/202), reported by @StratoNET.
+- Links lost `target="_blank"` under page sanitization, although the
+  editor sets it on new links by default. It is kept now, always with
+  `rel="noopener"`.
+- Public search labelled every result a page. Posts (the default page
+  type) now keep their `post` type, so themes label them correctly.
 - Since 0.23.0, draft titles in `/admin/pages` were plain text and a
   draft's editor had no **Preview** button. Both open the draft at its
   URL again; only admins and editors can see it there, while public
@@ -25,6 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published `CHANGELOG.md`'s wrapped lines as they are, and GitHub renders
   each newline of a release description as a line break. The new
   `scripts/release-notes.sh` joins each paragraph and list item onto one line.
+
+### Security
+- Update `golang.org/x/net` 0.61.0 → 0.62.0 for GO-2026-6860
+  (CVE-2026-78661, quadratic time when the HTML parser coalesces text
+  nodes) and GO-2026-6866 (CVE-2026-97045, raw text rendered without
+  checking every ancestor's namespace), both reachable from Markdown
+  conversion.
 
 ## [0.30.0] - 2026-10-24
 
@@ -2106,7 +2165,8 @@ structural dependency.
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/olegiv/ocms-go/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/olegiv/ocms-go/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/olegiv/ocms-go/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/olegiv/ocms-go/compare/v0.28.0...v0.29.0
