@@ -63,7 +63,11 @@ Errors appear as flash messages.
 
 While the module is active, the policy allows the Google Tag Manager and
 Google Analytics hosts (including the GTM `<noscript>` iframe), whether or not
-a tracker is configured; deactivate the module when it is not used. While Matomo tracking is enabled with a valid URL and
+a tracker is configured; deactivate the module when it is not used. This
+includes the hosts GA4 sends hits to when Google signals or other Ads features
+are on (`*.g.doubleclick.net`, `pagead2.googlesyndication.com`), but not
+country Google domains such as `www.google.ru`, which a policy has to list one
+by one, so those audience requests stay blocked. While Matomo tracking is enabled with a valid URL and
 Site ID, it also allows that Matomo server's origin for `script-src` and
 `connect-src`, so `matomo.js` and tracking hits are not blocked. Saving the
 settings changes the policy on the next request.
