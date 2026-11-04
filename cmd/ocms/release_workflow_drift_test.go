@@ -181,6 +181,82 @@ func TestReleaseNotesAreUnwrapped(t *testing.T) {
 	})
 }
 
+// TestReleaseTitleComesFromChangelog fails when the release workflow titles
+// a GitHub release with the bare tag name, or when scripts/release-title.sh
+// stops reading the title from the version's CHANGELOG.md heading
+// ("## [X.Y.Z] - YYYY-MM-DD - <title>") or accepts a heading without one.
+// Releases up to v0.30.0 were titled "vX.Y.Z" alone.
+//
+// Bug state: put `--title "${GITHUB_REF_NAME}"` back into the publish step,
+// or drop the title check from the validate job, and this fails.
+func TestReleaseTitleComesFromChangelog(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf := readWorkflow(t, "release.yml")
+	const titleCmd = `scripts/release-title.sh "$version_no_v" CHANGELOG.md`
+	validated := false
+	for _, step := range wf.Jobs["validate"].Steps {
+		if strings.Contains(step.Run, "if ! "+titleCmd+"; then") {
+			validated = true
+		}
+	}
+	if !validated {
+		t.Error("the validate job does not reject a CHANGELOG heading without a release title")
+	}
+	written := false
+	for _, step := range wf.Jobs["build"].Steps {
+		if step.Name == "Prepare release notes" && strings.Contains(step.Run, titleCmd+" > release/title.txt") {
+			written = true
+		}
+	}
+	if !written {
+		t.Error(`the build job's "Prepare release notes" step does not write release/title.txt with scripts/release-title.sh`)
+	}
+	for _, step := range wf.Jobs["publish"].Steps {
+		if !strings.Contains(step.Run, "gh release") {
+			continue
+		}
+		if !strings.Contains(step.Run, `title="$(cat release/title.txt)"`) {
+			t.Error("the publish step does not read release/title.txt")
+		}
+		if strings.Contains(step.Run, `--title "${GITHUB_REF_NAME}"`) {
+			t.Error("the publish step titles the release with the bare tag name")
+		}
+		for _, cmd := range []string{"gh release create", "gh release edit"} {
+			if !regexp.MustCompile(regexp.QuoteMeta(cmd) + `[^\n]*(\\\n[^\n]*)*--title "\$title"`).MatchString(step.Run) {
+				t.Errorf(`%s does not pass --title "$title"`, cmd)
+			}
+		}
+	}
+
+	changelog := filepath.Join(t.TempDir(), "CHANGELOG.md")
+	fixture := "## [Unreleased]\n\n## [1.2.30] - 2026-01-02 - Not this one\n\n- a\n\n" +
+		"## [1.2.3] - 2026-01-01 - Editor formatting and search\n\n- b\n\n" +
+		"## [1.2.2] - 2025-12-31\n\n- c\n"
+	if err = os.WriteFile(changelog, []byte(fixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(root, "scripts", "release-title.sh")
+	out, err := exec.Command(bash, script, "1.2.3", changelog).Output() // #nosec G204 -- fixed repository script, test arguments
+	if err != nil {
+		t.Fatalf("release-title.sh 1.2.3: %v", err)
+	}
+	if got, want := string(out), "v1.2.3 - Editor formatting and search\n"; got != want {
+		t.Errorf("release title for 1.2.3 = %q, want %q", got, want)
+	}
+	for _, version := range []string{"1.2.2", "1.2.4", "1.2"} {
+		if got, runErr := exec.Command(bash, script, version, changelog).Output(); runErr == nil { // #nosec G204 -- fixed repository script, test arguments
+			t.Errorf("release-title.sh %s printed %q, want an error: the heading has no title", version, got)
+		}
+	}
+}
+
 // pinnedAction matches an action reference pinned to a full commit SHA.
 var pinnedAction = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$`)
 
