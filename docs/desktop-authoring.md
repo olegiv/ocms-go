@@ -7,8 +7,13 @@ R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
 the browser traces confirmed token-free HTTP request URLs. R1.7's current
 client coverage and remaining release gates are recorded below.
 
-R1.7 is now deployed at `16ac7161` (2026-11-02). Fresh web OAuth/sharing
-checks and full EN/RU/DE draft authoring with existing taxonomy/media ran on
+R1.7 is now deployed at `ba044434` (2026-11-04). Fresh Claude web and ChatGPT
+web checks passed OAuth/MFA revoke/reconnect, draft replay/conflict,
+share-policy refusal and anonymous sharing/revocation; see the
+[upgrade record](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
+for the separate pinning checks and limits. Native Desktop/CLI modes were
+not rerun on this SHA. Earlier web OAuth/sharing checks and full EN/RU/DE
+draft authoring with existing taxonomy/media ran on
 `39d82c94` in native Desktop, ChatGPT and both CLIs' OAuth/bearer modes.
 The inline alt-text repair passed Claude web/ChatGPT web resaves and
 readbacks on `16ac7161`, with matching rendered previews. This focused
@@ -95,7 +100,10 @@ translations. The [16ac7161 alt-text verification](launch/r17-acceptance.md#alt-
 records web checks of resaved pages 27/43/44 at revisions 6/4/3. Fresh
 editorial/stale-translation review, human publication and its final
 recording segment are pending.
-The table below retains the earlier bounded `df6e5d86` evidence.
+The [ba044434 follow-up](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
+adds fresh web checks without repeating that native/CLI matrix or closing
+native-only reconnect. The table below retains the earlier bounded
+`df6e5d86` evidence.
 Use [Connected apps](connected-apps.md) for access management and
 the [author skill](skills/ocms-author/SKILL.md) for the draft workflow. Follow
 the [demo script](launch/demo-script.md) for the remaining human-publication shot.

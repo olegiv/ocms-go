@@ -894,10 +894,15 @@ release hardening and independent security audit remain R1.7 work.
 
 ### Iteration R1.7: Connected Apps, Hardening and Release
 
-**Status updated 2026-11-03:** the latest verified Fly staging build is
-`035ac1dd`. Klaro consent, SRI/license delivery and fresh Claude/ChatGPT
-read-only checks passed; original privacy settings were restored exactly.
-See the [focused staging follow-up](../../docs/launch/r17-acceptance.md#klarominimatch-staging-verification--2026-11-02).
+**Status updated 2026-11-04:** the latest verified Fly staging build is
+`ba044434`. Claude web and ChatGPT web passed fresh OAuth/MFA
+revoke/reconnect, draft create/update/replay/conflict, share-policy and
+anonymous preview/revocation checks. Original content and demo revisions
+6/4/3 were preserved. An owner-approved staging-only CAPTCHA exception is
+active with zero public forms; required MFA remains enabled. See the
+[upgrade record](../../docs/launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04).
+Klaro interactive consent/SRI checks retain their `035ac1dd` scope; fresh
+JS/CSS/license delivery matched reviewed bytes during this upgrade.
 
 The earlier Claude/ChatGPT web OAuth/share/revocation checks and the full
 EN/RU/DE draft workflow in native Desktop, ChatGPT and both CLI modes are
@@ -909,7 +914,7 @@ demo pages 27/43/44 at revisions 6/4/3, with matching rendered previews.
 The owner accepted the unimported OpenPGP advisory for the reviewed local
 build. The Klaro/minimatch rollout is complete, and a Linux/amd64 package
 recheck retained zero imported-package vulnerabilities and the module-only
-warning. The Desktop reconnect decision, fresh editorial/stale-translation
+warning. Native-only Desktop reconnect, fresh editorial/stale-translation
 review, human publication, the recording's final segment and the planned
 production article draft remain pending. See the
 [release decisions](../../docs/launch/release-decisions.md).
@@ -3822,3 +3827,64 @@ revocation/reconnect, sharing and full Go tests were not rerun in this focused
 web/read-only check. No content edits, publication, scheduling, new commit
 or Git push occurred; wiki was unchanged. Desktop reconnect disposition,
 human review/publication, the final demo shot and launch drafting remain open.
+
+### R1.7 merged release staging verification — 2026-11-04
+
+After explicit approval, `ba0444341691b567b3e128f59e7e4cb323125df8`
+(tree `fd409ccfd133de7c8e5c0e5c4b0e8b3598f2eb20`) was archived, built and
+deployed to `ocms-mcp-staging`. The host reported build time
+`2026-11-04T17:17:32Z`, image
+`[image digest redacted]`.
+Snapshot `[snapshot ID redacted]` preceded prerequisites and rollout.
+The existing Machine/volume were retained; all Fly/public health checks,
+canonical OAuth discovery and anonymous MCP refusal passed.
+Klaro JS/CSS/license delivery returned 200 and matched reviewed vendor bytes;
+interactive consent and rendered SRI retain their earlier-build scope.
+
+Preparation set the current Mac IPv4 `/32` API allowlist privately and
+disabled Developer, Embed and Migrator modules, retaining the Developer
+theme. The owner separately approved `OCMS_REQUIRE_FORM_CAPTCHA=false`
+only for this staging app with zero public forms. No CAPTCHA keys were
+configured; MFA stayed required, seeding/DCR off, and existing security
+secret digests matched. The tracked Fly config still requires CAPTCHA;
+the approved exception was an explicit deployment override. Startup applied
+core search migration `20261023120000` and MCP migration 3.
+
+Claude web and ChatGPT web used dedicated Editor user 2 with exactly
+`mcp:access mcp:drafts`. Both passed fresh schema/context, translation and
+demo readbacks; idempotent create/update replay; stale-revision refusal;
+disabled-share-policy refusal; anonymous share rendering; and own-grant
+revoke/refusal/normal password/shared-MFA/consent reconnect. Fresh reads
+and backend events verified both final two-scope grants. The temporary
+Claude access-only grant was revoked without disrupting its final grant.
+
+Synthetic pages 45/46 ended as private, unscheduled revision-3 drafts.
+Claude's revision-2 share stayed byte-identical after its draft advanced,
+then explicit revocation returned 404 for both token and cookie access.
+ChatGPT's share rendered revision 2; parent-grant revocation returned 404
+for both, including after reconnect. Its separate post-update pin check
+was not repeated. All three disposable shares are revoked and the original
+enabled share policy was restored. Refresh tools plus a fresh ChatGPT chat
+removed stale sharing wording without global permission changes.
+
+All original 44 pages, 101 versions and 99 provenance rows matched hashes;
+demo pages 27/43/44 stayed at revisions 6/4/3 with stale RU/DE bases intact.
+Owner user/TOTP/recovery data and API-key tables matched their baselines.
+OAuth runtime fingerprints changed alongside refresh activity; no byte-level
+preservation claim is made for them. Database quick/FK checks passed.
+
+Token transport stayed in redemption POST bodies. Neither test token
+appeared in the captured 100-record Fly buffer; no fresh controlled
+proxy-error probe ran. Temporary remote utilities and private token/cookie
+and MFA-code files were removed. Native Desktop/CLI modes, new multilingual
+creation and Klaro consent/SRI were not rerun on this SHA. This web pass
+does not close native-only reconnect, editorial/stale-translation review,
+human publication, the final demo segment or launch drafting.
+
+Evidence: ignored `output/r17-validation/ba044434-staging-20261104/`,
+especially `acceptance-summary.json`, `verification.txt`, client captures,
+final readbacks and preservation receipts. The
+[acceptance record](../../docs/launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
+retains the client-specific alt punctuation and preview-check limits.
+No commit, push, publication or scheduling change occurred in this rollout;
+wiki and `.claude/shared` remained untouched.

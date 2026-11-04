@@ -10,8 +10,12 @@ owned draft creation/update/translation with `mcp:drafts`, retained retries,
 CAS, provenance and existing taxonomy/media. Publishing and deletion remain
 human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
 [OAuth](oauth.md) records the completed R1.1 authentication acceptance and
-PHASE5 notes retain R1.5/R1.6 results. R1.7 is deployed at `16ac7161`;
-the [current acceptance record](launch/r17-acceptance.md) retains fresh web
+PHASE5 notes retain R1.5/R1.6 results. R1.7 is deployed at `ba044434`
+(2026-11-04), with fresh Claude web/ChatGPT web OAuth/MFA reconnect,
+draft replay/conflict, share-policy and anonymous preview/revocation checks.
+The [upgrade record](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
+records exact identity and limits; native/CLI modes were not rerun on this SHA.
+The [current acceptance record](launch/r17-acceptance.md) retains earlier web
 sharing/revocation and native/CLI multilingual draft results on `39d82c94`.
 The inline alt-text repair passed both web clients' resaves/readbacks and
 rendered previews on `16ac7161`. Fresh editorial/stale-translation review,

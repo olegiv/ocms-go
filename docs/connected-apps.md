@@ -1,7 +1,12 @@
 # Connected apps and OAuth retention
 
-R1.7 is deployed to MCP staging at `16ac7161` (2026-11-02).
-The [current acceptance record](launch/r17-acceptance.md) retains full
+R1.7 is deployed to MCP staging at `ba044434` (2026-11-04). Fresh Claude web
+and ChatGPT web own-grant revoke/refusal/password/shared-MFA/consent
+reconnect and draft readbacks passed with exactly `mcp:access mcp:drafts`.
+The temporary Claude access-only grant and all new test shares were revoked;
+the final two-scope connections remain active. See the
+[upgrade record](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04).
+The [current acceptance record](launch/r17-acceptance.md) also retains full
 EN/RU/DE draft flows and fresh web revocation/reconnect evidence on
 `39d82c94`. The `16ac7161` follow-up verified repaired inline alt text through
 Claude web, ChatGPT web and rendered previews of the resaved demo drafts;
@@ -11,7 +16,8 @@ and ChatGPT web checks passed on `df6e5d86` for these paths; see the
 Native Desktop authoring and Claude Code/Codex OAuth and bearer checks also
 passed on that build, with a Chrome workaround for Desktop reconnect; see the
 [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
-Native-only Desktop reconnect and full release acceptance remain open.
+Native/CLI modes were not rerun on `ba044434`. Native-only Desktop
+reconnect and full release acceptance remain open.
 
 ## Account and administrator controls
 

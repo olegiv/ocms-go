@@ -1,10 +1,30 @@
 # R1 release decisions
 
-Updated 2026-11-03. The OpenPGP disposition below is owner-approved for the
+Updated 2026-11-04. The OpenPGP disposition below is owner-approved for the
 reviewed build, with the staging-target recheck recorded below; other
 decisions retain their stated status. This record does not authorize
 commit, push, deployment or publication. The
 [acceptance record](r17-acceptance.md) binds results to the tested build.
+
+## Latest staging verification
+
+`ba044434` is deployed and healthy on `ocms-mcp-staging`. Fresh Claude web
+and ChatGPT web OAuth/MFA reconnect, draft replay/conflict, share-policy and
+anonymous preview/revocation checks passed. Original content and demo
+drafts 27/43/44 at revisions 6/4/3 were preserved; all test shares are
+revoked. See the
+[upgrade record](r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
+for exact identity and client-specific limits. Native Desktop/CLI modes,
+Klaro consent/SRI and dependency scans were not rerun during this rollout;
+earlier evidence and advisory dispositions retain their recorded scope.
+
+The owner explicitly approved `OCMS_REQUIRE_FORM_CAPTCHA=false` only for
+this staging app with zero public forms. MFA remains required. No CAPTCHA
+keys were configured and the tracked profile's secure default was not
+changed; future redeploys need the explicit approved exception or a real
+verifier. This is not a production CAPTCHA exception or a publication
+approval. The existing native-only reconnect and human release gates below
+remain open.
 
 ## Inline-image accessibility
 
@@ -67,9 +87,9 @@ update process are recorded in the
 longer tracks this browser library; future Klaro updates and advisories need
 explicit review.
 
-`035ac1dd` is deployed and verified on `ocms-mcp-staging`: asset/SRI/license
-delivery, the temporary Russian consent fixture and focused Claude/ChatGPT
-read-only checks passed. Original privacy settings were restored exactly;
+The earlier `035ac1dd` rollout passed asset/SRI/license delivery, the
+temporary Russian consent fixture and focused Claude/ChatGPT read-only
+checks. Original privacy settings were restored exactly;
 privacy consent remains disabled as before the fixture. The dependency-fix
 rollout is complete; the remaining release gates are below. Revalidate this asset
 assessment when vendor bytes, the lockfile, copy/build paths or relevant

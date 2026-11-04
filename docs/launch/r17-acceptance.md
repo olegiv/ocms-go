@@ -1,26 +1,34 @@
-# R1.7 release acceptance — updated 2026-11-03
+# R1.7 release acceptance — updated 2026-11-04
 
-The latest verified staging build is `035ac1dd`: Klaro consent, asset/SRI and
-license delivery, plus fresh Claude/ChatGPT read-only checks passed. The
-full EN/RU/DE draft workflow ran on `39d82c94` in native Claude Desktop,
-ChatGPT, Claude Code and Codex; alt-text resaves were verified on `16ac7161`.
-Those earlier results retain their build-specific scope.
-**R1.7 is not release-complete:** the Desktop reconnect decision, fresh
+The latest verified staging build is `ba044434`: Claude web and ChatGPT web
+passed fresh OAuth/MFA revoke/reconnect, draft replay/conflict, share-policy
+and anonymous preview/revocation checks. The upgrade retained the original
+content and required MFA, with an explicitly approved staging-only CAPTCHA
+exception for zero public forms. Klaro's interactive consent/SRI checks remain
+bound to `035ac1dd`; the full native/CLI EN/RU/DE workflow to `39d82c94`,
+and alt-text resaves to `16ac7161`. Those earlier results were not rerun or
+relabelled as new-build passes.
+**R1.7 is not release-complete:** native-only Desktop reconnect, fresh
 editorial/translation review, human publication, the final demo segment and
 the planned production article draft remain pending. The approved
-OpenPGP disposition has a fresh Linux/amd64 package recheck; the module-only
-warning remains visible. See the
+OpenPGP disposition retains its earlier Linux/amd64 package recheck; the
+module-only warning remains visible. See the
 [scoped dependency dispositions](release-decisions.md#dependency-advisory-dispositions).
 
 ## Tested identities
 
 - Fly app: `ocms-mcp-staging`, canonical origin
   `https://ocms-mcp-staging.fly.dev`.
-- Latest verified deployed commit: `035ac1ddf9b3a9abb6e4289d8545ec246cea1ac3`;
-  binary build time `2026-11-02T22:25:49Z`, checked directly on the host.
+- Latest verified deployed commit: `ba0444341691b567b3e128f59e7e4cb323125df8`;
+  source tree `fd409ccfd133de7c8e5c0e5c4b0e8b3598f2eb20`, binary build time
+  `2026-11-04T17:17:32Z`, checked directly on the host.
   Fly readiness/liveness and both public health endpoints passed. MCP's
   generic server version `1.0.0` does not attest to a Git commit.
 - Image digest:
+  `[image digest redacted]`.
+- Earlier Klaro checks ran on
+  `035ac1ddf9b3a9abb6e4289d8545ec246cea1ac3`, built at
+  `2026-11-02T22:25:49Z`, image
   `[image digest redacted]`.
 - Earlier alt-text resaves/previews ran on
   `16ac71611e2e82e8a5789f0bf13145ef844301ef`, built at
@@ -35,10 +43,12 @@ warning remains visible. See the
   `mcp:access mcp:drafts`, without broad REST page-write permission.
 - Draft tools enabled; global draft visibility disabled; external links
   use `nofollow`. Own opted-in drafts remain available under draft scope.
-- Native Claude Desktop 4.4212.0, Pro, Opus 5.5 Extra as displayed; ChatGPT
-  web in Instant mode (tier/model not independently established). Agent
-  model reports remain unverified. Claude Code 2.1.316 and Codex 0.166.0
-  used isolated CLI configurations with only this staging MCP server.
+- The `ba044434` run used Claude web displaying Opus 5.5 Extra and ChatGPT
+  web in Instant mode; underlying model identity was not independently
+  established. Historical native/CLI runs used Claude Desktop 4.4212.0,
+  Pro, Opus 5.5 Extra as displayed, Claude Code 2.1.316 and Codex 0.166.0.
+  The CLIs used isolated configurations with only this staging MCP server.
+  Agent-reported model and surface metadata remain unverified.
 
 The `39d82c94` run added German and named synthetic EN/RU/DE categories and tags
 (IDs 1/2/3 respectively), plus media 1: a 1600×900 workflow diagram with
@@ -235,6 +245,98 @@ suite was not repeated during rollout; the unchanged runtime source had
 already passed 68 test packages and Docker builds locally. No CMS content
 edit, publication, scheduling, new commit or Git push occurred in this run.
 
+## Staging upgrade to ba044434 — 2026-11-04
+
+After explicit approval, the merged release commit was built from a clean
+Git archive and deployed to `ocms-mcp-staging`. The binary/image identity
+is above. Machine `[machine ID redacted]`, its 2 shared vCPU / 1 GB configuration
+and volume `[volume ID redacted]` were retained. All three Fly checks and
+both public health endpoints passed. Canonical HTTPS OAuth discovery and
+anonymous MCP 401/resource-metadata refusal passed.
+Klaro JS/CSS and the BSD license returned 200 and matched reviewed vendor
+bytes; interactive consent and rendered SRI were not rechecked.
+
+The approved prerequisites were applied before startup:
+
+- Recovery snapshot `[snapshot ID redacted]` preceded configuration
+  changes and deployment.
+- `OCMS_API_ALLOWED_CIDRS` was set privately to the current Mac's public
+  IPv4 `/32`. Existing session, MFA and trusted-proxy secret digests matched.
+- Developer, Embed and Migrator modules were disabled; the Developer theme
+  remained active. No other module setting was changed by this preparation.
+- The owner explicitly approved `OCMS_REQUIRE_FORM_CAPTCHA=false` only
+  for this staging app, which had zero public forms. No CAPTCHA keys were
+  configured. Required MFA stayed enabled and seeding/DCR stayed disabled.
+  The tracked `fly.staging.toml` still requires CAPTCHA: this rollout used
+  an explicit deployment override, not a changed default. A future redeploy
+  must retain that approved exception while there are no public forms, or
+  configure a real verifier before requiring CAPTCHA.
+- Startup applied core migration `20261023120000_create_page_search` and
+  MCP module migration 3. The new `agent_share_links` setting was enabled.
+
+Both web clients used dedicated Editor user 2 and exactly
+`mcp:access mcp:drafts`, with a 30-day refresh lifetime. Password and MFA
+were supplied privately from Keychain and the shared development
+authenticator; no owner credentials or authenticator enrollment were changed.
+
+| Check | Claude web | ChatGPT web |
+|---|---|---|
+| Fresh schema/context and demo readback | PASS; references page 1/revision 1 and own page 27/revision 6 | PASS; same bounded source/context checks |
+| Existing demo revisions | EN 27/6, RU 43/4, DE 44/3; localized alt/captions intact, no issues/warnings, RU/DE stale | PASS; same authoritative readback |
+| Create/update and exact replay | Page 45: create/replay at revision 1, update/replay at revision 2 | Page 46: same revision progression |
+| New request with stale base revision | `revision_conflict`, no write or retry | `revision_conflict`, no write or retry |
+| Disabled share policy | `share_links_disabled`, no URL issued | Same refusal; original policy restored to enabled |
+| Anonymous revision-2 share | Issued and rendered; unchanged after current draft advanced to revision 3 | Issued and rendered; landing also accepts ChatGPT's tracking query |
+| Revocation | Explicit link revoke denied fresh-token and existing-cookie access with 404 | Parent-grant revoke denied both with 404; both stayed 404 after reconnect |
+| OAuth revoke/refusal/reconnect | PASS; normal password/MFA/consent, draft-scope upgrade, then fresh readback | PASS; normal password/MFA/two-scope consent, then fresh readback |
+
+Claude's revision-2 share response stayed byte-identical after page 45
+advanced to revision 3. ChatGPT's separate post-update pin-invariance check
+was not repeated; its revision-2 rendering and parent-grant invalidation
+were directly checked. The temporary access-only Claude grant was revoked,
+and both final two-scope connections passed fresh site-info/draft calls,
+independently corroborated by successful user-2 OAuth events in server logs.
+Claude's English listing included its fixture while the Russian filter
+excluded it. All three disposable share rows are revoked.
+
+The ChatGPT conversation initially retained the old R1.5 tool description.
+Refresh tools and a fresh chat exposed the current sharing contract without
+changing global permissions; the old-context share was revoked. Temporary
+response-load placeholders were resolved with Reload response, without
+replaying non-idempotent calls. ChatGPT preserved the exact supplied inline
+alt punctuation and final period. Claude preserved what it submitted but
+omitted the requested final period; exact period preservation is not claimed
+for that client. Stored HTML and derived Markdown retained the submitted
+descriptions and quotes.
+
+All original 44 pages, 101 version rows and 99 provenance rows matched
+pre-upgrade hashes. Demo drafts 27/43/44 stayed at revisions 6/4/3,
+unscheduled, with stale translation bases intact. New test pages 45/46 ended
+at revision 3 and remain private, unscheduled drafts: the final totals are
+45 drafts and one existing published page. Owner user/TOTP/recovery records
+and API-key tables matched baseline hashes. OAuth runtime fingerprints
+changed alongside normal refresh activity; byte-identical preservation is
+not claimed for those tables. SQLite quick_check returned ok and
+foreign_key_check was empty.
+
+Anonymous session-preview access returned 404 while the dedicated signed-in
+Editor preview rendered. Share redemption used the fixed POST endpoint,
+with bearer tokens in form bodies and no token in request targets or
+response URLs. Preview responses enforced private/no-store and no-referrer.
+Neither known share token appeared in the captured 100-record Fly log
+buffer. No fresh controlled proxy-error fault injection was performed;
+universal log redaction is not claimed. Native Desktop, Claude Code, Codex
+and CLI bearer modes, new multilingual creation, and Klaro consent/SRI
+were not rerun on this SHA.
+
+Temporary remote maintenance probes, local preview-token/cookie files and
+private MFA code files were removed. Shared development enrollment remains
+in Keychain. The rollout made no commit, push, publication or scheduling
+change; wiki and `.claude/shared` were untouched. Evidence is under ignored
+`output/r17-validation/ba044434-staging-20261104/`, including
+`acceptance-summary.json`, `verification.txt`, deployment and preservation
+receipts, sanitized client/log captures and final readback screenshots.
+
 ## Evidence, cleanup and remaining decisions
 
 Local evidence is under ignored `output/r17-validation/release-closure/`:
@@ -280,8 +382,10 @@ The exact release decisions are in [release decisions](release-decisions.md):
 the alt-fix and Klaro/minimatch staging checks are complete; the approved
 OpenPGP disposition retains its module-only warning and staging-target
 package revalidation.
-Decide the Desktop reconnect caveat, then have the human review the
-current drafts/translations and, after separate publication approval,
-publish and finish the recording. Production
+The `ba044434` upgrade adds the bounded web acceptance above; it does not
+complete native-only Desktop reconnect or replace the earlier dependency
+and full multilingual client evidence. Resolve that reconnect coverage,
+then have the human review current drafts/translations and, after separate
+publication approval, publish and finish the recording. Production
 authoring/publication remains a separate request under the
 [article outline](article-outline.md).

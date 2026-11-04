@@ -6,12 +6,15 @@ deploy when **you** run them. Preparing this guide does not execute them.
 The existing `ocms-demo`, `fly.toml`, demo deployment script and the production host are
 outside this procedure.
 
-Current runtime: `16ac7161`, verified 2026-11-02. See the
+Current runtime: `ba044434`, verified 2026-11-04. See the
 [R1.7 acceptance record](launch/r17-acceptance.md) for image identity,
-multilingual clients, cleanup and the deployed inline alt-text repair.
-Claude web and ChatGPT web verified the resaved demo drafts and rendered
-previews. Historical client tables below retain their original builds;
-editorial/stale-translation review and release decisions remain open.
+upgrade prerequisites, fresh Claude web/ChatGPT web OAuth/MFA reconnect,
+draft and preview checks, cleanup and preservation evidence. This rollout
+used an explicitly approved staging-only `OCMS_REQUIRE_FORM_CAPTCHA=false`
+override with zero public forms; required MFA remains enabled. The tracked
+profile still defaults to requiring CAPTCHA. Historical client tables below
+retain their original builds; native Desktop/CLI modes were not rerun.
+Editorial/stale-translation review and release decisions remain open.
 
 | File | Role |
 |---|---|
