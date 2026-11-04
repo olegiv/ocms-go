@@ -6,8 +6,11 @@ created, published or cross-posted by this file. The
 examples, existing taxonomy/media and four-client continuation. Its inline
 alt-text failure is repaired on staging `16ac7161`: Claude web and ChatGPT
 web verified resaved demo drafts, with matching rendered previews. Fresh
-editorial/stale-translation review remains. Desktop reconnect uses Chrome;
-human publication and the recording's final segment remain pending. Use
+editorial/stale-translation review remains. Native-initiated Desktop
+reconnect and all four CLI OAuth/bearer paths passed on `ba044434`, with
+scoped dependency revalidation; see the
+[final record](r17-acceptance.md#final-native-and-cli-verification--2026-11-04).
+Human publication and the recording's final segment remain pending. Use
 the recorded build-specific evidence limits in any future article.
 
 ## Proposed structure

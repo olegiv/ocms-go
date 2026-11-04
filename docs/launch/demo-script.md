@@ -3,13 +3,15 @@
 Status: the full EN/RU/DE draft preparation ran on `39d82c94`; see the
 [acceptance record](r17-acceptance.md). A partial screenshot walkthrough
 captures real draft/review/preview states; it is not a continuous recording
-of completed publication. The inline alt-text repair is deployed at
+of completed publication. The inline alt-text repair was verified on
 `16ac7161`; Claude web and ChatGPT web verified the resaved EN 27/revision
 6, RU 43/revision 4 and DE 44/revision 3 in HTML and Markdown, with matching
 rendered preview alt text. RU/DE are now stale; fresh editorial/translation
 review, human publication and the final recording shot remain pending.
 The existing walkthrough predates this repair and retains its historical
-limitations. Desktop reconnect uses the documented Chrome handoff.
+limitations. Native-initiated Desktop reconnect passed on `ba044434`,
+through normal browser confirmation, shared MFA/consent and Desktop callback;
+see the [final native/CLI record](r17-acceptance.md#final-native-and-cli-verification--2026-11-04).
 Preserve owner connections.
 
 ## Before recording

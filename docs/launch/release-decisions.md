@@ -14,17 +14,21 @@ anonymous preview/revocation checks passed. Original content and demo
 drafts 27/43/44 at revisions 6/4/3 were preserved; all test shares are
 revoked. See the
 [upgrade record](r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
-for exact identity and client-specific limits. Native Desktop/CLI modes,
-Klaro consent/SRI and dependency scans were not rerun during this rollout;
-earlier evidence and advisory dispositions retain their recorded scope.
+for exact identity and client-specific limits. The subsequent
+[final native/CLI follow-up](r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+passed Desktop OAuth and both CLIs' OAuth/bearer authoring and credential
+lifecycle checks on the same binary. Dependency revalidation found zero
+vulnerable imported Go packages/reachable symbols and zero npm findings;
+the approved OpenPGP module-only warning remains. Interactive Klaro
+consent/SRI and the earlier full EN/RU/DE matrix retain their build scope.
 
 The owner explicitly approved `OCMS_REQUIRE_FORM_CAPTCHA=false` only for
 this staging app with zero public forms. MFA remains required. No CAPTCHA
 keys were configured and the tracked profile's secure default was not
 changed; future redeploys need the explicit approved exception or a real
 verifier. This is not a production CAPTCHA exception or a publication
-approval. The existing native-only reconnect and human release gates below
-remain open.
+approval. Native-initiated Desktop reconnect is passed. Human review,
+publication, the final demo segment and article drafting remain open.
 
 ## Inline-image accessibility
 
@@ -45,8 +49,8 @@ establish a whole-site accessibility pass or authorize publication.
 
 | Advisory | Actual exposure and disposition | Decision status |
 |---|---|---|
-| GO-2026-5932 / `golang.org/x/crypto/openpgp` | Keep `golang.org/x/crypto v0.58.0` for Argon2 password hashing and bcrypt imports. oCMS does not import OpenPGP; the reviewed build has no affected imported packages. OpenPGP imports are outside this disposition. | Accepted by owner on 2026-11-02: not applicable to the reviewed local build; revalidation required |
-| GHSA-g3hv-75wg-m249 / transitive `minimatch` | Deployed commit `035ac1dd` imports master fix `a325de44`: vendor the existing Klaro 0.7.22 browser JS/CSS and BSD license, removing its unused Babel/ESLint/minimatch npm chain. No major override or advisory suppression. | Resolved in `035ac1dd`; focused staging verification passed |
+| GO-2026-5932 / `golang.org/x/crypto/openpgp` | Keep `golang.org/x/crypto v0.58.0` for Argon2 password hashing and bcrypt imports. oCMS does not import OpenPGP; the tested build has no vulnerable imported packages or reachable symbols. OpenPGP imports are outside this disposition. | Owner-approved not applicable; revalidated on `ba044434` for Linux/amd64, CGO disabled; future revalidation conditions remain |
+| GHSA-g3hv-75wg-m249 / transitive `minimatch` | `035ac1dd` imports master fix `a325de44`: vendor the existing Klaro 0.7.22 browser JS/CSS and BSD license, removing its unused Babel/ESLint/minimatch npm chain. No major override or advisory suppression. | Resolved; `ba044434` npm audit reports zero findings and reviewed vendor bytes match |
 
 The owner approved retaining the required crypto module and recording this
 advisory as not applicable to the reviewed local build. The scope is the
@@ -64,7 +68,16 @@ module-only warning. This is source package analysis, not a scan of the
 deployed binary or a broader waiver. See the
 [staging follow-up](r17-acceptance.md#klarominimatch-staging-verification--2026-11-02).
 
-The advisory has no known fixed OpenPGP version. It remains visible in
+The final `ba044434` revalidation used Go 1.27.3 / govulncheck 1.9.0
+source/symbol analysis on its exact clean archive for Linux/amd64 with CGO
+disabled. There were zero vulnerable imported packages or reachable symbols;
+GO-2026-5932 remained module-only. npm audit including dev dependencies
+reported zero findings, and Klaro JS/CSS/license bytes matched `035ac1dd`.
+No new exception, runtime dependency change, binary scan or container OS
+scan was part of this follow-up. See the
+[final record](r17-acceptance.md#final-native-and-cli-verification--2026-11-04).
+
+OpenPGP remains unsafe and unmaintained. Its advisory remains visible in
 dependency reports; no scanner exclusion or CI bypass is part of this
 decision. Keep the existing local, CI and release vulnerability checks.
 Revalidate the disposition when imports, dependency versions, build tags
@@ -100,17 +113,19 @@ candidate before a release tag. No broad dependency waiver is accepted.
 
 ## Native Desktop reconnect
 
-Native Claude Desktop 4.4212.0 authored and freshly read the multilingual
-demo. Earlier revocation correctly blocked access, but native Connect /
-Reconnect did not open an observable sign-in. Normal Chrome web settings
-and the shared chat's Connect flow completed password/MFA/consent; subsequent
-native calls confirmed the new account/scopes and content. The cause is
-unestablished and native-only reconnect is not a passed row.
+**Passed on `ba044434` with Desktop 4.16336.0 (2026-11-04).** Native Connect
+opened Chrome's normal **Finish connecting a connector?** confirmation,
+identifying `claude-desktop-chat` and a Desktop callback. Normal password,
+shared MFA and base/draft consent restored the intended Editor and exactly
+`mcp:access mcp:drafts`. Fresh native reads passed after the temporary
+access-only grant was revoked. No web-settings workaround or oCMS fix was
+needed; the browser is the normal external OAuth handoff.
 
-Proposed release position: support the documented Chrome handoff and state
-this client limitation explicitly. If native-only reconnect is mandatory,
-keep release closure blocked on a reproducible client-side resolution and
-fresh native verification. Do not remove MFA or expand scopes to bypass it.
+Native-initiated reconnect had already passed on `035ac1dd` with Desktop
+4.4212.0 on 2026-11-03. Earlier notes retaining the pending/workaround label
+were stale. The cause of the original failed attempt is unestablished;
+it is not a current release blocker. Both build-specific records are
+retained in the [acceptance record](r17-acceptance.md#final-native-and-cli-verification--2026-11-04).
 
 ## Human publication and launch material
 

@@ -12,9 +12,13 @@ upgrade prerequisites, fresh Claude web/ChatGPT web OAuth/MFA reconnect,
 draft and preview checks, cleanup and preservation evidence. This rollout
 used an explicitly approved staging-only `OCMS_REQUIRE_FORM_CAPTCHA=false`
 override with zero public forms; required MFA remains enabled. The tracked
-profile still defaults to requiring CAPTCHA. Historical client tables below
-retain their original builds; native Desktop/CLI modes were not rerun.
-Editorial/stale-translation review and release decisions remain open.
+profile still defaults to requiring CAPTCHA. The
+[final follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+passed native-initiated Desktop reconnect and authoring, both CLIs'
+OAuth/bearer paths and scoped dependency revalidation without another
+deployment. Historical client tables retain their original builds.
+Human editorial/stale-translation review, publication, the final demo
+segment and article drafting remain open.
 
 | File | Role |
 |---|---|
@@ -430,8 +434,8 @@ authoring in OAuth and bearer modes, revoked startup 401 denial and fresh
 OAuth reconnect/readback. Both 90-minute, IPv4 `/32`-restricted keys were
 deactivated. Native Desktop 4.4212.0 passed authoring, cross-client readback
 and pinned sharing, but reconnect required Chrome web settings/shared-chat
-consent; native-only reconnect remains unverified. The dedicated Editor and
-shared authenticator were used throughout, with exactly
+consent; that run did not establish native-initiated reconnect. The dedicated
+Editor and shared authenticator were used throughout, with exactly
 `mcp:access mcp:drafts`; owner connections and older drafts were preserved.
 Test shares and the temporary base grant are revoked. Six overlapping bounded
 log slices showed no credential patterns; no new proxy-error experiment was
@@ -444,9 +448,11 @@ and real-client sharing checks. Keep HTTP body dumps disabled. Record actual
 client/version/build/results in PHASE5 and mark unavailable capabilities
 pending. The [current acceptance record](launch/r17-acceptance.md) covers
 the later full EN/RU/DE draft demo, taxonomy/media, publication/lifecycle
-tests and `16ac7161` alt-text verification. Native-only Desktop reconnect
-remains unverified; editorial/stale-translation review, human publication,
-the final demo segment and release decisions remain open.
+tests and `16ac7161` alt-text verification. Its
+[final ba044434 follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+passed native-initiated Desktop reconnect, all four CLI OAuth/bearer paths
+and scoped dependency revalidation. Human editorial/stale-translation review,
+publication, the final demo segment and article drafting remain open.
 DCR and unsupported authentication methods remain off. Do not reuse the
 historical R1.1 probe result as a CMS-write pass.
 

@@ -16,8 +16,11 @@ and ChatGPT web checks passed on `df6e5d86` for these paths; see the
 Native Desktop authoring and Claude Code/Codex OAuth and bearer checks also
 passed on that build, with a Chrome workaround for Desktop reconnect; see the
 [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02).
-Native/CLI modes were not rerun on `ba044434`. Native-only Desktop
-reconnect and full release acceptance remain open.
+The [final ba044434 follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+passed native Desktop OAuth and both CLIs' OAuth/bearer modes. Native Connect
+completed the normal browser confirmation, password/shared MFA, consent and
+Desktop callback; the earlier workaround/pending label is superseded.
+Human editorial review, publication and the final demo segment remain open.
 
 ## Account and administrator controls
 
@@ -119,19 +122,25 @@ Live aged-family draining, refresh replay and administrative cross-account or
 API-key revocation were not exercised by those web checks; local coverage is
 listed above. Both test shares and the temporary base grant were revoked.
 
-The later native/CLI pass confirmed revoked MCP startup requests received 401
-in both CLIs' OAuth and bearer modes. Fresh OAuth reconnects issued new grants
-and restored draft reads. Two dedicated 90-minute keys with exactly
+The earlier `df6e5d86` native/CLI pass confirmed revoked MCP startup requests
+received 401 in both CLIs' OAuth and bearer modes. Fresh OAuth reconnects
+issued new grants and restored draft reads. Two dedicated 90-minute keys with exactly
 `mcp:access mcp:drafts` and the Mac's public IPv4 `/32` restriction were
 deactivated; independent probes also returned 401. Native Desktop's own-grant
 revocation rejected its read and invalidated its share. Chrome web settings
 and shared-chat consent restored the connection, including the draft-scope
-upgrade; fresh native reads passed. Its native-only reconnect remains
-unverified. Owner grants, older drafts and site settings were preserved.
+upgrade; fresh native reads passed. That run did not establish native-initiated
+reconnect. Owner grants, older drafts and site settings were preserved.
 
-The full two-target multilingual demo with existing taxonomy/media, native-only
-Desktop reconnect, the complete publish/schedule failure matrix, publication
-by the human editor, independent security audit and release recording remain
+The final `ba044434` pass confirmed native-initiated reconnect and both CLIs'
+OAuth revoke/refusal/reconnect with new grants and fresh draft readbacks.
+The temporary native access-only grant was revoked; final two-scope OAuth
+connections retain their normal 30-day refresh duration. Both new 90-minute,
+IPv4 `/32`-restricted bearer keys were deactivated, with direct and actual
+CLI startup HTTP 401 checks. Owner connections and original content were
+preserved. Full EN/RU/DE and publication/lifecycle coverage retain their
+earlier build-specific evidence; fresh human editorial/stale-translation
+review, publication, the final recording segment and article drafting remain
 pending. See the
 [phase notes](../.claude/docs/PHASE5.md), [client checklist](desktop-authoring.md),
 [OAuth contract](oauth.md) and [demo script](launch/demo-script.md).

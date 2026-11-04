@@ -898,7 +898,14 @@ release hardening and independent security audit remain R1.7 work.
 `ba044434`. Claude web and ChatGPT web passed fresh OAuth/MFA
 revoke/reconnect, draft create/update/replay/conflict, share-policy and
 anonymous preview/revocation checks. Original content and demo revisions
-6/4/3 were preserved. An owner-approved staging-only CAPTCHA exception is
+6/4/3 were preserved. The final native Desktop and four CLI OAuth/bearer
+authoring/authentication rows also passed on this binary. Native-initiated
+Desktop reconnect is passed, with the normal external browser confirmation,
+shared MFA and incremental draft consent. Go revalidation found zero
+vulnerable imported packages/reachable symbols; npm audit had zero findings.
+The approved OpenPGP module-only warning remains. See the
+[final record](../../docs/launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04).
+An owner-approved staging-only CAPTCHA exception is
 active with zero public forms; required MFA remains enabled. See the
 [upgrade record](../../docs/launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04).
 Klaro interactive consent/SRI checks retain their `035ac1dd` scope; fresh
@@ -914,16 +921,17 @@ demo pages 27/43/44 at revisions 6/4/3, with matching rendered previews.
 The owner accepted the unimported OpenPGP advisory for the reviewed local
 build. The Klaro/minimatch rollout is complete, and a Linux/amd64 package
 recheck retained zero imported-package vulnerabilities and the module-only
-warning. Native-only Desktop reconnect, fresh editorial/stale-translation
-review, human publication, the recording's final segment and the planned
-production article draft remain pending. See the
+warning; the final `ba044434` source/symbol scan revalidated that disposition.
+Fresh editorial/stale-translation review, human publication, the recording's
+final segment and the planned production article draft remain pending. See the
 [release decisions](../../docs/launch/release-decisions.md).
 R1.7 is not complete. Earlier bounded results remain in the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 The earlier [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
 adds bounded native Desktop authoring and both CLIs' OAuth/bearer passes on
-`df6e5d86`. Desktop reconnect required Chrome; native-only reconnect is
-unverified. The [implementation notes](#r17-implementation-notes--2026-11-02)
+`df6e5d86`. Its Desktop workaround caveat is historical: native-initiated
+reconnect passed on `035ac1dd` and again on `ba044434`. The
+[implementation notes](#r17-implementation-notes--2026-11-02)
 retain local checks and benchmarks; the
 [local quality follow-up](#r17-local-quality-follow-up--2026-11-02) records
 the completed findings repairs, passing analyzer checks and earlier
@@ -3332,6 +3340,10 @@ iterations per benchmark (not production load tests or release SLOs):
 
 ### Open release gates
 
+Historical local checkpoint: later sections record resolved quality,
+dependency and client gates. Use the
+[current release decisions](../../docs/launch/release-decisions.md) for remaining work.
+
 - `govulncheck ./...` reports zero affected/called vulnerabilities and zero in
   imported packages; one advisory remains only in an uncalled required module.
   This is a dependency analysis result, not a complete security audit.
@@ -3545,6 +3557,10 @@ no application rebuild or deployment occurred during this pass.
 
 ### Desktop reconnect caveat
 
+This is the historical `df6e5d86` observation. The
+[final native/CLI record](#r17-final-nativecli-and-dependency-verification--2026-11-04)
+supersedes its pending label with passes on `035ac1dd` and `ba044434`.
+
 Native Connect/Reconnect did not open an observable sign-in in the controlled
 native/Chrome surfaces. Chrome web settings and Connect in the same shared
 chat launched the normal OAuth flow. Password, shared MFA and consent restored
@@ -3558,8 +3574,8 @@ grant was revoked.
 The scope upgrade explains the draft read after the earlier access-only
 site-info response; it is not a scope-enforcement bypass. The cause of the
 native reconnect behavior was not established. Native authoring/readback
-passed with this Chrome workaround; **native-only reconnect remains
-unverified**, not an unconditional OAuth UX pass.
+passed with this Chrome workaround; native initiation was unverified in
+that run. The later native-initiated passes supersede this pending label.
 
 ### Logs, preservation and remaining gates
 
@@ -3876,10 +3892,11 @@ preservation claim is made for them. Database quick/FK checks passed.
 Token transport stayed in redemption POST bodies. Neither test token
 appeared in the captured 100-record Fly buffer; no fresh controlled
 proxy-error probe ran. Temporary remote utilities and private token/cookie
-and MFA-code files were removed. Native Desktop/CLI modes, new multilingual
-creation and Klaro consent/SRI were not rerun on this SHA. This web pass
-does not close native-only reconnect, editorial/stale-translation review,
-human publication, the final demo segment or launch drafting.
+and MFA-code files were removed. This initial web pass did not rerun native
+Desktop/CLI modes or new multilingual creation. The final follow-up below
+adds native/CLI EN/RU and dependency checks on the same SHA; interactive
+Klaro consent/SRI retains its earlier-build scope. Human editorial review,
+publication, the final demo segment and launch drafting remain open.
 
 Evidence: ignored `output/r17-validation/ba044434-staging-20261104/`,
 especially `acceptance-summary.json`, `verification.txt`, client captures,
@@ -3888,3 +3905,68 @@ final readbacks and preservation receipts. The
 retains the client-specific alt punctuation and preview-check limits.
 No commit, push, publication or scheduling change occurred in this rollout;
 wiki and `.claude/shared` remained untouched.
+
+### R1.7 final native/CLI and dependency verification — 2026-11-04
+
+Without another deployment, the exact `ba044434` binary/image above passed
+native Desktop OAuth, Claude Code OAuth/bearer and Codex OAuth/bearer
+checks. The clean scan archive matched all 1,425 tracked blobs of tree
+`fd409ccfd133de7c8e5c0e5c4b0e8b3598f2eb20`. Machine/configuration and all
+Fly/public health checks remained unchanged and healthy.
+
+Observed clients: Desktop 4.16336.0 on macOS 27.2, displaying Pro / Opus
+5.5 Extra; Claude Code 2.1.318; Codex 0.166.0. All used dedicated Editor
+user 2 and exactly `mcp:access mcp:drafts`. Each path created an EN/RU
+fixture pair with source/target revisions 3/1, verified identical
+create/update replay, stale-write refusal and exact inline alt punctuation.
+CLI assertions checked actual request/results and text/structured parity;
+native UI and backend dispatches corroborated its sequence. Fixture IDs:
+Desktop 47/48, Codex OAuth 49/50, Claude Code OAuth 51/52, Claude Code
+bearer 53/54 and Codex bearer 55/56.
+
+Native-initiated reconnect is passed. Both native Connect actions opened
+the normal Chrome confirmation with Desktop destination, then normal
+password/shared MFA and base/draft consent returned to the app. The temporary
+access-only grant was revoked; final native identity/demo reads succeeded
+on the two-scope grant. No web-settings workaround or oCMS fix was needed.
+The old pending label was stale: native reconnect had already passed on
+`035ac1dd` on 2026-11-03. The historical failure's cause remains unestablished.
+Both CLI revoked grants failed startup, and normal login/MFA/consent restored
+fresh two-scope grants with 30-day refresh and successful readback.
+
+Two new 90-minute keys (7/8), restricted to the Mac's public IPv4 `/32`,
+were held only in Keychain and deactivated. Direct probes and actual CLI
+startup with revoked keys returned 401; no protected call dispatched.
+Both first bearer creates correctly refused the 50-AI-draft limit. Normal
+Editor saves disabled AI editing on completed fixtures to free slots, then
+both full bearer paths passed. All ten new fixtures were subsequently
+opted out, restoring 44 active AI drafts. Content/history remain private
+and unscheduled; cleanup saves advanced source/target revisions to 4/2.
+
+Go 1.27.3 / govulncheck 1.9.0 Linux/amd64 CGO-disabled source/symbol
+analysis found zero vulnerable imported packages or reachable symbols.
+GO-2026-5932 stays module-only under the approved, revalidated disposition.
+npm audit including dev dependencies found zero vulnerabilities. Klaro
+JS/CSS/license bytes match the reviewed `035ac1dd` build. No new full audit,
+Go-suite rerun, binary scan or container OS scan was performed.
+
+All original 46 pages, 107 versions and 105 provenance rows matched hashes.
+Demo revisions 6/4/3 and stale RU/DE bases were unchanged. Owner MFA/recovery
+and grant fields, original API-key restrictions, and 32 untargeted grant
+identity/scope/lifecycle records were preserved; runtime last-use timestamps
+were excluded. Whole users-row equality is not claimed after normal logins
+updated `last_login_at`. SQLite quick/FK checks passed. Temporary remote
+utilities, local CLI config/workspace and private code files were removed;
+final normal OAuth grants remain active. Bounded logs exposed neither known
+test bearer; no new proxy-error probe or universal redaction claim was made.
+
+Evidence: ignored `output/r17-validation/ba044434-final-clients-20261104/`:
+`acceptance-summary.json`, `verification.txt`, machine assertions, client
+captures, dependency reports and preservation/cleanup receipts. It also
+records corrected Go-cache setup, Codex reference syntax and temporary MCP
+project-approval setup. No source fix, commit, push, deploy or publication
+occurred; wiki and `.claude/shared` were untouched.
+The [final acceptance record](../../docs/launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+keeps earlier new-DE/sharing/proxy-error coverage bound to its tested builds.
+Only human editorial/stale-translation review, publication, the final demo
+segment and planned launch article drafting remain from these release gates.

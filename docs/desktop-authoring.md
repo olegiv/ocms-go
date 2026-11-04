@@ -11,16 +11,20 @@ R1.7 is now deployed at `ba044434` (2026-11-04). Fresh Claude web and ChatGPT
 web checks passed OAuth/MFA revoke/reconnect, draft replay/conflict,
 share-policy refusal and anonymous sharing/revocation; see the
 [upgrade record](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
-for the separate pinning checks and limits. Native Desktop/CLI modes were
-not rerun on this SHA. Earlier web OAuth/sharing checks and full EN/RU/DE
-draft authoring with existing taxonomy/media ran on
+for the separate pinning checks and limits. The
+[final native/CLI follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+passed native Desktop OAuth and both CLIs' OAuth/bearer authoring and
+credential lifecycle checks on the same SHA. Native-initiated Desktop
+reconnect passed through normal browser confirmation, password/shared MFA,
+consent and Desktop callback. Earlier web OAuth/sharing checks and full
+EN/RU/DE draft authoring with existing taxonomy/media ran on
 `39d82c94` in native Desktop, ChatGPT and both CLIs' OAuth/bearer modes.
 The inline alt-text repair passed Claude web/ChatGPT web resaves and
-readbacks on `16ac7161`, with matching rendered previews. This focused
+readbacks on `16ac7161`, with matching rendered previews. That focused alt-text
 follow-up did not rerun native/CLI modes. See the
 [current acceptance record](launch/r17-acceptance.md)
-and [release decisions](launch/release-decisions.md). Desktop reconnect
-requires the documented Chrome workaround; native-only reconnect is unverified.
+and [release decisions](launch/release-decisions.md) for dependency
+revalidation and the remaining human editorial/publication/demo gates.
 
 ## Workflow
 
@@ -100,17 +104,19 @@ translations. The [16ac7161 alt-text verification](launch/r17-acceptance.md#alt-
 records web checks of resaved pages 27/43/44 at revisions 6/4/3. Fresh
 editorial/stale-translation review, human publication and its final
 recording segment are pending.
-The [ba044434 follow-up](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
-adds fresh web checks without repeating that native/CLI matrix or closing
-native-only reconnect. The table below retains the earlier bounded
-`df6e5d86` evidence.
+The [ba044434 web rollout](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
+and [final native/CLI follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+add fresh web checks, native-initiated Desktop reconnect, all four CLI
+OAuth/bearer paths and scoped dependency revalidation. The final native/CLI
+authoring checks created EN/RU pairs. The table below retains the earlier
+bounded `df6e5d86` evidence.
 Use [Connected apps](connected-apps.md) for access management and
 the [author skill](skills/ocms-author/SKILL.md) for the draft workflow. Follow
 the [demo script](launch/demo-script.md) for the remaining human-publication shot.
 
 | Client | Authoring path | R1.7 result (2026-11-02) |
 |---|---|---|
-| Claude Desktop 4.4212.0 | OAuth; context/schema → EN draft/replay/update/conflict → RU translation → editor/review/pinned preview; cross-client readback | Bounded authoring passed on `df6e5d86`; reconnect completed through Chrome, native-only reconnect unverified |
+| Claude Desktop 4.4212.0 | OAuth; context/schema → EN draft/replay/update/conflict → RU translation → editor/review/pinned preview; cross-client readback | Bounded authoring passed on `df6e5d86`; reconnect completed through Chrome; native initiation was not established in that run and passed in later follow-ups |
 | Claude web | Context/schema → EN draft/replay → RU translation; cross-client readback, pinned share, own-grant revoke/reconnect | Passed, bounded web flow on `df6e5d86` |
 | ChatGPT web | Context/schema → EN draft/replay → RU translation; cross-client update/replay/conflict, stale translation, tracking-query share, revoke/reconnect | Passed, bounded web flow on `df6e5d86` |
 | Claude Code 2.1.316 | OAuth and scoped bearer; context/schema → draft/replay/update/conflict → RU translation; revoked startup denial and fresh OAuth reconnect/read | Passed, both bounded modes on `df6e5d86` |
@@ -133,21 +139,23 @@ were not treated as refusal evidence. Both OAuth reconnects produced new
 grants and fresh reads. The two 90-minute bearer keys, each restricted to the
 Mac's public IPv4 `/32`, were deactivated after testing.
 
-**Desktop reconnect caveat:** native Connect/Reconnect did not open an
-observable sign-in in the controlled native/Chrome surfaces. Chrome web
-settings and Connect in the shared chat completed normal password/MFA/consent,
+**Historical Desktop reconnect caveat (`df6e5d86`):** native Connect/Reconnect
+did not open an observable sign-in in the controlled native/Chrome surfaces.
+Chrome web settings and Connect in the shared chat completed normal password/MFA/consent,
 including the `mcp:drafts` upgrade. Fresh native site-info/draft calls then
-confirmed user 2, exactly both scopes and revision 4. The root cause is
-unestablished; this is not an unconditional native-only reconnect pass.
+confirmed user 2, exactly both scopes and revision 4. The original cause
+remains unestablished. Native-initiated reconnect subsequently passed on
+`035ac1dd` (2026-11-03) and `ba044434` (2026-11-04), through normal external
+browser confirmation and MFA/consent; the pending/workaround label is stale.
 
 Those earlier runs enabled only English/Russian without taxonomy/media.
 The [new run](launch/r17-acceptance.md) adds German, full catalog fixtures,
 all six client/mode flows and 15 publication/lifecycle test roots. Audit
 findings and first-party NilAway diagnostics were fixed before deployment.
-The remaining [release decisions](launch/release-decisions.md) are concrete:
-dependency dispositions and the Desktop workaround, followed by fresh
-editorial/stale-translation review and human publication/recording. See the
-earlier
+Native reconnect and dependency revalidation are complete. The remaining
+[release decisions](launch/release-decisions.md) are fresh human
+editorial/stale-translation review, publication, the final recording segment
+and the planned launch article draft. See the earlier
 [web staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
 and [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02)
 for build identity, evidence limits, cleanup and remaining gates.

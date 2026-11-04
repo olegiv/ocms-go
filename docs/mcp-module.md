@@ -14,7 +14,13 @@ PHASE5 notes retain R1.5/R1.6 results. R1.7 is deployed at `ba044434`
 (2026-11-04), with fresh Claude web/ChatGPT web OAuth/MFA reconnect,
 draft replay/conflict, share-policy and anonymous preview/revocation checks.
 The [upgrade record](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
-records exact identity and limits; native/CLI modes were not rerun on this SHA.
+records exact identity and limits. The
+[final native/CLI follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+passed native-initiated Desktop reconnect and authoring plus both CLIs'
+OAuth/bearer authoring and credential lifecycle checks on the same SHA.
+Dependency revalidation found zero vulnerable imported Go packages/reachable
+symbols and zero npm findings, retaining the approved module-only OpenPGP
+warning.
 The [current acceptance record](launch/r17-acceptance.md) retains earlier web
 sharing/revocation and native/CLI multilingual draft results on `39d82c94`.
 The inline alt-text repair passed both web clients' resaves/readbacks and
