@@ -153,3 +153,18 @@ func TestSanitizePageHTML(t *testing.T) {
 		t.Fatalf("expected safe paragraph preserved, got %q", got)
 	}
 }
+
+// TestPageHTMLKeepsLinkTargetBlank checks "open in new tab" survives the page
+// policy, always with rel="noopener", and that no other target value does.
+func TestPageHTMLKeepsLinkTargetBlank(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`<a href="https://example.com/x" target="_blank" rel="noopener noreferrer">ext</a>`, `<a href="https://example.com/x" target="_blank" rel="nofollow noopener">ext</a>`},
+		{`<a href="/local" target="_blank">local</a>`, `<a href="/local" target="_blank" rel="nofollow noopener">local</a>`},
+		{`<a href="/local" target="_top">top</a>`, `<a href="/local" rel="nofollow">top</a>`},
+		{`<a href="/local" target="evil">named</a>`, `<a href="/local" rel="nofollow">named</a>`},
+	} {
+		if got := SanitizePageHTML(tc.in); got != tc.want {
+			t.Errorf("SanitizePageHTML(%q)\n got %q\nwant %q", tc.in, got, tc.want)
+		}
+	}
+}

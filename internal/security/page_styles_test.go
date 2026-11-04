@@ -187,8 +187,8 @@ func TestPageStylesRejectDangerousCSS(t *testing.T) {
 		"border-width: 99999px",
 		"border-spacing: 99999px",
 		"width: 9999em",
-		"width: 101%",
-		"height: 100.5%",
+		"width: 201%",
+		"height: 200.5%",
 		"padding: 9999%",
 		"margin-left: 9999em",
 	}
@@ -301,42 +301,7 @@ func TestPageHTMLKeepsTableBorderAttribute(t *testing.T) {
 // it again. The drift tests compare the rule list with itself; only replayed
 // editor output catches a style the editor writes that the list lacks.
 func TestSanitizePageHTMLKeepsEditorFormatting(t *testing.T) {
-	cases := []struct{ name, editor, want string }{
-		{"align center", `<p style="text-align: center;">Centered</p>`, `<p style="text-align: center">Centered</p>`},
-		{"align right", `<p style="text-align: right;">Right</p>`, `<p style="text-align: right">Right</p>`},
-		{"justify", `<p style="text-align: justify;">Justify</p>`, `<p style="text-align: justify">Justify</p>`},
-		{"heading align", `<h2 style="text-align: center;">Heading</h2>`, `<h2 style="text-align: center">Heading</h2>`},
-		{"text colour", `<p><span style="color: #e03e2d;">Colored</span></p>`, `<p><span style="color: #e03e2d">Colored</span></p>`},
-		{"text colour rgb", `<p><span style="color: rgb(224, 62, 45);">Colored</span></p>`, `<p><span style="color: rgb(224, 62, 45)">Colored</span></p>`},
-		{"highlight", `<p><span style="background-color: #fbeeb8;">Highlighted</span></p>`, `<p><span style="background-color: #fbeeb8">Highlighted</span></p>`},
-		{"underline", `<p><span style="text-decoration: underline;">Underlined</span></p>`, `<p><span style="text-decoration: underline">Underlined</span></p>`},
-		{"strikethrough", `<p><s>Struck</s></p>`, `<p><s>Struck</s></p>`},
-		{"font size", `<p><span style="font-size: 18pt;">Sized</span></p>`, `<p><span style="font-size: 18pt">Sized</span></p>`},
-		{"font family", `<p><span style="font-family: 'times new roman', times;">Family</span></p>`, `<p><span style="font-family: &#39;times new roman&#39;, times">Family</span></p>`},
-		{"line height", `<p style="line-height: 1.5;">Spaced</p>`, `<p style="line-height: 1.5">Spaced</p>`},
-		{"indent", `<p style="padding-left: 40px;">Indented</p>`, `<p style="padding-left: 40px">Indented</p>`},
-		{"list style", `<ol style="list-style-type: lower-alpha;"><li>a</li></ol>`, `<ol style="list-style-type: lower-alpha"><li>a</li></ol>`},
-		{"image float", `<img style="float: left;" src="/uploads/a.png" alt="f">`, `<img style="float: left" src="/uploads/a.png" alt="f">`},
-		{"image centre", `<img style="display: block; margin-left: auto; margin-right: auto;" src="/uploads/a.png" alt="c">`, `<img style="display: block; margin-left: auto; margin-right: auto" src="/uploads/a.png" alt="c">`},
-		{"image advanced tab", `<img style="border-style: solid; border-width: 2px; margin: 10px 20px;" src="/uploads/a.png" alt="b">`, `<img style="border-style: solid; border-width: 2px; margin: 10px 20px" src="/uploads/a.png" alt="b">`},
-		{"image vertical space", `<img style="margin-bottom: 10px; margin-top: 10px;" src="/uploads/a.png" alt="v">`, `<img style="margin-bottom: 10px; margin-top: 10px" src="/uploads/a.png" alt="v">`},
-		{"text colour on a link", `<p><span style="color: #e03e2d;">Before <a style="color: #e03e2d;" href="/x">linked</a> after</span></p>`, `<p><span style="color: #e03e2d">Before <a style="color: #e03e2d" href="/x" rel="nofollow">linked</a> after</span></p>`},
-		{"highlight on a link", `<p><span style="background-color: #fbeeb8;">A <a style="background-color: #fbeeb8;" href="/y">link</a></span></p>`, `<p><span style="background-color: #fbeeb8">A <a style="background-color: #fbeeb8" href="/y" rel="nofollow">link</a></span></p>`},
-		{
-			"whole list item formatted",
-			`<ul><li style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt; font-style: italic; font-weight: bold;"><em><span style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt;"><strong>Item</strong></span></em></li></ul>`,
-			`<ul><li style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt; font-style: italic; font-weight: bold"><em><span style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt"><strong>Item</strong></span></em></li></ul>`,
-		},
-		{"right-to-left indent", `<p dir="rtl" style="padding-right: 40px;">rtl</p>`, `<p dir="rtl" style="padding-right: 40px">rtl</p>`},
-		{"indented first list item", `<ul><li style="list-style-type: none;"><ul><li>first</li></ul></li><li>second</li></ul>`, `<ul><li style="list-style-type: none"><ul><li>first</li></ul></li><li>second</li></ul>`},
-		{"twelve-column table", `<table style="border-collapse: collapse; width: 100%;" border="1"><colgroup><col style="width: 8.37563%;"></colgroup></table>`, `<table style="border-collapse: collapse; width: 100%" border="1"><colgroup><col style="width: 8.37563%"></colgroup></table>`},
-		{
-			"table and cell properties",
-			`<table style="border-collapse: collapse; margin-left: auto; margin-right: auto; width: 100%;" border="1"><colgroup><col style="width: 50%;"><col style="width: 50%;"></colgroup><tbody><tr><td style="background-color: #fbeeb8; border: 2px dotted #000000; vertical-align: top;">a</td><td style="text-align: center;">b</td></tr></tbody></table>`,
-			`<table style="border-collapse: collapse; margin-left: auto; margin-right: auto; width: 100%" border="1"><colgroup><col style="width: 50%"><col style="width: 50%"></colgroup><tbody><tr><td style="background-color: #fbeeb8; border: 2px dotted #000000; vertical-align: top">a</td><td style="text-align: center">b</td></tr></tbody></table>`,
-		},
-	}
-	for _, tc := range cases {
+	for _, tc := range editorReplayCases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := SanitizePageHTML(tc.editor)
 			if got != tc.want {
@@ -347,4 +312,55 @@ func TestSanitizePageHTMLKeepsEditorFormatting(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestEditorOutputNeverReportsRemovals guards the save-time warning: markup
+// the admin editor writes must sanitize without a removal, or every ordinary
+// save would warn and editors would learn to ignore it.
+func TestEditorOutputNeverReportsRemovals(t *testing.T) {
+	for _, tc := range editorReplayCases {
+		if removed := RemovedMarkup(tc.editor, SanitizePageHTML(tc.editor)); len(removed) > 0 {
+			t.Errorf("%s: sanitizing editor output reports removals %q", tc.name, removed)
+		}
+	}
+}
+
+// editorReplayCases is markup captured from the admin editor (TinyMCE 8.10)
+// with the policy's expected output.
+var editorReplayCases = []struct{ name, editor, want string }{
+	{"align center", `<p style="text-align: center;">Centered</p>`, `<p style="text-align: center">Centered</p>`},
+	{"align right", `<p style="text-align: right;">Right</p>`, `<p style="text-align: right">Right</p>`},
+	{"justify", `<p style="text-align: justify;">Justify</p>`, `<p style="text-align: justify">Justify</p>`},
+	{"heading align", `<h2 style="text-align: center;">Heading</h2>`, `<h2 style="text-align: center">Heading</h2>`},
+	{"text colour", `<p><span style="color: #e03e2d;">Colored</span></p>`, `<p><span style="color: #e03e2d">Colored</span></p>`},
+	{"text colour rgb", `<p><span style="color: rgb(224, 62, 45);">Colored</span></p>`, `<p><span style="color: rgb(224, 62, 45)">Colored</span></p>`},
+	{"highlight", `<p><span style="background-color: #fbeeb8;">Highlighted</span></p>`, `<p><span style="background-color: #fbeeb8">Highlighted</span></p>`},
+	{"underline", `<p><span style="text-decoration: underline;">Underlined</span></p>`, `<p><span style="text-decoration: underline">Underlined</span></p>`},
+	{"strikethrough", `<p><s>Struck</s></p>`, `<p><s>Struck</s></p>`},
+	{"font size", `<p><span style="font-size: 18pt;">Sized</span></p>`, `<p><span style="font-size: 18pt">Sized</span></p>`},
+	{"font family", `<p><span style="font-family: 'times new roman', times;">Family</span></p>`, `<p><span style="font-family: &#39;times new roman&#39;, times">Family</span></p>`},
+	{"line height", `<p style="line-height: 1.5;">Spaced</p>`, `<p style="line-height: 1.5">Spaced</p>`},
+	{"indent", `<p style="padding-left: 40px;">Indented</p>`, `<p style="padding-left: 40px">Indented</p>`},
+	{"list style", `<ol style="list-style-type: lower-alpha;"><li>a</li></ol>`, `<ol style="list-style-type: lower-alpha"><li>a</li></ol>`},
+	{"image float", `<img style="float: left;" src="/uploads/a.png" alt="f">`, `<img style="float: left" src="/uploads/a.png" alt="f">`},
+	{"image centre", `<img style="display: block; margin-left: auto; margin-right: auto;" src="/uploads/a.png" alt="c">`, `<img style="display: block; margin-left: auto; margin-right: auto" src="/uploads/a.png" alt="c">`},
+	{"image advanced tab", `<img style="border-style: solid; border-width: 2px; margin: 10px 20px;" src="/uploads/a.png" alt="b">`, `<img style="border-style: solid; border-width: 2px; margin: 10px 20px" src="/uploads/a.png" alt="b">`},
+	{"image vertical space", `<img style="margin-bottom: 10px; margin-top: 10px;" src="/uploads/a.png" alt="v">`, `<img style="margin-bottom: 10px; margin-top: 10px" src="/uploads/a.png" alt="v">`},
+	{"text colour on a link", `<p><span style="color: #e03e2d;">Before <a style="color: #e03e2d;" href="/x">linked</a> after</span></p>`, `<p><span style="color: #e03e2d">Before <a style="color: #e03e2d" href="/x" rel="nofollow">linked</a> after</span></p>`},
+	{"highlight on a link", `<p><span style="background-color: #fbeeb8;">A <a style="background-color: #fbeeb8;" href="/y">link</a></span></p>`, `<p><span style="background-color: #fbeeb8">A <a style="background-color: #fbeeb8" href="/y" rel="nofollow">link</a></span></p>`},
+	{
+		"whole list item formatted",
+		`<ul><li style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt; font-style: italic; font-weight: bold;"><em><span style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt;"><strong>Item</strong></span></em></li></ul>`,
+		`<ul><li style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt; font-style: italic; font-weight: bold"><em><span style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt"><strong>Item</strong></span></em></li></ul>`,
+	},
+	{"right-to-left indent", `<p dir="rtl" style="padding-right: 40px;">rtl</p>`, `<p dir="rtl" style="padding-right: 40px">rtl</p>`},
+	{"indented first list item", `<ul><li style="list-style-type: none;"><ul><li>first</li></ul></li><li>second</li></ul>`, `<ul><li style="list-style-type: none"><ul><li>first</li></ul></li><li>second</li></ul>`},
+	{"twelve-column table", `<table style="border-collapse: collapse; width: 100%;" border="1"><colgroup><col style="width: 8.37563%;"></colgroup></table>`, `<table style="border-collapse: collapse; width: 100%" border="1"><colgroup><col style="width: 8.37563%"></colgroup></table>`},
+	{
+		"table and cell properties",
+		`<table style="border-collapse: collapse; margin-left: auto; margin-right: auto; width: 100%;" border="1"><colgroup><col style="width: 50%;"><col style="width: 50%;"></colgroup><tbody><tr><td style="background-color: #fbeeb8; border: 2px dotted #000000; vertical-align: top;">a</td><td style="text-align: center;">b</td></tr></tbody></table>`,
+		`<table style="border-collapse: collapse; margin-left: auto; margin-right: auto; width: 100%" border="1"><colgroup><col style="width: 50%"><col style="width: 50%"></colgroup><tbody><tr><td style="background-color: #fbeeb8; border: 2px dotted #000000; vertical-align: top">a</td><td style="text-align: center">b</td></tr></tbody></table>`,
+	},
+	{"resized table", `<table style="border-collapse: collapse; width: 100.035%;" border="1"><tbody><tr><td style="width: 49.9824%;">a</td></tr></tbody></table>`, `<table style="border-collapse: collapse; width: 100.035%" border="1"><tbody><tr><td style="width: 49.9824%">a</td></tr></tbody></table>`},
+	{"link opening in a new tab", `<p><a href="https://example.com/x" target="_blank" rel="noopener noreferrer">ext</a></p>`, `<p><a href="https://example.com/x" target="_blank" rel="nofollow noopener">ext</a></p>`},
 }

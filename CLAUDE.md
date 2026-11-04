@@ -123,6 +123,7 @@ The hook source is in `.claude/shared/global/hooks/`.
    - Write SQL in `internal/store/queries/*.sql` with sqlc annotations
    - Run `sqlc generate` to create type-safe Go code
    - Migrations live in `internal/store/migrations/` (goose format)
+   - Site search reads `page_search`, an FTS5 index of each page's readable text (`security.PageHTMLText`), never its HTML. Plain-SQL triggers only queue changed page IDs in `page_search_queue`; `SearchService` indexes the queue in Go in batches of 100 (a search does at most two, a background drain the rest). Keep schema triggers plain SQL (no Go functions), so any program and older oCMS versions can still write pages. `pages_fts` (raw HTML) stays for older versions. A migration that rebuilds the `pages` table must recreate both the `pages_fts_*` and the `page_search_queue_*` triggers
 
 2. **Embedded Assets**: Templates and static files are embedded using `//go:embed` in `web/embed.go`. JS dependencies (htmx, Alpine.js) are managed via `package.json` and copied to `web/static/dist/js/` during build. Run `make assets` to compile SCSS and install JS deps. After modifying JS dependencies, use `go build -a` to force re-embedding.
 

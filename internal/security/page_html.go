@@ -101,6 +101,10 @@ func buildPageHTMLSanitizer() *bluemonday.Policy {
 	// Keep the value-checked inline styles the admin editor writes (alignment,
 	// colours, fonts, indent, image and table layout); see pageStyleRules.
 	allowPageStyles(p)
+	// Keep "open in new tab": the editor gives every link target="_blank".
+	// bluemonday adds rel="noopener" to any link it keeps the target on, so
+	// the opened page cannot reach back through window.opener.
+	p.AllowAttrs("target").Matching(regexp.MustCompile(`^_blank$`)).OnElements("a")
 	return p
 }
 

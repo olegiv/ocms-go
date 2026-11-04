@@ -267,6 +267,18 @@ type PageCategory struct {
 	CategoryID int64 `json:"category_id"`
 }
 
+type PageSearch struct {
+	Title           string `json:"title"`
+	Body            string `json:"body"`
+	MetaTitle       string `json:"meta_title"`
+	MetaDescription string `json:"meta_description"`
+	MetaKeywords    string `json:"meta_keywords"`
+}
+
+type PageSearchQueue struct {
+	PageID int64 `json:"page_id"`
+}
+
 type PageTag struct {
 	PageID int64 `json:"page_id"`
 	TagID  int64 `json:"tag_id"`

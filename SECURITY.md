@@ -85,7 +85,7 @@ oCMS implements defense-in-depth security measures:
 - **CSP Nonce Support**: Per-request nonces across the render pipeline
 - **Frame Ancestors**: CSP `frame-ancestors` directive to prevent clickjacking
 - **Open Redirect Protection**: Validates redirect targets to prevent open redirects
-- **Page HTML Sanitization**: Configurable sanitization on save and before rendering (`OCMS_SANITIZE_PAGE_HTML`). Inline styles are limited to the formatting the page editor writes (alignment, colours, fonts, indent, image and table layout), each value-checked; all other CSS is removed
+- **Page HTML Sanitization**: Configurable sanitization on save and before rendering (`OCMS_SANITIZE_PAGE_HTML`). Inline styles are limited to the formatting the page editor writes (alignment, colours, fonts, indent, image and table layout), each value-checked; all other CSS is removed. Links keep `target="_blank"` (always with `rel="noopener"`). When a save in the admin page editor loses markup to the policy, the editor shows a warning naming what was removed
 - **Suspicious Markup Blocking**: Reject page writes containing dangerous HTML patterns (`OCMS_BLOCK_SUSPICIOUS_PAGE_HTML`)
 
 ### HTTP Security Headers

@@ -23,15 +23,23 @@ func TestSearchPublishedPagesPreservesTypesAndVisibility(t *testing.T) {
 			id INTEGER PRIMARY KEY, title TEXT, slug TEXT, body TEXT,
 			status TEXT, page_type TEXT, exclude_from_lists INTEGER,
 			language_code TEXT, published_at DATETIME, created_at DATETIME,
-			updated_at DATETIME, featured_image_id INTEGER
+			updated_at DATETIME, featured_image_id INTEGER,
+			meta_title TEXT NOT NULL DEFAULT '', meta_description TEXT NOT NULL DEFAULT '',
+			meta_keywords TEXT NOT NULL DEFAULT ''
 		);
-		CREATE VIRTUAL TABLE pages_fts USING fts5(title, body);
-		INSERT INTO pages VALUES
+		CREATE VIRTUAL TABLE pages_fts USING fts5(title, body, meta_title, meta_description, meta_keywords);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyPageSearchMigration(t, db)
+	_, err = db.Exec(`
+		INSERT INTO pages (id, title, slug, body, status, page_type, exclude_from_lists,
+			language_code, published_at, created_at, updated_at, featured_image_id) VALUES
 			(1,'needle article','article','needle body','published','post',0,'en',NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL),
 			(2,'needle guide','guide','needle body','published','page',0,'en',NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL),
 			(3,'needle draft','draft','needle body','draft','post',0,'en',NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL),
 			(4,'needle excluded','excluded','needle body','published','post',1,'en',NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL);
-		INSERT INTO pages_fts(rowid,title,body) SELECT id,title,body FROM pages;
 	`)
 	if err != nil {
 		t.Fatal(err)
