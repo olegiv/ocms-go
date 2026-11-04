@@ -197,6 +197,14 @@ Ordinary updates retain it; a later text change marks it stale rather than
 claiming it was refreshed. Legacy/unlinked basis is `not_tracked`. Hidden
 sources/siblings return no unreadable page IDs, revisions, titles or bodies.
 
+An editor can explicitly review an existing translated draft against the
+current source with **Mark translation reviewed**. That action creates a
+revision with a fresh source basis and the reviewer identity, preserving
+earlier history. It checks both displayed revisions and never changes text
+or publishes. The action is implemented locally, pending staging deployment;
+ordinary MCP updates continue to retain the recorded basis. See
+[editorial review](editorial-review.md#review-a-draft).
+
 `get_my_draft` separates three objects:
 
 - `verified`: authenticated user, grant/key, registered client ID, transport,

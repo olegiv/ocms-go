@@ -922,9 +922,16 @@ The owner accepted the unimported OpenPGP advisory for the reviewed local
 build. The Klaro/minimatch rollout is complete, and a Linux/amd64 package
 recheck retained zero imported-package vulnerabilities and the module-only
 warning; the final `ba044434` source/symbol scan revalidated that disposition.
-Fresh editorial/stale-translation review, human publication, the recording's
+Staging source-basis review, human publication, the recording's
 final segment and the planned production article draft remain pending. See the
 [release decisions](../../docs/launch/release-decisions.md).
+The subsequent editorial pass saved demo revisions EN 27/7, RU 43/5 and
+DE 44/4, with preserved images/metadata and saved claim acknowledgments.
+It exposed a missing action for reviewing an existing translation against
+a new source basis: both translations remain stale on `ba044434`.
+A local editor action is now implemented and verified, pending separate
+commit/deployment approval; no staging freshness flag was changed. See the
+[local review follow-up](#r17-translation-review-follow-up--2026-11-04).
 R1.7 is not complete. Earlier bounded results remain in the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 The earlier [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
@@ -3970,3 +3977,80 @@ The [final acceptance record](../../docs/launch/r17-acceptance.md#final-native-a
 keeps earlier new-DE/sharing/proxy-error coverage bound to its tested builds.
 Only human editorial/stale-translation review, publication, the final demo
 segment and planned launch article drafting remain from these release gates.
+
+
+### R1.7 translation-review follow-up — 2026-11-04
+
+The separately authorized staging content review saved EN 27/revision 7,
+RU 43/revision 5 and DE 44/revision 4. It clarified page-level reference
+limits, identical-input retries and text/SEO freshness triggers. Localized
+images, metadata and taxonomy were preserved, and claim acknowledgments
+were saved. Anonymous page/API/session-preview requests returned 404.
+The translated text matches the reviewed source, but RU/DE still show stale:
+ordinary updates correctly retain the old basis, and the deployed build has
+no action for recording an existing translation's reviewed source revision.
+
+The owner authorized implementing and testing that action locally. The
+editor now offers **Mark translation reviewed**, with an explicit meaning
+acknowledgment and links to the saved source snapshot. It requires a normal
+editor session/CSRF protection and rechecks current role, both displayed
+revisions, active languages and the recorded translation relationship in
+one transaction. Published/scheduled targets and unavailable sources refuse
+review. Query selectors, duplicate/missing fields and oversized/unsupported
+bodies are refused. Historical revision pages expose no review action.
+
+A successful review adds a target revision with the current source basis,
+reviewed translation revision, reviewer and time. It changes no article
+fields, AI access, translation links, source or sibling revisions. Earlier
+provenance/checks remain in history; agent assertions are not copied into
+the human review. Later source text/SEO changes make the translation stale
+again; ordinary MCP updates retain the refreshed basis. This adds no MCP
+approval tool, publication operation, dependency or database migration.
+
+Local verification passed the full Go suite and focused domain/HTTP/template
+checks: stale target/source refusal, role loss, source/link availability,
+CSRF, acknowledgment, parsing, rollback, history preservation, ordinary MCP
+read/update freshness and the existing publication gate. An isolated
+loopback site with synthetic accounts/data passed normal Editor login and
+English/Russian browser flows. A source edit rejected the old form with
+409; fresh reviews changed RU revision 2 to 3 and DE revision 1 to 2, both
+current against source revision 5. Stored source/content/relationships,
+AI access and prior provenance/version rows matched before/after comparisons.
+
+The initial checks reported two pre-existing lint warnings in
+`authoring/retention_test.go` (unlambda) and `authoring/limit_test.go`
+(unparam), plus one test-inclusive NilAway diagnostic in
+`handler/modules_activation_test.go`. The
+[analyzer follow-up](#r17-analyzer-follow-up--2026-11-04) resolves all three;
+the original reports remain historical evidence.
+
+Evidence is under ignored
+`output/r17-validation/translation-review-local-20261104/`, including full
+check logs, browser captures and database preservation assertions. The
+preceding staging content review is under `editorial-review-20261104/`.
+No commit, push, deployment or publication occurred in this local follow-up.
+Staging remains `ba044434`; applying source-basis reviews to 43/44 still
+requires a separately authorized rollout. Wiki and `.claude/shared` were
+left untouched.
+
+### R1.7 analyzer follow-up — 2026-11-04
+
+The owner authorized fixing all three analyzer findings locally. The clock
+fixture now uses `time.Now` directly. Draft-seeding helpers no longer return
+unused IDs or build an unused slice. The SQL gate's reader checks that the
+split results exist and match the query-header count before indexing them.
+There are no analyzer suppressions or runtime behavior changes.
+
+All authoring and handler tests passed, including retention/replay, draft
+limits/concurrent creates, module-activation gates and translation-review
+coverage. Unfiltered golangci-lint across review, authoring, handlers, admin
+views and `cmd/ocms` reports zero issues. Test-inclusive NilAway across
+review, handlers and admin views exits zero with no diagnostics. These are
+the affected-package checks, not a new whole-checkout audit. The preceding
+full Go-suite and local browser results retain their recorded scope.
+
+Evidence is under ignored
+`output/r17-validation/translation-review-analyzers-20261104/`. Existing
+translation-review implementation changes remain intact and uncommitted;
+wiki and `.claude/shared` are untouched. No commit, push, deployment or
+publication occurred.

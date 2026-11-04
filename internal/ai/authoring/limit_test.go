@@ -23,7 +23,7 @@ import (
 // seedPage inserts a page directly, which is far cheaper than a real write and
 // stays outside the hourly mutation quota. Only the columns the limit reads
 // matter: author, status, schedule and AI access.
-func (f *fixture) seedPage(t testing.TB, author int64, status string, scheduled, ai bool) int64 {
+func (f *fixture) seedPage(t testing.TB, author int64, status string, scheduled, ai bool) {
 	t.Helper()
 	now := time.Now().UTC()
 	params := store.CreatePageParams{Title: "Seed", Slug: "seed-" + uuid.NewString(), Body: "<p>Seed</p>", Status: status, AuthorID: author, LanguageCode: "en", PageType: "page", CreatedAt: now, UpdatedAt: now}
@@ -39,16 +39,13 @@ func (f *fixture) seedPage(t testing.TB, author int64, status string, scheduled,
 			t.Fatal(err)
 		}
 	}
-	return page.ID
 }
 
-func (f *fixture) seedDrafts(t testing.TB, n int) []int64 {
+func (f *fixture) seedDrafts(t testing.TB, n int) {
 	t.Helper()
-	ids := make([]int64, 0, n)
 	for range n {
-		ids = append(ids, f.seedPage(t, f.user.ID, "draft", false, true))
+		f.seedPage(t, f.user.ID, "draft", false, true)
 	}
-	return ids
 }
 
 func (f *fixture) ownDrafts(t testing.TB) int64 {

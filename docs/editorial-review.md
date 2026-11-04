@@ -34,6 +34,25 @@ same content fingerprint as draft authoring: source text/SEO changes make a
 translation stale; publication, AI-access changes and sibling membership do
 not. Missing or historical bases are labelled explicitly.
 
+First save any text edits. For an existing translated draft, compare its
+saved text with the linked **Source to review** snapshot, acknowledge that
+it preserves the source's meaning,
+then choose **Mark translation reviewed**. This editor action is implemented
+locally and is not yet deployed to MCP staging. It binds both displayed
+revisions and rechecks the source relationship and editor role in one
+transaction. A changed source or translation, an unavailable source, or a
+published/scheduled target refuses the review; reload and compare again.
+
+A successful review creates a new translation revision with the current
+source fingerprint and records the reviewer, time and reviewed revisions.
+It changes no article text, metadata, taxonomy, AI access, publication state,
+source or sibling revision. Earlier provenance and claim acknowledgments
+remain in history; agent assertions are not copied into the human review.
+Ordinary draft updates retain the reviewed basis. A subsequent source
+text/SEO change makes the translation stale again. This action is available
+through the normal editor session and CSRF protection; MCP cannot approve
+translation reviews or publish content.
+
 Revision history identifies the recorded principal/app and links to a
 side-by-side comparison of title, summary, SEO metadata and body text.
 Incomplete legacy revisions show unrecorded fields rather than borrowing

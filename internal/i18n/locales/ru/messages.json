@@ -8383,6 +8383,46 @@
             "translation": "Проверка переводов"
         },
         {
+            "id": "review.translation_source",
+            "message": "Source to review",
+            "translation": "Источник для проверки"
+        },
+        {
+            "id": "review.translation_note",
+            "message": "Save any text edits first, then compare the saved translation with the linked source revision. This action records your review in a new revision without changing the text or publishing it. Earlier reviews remain in history.",
+            "translation": "Сначала сохраните правки текста, затем сопоставьте сохранённый перевод с указанной версией источника. Это действие запишет проверку в новой версии без изменения текста или публикации. Предыдущие проверки останутся в истории."
+        },
+        {
+            "id": "review.translation_acknowledge",
+            "message": "I reviewed this translation against the source revision shown above and confirm that it preserves its meaning.",
+            "translation": "Я сопоставил перевод с указанной выше версией источника и подтверждаю, что он сохраняет её смысл."
+        },
+        {
+            "id": "review.translation_save",
+            "message": "Mark translation reviewed",
+            "translation": "Подтвердить проверку перевода"
+        },
+        {
+            "id": "review.translation_saved",
+            "message": "Translation review saved for the selected source revision.",
+            "translation": "Проверка перевода сохранена для выбранной версии источника."
+        },
+        {
+            "id": "review.translation_conflict",
+            "message": "The translation, source revision or translation group changed, or this draft cannot be reviewed. Reload both pages and review them again.",
+            "translation": "Перевод, версия источника или группа переводов изменились, либо этот черновик недоступен для проверки. Обновите обе страницы и проверьте их заново."
+        },
+        {
+            "id": "review.translation_failed",
+            "message": "Could not confirm the translation review. Reload the page before trying again.",
+            "translation": "Не удалось подтвердить сохранение проверки перевода. Обновите страницу перед повторной попыткой."
+        },
+        {
+            "id": "review.translation_reviewed_revision",
+            "message": "Translation revision reviewed: %d",
+            "translation": "Проверенная версия перевода: %d"
+        },
+        {
             "id": "review.ai_draft",
             "message": "AI draft",
             "translation": "ИИ-черновик"

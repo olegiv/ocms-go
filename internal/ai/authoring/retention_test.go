@@ -53,7 +53,7 @@ func (f *fixture) recentMutations(t testing.TB) int64 {
 // revision, so the receipt read fails with sql.ErrNoRows.
 func TestRetentionLeavesReplayAndLiveDraftUsable(t *testing.T) {
 	f := setup(t)
-	f.svc.Now = func() time.Time { return time.Now() }
+	f.svc.Now = time.Now
 	created, err := f.svc.Create(f.ctx, f.actor, input("Long-lived draft"))
 	if err != nil {
 		t.Fatal(err)

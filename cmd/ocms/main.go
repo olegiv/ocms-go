@@ -2432,6 +2432,7 @@ func run() (runErr error) {
 			r.Get(handler.RoutePagesID+"/versions", pagesHandler.Versions)
 			r.Get(handler.RoutePagesID+"/versions/{versionId}", pagesHandler.RevisionReview)
 			r.Post(handler.RoutePagesID+"/claims/{index}", pagesHandler.CheckClaim)
+			r.Post(handler.RoutePagesID+"/translation-review", pagesHandler.ReviewTranslation)
 			r.Post(handler.RoutePagesID+"/preview-links", pagesHandler.CreatePreviewLink)
 			r.Post(handler.RoutePagesID+"/preview-links/{linkID}/revoke", pagesHandler.RevokePreviewLink)
 			r.Post(handler.RoutePagesID+"/versions/{versionId}/restore", pagesHandler.RestoreVersion)

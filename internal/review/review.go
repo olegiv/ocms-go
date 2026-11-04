@@ -29,12 +29,13 @@ type Basis struct {
 	Fingerprint    string `json:"fingerprint"`
 }
 type Validation struct {
-	Issues                []draft.Issue `json:"issues"`
-	References            []Reference   `json:"references"`
-	Links                 []draft.Link  `json:"links"`
-	TranslationBasis      *Basis        `json:"translation_basis"`
-	PromptContractVersion string        `json:"prompt_contract_version"`
-	SiteURL               string        `json:"site_url"`
+	Issues                      []draft.Issue `json:"issues"`
+	References                  []Reference   `json:"references"`
+	Links                       []draft.Link  `json:"links"`
+	TranslationBasis            *Basis        `json:"translation_basis"`
+	TranslationReviewedRevision int64         `json:"translation_reviewed_revision,omitempty"`
+	PromptContractVersion       string        `json:"prompt_contract_version"`
+	SiteURL                     string        `json:"site_url"`
 }
 type Report struct {
 	Agent            draft.AgentReport `json:"agent"`
@@ -59,6 +60,7 @@ type Review struct {
 	Reported                 Report
 	Claims                   []Claim
 	Translations             []Translation
+	TranslationSource        *TranslationSource
 	Links                    []store.ListPagePreviewLinksRow
 }
 
@@ -146,6 +148,15 @@ func Load(ctx context.Context, q *store.Queries, page store.Page, viewer int64) 
 	result.Translations, err = Translations(ctx, q, page)
 	if err != nil {
 		return Review{}, err
+	}
+	if page.Status == "draft" && !page.ScheduledAt.Valid {
+		source, sourceErr := translationSource(ctx, q, page)
+		if sourceErr != nil {
+			return Review{}, sourceErr
+		}
+		if source != nil {
+			result.TranslationSource = &TranslationSource{PageID: source.ID, Revision: source.Revision, Title: source.Title, Language: source.LanguageCode}
+		}
 	}
 	result.Links, err = q.ListPagePreviewLinks(ctx, store.ListPagePreviewLinksParams{PageID: page.ID, ExpiresAt: time.Now().Unix()})
 	return result, err

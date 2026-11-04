@@ -8383,6 +8383,46 @@
             "translation": "Translation review"
         },
         {
+            "id": "review.translation_source",
+            "message": "Source to review",
+            "translation": "Source to review"
+        },
+        {
+            "id": "review.translation_note",
+            "message": "Save any text edits first, then compare the saved translation with the linked source revision. This action records your review in a new revision without changing the text or publishing it. Earlier reviews remain in history.",
+            "translation": "Save any text edits first, then compare the saved translation with the linked source revision. This action records your review in a new revision without changing the text or publishing it. Earlier reviews remain in history."
+        },
+        {
+            "id": "review.translation_acknowledge",
+            "message": "I reviewed this translation against the source revision shown above and confirm that it preserves its meaning.",
+            "translation": "I reviewed this translation against the source revision shown above and confirm that it preserves its meaning."
+        },
+        {
+            "id": "review.translation_save",
+            "message": "Mark translation reviewed",
+            "translation": "Mark translation reviewed"
+        },
+        {
+            "id": "review.translation_saved",
+            "message": "Translation review saved for the selected source revision.",
+            "translation": "Translation review saved for the selected source revision."
+        },
+        {
+            "id": "review.translation_conflict",
+            "message": "The translation, source revision or translation group changed, or this draft cannot be reviewed. Reload both pages and review them again.",
+            "translation": "The translation, source revision or translation group changed, or this draft cannot be reviewed. Reload both pages and review them again."
+        },
+        {
+            "id": "review.translation_failed",
+            "message": "Could not confirm the translation review. Reload the page before trying again.",
+            "translation": "Could not confirm the translation review. Reload the page before trying again."
+        },
+        {
+            "id": "review.translation_reviewed_revision",
+            "message": "Translation revision reviewed: %d",
+            "translation": "Translation revision reviewed: %d"
+        },
+        {
             "id": "review.ai_draft",
             "message": "AI draft",
             "translation": "AI draft"

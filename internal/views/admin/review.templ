@@ -239,6 +239,29 @@ templ EditorialReviewPanel(pc *PageContext, data ReviewPanelData) {
 						}
 					</div>
 				}
+				if data.Details.Validated.TranslationReviewedRevision > 0 && data.Details.Validated.TranslationBasis != nil {
+					<p>{ pc.T("review.translation_reviewed_revision", data.Details.Validated.TranslationReviewedRevision) }</p>
+					<p><a class="underline" href={ templ.SafeURL(preview.SessionURL("", "", data.Details.Validated.TranslationBasis.SourcePageID, data.Details.Validated.TranslationBasis.SourceRevision)) }>{ pc.T("review.reference", data.Details.Validated.TranslationBasis.SourcePageID, data.Details.Validated.TranslationBasis.SourceRevision) }</a></p>
+				}
+				if data.Current && data.Details.TranslationSource != nil {
+					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/translation-review", data.PageID)) } class="space-y-3 border-t pt-3">
+						@csrfField()
+						<input type="hidden" name="base_revision" value={ fmt.Sprint(data.Revision) }/>
+						<input type="hidden" name="source_page_id" value={ fmt.Sprint(data.Details.TranslationSource.PageID) }/>
+						<input type="hidden" name="source_revision" value={ fmt.Sprint(data.Details.TranslationSource.Revision) }/>
+						<p>{ pc.T("review.translation_source") }: <a class="underline" target="_blank" href={ templ.SafeURL(preview.SessionURL("", data.Details.TranslationSource.Language, data.Details.TranslationSource.PageID, data.Details.TranslationSource.Revision)) }>{ pc.T("review.reference", data.Details.TranslationSource.PageID, data.Details.TranslationSource.Revision) } — { data.Details.TranslationSource.Title }</a></p>
+						<p class="text-sm text-muted-foreground">{ pc.T("review.translation_note") }</p>
+						<div class="flex gap-2 items-start">
+							@checkbox.Checkbox(checkbox.Props{ID: "translation-acknowledge", Name: "acknowledge", Attributes: templ.Attributes{"required": true}})
+							@label.Label(label.Props{For: "translation-acknowledge"}) {
+								{ pc.T("review.translation_acknowledge") }
+							}
+						</div>
+						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}) {
+							{ pc.T("review.translation_save") }
+						}
+					</form>
+				}
 			}
 		}
 		@card.Card() {

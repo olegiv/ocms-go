@@ -84,3 +84,33 @@ func TestReviewIssueDisplayLocalizesWithoutChangingRecordedEvidence(t *testing.T
 		t.Fatal("unknown historical issue was replaced")
 	}
 }
+
+func TestTranslationReviewFormBindsBothRevisionsAndHidesHistoricalAction(t *testing.T) {
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, language := range []string{"en", "ru"} {
+		for _, current := range []bool{true, false} {
+			data := ReviewPanelData{PageID: 43, Revision: 5, Current: current, Details: review.Review{TranslationSource: &review.TranslationSource{PageID: 27, Revision: 7, Title: "<script>untrusted source</script>", Language: "en"}}}
+			var body bytes.Buffer
+			if err := EditorialReviewPanel(&PageContext{AdminLang: language}, data).Render(context.Background(), &body); err != nil {
+				t.Fatal(err)
+			}
+			markup := body.String()
+			if strings.Contains(markup, `action="/admin/pages/43/translation-review"`) != current {
+				t.Fatal("historical action exposed or current action missing")
+			}
+			if !current {
+				continue
+			}
+			for _, required := range []string{`name="base_revision" value="5"`, `name="source_page_id" value="27"`, `name="source_revision" value="7"`, `id="translation-acknowledge"`, `required`, `/en/preview/pages/27/revisions/7`, i18n.T(language, "review.translation_save"), i18n.T(language, "review.translation_acknowledge")} {
+				if !strings.Contains(markup, required) {
+					t.Fatalf("missing %q", required)
+				}
+			}
+			if strings.Contains(markup, "<script>untrusted source</script>") {
+				t.Fatal("source title executed as markup")
+			}
+		}
+	}
+}
