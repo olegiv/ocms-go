@@ -97,12 +97,14 @@ this step unless the user passed a valid version argument.
 
 ## Step 4 - infer release title
 
-From the drafted notes, take the first bullet under `### Added`, or the first
-bullet overall if there is no Added section. Strip formatting and trim to about
-50 characters. Fallback: `vX.Y.Z`.
+Propose a headline of about 50 characters that names the release's most
+important user-facing changes (not simply the first `### Added` bullet), in
+plain text without Markdown.
 
-Let the user override the title in Step 5. The tag-triggered release workflow
-uses the tag name as the GitHub Release title unless the workflow is changed.
+Let the user override the title in Step 5. It goes into the version heading
+(Step 6), from which the release workflow titles the GitHub Release
+`vX.Y.Z - <title>` (`scripts/release-title.sh`). A heading without a title
+fails the workflow's validate job, so there is no bare-tag fallback.
 
 ## Step 5 - mandatory content-approval gate
 
@@ -124,7 +126,7 @@ Two edits to one file:
 1. Insert a new section directly below the existing `[Unreleased]` stub:
 
    ```markdown
-   ## [X.Y.Z] - YYYY-MM-DD
+   ## [X.Y.Z] - YYYY-MM-DD - <approved title>
 
    <approved release notes>
 
@@ -187,7 +189,7 @@ for `ocms-go`.
 Then:
 
 ```bash
-git tag -a vX.Y.Z -m "vX.Y.Z" "$FULL_SHA"
+git tag -a vX.Y.Z -m "$(scripts/release-title.sh X.Y.Z)" "$FULL_SHA"
 git push origin vX.Y.Z
 ```
 
