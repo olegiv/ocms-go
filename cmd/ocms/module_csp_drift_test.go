@@ -40,6 +40,9 @@ var vendorLoads = map[string][]thirdPartyLoad{
 		{"connect-src", "region1.analytics.google.com"},
 		{"connect-src", "www.google.com"},
 		{"connect-src", "www.googletagmanager.com"},
+		// With Google signals or other Ads features on.
+		{"connect-src", "stats.g.doubleclick.net"},
+		{"connect-src", "pagead2.googlesyndication.com"},
 	},
 }
 
@@ -57,7 +60,8 @@ var vendorLoads = map[string][]thirdPartyLoad{
 //
 // Bug state: drop "https://*.hcaptcha.com" from the hcaptcha module's
 // CSPSources and this names js.hcaptcha.com; drop "https://*.google.com"
-// from analytics_ext's and it names www.google.com.
+// from analytics_ext's and it names www.google.com, or
+// "https://*.g.doubleclick.net" and it names stats.g.doubleclick.net.
 func TestModuleThirdPartyHostsAreInCSPSources(t *testing.T) {
 	const modulePath = "github.com/olegiv/ocms-go/"
 	root := filepath.Join("..", "..")

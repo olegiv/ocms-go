@@ -134,11 +134,17 @@ func (m *Module) CSPSources() map[string][]string {
 		"style-src": {"https://www.googletagmanager.com"},
 		// GTM's <noscript> fallback is an iframe.
 		"frame-src": {"https://www.googletagmanager.com"},
-		// Google's tag also sends GA4 hits to www.google.com/g/collect.
+		// Google's tag also sends GA4 hits to www.google.com/g/collect, and,
+		// with Google signals or other Ads features on, to
+		// stats.g.doubleclick.net and pagead2.googlesyndication.com: the
+		// connect-src of the "Google Analytics" variant in Google's CSP guide
+		// (developers.google.com/tag-platform/security/guides/csp), apart
+		// from google.<TLD> country domains, which must each be listed.
 		"connect-src": {
 			"https://www.google-analytics.com", "https://*.google-analytics.com",
 			"https://*.analytics.google.com", "https://*.google.com",
 			"https://www.googletagmanager.com", "https://*.googletagmanager.com",
+			"https://*.g.doubleclick.net", "https://pagead2.googlesyndication.com",
 		},
 	}
 	if settings := m.currentSettings(); settings != nil && matomoActive(settings) {
