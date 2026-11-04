@@ -9,22 +9,6 @@ import (
 	"context"
 )
 
-const countAdminSearchPagesByLanguage = `-- name: CountAdminSearchPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE language_code=?1 AND ((title LIKE ?2 ESCAPE '!') OR (body LIKE ?2 ESCAPE '!'))
-`
-
-type CountAdminSearchPagesByLanguageParams struct {
-	LanguageCode  string `json:"language_code"`
-	SearchPattern string `json:"search_pattern"`
-}
-
-func (q *Queries) CountAdminSearchPagesByLanguage(ctx context.Context, arg CountAdminSearchPagesByLanguageParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAdminSearchPagesByLanguage, arg.LanguageCode, arg.SearchPattern)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countPagesInLanguage = `-- name: CountPagesInLanguage :one
 SELECT COUNT(*) FROM pages p WHERE p.language_code=?1
 AND (?2='' OR p.status=?2)
@@ -332,72 +316,6 @@ func (q *Queries) ListPagesInLanguage(ctx context.Context, arg ListPagesInLangua
 		arg.Status,
 		arg.CategoryID,
 		arg.TagID,
-		arg.ResultOffset,
-		arg.ResultLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	items := []Page{}
-	for rows.Next() {
-		var i Page
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Slug,
-			&i.Body,
-			&i.Status,
-			&i.AuthorID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.PublishedAt,
-			&i.FeaturedImageID,
-			&i.MetaTitle,
-			&i.MetaDescription,
-			&i.MetaKeywords,
-			&i.OgImageID,
-			&i.NoIndex,
-			&i.NoFollow,
-			&i.CanonicalUrl,
-			&i.ScheduledAt,
-			&i.LanguageCode,
-			&i.HideFeaturedImage,
-			&i.PageType,
-			&i.ExcludeFromLists,
-			&i.Summary,
-			&i.VideoUrl,
-			&i.VideoTitle,
-			&i.Revision,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const searchAdminPagesByLanguage = `-- name: SearchAdminPagesByLanguage :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url, video_title, revision FROM pages WHERE language_code=?1 AND ((title LIKE ?2 ESCAPE '!') OR (body LIKE ?2 ESCAPE '!')) ORDER BY updated_at DESC,id DESC LIMIT ?4 OFFSET ?3
-`
-
-type SearchAdminPagesByLanguageParams struct {
-	LanguageCode  string `json:"language_code"`
-	SearchPattern string `json:"search_pattern"`
-	ResultOffset  int64  `json:"result_offset"`
-	ResultLimit   int64  `json:"result_limit"`
-}
-
-func (q *Queries) SearchAdminPagesByLanguage(ctx context.Context, arg SearchAdminPagesByLanguageParams) ([]Page, error) {
-	rows, err := q.db.QueryContext(ctx, searchAdminPagesByLanguage,
-		arg.LanguageCode,
-		arg.SearchPattern,
 		arg.ResultOffset,
 		arg.ResultLimit,
 	)

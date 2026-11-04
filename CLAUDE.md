@@ -138,6 +138,7 @@ The hook source is in `.claude/shared/global/hooks/`.
    - Write SQL in `internal/store/queries/*.sql` with sqlc annotations
    - Run `sqlc generate` to create type-safe Go code
    - Migrations live in `internal/store/migrations/` (goose format)
+   - Site search reads `page_search`, an FTS5 index of each page's readable text (`security.PageHTMLText`), never its HTML. Plain-SQL triggers only queue changed page IDs in `page_search_queue`; `SearchService` indexes the queue in Go in batches of 100 (a search does at most two, a background drain the rest). Keep schema triggers plain SQL (no Go functions), so any program and older oCMS versions can still write pages. `pages_fts` (raw HTML) stays for older versions. A migration that rebuilds the `pages` table must recreate both the `pages_fts_*` and the `page_search_queue_*` triggers
 
 2. **Embedded Assets**: Templates and static files are embedded using `//go:embed` in `web/embed.go`. JS dependencies (htmx, Alpine.js) are managed via `package.json` and copied to `web/static/dist/js/` during build. Run `make assets` to compile SCSS and install JS deps. After modifying JS dependencies, use `go build -a` to force re-embedding.
 
@@ -295,7 +296,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OCMS_REQUIRE_FORM_CAPTCHA` | No | `false` (effective `true` in prod) | Require captcha on all public form submissions |
-| `OCMS_SANITIZE_PAGE_HTML` | No | `false` (effective `true` in prod) | Sanitize page HTML before rendering to visitors |
+| `OCMS_SANITIZE_PAGE_HTML` | No | `false` (effective `true` in prod) | Sanitize page HTML on save and before rendering to visitors; keeps the editor's value-checked inline formatting (`security.PageEditorValidStyles`, handed to TinyMCE as `valid_styles` while it is on) |
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | No | `false` (effective `true` in prod) | Fail startup in production if page HTML sanitization is disabled |
 | `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | No | `false` (effective `true` in prod) | Reject page writes containing suspicious HTML patterns |
 | `OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML` | No | `false` (effective `true` in prod) | Fail startup in production if suspicious page HTML blocking is disabled |

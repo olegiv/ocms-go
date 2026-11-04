@@ -34,7 +34,7 @@ The notification text supports HTML tags for rich formatting:
 Check our <a href="/sale">sale page</a> for <strong>50% off</strong>!
 ```
 
-The text is sanitized before it is rendered, with the same bluemonday UGC policy used for page HTML (`security.SanitizePageHTML`): scripts, event-handler attributes and inline `style` attributes are removed, and links get `rel="nofollow"`. Set the colors with the Background Color and Text Color settings instead of inline styles. The colors are HTML-escaped, not sanitized.
+The text is sanitized before it is rendered, with the same bluemonday UGC policy used for page HTML (`security.SanitizePageHTML`): scripts and event-handler attributes are removed, inline styles are limited to the page editor's value-checked formatting (alignment, colours, fonts and similar), links keep the `rel` values `nofollow`, `noopener` and `noreferrer` an author set, and a link that opens a new tab always gets `rel="noopener"`. Set the colors with the Background Color and Text Color settings instead of inline styles. The colors are HTML-escaped, not sanitized.
 
 ## Cookie-Based Dismissal
 

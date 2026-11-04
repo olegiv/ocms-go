@@ -635,8 +635,11 @@ func TestConvertPageFormViewData_OgImage(t *testing.T) {
 		Errors:    make(map[string]string),
 	}
 
-	got := convertPageFormViewData(data, &render.Renderer{}, "en")
+	got := convertPageFormViewData(data, &render.Renderer{}, "en", true)
 
+	if !got.SanitizesPageHTML {
+		t.Error("SanitizesPageHTML = false; want the handler's setting passed through")
+	}
 	if got.OgImage == nil {
 		t.Fatal("OgImage is nil; want non-nil")
 	}
@@ -663,8 +666,11 @@ func TestConvertPageFormViewData_OgImageNil(t *testing.T) {
 		Errors:    make(map[string]string),
 	}
 
-	got := convertPageFormViewData(data, &render.Renderer{}, "en")
+	got := convertPageFormViewData(data, &render.Renderer{}, "en", false)
 
+	if got.SanitizesPageHTML {
+		t.Error("SanitizesPageHTML = true; want the handler's setting passed through")
+	}
 	if got.OgImage != nil {
 		t.Errorf("OgImage = %v; want nil", got.OgImage)
 	}

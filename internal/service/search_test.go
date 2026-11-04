@@ -6,8 +6,15 @@ package service
 import (
 	"context"
 	"database/sql"
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -146,6 +153,31 @@ func TestSearchServiceGenerateExcerpt(t *testing.T) {
 			},
 		},
 		{
+			name:   "multi-byte text is never split",
+			body:   "<p>" + strings.Repeat("Привет мир ", 30) + "</p>",
+			query:  "мир",
+			maxLen: 25,
+			check: func(t *testing.T, got string) {
+				if !utf8.ValidString(got) {
+					t.Errorf("excerpt is not valid UTF-8: %q", got)
+				}
+				if n := utf8.RuneCountInString(strings.Trim(got, ".")); n > 25 {
+					t.Errorf("excerpt has %d characters, want at most 25", n)
+				}
+			},
+		},
+		{
+			name:   "markup words are not excerpt matches",
+			body:   `<p style="text-align: center">Intro text</p><p>` + strings.Repeat("filler ", 40) + `</p>`,
+			query:  "center",
+			maxLen: 20,
+			check: func(t *testing.T, got string) {
+				if !strings.HasPrefix(got, "Intro text") || strings.Contains(got, "center") {
+					t.Errorf("got %q, want the start of the page text", got)
+				}
+			},
+		},
+		{
 			name:   "html tags stripped",
 			body:   "<p>Hello <strong>world</strong></p>",
 			query:  "hello",
@@ -166,69 +198,6 @@ func TestSearchServiceGenerateExcerpt(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := service.generateExcerpt(tt.body, tt.query, tt.maxLen)
 			tt.check(t, got)
-		})
-	}
-}
-
-func TestStripHTMLTags(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{
-			name:  "simple paragraph",
-			input: "<p>Hello World</p>",
-			want:  "Hello World",
-		},
-		{
-			name:  "nested tags",
-			input: "<div><p>Hello <strong>World</strong></p></div>",
-			want:  "Hello World",
-		},
-		{
-			name:  "multiple spaces normalized",
-			input: "<p>Hello</p>   <p>World</p>",
-			want:  "Hello World",
-		},
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
-		{
-			name:  "no tags",
-			input: "Hello World",
-			want:  "Hello World",
-		},
-		{
-			name:  "html entities decoded",
-			input: "Hello &amp; World",
-			want:  "Hello & World",
-		},
-		{
-			name:  "script tags removed",
-			input: "<script>alert('xss')</script>Safe content",
-			want:  "alert('xss')Safe content",
-		},
-		{
-			name:  "self-closing tags",
-			input: "Line 1<br/>Line 2<hr>Line 3",
-			want:  "Line 1Line 2Line 3",
-		},
-		{
-			name:  "attributes removed with tags",
-			input: `<a href="http://example.com" class="link">Click me</a>`,
-			want:  "Click me",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := stripHTMLTags(tt.input)
-			if got != tt.want {
-				t.Errorf("stripHTMLTags(%q) = %q, want %q", tt.input, got, tt.want)
-			}
 		})
 	}
 }
@@ -260,80 +229,71 @@ func TestNewSearchService(t *testing.T) {
 	if service.db != nil {
 		t.Error("db should be nil when passed nil")
 	}
-	if service.queries == nil {
-		t.Error("queries should be initialized even with nil db")
-	}
 }
 
-func TestSanitizeHighlight(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
-		{
-			name:  "clean highlight preserved",
-			input: "This is a <mark>test</mark> highlight",
-			want:  "This is a <mark>test</mark> highlight",
-		},
-		{
-			name:  "multiple marks preserved",
-			input: "<mark>mysql</mark> server with <mark>mysql</mark> client",
-			want:  "<mark>mysql</mark> server with <mark>mysql</mark> client",
-		},
-		{
-			name:  "html tags stripped but mark preserved",
-			input: `View the <mark>mysql</mark> guide <a href="test">here</a>`,
-			want:  "View the <mark>mysql</mark> guide here",
-		},
-		{
-			name:  "br tags removed",
-			input: `Line 1<br>Line 2 <mark>test</mark>`,
-			want:  "Line 1Line 2 <mark>test</mark>",
-		},
-		{
-			name:  "div and p tags removed",
-			input: `<div><p><mark>test</mark> content</p></div>`,
-			want:  "<mark>test</mark> content",
-		},
-		{
-			name:  "nested html with mark",
-			input: `<strong>Bold</strong> and <mark>highlighted</mark> text`,
-			want:  "Bold and <mark>highlighted</mark> text",
-		},
-		{
-			name:  "whitespace normalized",
-			input: "  <mark>test</mark>   result  ",
-			want:  "<mark>test</mark> result",
-		},
-	}
+// highlightTag matches every tag in a highlight.
+var highlightTag = regexp.MustCompile(`<[^>]*>`)
 
+// TestHighlightHTML pins the Highlight contract themes rely on when they
+// render it unescaped: escaped page text with <mark> as the only markup.
+func TestHighlightHTML(t *testing.T) {
+	tests := []struct{ name, in, want string }{
+		{"empty", "", ""},
+		{"marks a match", "a \x01b\x02 c", "a <mark>b</mark> c"},
+		{"several matches", "\x01go\x02 and \x01go\x02", "<mark>go</mark> and <mark>go</mark>"},
+		{"escapes text", "x < y & \x01z\x02", "x &lt; y &amp; <mark>z</mark>"},
+		{"escapes decoded markup", "<script>alert(1)</script> \x01t\x02", "&lt;script&gt;alert(1)&lt;/script&gt; <mark>t</mark>"},
+		{"unbalanced markers dropped", "\x01a b", "a b"},
+		{"trims", "  \x01t\x02 ...  ", "<mark>t</mark> ..."},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeHighlight(tt.input)
+			got := highlightHTML(tt.in)
 			if got != tt.want {
-				t.Errorf("sanitizeHighlight(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("highlightHTML(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+			for _, tag := range highlightTag.FindAllString(got, -1) {
+				if tag != "<mark>" && tag != "</mark>" {
+					t.Errorf("highlightHTML(%q) = %q carries tag %q", tt.in, got, tag)
+				}
 			}
 		})
 	}
 }
 
-// searchTestDB creates an in-memory SQLite database with the pages table for search tests.
+// pageSearchMigration is the migration that creates page_search, its queue
+// and the queue triggers.
+const pageSearchMigration = "20261023120000_create_page_search.sql"
+
+// applyPageSearchMigration runs the Up section of the real page_search
+// migration, so hand-made test schemas use the production triggers.
+func applyPageSearchMigration(t *testing.T, db *sql.DB) {
+	t.Helper()
+	migration, err := os.ReadFile(filepath.Join("..", "store", "migrations", pageSearchMigration)) // #nosec G304 -- fixed repo file
+	if err != nil {
+		t.Fatalf("reading %s: %v", pageSearchMigration, err)
+	}
+	up, _, found := strings.Cut(string(migration), "-- +goose Down")
+	if !found {
+		t.Fatalf("%s has no Down section", pageSearchMigration)
+	}
+	if _, err := db.Exec(up); err != nil {
+		t.Fatalf("applying %s: %v", pageSearchMigration, err)
+	}
+}
+
+// searchTestDB creates an in-memory SQLite database with the pages table and
+// both search indexes for search tests.
 func searchTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
 	db.SetMaxOpenConns(1)
 
-	// Create minimal pages table matching the columns SearchAdminPages returns
+	// Create a minimal pages table with the columns the search queries read
 	_, err = db.Exec(`
 		CREATE TABLE pages (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,8 +316,11 @@ func searchTestDB(t *testing.T) *sql.DB {
 		_ = db.Close()
 		t.Fatalf("failed to create pages table: %v", err)
 	}
-
 	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`CREATE VIRTUAL TABLE pages_fts USING fts5(title, body, meta_title, meta_description, meta_keywords)`); err != nil {
+		t.Fatalf("failed to create pages_fts: %v", err)
+	}
+	applyPageSearchMigration(t, db)
 	return db
 }
 
@@ -469,6 +432,22 @@ func TestSearchAllPages(t *testing.T) {
 		}
 	})
 
+	t.Run("markup does not match", func(t *testing.T) {
+		if _, err := db.Exec(`INSERT INTO pages (title, slug, body, status) VALUES
+			('Styled', 'styled', '<p style="text-align: center"><span style="color: #e03e2d">Centred caf&eacute; <b>B</b>old</span></p>', 'draft')`); err != nil {
+			t.Fatalf("insert styled page: %v", err)
+		}
+		for query, want := range map[string]int64{"text-align": 0, "e03e2d": 0, "span": 0, "Centred": 1, "café": 1, "Bold": 1} {
+			_, total, err := service.SearchAllPages(ctx, SearchParams{Query: query, Limit: 10})
+			if err != nil {
+				t.Fatalf("SearchAllPages(%q): %v", query, err)
+			}
+			if total != want {
+				t.Errorf("SearchAllPages(%q) total = %d, want %d", query, total, want)
+			}
+		}
+	})
+
 	t.Run("excerpt is generated", func(t *testing.T) {
 		results, _, err := service.SearchAllPages(ctx, SearchParams{
 			Query: "Go", Limit: 1, Offset: 0,
@@ -552,4 +531,83 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// countRows returns COUNT(*) of a table.
+func countRows(t *testing.T, db *sql.DB, table string) int {
+	t.Helper()
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil {
+		t.Fatalf("counting %s: %v", table, err)
+	}
+	return n
+}
+
+// TestSearchIndexingIsBatched guards against a search indexing a large
+// backlog in one write transaction: after an upgrade every page is queued,
+// and indexing them all at once held the write lock long enough for other
+// searches and logins to fail. One batch takes at most indexBatchSize pages,
+// a search at most searchSyncBatches batches, and a background drain the rest.
+func TestSearchIndexingIsBatched(t *testing.T) {
+	db := searchTestDB(t)
+	svc := NewSearchService(db)
+	ctx := context.Background()
+	const pages = indexBatchSize*searchSyncBatches + 50
+	for i := range pages {
+		if _, err := db.Exec(`INSERT INTO pages (title, slug, body, status) VALUES (?, ?, '<p>batched opossum</p>', 'published')`,
+			"Page", "page-"+strconv.Itoa(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if n, err := svc.indexQueued(ctx); err != nil || n != indexBatchSize {
+		t.Fatalf("indexQueued() = %d, %v; want one batch of %d", n, err, indexBatchSize)
+	}
+	if left := countRows(t, db, "page_search_queue"); left != pages-indexBatchSize {
+		t.Fatalf("queue holds %d after one batch, want %d", left, pages-indexBatchSize)
+	}
+
+	// Both searches run syncIndex first; this schema carries the columns of
+	// the all-status search.
+	if _, _, err := svc.SearchAllPages(ctx, SearchParams{Query: "opossum", Limit: 10}); err != nil {
+		t.Fatalf("SearchAllPages: %v", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for countRows(t, db, "page_search_queue") > 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the background drain did not empty the queue")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if indexed := countRows(t, db, "page_search"); indexed != pages {
+		t.Errorf("page_search holds %d pages, want %d", indexed, pages)
+	}
+}
+
+// TestRebuildIndexKeepsAnsweringAndDropsDeletedPages checks RebuildIndex goes
+// through the queue: the index is never emptied, and an entry whose page no
+// longer exists is removed.
+func TestRebuildIndexKeepsAnsweringAndDropsDeletedPages(t *testing.T) {
+	db := searchTestDB(t)
+	svc := NewSearchService(db)
+	ctx := context.Background()
+	if _, err := db.Exec(`INSERT INTO pages (title, slug, body, status) VALUES ('Kept', 'kept', '<p>rebuild <b>word</b></p>', 'published')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO page_search(rowid, title, body) VALUES (999, 'Ghost', 'ghost text')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RebuildIndex(ctx); err != nil {
+		t.Fatalf("RebuildIndex: %v", err)
+	}
+	var body string
+	if err := db.QueryRow(`SELECT body FROM page_search WHERE rowid = 1`).Scan(&body); err != nil || body != "rebuild word" {
+		t.Errorf("indexed body = %q (err %v), want %q", body, err, "rebuild word")
+	}
+	if ghosts := countRows(t, db, "page_search WHERE rowid = 999"); ghosts != 0 {
+		t.Error("the entry of a page that no longer exists survived RebuildIndex")
+	}
+	if left := countRows(t, db, "page_search_queue"); left != 0 {
+		t.Errorf("RebuildIndex left %d pages queued", left)
+	}
 }

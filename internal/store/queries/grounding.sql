@@ -31,11 +31,5 @@ AND (sqlc.arg(status)='' OR p.status=sqlc.arg(status))
 AND (sqlc.arg(category_id)=0 OR EXISTS(SELECT 1 FROM page_categories pc WHERE pc.page_id=p.id AND pc.category_id=sqlc.arg(category_id)))
 AND (sqlc.arg(tag_id)=0 OR EXISTS(SELECT 1 FROM page_tags pt WHERE pt.page_id=p.id AND pt.tag_id=sqlc.arg(tag_id)));
 
--- name: SearchAdminPagesByLanguage :many
-SELECT * FROM pages WHERE language_code=sqlc.arg(language_code) AND ((title LIKE sqlc.arg(search_pattern) ESCAPE '!') OR (body LIKE sqlc.arg(search_pattern) ESCAPE '!')) ORDER BY updated_at DESC,id DESC LIMIT sqlc.arg(result_limit) OFFSET sqlc.arg(result_offset);
-
--- name: CountAdminSearchPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE language_code=sqlc.arg(language_code) AND ((title LIKE sqlc.arg(search_pattern) ESCAPE '!') OR (body LIKE sqlc.arg(search_pattern) ESCAPE '!'));
-
 -- name: ListGroundingLanguages :many
 SELECT * FROM languages WHERE is_active=1 ORDER BY position,name,id LIMIT sqlc.arg(result_limit) OFFSET sqlc.arg(result_offset);

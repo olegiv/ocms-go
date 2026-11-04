@@ -527,7 +527,7 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
-	viewData := convertPageFormViewData(data, h.renderer, lang)
+	viewData := convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)
 	renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 }
 
@@ -635,7 +635,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
-		viewData := convertPageFormViewData(data, h.renderer, lang)
+		viewData := convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)
 		renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 		return
 	}
@@ -649,7 +649,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if input.Status == PageStatusPublished {
 		publishedAt = sql.NullTime{Time: now, Valid: true}
 	}
-	normalizedBody := h.normalizePageBodyForStorage(rawBody)
+	normalizedBody, removedMarkup := h.normalizePageBodyForStorage(rawBody)
 
 	newPage, err := h.createPageGuarded(r.Context(), store.CreatePageParams{
 		Title:             input.Title,
@@ -699,7 +699,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Invalidate page cache (for sitemap regeneration on next request)
 	h.invalidatePageCache(newPage.ID)
 
-	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page created successfully")
+	h.pageSaved(w, r, newPage.ID, redirectAdminPages, "Page created", removedMarkup)
 }
 
 // isValidPageStatus checks if a status is valid.
@@ -806,7 +806,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "pages.edit"), pagesEditBreadcrumbs(adminLang, page.Title, page.ID))
-	viewData := convertPageFormViewData(data, h.renderer, adminLang)
+	viewData := convertPageFormViewData(data, h.renderer, adminLang, h.sanitizePageHTML)
 	viewData.PublicURL = sessionPreviewPath(page)
 	viewData.Review, err = h.reviewPanel(r, page, page.Revision)
 	if err != nil {
@@ -919,7 +919,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		// Preserve existing
 		publishedAt = existingPage.PublishedAt
 	}
-	normalizedBody := h.normalizePageBodyForStorage(rawBody)
+	normalizedBody, removedMarkup := h.normalizePageBodyForStorage(rawBody)
 
 	updatedPage, err := h.updatePageGuarded(r.Context(), store.UpdatePageParams{
 		ID:                id,
@@ -999,7 +999,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Invalidate page cache
 	h.invalidatePageCache(updatedPage.ID)
 
-	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page updated successfully")
+	h.pageSaved(w, r, updatedPage.ID, redirectAdminPages, "Page updated", removedMarkup)
 }
 
 // Delete handles DELETE /admin/pages/{id} - deletes a page.
@@ -1143,7 +1143,7 @@ func (h *PagesHandler) renderEditFormErrors(w http.ResponseWriter, r *http.Reque
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(status)
 	}
-	renderTempl(w, r, adminviews.PageFormPage(pc, convertPageFormViewData(data, h.renderer, lang)))
+	renderTempl(w, r, adminviews.PageFormPage(pc, convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)))
 }
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
@@ -1364,7 +1364,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, versionsURL, bodyErr)
 		return
 	}
-	normalizedBody := h.normalizePageBodyForStorage(rawVersionBody)
+	normalizedBody, removedMarkup := h.normalizePageBodyForStorage(rawVersionBody)
 
 	base, err := revisionForAction(r)
 	if err != nil {
@@ -1414,7 +1414,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page version restored", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "version_id": versionId})
 	h.logSuspiciousPageContentEvent(r, page.ID, page.Slug, rawVersionBody, "restored")
-	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Version restored successfully")
+	h.pageSaved(w, r, id, fmt.Sprintf(redirectAdminPagesID, id), "Version restored", removedMarkup)
 }
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
@@ -2017,9 +2017,64 @@ func validatePageBodySecurityPolicy(body string, blockSuspicious bool) string {
 	return "Body contains suspicious HTML markup that is blocked by policy"
 }
 
-func (h *PagesHandler) normalizePageBodyForStorage(raw string) string {
+// normalizePageBodyForStorage returns the body to store. With
+// OCMS_SANITIZE_PAGE_HTML on it is the sanitized body, together with what the
+// page HTML policy removed (security.RemovedMarkup) for the save message.
+func (h *PagesHandler) normalizePageBodyForStorage(raw string) (body string, removed []string) {
 	if h == nil || !h.sanitizePageHTML {
-		return raw
+		return raw, nil
 	}
-	return security.SanitizePageHTML(raw)
+	body = security.SanitizePageHTML(raw)
+	return body, security.RemovedMarkup(raw, body)
+}
+
+// removedMarkupShown caps how many removed items a save warning lists, and
+// removedMarkupItemLen how many characters of each: an item quotes a tag or
+// attribute name from the submitted HTML, which can be arbitrarily long.
+const (
+	removedMarkupShown   = 5
+	removedMarkupItemLen = 60
+)
+
+// pageSaved reports a successful page save ("Page updated" and so on). When
+// sanitizing removed markup it does not say "successfully": it records the
+// loss (log and event log), then opens the page's editor with a warning that
+// names what was removed. The editor shows only allowed formatting, but a
+// pasted embed or a value outside the allowed range would otherwise vanish
+// without a word.
+func (h *PagesHandler) pageSaved(w http.ResponseWriter, r *http.Request, pageID int64, successURL, action string, removed []string) {
+	if len(removed) == 0 {
+		flashSuccess(w, r, h.renderer, successURL, action+" successfully")
+		return
+	}
+	// slog.Info, as for other page actions: the warning-level Event Log entry
+	// below is the record (a slog warning would be copied there again).
+	shown := capRemovedMarkup(removed)
+	slog.Info("page HTML policy removed markup on save", "page_id", pageID, "removed", shown, "removed_count", len(removed), "user_id", middleware.GetUserID(r))
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelWarning, "Page HTML policy removed markup on save", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": pageID, "removed": shown, "removed_count": len(removed)})
+	flashAndRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, pageID), removedMarkupWarning(action, removed), "warning")
+}
+
+// capRemovedMarkup returns at most removedMarkupShown removed items, each cut
+// to removedMarkupItemLen characters, for the warning, the log and the event
+// log alike: an item quotes names from the submitted HTML.
+func capRemovedMarkup(removed []string) []string {
+	shown := make([]string, 0, min(len(removed), removedMarkupShown))
+	for _, item := range removed[:min(len(removed), removedMarkupShown)] {
+		if runes := []rune(item); len(runes) > removedMarkupItemLen {
+			item = string(runes[:removedMarkupItemLen]) + "…"
+		}
+		shown = append(shown, item)
+	}
+	return shown
+}
+
+// removedMarkupWarning words the save warning from the capped removed items.
+func removedMarkupWarning(action string, removed []string) string {
+	shown := capRemovedMarkup(removed)
+	more := ""
+	if len(removed) > removedMarkupShown {
+		more = fmt.Sprintf(" and %d more", len(removed)-removedMarkupShown)
+	}
+	return fmt.Sprintf("%s, but markup the site does not allow was removed: %s%s. Check the page.", action, strings.Join(shown, ", "), more)
 }

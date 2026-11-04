@@ -1426,10 +1426,13 @@ func convertPageCategoryNodes(nodes []PageCategoryNode) []adminviews.PageCategor
 }
 
 // convertPageFormViewData converts handler PageFormData to view PageFormViewData.
-func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang string) adminviews.PageFormViewData {
+// sanitizesPageHTML is the handler's OCMS_SANITIZE_PAGE_HTML setting; the editor
+// limits itself to the page style allowlist while it is on.
+func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang string, sanitizesPageHTML bool) adminviews.PageFormViewData {
 	viewData := adminviews.PageFormViewData{
-		IsEdit:       data.IsEdit,
-		BaseRevision: data.BaseRevision, ConflictRevision: data.ConflictRevision, AIEditable: data.AIEditable, CanManageAI: data.CanManageAI,
+		SanitizesPageHTML: sanitizesPageHTML,
+		IsEdit:            data.IsEdit,
+		BaseRevision:      data.BaseRevision, ConflictRevision: data.ConflictRevision, AIEditable: data.AIEditable, CanManageAI: data.CanManageAI,
 		PublicURL:            data.PublicURL,
 		Statuses:             data.Statuses,
 		PageTypes:            data.PageTypes,

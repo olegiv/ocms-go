@@ -351,34 +351,12 @@ func TestExtractAssetRefsIsDeterministic(t *testing.T) {
 	}
 }
 
-// TestMarkupRemovedIgnoresRewrites covers a second-pass review finding. The
-// sanitizer adds rel="nofollow" to every link and normalizes entities, so a
-// plain "output != input" check counted almost every article body while the
-// summary claimed markup had been *removed* — the opposite of what happened.
-func TestMarkupRemovedIgnoresRewrites(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		before string
-		after  string
-		want   bool
-	}{
-		{"nofollow added", `<a href="/x">l</a>`, `<a href="/x" rel="nofollow">l</a>`, false},
-		{"entity normalized", `<p>caf&eacute;</p>`, `<p>café</p>`, false},
-		{"identical", `<p>hi</p>`, `<p>hi</p>`, false},
-		{"element dropped", `<font color="red">x</font>`, `x`, true},
-		{"attribute dropped", `<p style="color:red">x</p>`, `<p>x</p>`, true},
-		{"one of several dropped", `<p><b>a</b><iframe src="x"></iframe></p>`, `<p><b>a</b></p>`, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := markupRemoved(tc.before, tc.after); got != tc.want {
-				t.Errorf("markupRemoved() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
 // TestPrepareBodyTallyCountsOnlyRemovals runs the real sanitizer, so it pins
 // the behaviour against the policy rather than against a hand-written fixture.
+// The sanitizer adds rel="nofollow" to every link and normalizes entities, so a
+// plain "output != input" check would count almost every article body while
+// the summary claimed markup had been removed; security.RemovedMarkup, tested
+// on its own in internal/security, counts only what disappeared.
 func TestPrepareBodyTallyCountsOnlyRemovals(t *testing.T) {
 	source := NewSource()
 
@@ -392,6 +370,20 @@ func TestPrepareBodyTallyCountsOnlyRemovals(t *testing.T) {
 	source.prepareBody(`<font color="red">legacy</font>`, nil, &legacy)
 	if legacy != 1 {
 		t.Errorf("a body that lost <font> was not counted (%d)", legacy)
+	}
+
+	// The policy keeps allowlisted inline styles, so a body can lose one
+	// declaration while its style attribute survives.
+	partial := 0
+	source.prepareBody(`<p style="text-align: center; position: fixed">partly kept</p>`, nil, &partial)
+	if partial != 1 {
+		t.Errorf("a body that lost a style declaration was not counted (%d)", partial)
+	}
+
+	keptStyle := 0
+	source.prepareBody(`<p style="text-align: center;">kept</p>`, nil, &keptStyle)
+	if keptStyle != 0 {
+		t.Errorf("a body whose allowlisted style was only reformatted was counted (%d)", keptStyle)
 	}
 }
 
