@@ -2,7 +2,7 @@
 
 Status: plan, not started. Branch `feature/issue-207-custom-code`, cut from `origin/master` at 3931fd82.
 
-Issue: https://github.com/olegiv/ocms-go/issues/207. The design we committed to is in the comment https://github.com/olegiv/ocms-go/issues/207#issuecomment-6641782122.
+Issue: https://github.com/olegiv/ocms-go/issues/207. The design we committed to is in the comment https://github.com/olegiv/ocms-go/issues/207#issuecomment-6641782122. c-nv-s confirmed it and asked about HTMX in draft views; that answer is in https://github.com/olegiv/ocms-go/issues/207#issuecomment-6642947912. Work starts after the MCP desktop feature is finalized.
 
 ## Context
 
@@ -23,6 +23,10 @@ So this is a built-in, opt-in module. It does not move the privilege boundary: a
 7. Stylesheet hosts taken from `<link rel=stylesheet>` are allowed in `style-src`, and only on the pages that use them.
 8. The editor warns about inline handlers (`on*=`), because the CSP blocks them.
 9. The built-in themes render the snippets. A custom html theme needs one call per position in its layout.
+10. Page content can't carry instructions for attribute-driven libraries (see D9):
+    - a test fails if the page HTML sanitizer ever keeps those attributes;
+    - the module's admin page warns while page sanitizing is off;
+    - the docs explain the risk.
 
 ### Out of scope for this branch
 
@@ -139,6 +143,25 @@ So this is a built-in, opt-in module. It does not move the privilege boundary: a
 - **Event log.** Call `m.ctx.Events.LogConfigEvent` with metadata: scope, `page_id`, position, byte count, the first 12 hex characters of the SHA-256, and the stylesheet hosts. The code itself is not logged. The failure branch logs with `service.WithoutEventLog(ctx)`, as `TestEventWriteFailuresStayOutOfTheEventLog` requires.
 - **Placeholder text.** It must contain no literal `https://` URLs, because `TestModuleThirdPartyHostsAreInCSPSources` would treat them as hosts the module loads. Describe the expected shape in words instead.
 
+**D9. Attribute-driven libraries in snippets.**
+- **The threat.** A snippet may load HTMX, Alpine or a similar library that reads code or requests from HTML attributes. Page content then becomes code in the hands of whoever writes it: editors, API keys with page write access, and later AI drafts.
+  - For example, `hx-post="/admin/…" hx-trigger="load"` in a page body would send that request with the session of the admin or editor viewing the page, including in the draft view.
+  - CSRF protection would not stop it, because the request is same-origin.
+  - The CSP can't stop it either: `connect-src 'self'` allows it, and production's `'unsafe-eval'` lets Alpine expressions run.
+  - Neither library can reach the admin UI's own document. Out-of-band swaps only target the page that made the request.
+- **The defense.** The page HTML sanitizer (`security.SanitizePageHTML`, bluemonday UGC in `internal/security/page_html.go:89-109`) runs on save and before rendering (`trustedPageBody`, `internal/handler/frontend.go:628-635`), drafts included.
+  - A probe on 3931fd82 confirmed that it strips `hx-*`, `data-hx-*`, `hx-on:*`, `x-data`, `x-init`, `@click`, `:class`, `<hx-partial>`, `<template hx-swap-oob>` and `<form>`.
+  - Snippets are not page content and are never sanitized, so HTMX attributes an admin writes in a snippet keep working.
+- **Lock it in.** New drift test `TestPageSanitizerStripsAttributeDrivenMarkup` in `internal/security`.
+  - It feeds that markup through `SanitizePageHTML` and fails if any attribute whose name starts with `hx-`, `data-hx-`, `x-`, `@` or `:` survives, or if `<hx-*>` elements or `<form>` survive.
+  - Show that it fails when the policy is widened, for example with `p.AllowDataAttributes()` or `p.AllowAttrs("hx-post").Globally()`.
+  - The existing `internal/security/page_html_test.go:124` only checks that the suspicious-markup detector does not flag `hx-on`; it says nothing about the sanitizer.
+- **Warn while it's off.** `OCMS_SANITIZE_PAGE_HTML` is off by default in development and on by default in staging and production (`internal/config/config.go:106`, `:386`).
+  - Both module admin views show a warning while `m.ctx.Config.SanitizePageHTML` is false: page content is not sanitized, so a snippet that loads an attribute-driven library lets page authors run requests as the viewer.
+  - It is a warning, not an activation guard, so development stays usable.
+- **Docs.** The module doc gets a section on attribute-driven libraries: the threat, the sanitizer's role, the setting to check, and the advice not to load such a library while sanitizing is off on a site with untrusted page authors.
+- **Later idea, a separate issue, not this branch.** Admin endpoints that change data could reject requests whose `Referer` is outside `/admin`. That would cover any same-origin request trick from a public page, not just HTMX.
+
 ## Iterations
 
 Each iteration builds, passes the full gate (`scripts/test-gate.sh`), and gets its own approved commit.
@@ -164,7 +187,8 @@ Each iteration builds, passes the full gate (`scripts/test-gate.sh`), and gets i
   - registry aggregation, including panic recovery and inactive modules;
   - `PageID` is set on page routes, including draft fallback, and is 0 on home, list and 404;
   - `callModuleHTMLFuncs` passes three arguments (extend `internal/handler/frontend_test.go:2002-2075`);
-  - editor links: shown to admins, absent for editors, absent on the new-page form.
+  - editor links: shown to admins, absent for editors, absent on the new-page form;
+  - `TestPageSanitizerStripsAttributeDrivenMarkup` (D9), shown failing with the policy widened.
 
 ### 2. The module
 
@@ -188,6 +212,7 @@ Each iteration builds, passes the full gate (`scripts/test-gate.sh`), and gets i
   - functions return `""` when inactive and when `ActiveChecker` is nil, and render nothing for `pageID` 0 beyond the site-wide slot;
   - an uninitialized module, with no `Init` and a nil `ctx`, returns empty results from `TemplateFuncs()` closures, `CSPSources()` and `PageCSPSources()` without panicking;
   - a Markdown-negotiated page response keeps the base CSP;
+  - both admin views show the sanitizer warning when `Config.SanitizePageHTML` is false, and hide it when true;
   - handlers: admin gets 200, demo mode is blocked, the event is recorded, and an editor gets 403 (the existing drift test covers this);
   - `CSPSources` and `PageCSPSources` results.
 
@@ -213,6 +238,7 @@ Each iteration builds, passes the full gate (`scripts/test-gate.sh`), and gets i
   - template functions, and the two calls a custom html theme adds to its layout: one before `</head>`, one before `</body>`. The #207 comment said "one call", so state two plainly;
   - the restart needed for html themes after activation;
   - snippets apply to one translation, are not exported, and run regardless of the privacy consent banner unless written in the Klaro `type="text/plain"` form;
+  - attribute-driven libraries such as HTMX and Alpine (D9): the risk, the sanitizer setting, and when not to load them;
   - the database schema.
 - Update:
   - `docs/custom-themes.md:365-379` (integration hooks table)
@@ -234,6 +260,7 @@ Each iteration builds, passes the full gate (`scripts/test-gate.sh`), and gets i
 
 ## New drift tests
 
+- `TestPageSanitizerStripsAttributeDrivenMarkup` (iteration 1, D9).
 - `TestBuiltInLayoutsCallEveryModuleHTMLFunc` (iteration 3).
 - `TestCustomCodeTableStaysInsideTheModule`: no non-test file outside `modules/customcode/` names `custom_code_snippets`. This keeps API, MCP, transfer and handler code from gaining a path to the table. It must fail when such a reference is added.
 - `TestOnlyFrontendPageExtendsResponseCSP`: `ExtendResponseCSP` has exactly one non-test caller, `FrontendHandler.Page`, so per-page widening cannot spread to admin or API responses.
@@ -256,6 +283,9 @@ Following the CLAUDE.md drift-test rule, each new test is shown to fail on the b
   - a draft page shows its snippets in preview;
   - an `onclick` snippet produces the warning flash, and is blocked in the browser as documented;
   - deactivating the module stops the snippets at once on the templ default theme, and on an html theme thanks to D5's active check.
+- **Attribute-driven markup.**
+  - With sanitizing on, a page whose body was saved with `hx-get="/admin/" hx-trigger="load"` and a snippet loading HTMX sends no request when viewed as admin or editor, draft included.
+  - With sanitizing off, as in development, the module's admin pages show the warning.
 - **Event log.** Each save shows one entry with the hash and size, and no code.
 - **Page deletion.** Deleting a page with snippets removes its rows.
 
