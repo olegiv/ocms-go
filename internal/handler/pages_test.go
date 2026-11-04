@@ -7,14 +7,17 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -342,19 +345,22 @@ func TestPagesHandlerNormalizePageBodyForStorage(t *testing.T) {
 
 	t.Run("returns raw body when sanitization is disabled", func(t *testing.T) {
 		h := &PagesHandler{}
-		if got := h.normalizePageBodyForStorage(raw); got != raw {
-			t.Fatalf("normalizePageBodyForStorage() = %q, want %q", got, raw)
+		if got, removed := h.normalizePageBodyForStorage(raw); got != raw || removed != nil {
+			t.Fatalf("normalizePageBodyForStorage() = %q, %q; want %q, nil", got, removed, raw)
 		}
 	})
 
-	t.Run("sanitizes body when enabled", func(t *testing.T) {
+	t.Run("sanitizes body when enabled and reports the removal", func(t *testing.T) {
 		h := &PagesHandler{sanitizePageHTML: true}
-		got := h.normalizePageBodyForStorage(raw)
+		got, removed := h.normalizePageBodyForStorage(raw)
 		if strings.Contains(got, "<script") {
 			t.Fatalf("normalizePageBodyForStorage() should strip script tags, got %q", got)
 		}
 		if !strings.Contains(got, "<p>Hello</p>") {
 			t.Fatalf("normalizePageBodyForStorage() should keep safe markup, got %q", got)
+		}
+		if !slices.Equal(removed, []string{"<script>"}) {
+			t.Fatalf("removed = %q, want [<script>]", removed)
 		}
 	})
 
@@ -363,12 +369,99 @@ func TestPagesHandlerNormalizePageBodyForStorage(t *testing.T) {
 	t.Run("keeps editor formatting when enabled", func(t *testing.T) {
 		h := &PagesHandler{sanitizePageHTML: true}
 		styled := `<p style="text-align: center;"><span style="color: #e03e2d;">Hi</span></p>`
-		got := h.normalizePageBodyForStorage(styled)
+		got, removed := h.normalizePageBodyForStorage(styled)
 		want := `<p style="text-align: center"><span style="color: #e03e2d">Hi</span></p>`
-		if got != want {
-			t.Fatalf("normalizePageBodyForStorage() = %q, want %q", got, want)
+		if got != want || len(removed) != 0 {
+			t.Fatalf("normalizePageBodyForStorage() = %q, %q; want %q and no removals", got, removed, want)
 		}
 	})
+}
+
+// TestPageSavedWarnsAboutRemovedMarkup checks a save that lost markup to the
+// page HTML policy says so, opens the page's editor and records the loss,
+// instead of the plain success message the editor used to get while its
+// formatting silently vanished (issue #202).
+func TestPageSavedWarnsAboutRemovedMarkup(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewPagesHandler(db, renderer, sm)
+	for _, tc := range []struct {
+		name                         string
+		removed                      []string
+		wantFlash, wantType, wantLoc string
+		wantEvents                   int
+	}{
+		{"nothing removed", nil, "Page updated successfully", "success", "/admin/pages", 0},
+		{"removals listed", []string{"<iframe>", `<p style="position: …">`},
+			`Page updated, but markup the site does not allow was removed: <iframe>, <p style="position: …">. Check the page.`,
+			"warning", "/admin/pages/7", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := countPolicyEvents(t, db)
+			var flash, flashType string
+			handler := sm.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.pageSaved(w, r, 7, "/admin/pages", "Page updated", tc.removed)
+				flash, flashType = sm.GetString(r.Context(), "flash"), sm.GetString(r.Context(), "flash_type")
+			}))
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/admin/pages/7", nil))
+			if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != tc.wantLoc {
+				t.Errorf("response = %d to %q, want 303 to %q", rr.Code, rr.Header().Get("Location"), tc.wantLoc)
+			}
+			if flash != tc.wantFlash || flashType != tc.wantType {
+				t.Errorf("flash = %q (%s), want %q (%s)", flash, flashType, tc.wantFlash, tc.wantType)
+			}
+			if got := countPolicyEvents(t, db) - before; got != tc.wantEvents {
+				t.Errorf("logged %d policy events, want %d", got, tc.wantEvents)
+			}
+		})
+	}
+}
+
+// TestPageSavedCapsLoggedRemovals checks the event log entry lists the same
+// capped items as the warning: each item quotes a name from the submitted
+// HTML, which an editor can make arbitrarily long.
+func TestPageSavedCapsLoggedRemovals(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewPagesHandler(db, renderer, sm)
+	huge := "<p " + strings.Repeat("x", 5000) + `="…">`
+	removed := []string{huge, "<a>", "<b>", "<c>", "<d>", "<e>", "<f>"}
+	handler := sm.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.pageSaved(w, r, 7, "/admin/pages", "Page updated", removed)
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/admin/pages/7", nil))
+	var metadata string
+	if err := db.QueryRow(`SELECT metadata FROM events WHERE message = 'Page HTML policy removed markup on save' ORDER BY id DESC LIMIT 1`).Scan(&metadata); err != nil {
+		t.Fatalf("reading the event: %v", err)
+	}
+	if len(metadata) > 600 || !strings.Contains(metadata, `"removed_count":7`) {
+		t.Errorf("event metadata is %d bytes (%.120q…), want the capped list and removed_count 7", len(metadata), metadata)
+	}
+}
+
+func countPolicyEvents(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM events WHERE message = 'Page HTML policy removed markup on save'`).Scan(&n); err != nil {
+		t.Fatalf("counting events: %v", err)
+	}
+	return n
+}
+
+func TestRemovedMarkupWarningCapsItsLength(t *testing.T) {
+	long := "<p " + strings.Repeat("x", 500) + `="…">`
+	got := removedMarkupWarning("Page created", []string{"<a>", "<b>", long, "<d>", "<e>", "<f>", "<g>"})
+	want := "Page created, but markup the site does not allow was removed: <a>, <b>, <p " + strings.Repeat("x", 57) + "…, <d>, <e> and 2 more. Check the page."
+	if got != want {
+		t.Errorf("removedMarkupWarning() =\n%q\nwant\n%q", got, want)
+	}
 }
 
 // TestPageScheduling tests page scheduling logic

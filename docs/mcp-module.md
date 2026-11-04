@@ -171,8 +171,8 @@ Notes:
 
 - **Search:** `search_pages` uses the site's FTS5 index, which covers
   published pages, the same index that powers the public site search. When
-  drafts are visible to the key, it matches titles and bodies across all pages
-  instead, as the admin search does.
+  drafts are visible to the key, it matches titles and body text (never the
+  HTML markup) across all pages instead, as the admin search does.
 - **Markdown bodies:** `body_format: "markdown"` converts the stored HTML with
   the same converter as [Markdown for Agents](agent-ready.md#markdown-negotiation)
   (2 MB input cap). The result is compact, but embeds and styling are dropped.

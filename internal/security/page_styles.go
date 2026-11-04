@@ -38,13 +38,13 @@ var (
 	tablePartElements = []string{"table", "tr", "td", "th"}
 )
 
-// lengthToken is a non-negative length: up to 9999px/pt, 99em/rem or 100%,
+// lengthToken is a non-negative length: up to 9999px/pt, 99em/rem or 200%,
 // with up to six decimals (TinyMCE writes unrounded table percentages such as
-// 8.37563%). bluemonday's own length handler also accepts negative values,
+// 8.37563%, and a resized table can come out slightly over 100%). bluemonday's own length handler also accepts negative values,
 // viewport units and any magnitude. Negative offsets would pull an image over
 // the site header; the size caps keep page content in normal flow at sizes a
 // page layout can still contain, so nothing here can cover content above it.
-const lengthToken = `(?:0|[0-9]{1,4}(?:\.[0-9]{1,6})?(?:px|pt)|[0-9]{1,2}(?:\.[0-9]{1,6})?(?:em|rem)|(?:100|[0-9]{1,2}(?:\.[0-9]{1,6})?)%)`
+const lengthToken = `(?:0|[0-9]{1,4}(?:\.[0-9]{1,6})?(?:px|pt)|[0-9]{1,2}(?:\.[0-9]{1,6})?(?:em|rem)|(?:200|1?[0-9]{1,2}(?:\.[0-9]{1,6})?)%)`
 
 const (
 	lengthOrAutoToken = `(?:auto|` + lengthToken + `)`

@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/api/v2/pages"
@@ -163,8 +162,9 @@ func (m *Module) searchPages(ctx context.Context, call *toolCall, in SearchPages
 			Title:  r.Title,
 			Slug:   r.Slug,
 			Status: r.Status,
-			// The excerpt is cut by bytes and may split a multi-byte rune.
-			Excerpt:   strings.ToValidUTF8(r.Excerpt, ""),
+			// Cut by runes from security.PageHTMLText, which writes invalid
+			// bytes as U+FFFD, so the excerpt is always valid UTF-8.
+			Excerpt:   r.Excerpt,
 			UpdatedAt: r.UpdatedAt,
 		}
 		if r.FeaturedImageID.Valid {
