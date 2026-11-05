@@ -10,9 +10,14 @@ owned draft creation/update/translation with `mcp:drafts`, retained retries,
 CAS, provenance and existing taxonomy/media. Publishing and deletion remain
 human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
 [OAuth](oauth.md) records the completed R1.1 authentication acceptance and
-PHASE5 notes retain R1.5/R1.6 results. R1.7 is deployed at `ba044434`
-(2026-11-04), with fresh Claude web/ChatGPT web OAuth/MFA reconnect,
-draft replay/conflict, share-policy and anonymous preview/revocation checks.
+PHASE5 notes retain R1.5/R1.6 results. R1.7's latest verified staging build
+is `be0e9cc3` (2026-11-04). Dedicated Editor password/shared-MFA login and
+translation review passed: RU 43/6 and DE 44/5 are `current` against
+unchanged EN 27/7, confirmed in the editor and MCP. All remain unscheduled
+drafts; see the [rollout record](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
+Earlier `ba044434` checks passed fresh Claude web/ChatGPT web OAuth/MFA
+reconnect, draft replay/conflict, share-policy and anonymous
+preview/revocation checks.
 The [upgrade record](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
 records exact identity and limits. The
 [final native/CLI follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
@@ -24,8 +29,11 @@ warning.
 The [current acceptance record](launch/r17-acceptance.md) retains earlier web
 sharing/revocation and native/CLI multilingual draft results on `39d82c94`.
 The inline alt-text repair passed both web clients' resaves/readbacks and
-rendered previews on `16ac7161`. Fresh editorial/stale-translation review,
-[release decisions](launch/release-decisions.md) and human publication remain.
+rendered previews on `16ac7161`. The focused `be0e9cc3` rollout did not
+repeat GUI/native/CLI reconnect, dependency, sharing or proxy-error checks;
+earlier results retain their tested builds. Final owner editorial approval,
+human publication and launch material remain in the
+[release decisions](launch/release-decisions.md).
 
 ## Features
 
@@ -572,9 +580,11 @@ OAuth/API-key metadata and revocation at `/account/connected-apps`, with an
 administrator overview/revoke in `/admin/mcp`. Credential hashes/values are
 absent from these views. Core maintenance drains retired OAuth evidence in
 bounded transactions while retaining all active-family replay evidence.
-Management/retention is deployed on staging; the current runtime including
-the verified inline alt-text repair is `16ac7161`. This does not mark the
-pending release decisions or manual publication as complete.
+Management/retention is deployed on staging. The latest verified runtime
+is `be0e9cc3`, including the inline alt-text repair and editor translation
+review. Its focused rollout made RU 43/6 and DE 44/5 current against
+EN 27/7; earlier client results retain their recorded builds. Final owner
+approval, manual publication and launch material remain pending.
 
 
 ## Page authoring foundations (R1.2 development)

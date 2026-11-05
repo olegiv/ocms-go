@@ -1,17 +1,25 @@
 # Connected apps and OAuth retention
 
-R1.7 is deployed to MCP staging at `ba044434` (2026-11-04). Fresh Claude web
-and ChatGPT web own-grant revoke/refusal/password/shared-MFA/consent
-reconnect and draft readbacks passed with exactly `mcp:access mcp:drafts`.
+R1.7's latest verified MCP staging build is `be0e9cc3` (2026-11-04).
+Dedicated Editor password/shared-MFA login and normal translation review
+passed: RU 43/6 and DE 44/5 are `current` against unchanged EN 27/7 in the
+editor and MCP. All three remain unscheduled drafts; see the
+[rollout record](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
+Existing OAuth grants and owner connections were preserved. This focused
+rollout did not repeat provider reconnect or credential lifecycle checks.
+
+On `ba044434`, fresh Claude web and ChatGPT web own-grant
+revoke/refusal/password/shared-MFA/consent reconnect and draft readbacks
+passed with exactly `mcp:access mcp:drafts`.
 The temporary Claude access-only grant and all new test shares were revoked;
 the final two-scope connections remain active. See the
 [upgrade record](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04).
 The [current acceptance record](launch/r17-acceptance.md) also retains full
 EN/RU/DE draft flows and fresh web revocation/reconnect evidence on
 `39d82c94`. The `16ac7161` follow-up verified repaired inline alt text through
-Claude web, ChatGPT web and rendered previews of the resaved demo drafts;
-fresh editorial/stale-translation review remains. Earlier bounded Claude web
-and ChatGPT web checks passed on `df6e5d86` for these paths; see the
+Claude web, ChatGPT web and rendered previews of the resaved demo drafts.
+Earlier bounded Claude web and ChatGPT web checks passed on `df6e5d86`
+for these paths; see the
 [staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 Native Desktop authoring and Claude Code/Codex OAuth and bearer checks also
 passed on that build, with a Chrome workaround for Desktop reconnect; see the
@@ -20,7 +28,8 @@ The [final ba044434 follow-up](launch/r17-acceptance.md#final-native-and-cli-ver
 passed native Desktop OAuth and both CLIs' OAuth/bearer modes. Native Connect
 completed the normal browser confirmation, password/shared MFA, consent and
 Desktop callback; the earlier workaround/pending label is superseded.
-Human editorial review, publication and the final demo segment remain open.
+Final owner editorial approval, human publication and launch material remain
+open; staging content/translation review is complete.
 
 ## Account and administrator controls
 
@@ -139,8 +148,8 @@ connections retain their normal 30-day refresh duration. Both new 90-minute,
 IPv4 `/32`-restricted bearer keys were deactivated, with direct and actual
 CLI startup HTTP 401 checks. Owner connections and original content were
 preserved. Full EN/RU/DE and publication/lifecycle coverage retain their
-earlier build-specific evidence; fresh human editorial/stale-translation
-review, publication, the final recording segment and article drafting remain
-pending. See the
+earlier build-specific evidence. The `be0e9cc3` rollout completes staging
+content/translation review; final owner editorial approval, publication,
+the final recording segment and article drafting remain pending. See the
 [phase notes](../.claude/docs/PHASE5.md), [client checklist](desktop-authoring.md),
 [OAuth contract](oauth.md) and [demo script](launch/demo-script.md).

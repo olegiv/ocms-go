@@ -6,19 +6,23 @@ deploy when **you** run them. Preparing this guide does not execute them.
 The existing `ocms-demo`, `fly.toml`, demo deployment script and the production host are
 outside this procedure.
 
-Current runtime: `ba044434`, verified 2026-11-04. See the
-[R1.7 acceptance record](launch/r17-acceptance.md) for image identity,
-upgrade prerequisites, fresh Claude web/ChatGPT web OAuth/MFA reconnect,
-draft and preview checks, cleanup and preservation evidence. This rollout
-used an explicitly approved staging-only `OCMS_REQUIRE_FORM_CAPTCHA=false`
+Latest verified runtime: `be0e9cc3`, deployed 2026-11-04. The
+[translation-review rollout](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
+records exact image identity, snapshot, health and preservation checks.
+Normal dedicated Editor password/shared-MFA login passed; RU 43/6 and
+DE 44/5 are current against EN 27/7 in the editor and MCP. All remain
+unscheduled drafts. Earlier client/dependency results in the
+[R1.7 acceptance record](launch/r17-acceptance.md) retain their build scope;
+the focused rollout did not rerun them. The rollout used the explicitly
+approved staging-only `OCMS_REQUIRE_FORM_CAPTCHA=false`
 override with zero public forms; required MFA remains enabled. The tracked
 profile still defaults to requiring CAPTCHA. The
 [final follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
 passed native-initiated Desktop reconnect and authoring, both CLIs'
-OAuth/bearer paths and scoped dependency revalidation without another
-deployment. Historical client tables retain their original builds.
-Human editorial/stale-translation review, publication, the final demo
-segment and article drafting remain open.
+OAuth/bearer paths and scoped dependency revalidation on `ba044434` without
+another deployment during that follow-up. Historical client tables retain
+their original builds. Final owner editorial approval, publication, the
+final demo segment and article drafting remain open.
 
 | File | Role |
 |---|---|
@@ -451,8 +455,10 @@ the later full EN/RU/DE draft demo, taxonomy/media, publication/lifecycle
 tests and `16ac7161` alt-text verification. Its
 [final ba044434 follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
 passed native-initiated Desktop reconnect, all four CLI OAuth/bearer paths
-and scoped dependency revalidation. Human editorial/stale-translation review,
-publication, the final demo segment and article drafting remain open.
+and scoped dependency revalidation. The later `be0e9cc3` rollout completes
+staging content/translation review, with RU/DE current against EN 27/7.
+Final owner editorial approval, publication, the final demo segment and
+article drafting remain open.
 DCR and unsupported authentication methods remain off. Do not reuse the
 historical R1.1 probe result as a CMS-write pass.
 

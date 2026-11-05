@@ -1,6 +1,6 @@
 # R1 release decisions
 
-Updated 2026-11-04. The OpenPGP disposition below is owner-approved for the
+Updated 2026-11-05. The OpenPGP disposition below is owner-approved for the
 reviewed build, with the staging-target recheck recorded below; other
 decisions retain their stated status. This record does not authorize
 commit, push, deployment or publication. The
@@ -8,8 +8,18 @@ commit, push, deployment or publication. The
 
 ## Latest staging verification
 
-`ba044434` is deployed and healthy on `ocms-mcp-staging`. Fresh Claude web
-and ChatGPT web OAuth/MFA reconnect, draft replay/conflict, share-policy and
+`be0e9cc3` is the latest verified deployment on `ocms-mcp-staging`
+(2026-11-04). Normal dedicated Editor password/shared-MFA login and
+translation review passed. RU 43/revision 6 and DE 44/revision 5 are
+`current` against unchanged EN 27/revision 7, verified in the editor and
+MCP; all remain unscheduled drafts. The
+[rollout record](r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
+includes exact image, preservation and cleanup evidence. This focused
+rollout did not repeat client reconnect, dependency, sharing or proxy-error
+checks; earlier results keep their tested builds.
+
+On the preceding `ba044434` build, fresh Claude web and ChatGPT web
+OAuth/MFA reconnect, draft replay/conflict, share-policy and
 anonymous preview/revocation checks passed. Original content and demo
 drafts 27/43/44 at revisions 6/4/3 were preserved; all test shares are
 revoked. See the
@@ -27,8 +37,9 @@ this staging app with zero public forms. MFA remains required. No CAPTCHA
 keys were configured and the tracked profile's secure default was not
 changed; future redeploys need the explicit approved exception or a real
 verifier. This is not a production CAPTCHA exception or a publication
-approval. Native-initiated Desktop reconnect is passed. Human review,
-publication, the final demo segment and article drafting remain open.
+approval. Native-initiated Desktop reconnect and staging translation review
+are passed. Final owner editorial approval, human publication, the final
+demo segment and article drafting remain open.
 
 ## Inline-image accessibility
 
@@ -40,10 +51,12 @@ signed-in revision previews retained their rendered alt values. Captions
 and other content metadata were preserved. See the
 [verification record](r17-acceptance.md#alt-text-staging-verification).
 
-Fresh editorial review is still required at these new revisions. RU/DE are
-now `stale` after the English body changed; their source bases were left
-intact. Old pinned snapshots remain unchanged. This focused check does not
-establish a whole-site accessibility pass or authorize publication.
+Those resaves made RU/DE `stale` after the English body changed; their
+source bases were left intact. The later content review and `be0e9cc3`
+editor action resolved that state: RU 43/6 and DE 44/5 are now `current`
+against EN 27/7. Old pinned snapshots remain unchanged. These focused
+checks do not establish a whole-site accessibility pass or authorize
+publication.
 
 ## Dependency advisory dispositions
 
@@ -129,10 +142,14 @@ retained in the [acceptance record](r17-acceptance.md#final-native-and-cli-verif
 
 ## Human publication and launch material
 
-The alt fix is deployed and verified. Review the selected staging component,
-currently EN 27/revision 6, RU 43/revision 4 and DE 44/revision 3, including
-fresh claim acknowledgments and stale translation review. Re-read current
-revisions before any lifecycle action. All remain unscheduled drafts.
+The selected staging component is now EN 27/revision 7, RU 43/revision 6
+and DE 44/revision 5. The authorized content review saved corrections and
+claim acknowledgments at revisions 7/5/4. The `be0e9cc3` translation-review
+action then made RU/DE current against English revision 7 without changing
+article fields; previous acknowledgments remain in their original
+revisions. Final owner editorial approval is still required. Re-read the
+current revisions and their review state before any lifecycle action.
+All remain unscheduled drafts.
 Only the human editor performs the final Publish action after separate
 publication approval. Capture the published page and translation state to
 finish the demo. The current screenshot walkthrough ends before that action

@@ -1,31 +1,46 @@
-# R1.7 release acceptance — updated 2026-11-04
+# R1.7 release acceptance — updated 2026-11-05
 
-The latest verified staging build is `ba044434`. Claude web/ChatGPT web
-checks and the final native Desktop plus four CLI OAuth/bearer paths passed.
-Native-initiated Desktop reconnect is passed, including normal browser
-confirmation, password/shared MFA, incremental draft consent and final
-native readback. Dependency revalidation found zero vulnerable imported Go
-packages/reachable symbols and zero npm findings; the approved OpenPGP
-module-only warning remains visible. The upgrade retained required MFA and
-its approved staging-only CAPTCHA exception for zero public forms.
+The latest verified staging build is `be0e9cc3`, deployed on 2026-11-04.
+Dedicated Editor password/shared-MFA login and the normal translation-review
+action passed. RU 43/revision 6 and DE 44/revision 5 are both `current`
+against unchanged EN 27/revision 7, confirmed in the editor and MCP.
+All three remain private, unscheduled drafts. See the
+[translation-review rollout](#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
+
+Earlier Claude web/ChatGPT web checks, native-initiated Desktop reconnect
+and all four CLI OAuth/bearer paths passed on `ba044434`. Its dependency
+revalidation found zero vulnerable imported Go packages/reachable symbols
+and zero npm findings; the approved OpenPGP module-only warning remains
+visible. Those results retain their build scope. The latest rollout
+retained required MFA and the approved staging-only CAPTCHA exception for
+zero public forms.
 Klaro's interactive consent/SRI checks remain bound to `035ac1dd`, the full
 EN/RU/DE workflow to `39d82c94`, and alt-text resaves to `16ac7161`. The final
 native/CLI follow-up created EN/RU pairs; it did not repeat new DE creation.
-**R1.7 is not release-complete:** fresh editorial/translation review, human
-publication, the final demo segment and the planned production article
-draft remain pending. See the
+**R1.7 is not release-complete:** final owner editorial approval, separately
+authorized human publication, the final demo segment and the planned
+production article draft remain pending. Staging content/translation
+review is complete. See the
 [scoped dependency dispositions](release-decisions.md#dependency-advisory-dispositions).
 
 ## Tested identities
 
 - Fly app: `ocms-mcp-staging`, canonical origin
   `https://ocms-mcp-staging.fly.dev`.
-- Latest verified deployed commit: `ba0444341691b567b3e128f59e7e4cb323125df8`;
+- Latest verified deployed commit: `be0e9cc3793ed310ca3702cbce34759c99d3e659`;
+  source tree `6a2a9ac1858163a40b2c219bae79e1b4d9a787ba`, binary build time
+  `2026-11-04T22:22:20Z`, checked directly on the host.
+  Fly readiness/liveness and both public health endpoints passed. MCP's
+  generic server version `1.0.0` does not attest to a Git commit.
+- Latest image digest:
+  `[image digest redacted]`.
+- Earlier web/native/CLI and dependency checks ran on
+  `ba0444341691b567b3e128f59e7e4cb323125df8`;
   source tree `fd409ccfd133de7c8e5c0e5c4b0e8b3598f2eb20`, binary build time
   `2026-11-04T17:17:32Z`, checked directly on the host.
   Fly readiness/liveness and both public health endpoints passed. MCP's
   generic server version `1.0.0` does not attest to a Git commit.
-- Image digest:
+- Earlier `ba044434` image digest:
   `[image digest redacted]`.
 - Earlier Klaro checks ran on
   `035ac1ddf9b3a9abb6e4289d8545ec246cea1ac3`, built at
@@ -87,11 +102,14 @@ revision, as documented in [draft authoring](../draft-authoring.md).
 The chosen review component is [EN page 27](https://ocms-mcp-staging.fly.dev/admin/pages/27),
 [RU page 43](https://ocms-mcp-staging.fly.dev/admin/pages/43) and
 [DE page 44](https://ocms-mcp-staging.fly.dev/admin/pages/44).
-After the `16ac7161` resaves their revisions are 6, 4 and 3 respectively.
+The `16ac7161` resaves produced revisions 6, 4 and 3 respectively.
 Both translations changed from `current` to `stale` after the English body
-fingerprint changed. Their recorded source bases were preserved. These
-current revisions need fresh human claim/content review and translation
-review before any separately authorized publication.
+fingerprint changed. Their recorded source bases were preserved. Subsequent
+content review saved revisions 7/5/4; the `be0e9cc3` editor review then
+advanced only RU/DE to 6/5. Both translations are now `current` against
+EN 27/revision 7. The [rollout record](#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
+records that completed review; final owner approval and publication remain
+separate.
 
 ## Direct review and failure evidence
 
@@ -181,8 +199,10 @@ to `mcp:access mcp:drafts`. The expired editor browser session was refreshed
 with its Keychain password and shared authenticator. No owner MFA or grant
 changes, new scopes, shares or bearer keys were needed.
 
-RU 43 and DE 44 now report `stale`; their translation bases were not reset
-to conceal the source change. All three pages remain unscheduled drafts.
+At the end of this alt-text check, RU 43 and DE 44 reported `stale`; their
+translation bases were not reset to conceal the source change. The later
+`be0e9cc3` review resolves that state, as recorded below. All three pages
+remain unscheduled drafts.
 Native Desktop/CLI modes, web revocation/reconnect and proxy-error probes
 were not rerun in this focused alt-text check; their earlier build-specific
 evidence remains above.
@@ -432,6 +452,78 @@ reconnect pass is retained under `output/r17-validation/desktop-reconnect-202611
 No commit, push, deployment, publication or original-draft edit occurred in
 this test run; wiki and `.claude/shared` were untouched.
 
+## Staging translation-review verification on be0e9cc3 — 2026-11-04
+
+After separate authorization, `be0e9cc3` was deployed from its exact clean
+Git archive, with 1,429 source blobs verified, including symlink targets.
+The full uncached Go test gate and Fly configuration validation passed
+before deployment. The existing Machine `[machine ID redacted]`, volume
+`[volume ID redacted]`, 2 shared vCPU / 1 GB sizing and environment were
+preserved. Volume snapshot `[snapshot ID redacted]` preceded rollout.
+The binary/image identity is recorded above. All three Fly checks passed;
+public `/health/live` and `/health/ready` returned 200.
+
+Required MFA stayed enabled, seeding stayed disabled, and the existing
+owner-approved staging-only `OCMS_REQUIRE_FORM_CAPTCHA=false` exception
+was retained with zero public forms. No tracked configuration or secret
+was changed by the rollout.
+
+Fresh normal password login and the shared development authenticator
+restored dedicated Editor user 2, `ocms-agent@example.test`. The preceding
+content review had saved EN 27/7, RU 43/5 and DE 44/4, clarifying reference
+limits, identical-input retries and text/SEO freshness triggers. Comparing
+the localized text with English revision 7 required no further article or
+metadata edits; localized images and taxonomy were preserved.
+
+The editor's **Mark translation reviewed** action was used once per target,
+with its explicit meaning acknowledgment and source snapshot 27/revision 7.
+The editor and independent MCP draft/translation-status reads agreed:
+
+| Draft | Revision before → after | Final translation freshness / basis |
+|---|---|---|
+| EN 27 | 7 → 7 | Source unchanged; `not_tracked` |
+| RU 43 | 5 → 6 | `current` against page 27/revision 7 |
+| DE 44 | 4 → 5 | `current` against page 27/revision 7 |
+
+Each new target revision records user 2, source `human`, transport
+`translation_review`, the reviewed target revision (RU 5 / DE 4), time and
+source 27/revision 7. This is the normal editor-session review provenance;
+the MCP reader separately retained OAuth user 2 and exactly
+`mcp:access mcp:drafts`. It is not the owner's final publication approval.
+Article/SEO fields, localized image descriptions and translation links
+were unchanged. Earlier claim acknowledgments and provenance stayed in
+their original revisions; no old agent assertions were copied into the
+new editor-review revisions.
+
+Read-only database comparisons preserved all 56 page identities and all
+140 existing versions, 138 provenance rows and five claim checks. Only
+pages 43/44 advanced, adding exactly two versions and two provenance rows.
+English 27 and every other page were unchanged. The page totals stayed at
+55 drafts and one pre-existing published page; all three demo pages stayed
+unscheduled drafts. Owner/dedicated credential identity, owner MFA/recovery,
+OAuth grant identity/scope/lifecycle, API-key restrictions, AI access,
+preview links, configuration and module settings matched. Routine OAuth
+last-use and dedicated-login/MFA counters were excluded from preservation
+comparisons. SQLite quick-check passed with no foreign-key errors.
+
+Nine anonymous checks returned 404: the three demo public URLs, their
+current session-preview URLs and their REST page endpoints. No share,
+bearer key, grant revocation, publication or schedule was created. Private
+MFA delivery files and the temporary remote read-only verifier were removed.
+No additional commit or Git push occurred; wiki and `.claude/shared` were
+untouched.
+
+This focused rollout verifies the deployed translation-review action and
+editor/MCP readbacks. It did not rerun Claude/ChatGPT GUI acceptance,
+native/CLI OAuth reconnect, dependency scans, sharing or Fly proxy-error
+probes. Their earlier results retain the build identities above.
+
+Evidence is under ignored
+`output/r17-validation/be0e9cc3-staging-20261104/`: deployment/source/snapshot
+receipts, `acceptance-summary.json`, `verification.txt`, editor captures and
+`both-translations-current.png`, MCP before/after readbacks, anonymous
+checks, preservation fingerprints and cleanup receipts.
+
 ## Evidence, cleanup and remaining decisions
 
 Local evidence is under ignored `output/r17-validation/release-closure/`:
@@ -480,8 +572,9 @@ package revalidation.
 The final `ba044434` follow-up completes native-initiated Desktop reconnect,
 the four CLI OAuth/bearer rows and the scoped dependency revalidation.
 Earlier full EN/RU/DE and interactive Klaro results retain their build
-scope. The remaining work is fresh human review of the current demo drafts
-and stale translations, separately approved human publication, the final
+scope. The `be0e9cc3` rollout completes staging content/translation review:
+RU 43/6 and DE 44/5 are current against EN 27/7. The remaining work is final
+owner editorial approval, separately approved human publication, the final
 recording segment and the planned launch article draft. Production
 authoring/publication remains a separate request under the
 [article outline](article-outline.md).

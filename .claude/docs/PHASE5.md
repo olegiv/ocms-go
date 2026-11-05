@@ -894,12 +894,17 @@ release hardening and independent security audit remain R1.7 work.
 
 ### Iteration R1.7: Connected Apps, Hardening and Release
 
-**Status updated 2026-11-04:** the latest verified Fly staging build is
-`ba044434`. Claude web and ChatGPT web passed fresh OAuth/MFA
+**Status updated 2026-11-05:** the latest verified Fly staging build is
+`be0e9cc3` (deployed 2026-11-04). Dedicated Editor login with shared MFA and
+the normal translation-review action passed. RU 43/6 and DE 44/5 are
+`current` against unchanged EN 27/7; all remain unscheduled drafts. See the
+[translation-review rollout](#r17-staging-translation-review-verification--2026-11-04).
+
+Earlier, on `ba044434`, Claude web and ChatGPT web passed fresh OAuth/MFA
 revoke/reconnect, draft create/update/replay/conflict, share-policy and
 anonymous preview/revocation checks. Original content and demo revisions
 6/4/3 were preserved. The final native Desktop and four CLI OAuth/bearer
-authoring/authentication rows also passed on this binary. Native-initiated
+authoring/authentication rows also passed on that binary. Native-initiated
 Desktop reconnect is passed, with the normal external browser confirmation,
 shared MFA and incremental draft consent. Go revalidation found zero
 vulnerable imported packages/reachable symbols; npm audit had zero findings.
@@ -922,16 +927,20 @@ The owner accepted the unimported OpenPGP advisory for the reviewed local
 build. The Klaro/minimatch rollout is complete, and a Linux/amd64 package
 recheck retained zero imported-package vulnerabilities and the module-only
 warning; the final `ba044434` source/symbol scan revalidated that disposition.
-Staging source-basis review, human publication, the recording's
-final segment and the planned production article draft remain pending. See the
+Final owner editorial approval, separately authorized human publication,
+the recording's final segment and the planned production article draft
+remain pending. See the
 [release decisions](../../docs/launch/release-decisions.md).
 The subsequent editorial pass saved demo revisions EN 27/7, RU 43/5 and
 DE 44/4, with preserved images/metadata and saved claim acknowledgments.
 It exposed a missing action for reviewing an existing translation against
-a new source basis: both translations remain stale on `ba044434`.
-A local editor action is now implemented and verified, pending separate
-commit/deployment approval; no staging freshness flag was changed. See the
+a new source basis. The editor action and analyzer fixes were committed as
+`be0e9cc3` after approval, then separately deployed and verified on staging.
+The reviews advanced only RU/DE to revisions 6/5 without changing article
+fields. Earlier local verification remains in the
 [local review follow-up](#r17-translation-review-follow-up--2026-11-04).
+No new GUI/native/CLI reconnect, sharing, dependency or proxy-error pass is
+claimed by the focused rollout; earlier results retain their build scope.
 R1.7 is not complete. Earlier bounded results remain in the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 The earlier [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
@@ -3975,8 +3984,10 @@ project-approval setup. No source fix, commit, push, deploy or publication
 occurred; wiki and `.claude/shared` were untouched.
 The [final acceptance record](../../docs/launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
 keeps earlier new-DE/sharing/proxy-error coverage bound to its tested builds.
-Only human editorial/stale-translation review, publication, the final demo
-segment and planned launch article drafting remain from these release gates.
+At that point, human editorial/stale-translation review, publication, the
+final demo segment and launch article drafting remained. The subsequent
+content and translation-review records below supersede the stale-review
+status; final owner approval and publication remain separate.
 
 
 ### R1.7 translation-review follow-up — 2026-11-04
@@ -4029,9 +4040,10 @@ Evidence is under ignored
 check logs, browser captures and database preservation assertions. The
 preceding staging content review is under `editorial-review-20261104/`.
 No commit, push, deployment or publication occurred in this local follow-up.
-Staging remains `ba044434`; applying source-basis reviews to 43/44 still
-requires a separately authorized rollout. Wiki and `.claude/shared` were
-left untouched.
+At the end of this local follow-up, staging was still `ba044434`; applying
+source-basis reviews to 43/44 required a separately authorized rollout.
+The later `be0e9cc3` rollout below completes that step. Wiki and
+`.claude/shared` were left untouched.
 
 ### R1.7 analyzer follow-up — 2026-11-04
 
@@ -4050,7 +4062,57 @@ the affected-package checks, not a new whole-checkout audit. The preceding
 full Go-suite and local browser results retain their recorded scope.
 
 Evidence is under ignored
-`output/r17-validation/translation-review-analyzers-20261104/`. Existing
-translation-review implementation changes remain intact and uncommitted;
-wiki and `.claude/shared` are untouched. No commit, push, deployment or
-publication occurred.
+`output/r17-validation/translation-review-analyzers-20261104/`. At the end
+of this local follow-up, translation-review implementation changes were
+intact and uncommitted; wiki and `.claude/shared` were untouched. No commit,
+push, deployment or publication occurred in that follow-up. The changes
+were subsequently committed as `be0e9cc3` after approval.
+
+### R1.7 staging translation-review verification — 2026-11-04
+
+The separately authorized `be0e9cc3793ed310ca3702cbce34759c99d3e659`
+rollout used an exact clean Git archive (1,429 verified source blobs).
+The full uncached Go suite and Fly configuration validation passed before
+deployment. Snapshot `[snapshot ID redacted]` preceded the rollout;
+Machine `[machine ID redacted]`, volume `[volume ID redacted]`, sizing and
+environment were preserved. The directly checked binary was built at
+`2026-11-04T22:22:20Z`; image digest:
+`[image digest redacted]`.
+All three Fly checks passed and both health endpoints returned 200.
+Required MFA and the existing approved staging-only CAPTCHA exception
+were retained; seeding stayed disabled and there were zero public forms.
+
+Fresh password/shared-authenticator login restored dedicated Editor user 2.
+RU 43/5 and DE 44/4 matched the previously reviewed localized text against
+EN 27/7; no further article, SEO, taxonomy or image edits were needed.
+The normal **Mark translation reviewed** action was acknowledged and used
+once per target. RU advanced 5 → 6 and DE 4 → 5, both `current` against
+source 27/revision 7. English stayed at revision 7. Editor and independent
+MCP readbacks agreed; the reader retained exactly `mcp:access mcp:drafts`.
+The new target provenance records user 2, source `human`, transport
+`translation_review`, reviewed target revision and source basis. This
+editor-session acceptance is not final owner publication approval.
+
+Database comparisons preserved all 56 page identities, 140 prior versions,
+138 prior provenance rows and five claim checks. Only pages 43/44 advanced,
+adding two versions and two provenance rows; content/metadata, English,
+other pages, translation links, AI access and existing review history were
+unchanged. Owner/dedicated credential identity, owner MFA/recovery, OAuth
+grant identity/scope/lifecycle, API keys, preview links, configuration and
+module settings matched; routine OAuth last-use and dedicated-login/MFA
+counters were excluded. SQLite quick/FK checks passed. All three demo pages
+remain unscheduled drafts, with totals unchanged at 55 drafts and one
+pre-existing published page. Nine anonymous page/API/session-preview checks
+returned 404. Temporary remote verifier and private MFA files were removed.
+No new share/key/revocation, additional commit, Git push, publication or
+scheduling occurred; wiki and `.claude/shared` were untouched.
+
+Evidence: ignored `output/r17-validation/be0e9cc3-staging-20261104/`,
+including `acceptance-summary.json`, `verification.txt`, deployment/source
+receipts, editor screenshots, MCP readbacks and preservation/cleanup data.
+The [acceptance record](../../docs/launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
+retains exact scope. No new Claude/ChatGPT GUI, native/CLI reconnect,
+dependency, sharing or proxy-error checks ran. Earlier results keep their
+tested builds. Remaining work is final owner editorial approval, separately
+authorized human publication, the final demo segment and the planned launch
+article draft.

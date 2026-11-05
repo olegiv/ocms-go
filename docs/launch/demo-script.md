@@ -6,8 +6,15 @@ captures real draft/review/preview states; it is not a continuous recording
 of completed publication. The inline alt-text repair was verified on
 `16ac7161`; Claude web and ChatGPT web verified the resaved EN 27/revision
 6, RU 43/revision 4 and DE 44/revision 3 in HTML and Markdown, with matching
-rendered preview alt text. RU/DE are now stale; fresh editorial/translation
-review, human publication and the final recording shot remain pending.
+rendered preview alt text. Those resaves made RU/DE stale. The subsequent
+content review and `be0e9cc3` staging rollout (2026-11-04) resolved that
+state: RU 43/6 and DE 44/5 are `current` against unchanged EN 27/7, verified
+in the editor and MCP after normal dedicated password/shared-MFA login.
+All remain unscheduled drafts; see the
+[review record](r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
+Final owner editorial approval, human publication and the final recording
+shot remain pending. No new client reconnect or sharing test ran in that
+focused rollout.
 The existing walkthrough predates this repair and retains its historical
 limitations. Native-initiated Desktop reconnect passed on `ba044434`,
 through normal browser confirmation, shared MFA/consent and Desktop callback;
