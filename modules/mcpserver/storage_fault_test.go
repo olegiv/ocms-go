@@ -5,11 +5,19 @@ package mcpserver
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"go/ast"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
+	"github.com/olegiv/ocms-go/internal/ai/authoring"
+	"github.com/olegiv/ocms-go/internal/ai/draft"
+	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
@@ -94,6 +102,51 @@ func TestDraftAuthorizationStorageFaultIsRetryableNotUnauthorized(t *testing.T) 
 		t.Fatal(err)
 	}
 	requireUnauthorized(t, "a deleted key", authorize(id))
+}
+
+func TestDraftWriteCredentialLookupFaultsAreRetryable(t *testing.T) {
+	for _, table := range []string{"api_keys", "oauth_grants"} {
+		t.Run(table, func(t *testing.T) {
+			env, id := draftKeyFixture(t)
+			credentialField, credentialID := "api_key_id", any(id.key.ID)
+			if table == "oauth_grants" {
+				s := enableOAuth(t, env, true)
+				_, p := oauthToken(t, s, env.userID, "mcp:access mcp:drafts")
+				id = &identity{userID: p.UserID, grantID: p.GrantID, clientID: p.ClientID, tokenID: p.TokenID, scopes: p.Scopes, expiresAt: p.ExpiresAt}
+				credentialField, credentialID = "grant_id", p.GrantID
+			}
+			svc, actor, err := env.module.authoringService(t.Context(), &toolCall{identity: id, settings: env.module.currentSettings()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			originalLogger := slog.Default()
+			slog.SetDefault(slog.New(env.logs))
+			t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+			in := authoring.CreateInput{RequestID: uuid.NewString(), Draft: draft.PageDraft{Title: "Draft after a credential fault", Summary: "Review", BodyMarkdown: "A safe body."}}
+			var fault error
+			// The transport credential check has already passed. Fail only the
+			// shared page writer's re-check inside the transaction.
+			withTableUnavailable(t, env.db, table, func() { _, fault = svc.Create(t.Context(), actor, in) })
+			requireRetryableFault(t, fault)
+			var domain *v2.Error
+			if !errors.As(fault, &domain) || domain.Kind == v2.ErrUnauthorized {
+				t.Fatalf("write fault returned %v, want a retryable domain error", fault)
+			}
+			requireFaultLogged(t, env, "failed to re-check draft write credential")
+			if logs := env.logs.text(); !strings.Contains(logs, fmt.Sprintf("%s=%v", credentialField, credentialID)) || !strings.Contains(logs, fmt.Sprintf("user_id=%d", env.userID)) {
+				t.Fatalf("fault log omitted credential or user ID: %q", logs)
+			}
+			if result, saveErr := svc.Create(t.Context(), actor, in); saveErr != nil || result.PageID == 0 {
+				t.Fatalf("retry with healthy storage: %+v, %v", result, saveErr)
+			}
+			if _, err = env.db.ExecContext(t.Context(), `DELETE FROM `+table+` WHERE id = ?`, credentialID); err != nil {
+				t.Fatal(err)
+			}
+			_, err = svc.Create(t.Context(), actor, in)
+			requireUnauthorized(t, "deleted write credential", err)
+		})
+	}
 }
 
 // TestQueuedWritePolicyCheckSharesTheCredentialLookup covers the queued

@@ -4,8 +4,13 @@
 package authoring_test
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,7 +92,7 @@ func TestTranslationReviewRefreshesBasisWithoutRewritingContentOrHistory(t *test
 		t.Fatalf("freshness after review: %+v %v", after, err)
 	}
 	panel, err = review.Load(f.ctx, f.q, reviewed, f.user.ID)
-	if err != nil || panel.Fact.Source != "human" || panel.Fact.Transport != "translation_review" || panel.Fact.UserID.Int64 != f.user.ID || panel.Validated.TranslationReviewedRevision != target.Revision || len(panel.Claims) != 0 || panel.Reported.Agent.Model.Present {
+	if err != nil || panel.Fact.Source != "human" || panel.Fact.Transport != "translation_review" || panel.Fact.UserID.Int64 != f.user.ID || panel.Validated.TranslationReviewedRevision != target.Revision || len(panel.Claims) != 1 || panel.Claims[0].Checked {
 		t.Fatalf("review attribution: %+v %v", panel, err)
 	}
 	factAfter, err := f.q.GetContentProvenance(f.ctx, store.GetContentProvenanceParams{PageID: target.ID, Revision: target.Revision})
@@ -122,6 +127,64 @@ func TestTranslationReviewRefreshesBasisWithoutRewritingContentOrHistory(t *test
 	after, err = f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: target.ID})
 	if err != nil || after.TranslationStatus != "stale" {
 		t.Fatalf("source changes stopped invalidating review: %+v %v", after, err)
+	}
+}
+
+func TestTranslationReviewPreservesEvidence(t *testing.T) {
+	f, source, target := staleReviewFixture(t)
+	var words []string
+	for i := range 100 {
+		words = append(words, fmt.Sprintf("word%d", i))
+	}
+	exampleInput := input("Grounding example")
+	exampleInput.Draft.BodyMarkdown = strings.Join(words, " ")
+	example, err := f.svc.Create(f.ctx, f.actor, exampleInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := f.svc.Update(f.ctx, f.actor, authoring.UpdateInput{RequestID: uuid.NewString(), PageID: target.ID, BaseRevision: target.Revision,
+		Changes: draft.Changes{
+			BodyMarkdown: draft.Set("This [external link](https://example.org/) is evidence."),
+			References:   draft.Set([]draft.Reference{{Ref: strconv.FormatInt(example.PageID, 10), Role: "example"}}),
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target.Revision = updated.Revision
+	// The review must preserve even validation fields it does not interpret.
+	if _, err = f.db.ExecContext(f.ctx, `UPDATE content_provenance SET validated_json = json_set(validated_json, '$.future_validation', json('{"count":9007199254740993}')) WHERE page_id = ? AND revision = ?`, target.ID, target.Revision); err != nil {
+		t.Fatal(err)
+	}
+	loadEvidence := func(revision int64) (map[string]json.RawMessage, string) {
+		t.Helper()
+		fact, loadErr := f.q.GetContentProvenance(f.ctx, store.GetContentProvenanceParams{PageID: target.ID, Revision: revision})
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		var fields map[string]json.RawMessage
+		if decodeErr := json.Unmarshal([]byte(fact.ValidatedJson), &fields); decodeErr != nil {
+			t.Fatal(decodeErr)
+		}
+		delete(fields, "translation_basis")
+		delete(fields, "translation_reviewed_revision")
+		return fields, fact.ReportedJson
+	}
+	before, reported := loadEvidence(target.Revision)
+	reviewed, err := review.MarkTranslationReviewed(f.ctx, f.q, f.user.ID, reviewInput(source, target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, afterReported := loadEvidence(reviewed.Revision)
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("review changed validation fields outside the translation basis and reviewed revision: before=%v after=%v", before, after)
+	}
+	if afterReported != reported {
+		t.Error("review changed the agent report")
+	}
+	result, err := f.svc.Update(f.ctx, f.actor, authoring.UpdateInput{RequestID: uuid.NewString(), PageID: target.ID, BaseRevision: reviewed.Revision,
+		Changes: draft.Changes{BodyMarkdown: draft.Set(exampleInput.Draft.BodyMarkdown)}})
+	if err != nil || !slices.ContainsFunc(result.Issues, func(issue draft.Issue) bool { return issue.Code == "overlap_with_example" }) {
+		t.Fatalf("next agent edit lost the example overlap check: %+v, %v", result.Issues, err)
 	}
 }
 

@@ -7808,9 +7808,59 @@
             "translation": "Версия не восстановлена."
         },
         {
+            "id": "pages.restore_missing_language",
+            "message": "The language (%s) from this version is unavailable. Choose another version.",
+            "translation": "Язык этой версии (%s) больше недоступен. Выберите другую версию."
+        },
+        {
+            "id": "pages.restore_missing_featured_image",
+            "message": "The featured image (ID %s) from this version is missing. Choose another version.",
+            "translation": "Основное изображение этой версии (ID %s) недоступно. Выберите другую версию."
+        },
+        {
+            "id": "pages.restore_missing_og_image",
+            "message": "The Open Graph image (ID %s) from this version is missing. Choose another version.",
+            "translation": "Изображение Open Graph этой версии (ID %s) недоступно. Выберите другую версию."
+        },
+        {
+            "id": "pages.restore_missing_tag",
+            "message": "The tag (ID %s) from this version is missing. Choose another version.",
+            "translation": "Тег этой версии (ID %s) недоступен. Выберите другую версию."
+        },
+        {
+            "id": "pages.restore_missing_category",
+            "message": "The category (ID %s) from this version is missing. Choose another version.",
+            "translation": "Категория этой версии (ID %s) недоступна. Выберите другую версию."
+        },
+        {
             "id": "pages.error_translation_not_created",
             "message": "The translation was not created.",
             "translation": "Перевод не создан."
+        },
+        {
+            "id": "pages.edit_recovery_title",
+            "message": "Page save interrupted",
+            "translation": "Сохранение страницы прервано"
+        },
+        {
+            "id": "pages.edit_recovery_retry",
+            "message": "The editor hit a temporary read error. Retry with your submitted edits below.",
+            "translation": "Редактор столкнулся с временной ошибкой чтения. Повторите попытку с правками, сохранёнными в этой форме."
+        },
+        {
+            "id": "pages.edit_recovery_missing",
+            "message": "The page is unavailable. You can copy your submitted text below.",
+            "translation": "Страница недоступна. Вы можете скопировать введённый текст ниже."
+        },
+        {
+            "id": "pages.edit_recovery_button",
+            "message": "Retry with these edits",
+            "translation": "Повторить с этими правками"
+        },
+        {
+            "id": "pages.conflict_missing_tag",
+            "message": "Tag %d is unavailable. Remove it or select a replacement.",
+            "translation": "Тег %d недоступен. Удалите его или выберите другой."
         },
         {
             "id": "pages.revision_conflict_title",

@@ -130,6 +130,33 @@ func TestRevokeStorageFaultIsNotReportedAsSuccess(t *testing.T) {
 	}
 }
 
+func TestRevokeLiveAccessWriteFaultIsRetryable(t *testing.T) {
+	f := newFixture(t)
+	first := f.redeem(t, f.code(t))
+	if _, err := f.db.ExecContext(t.Context(), `CREATE TRIGGER fail_revoke BEFORE UPDATE OF revoked_at ON oauth_grants
+		BEGIN SELECT RAISE(ABORT, 'revocation write failed'); END`); err != nil {
+		t.Fatal(err)
+	}
+	clientID := f.values.Get("client_id")
+	status, response := f.revoke(clientID, access(first))
+	if status != http.StatusServiceUnavailable || response["error"] != "temporarily_unavailable" {
+		t.Fatalf("failed revoke: status=%d error=%v", status, response["error"])
+	}
+	if _, err := f.s.VerifyAccess(t.Context(), access(first)); err != nil {
+		t.Fatalf("failed revoke changed the grant: %v", err)
+	}
+	if _, err := f.db.ExecContext(t.Context(), `DROP TRIGGER fail_revoke`); err != nil {
+		t.Fatal(err)
+	}
+	status, response = f.revoke(clientID, access(first))
+	if status != http.StatusOK || len(response) != 0 {
+		t.Fatalf("retry revoke: status=%d body=%v", status, response)
+	}
+	if _, err := f.s.VerifyAccess(t.Context(), access(first)); problemCode(err) != "invalid_token" {
+		t.Fatalf("access after retrying revoke: %v", err)
+	}
+}
+
 // Storage faults are retryable: they must never tell a client that a token,
 // code or refresh token is dead, or the client throws away live credentials.
 func TestStorageFaultsDoNotInvalidateCredentials(t *testing.T) {

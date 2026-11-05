@@ -74,28 +74,34 @@ func (s *Service) options(ctx context.Context) (draft.Options, error) {
 	return draft.Options{Resolver: r.DraftResolver(), DefaultLanguage: lang.Code, UILanguage: lang.Code, SiteURL: s.SiteURL, LinkPolicy: s.LinkPolicy}, nil
 }
 
-func (s *Service) writeOptions(ctx context.Context, a v2.Actor, tool, id string, input any) (pages.WriteOptions, *pages.Page, error) {
+func (s *Service) writeOptions(ctx context.Context, a v2.Actor, tool, id string, input any, receipt *SaveResult) (pages.WriteOptions, bool, error) {
 	r, err := idempotency.New(a.ActingUserID(), tool, id, input)
 	if err != nil {
-		return pages.WriteOptions{}, nil, &Error{Code: "invalid_request_id", Message: "Use one non-zero UUID request_id for this operation"}
+		return pages.WriteOptions{}, false, &Error{Code: "invalid_request_id", Message: "Use one non-zero UUID request_id for this operation"}
 	}
 	opt := pages.WriteOptions{ForceDraft: true, RequestID: r.ID, Idempotency: &r, Authorize: func(ctx context.Context, q *store.Queries) error { return s.authorize(ctx, q, a) }}
+	opt.PrepareResult = func(ctx context.Context, q *store.Queries, page *pages.Page) error {
+		var receiptErr error
+		*receipt, receiptErr = s.receipt(ctx, q, page)
+		return receiptErr
+	}
 	replayed, err := s.Pages.ReplayDraft(ctx, a, opt)
-	return opt, replayed, err
+	return opt, replayed != nil, err
 }
 
 func (s *Service) Create(ctx context.Context, a v2.Actor, in CreateInput) (SaveResult, error) {
-	opt, replay, err := s.writeOptions(ctx, a, "create_draft_page", in.RequestID, in)
+	var receipt SaveResult
+	opt, replayed, err := s.writeOptions(ctx, a, "create_draft_page", in.RequestID, in, &receipt)
 	if err != nil {
 		return SaveResult{}, err
 	}
-	if replay != nil {
-		return s.receipt(ctx, replay)
+	if replayed {
+		return receipt, nil
 	}
-	return s.create(ctx, a, in.Draft, opt, nil)
+	return s.create(ctx, a, in.Draft, opt, nil, &receipt)
 }
 
-func (s *Service) create(ctx context.Context, a v2.Actor, input draft.PageDraft, opt pages.WriteOptions, basis *Basis) (SaveResult, error) {
+func (s *Service) create(ctx context.Context, a v2.Actor, input draft.PageDraft, opt pages.WriteOptions, basis *Basis, receipt *SaveResult) (SaveResult, error) {
 	options, err := s.options(ctx)
 	if err != nil {
 		return SaveResult{}, err
@@ -117,25 +123,26 @@ func (s *Service) create(ctx context.Context, a v2.Actor, input draft.PageDraft,
 		if err != nil {
 			return SaveResult{}, err
 		}
-		saved, err := s.Pages.CreateWith(ctx, a, body, opt)
-		if err == nil {
-			return s.receipt(ctx, saved)
+		_, writeErr := s.Pages.CreateWith(ctx, a, body, opt)
+		if writeErr == nil {
+			return *receipt, nil
 		}
 		var domain *v2.Error
-		if input.Slug.Present && !input.Slug.Null || !errors.As(err, &domain) || domain.Fields["slug"] == "" {
-			return SaveResult{}, err
+		if input.Slug.Present && !input.Slug.Null || !errors.As(writeErr, &domain) || domain.Fields["slug"] == "" {
+			return SaveResult{}, writeErr
 		}
 	}
 	return SaveResult{}, invalid([]draft.Issue{draft.NewIssue("slug_taken", "slug", options.UILanguage)})
 }
 
 func (s *Service) Update(ctx context.Context, a v2.Actor, in UpdateInput) (SaveResult, error) {
-	opt, replay, err := s.writeOptions(ctx, a, "update_draft_page", in.RequestID, in)
+	var receipt SaveResult
+	opt, replayed, err := s.writeOptions(ctx, a, "update_draft_page", in.RequestID, in, &receipt)
 	if err != nil {
 		return SaveResult{}, err
 	}
-	if replay != nil {
-		return s.receipt(ctx, replay)
+	if replayed {
+		return receipt, nil
 	}
 	if in.BaseRevision <= 0 {
 		return SaveResult{}, invalid([]draft.Issue{draft.NewIssue("revision_required", "base_revision", "en")})
@@ -193,11 +200,10 @@ func (s *Service) Update(ctx context.Context, a v2.Actor, in UpdateInput) (SaveR
 	if err != nil {
 		return SaveResult{}, err
 	}
-	saved, err := s.Pages.UpdateWith(ctx, a, in.PageID, body, opt)
-	if err != nil {
+	if _, err = s.Pages.UpdateWith(ctx, a, in.PageID, body, opt); err != nil {
 		return SaveResult{}, err
 	}
-	return s.receipt(ctx, saved)
+	return receipt, nil
 }
 
 func invalid(issues []draft.Issue) *Error {
@@ -288,8 +294,8 @@ func (s *Service) prepare(a v2.Actor, validation Validation, report draft.AgentR
 	}
 }
 
-func (s *Service) receipt(ctx context.Context, p *pages.Page) (SaveResult, error) {
-	fact, err := s.Q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: p.ID, Revision: p.Revision})
+func (s *Service) receipt(ctx context.Context, q *store.Queries, p *pages.Page) (SaveResult, error) {
+	fact, err := q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: p.ID, Revision: p.Revision})
 	if err != nil {
 		return SaveResult{}, err
 	}

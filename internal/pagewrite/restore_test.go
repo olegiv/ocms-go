@@ -7,6 +7,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +17,113 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
+
+// Every restored foreign key needs a case here. The schema supplies the
+// inventory so adding an assignment cannot silently bypass restore validation.
+func TestRestoreRefusesMissingSnapshotReferences(t *testing.T) {
+	type deletion struct {
+		kind, statement string
+		id              any
+	}
+	cases := map[string]deletion{
+		"page_tags.tag_id -> tags":                  {"tag", `DELETE FROM tags WHERE id = ?`, 10},
+		"page_categories.category_id -> categories": {"category", `DELETE FROM categories WHERE id = ?`, 10},
+		"pages.featured_image_id -> media":          {"featured image", `DELETE FROM media WHERE id = ?`, 10},
+		"pages.og_image_id -> media":                {"Open Graph image", `DELETE FROM media WHERE id = ?`, 11},
+	}
+	f := setup(t)
+	rows, err := f.db.Query(`SELECT m.name || '.' || f."from" || ' -> ' || f."table"
+		FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
+		WHERE m.name IN ('pages', 'page_tags', 'page_categories') ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var covered []deletion
+	for rows.Next() {
+		var reference string
+		if err = rows.Scan(&reference); err != nil {
+			t.Fatal(err)
+		}
+		switch reference {
+		case "pages.author_id -> users", "page_tags.page_id -> pages", "page_categories.page_id -> pages":
+			// Restore keeps the current author and page identity.
+			continue
+		}
+		if tc, ok := cases[reference]; ok {
+			covered = append(covered, tc)
+		} else {
+			t.Errorf("no restore coverage for %s", reference)
+		}
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(covered) != len(cases) {
+		t.Fatalf("restore fixtures cover %d of %d expected foreign keys", len(covered), len(cases))
+	}
+	// language_code is a validated reference without a declared foreign key.
+	covered = append(covered, deletion{"language", `DELETE FROM languages WHERE code = ?`, "ru"})
+	for _, tc := range covered {
+		t.Run(tc.kind, func(t *testing.T) {
+			candidate := setup(t)
+			version := snapshotWithReferences(t, candidate)
+			if _, deleteErr := candidate.db.ExecContext(t.Context(), tc.statement, tc.id); deleteErr != nil {
+				t.Fatal(deleteErr)
+			}
+			before, loadErr := candidate.q.GetPageSnapshot(t.Context(), candidate.page.ID)
+			if loadErr != nil {
+				t.Fatal(loadErr)
+			}
+			_, restoreErr := pagewrite.InTx(t.Context(), candidate.db, provenance.Principal{UserID: candidate.user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
+				current, trackErr := work.Track(t.Context(), candidate.page.ID, &candidate.page.Revision, true)
+				if trackErr != nil {
+					return trackErr
+				}
+				refusalErr := work.Restore(t.Context(), current, version, version.Body)
+				if after, snapshotErr := work.Q.GetPageSnapshot(t.Context(), current.ID); snapshotErr != nil || before != after {
+					t.Errorf("restore mutated the page or assignments before refusing: %v", snapshotErr)
+				}
+				return refusalErr
+			})
+			var refusal *pagewrite.Refusal
+			if !errors.As(restoreErr, &refusal) || !strings.Contains(refusal.Reason, fmt.Sprintf("%s %v", tc.kind, tc.id)) {
+				t.Errorf("restore returned %v, want a refusal identifying the missing %s %v", restoreErr, tc.kind, tc.id)
+			}
+			if after, snapshotErr := candidate.q.GetPageSnapshot(t.Context(), candidate.page.ID); snapshotErr != nil || before != after {
+				t.Errorf("refused restore changed the stored page or assignments: %v", snapshotErr)
+			}
+			if versions, countErr := candidate.q.CountPageVersions(t.Context(), candidate.page.ID); countErr != nil || versions != 1 {
+				t.Errorf("refused restore left %d versions, %v", versions, countErr)
+			}
+		})
+	}
+}
+
+func snapshotWithReferences(t *testing.T, f fixture) store.PageVersion {
+	t.Helper()
+	exec := func(statement string, args ...any) {
+		t.Helper()
+		if _, err := f.db.ExecContext(t.Context(), statement, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`INSERT INTO languages (code, name, native_name, is_active) VALUES ('ru','Russian','Русский',1)`)
+	exec(`INSERT INTO tags (id, name, slug, language_code) VALUES (10,'Saved','saved','ru'), (11,'Current','current','en')`)
+	exec(`INSERT INTO categories (id, name, slug, language_code) VALUES (10,'Saved','saved','ru')`)
+	exec(`INSERT INTO media (id, uuid, filename, mime_type, size, uploaded_by, language_code)
+		VALUES (10,'featured','featured.png','image/png',1,?,'ru'), (11,'og','og.png','image/png',1,?,'ru')`, f.user.ID, f.user.ID)
+	exec(`UPDATE pages SET featured_image_id = 10, og_image_id = 11, language_code = 'ru' WHERE id = ?`, f.page.ID)
+	exec(`INSERT INTO page_tags (page_id, tag_id) VALUES (?, 10)`, f.page.ID)
+	exec(`INSERT INTO page_categories (page_id, category_id) VALUES (?, 10)`, f.page.ID)
+	snapshot, err := f.q.GetPageSnapshot(t.Context(), f.page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec(`UPDATE pages SET body = 'Current body', language_code = 'en' WHERE id = ?`, f.page.ID)
+	exec(`UPDATE page_tags SET tag_id = 11 WHERE page_id = ?`, f.page.ID)
+	return store.PageVersion{PageID: f.page.ID, Title: f.page.Title, Body: f.page.Body, SnapshotJson: sql.NullString{String: snapshot, Valid: true}}
+}
 
 func TestRestoreCompleteAndLegacyVersionsPreservesCurrentPolicy(t *testing.T) {
 	f := setup(t)

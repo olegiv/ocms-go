@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
 
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
@@ -82,8 +84,9 @@ func translationSource(ctx context.Context, q *store.Queries, page store.Page) (
 }
 
 // MarkTranslationReviewed records an editor's explicit review in a new target
-// revision. Both displayed revisions are checked in the same transaction. It
-// preserves article fields, prior evidence/checks, source and sibling revisions.
+// revision after checking both displayed revisions in one transaction. The
+// revision carries forward validation and agent reports. Claim checks stay
+// with the revision where the editor made them.
 func MarkTranslationReviewed(ctx context.Context, q *store.Queries, reviewerID int64, in TranslationReviewInput) (store.Page, error) {
 	work, err := pagewrite.InQueriesTx(ctx, q, provenance.Principal{UserID: reviewerID, Source: "human", Transport: "translation_review"}, func(work *pagewrite.Tx) error {
 		if err := pagewrite.RequireEditor(ctx, work.Q, reviewerID); err != nil {
@@ -109,16 +112,28 @@ func MarkTranslationReviewed(ctx context.Context, q *store.Queries, reviewerID i
 		if source.Revision != in.SourceRevision {
 			return &pagewrite.Conflict{CurrentRevision: source.Revision}
 		}
-		validated, err := json.Marshal(struct {
-			TranslationBasis Basis `json:"translation_basis"`
-			ReviewedRevision int64 `json:"translation_reviewed_revision"`
-		}{Basis{SourcePageID: source.ID, SourceRevision: source.Revision, Fingerprint: provenance.PageFingerprint(*source)}, target.Revision})
+		previous, err := work.Q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: target.ID, Revision: target.Revision})
+		if err != nil {
+			return fmt.Errorf("load translation review evidence: %w", err)
+		}
+		var fields map[string]json.RawMessage
+		if err = json.Unmarshal([]byte(previous.ValidatedJson), &fields); err != nil {
+			return fmt.Errorf("decode translation review evidence: %w", err)
+		}
+		if fields == nil {
+			fields = make(map[string]json.RawMessage)
+		}
+		basis, err := json.Marshal(Basis{SourcePageID: source.ID, SourceRevision: source.Revision, Fingerprint: provenance.PageFingerprint(*source)})
 		if err != nil {
 			return err
 		}
-		// This is a human review, not a new agent report or a factual validation
-		// of the article. Earlier claims/checks remain on their own revisions.
-		work.SetPageEvidence(target.ID, provenance.Evidence{Validated: validated})
+		fields["translation_basis"] = basis
+		fields["translation_reviewed_revision"] = json.RawMessage(strconv.FormatInt(target.Revision, 10))
+		validated, err := json.Marshal(fields)
+		if err != nil {
+			return err
+		}
+		work.SetPageEvidence(target.ID, provenance.Evidence{Validated: validated, Reported: json.RawMessage(previous.ReportedJson)})
 		work.TrackEvidenceChanges(target.ID)
 		return nil
 	})

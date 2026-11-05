@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
@@ -126,6 +127,80 @@ func TestUnchangedSaveKeepsAIAccessAttribution(t *testing.T) {
 	save(plain, "Plain page edited", false)
 	if _, err = queries.GetPageAIAccess(ctx, plain.ID); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("saving a page without AI access created a row: %v", err)
+	}
+}
+
+func TestNonOwnerEditorCannotChangeAIAccess(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	sm := testSessionManager(t)
+	owner := createTestUser(t, db, testUser{Email: "owner@example.test", Name: "Owner", Role: model.RoleEditor})
+	editor := createTestUser(t, db, testUser{Email: "editor@example.test", Name: "Other editor", Role: model.RoleEditor})
+	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewPagesHandler(db, renderer, sm)
+	router := chi.NewRouter()
+	router.Use(sm.LoadAndSave)
+	router.Post("/admin/pages/{id}", h.Update)
+	ctx := t.Context()
+	q := store.New(db)
+	now := time.Now()
+	page, err := pagewrite.Insert(ctx, q, provenance.Principal{UserID: owner.ID, Source: "human"}, store.CreatePageParams{
+		Title: "Owner draft", Slug: "owner-draft", Body: "<p>Body</p>", Status: "draft", AuthorID: owner.ID,
+		LanguageCode: "en", PageType: "post", CreatedAt: now, UpdatedAt: now,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	submit := func(user store.User, revision int64, title, aiChange string) {
+		t.Helper()
+		form := url.Values{
+			"title": {title}, "slug": {page.Slug}, "body": {page.Body}, "status": {"draft"},
+			"language_code": {"en"}, "page_type": {"post"}, "base_revision": {strconv.FormatInt(revision, 10)},
+		}
+		if aiChange != "" {
+			form.Set("ai_access_present", "1")
+			if aiChange == "enable" {
+				form.Set("allow_ai_edits", "on")
+			}
+		}
+		r := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/pages/%d", page.ID), strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, withUser(r, user))
+		if response.Code != http.StatusSeeOther {
+			t.Fatalf("%s save returned %d", user.Name, response.Code)
+		}
+	}
+	load := func() store.Page {
+		t.Helper()
+		current, loadErr := q.GetPageByID(ctx, page.ID)
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		return current
+	}
+	submit(editor, page.Revision, "Ordinary editor save", "")
+	current := load()
+	if current.Revision != page.Revision+1 || current.Title != "Ordinary editor save" {
+		t.Fatal("non-owner editor could not make an ordinary content edit")
+	}
+	submit(editor, current.Revision, "Unauthorized opt-in", "enable")
+	if _, err = q.GetPageAIAccess(ctx, page.ID); !errors.Is(err, sql.ErrNoRows) || load() != current {
+		t.Fatalf("non-owner opt-in changed the draft or AI access: %v", err)
+	}
+	submit(owner, current.Revision, current.Title, "enable")
+	current = load()
+	access, err := q.GetPageAIAccess(ctx, page.ID)
+	if err != nil || !access.AiEditable || access.SetBy != owner.ID {
+		t.Fatalf("owner opt-in: %+v, %v", access, err)
+	}
+	submit(editor, current.Revision, "Unauthorized opt-out", "disable")
+	after, err := q.GetPageAIAccess(ctx, page.ID)
+	if err != nil || after != access || load() != current {
+		t.Fatalf("non-owner opt-out changed the draft or AI access: %+v, %v", after, err)
 	}
 }
 

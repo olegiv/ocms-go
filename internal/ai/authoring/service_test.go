@@ -146,6 +146,77 @@ func TestCreateReplayAcrossAppsAndBeforeMutableValidation(t *testing.T) {
 	}
 }
 
+// receiptFaultDB simulates a fault on the plain query handle once the request
+// has committed. Reads on the write or replay transaction are unaffected.
+type receiptFaultDB struct {
+	*sql.DB
+	requestID string
+}
+
+func (db receiptFaultDB) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	if strings.Contains(query, "FROM content_provenance WHERE page_id = ? AND revision = ?") {
+		var committed bool
+		err := db.DB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM idempotency_keys WHERE request_id = ?)`, db.requestID).Scan(&committed)
+		if err != nil || committed {
+			return db.DB.QueryRowContext(ctx, `SELECT * FROM unavailable_provenance`)
+		}
+	}
+	return db.DB.QueryRowContext(ctx, query, args...)
+}
+
+func TestDraftReceiptsSurvivePostCommitProvenanceFault(t *testing.T) {
+	for _, operation := range []string{"create", "update", "translate"} {
+		t.Run(operation, func(t *testing.T) {
+			f := setup(t)
+			in := input("Draft receipt")
+			var save func() (authoring.SaveResult, error)
+			expectedPages := int64(1)
+			if operation == "create" {
+				save = func() (authoring.SaveResult, error) { return f.svc.Create(f.ctx, f.actor, in) }
+			} else {
+				source, err := f.svc.Create(f.ctx, f.actor, input("Source draft"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if operation == "update" {
+					patch := authoring.UpdateInput{RequestID: in.RequestID, PageID: source.PageID, BaseRevision: source.Revision,
+						Changes: draft.Changes{Summary: draft.Set("Updated draft")}}
+					save = func() (authoring.SaveResult, error) { return f.svc.Update(f.ctx, f.actor, patch) }
+				} else {
+					translation := authoring.TranslateInput{RequestID: in.RequestID, SourcePageID: source.PageID,
+						SourceRevision: source.Revision, LanguageCode: "ru", Draft: in.Draft}
+					save = func() (authoring.SaveResult, error) { return f.svc.Translate(f.ctx, f.actor, translation) }
+					expectedPages++
+				}
+			}
+			f.svc.Q = store.New(receiptFaultDB{DB: f.db, requestID: in.RequestID})
+			first, err := save()
+			if err != nil {
+				count, countErr := f.q.CountPages(f.ctx)
+				t.Fatalf("draft write returned %v with %d pages committed (count error: %v)", err, count, countErr)
+			}
+			page, err := f.q.GetPageByID(f.ctx, first.PageID)
+			if err != nil || first.Revision != page.Revision || first.PreviewURL == "" {
+				t.Fatalf("receipt does not identify the committed draft: %+v, %v", first, err)
+			}
+			if _, faultErr := f.svc.Q.GetContentProvenance(f.ctx, store.GetContentProvenanceParams{PageID: page.ID, Revision: page.Revision}); faultErr == nil {
+				t.Fatal("post-commit provenance fault did not activate")
+			}
+			replay, err := save()
+			if err != nil || !reflect.DeepEqual(replay, first) {
+				t.Fatalf("replay returned %+v, %v, want %+v", replay, err, first)
+			}
+			if count, countErr := f.q.CountPages(f.ctx); countErr != nil || count != expectedPages {
+				t.Fatalf("page count after replay = %d, %v, want %d", count, countErr, expectedPages)
+			}
+			page, err = f.q.GetPageByID(f.ctx, first.PageID)
+			if err != nil || page.Revision != first.Revision {
+				t.Fatalf("revision after replay = %d, %v, want %d", page.Revision, err, first.Revision)
+			}
+		})
+	}
+}
+
 func TestMetadataUpdatesPreserveRichHTMLAndClearNullableAssignments(t *testing.T) {
 	f := setup(t)
 	now := time.Now()

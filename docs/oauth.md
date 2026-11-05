@@ -67,7 +67,7 @@ Revoke an app in **Account → Security → Connected AI apps**.
 | `GET /.well-known/oauth-protected-resource/api/mcp` | MCP resource and issuer metadata |
 | `GET/POST /oauth/authorize` | Browser sign-in and explicit consent |
 | `POST /oauth/token` | Form-encoded code exchange or rotating refresh |
-| `POST /oauth/revoke` | Revoke a token's connection, bound to the requesting client |
+| `POST /oauth/revoke` | Revoke a connection using a live access token or a refresh token and the matching `client_id` |
 | `POST /oauth/register` | Optional public-client registration; otherwise 404 |
 
 Only authorization code with **S256 PKCE** and refresh grants are supported.
@@ -142,10 +142,13 @@ Storage faults are retryable. A database error while checking an access
 token, code or refresh token, or while revoking, is logged with its cause and
 answered `temporarily_unavailable` (HTTP 503; the MCP endpoint answers 500),
 never `invalid_token` or `invalid_grant`, so clients keep credentials that are
-still valid. `POST /oauth/revoke` answers 200 after revoking and, as RFC 7009
-requires, for an unknown or malformed token or another client's token, which
-it leaves alone; a storage fault that prevented the revocation is a 503. A
-client-metadata host that cannot be reached (network error, timeout, rate
+still valid. `POST /oauth/revoke` matches the `client_id` against the stored
+grant and returns HTTP 200 after revocation. Unknown or malformed tokens,
+tokens for a different client, and expired or rotated access tokens get
+HTTP 200 with no effect. A spent refresh token can still revoke its family.
+A storage fault that prevents revocation returns HTTP 503.
+
+A client-metadata host that cannot be reached (network error, timeout, rate
 limiting or 5xx) is also `temporarily_unavailable`; any other non-200 answer
 or a document that fails validation is `invalid_client`.
 

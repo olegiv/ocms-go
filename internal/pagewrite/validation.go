@@ -19,7 +19,11 @@ import (
 // taken slug or an inactive language. Its Reason is fixed text written for
 // people, never a storage error, so callers may show it; anything that is not
 // a Refusal (or another typed refusal) is a fault to log and report generically.
-type Refusal struct{ Reason string }
+type Refusal struct {
+	Reason      string
+	MessageKey  string
+	MessageArgs []any
+}
 
 func (r *Refusal) Error() string { return r.Reason }
 

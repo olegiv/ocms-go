@@ -830,12 +830,12 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existingPage, ok := h.requirePageWithRedirect(w, r, id)
-	if !ok {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id)) {
 		return
 	}
-
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id)) {
+	existingPage, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		h.preservePageEdits(w, r, id, fmt.Errorf("load page before editing: %w", err))
 		return
 	}
 
@@ -1952,12 +1952,20 @@ func pageAliasesFromForm(values []string) []store.PageAlias {
 // loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is
 // not valid or the media record cannot be found.
 func (h *PagesHandler) loadImageData(ctx context.Context, id sql.NullInt64) *FeaturedImageData {
-	if !id.Valid {
+	data, err := h.queryImageData(ctx, id)
+	if err != nil {
 		return nil
+	}
+	return data
+}
+
+func (h *PagesHandler) queryImageData(ctx context.Context, id sql.NullInt64) (*FeaturedImageData, error) {
+	if !id.Valid {
+		return nil, nil
 	}
 	media, err := h.queries.GetMediaByID(ctx, id.Int64)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	return &FeaturedImageData{
 		ID:        media.ID,
@@ -1965,7 +1973,7 @@ func (h *PagesHandler) loadImageData(ctx context.Context, id sql.NullInt64) *Fea
 		Filepath:  model.MediaURL(model.VariantOriginal, media.Uuid, media.Filename),
 		Thumbnail: model.MediaURL("thumbnail", media.Uuid, media.Filename),
 		Mimetype:  media.MimeType,
-	}
+	}, nil
 }
 
 // validateFeaturedImageSize checks if a featured image meets minimum size requirements.

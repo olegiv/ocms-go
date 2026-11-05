@@ -389,6 +389,29 @@ func (q *Queries) RevokeOAuthGrant(ctx context.Context, arg RevokeOAuthGrantPara
 	return err
 }
 
+const revokeOAuthGrantByAccess = `-- name: RevokeOAuthGrantByAccess :execrows
+UPDATE oauth_grants SET revoked_at = unixepoch()
+WHERE oauth_grants.id = ?1 AND revoked_at = 0
+AND EXISTS (
+    SELECT 1 FROM oauth_tokens
+    WHERE oauth_tokens.id = ?2 AND oauth_tokens.grant_id = oauth_grants.id
+    AND access_revoked_at = 0 AND access_expires_at > unixepoch()
+)
+`
+
+type RevokeOAuthGrantByAccessParams struct {
+	GrantID string `json:"grant_id"`
+	TokenID string `json:"token_id"`
+}
+
+func (q *Queries) RevokeOAuthGrantByAccess(ctx context.Context, arg RevokeOAuthGrantByAccessParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, revokeOAuthGrantByAccess, arg.GrantID, arg.TokenID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const revokeOwnedOAuthGrant = `-- name: RevokeOwnedOAuthGrant :execrows
 UPDATE oauth_grants SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at = 0
 `

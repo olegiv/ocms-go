@@ -47,8 +47,9 @@ published/scheduled target refuses the review; reload and compare again.
 A successful review creates a new translation revision with the current
 source fingerprint and records the reviewer, time and reviewed revisions.
 It changes no article text, metadata, taxonomy, AI access, publication state,
-source or sibling revision. Earlier provenance and claim acknowledgments
-remain in history; agent assertions are not copied into the human review.
+source or sibling revision. The new revision carries forward validation
+evidence and agent-reported claims. Claim acknowledgments stay with the
+revision where they were recorded.
 Ordinary draft updates retain the reviewed basis. A subsequent source
 text/SEO change makes the translation stale again. This action is available
 through the normal editor session and CSRF protection; MCP cannot approve

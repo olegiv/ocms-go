@@ -41,12 +41,13 @@ func (s *Service) checkSource(ctx context.Context, q *store.Queries, basis Basis
 }
 
 func (s *Service) Translate(ctx context.Context, a v2.Actor, in TranslateInput) (SaveResult, error) {
-	opt, replay, err := s.writeOptions(ctx, a, "create_translation_draft", in.RequestID, in)
+	var receipt SaveResult
+	opt, replayed, err := s.writeOptions(ctx, a, "create_translation_draft", in.RequestID, in, &receipt)
 	if err != nil {
 		return SaveResult{}, err
 	}
-	if replay != nil {
-		return s.receipt(ctx, replay)
+	if replayed {
+		return receipt, nil
 	}
 	if in.SourcePageID <= 0 || in.SourceRevision <= 0 || in.LanguageCode == "" {
 		return SaveResult{}, invalid([]draft.Issue{draft.NewIssue("invalid_input", "source_revision", "en")})
@@ -81,7 +82,7 @@ func (s *Service) Translate(ctx context.Context, a v2.Actor, in TranslateInput) 
 	input := in.Draft
 	input.LanguageCode = draft.SetNullable(in.LanguageCode)
 	opt.TranslationOf = in.SourcePageID
-	return s.create(ctx, a, input, opt, basis)
+	return s.create(ctx, a, input, opt, basis, &receipt)
 }
 
 func (s *Service) latestBasis(ctx context.Context, id, revision int64) (*Basis, error) {

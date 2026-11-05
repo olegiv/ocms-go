@@ -322,6 +322,7 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 	// a 503 so the client retries instead of discarding a still-active grant.
 	ctx := r.Context()
 	raw := r.PostForm.Get("token")
+	accessToken := validCredential(raw, AccessPrefix)
 	var (
 		row store.OauthToken
 		err error
@@ -329,7 +330,7 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case validCredential(raw, refreshPrefix):
 		row, err = s.q.GetOAuthTokenByRefresh(ctx, tokenHash(raw))
-	case validCredential(raw, AccessPrefix):
+	case accessToken:
 		row, err = s.q.GetOAuthTokenByAccess(ctx, tokenHash(raw))
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{})
@@ -343,6 +344,10 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to load OAuth token for revocation", err))
 		return
 	}
+	if accessToken && (row.AccessRevokedAt != 0 || row.AccessExpiresAt <= s.now().Unix()) {
+		writeJSON(w, http.StatusOK, map[string]any{})
+		return
+	}
 	g, err := s.q.GetOAuthGrant(ctx, row.GrantID)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeJSON(w, http.StatusOK, map[string]any{})
@@ -353,11 +358,22 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if g.ClientID == clientID {
-		if err := s.q.RevokeOAuthGrant(ctx, store.RevokeOAuthGrantParams{ID: g.ID, RevokedAt: s.now().Unix()}); err != nil {
+		revoked := g.RevokedAt == 0
+		if accessToken {
+			// A refresh or expiry can invalidate the token between lookup and write.
+			var changed int64
+			changed, err = s.q.RevokeOAuthGrantByAccess(ctx, store.RevokeOAuthGrantByAccessParams{
+				GrantID: g.ID, TokenID: row.ID,
+			})
+			revoked = changed != 0
+		} else {
+			err = s.q.RevokeOAuthGrant(ctx, store.RevokeOAuthGrantParams{ID: g.ID, RevokedAt: s.now().Unix()})
+		}
+		if err != nil {
 			WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to revoke OAuth grant", err, "grant_id", g.ID, "client_id", g.ClientID))
 			return
 		}
-		if g.RevokedAt == 0 {
+		if revoked {
 			s.audit(ctx, g, "OAuth connection revoked by client", false)
 		}
 	}

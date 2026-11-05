@@ -41,6 +41,15 @@ ORDER BY g.created_at DESC LIMIT 100;
 -- name: RevokeOAuthGrant :exec
 UPDATE oauth_grants SET revoked_at = ? WHERE id = ? AND revoked_at = 0;
 
+-- name: RevokeOAuthGrantByAccess :execrows
+UPDATE oauth_grants SET revoked_at = unixepoch()
+WHERE oauth_grants.id = sqlc.arg(grant_id) AND revoked_at = 0
+AND EXISTS (
+    SELECT 1 FROM oauth_tokens
+    WHERE oauth_tokens.id = sqlc.arg(token_id) AND oauth_tokens.grant_id = oauth_grants.id
+    AND access_revoked_at = 0 AND access_expires_at > unixepoch()
+);
+
 -- name: RevokeOwnedOAuthGrant :execrows
 UPDATE oauth_grants SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at = 0;
 

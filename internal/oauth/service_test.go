@@ -173,6 +173,98 @@ func TestRefreshRotationScopeBindingAndDurableReuseRevocation(t *testing.T) {
 	}
 }
 
+func TestRevokeStaleAccessKeepsRefreshFamily(t *testing.T) {
+	for _, state := range []string{"rotated", "expired", "rotation during revoke", "expiry before write"} {
+		t.Run(state, func(t *testing.T) {
+			f := newFixture(t)
+			f.s.options.AccessTTL = time.Minute
+			first := f.redeem(t, f.code(t))
+			current := first
+			rotate := func() {
+				status, next := f.exchange(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh(first)}})
+				if status != http.StatusOK {
+					t.Fatalf("setup refresh: status=%d error=%v", status, next["error"])
+				}
+				current = next
+			}
+			switch state {
+			case "rotated":
+				rotate()
+			case "expired":
+				row, err := f.s.q.GetOAuthTokenByAccess(t.Context(), tokenHash(access(first)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.s.now = func() time.Time { return time.Unix(row.AccessExpiresAt, 0) }
+			case "rotation during revoke":
+				// Rotate after Revoke loads the access row, before it writes the grant.
+				clock := f.s.now
+				f.s.now = func() time.Time {
+					f.s.now = clock
+					rotate()
+					return clock()
+				}
+			case "expiry before write":
+				// The access row passed the Go check, but its expiry has passed by
+				// the time SQLite evaluates the grant update.
+				row, err := f.s.q.GetOAuthTokenByAccess(t.Context(), tokenHash(access(first)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				expiry := f.s.now().Truncate(time.Second)
+				if _, err = f.db.ExecContext(t.Context(), `UPDATE oauth_tokens SET access_expires_at = ? WHERE id = ?`, expiry.Unix(), row.ID); err != nil {
+					t.Fatal(err)
+				}
+				f.s.now = func() time.Time { return expiry.Add(-time.Second) }
+			}
+			status, response := f.revoke(f.values.Get("client_id"), access(first))
+			if status != http.StatusOK || len(response) != 0 {
+				t.Fatalf("revoke: status=%d body=%v", status, response)
+			}
+			for _, event := range authEvents(t, f) {
+				if event.message == "OAuth connection revoked by client" {
+					t.Error("stale access recorded a revocation event")
+				}
+			}
+			status, next := f.exchange(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh(current)}})
+			if status != http.StatusOK {
+				t.Fatalf("stale access revoked the refresh family: status=%d error=%v", status, next["error"])
+			}
+			if _, err := f.s.VerifyAccess(t.Context(), access(next)); err != nil {
+				t.Fatalf("refreshed access unusable: %v", err)
+			}
+		})
+	}
+}
+
+func TestRevokeLiveAccessAndSpentRefresh(t *testing.T) {
+	for _, state := range []string{"live access", "spent refresh"} {
+		t.Run(state, func(t *testing.T) {
+			f := newFixture(t)
+			first := f.redeem(t, f.code(t))
+			status, current := f.exchange(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh(first)}})
+			if status != http.StatusOK {
+				t.Fatalf("setup refresh: status=%d error=%v", status, current["error"])
+			}
+			revokeToken := refresh(first)
+			if state == "live access" {
+				revokeToken = access(current)
+			}
+			clientID := f.values.Get("client_id")
+			if revokeStatus, response := f.revoke(clientID, revokeToken); revokeStatus != http.StatusOK || len(response) != 0 {
+				t.Fatalf("revoke: status=%d body=%v", revokeStatus, response)
+			}
+			if _, err := f.s.VerifyAccess(t.Context(), access(current)); problemCode(err) != "invalid_token" {
+				t.Fatalf("current access after revocation: %v", err)
+			}
+			status, denied := f.exchange(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh(current)}})
+			if status != http.StatusBadRequest || denied["error"] != "invalid_grant" {
+				t.Fatalf("current refresh after revocation: status=%d error=%v", status, denied["error"])
+			}
+		})
+	}
+}
+
 func TestWrongRefreshClientCannotUseOrRevokeFamily(t *testing.T) {
 	f := newFixture(t)
 	body := f.redeem(t, f.code(t))

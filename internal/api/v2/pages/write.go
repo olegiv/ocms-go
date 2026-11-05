@@ -44,6 +44,8 @@ type WriteOptions struct {
 	// lookup, returning the evidence for this transaction without charging replays.
 	PrepareMutation func(context.Context, *store.Queries) (provenance.Evidence, error)
 	EvidenceChanges bool
+	// PrepareResult builds the transport's receipt inside the write or replay transaction.
+	PrepareResult func(context.Context, *store.Queries, *Page) error
 }
 
 func validateTitle(title string) error {
@@ -189,7 +191,8 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 			}
 			if record != nil {
 				replayed = true
-				return json.Unmarshal([]byte(record.ResultJson.String), &result)
+				result, err = readReplayResult(ctx, work.Q, record, opt.PrepareResult)
+				return err
 			}
 		}
 		evidence := opt.Evidence
@@ -239,6 +242,11 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 			return err
 		}
 		result.Revision = work.Pages[result.ID].Revision
+		if opt.PrepareResult != nil {
+			if prepareErr := opt.PrepareResult(ctx, work.Q, result); prepareErr != nil {
+				return prepareErr
+			}
+		}
 		if request.ID != "" {
 			if opt.Idempotency != nil {
 				// Agent tools return a receipt, not the full HTML body. Keep its
@@ -309,9 +317,27 @@ func (s *Service) ReplayDraft(ctx context.Context, a v2.Actor, opt WriteOptions)
 		if lookupErr != nil || record == nil {
 			return lookupErr
 		}
-		return json.Unmarshal([]byte(record.ResultJson.String), &result)
+		var readErr error
+		result, readErr = readReplayResult(ctx, work.Q, record, opt.PrepareResult)
+		return readErr
 	})
 	return result, writeError(err)
+}
+
+func readReplayResult(ctx context.Context, q *store.Queries, record *store.IdempotencyKey, prepare func(context.Context, *store.Queries, *Page) error) (*Page, error) {
+	var result *Page
+	if err := json.Unmarshal([]byte(record.ResultJson.String), &result); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, errors.New("page replay returned no result")
+	}
+	if prepare != nil {
+		if err := prepare(ctx, q, result); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 func draftRequest(a v2.Actor, opt WriteOptions, operation string) (idempotency.Request, error) {
@@ -366,18 +392,26 @@ func (s *Service) authorizeWrite(ctx context.Context, q *store.Queries, a v2.Act
 	}
 	switch {
 	case a.APIKey != nil:
+		const unavailable = "Credential unavailable"
 		key, keyErr := q.GetAPIKeyByID(ctx, a.APIKey.ID)
-		if keyErr != nil || !key.IsActive || key.CreatedBy != user.ID || (key.ExpiresAt.Valid && !time.Now().Before(key.ExpiresAt.Time)) {
-			return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
+		if keyErr != nil {
+			return draftCredentialLookupError(ctx, keyErr, unavailable, "api_key_id", a.APIKey.ID, "user_id", user.ID)
+		}
+		if !key.IsActive || key.CreatedBy != user.ID || (key.ExpiresAt.Valid && !time.Now().Before(key.ExpiresAt.Time)) {
+			return v2.NewError(v2.ErrUnauthorized, unavailable)
 		}
 		permissions := middleware.ParseAPIKeyPermissions(&key)
 		if !slices.Contains(permissions, model.PermissionMCPAccess) || !slices.Contains(permissions, model.PermissionMCPDrafts) {
 			return v2.NewError(v2.ErrForbidden, "Draft permission removed")
 		}
 	case a.OAuthGrantID != "":
+		const unavailable = "Grant unavailable"
 		grant, grantErr := q.GetOAuthGrant(ctx, a.OAuthGrantID)
-		if grantErr != nil || grant.UserID != user.ID || grant.RevokedAt != 0 || grant.ExpiresAt <= time.Now().Unix() || grant.SessionVersion != user.SessionVersion || grant.ClientID != a.OAuthClientID {
-			return v2.NewError(v2.ErrUnauthorized, "Grant unavailable")
+		if grantErr != nil {
+			return draftCredentialLookupError(ctx, grantErr, unavailable, "grant_id", a.OAuthGrantID, "client_id", a.OAuthClientID, "user_id", user.ID)
+		}
+		if grant.UserID != user.ID || grant.RevokedAt != 0 || grant.ExpiresAt <= time.Now().Unix() || grant.SessionVersion != user.SessionVersion || grant.ClientID != a.OAuthClientID {
+			return v2.NewError(v2.ErrUnauthorized, unavailable)
 		}
 		scopes := strings.Fields(grant.Scopes)
 		if !slices.Contains(scopes, model.PermissionMCPAccess) || !slices.Contains(scopes, model.PermissionMCPDrafts) {
@@ -387,6 +421,14 @@ func (s *Service) authorizeWrite(ctx context.Context, q *store.Queries, a v2.Act
 		return v2.NewError(v2.ErrUnauthorized, "An app credential is required")
 	}
 	return opt.Authorize(ctx, q)
+}
+
+func draftCredentialLookupError(ctx context.Context, err error, unavailable string, attrs ...any) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return v2.NewError(v2.ErrUnauthorized, unavailable)
+	}
+	slog.ErrorContext(service.WithoutEventLog(ctx), "failed to re-check draft write credential", append([]any{"error", err}, attrs...)...)
+	return &v2.Error{Kind: v2.ErrConflict, Msg: "Credential check is temporarily unavailable; retry the call", MachineCode: "write_retryable", Wrap: err}
 }
 
 func writeError(err error) error {

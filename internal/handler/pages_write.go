@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -147,6 +148,9 @@ func pageWriteMessage(lang string, err error) (message string, ok bool) {
 	case errors.As(err, &size):
 		return i18n.T(lang, "pages.error.featured_image_too_small", model.MinFeaturedImageWidth, model.MinFeaturedImageHeight, size.Width, size.Height), true
 	case errors.As(err, &refusal):
+		if refusal.MessageKey != "" {
+			return i18n.T(lang, refusal.MessageKey, refusal.MessageArgs...), true
+		}
 		// Fixed text written for people (pagewrite.Refusal), never storage text.
 		return refusal.Reason, true
 	}
@@ -160,14 +164,15 @@ func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err 
 	}
 	latest, loadErr := h.queries.GetPageByID(r.Context(), page.ID)
 	if loadErr != nil {
-		flashError(w, r, h.renderer, redirectAdminPages, "Page unavailable")
+		h.preservePageEdits(w, r, page.ID, fmt.Errorf("load current page for conflict form: %w", loadErr))
 		return true
 	}
 	allCategories, loadErr := h.queries.ListCategories(r.Context())
 	if loadErr != nil {
-		http.Error(w, "Cannot load conflict form", http.StatusInternalServerError)
+		h.preservePageEdits(w, r, page.ID, fmt.Errorf("load categories for conflict form: %w", loadErr))
 		return true
 	}
+	lang := h.renderer.GetAdminLang(r)
 	var tags []store.Tag
 	for _, raw := range r.Form["tags[]"] {
 		id, parseErr := strconv.ParseInt(raw, 10, 64)
@@ -175,13 +180,31 @@ func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err 
 			continue
 		}
 		tag, tagErr := h.queries.GetTagByID(r.Context(), id)
-		if tagErr == nil {
-			tags = append(tags, tag)
+		if errors.Is(tagErr, sql.ErrNoRows) {
+			tag = store.Tag{ID: id, Name: i18n.T(lang, "pages.conflict_missing_tag", id)}
+		} else if tagErr != nil {
+			h.preservePageEdits(w, r, page.ID, fmt.Errorf("load tag %d for conflict form: %w", id, tagErr))
+			return true
 		}
+		tags = append(tags, tag)
 	}
 	user, loadErr := h.queries.GetUserByID(r.Context(), middleware.GetUserID(r))
-	if loadErr != nil {
+	if errors.Is(loadErr, sql.ErrNoRows) {
 		http.Error(w, "Account unavailable", http.StatusUnauthorized)
+		return true
+	}
+	if loadErr != nil {
+		h.preservePageEdits(w, r, page.ID, fmt.Errorf("load editor for conflict form: %w", loadErr))
+		return true
+	}
+	featured, loadErr := h.queryImageData(r.Context(), input.FeaturedImageID)
+	if loadErr != nil && !errors.Is(loadErr, sql.ErrNoRows) {
+		h.preservePageEdits(w, r, page.ID, fmt.Errorf("load featured image %d for conflict form: %w", input.FeaturedImageID.Int64, loadErr))
+		return true
+	}
+	ogImage, loadErr := h.queryImageData(r.Context(), input.OgImageID)
+	if loadErr != nil && !errors.Is(loadErr, sql.ErrNoRows) {
+		h.preservePageEdits(w, r, page.ID, fmt.Errorf("load Open Graph image %d for conflict form: %w", input.OgImageID.Int64, loadErr))
 		return true
 	}
 	info := h.loadPageLanguageInfo(r.Context(), latest)
@@ -189,14 +212,29 @@ func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err 
 		Tags: tags, Categories: selectedPageCategoriesFromForm(r.Form["categories[]"]), AllCategories: buildPageCategoryTree(allCategories, nil, 0),
 		Aliases: pageAliasesFromForm(r.Form["aliases[]"]), AllLanguages: info.AllLanguages, Language: info.EntityLanguage,
 		Translations: info.Translations, MissingLanguages: info.MissingLanguages, Statuses: ValidPageStatuses, PageTypes: ValidPageTypes,
-		FormValues: input.FormValues, FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID), OgImage: h.loadImageData(r.Context(), input.OgImageID),
+		FormValues: input.FormValues, FeaturedImage: featured, OgImage: ogImage,
 		AIEditable: r.FormValue("allow_ai_edits") == "on", CanManageAI: latest.AuthorID == user.ID || user.Role == model.RoleAdmin}
-	lang := h.renderer.GetAdminLang(r)
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.revision_conflict_title"), pagesEditBreadcrumbs(lang, latest.Title, latest.ID))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusConflict)
 	renderTempl(w, r, adminviews.PageFormPage(pc, convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)))
 	return true
+}
+
+func (h *PagesHandler) preservePageEdits(w http.ResponseWriter, r *http.Request, pageID int64, cause error) {
+	lang := h.renderer.GetAdminLang(r)
+	status, messageKey := http.StatusServiceUnavailable, "pages.edit_recovery_retry"
+	if errors.Is(cause, sql.ErrNoRows) {
+		status, messageKey = http.StatusNotFound, "pages.edit_recovery_missing"
+	} else {
+		slog.ErrorContext(r.Context(), "failed to load page edit data", "error", cause, "page_id", pageID, "user_id", middleware.GetUserID(r))
+	}
+	title := i18n.T(lang, "pages.edit_recovery_title")
+	pc := buildPageContext(r, h.sessionManager, h.renderer, title, pagesEditBreadcrumbs(lang, r.FormValue("title"), pageID))
+	w.Header().Set(HeaderContentType, "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	renderTempl(w, r, adminviews.PageEditRecovery(pc, pageID, r.Form, i18n.T(lang, messageKey), status == http.StatusServiceUnavailable))
 }
 
 // revisionForAction rejects malformed/missing revisions before an editor action.

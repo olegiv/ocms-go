@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
@@ -64,37 +65,54 @@ func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVer
 		params.Slug = saved.Slug
 		params.Summary = saved.Summary
 		params.PageType = saved.PageType
+		language, err := t.Q.GetLanguageByCode(ctx, saved.LanguageCode)
+		if err != nil {
+			return restoreReferenceError(err, "language", "pages.restore_missing_language", saved.LanguageCode)
+		}
+		if !language.IsActive {
+			return refuse("recorded language is inactive")
+		}
 		// Language changes may affect translation-component uniqueness.
 		if saved.LanguageCode != page.LanguageCode {
-			member, err := t.Q.GetTranslationComponentEntityByLanguage(ctx, store.GetTranslationComponentEntityByLanguageParams{EntityType: "page", EntityID: page.ID, LanguageCode: saved.LanguageCode})
-			if err == nil && member != page.ID {
+			member, memberErr := t.Q.GetTranslationComponentEntityByLanguage(ctx, store.GetTranslationComponentEntityByLanguageParams{EntityType: "page", EntityID: page.ID, LanguageCode: saved.LanguageCode})
+			if memberErr == nil && member != page.ID {
 				return ErrTranslationExists
 			}
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return err
+			if memberErr != nil && !errors.Is(memberErr, sql.ErrNoRows) {
+				return memberErr
 			}
 			if err = t.TrackComponent(ctx, page.ID); err != nil {
 				return err
 			}
 		}
-		language, err := t.Q.GetLanguageByCode(ctx, saved.LanguageCode)
-		if err != nil {
-			return err
-		}
-		if !language.IsActive {
-			return refuse("recorded language is inactive")
-		}
 		params.LanguageCode = saved.LanguageCode
 		params.FeaturedImageID = sql.NullInt64{}
 		if saved.FeaturedImageID != nil {
+			media, loadErr := t.Q.GetMediaByID(ctx, *saved.FeaturedImageID)
+			if loadErr != nil {
+				return restoreReferenceError(loadErr, "featured image", "pages.restore_missing_featured_image", *saved.FeaturedImageID)
+			}
+			if err = CheckFeaturedImageDimensions(media.Width.Int64, media.Height.Int64, media.Width.Valid && media.Height.Valid); err != nil {
+				return err
+			}
 			params.FeaturedImageID = sql.NullInt64{Int64: *saved.FeaturedImageID, Valid: true}
 		}
 		params.OgImageID = sql.NullInt64{}
 		if saved.OGImageID != nil {
+			if _, err = t.Q.GetMediaByID(ctx, *saved.OGImageID); err != nil {
+				return restoreReferenceError(err, "Open Graph image", "pages.restore_missing_og_image", *saved.OGImageID)
+			}
 			params.OgImageID = sql.NullInt64{Int64: *saved.OGImageID, Valid: true}
 		}
-		if err = FeaturedImageSize(ctx, t.Q, params.FeaturedImageID); err != nil {
-			return err
+		for _, id := range saved.TagIDs {
+			if _, err = t.Q.GetTagByID(ctx, id); err != nil {
+				return restoreReferenceError(err, "tag", "pages.restore_missing_tag", id)
+			}
+		}
+		for _, id := range saved.CategoryIDs {
+			if _, err = t.Q.GetCategoryByID(ctx, id); err != nil {
+				return restoreReferenceError(err, "category", "pages.restore_missing_category", id)
+			}
 		}
 		params.MetaTitle = saved.MetaTitle
 		params.MetaDescription = saved.MetaDescription
@@ -150,4 +168,15 @@ func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVer
 	}
 	_, err := t.Q.UpdatePage(ctx, params)
 	return err
+}
+
+func restoreReferenceError(err error, kind, messageKey string, id any) error {
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("load recorded %s %v: %w", kind, id, err)
+	}
+	return &Refusal{
+		Reason:      fmt.Sprintf("recorded %s %v no longer exists", kind, id),
+		MessageKey:  messageKey,
+		MessageArgs: []any{fmt.Sprint(id)},
+	}
 }

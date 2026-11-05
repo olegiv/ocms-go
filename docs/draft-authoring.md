@@ -106,9 +106,12 @@ missing pages share the generic inaccessible/not-found response.
 
 Typed input is hashed before normalization, defaults, media and slug lookup.
 Fresh authorization and retained-request lookup precede current validation
-and CAS; the write transaction repeats both checks. A lost committed response
-replays its original receipt even after the page or mutable defaults changed.
-Different input under the same ID returns `idempotency_key_reused`.
+and CAS. The write transaction repeats both checks and prepares the receipt
+before committing. A lost committed response replays its original receipt
+even after the page or mutable defaults changed. Different input under the
+same ID returns `idempotency_key_reused`. If a credential lookup is temporarily
+unavailable, `write_retryable` tells the caller to retry with the same
+`request_id`.
 
 The original non-secret receipt is retained for seven days, then compacted to
 a permanent tombstone; deletion also preserves a tombstone. `request_expired`

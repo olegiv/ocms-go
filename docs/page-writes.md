@@ -45,8 +45,12 @@ preserved through Huma's schema-link transformer.
 Admin edit, restore, translation creation, publish and scheduling actions submit
 the displayed revision. A stale editor retains its unsaved inputs and offers
 **View latest** or **Confirm overwrite**. Confirmation submits a new CAS against
-the revision displayed on the conflict form; another intervening edit conflicts
-again. The owner or an administrator can toggle **Allow AI edits**. That toggle
+the revision displayed on the conflict form. Another intervening edit conflicts
+again. If a temporary read error prevents loading the conflict form, the editor
+keeps the submission on a recovery screen. **Retry with these edits** submits
+the same values and revision for another check.
+
+The owner or an administrator can toggle **Allow AI edits**. That toggle
 also advances the page revision when its value changes. A save that leaves it
 as it was does not touch `page_ai_access`, so `set_by` and `set_at` keep naming
 whoever last changed the setting. That user cannot be deleted while the row
@@ -99,10 +103,11 @@ handled by `pagewrite.PruneAIDraftRevisions` first. See
 Restoring a complete version recovers recorded content, taxonomy, aliases and
 media assignments. It retains current author, AI access, publication/scheduling
 and translation membership. A legacy restore changes only title and body.
-Restore uses a new revision, checks references and route availability, and rolls
-back if a recorded dependency is unavailable. Language changes also track
-affected translation siblings. Linking components refuses duplicate languages
-without disclosing a conflicting sibling ID.
+Restore checks saved references and route availability before recording a new
+revision. If a saved tag, category, image or language is missing, the editor
+identifies the missing reference and asks you to choose another version.
+Language changes also track affected translation siblings. Linking components
+refuses duplicate languages without disclosing a conflicting sibling ID.
 
 Before applying the migration to any real site, take a consistent database
 backup and verify the upgrade on a disposable copy. Development verification

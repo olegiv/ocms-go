@@ -47,10 +47,12 @@ func TestRefusedPageWritesExplainWhy(t *testing.T) {
 	}
 	h := NewPagesHandler(db, renderer, sm)
 	var flash string
+	adminLang := "en"
 	router := chi.NewRouter()
 	router.Use(sm.LoadAndSave)
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			renderer.SetAdminLang(r, adminLang)
 			next.ServeHTTP(w, withUser(r, user))
 			flash = sm.GetString(r.Context(), "flash")
 		})
@@ -139,6 +141,36 @@ func TestRefusedPageWritesExplainWhy(t *testing.T) {
 	post(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", published.ID, bad.ID), url.Values{"base_revision": {strconv.FormatInt(published.Revision+5, 10)}})
 	if want := i18n.T("en", "pages.error_version_not_restored") + " " + changed; flash != want {
 		t.Errorf("restore with a stale revision: flash %q, want %q", flash, want)
+	}
+
+	// A deleted tag in a complete snapshot is explained in the editor's UI language.
+	tag, err := queries.CreateTag(ctx, store.CreateTagParams{Name: "Recorded tag", Slug: "recorded-tag", LanguageCode: "en", CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	work, err := pagewrite.InTx(ctx, db, provenance.Principal{UserID: user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
+		if _, trackErr := work.Track(ctx, draft.ID, &draft.Revision, true); trackErr != nil {
+			return trackErr
+		}
+		return work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: draft.ID, TagID: tag.ID})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := work.Pages[draft.ID]
+	saved, err := queries.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{PageID: current.ID, Revision: sql.NullInt64{Int64: current.Revision, Valid: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = queries.DeleteTag(ctx, tag.ID); err != nil {
+		t.Fatal(err)
+	}
+	for lang, reason := range map[string]string{"en": "Choose another version.", "ru": "Выберите другую версию."} {
+		adminLang = lang
+		response := post(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", current.ID, saved.ID), url.Values{"base_revision": {strconv.FormatInt(current.Revision, 10)}})
+		if response.Code != http.StatusSeeOther || !strings.Contains(flash, reason) || !strings.Contains(flash, strconv.FormatInt(tag.ID, 10)) {
+			t.Errorf("restore with deleted tag in %s: status=%d flash=%q", lang, response.Code, flash)
+		}
 	}
 }
 

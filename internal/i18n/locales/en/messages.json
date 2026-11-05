@@ -7808,9 +7808,59 @@
             "translation": "The version was not restored."
         },
         {
+            "id": "pages.restore_missing_language",
+            "message": "The language (%s) from this version is unavailable. Choose another version.",
+            "translation": "The language (%s) from this version is unavailable. Choose another version."
+        },
+        {
+            "id": "pages.restore_missing_featured_image",
+            "message": "The featured image (ID %s) from this version is missing. Choose another version.",
+            "translation": "The featured image (ID %s) from this version is missing. Choose another version."
+        },
+        {
+            "id": "pages.restore_missing_og_image",
+            "message": "The Open Graph image (ID %s) from this version is missing. Choose another version.",
+            "translation": "The Open Graph image (ID %s) from this version is missing. Choose another version."
+        },
+        {
+            "id": "pages.restore_missing_tag",
+            "message": "The tag (ID %s) from this version is missing. Choose another version.",
+            "translation": "The tag (ID %s) from this version is missing. Choose another version."
+        },
+        {
+            "id": "pages.restore_missing_category",
+            "message": "The category (ID %s) from this version is missing. Choose another version.",
+            "translation": "The category (ID %s) from this version is missing. Choose another version."
+        },
+        {
             "id": "pages.error_translation_not_created",
             "message": "The translation was not created.",
             "translation": "The translation was not created."
+        },
+        {
+            "id": "pages.edit_recovery_title",
+            "message": "Page save interrupted",
+            "translation": "Page save interrupted"
+        },
+        {
+            "id": "pages.edit_recovery_retry",
+            "message": "The editor hit a temporary read error. Retry with your submitted edits below.",
+            "translation": "The editor hit a temporary read error. Retry with your submitted edits below."
+        },
+        {
+            "id": "pages.edit_recovery_missing",
+            "message": "The page is unavailable. You can copy your submitted text below.",
+            "translation": "The page is unavailable. You can copy your submitted text below."
+        },
+        {
+            "id": "pages.edit_recovery_button",
+            "message": "Retry with these edits",
+            "translation": "Retry with these edits"
+        },
+        {
+            "id": "pages.conflict_missing_tag",
+            "message": "Tag %d is unavailable. Remove it or select a replacement.",
+            "translation": "Tag %d is unavailable. Remove it or select a replacement."
         },
         {
             "id": "pages.revision_conflict_title",
