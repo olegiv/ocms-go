@@ -9,17 +9,20 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/oauth"
+	"github.com/olegiv/ocms-go/internal/store"
 	"golang.org/x/net/html"
 )
 
@@ -128,6 +131,61 @@ func oauthCallbackResponse(t *testing.T, rr *httptest.ResponseRecorder) *url.URL
 		t.Fatal(err)
 	}
 	return u
+}
+
+func TestOAuthPreLoginErrorsRespectClientSource(t *testing.T) {
+	env := newMFATestEnv(t, false)
+	values := enableTestOAuth(t, env)
+	assertLocalError := func(t *testing.T, params url.Values, code string) {
+		t.Helper()
+		rr := authRequest(env.router, http.MethodGet, "/oauth/authorize?"+params.Encode(), nil)
+		if rr.Code != http.StatusBadRequest || rr.Header().Get("Location") != "" ||
+			rr.Header().Get("Content-Type") != "application/json" {
+			t.Fatalf("expected local OAuth error, got status %d and content type %q", rr.Code, rr.Header().Get("Content-Type"))
+		}
+		var body map[string]string
+		if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil || body["error"] != code {
+			t.Fatalf("expected OAuth error %q, got %q (%v)", code, body["error"], err)
+		}
+	}
+
+	t.Run("new dynamic client", func(t *testing.T) {
+		params := maps.Clone(values)
+		params.Set("response_type", "token")
+		assertLocalError(t, params, "unsupported_response_type")
+	})
+	t.Run("existing dynamic client with registration disabled", func(t *testing.T) {
+		original := env.h.oauth
+		s, err := oauth.New(env.db, oauth.Options{Issuer: "https://cms.test"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		env.h.SetOAuthService(s)
+		t.Cleanup(func() { env.h.SetOAuthService(original) })
+		params := maps.Clone(values)
+		params.Set("scope", "openid")
+		assertLocalError(t, params, "invalid_scope")
+	})
+	t.Run("metadata client keeps its error callback", func(t *testing.T) {
+		const id = "https://client.test/metadata"
+		err := store.New(env.db).UpsertOAuthClient(t.Context(), store.UpsertOAuthClientParams{
+			ID: id, Name: "Test metadata client", Source: "cimd",
+			RedirectUris: "[\"https://client.test/callback\"]", ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		params := maps.Clone(values)
+		params.Set("client_id", id)
+		params.Set("scope", "openid")
+		rr := authRequest(env.router, http.MethodGet, "/oauth/authorize?"+params.Encode(), nil)
+		u := oauthCallbackResponse(t, rr)
+		q := u.Query()
+		if u.Scheme != "https" || u.Host != "client.test" || u.Path != "/callback" ||
+			q.Get("error") != "invalid_scope" || q.Get("state") != "browser-state" || q.Get("iss") != "https://cms.test" {
+			t.Fatalf("unexpected OAuth error callback %q", u)
+		}
+	})
 }
 
 func TestOAuthConsentRequiresFreshLoginAndMFA(t *testing.T) {

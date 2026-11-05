@@ -50,7 +50,7 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	req, err := h.oauth.Prepare(r.Context(), values)
 	if err != nil {
-		if redirect := h.oauth.Redirect(req, url.Values{"error": {protocolErrorCode(err)}}); redirect != "" {
+		if redirect := h.oauth.PreLoginErrorRedirect(req, protocolErrorCode(err)); redirect != "" {
 			oauthClientRedirect(w, r, redirect)
 		} else {
 			oauth.WriteProblem(w, err)

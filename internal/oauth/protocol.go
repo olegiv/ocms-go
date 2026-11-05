@@ -86,6 +86,15 @@ func (s *Service) Prepare(ctx context.Context, values url.Values) (Authorization
 	return out, nil
 }
 
+// PreLoginErrorRedirect keeps errors for anonymously registered clients on the
+// server until the browser has gone through the fresh sign-in flow.
+func (s *Service) PreLoginErrorRedirect(req AuthorizationRequest, code string) string {
+	if req.client.dynamicallyRegistered {
+		return ""
+	}
+	return s.Redirect(req, url.Values{"error": {code}})
+}
+
 // Redirect builds a response only for a URI already validated by Prepare.
 func (s *Service) Redirect(req AuthorizationRequest, values url.Values) string {
 	u, err := url.Parse(req.RedirectURI)
@@ -303,16 +312,20 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, problem("invalid_client"))
 		return
 	}
-	client, err := s.clients.resolve(r.Context(), r.PostForm.Get("client_id"))
-	if err != nil {
-		WriteProblem(w, err)
+	clientID := r.PostForm.Get("client_id")
+	if clientID == "" || len(clientID) > maxClientIDBytes {
+		WriteProblem(w, problem("invalid_client"))
 		return
 	}
+	// The stored token and grant identify the client without a metadata lookup.
 	// RFC 7009 §2.2: an unknown token is answered 200, but a storage fault is
 	// a 503 so the client retries instead of discarding a still-active grant.
 	ctx := r.Context()
 	raw := r.PostForm.Get("token")
-	var row store.OauthToken
+	var (
+		row store.OauthToken
+		err error
+	)
 	switch {
 	case validCredential(raw, refreshPrefix):
 		row, err = s.q.GetOAuthTokenByRefresh(ctx, tokenHash(raw))
@@ -327,7 +340,7 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to load OAuth token for revocation", err, "client_id", client.ID))
+		WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to load OAuth token for revocation", err))
 		return
 	}
 	g, err := s.q.GetOAuthGrant(ctx, row.GrantID)
@@ -336,12 +349,12 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to load OAuth grant for revocation", err, "client_id", client.ID))
+		WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to load OAuth grant for revocation", err, "grant_id", row.GrantID))
 		return
 	}
-	if g.ClientID == client.ID {
+	if g.ClientID == clientID {
 		if err := s.q.RevokeOAuthGrant(ctx, store.RevokeOAuthGrantParams{ID: g.ID, RevokedAt: s.now().Unix()}); err != nil {
-			WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to revoke OAuth grant", err, "grant_id", g.ID, "client_id", client.ID))
+			WriteProblem(w, failure(ctx, "temporarily_unavailable", "failed to revoke OAuth grant", err, "grant_id", g.ID, "client_id", g.ClientID))
 			return
 		}
 		if g.RevokedAt == 0 {

@@ -35,6 +35,8 @@ type registeredClient struct {
 	AuthMethods []string `json:"token_endpoint_auth_methods_supported,omitempty"`
 	GrantTypes  []string `json:"grant_types,omitempty"`
 	Responses   []string `json:"response_types,omitempty"`
+
+	dynamicallyRegistered bool
 }
 
 func (c registeredClient) GetID() string     { return c.ID }
@@ -110,6 +112,8 @@ func (s clientStorage) GetByID(_ context.Context, id string) (lib.ClientInfo, er
 }
 
 const (
+	maxClientIDBytes = 2048
+
 	// cimdFetchTimeout bounds one metadata fetch, however many callers wait for it.
 	cimdFetchTimeout = 5 * time.Second
 	// cimdFailureTTL is how long a failed fetch of one metadata URL is
@@ -155,7 +159,7 @@ func newClientResolver(s *Service) *clientResolver {
 }
 
 func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClient, error) {
-	if id == "" || len(id) > 2048 {
+	if id == "" || len(id) > maxClientIDBytes {
 		return registeredClient{}, problem("invalid_client")
 	}
 	cached, err := c.service.q.GetOAuthClient(ctx, id)
@@ -177,7 +181,10 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 		if json.Unmarshal([]byte(cached.RedirectUris), &redirects) != nil {
 			return registeredClient{}, problem("server_error")
 		}
-		return registeredClient{ID: id, Name: cached.Name, Redirects: redirects, AuthMethod: "none"}, nil
+		return registeredClient{
+			ID: id, Name: cached.Name, Redirects: redirects, AuthMethod: "none",
+			dynamicallyRegistered: cached.Source == "dcr",
+		}, nil
 	}
 	if !validCIMDID(id, c.service.options.AllowedHosts) {
 		return registeredClient{}, problem("invalid_client")
@@ -218,7 +225,7 @@ func validCIMDID(id string, allowedHosts []string) bool {
 // fragment, and not a private address.
 func cimdHost(id string) (string, bool) {
 	u, err := url.Parse(id)
-	if err != nil || id == "" || len(id) > 2048 || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" ||
+	if err != nil || id == "" || len(id) > maxClientIDBytes || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" ||
 		u.Fragment != "" || u.Path == "" || (u.Port() != "" && u.Port() != "443") {
 		return "", false
 	}

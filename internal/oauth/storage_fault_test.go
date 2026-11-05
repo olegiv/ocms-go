@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -34,8 +35,8 @@ func (f *fixture) breakTable(t *testing.T, table string) (restore func()) {
 	return restore
 }
 
-func (f *fixture) revoke(token string) (int, map[string]any) {
-	values := url.Values{"client_id": {f.values.Get("client_id")}, "token": {token}}
+func (f *fixture) revoke(clientID, token string) (int, map[string]any) {
+	values := url.Values{"client_id": {clientID}, "token": {token}}
 	r := httptest.NewRequest(http.MethodPost, "https://cms.test/oauth/revoke", strings.NewReader(values.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
@@ -53,6 +54,50 @@ func problemCode(err error) string {
 	return ""
 }
 
+func TestRevokeUsesStoredGrantWithoutClientMetadata(t *testing.T) {
+	f := newFixture(t)
+	body := f.redeem(t, f.code(t))
+	clientID := f.values.Get("client_id")
+	f.s.options.AllowedHosts = []string{"client.test"}
+	var fetches atomic.Int64
+	f.s.clients.http.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		fetches.Add(1)
+		return nil, errors.New("unexpected client metadata fetch")
+	})
+
+	const otherClient = "https://client.test/other-metadata"
+	for _, tc := range []struct{ name, token string }{
+		{"malformed token", "x"},
+		{"unknown token", randomCredential(AccessPrefix)},
+		{"wrong client for a known token", refresh(body)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status, response := f.revoke(otherClient, tc.token)
+			if status != http.StatusOK || len(response) != 0 {
+				t.Fatalf("expected indistinguishable 200 response, got status=%d body=%v", status, response)
+			}
+		})
+	}
+
+	// Revocation of a valid grant must work even after its metadata expires.
+	if _, err := f.db.ExecContext(t.Context(), "UPDATE oauth_clients SET expires_at = 0 WHERE id = ?", clientID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.s.VerifyAccess(t.Context(), access(body)); err != nil {
+		t.Fatalf("wrong client or metadata expiry invalidated the grant: %v", err)
+	}
+	status, response := f.revoke(clientID, refresh(body))
+	if status != http.StatusOK || len(response) != 0 {
+		t.Errorf("revoke with expired metadata: status=%d body=%v", status, response)
+	}
+	if _, err := f.s.VerifyAccess(t.Context(), access(body)); problemCode(err) != "invalid_token" {
+		t.Errorf("revoked grant remained usable: %v", err)
+	}
+	if got := fetches.Load(); got != 0 {
+		t.Errorf("revocation made %d client metadata requests", got)
+	}
+}
+
 // A revocation the server could not perform must not be reported as done:
 // the client would discard its token while the grant stayed active.
 func TestRevokeStorageFaultIsNotReportedAsSuccess(t *testing.T) {
@@ -61,7 +106,8 @@ func TestRevokeStorageFaultIsNotReportedAsSuccess(t *testing.T) {
 			f := newFixture(t)
 			body := f.redeem(t, f.code(t))
 			restore := f.breakTable(t, table)
-			status, problemBody := f.revoke(refresh(body))
+			clientID := f.values.Get("client_id")
+			status, problemBody := f.revoke(clientID, refresh(body))
 			if status != http.StatusServiceUnavailable || problemBody["error"] != "temporarily_unavailable" {
 				t.Fatalf("revoke during storage fault: status=%d error=%v", status, problemBody["error"])
 			}
@@ -69,7 +115,7 @@ func TestRevokeStorageFaultIsNotReportedAsSuccess(t *testing.T) {
 			if _, err := f.s.VerifyAccess(t.Context(), access(body)); err != nil {
 				t.Fatalf("failed revocation changed the grant: %v", err)
 			}
-			if status, _ := f.revoke(refresh(body)); status != http.StatusOK {
+			if status, _ := f.revoke(clientID, refresh(body)); status != http.StatusOK {
 				t.Fatalf("retried revoke status=%d", status)
 			}
 			if _, err := f.s.VerifyAccess(t.Context(), access(body)); err == nil {
@@ -79,7 +125,7 @@ func TestRevokeStorageFaultIsNotReportedAsSuccess(t *testing.T) {
 	}
 	f := newFixture(t)
 	unknown := randomCredential(refreshPrefix)
-	if status, _ := f.revoke(unknown); status != http.StatusOK {
+	if status, _ := f.revoke(f.values.Get("client_id"), unknown); status != http.StatusOK {
 		t.Fatalf("unknown token revoke status=%d, RFC 7009 requires 200", status)
 	}
 }
