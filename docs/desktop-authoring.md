@@ -7,8 +7,9 @@ R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
 the browser traces confirmed token-free HTTP request URLs. R1.7's current
 client coverage and remaining release gates are recorded below.
 
-R1.7's latest verified staging build is `be0e9cc3` (2026-11-04). Dedicated
-Editor password/shared-MFA login and translation review passed: RU 43/6
+R1.7's latest verified staging build is `6c611040` (2026-11-05). The normal
+editor publication save preserved HTML and both translation bases.
+On `be0e9cc3`, the dedicated Editor's translation review passed. RU 43/6
 and DE 44/5 became Current against EN 27/7. After owner approval and manual
 publication on 2026-11-05, final revisions 9/7/6 are Published with both
 translations Current. See the
@@ -35,7 +36,7 @@ readbacks on `16ac7161`, with matching rendered previews. That focused alt-text
 follow-up did not rerun native/CLI modes. See the
 [current acceptance record](launch/r17-acceptance.md)
 and [release decisions](launch/release-decisions.md) for dependency
-revalidation, completed publication/demo and the local editor-fix follow-up.
+revalidation, the completed demo and verified editor preservation.
 
 ## Workflow
 
@@ -166,10 +167,9 @@ The [new run](launch/r17-acceptance.md) adds German, full catalog fixtures,
 all six client/mode flows and 15 publication/lifecycle test roots. Audit
 findings and first-party NilAway diagnostics were fixed before deployment.
 Native reconnect and dependency revalidation passed on their recorded
-builds. Staging content/translation review is complete on `be0e9cc3`. The
-remaining [release decisions](launch/release-decisions.md) concern the local
-editor preservation fix, its staging verification and release-candidate
-checks. The article is drafted locally. See the earlier
+builds. Translation review passed on `be0e9cc3` and editor preservation
+passed on `6c611040`. The [release decisions](launch/release-decisions.md)
+record the candidate checks and the production draft. See the earlier
 [web staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
 and [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02)
 for build identity, evidence limits, cleanup and remaining gates.

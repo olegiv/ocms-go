@@ -7,9 +7,8 @@ are recorded in the [R1.7 acceptance record](launch/r17-acceptance.md),
 including the inline alt-text repair on `16ac7161`, translation review on
 `be0e9cc3` and owner-confirmed staging publication on 2026-11-05. Final demo
 revisions EN 27/9, RU 43/7 and DE 44/6 are Published; both translations are
-Current. The editor HTML preservation fix below is local only. Publishing remains
-an explicit human action; MCP cannot
-publish, schedule, delete or transfer pages.
+Current. The editor HTML preservation fix passed on staging `6c611040`.
+Publication, scheduling, deletion and transfer remain human CMS operations.
 
 ## Review a draft
 
@@ -81,10 +80,10 @@ only status or metadata. Actual body edits still serialize normally. The
 server applies the existing body policy and then preserves stored line
 endings when they are the only remaining difference. Source text/SEO edits
 still make translations stale, and revision conflicts still refuse writes.
-This fix is **not deployed**. The `be0e9cc3` publication run needed a normal
-version restore to recover the exact approved English HTML and its matching
-translation bases. See the
-[local verification](launch/r17-acceptance.md#local-editor-body-preservation--2026-11-05).
+The `be0e9cc3` publication run recovered the approved English HTML through
+Version History. On `6c611040`, a normal status-only save preserved the
+fixture HTML byte for byte and both translations stayed Current. See the
+[staging verification](launch/r17-acceptance.md#editor-preservation-staging-verification--2026-11-05).
 
 ## Session previews
 

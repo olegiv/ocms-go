@@ -6,12 +6,15 @@ deploy when **you** run them. Preparing this guide does not execute them.
 The existing `ocms-demo`, `fly.toml`, demo deployment script and the production host are
 outside this procedure.
 
-Latest verified runtime: `be0e9cc3`, deployed 2026-11-04. The
+The latest verified runtime is `6c611040`, deployed 2026-11-05. The
+[editor rollout](launch/r17-acceptance.md#editor-preservation-staging-verification--2026-11-05)
+records the image, recovery snapshot and passing status-only save. The
+earlier
 [translation-review rollout](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
 records exact image identity, snapshot, health and preservation checks.
 Normal dedicated Editor password/shared-MFA login passed; RU 43/6 and
 DE 44/5 became Current against EN 27/7. The owner subsequently approved
-and manually published the component on the same runtime: final EN 27/9,
+and manually published the component on `be0e9cc3`. Final EN 27/9,
 RU 43/7 and DE 44/6 are Published, both translations Current. See the
 [publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05).
 Earlier client/dependency results in the
@@ -25,8 +28,7 @@ passed native-initiated Desktop reconnect and authoring, both CLIs'
 OAuth/bearer paths and scoped dependency revalidation on `ba044434` without
 another deployment during that follow-up. Historical client tables retain
 their original builds. Owner approval, publication and the final demo
-walkthrough are complete; the article is drafted locally. The editor
-preservation fix is local only and needs a separately approved rollout.
+walkthrough are complete. The launch article was saved as an unscheduled production draft.
 
 | File | Role |
 |---|---|
@@ -462,8 +464,7 @@ passed native-initiated Desktop reconnect, all four CLI OAuth/bearer paths
 and scoped dependency revalidation. The later `be0e9cc3` rollout completes
 staging content/translation review, with RU/DE current against EN 27/7.
 The later owner-confirmed publication and final demo walkthrough are
-complete, with the article drafted locally. The editor preservation fix
-has not been deployed and requires separate approval and staging checks.
+complete. The normal editor publication check passed on `6c611040`.
 DCR and unsupported authentication methods remain off. Do not reuse the
 historical R1.1 probe result as a CMS-write pass.
 

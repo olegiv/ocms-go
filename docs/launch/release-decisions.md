@@ -8,9 +8,12 @@ commit, push, deployment or publication. The
 
 ## Latest staging verification
 
-`be0e9cc3` is the latest verified deployment on `ocms-mcp-staging`
-(2026-11-04). Normal dedicated Editor password/shared-MFA login and
-translation review passed. Following explicit owner approval and manual
+`6c611040` is the latest verified deployment on `ocms-mcp-staging`
+(2026-11-05). An ordinary status-only editor save preserved the source
+HTML byte for byte and kept both translations Current. See the
+[editor rollout](r17-acceptance.md#editor-preservation-staging-verification--2026-11-05).
+Dedicated Editor login and translation review passed on the earlier
+`be0e9cc3` build. Following explicit owner approval and manual
 publication on 2026-11-05, final revisions are EN 27/9, RU 43/7 and DE 44/6,
 all Published, with both translations Current. The
 [publication record](r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
@@ -41,8 +44,8 @@ changed; future redeploys need the explicit approved exception or a real
 verifier. This is not a production CAPTCHA exception or a publication
 approval. Native-initiated Desktop reconnect and staging translation review
 are passed. Owner approval, manual staging publication and the final demo
-walkthrough are complete. The launch article is drafted locally. The
-new editor preservation fix remains local and needs staging verification.
+walkthrough are complete. The editor preservation fix passed staging
+verification on `6c611040`.
 
 ## Inline-image accessibility
 
@@ -162,24 +165,47 @@ staging views, not continuous footage of the human clicks. The original
 acceptance they cover the final demo segment without claiming a continuous
 end-to-end film.
 
-The planned production article is a complete
-[local HTML draft](article-draft.html) with
-[proposed metadata](article-draft.json). No production CMS article or media
-assignment exists. Creating/publishing the production post remains a
-separate request. No release tag, remote push or announcement is authorized.
+The planned article is saved as
+an unscheduled production draft. The API
+readback verified the article, metadata, taxonomy and supplied workflow
+image. The public URL and both anonymous API routes returned HTTP 404.
+The draft was absent from published listings, RSS and Atom. Browser preview
+awaits staff sign-in. The
+[local HTML](article-draft.html) and [metadata](article-draft.json) record
+the source. Production publication awaits editorial approval.
 
 ## Editor publication follow-up
 
-The HTML preservation fix is uncommitted and locally verified; it has not
-been deployed. The real browser failure on the baseline and passing fixed
-normal/edit/retry/conflict cases are recorded in the
+The HTML preservation fix passed on staging `6c611040`. The normal editor
+form published EN 57 from revision 4 to 5, kept all 644 stored HTML bytes,
+and retained both translation bases. The public page returned HTTP 200
+with its image alt and caption. Returning the source to Draft at revision
+6 restored anonymous HTTP 404 for the fixture. The real browser baseline
+failure and fixed edit/retry/conflict cases are recorded in the
 [local verification](r17-acceptance.md#local-editor-body-preservation--2026-11-05).
 The server still applies the normal body policy before preserving bytes
-that differ only by form newline conversion. It does not bypass freshness,
-publication checks or optimistic concurrency.
+that differ only by form newline conversion. Freshness, publication
+validation and revision checks still apply. See the
+[staging verification](r17-acceptance.md#editor-preservation-staging-verification--2026-11-05).
 
-Before closing R1.7: obtain the separate commit/deployment approval for
-this fix, verify ordinary status-only publication on staging without a
-restore, then finalize release-candidate checks and release/tag decisions.
-The OpenPGP revalidation conditions above remain in force. The wiki is
-excluded; its synchronization stays a separately authorized task.
+## Release candidate checks
+
+The clean `6c611040` archive matched the source used for the staging image.
+`make assets` ran with Node 24, Sass 1.105.1 and templ 0.3.1070. The
+generated-source comparison found zero changes outside `web/static/dist`.
+Go vet and 68 release-archive test packages passed. Application lint and
+first-party NilAway reported zero issues. npm audit reported zero findings.
+
+Go 1.27.3 and govulncheck 1.9.0 revalidated the exact archive on
+Linux/amd64, Linux/arm64 and Darwin/arm64 with CGO disabled. Each
+source/symbol scan retained GO-2026-5932 at module scope
+only, with zero vulnerable imported packages or reachable symbols. The
+release binary's import graph excluded `golang.org/x/crypto/openpgp` on
+all three targets. The approved scoped disposition and revalidation
+conditions above apply. Logs and hashes are under ignored
+`output/r17-validation/release-stop-20261105/`.
+
+The [Release 1 STOP review](../../.claude/docs/PHASE5.md#release-1-stop--2026-11-05)
+records the tested code, the launch draft and wiki synchronization as a
+separate follow-up. Release version, integration and tag decisions await
+the owner's sign-off.

@@ -9,8 +9,8 @@
 <p>A reference records what was available to the assistant. It does not prove a claim, establish that the model used it correctly or provide sentence-level provenance. Editorial guidance can set tone and structure; the editor still has to check the result.</p>
 
 <figure>
-  <img src="assets/editorial-workflow.svg" alt="Workflow: an AI app prepares a draft using sources and existing media, an editor reviews it, then a human publishes the approved revision." width="1600" height="900" loading="lazy" decoding="async">
-  <figcaption>The synthetic staging workflow. This diagram is a local article asset; production media assignments are still to be made.</figcaption>
+  <img src="assets/editorial-workflow.svg" alt="AI draft followed by editor review and human publication" width="1600" height="900" loading="lazy" decoding="async">
+  <figcaption>The staging demo follows a saved draft through editorial review and human publication.</figcaption>
 </figure>
 
 <h2>// Save something another app can continue</h2>
@@ -59,6 +59,6 @@
 
 <p>The final 31-second demo segment is a screenshot walkthrough of those actual published views, not continuous footage of the Publish clicks. The full multilingual client matrix, later native Desktop reconnect, CLI OAuth/bearer checks and dependency checks have separate recorded build scopes. They are not one fresh matrix on the final staging binary.</p>
 
-<p>The publication run also exposed a bug: saving only a status change through TinyMCE normalized unchanged HTML and falsely made translations stale. Restoring the approved English revision through normal version history resolved the staging state. A fix now passes local browser and HTTP regression checks, including genuine edits and stale-write refusal; it still needs an approved staging rollout. R1.7 remains open for that verification and the final release-candidate decisions.</p>
+<p>The original publication run exposed a bug in the editor. A status-only save through TinyMCE rewrote unchanged HTML and marked both translations stale. Restoring the approved English revision resolved the staging state. A later test on <code>6c611040</code> published a disposable translated draft through the ordinary editor form. The stored HTML matched byte for byte, both translations stayed Current, and the public page rendered its image description and caption.</p>
 
 <p>The intended editorial result is concrete: a saved draft with inspectable history, linked translations whose freshness has a defined meaning, a preview of the reviewed revision and a human publication decision. The assistant prepares and revises the content. The editor remains responsible for its accuracy and release.</p>

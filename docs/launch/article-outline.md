@@ -1,8 +1,8 @@
 # Article outline: From an AI brief to a reviewed multilingual article
 
-Status: a complete [local HTML draft](article-draft.html) and
-[proposed metadata](article-draft.json) are prepared for production.
-No production CMS article, upload, publication or cross-post exists. The
+The article was saved as an unscheduled production draft.
+The [local HTML source](article-draft.html) and
+[metadata](article-draft.json) record the material used. The
 [39d82c94 staging record](r17-acceptance.md) now supplies full EN/RU/DE draft
 examples, existing taxonomy/media and four-client continuation. Its inline
 alt-text failure is repaired on staging `16ac7161`: Claude web and ChatGPT
@@ -19,9 +19,8 @@ The owner approved and manually published them on 2026-11-05; final
 revisions EN 27/9, RU 43/7 and DE 44/6 are Published and both translations
 Current. The final 31-second screenshot walkthrough is complete; see the
 [publication record](r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05).
-The draft retains build-specific evidence limits and identifies the local
-editor preservation fix as not yet deployed. It announces no release tag
-or production rollout.
+The draft retains build-specific client evidence and records the editor
+preservation pass on staging `6c611040`.
 
 ## Proposed structure
 
@@ -45,16 +44,15 @@ or production rollout.
 - **Publication:** the human editor reviews and publishes. Distinguish local
   implementation, measured staging acceptance and release work still pending.
 
-## Draft assets and remaining production preparation
+## Draft assets and editorial review
 
-The HTML uses the existing synthetic workflow diagram at
-`assets/editorial-workflow.svg`. Proposed metadata leaves production
-taxonomy and featured/OG media IDs unassigned. Before a separately requested
-CMS draft, resolve the site's existing taxonomy and prepare suitable
-production media. Recheck the article's final status against the editor
-fix rollout and actual release candidate; no performance claims are made.
+The draft uses the supplied workflow illustration. Decoded
+pixels match the source, and the draft readback preserves its inline alt
+text and caption. The same asset supplies the featured image while the
+article displays it inline. The article uses the existing oCMS category
+and existing tags. Its URL, ID and slug returned HTTP 404 anonymously,
+and the article was absent from published listings, RSS and Atom.
 Use the [demo script](demo-script.md), [editorial contract](../editorial-review.md)
 and [connected-app policy](../connected-apps.md) as technical references.
 Do not describe an independent audit or a complete release pass until recorded.
-Creating the real site draft requires a separate authoring request; publishing
-or sharing it requires the corresponding explicit user authorization.
+Production publication requires the owner's editorial approval.

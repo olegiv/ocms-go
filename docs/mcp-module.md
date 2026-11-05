@@ -11,8 +11,9 @@ CAS, provenance and existing taxonomy/media. Publishing and deletion remain
 human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
 [OAuth](oauth.md) records the completed R1.1 authentication acceptance and
 PHASE5 notes retain R1.5/R1.6 results. R1.7's latest verified staging build
-is `be0e9cc3` (2026-11-04). Dedicated Editor password/shared-MFA login and
-translation review passed. On 2026-11-05 the owner approved and manually
+is `6c611040` (2026-11-05). Normal publication preserved the HTML and
+translation freshness. On `be0e9cc3`, translation review passed and the
+owner approved and manually
 published the component: final EN 27/9, RU 43/7 and DE 44/6 are Published,
 with both translations Current. See the
 [publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
@@ -33,9 +34,8 @@ sharing/revocation and native/CLI multilingual draft results on `39d82c94`.
 The inline alt-text repair passed both web clients' resaves/readbacks and
 rendered previews on `16ac7161`. The focused `be0e9cc3` rollout did not
 repeat GUI/native/CLI reconnect, dependency, sharing or proxy-error checks;
-earlier results retain their tested builds. The final demo walkthrough and
-local article draft are complete. The local editor preservation fix and
-its staging verification remain in the
+earlier results retain their tested builds. The final demo, editor
+verification and production draft are recorded in the
 [release decisions](launch/release-decisions.md).
 
 ## Features
@@ -584,12 +584,11 @@ administrator overview/revoke in `/admin/mcp`. Credential hashes/values are
 absent from these views. Core maintenance drains retired OAuth evidence in
 bounded transactions while retaining all active-family replay evidence.
 Management/retention is deployed on staging. The latest verified runtime
-is `be0e9cc3`, including the inline alt-text repair and editor translation
-review. Its focused rollout made RU 43/6 and DE 44/5 current against
-EN 27/7; earlier client results retain their recorded builds. Final owner
-approval and manual staging publication are complete. The final demo
-walkthrough and local article draft are complete; editor-fix staging
-verification and release-candidate decisions remain open.
+is `6c611040`, including the verified editor preservation fix. The
+`be0e9cc3` translation review made RU 43/6 and DE 44/5 Current against
+EN 27/7. The owner published the demo, and the ordinary publication check
+passed on `6c611040`. The demo walkthrough and production draft are complete.
+Earlier client results retain their recorded builds.
 
 
 ## Page authoring foundations (R1.2 development)

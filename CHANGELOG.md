@@ -12,18 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and MCP API-key metadata/revocation, administrator oversight, and bounded
   transactional cleanup that preserves active-family refresh-replay evidence.
   Adds a bundled author workflow and prepared launch/acceptance documents.
-  Build `39d82c94` passed fresh web OAuth/sharing checks and
-  full EN/RU/DE draft workflows with taxonomy/media in native Desktop,
-  ChatGPT and Claude Code/Codex OAuth/bearer modes. Desktop reconnect uses
-  Chrome. Current staging build `16ac7161` repairs inline alt text; both web
-  clients verified resaved EN/RU/DE drafts, with matching browser previews. Fresh
-  editorial/stale-translation review, human publication and release
-  decisions remain open. See `docs/launch/r17-acceptance.md`.
+  The EN/RU/DE authoring matrix passed on `39d82c94`. Native-initiated
+  Desktop reconnect and Claude Code/Codex OAuth and bearer checks passed
+  on `ba044434`. The owner published the reviewed demo on staging, and
+  `6c611040` passed an ordinary publication save with both translations
+  Current. See `docs/launch/r17-acceptance.md` for build-specific results.
+- **Editorial review and previews (R1.6).** Review recorded provenance,
+  validation and claims by revision. Open session previews or create
+  expiring, revocable share links for a selected revision. Share tokens
+  travel in the URL fragment and are redeemed in a POST body.
+- Review an existing translation against the current source revision
+  from the editor and record its updated source basis and reviewer.
 - **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
   translations and private reads over MCP, with original-input retries, revision
   checks, rolling user quotas and separate provenance. Removes compatibility
-  scratch tools/flag. Session preview URLs are returned; sharing remains
-  explicitly unavailable until R1.6. See `docs/draft-authoring.md`.
+  scratch tools/flag and returns session preview URLs. See
+  `docs/draft-authoring.md`.
 - **Authoring context (R1.4).** Database-only reference grounding with shared
   frontend routing, recorded revisions, bounded existing taxonomy/media and
   duplicate/overlap feedback. Adds editorial style guides/presets, three MCP
@@ -51,8 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Preserve punctuation and localized text in inline-image alt attributes
-  through sanitization, draft reads and Markdown resaves. The regression
-  reproduced on staging; this fix has passed local verification only.
+  through sanitization, draft reads and Markdown resaves. Both web clients
+  verified repaired EN/RU/DE drafts and rendered previews on `16ac7161`.
+- Preserve unchanged page HTML on status and metadata saves so publication
+  does not falsely mark translations stale. Verified on staging `6c611040`.
 - Resolve R1.7 audit and first-party NilAway findings: constrain custom CSS
   rendering, ZIP imports, redirect resolution, OAuth client capacity, page
   cache invalidation, API-key policy transactions and site-owner execution

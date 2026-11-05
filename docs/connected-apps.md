@@ -1,7 +1,8 @@
 # Connected apps and OAuth retention
 
-R1.7's latest verified MCP staging build is `be0e9cc3` (2026-11-04).
-Dedicated Editor password/shared-MFA login and normal translation review
+R1.7's latest verified MCP staging build is `6c611040` (2026-11-05).
+An ordinary publication save preserved the HTML and translation freshness.
+On `be0e9cc3`, dedicated Editor login and normal translation review
 passed at revisions EN 27/7, RU 43/6 and DE 44/5. The owner later approved
 and manually published them on 2026-11-05. Final revisions 9/7/6 are
 Published, with both translations Current; see the
@@ -32,8 +33,8 @@ passed native Desktop OAuth and both CLIs' OAuth/bearer modes. Native Connect
 completed the normal browser confirmation, password/shared MFA, consent and
 Desktop callback; the earlier workaround/pending label is superseded.
 Owner approval, staging publication and the final demo walkthrough are
-complete. The launch article is drafted locally; the editor preservation
-fix still needs separate approval and staging verification.
+complete. The editor preservation rollout and launch draft are recorded
+in the [release decisions](launch/release-decisions.md).
 
 ## Account and administrator controls
 
@@ -154,7 +155,7 @@ CLI startup HTTP 401 checks. Owner connections and original content were
 preserved. Full EN/RU/DE and publication/lifecycle coverage retain their
 earlier build-specific evidence. The `be0e9cc3` rollout completes staging
 content/translation review. The later manual publication and final demo
-walkthrough are complete, with the article drafted locally. The editor
-preservation fix remains local pending staging verification. See the
+walkthrough are complete. The editor preservation fix passed on
+`6c611040`, and the article was saved as an unscheduled production draft. See the
 [phase notes](../.claude/docs/PHASE5.md), [client checklist](desktop-authoring.md),
 [OAuth contract](oauth.md) and [demo script](launch/demo-script.md).

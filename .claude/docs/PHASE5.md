@@ -895,8 +895,12 @@ release hardening and independent security audit remain R1.7 work.
 ### Iteration R1.7: Connected Apps, Hardening and Release
 
 **Status updated 2026-11-05:** the latest verified Fly staging build is
-`be0e9cc3` (deployed 2026-11-04). Dedicated Editor login with shared MFA and
-the normal translation-review action passed. On 2026-11-05 the owner
+`6c611040` (deployed 2026-11-05). An ordinary editor status save published
+the disposable source with byte-identical HTML and both translations
+Current. See the
+[staging verification](../../docs/launch/r17-acceptance.md#editor-preservation-staging-verification--2026-11-05).
+Dedicated Editor login and translation review passed earlier on `be0e9cc3`.
+On 2026-11-05 the owner
 approved and manually published the component. Final EN 27/9, RU 43/7 and
 DE 44/6 are Published, with both translations Current. See the
 [publication follow-up](#r17-manual-publication-and-editor-preservation--2026-11-05).
@@ -928,10 +932,8 @@ The owner accepted the unimported OpenPGP advisory for the reviewed local
 build. The Klaro/minimatch rollout is complete, and a Linux/amd64 package
 recheck retained zero imported-package vulnerabilities and the module-only
 warning; the final `ba044434` source/symbol scan revalidated that disposition.
-Owner approval, manual staging publication and the final screenshot
-walkthrough are complete. The planned production article is drafted
-locally. The editor HTML preservation fix remains uncommitted and needs
-separate staging rollout/verification before closure. See the
+Owner approval, manual staging publication, the final screenshot
+walkthrough and the editor preservation check are complete. See the
 [release decisions](../../docs/launch/release-decisions.md).
 The subsequent editorial pass saved demo revisions EN 27/7, RU 43/5 and
 DE 44/4, with preserved images/metadata and saved claim acknowledgments.
@@ -943,7 +945,7 @@ fields. Earlier local verification remains in the
 [local review follow-up](#r17-translation-review-follow-up--2026-11-04).
 No new GUI/native/CLI reconnect, sharing, dependency or proxy-error pass is
 claimed by the focused rollout; earlier results retain their build scope.
-R1.7 is not complete. Earlier bounded results remain in the
+Earlier bounded results remain in the
 [staging record](#r17-fly-staging-and-web-client-acceptance--2026-11-02).
 The earlier [native/CLI record](#r17-native-desktop-and-cli-acceptance--2026-11-02)
 adds bounded native Desktop authoring and both CLIs' OAuth/bearer passes on
@@ -4148,7 +4150,7 @@ limitations remain stated. Evidence is under ignored
 [publication record](../../docs/launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
 contains the exact sequence and preservation/cleanup limits.
 
-The subsequent local fix captures original textarea HTML and initialized
+The local fix at this checkpoint captured original textarea HTML and initialized
 TinyMCE output. Save-time `GetContent` returns original HTML only while
 the body is unchanged, including repeated editor saves during one submit.
 The server applies its normal body policy, then retains existing bytes
@@ -4172,15 +4174,46 @@ All 69 application Go test packages, the focused HTTP regressions,
 application-package golangci-lint and first-party NilAway passed. Templ
 generation, diff whitespace and the absolute-path check also passed.
 
-The planned production article is a complete
-[local HTML draft](../../docs/launch/article-draft.html) with proposed
-metadata and the existing synthetic workflow diagram. No production CMS
-post or media assignment exists. It preserves the recorded client/build
-limits and makes no release or production deployment claim.
+At this checkpoint the production article was prepared as
+[local HTML](../../docs/launch/article-draft.html), with proposed metadata
+and the synthetic workflow diagram. The STOP entry below records the
+subsequent CMS draft.
 
-No commit, push, new deployment or production publication occurred in this
-follow-up. Wiki and `.claude/shared` remain excluded. R1.7 still needs the
-separately approved editor-fix rollout and ordinary staging publication
-verification, then release-candidate checks and release/tag decisions.
-Wiki synchronization remains a separately authorized task. No Release 2
-work has started.
+The subsequent approved rollout verifies the fix on `6c611040`. See the
+[staging record](../../docs/launch/r17-acceptance.md#editor-preservation-staging-verification--2026-11-05)
+for the exact image, publication result and fixture cleanup.
+
+### Release 1 STOP — 2026-11-05
+
+The tested runtime candidate is `6c6110403a7ed5a2aca1b44b20e8455d7fa18cda`.
+The clean archive matches the Fly staging build. The status notes and
+changelog record this closeout as local documentation edits.
+
+- The ordinary staging editor save published EN 57 from revision 4 to 5
+  with all 644 stored HTML bytes intact. RU 58 and DE 59 stayed Current.
+  Public readback passed. EN returned to Draft at revision 6 and all three
+  fixture URLs returned HTTP 404. The original EN 27/9, RU 43/7 and DE 44/6
+  demo readbacks and final screenshot walkthrough are complete.
+- The release archive passed the CI-mode asset build with no source changes
+  outside `web/static/dist`, Go vet, all 68 test packages, application lint
+  and first-party NilAway. The checks used Go 1.27.3, Node 24, Sass 1.105.1
+  and templ 0.3.1070.
+- npm audit found zero issues. Govulncheck 1.9.0 found zero vulnerable
+  imported packages or reachable symbols on Linux/amd64, Linux/arm64 and
+  Darwin/arm64 with CGO disabled. GO-2026-5932 remains a visible module-only
+  advisory. The release command's import graph contains no OpenPGP package
+  on any of these targets. See the
+  [scoped release decision](../../docs/launch/release-decisions.md#dependency-advisory-dispositions).
+- The article is saved as
+  an unscheduled production draft.
+  API readback verified its content, metadata, existing taxonomy and
+  supplied artwork. The draft is unscheduled. Its public URL and both API
+  lookups returned HTTP 404 anonymously, and the draft was absent from the
+  published listings, RSS and Atom. Browser preview awaits staff sign-in.
+
+The prior client acceptance results retain their recorded builds. The
+latest focused rollout verified publication and public/MCP readbacks.
+Evidence for the candidate gates and article is under ignored
+`output/r17-validation/release-stop-20261105/`. Wiki synchronization is
+listed as a separate follow-up. Release integration, version and tag
+decisions await the owner's STOP review.

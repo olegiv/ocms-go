@@ -1,10 +1,13 @@
 # R1.7 release acceptance — updated 2026-11-05
 
-The latest verified staging build is `be0e9cc3`, deployed on 2026-11-04.
-Dedicated Editor password/shared-MFA login and the normal translation-review
-action passed. On 2026-11-05 the owner approved EN 27/7, RU 43/6 and DE 44/5
-and performed the final publication/restore confirmations. Final published
-revisions are EN 27/9, RU 43/7 and DE 44/6; both translations are `current`.
+The latest verified staging build is `6c611040`, deployed on 2026-11-05.
+An ordinary status-only save published the disposable English source with
+byte-identical HTML and both translations Current. See the
+[editor rollout](#editor-preservation-staging-verification--2026-11-05).
+Earlier translation review passed on `be0e9cc3`. The owner then approved
+EN 27/7, RU 43/6 and DE 44/5 and performed the final publication and restore
+confirmations. Final published revisions are EN 27/9, RU 43/7 and DE 44/6,
+with both translations Current.
 Anonymous public, editor and MCP readbacks passed. See the
 [publication record](#human-staging-publication-and-final-demo--2026-11-05).
 
@@ -18,25 +21,28 @@ zero public forms.
 Klaro's interactive consent/SRI checks remain bound to `035ac1dd`, the full
 EN/RU/DE workflow to `39d82c94`, and alt-text resaves to `16ac7161`. The final
 native/CLI follow-up created EN/RU pairs; it did not repeat new DE creation.
-Owner approval, manual staging publication and the final demo walkthrough
-are complete. The planned production article is now a
-[local HTML draft](article-draft.html), with no production CMS write.
-**R1.7 is not release-complete:** the publication run exposed editor HTML
-normalization; its [local fix](#local-editor-body-preservation--2026-11-05)
-still needs separate commit/deployment approval and staging verification.
-Release-candidate checks and release/tag decisions remain separate. See the
-[scoped dependency dispositions](release-decisions.md#dependency-advisory-dispositions).
+Owner approval, manual staging publication, the final demo walkthrough
+and editor preservation verification are complete. The launch article was saved
+as an unscheduled production draft.
+The [release decisions](release-decisions.md) record the candidate checks,
+scoped dependency disposition and sign-off.
 
 ## Tested identities
 
 - Fly app: `ocms-mcp-staging`, canonical origin
   `https://ocms-mcp-staging.fly.dev`.
-- Latest verified deployed commit: `be0e9cc3793ed310ca3702cbce34759c99d3e659`;
+- Latest verified deployed commit: `6c6110403a7ed5a2aca1b44b20e8455d7fa18cda`;
+  source tree `54a68972259447803f6d7c3c37f8b75dea5535e8`, binary build time
+  `2026-11-05T07:00:04Z`, checked directly on the host. All three Fly checks
+  and both public health endpoints passed. Image digest
+  `[image digest redacted]`.
+- Earlier translation review and owner publication ran on
+  `be0e9cc3793ed310ca3702cbce34759c99d3e659`;
   source tree `6a2a9ac1858163a40b2c219bae79e1b4d9a787ba`, binary build time
   `2026-11-04T22:22:20Z`, checked directly on the host.
   Fly readiness/liveness and both public health endpoints passed. MCP's
   generic server version `1.0.0` does not attest to a Git commit.
-- Latest image digest:
+- Earlier `be0e9cc3` image digest:
   `[image digest redacted]`.
 - Earlier web/native/CLI and dependency checks ran on
   `ba0444341691b567b3e128f59e7e4cb323125df8`;
@@ -612,8 +618,38 @@ Two missing nil guards and unused parameters/results in existing test
 helpers were corrected; retention and MCP tests passed again. Historical
 ignored verification programs are outside the application lint scope.
 Templ regeneration, diff whitespace and the absolute-path check passed.
-This fix has **not** been committed or deployed; staging still uses the
-recorded restore workaround. See [release decisions](release-decisions.md).
+The subsequently approved commit and rollout are recorded below.
+
+## Editor preservation staging verification — 2026-11-05
+
+The owner approved commit `6c611040` and its rollout to `ocms-mcp-staging`.
+Fly deployed a clean archive of that commit after snapshot
+`[snapshot ID redacted]`. The binary identity, Machine
+`[machine ID redacted]`, volume `[volume ID redacted]`, environment and sizing
+matched the rollout plan. The dedicated Editor used normal password and
+shared MFA. Staging had zero forms and retained its approved CAPTCHA
+setting and required MFA.
+
+MCP created the disposable EN 57, RU 58 and DE 59 component. A metadata
+save on EN set No Index and Exclude from lists while retaining the stored
+body and both translation bases. At revision 4, TinyMCE's source dialog
+showed its normalized representation without `decoding="async"`.
+Changing only the status in the normal editor form published revision 5.
+The 644 stored HTML bytes, image attributes, caption and text metadata
+matched revision 4. Both translations stayed Current with their revisions
+and source bases intact. The anonymous page returned HTTP 200 with
+`noindex`, the expected alt text and the responsive image.
+
+The English fixture returned to Draft at revision 6. All three fixture
+URLs returned HTTP 404 anonymously. The original EN 27/9, RU 43/7 and
+DE 44/6 demo readbacks matched the pre-rollout records, with both
+translations Current and all three public URLs returning HTTP 200.
+This run covers editor publication and public/MCP readbacks. Earlier
+client and sharing checks retain their recorded build scopes.
+
+Evidence is under ignored `output/r17-validation/6c611040-staging-20261105/`.
+It includes the snapshot and image receipts, pre/post HTML hashes,
+editor screenshot, anonymous responses and `acceptance-summary.json`.
 
 ## Evidence, cleanup and remaining decisions
 
@@ -664,9 +700,7 @@ package revalidation.
 The final `ba044434` follow-up completes native-initiated Desktop reconnect,
 the four CLI OAuth/bearer rows and the scoped dependency revalidation.
 Earlier full EN/RU/DE and interactive Klaro results retain their build
-scope. Owner approval, staging publication and final demo capture are now
-complete on unchanged `be0e9cc3`. The launch article is drafted locally.
-The editor preservation fix still needs separately approved commit/deploy
-and staging verification before release closure. Production
-authoring/publication, release-candidate revalidation and release/tag
-decisions remain separate; see the [article outline](article-outline.md).
+scope. Owner approval, staging publication and final demo capture passed
+on `be0e9cc3`. The ordinary publication save and byte preservation passed
+on `6c611040`. See the [article outline](article-outline.md) and
+[release decisions](release-decisions.md) for launch and sign-off status.

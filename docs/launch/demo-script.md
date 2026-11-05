@@ -35,8 +35,9 @@ visual contact-sheet review passed. The earlier 40-second draft walkthrough
 retains its historical limits. Do not present the two as one uninterrupted
 session or claim every client was retested on `be0e9cc3`.
 
-The editor preservation fix is local only. Any newly authorized staging
-recording must verify normal publication without the restore workaround.
+The subsequent ordinary editor save on `6c611040` published a disposable
+fixture with byte-identical HTML and both translations Current. See the
+[staging verification](r17-acceptance.md#editor-preservation-staging-verification--2026-11-05).
 
 ## Before recording
 
