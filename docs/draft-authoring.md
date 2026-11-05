@@ -201,8 +201,11 @@ An editor can explicitly review an existing translated draft against the
 current source with **Mark translation reviewed**. That action creates a
 revision with a fresh source basis and the reviewer identity, preserving
 earlier history. It checks both displayed revisions and never changes text
-or publishes. The action is implemented locally, pending staging deployment;
-ordinary MCP updates continue to retain the recorded basis. See
+or publishes. The action was deployed and verified on `be0e9cc3`:
+RU 43/6 and DE 44/5 became Current against EN 27/7 without text changes.
+The owner later published that component; final revisions are 9/7/6,
+with both translations Current. Ordinary MCP updates continue to retain
+the recorded basis. See
 [editorial review](editorial-review.md#review-a-draft).
 
 `get_my_draft` separates three objects:

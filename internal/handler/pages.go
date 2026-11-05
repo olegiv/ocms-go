@@ -921,6 +921,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizedBody, removedMarkup := h.normalizePageBodyForStorage(rawBody)
 
+	// Forms and the sanitizer normalize textarea newlines. Preserve existing
+	// bytes if line endings are the only difference after the normal body
+	// policy, so unchanged saves retain their translation fingerprints.
+	if strings.ReplaceAll(normalizedBody, "\r\n", "\n") == strings.ReplaceAll(existingPage.Body, "\r\n", "\n") {
+		normalizedBody = existingPage.Body
+	}
+
 	updatedPage, err := h.updatePageGuarded(r.Context(), store.UpdatePageParams{
 		ID:                id,
 		Title:             input.Title,

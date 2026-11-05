@@ -2,8 +2,11 @@
 
 R1.7's latest verified MCP staging build is `be0e9cc3` (2026-11-04).
 Dedicated Editor password/shared-MFA login and normal translation review
-passed: RU 43/6 and DE 44/5 are `current` against unchanged EN 27/7 in the
-editor and MCP. All three remain unscheduled drafts; see the
+passed at revisions EN 27/7, RU 43/6 and DE 44/5. The owner later approved
+and manually published them on 2026-11-05. Final revisions 9/7/6 are
+Published, with both translations Current; see the
+[publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
+and earlier
 [rollout record](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
 Existing OAuth grants and owner connections were preserved. This focused
 rollout did not repeat provider reconnect or credential lifecycle checks.
@@ -28,8 +31,9 @@ The [final ba044434 follow-up](launch/r17-acceptance.md#final-native-and-cli-ver
 passed native Desktop OAuth and both CLIs' OAuth/bearer modes. Native Connect
 completed the normal browser confirmation, password/shared MFA, consent and
 Desktop callback; the earlier workaround/pending label is superseded.
-Final owner editorial approval, human publication and launch material remain
-open; staging content/translation review is complete.
+Owner approval, staging publication and the final demo walkthrough are
+complete. The launch article is drafted locally; the editor preservation
+fix still needs separate approval and staging verification.
 
 ## Account and administrator controls
 
@@ -149,7 +153,8 @@ IPv4 `/32`-restricted bearer keys were deactivated, with direct and actual
 CLI startup HTTP 401 checks. Owner connections and original content were
 preserved. Full EN/RU/DE and publication/lifecycle coverage retain their
 earlier build-specific evidence. The `be0e9cc3` rollout completes staging
-content/translation review; final owner editorial approval, publication,
-the final recording segment and article drafting remain pending. See the
+content/translation review. The later manual publication and final demo
+walkthrough are complete, with the article drafted locally. The editor
+preservation fix remains local pending staging verification. See the
 [phase notes](../.claude/docs/PHASE5.md), [client checklist](desktop-authoring.md),
 [OAuth contract](oauth.md) and [demo script](launch/demo-script.md).

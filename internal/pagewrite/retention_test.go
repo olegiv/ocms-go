@@ -190,10 +190,10 @@ func (f *retentionFixture) pin(pageID, revision int64, expires time.Time, revoke
 		uuid.NewString(), pageID, revision, f.user.ID, f.user.SessionVersion, time.Now().Unix(), expires.Unix(), revoked)
 }
 
-func (f *retentionFixture) replay(pageID, revision int64, retained bool) string {
+func (f *retentionFixture) replay(pageID, revision int64) string {
 	f.t.Helper()
 	id := uuid.NewString()
-	result := sql.NullString{String: `{"id":1}`, Valid: retained}
+	result := sql.NullString{String: `{"id":1}`, Valid: true}
 	if err := f.q.CreateIdempotencyKey(f.ctx, store.CreateIdempotencyKeyParams{UserID: f.user.ID, Tool: "update_draft_page", RequestID: id, RequestHash: "fixture", ResultJson: result, EntityType: "page", EntityID: pageID, EntityRevision: revision, CreatedAt: time.Now().UTC()}); err != nil {
 		f.t.Fatal(err)
 	}
@@ -239,13 +239,13 @@ func (f *retentionFixture) assertConsistent() {
 func TestPruneKeepsNewestRevisionsAndWhatIsStillPinned(t *testing.T) {
 	f := newRetentionFixture(t)
 	draft := f.page(pageSpec{revisions: 30})
-	f.pin(draft, 3, time.Now().Add(time.Hour), 0)                                                       // active share link: kept
-	f.pin(draft, 4, time.Now().Add(time.Hour), 1)                                                       // revoked: no longer reads revision 4
-	f.pin(draft, 5, time.Now().Add(-time.Hour), 0)                                                      // expired: no longer reads revision 5
-	f.replay(draft, 20, true)                                                                           // newest 20: untouched
-	prunedReplay := f.replay(draft, 6, true)                                                            // revision 6 goes: receipt becomes a tombstone
-	f.replay(draft, 3, true)                                                                            // pinned revision 3 stays: receipt stays
-	f.exec("UPDATE idempotency_keys SET result_json=NULL WHERE request_id=?", f.replay(draft, 7, true)) // already a tombstone
+	f.pin(draft, 3, time.Now().Add(time.Hour), 0)                                                 // active share link: kept
+	f.pin(draft, 4, time.Now().Add(time.Hour), 1)                                                 // revoked: no longer reads revision 4
+	f.pin(draft, 5, time.Now().Add(-time.Hour), 0)                                                // expired: no longer reads revision 5
+	f.replay(draft, 20)                                                                           // newest 20: untouched
+	prunedReplay := f.replay(draft, 6)                                                            // revision 6 goes: receipt becomes a tombstone
+	f.replay(draft, 3)                                                                            // pinned revision 3 stays: receipt stays
+	f.exec("UPDATE idempotency_keys SET result_json=NULL WHERE request_id=?", f.replay(draft, 7)) // already a tombstone
 	if err := f.q.CheckClaim(f.ctx, store.CheckClaimParams{ProvenanceID: f.provenanceID(draft, 7), ClaimIndex: 0, CheckedBy: sql.NullInt64{Int64: f.user.ID, Valid: true}, CheckedAt: 1}); err != nil {
 		t.Fatal(err)
 	}
@@ -442,7 +442,7 @@ func TestPruneIsAtomicAcrossEveryTableAndFailedCommit(t *testing.T) {
 		t.Run(fmt.Sprint(commitFailure), func(t *testing.T) {
 			f := newRetentionFixture(t)
 			draft := f.page(pageSpec{revisions: 30})
-			f.replay(draft, 1, true)
+			f.replay(draft, 1)
 			if commitFailure {
 				f.exec(`CREATE TABLE retention_commit_guard (page_id INTEGER REFERENCES pages(id) DEFERRABLE INITIALLY DEFERRED)`)
 				f.exec(`CREATE TRIGGER retention_failure AFTER DELETE ON content_provenance BEGIN INSERT INTO retention_commit_guard VALUES (-1); END`)

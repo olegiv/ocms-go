@@ -10,16 +10,33 @@ rendered preview alt text. Those resaves made RU/DE stale. The subsequent
 content review and `be0e9cc3` staging rollout (2026-11-04) resolved that
 state: RU 43/6 and DE 44/5 are `current` against unchanged EN 27/7, verified
 in the editor and MCP after normal dedicated password/shared-MFA login.
-All remain unscheduled drafts; see the
+All remained unscheduled drafts at that checkpoint; see the
 [review record](r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
-Final owner editorial approval, human publication and the final recording
-shot remain pending. No new client reconnect or sharing test ran in that
-focused rollout.
+The owner subsequently approved and manually published the component on
+2026-11-05: EN 27/9, RU 43/7 and DE 44/6 are Published, both translations
+Current. The English revision restores approved revision 7 HTML after an
+editor normalization failure at revision 8. See the
+[publication record](r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05).
+No new client reconnect or sharing test ran in this focused publication pass.
 The existing walkthrough predates this repair and retains its historical
 limitations. Native-initiated Desktop reconnect passed on `ba044434`,
 through normal browser confirmation, shared MFA/consent and Desktop callback;
 see the [final native/CLI record](r17-acceptance.md#final-native-and-cli-verification--2026-11-04).
 Preserve owner connections.
+
+## Completed final segment
+
+`output/r17-validation/publication-20261105/r17-publication-final.mp4`
+contains a 31-second screenshot walkthrough of the actual verified final
+views: published listing, English article, Russian, German and the editor's
+Published/Current status. It is not continuous footage of Publish clicks.
+Its six scene sources/hashes are in `demo-artifact.json`; full decode and
+visual contact-sheet review passed. The earlier 40-second draft walkthrough
+retains its historical limits. Do not present the two as one uninterrupted
+session or claim every client was retested on `be0e9cc3`.
+
+The editor preservation fix is local only. Any newly authorized staging
+recording must verify normal publication without the restore workaround.
 
 ## Before recording
 
@@ -70,6 +87,7 @@ Use the [author workflow](../skills/ocms-author/SKILL.md) and
 Record each client separately, including unavailable prompts/resources or
 blocked account features. Keep failures and pending rows explicit. Revoke all
 test shares and temporary keys, remove private code/token delivery files and
-retain synthetic drafts unless their cleanup was requested. Record publication
-and recording as pending until they actually occur. No commit, Git push,
+retain synthetic content unless its cleanup was requested. Record the
+publication result and distinguish live footage from screenshot walkthroughs.
+No commit, Git push,
 deployment, public post or external message is authorized by this document.

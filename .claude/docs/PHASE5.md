@@ -896,9 +896,10 @@ release hardening and independent security audit remain R1.7 work.
 
 **Status updated 2026-11-05:** the latest verified Fly staging build is
 `be0e9cc3` (deployed 2026-11-04). Dedicated Editor login with shared MFA and
-the normal translation-review action passed. RU 43/6 and DE 44/5 are
-`current` against unchanged EN 27/7; all remain unscheduled drafts. See the
-[translation-review rollout](#r17-staging-translation-review-verification--2026-11-04).
+the normal translation-review action passed. On 2026-11-05 the owner
+approved and manually published the component. Final EN 27/9, RU 43/7 and
+DE 44/6 are Published, with both translations Current. See the
+[publication follow-up](#r17-manual-publication-and-editor-preservation--2026-11-05).
 
 Earlier, on `ba044434`, Claude web and ChatGPT web passed fresh OAuth/MFA
 revoke/reconnect, draft create/update/replay/conflict, share-policy and
@@ -927,9 +928,10 @@ The owner accepted the unimported OpenPGP advisory for the reviewed local
 build. The Klaro/minimatch rollout is complete, and a Linux/amd64 package
 recheck retained zero imported-package vulnerabilities and the module-only
 warning; the final `ba044434` source/symbol scan revalidated that disposition.
-Final owner editorial approval, separately authorized human publication,
-the recording's final segment and the planned production article draft
-remain pending. See the
+Owner approval, manual staging publication and the final screenshot
+walkthrough are complete. The planned production article is drafted
+locally. The editor HTML preservation fix remains uncommitted and needs
+separate staging rollout/verification before closure. See the
 [release decisions](../../docs/launch/release-decisions.md).
 The subsequent editorial pass saved demo revisions EN 27/7, RU 43/5 and
 DE 44/4, with preserved images/metadata and saved claim acknowledgments.
@@ -1066,7 +1068,8 @@ EN/RU-only fixture limitation and records publication-check coverage precisely.
       bearer links, and preview rendering leaks no other private content or third-party requests
 - [ ] Verified, validated and reported information is visibly separate in the editor
 - [ ] Start in one app and continue in another, as the same user
-- [ ] Recorded demo: a multilingual article from conversation to reviewed publication
+- [x] Recorded demo: draft/review and final published EN/RU/DE screenshot walkthroughs
+      are complete; they are explicitly not continuous footage of Publish clicks
 
 ---
 
@@ -4116,3 +4119,68 @@ dependency, sharing or proxy-error checks ran. Earlier results keep their
 tested builds. Remaining work is final owner editorial approval, separately
 authorized human publication, the final demo segment and the planned launch
 article draft.
+
+### R1.7 manual publication and editor preservation — 2026-11-05
+
+The owner approved EN 27/7, RU 43/6 and DE 44/5 and personally confirmed
+the editor's final publication and English version-restore actions.
+The runtime remained `be0e9cc3`; final published revisions are EN 27/9,
+RU 43/7 and DE 44/6, with both translations Current. Public HTTP 200,
+titles/descriptions/canonicals, reciprocal language links, localized alt,
+editor and MCP readbacks passed. Published-only pages were refused by
+`get_my_draft`. The original public probe and other content were preserved.
+
+The first click occurred in the German tab despite the initial English
+reply; authoritative readback identified it before the English handoff.
+English publication at revision 8 then exposed a real editor bug: unchanged
+HTML was reserialized, making both translation fingerprints stale. The
+owner restored approved English revision 7 through normal Version History,
+creating revision 9 with identical body bytes and retaining publication.
+Both existing translation bases matched again; Russian was then published.
+RU/DE retained wording, localized alt/captions, metadata, taxonomy and media,
+with only the identified editor serialization differences in their bodies.
+
+The final `r17-publication-final.mp4` is a 31-second screenshot walkthrough
+of actual final published views, not continuous footage of the clicks.
+Six-scene visual review and full decode passed. Earlier draft walkthrough
+limitations remain stated. Evidence is under ignored
+`output/r17-validation/publication-20261105/`; the
+[publication record](../../docs/launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
+contains the exact sequence and preservation/cleanup limits.
+
+The subsequent local fix captures original textarea HTML and initialized
+TinyMCE output. Save-time `GetContent` returns original HTML only while
+the body is unchanged, including repeated editor saves during one submit.
+The server applies its normal body policy, then retains existing bytes
+when only LF/CRLF conversion differs. Actual edits, sanitation and revision
+CAS remain active. No translation basis is reset to conceal a source edit.
+The baseline browser reproduced false staleness; fixed publication, no-op
+and metadata saves preserve the exact body/fingerprint. Real edits and
+validation retry save the changed body and make targets stale. A stale
+form refuses publication and preserves the concurrent save. Native
+textarea body preservation was checked without claiming whole-form
+no-JavaScript compatibility. HTTP cases fail on the baseline and pass on
+the fix, including unsafe-markup sanitation and stale publication refusal.
+
+Local verification also corrected two missing nil checks and removed unused
+parameters/results in existing MCP/retention test helpers. These are test
+changes only. Ignored historical verification programs are outside the
+application-package lint scope. Exact check logs and tested hashes are in
+`output/r17-validation/editor-body-preservation-20261105/`; see the
+[local verification record](../../docs/launch/r17-acceptance.md#local-editor-body-preservation--2026-11-05).
+All 69 application Go test packages, the focused HTTP regressions,
+application-package golangci-lint and first-party NilAway passed. Templ
+generation, diff whitespace and the absolute-path check also passed.
+
+The planned production article is a complete
+[local HTML draft](../../docs/launch/article-draft.html) with proposed
+metadata and the existing synthetic workflow diagram. No production CMS
+post or media assignment exists. It preserves the recorded client/build
+limits and makes no release or production deployment claim.
+
+No commit, push, new deployment or production publication occurred in this
+follow-up. Wiki and `.claude/shared` remain excluded. R1.7 still needs the
+separately approved editor-fix rollout and ordinary staging publication
+verification, then release-candidate checks and release/tag decisions.
+Wiki synchronization remains a separately authorized task. No Release 2
+work has started.

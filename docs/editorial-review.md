@@ -4,8 +4,10 @@ R1.6 is deployed on Fly staging. Claude web and ChatGPT web passed the tested
 draft/review flows on `ff4de3b1368c` and fresh fragment/POST sharing checks on
 `31c55f8c9f67` (2026-11-02). The broader client matrix and release hardening
 are recorded in the [R1.7 acceptance record](launch/r17-acceptance.md),
-including the inline alt-text repair verified on `16ac7161` and pending
-editorial/stale-translation review. Publishing remains
+including the inline alt-text repair on `16ac7161`, translation review on
+`be0e9cc3` and owner-confirmed staging publication on 2026-11-05. Final demo
+revisions EN 27/9, RU 43/7 and DE 44/6 are Published; both translations are
+Current. The editor HTML preservation fix below is local only. Publishing remains
 an explicit human action; MCP cannot
 publish, schedule, delete or transfer pages.
 
@@ -37,8 +39,8 @@ not. Missing or historical bases are labelled explicitly.
 First save any text edits. For an existing translated draft, compare its
 saved text with the linked **Source to review** snapshot, acknowledge that
 it preserves the source's meaning,
-then choose **Mark translation reviewed**. This editor action is implemented
-locally and is not yet deployed to MCP staging. It binds both displayed
+then choose **Mark translation reviewed**. This editor action was deployed
+and verified on staging `be0e9cc3`. It binds both displayed
 revisions and rechecks the source relationship and editor role in one
 transaction. A changed source or translation, an unavailable source, or a
 published/scheduled target refuses the review; reload and compare again.
@@ -71,6 +73,18 @@ generic error. A missing or invalid site URL also refuses publication, but as
 a configuration problem. When a scheduled AI page fails the publication gate,
 the scheduler clears its schedule, keeps it a draft and records one warning
 event; a missing site URL leaves the schedule in place.
+
+## Preserving unchanged editor HTML
+
+The local follow-up retains original body bytes when a TinyMCE save changes
+only status or metadata. Actual body edits still serialize normally. The
+server applies the existing body policy and then preserves stored line
+endings when they are the only remaining difference. Source text/SEO edits
+still make translations stale, and revision conflicts still refuse writes.
+This fix is **not deployed**. The `be0e9cc3` publication run needed a normal
+version restore to recover the exact approved English HTML and its matching
+translation bases. See the
+[local verification](launch/r17-acceptance.md#local-editor-body-preservation--2026-11-05).
 
 ## Session previews
 

@@ -2,10 +2,11 @@
 
 The latest verified staging build is `be0e9cc3`, deployed on 2026-11-04.
 Dedicated Editor password/shared-MFA login and the normal translation-review
-action passed. RU 43/revision 6 and DE 44/revision 5 are both `current`
-against unchanged EN 27/revision 7, confirmed in the editor and MCP.
-All three remain private, unscheduled drafts. See the
-[translation-review rollout](#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
+action passed. On 2026-11-05 the owner approved EN 27/7, RU 43/6 and DE 44/5
+and performed the final publication/restore confirmations. Final published
+revisions are EN 27/9, RU 43/7 and DE 44/6; both translations are `current`.
+Anonymous public, editor and MCP readbacks passed. See the
+[publication record](#human-staging-publication-and-final-demo--2026-11-05).
 
 Earlier Claude web/ChatGPT web checks, native-initiated Desktop reconnect
 and all four CLI OAuth/bearer paths passed on `ba044434`. Its dependency
@@ -17,10 +18,13 @@ zero public forms.
 Klaro's interactive consent/SRI checks remain bound to `035ac1dd`, the full
 EN/RU/DE workflow to `39d82c94`, and alt-text resaves to `16ac7161`. The final
 native/CLI follow-up created EN/RU pairs; it did not repeat new DE creation.
-**R1.7 is not release-complete:** final owner editorial approval, separately
-authorized human publication, the final demo segment and the planned
-production article draft remain pending. Staging content/translation
-review is complete. See the
+Owner approval, manual staging publication and the final demo walkthrough
+are complete. The planned production article is now a
+[local HTML draft](article-draft.html), with no production CMS write.
+**R1.7 is not release-complete:** the publication run exposed editor HTML
+normalization; its [local fix](#local-editor-body-preservation--2026-11-05)
+still needs separate commit/deployment approval and staging verification.
+Release-candidate checks and release/tag decisions remain separate. See the
 [scoped dependency dispositions](release-decisions.md#dependency-advisory-dispositions).
 
 ## Tested identities
@@ -92,7 +96,8 @@ earlier native/CLI results as new-build passes.
 | Codex / OAuth | 30 | 33 | 34 | Identical create replay; restored demo page 27's original summary |
 | Codex / bearer | 36 | 39 | 42 | Identical create replay; own scoped API-key identity |
 
-All 18 pages remain private, unscheduled drafts. Source translation-membership
+At that checkpoint all 18 pages were private, unscheduled drafts; the later
+owner publication below changes only the selected three. Source translation-membership
 changes advance revisions without changing source text. Both linked targets
 initially report `current`; an older source revision is a valid basis while
 its translated-text fingerprint still matches. Relation-only revisions have
@@ -107,9 +112,10 @@ Both translations changed from `current` to `stale` after the English body
 fingerprint changed. Their recorded source bases were preserved. Subsequent
 content review saved revisions 7/5/4; the `be0e9cc3` editor review then
 advanced only RU/DE to 6/5. Both translations are now `current` against
-EN 27/revision 7. The [rollout record](#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
-records that completed review; final owner approval and publication remain
-separate.
+EN 27/revision 7 at that checkpoint. The
+[rollout record](#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
+records that review. The owner subsequently approved and published the
+component as recorded below.
 
 ## Direct review and failure evidence
 
@@ -142,7 +148,7 @@ through the guarded write helper. Hard publication validation, invalid/valid
 published restore, scheduler webhook/no-longer-due cases, acknowledgment
 reset, translation fingerprints, ownership/lifecycle denial, malformed JSON,
 revocation-before-replay and cross-app CAS all passed. These automated
-fixtures do not substitute for the pending human staging publication.
+fixtures are distinct from the later human staging publication below.
 
 ## Alt-text regression and verified fix
 
@@ -202,7 +208,7 @@ changes, new scopes, shares or bearer keys were needed.
 At the end of this alt-text check, RU 43 and DE 44 reported `stale`; their
 translation bases were not reset to conceal the source change. The later
 `be0e9cc3` review resolves that state, as recorded below. All three pages
-remain unscheduled drafts.
+remained unscheduled drafts at that checkpoint.
 Native Desktop/CLI modes, web revocation/reconnect and proxy-error probes
 were not rerun in this focused alt-text check; their earlier build-specific
 evidence remains above.
@@ -524,6 +530,91 @@ receipts, `acceptance-summary.json`, `verification.txt`, editor captures and
 `both-translations-current.png`, MCP before/after readbacks, anonymous
 checks, preservation fingerprints and cleanup receipts.
 
+## Human staging publication and final demo — 2026-11-05
+
+The owner explicitly approved EN 27/revision 7, RU 43/revision 6 and
+DE 44/revision 5 and personally performed the final editor confirmations.
+The runtime remained exact `be0e9cc3`; no code deployment occurred.
+
+| Page | Final revision | Public result | Translation freshness |
+|---|---:|---|---|
+| [EN 27](https://ocms-mcp-staging.fly.dev/r17-release-demo-desktop-en) | 9 | Published, anonymous HTTP 200 | Source |
+| [RU 43](https://ocms-mcp-staging.fly.dev/ru/r17-release-demo-desktop-ru) | 7 | Published, anonymous HTTP 200 | Current |
+| [DE 44](https://ocms-mcp-staging.fly.dev/de/r17-release-demo-desktop-de) | 6 | Published, anonymous HTTP 200 | Current |
+
+The first confirmation was performed in the German tab despite the initial
+English-success reply. Authoritative readback identified DE 44/6; the active
+tab was corrected before the English confirmation. English publication
+then produced revision 8. TinyMCE reserialized the unchanged body, including
+whitespace/attribute order and removal of optional `decoding="async"`, so
+both translation fingerprints became stale. The owner used normal Version
+History to restore approved English revision 7, creating revision 9 while
+retaining Published status and its publication timestamp. The body again
+matched approved revision 7 byte for byte; both existing translation bases
+became Current. The owner then published Russian, producing revision 7.
+
+Russian/German wording, headings, captions, localized alt, responsive image
+URLs/dimensions, metadata, taxonomy, featured media and authors were
+preserved. Their bodies contain only the identified editor serialization
+differences. Public checks verified titles, descriptions, self-canonicals
+and reciprocal EN/RU/DE/x-default hreflang. MCP published reads matched;
+`get_my_draft` refused all three now-published pages. The listing showed
+four published pages, including the unchanged original probe.
+
+`r17-publication-final.mp4` is a completed **31-second screenshot
+walkthrough of actual final staging views**, not continuous footage of
+Publish clicks. Six scenes show the published listing, English article,
+Russian, German and the editor's Published/Current state. Full video decode
+and visual contact-sheet review passed. The earlier 40-second draft
+walkthrough retains its original limitations; it was not relabelled.
+
+Evidence is under ignored `output/r17-validation/publication-20261105/`:
+`acceptance-summary.json`, public/editor/MCP readbacks, exact body diffs,
+restore verification, final screenshots, video and `demo-artifact.json`.
+The same image, Machine, volume, sizing and settings were retained; all
+three Fly checks and both public health endpoints passed. Required MFA,
+owner credentials/connections and the existing staging CAPTCHA exception
+were preserved. Temporary MFA delivery and duplicate task tabs were cleaned
+up. No new grant, key, share, commit, push, deployment or production
+publication occurred. This was a focused publication/readback check, not a
+new client reconnect, dependency, sharing or proxy-error test matrix.
+
+## Local editor body preservation — 2026-11-05
+
+An uncommitted fix based on core HEAD `2a764d70` addresses the false stale
+flags exposed above. After editor initialization it captures the original
+textarea and editor serialization. Save-time `GetContent` retains the
+original HTML only while the editor content is unchanged. Real edits use
+normal serialization, including repeated saves during one form submission.
+After the normal server body policy, a newline-only difference retains
+the existing stored bytes. Sanitization, publication validation, CSRF,
+role checks and revision CAS still apply.
+
+Disposable local EN/RU/DE fixtures reproduced the baseline failure through
+the real editor: status-only publication rewrote HTML and made both targets
+stale. The fixed browser flow preserved the exact body/fingerprint and
+both targets stayed Current. No-op and non-translated metadata saves also
+preserved them. Real edits saved and made targets stale, including an edit
+retained through a reserved-slug validation error. A stale editor submit
+was refused without overwriting the concurrent save. New-page creation
+still saved its edited body. A native textarea submission also preserved
+the body; this is not a whole-form no-JavaScript compatibility claim.
+
+HTTP regression cases cover LF/CRLF storage with sanitization enabled and
+disabled, actual body/summary edits, sanitation of unsafe existing markup
+and stale publication refusal. The baseline fails the newline-preservation
+cases. Local logs, browser readbacks/screenshots, tested hashes and exact
+results are under ignored
+`output/r17-validation/editor-body-preservation-20261105/`.
+All 69 application Go test packages passed, as did application-package
+golangci-lint (zero issues) and first-party NilAway (zero diagnostics).
+Two missing nil guards and unused parameters/results in existing test
+helpers were corrected; retention and MCP tests passed again. Historical
+ignored verification programs are outside the application lint scope.
+Templ regeneration, diff whitespace and the absolute-path check passed.
+This fix has **not** been committed or deployed; staging still uses the
+recorded restore workaround. See [release decisions](release-decisions.md).
+
 ## Evidence, cleanup and remaining decisions
 
 Local evidence is under ignored `output/r17-validation/release-closure/`:
@@ -563,8 +654,9 @@ runs. Both subsequent MCP initialization probes returned HTTP 401.
 Owner connections and pre-existing drafts are preserved; no new share was
 issued for the multilingual demo.
 
-The screenshot walkthrough is partial evidence, not a continuous recording
-of publication. See [the demo script](demo-script.md) for its remaining shot.
+The earlier screenshot walkthrough is partial evidence. The final
+publication walkthrough above completes the last segment, with its format
+explicitly stated. See [the demo script](demo-script.md).
 The exact release decisions are in [release decisions](release-decisions.md):
 the alt-fix and Klaro/minimatch staging checks are complete; the approved
 OpenPGP disposition retains its module-only warning and staging-target
@@ -572,9 +664,9 @@ package revalidation.
 The final `ba044434` follow-up completes native-initiated Desktop reconnect,
 the four CLI OAuth/bearer rows and the scoped dependency revalidation.
 Earlier full EN/RU/DE and interactive Klaro results retain their build
-scope. The `be0e9cc3` rollout completes staging content/translation review:
-RU 43/6 and DE 44/5 are current against EN 27/7. The remaining work is final
-owner editorial approval, separately approved human publication, the final
-recording segment and the planned launch article draft. Production
-authoring/publication remains a separate request under the
-[article outline](article-outline.md).
+scope. Owner approval, staging publication and final demo capture are now
+complete on unchanged `be0e9cc3`. The launch article is drafted locally.
+The editor preservation fix still needs separately approved commit/deploy
+and staging verification before release closure. Production
+authoring/publication, release-candidate revalidation and release/tag
+decisions remain separate; see the [article outline](article-outline.md).

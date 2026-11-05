@@ -2196,6 +2196,17 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 				if (meta.filetype === 'image') editorImagePicker.open(callback);
 			},
 			init_instance_callback: function(editor) {
+				const originalBody = editor.getElement().value;
+				const initialEditorContent = editor.getContent();
+				editor.on('GetContent', function(event) {
+					// Capture the baseline after every plugin's init handler has run.
+					// Keep the original HTML for status/metadata-only saves so editor
+					// normalization does not change the translation fingerprint.
+					// Compare content, not isDirty(): a form submission can save twice.
+					if (event.save && event.content === initialEditorContent) {
+						event.content = originalBody;
+					}
+				});
 				const form = editor.getElement().closest('form');
 				if (form) form.addEventListener('submit', function() { editor.save(); });
 			}

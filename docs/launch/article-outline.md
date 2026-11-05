@@ -1,22 +1,27 @@
 # Article outline: From an AI brief to a reviewed multilingual article
 
-Status: local outline for a future production draft. No article has been
-created, published or cross-posted by this file. The
+Status: a complete [local HTML draft](article-draft.html) and
+[proposed metadata](article-draft.json) are prepared for production.
+No production CMS article, upload, publication or cross-post exists. The
 [39d82c94 staging record](r17-acceptance.md) now supplies full EN/RU/DE draft
 examples, existing taxonomy/media and four-client continuation. Its inline
 alt-text failure is repaired on staging `16ac7161`: Claude web and ChatGPT
 web verified resaved demo drafts, with matching rendered previews. Staging
 content/translation review is now complete on `be0e9cc3` (2026-11-04):
 RU 43/6 and DE 44/5 are current against EN 27/7 in the editor and MCP;
-all remain unscheduled drafts. See the
+all remained unscheduled drafts at that checkpoint. See the
 [review record](r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
 Native-initiated Desktop reconnect and all four CLI OAuth/bearer paths
 passed on `ba044434`, with
 scoped dependency revalidation; see the
 [final record](r17-acceptance.md#final-native-and-cli-verification--2026-11-04).
-Final owner editorial approval, human publication and the recording's final
-segment remain pending. Use the recorded build-specific evidence limits
-in any future article.
+The owner approved and manually published them on 2026-11-05; final
+revisions EN 27/9, RU 43/7 and DE 44/6 are Published and both translations
+Current. The final 31-second screenshot walkthrough is complete; see the
+[publication record](r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05).
+The draft retains build-specific evidence limits and identifies the local
+editor preservation fix as not yet deployed. It announces no release tag
+or production rollout.
 
 ## Proposed structure
 
@@ -40,10 +45,14 @@ in any future article.
 - **Publication:** the human editor reviews and publishes. Distinguish local
   implementation, measured staging acceptance and release work still pending.
 
-## Materials to collect before drafting
+## Draft assets and remaining production preparation
 
-Capture the approved build/client matrix, sanitized editor/review screenshots,
-the completed demo recording and measured benchmarks with their environment.
+The HTML uses the existing synthetic workflow diagram at
+`assets/editorial-workflow.svg`. Proposed metadata leaves production
+taxonomy and featured/OG media IDs unassigned. Before a separately requested
+CMS draft, resolve the site's existing taxonomy and prepare suitable
+production media. Recheck the article's final status against the editor
+fix rollout and actual release candidate; no performance claims are made.
 Use the [demo script](demo-script.md), [editorial contract](../editorial-review.md)
 and [connected-app policy](../connected-apps.md) as technical references.
 Do not describe an independent audit or a complete release pass until recorded.

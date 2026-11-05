@@ -15,7 +15,7 @@ import (
 func TestDraftLimitErrorKeepsItsCodeAndIsNotRetryable(t *testing.T) {
 	err := fmt.Errorf("create draft: %w", &authoring.Error{Code: "draft_limit_reached", Message: "You already have 50 AI drafts, the maximum."})
 	te, internal := toToolError(err)
-	if internal || te.Code != "draft_limit_reached" || te.Retryable || te.RetryAfterSeconds != 0 || te.Message == "" {
+	if te == nil || internal || te.Code != "draft_limit_reached" || te.Retryable || te.RetryAfterSeconds != 0 || te.Message == "" {
 		t.Fatalf("mapped draft limit: %+v internal=%v", te, internal)
 	}
 }

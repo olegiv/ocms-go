@@ -17,7 +17,7 @@ import (
 )
 
 // packageFiles parses the non-test Go files of this package.
-func packageFiles(t *testing.T) (*token.FileSet, map[string]*ast.File) {
+func packageFiles(t *testing.T) map[string]*ast.File {
 	t.Helper()
 	fset := token.NewFileSet()
 	files := map[string]*ast.File{}
@@ -38,7 +38,7 @@ func packageFiles(t *testing.T) (*token.FileSet, map[string]*ast.File) {
 	if len(files) == 0 {
 		t.Fatal("no source files found; the scan is broken")
 	}
-	return fset, files
+	return files
 }
 
 // catalogHandlers maps every tool name in toolCatalog's source to the *Module
@@ -102,7 +102,7 @@ var writeAdapters = []string{"draftActor", "CreatePreviewLink"}
 // Bug state: register a handler that calls draftActor without mutation: set
 // in its catalog entry, or give a read tool a mutation class.
 func TestMutatingToolsAreExactlyTheClassifiedOnes(t *testing.T) {
-	_, files := packageFiles(t)
+	files := packageFiles(t)
 	handlers := catalogHandlers(t, files["catalog.go"])
 	if len(handlers) != len(toolCatalog()) {
 		t.Fatalf("read %d handlers from catalog.go, the catalog has %d tools; the scan is broken", len(handlers), len(toolCatalog()))

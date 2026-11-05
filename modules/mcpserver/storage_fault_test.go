@@ -128,9 +128,13 @@ func TestQueuedWritePolicyCheckSharesTheCredentialLookup(t *testing.T) {
 // or re-checks the OAuth grant, so the authorization and the queued write's
 // policy check cannot diverge again.
 func TestDraftServicesLookUpScopesOnlyThroughCredentialScopes(t *testing.T) {
-	_, files := packageFiles(t)
+	files := packageFiles(t)
+	file := files["tools_drafts.go"]
+	if file == nil {
+		t.Fatal("tools_drafts.go was not parsed")
+	}
 	callers := map[string][]string{}
-	for _, decl := range files["tools_drafts.go"].Decls {
+	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
 			continue

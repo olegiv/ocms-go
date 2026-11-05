@@ -9,8 +9,11 @@ client coverage and remaining release gates are recorded below.
 
 R1.7's latest verified staging build is `be0e9cc3` (2026-11-04). Dedicated
 Editor password/shared-MFA login and translation review passed: RU 43/6
-and DE 44/5 are `current` against unchanged EN 27/7 in the editor and MCP.
-All three remain unscheduled drafts; see the
+and DE 44/5 became Current against EN 27/7. After owner approval and manual
+publication on 2026-11-05, final revisions 9/7/6 are Published with both
+translations Current. See the
+[publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
+and earlier
 [rollout record](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
 This focused rollout did not repeat GUI/native/CLI reconnect or authoring
 acceptance; earlier client results retain their build scope.
@@ -32,7 +35,7 @@ readbacks on `16ac7161`, with matching rendered previews. That focused alt-text
 follow-up did not rerun native/CLI modes. See the
 [current acceptance record](launch/r17-acceptance.md)
 and [release decisions](launch/release-decisions.md) for dependency
-revalidation and the remaining final owner approval/publication/demo gates.
+revalidation, completed publication/demo and the local editor-fix follow-up.
 
 ## Workflow
 
@@ -111,8 +114,9 @@ includes complete EN/RU/DE draft fields, taxonomy/media, retries and linked
 translations. The [16ac7161 alt-text verification](launch/r17-acceptance.md#alt-text-staging-verification)
 records web checks of resaved pages 27/43/44 at revisions 6/4/3. The later
 `be0e9cc3` editor review made RU 43/6 and DE 44/5 current against EN 27/7.
-Final owner editorial approval, human publication and its final recording
-segment are pending.
+Owner approval, human staging publication and the final 31-second screenshot
+walkthrough are complete. Final revisions are EN 27/9, RU 43/7 and DE 44/6,
+all Published; both translations are Current.
 The [ba044434 web rollout](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
 and [final native/CLI follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
 add fresh web checks, native-initiated Desktop reconnect, all four CLI
@@ -121,7 +125,7 @@ authoring checks created EN/RU pairs. The table below retains the earlier
 bounded `df6e5d86` evidence.
 Use [Connected apps](connected-apps.md) for access management and
 the [author skill](skills/ocms-author/SKILL.md) for the draft workflow. Follow
-the [demo script](launch/demo-script.md) for the remaining human-publication shot.
+the [demo script](launch/demo-script.md) for the completed final segment and its format.
 
 | Client | Authoring path | R1.7 result (2026-11-02) |
 |---|---|---|
@@ -163,9 +167,9 @@ all six client/mode flows and 15 publication/lifecycle test roots. Audit
 findings and first-party NilAway diagnostics were fixed before deployment.
 Native reconnect and dependency revalidation passed on their recorded
 builds. Staging content/translation review is complete on `be0e9cc3`. The
-remaining [release decisions](launch/release-decisions.md) are final owner
-editorial approval, publication, the final recording segment
-and the planned launch article draft. See the earlier
+remaining [release decisions](launch/release-decisions.md) concern the local
+editor preservation fix, its staging verification and release-candidate
+checks. The article is drafted locally. See the earlier
 [web staging record](../.claude/docs/PHASE5.md#r17-fly-staging-and-web-client-acceptance--2026-11-02)
 and [native/CLI record](../.claude/docs/PHASE5.md#r17-native-desktop-and-cli-acceptance--2026-11-02)
 for build identity, evidence limits, cleanup and remaining gates.

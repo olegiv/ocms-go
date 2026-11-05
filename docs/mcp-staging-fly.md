@@ -10,8 +10,11 @@ Latest verified runtime: `be0e9cc3`, deployed 2026-11-04. The
 [translation-review rollout](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
 records exact image identity, snapshot, health and preservation checks.
 Normal dedicated Editor password/shared-MFA login passed; RU 43/6 and
-DE 44/5 are current against EN 27/7 in the editor and MCP. All remain
-unscheduled drafts. Earlier client/dependency results in the
+DE 44/5 became Current against EN 27/7. The owner subsequently approved
+and manually published the component on the same runtime: final EN 27/9,
+RU 43/7 and DE 44/6 are Published, both translations Current. See the
+[publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05).
+Earlier client/dependency results in the
 [R1.7 acceptance record](launch/r17-acceptance.md) retain their build scope;
 the focused rollout did not rerun them. The rollout used the explicitly
 approved staging-only `OCMS_REQUIRE_FORM_CAPTCHA=false`
@@ -21,8 +24,9 @@ profile still defaults to requiring CAPTCHA. The
 passed native-initiated Desktop reconnect and authoring, both CLIs'
 OAuth/bearer paths and scoped dependency revalidation on `ba044434` without
 another deployment during that follow-up. Historical client tables retain
-their original builds. Final owner editorial approval, publication, the
-final demo segment and article drafting remain open.
+their original builds. Owner approval, publication and the final demo
+walkthrough are complete; the article is drafted locally. The editor
+preservation fix is local only and needs a separately approved rollout.
 
 | File | Role |
 |---|---|
@@ -457,8 +461,9 @@ tests and `16ac7161` alt-text verification. Its
 passed native-initiated Desktop reconnect, all four CLI OAuth/bearer paths
 and scoped dependency revalidation. The later `be0e9cc3` rollout completes
 staging content/translation review, with RU/DE current against EN 27/7.
-Final owner editorial approval, publication, the final demo segment and
-article drafting remain open.
+The later owner-confirmed publication and final demo walkthrough are
+complete, with the article drafted locally. The editor preservation fix
+has not been deployed and requires separate approval and staging checks.
 DCR and unsupported authentication methods remain off. Do not reuse the
 historical R1.1 probe result as a CMS-write pass.
 

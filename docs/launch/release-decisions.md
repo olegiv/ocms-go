@@ -10,9 +10,11 @@ commit, push, deployment or publication. The
 
 `be0e9cc3` is the latest verified deployment on `ocms-mcp-staging`
 (2026-11-04). Normal dedicated Editor password/shared-MFA login and
-translation review passed. RU 43/revision 6 and DE 44/revision 5 are
-`current` against unchanged EN 27/revision 7, verified in the editor and
-MCP; all remain unscheduled drafts. The
+translation review passed. Following explicit owner approval and manual
+publication on 2026-11-05, final revisions are EN 27/9, RU 43/7 and DE 44/6,
+all Published, with both translations Current. The
+[publication record](r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
+includes the English restore workaround and public readbacks. The earlier
 [rollout record](r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
 includes exact image, preservation and cleanup evidence. This focused
 rollout did not repeat client reconnect, dependency, sharing or proxy-error
@@ -38,8 +40,9 @@ keys were configured and the tracked profile's secure default was not
 changed; future redeploys need the explicit approved exception or a real
 verifier. This is not a production CAPTCHA exception or a publication
 approval. Native-initiated Desktop reconnect and staging translation review
-are passed. Final owner editorial approval, human publication, the final
-demo segment and article drafting remain open.
+are passed. Owner approval, manual staging publication and the final demo
+walkthrough are complete. The launch article is drafted locally. The
+new editor preservation fix remains local and needs staging verification.
 
 ## Inline-image accessibility
 
@@ -53,8 +56,9 @@ and other content metadata were preserved. See the
 
 Those resaves made RU/DE `stale` after the English body changed; their
 source bases were left intact. The later content review and `be0e9cc3`
-editor action resolved that state: RU 43/6 and DE 44/5 are now `current`
-against EN 27/7. Old pinned snapshots remain unchanged. These focused
+editor action resolved that state at revisions RU 43/6 and DE 44/5
+against EN 27/7. The later manual publication retained Current status at
+final revisions 9/7/6. Old pinned snapshots remain unchanged. These focused
 checks do not establish a whole-site accessibility pass or authorize
 publication.
 
@@ -142,19 +146,40 @@ retained in the [acceptance record](r17-acceptance.md#final-native-and-cli-verif
 
 ## Human publication and launch material
 
-The selected staging component is now EN 27/revision 7, RU 43/revision 6
-and DE 44/revision 5. The authorized content review saved corrections and
-claim acknowledgments at revisions 7/5/4. The `be0e9cc3` translation-review
-action then made RU/DE current against English revision 7 without changing
-article fields; previous acknowledgments remain in their original
-revisions. Final owner editorial approval is still required. Re-read the
-current revisions and their review state before any lifecycle action.
-All remain unscheduled drafts.
-Only the human editor performs the final Publish action after separate
-publication approval. Capture the published page and translation state to
-finish the demo. The current screenshot walkthrough ends before that action
-and is labelled partial.
+Completed on 2026-11-05. The owner approved EN 27/7, RU 43/6 and DE 44/5
+and personally confirmed publication and the English version restore.
+Final published revisions are EN 27/9, RU 43/7 and DE 44/6, with both
+translations Current. English revision 9 restores the exact approved
+revision 7 HTML after TinyMCE normalization during publication falsely
+made translations stale. Localized wording, alt text and content metadata
+were preserved. The
+[publication record](r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
+records the sequence, public/editor/MCP readbacks and cleanup.
 
-The production outline is prepared; creating or publishing a real article
-on that production site needs its separate authoring request. No production
-post, release tag, remote push or release announcement is authorized here.
+The final 31-second video is a screenshot walkthrough of actual published
+staging views, not continuous footage of the human clicks. The original
+40-second draft walkthrough remains historical. Together with the recorded
+acceptance they cover the final demo segment without claiming a continuous
+end-to-end film.
+
+The planned production article is a complete
+[local HTML draft](article-draft.html) with
+[proposed metadata](article-draft.json). No production CMS article or media
+assignment exists. Creating/publishing the production post remains a
+separate request. No release tag, remote push or announcement is authorized.
+
+## Editor publication follow-up
+
+The HTML preservation fix is uncommitted and locally verified; it has not
+been deployed. The real browser failure on the baseline and passing fixed
+normal/edit/retry/conflict cases are recorded in the
+[local verification](r17-acceptance.md#local-editor-body-preservation--2026-11-05).
+The server still applies the normal body policy before preserving bytes
+that differ only by form newline conversion. It does not bypass freshness,
+publication checks or optimistic concurrency.
+
+Before closing R1.7: obtain the separate commit/deployment approval for
+this fix, verify ordinary status-only publication on staging without a
+restore, then finalize release-candidate checks and release/tag decisions.
+The OpenPGP revalidation conditions above remain in force. The wiki is
+excluded; its synchronization stays a separately authorized task.
