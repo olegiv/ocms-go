@@ -138,11 +138,22 @@ func TestReplayWithoutProofOfPossessionDoesNotRevoke(t *testing.T) {
 
 	wrong := url.Values{"code_verifier": {f.verifier[:50] + "b"}}
 	missing := url.Values{"code_verifier": {""}}
-	otherRedirect := url.Values{"redirect_uri": {"https://cms.test/not-the-redirect"}}
+	otherRedirect := url.Values{"redirect_uri": {"http://127.0.0.1/callback"}}
+	unregisteredRedirect := url.Values{"redirect_uri": {"https://cms.test/not-the-redirect"}}
+	// The alternate callback must pass client validation so the replay reaches
+	// provesCodePossession's binding to the callback used to issue the code.
+	client, resolveErr := f.s.clients.resolve(t.Context(), f.values.Get("client_id"))
+	if resolveErr != nil {
+		t.Fatal(resolveErr)
+	}
+	if !client.acceptsRedirect(otherRedirect.Get("redirect_uri")) {
+		t.Fatal("replay fixture needs a second registered redirect")
+	}
 	for name, extra := range map[string]url.Values{
-		"wrong verifier":      wrong,
-		"missing verifier":    missing,
-		"mismatched redirect": otherRedirect,
+		"wrong verifier":                 wrong,
+		"missing verifier":               missing,
+		"mismatched registered redirect": otherRedirect,
+		"unregistered redirect":          unregisteredRedirect,
 	} {
 		status, body := f.exchangeCode(code, extra)
 		if status != http.StatusBadRequest || body["error"] != "invalid_grant" {
@@ -184,13 +195,15 @@ func TestReplayedCodeFromAnotherClientCannotRevoke(t *testing.T) {
 	f := newFixture(t)
 	code := f.code(t)
 	first := f.redeem(t, code)
-	other := registeredClient{ID: "https://other.test/metadata", Name: "Other", AuthMethod: "none", Redirects: []string{"https://other.test/callback"}}
+	// Share the callback and send the correct verifier so only the spent
+	// code's client binding can prevent revocation of the original grant.
+	other := registeredClient{ID: "https://other.test/metadata", Name: "Other", AuthMethod: "none", Redirects: []string{f.values.Get("redirect_uri")}}
 	if err := f.s.saveClient(t.Context(), other, "cimd", time.Now().Add(time.Hour).Unix()); err != nil {
 		t.Fatal(err)
 	}
-	status, _ := f.exchangeCode(code, url.Values{"client_id": {other.ID}})
-	if status != http.StatusBadRequest {
-		t.Fatalf("foreign replay status=%d", status)
+	status, denied := f.exchangeCode(code, url.Values{"client_id": {other.ID}})
+	if status != http.StatusBadRequest || denied["error"] != "invalid_grant" {
+		t.Fatalf("foreign replay status=%d error=%v", status, denied["error"])
 	}
 	if _, err := f.s.VerifyAccess(t.Context(), access(first)); err != nil {
 		t.Fatalf("another client's replay revoked the grant: %v", err)
