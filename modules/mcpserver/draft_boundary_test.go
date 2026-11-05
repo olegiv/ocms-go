@@ -11,17 +11,17 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/config"
 )
 
-func TestDraftActorAndSharedWriterBoundary(t *testing.T) {
+func TestSharedDraftWriterBoundary(t *testing.T) {
 	allowed := map[string]map[string]string{
-		// create_preview_link issues a bearer link, a write like the three
-		// content mutations: it too may be reached from one adapter only.
-		".":                           {"createDraftPage": "draftActor", "updateDraftPage": "draftActor", "createTranslationDraft": "draftActor", "createPreviewLink": "CreatePreviewLink"},
+		// Each MCP write handler calls its authoring operation directly.
+		".":                           {"createDraftPage": "Create", "updateDraftPage": "Update", "createTranslationDraft": "Translate", "createPreviewLink": "CreatePreviewLink"},
 		"../../internal/ai/authoring": {"create": "CreateWith", "Update": "UpdateWith", "CreatePreviewLink": "Issue"},
 	}
 	for root, expected := range allowed {
@@ -51,14 +51,18 @@ func TestDraftActorAndSharedWriterBoundary(t *testing.T) {
 					if !ok {
 						return true
 					}
-					switch selector.Sel.Name {
-					case "draftActor", "CreateWith", "UpdateWith", "CreatePreviewLink", "Issue":
-						if expected[fn.Name.Name] != selector.Sel.Name {
-							t.Errorf("%s: unexpected write adapter %s in %s", path, selector.Sel.Name, fn.Name.Name)
-						}
-						found[fn.Name.Name] = selector.Sel.Name
+					method := selector.Sel.Name
+					switch method {
 					case "CreatePage", "UpdatePage", "DeletePage", "PublishPage", "PublishScheduledPage", "SetPageAIAccess":
-						t.Errorf("%s: direct page mutation %s bypasses shared writer", path, selector.Sel.Name)
+						t.Errorf("%s: direct page mutation %s bypasses shared writer", path, method)
+					default:
+						if !slices.Contains(draftWriteMethods, method) && method != "CreateWith" && method != "UpdateWith" && method != "Issue" {
+							return true
+						}
+						if expected[fn.Name.Name] != method {
+							t.Errorf("%s: unexpected write call %s in %s", path, method, fn.Name.Name)
+						}
+						found[fn.Name.Name] = method
 					}
 					return true
 				})

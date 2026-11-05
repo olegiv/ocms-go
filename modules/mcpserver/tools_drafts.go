@@ -209,14 +209,34 @@ func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in autho
 	if err != nil {
 		return preview.Link{}, err
 	}
-	// Read the policy from storage, never the server snapshot, so turning
-	// agent sharing off takes effect for the next call.
-	settings, err := loadSettings(ctx, m.ctx.DB)
-	if err != nil {
+	if err = checkAgentShareLinks(ctx, m.ctx.DB); err != nil {
 		return preview.Link{}, err
 	}
-	if !settings.AgentShareLinks {
-		return preview.Link{}, &v2.Error{Kind: v2.ErrForbidden, MachineCode: "share_links_disabled", Msg: "An administrator has turned off share links for AI clients"}
+	// Recheck through the issuance transaction in case sharing was disabled
+	// after preflight.
+	checkPolicy := s.CheckPolicy
+	s.CheckPolicy = func(ctx context.Context, q *store.Queries) error {
+		// Reserve the SQLite writer even with a deferred, read-uncommitted
+		// connection. Matching no rows keeps settings intact while holding
+		// the write lock through the policy read and link insertion.
+		if _, lockErr := q.DBHandle().ExecContext(ctx, `UPDATE mcp_settings SET agent_share_links = agent_share_links WHERE 0`); lockErr != nil {
+			return lockErr
+		}
+		if shareErr := checkAgentShareLinks(ctx, q.DBHandle()); shareErr != nil {
+			return shareErr
+		}
+		return checkPolicy(ctx, q)
 	}
 	return s.CreatePreviewLink(ctx, a, in)
+}
+
+func checkAgentShareLinks(ctx context.Context, db settingsReader) error {
+	settings, err := loadSettings(ctx, db)
+	if err != nil {
+		return err
+	}
+	if !settings.AgentShareLinks {
+		return &v2.Error{Kind: v2.ErrForbidden, MachineCode: "share_links_disabled", Msg: "An administrator has turned off share links for AI clients"}
+	}
+	return nil
 }

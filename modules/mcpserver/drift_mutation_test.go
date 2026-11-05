@@ -86,21 +86,64 @@ func catalogHandlers(t *testing.T, file *ast.File) map[string]string {
 	return handlers
 }
 
-// writeAdapters are the calls through which a tool handler writes: the shared
-// authoring writer for page content (draftActor) and the preview-link issuer.
-var writeAdapters = []string{"draftActor", "CreatePreviewLink"}
+// draftWriteMethods lists the authoring.Service operations that save draft
+// content or issue a preview link. Both service factories return that service.
+var draftWriteMethods = []string{"Create", "Update", "Translate", "CreatePreviewLink"}
+
+func callsDraftWrite(body *ast.BlockStmt) bool {
+	for node := range ast.Preorder(body) {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok && slices.Contains(draftWriteMethods, sel.Sel.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDraftWriteDetectionUsesTheOperation(t *testing.T) {
+	for _, tc := range []struct {
+		factory, method string
+		writes          bool
+	}{
+		{"authoringService", "Create", true},
+		{"authoringService", "Update", true},
+		{"authoringService", "Translate", true},
+		{"authoringService", "CreatePreviewLink", true},
+		{"authoringService", "Get", false},
+		{"authoringService", "List", false},
+		{"authoringService", "TranslationStatus", false},
+		{"draftActor", "Create", true},
+		{"draftActor", "Get", false},
+	} {
+		t.Run(tc.factory+"/"+tc.method, func(t *testing.T) {
+			source := "package mcpserver\nfunc handler() {\n" +
+				"svc, actor, _ := m." + tc.factory + "(ctx, call)\n" +
+				"return svc." + tc.method + "(ctx, actor, in)\n}"
+			file, err := parser.ParseFile(token.NewFileSet(), "handler.go", source, parser.SkipObjectResolution)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := file.Decls[0].(*ast.FuncDecl).Body
+			if got := callsDraftWrite(body); got != tc.writes {
+				t.Errorf("%s via %s writes = %v, want %v", tc.method, tc.factory, got, tc.writes)
+			}
+		})
+	}
+}
 
 // TestMutatingToolsAreExactlyTheClassifiedOnes keeps the catalog's mutation
 // classes honest. The annotations a client sees (read-only, destructive,
 // idempotent) are derived from toolSpec.mutation, so a write tool declared
 // without a class would be advertised as a read-only, idempotent query. The
 // class is therefore checked against what the handler does, found in its
-// source: a handler that calls a write adapter must have a class, and a
-// class must belong to a handler that does, and to the mcp:drafts scope that
-// gates every write.
+// source. A handler that directly calls one of the draft write methods must
+// have a class and require mcp:drafts. A read tool must have no class.
 //
-// Bug state: register a handler that calls draftActor without mutation: set
-// in its catalog entry, or give a read tool a mutation class.
+// Bug state: register a handler that gets its service from authoringService,
+// calls Create, and omits its mutation class. This test names that handler.
 func TestMutatingToolsAreExactlyTheClassifiedOnes(t *testing.T) {
 	files := packageFiles(t)
 	handlers := catalogHandlers(t, files["catalog.go"])
@@ -111,17 +154,9 @@ func TestMutatingToolsAreExactlyTheClassifiedOnes(t *testing.T) {
 	for _, file := range files {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Recv == nil || fn.Body == nil {
-				continue
+			if ok && fn.Recv != nil && fn.Body != nil && callsDraftWrite(fn.Body) {
+				writes[fn.Name.Name] = true
 			}
-			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				if call, ok := n.(*ast.CallExpr); ok {
-					if sel, ok := call.Fun.(*ast.SelectorExpr); ok && slices.Contains(writeAdapters, sel.Sel.Name) {
-						writes[fn.Name.Name] = true
-					}
-				}
-				return true
-			})
 		}
 	}
 
@@ -149,7 +184,7 @@ func TestMutatingToolsAreExactlyTheClassifiedOnes(t *testing.T) {
 		}
 	}
 	if mutating < 4 {
-		t.Errorf("found %d writing tools, want at least 4 (three content writes and the preview link); the scan no longer sees the adapters", mutating)
+		t.Errorf("found %d writing tools, want at least 4 (three content writes and the preview link)", mutating)
 	}
 }
 

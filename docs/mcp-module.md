@@ -546,11 +546,12 @@ new tools are `create_draft_page`, `update_draft_page`,
 `get_translation_status`. R1.6 enables explicit revision-pinned
 `create_preview_link` with expiring bearer access and lifecycle revocation.
 Save/read results remain session-only; see [Editorial review](editorial-review.md).
-**Let AI clients create share links** (on by default) controls that tool:
-with it off, `create_preview_link` refuses with `share_links_disabled`. The
-**Share links issued by AI clients** card lists every usable link an OAuth
-grant or API key issued, with its page, account and expiry, and revokes one
-with a recorded `Preview share link revoked` event.
+**Let AI clients create share links** (on by default) controls that tool.
+The server rechecks the setting inside the issuance transaction. With sharing
+off, `create_preview_link` returns `share_links_disabled`.
+The **Share links issued by AI clients** card lists every usable link an OAuth
+grant or API key issued, with its page, account and expiry. Revoking a link
+from the card records a `Preview share link revoked` event.
 Three content mutations require stable UUID request
 IDs; updates require the last-read revision. Own reads do not depend on the
 separate general drafts policy. All writes use the shared atomic service.
