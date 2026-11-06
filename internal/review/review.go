@@ -162,7 +162,7 @@ func Load(ctx context.Context, q *store.Queries, page store.Page, viewer int64) 
 	return result, err
 }
 
-// ErrClaimUnavailable reports a claim index the reviewed revision does not have.
+// ErrClaimUnavailable reports a missing page or a claim index the reviewed revision does not have.
 var ErrClaimUnavailable = errors.New("claim unavailable")
 
 // SetClaim records an editorial acknowledgment, without creating or changing content evidence.
@@ -172,6 +172,9 @@ func SetClaim(ctx context.Context, q *store.Queries, viewer, pageID, revision, i
 			return err
 		}
 		page, err := work.Q.GetPageByID(ctx, pageID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrClaimUnavailable
+		}
 		if err != nil {
 			return err
 		}

@@ -4,7 +4,6 @@
 package handler
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -66,10 +65,10 @@ func (h *PagesHandler) ReviewTranslation(w http.ResponseWriter, r *http.Request)
 		switch {
 		case errors.Is(err, pagewrite.ErrEditorRequired):
 			http.Error(w, i18n.T(lang, "pages.error_editor_required"), http.StatusForbidden)
-		case errors.As(err, &conflict), errors.Is(err, review.ErrTranslationReviewUnavailable), errors.Is(err, sql.ErrNoRows):
+		case errors.As(err, &conflict), errors.Is(err, review.ErrTranslationReviewUnavailable):
 			http.Error(w, i18n.T(lang, "review.translation_conflict"), http.StatusConflict)
 		default:
-			slog.Error("failed to review translation", "error", err, "page_id", id)
+			slog.Error("failed to review translation", "error", err, "page_id", id, "user_id", middleware.GetUserID(r))
 			http.Error(w, i18n.T(lang, "review.translation_failed"), http.StatusInternalServerError)
 		}
 		return

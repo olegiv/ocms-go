@@ -5,6 +5,7 @@ package grounding
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -89,6 +90,9 @@ func (r *Resolver) Build(ctx context.Context, in Input) (Context, error) {
 		return out, ErrInput
 	}
 	lang, err := contentpath.RouteLanguage(ctx, r.Queries, in.LanguageCode)
+	if in.LanguageCode != "" && errors.Is(err, sql.ErrNoRows) {
+		return out, fmt.Errorf("context language: %w", ErrInput)
+	}
 	if err != nil {
 		return out, fmt.Errorf("context language: %w", err)
 	}

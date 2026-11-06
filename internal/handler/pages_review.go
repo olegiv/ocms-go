@@ -67,10 +67,10 @@ func (h *PagesHandler) CheckClaim(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, pagewrite.ErrEditorRequired): // also matches sql.ErrNoRows for a deleted account
 			http.Error(w, i18n.T(lang, "pages.error_editor_required"), http.StatusForbidden)
-		case errors.As(err, &conflict), errors.Is(err, review.ErrClaimUnavailable), errors.Is(err, sql.ErrNoRows):
+		case errors.As(err, &conflict), errors.Is(err, review.ErrClaimUnavailable):
 			http.Error(w, i18n.T(lang, "review.check_conflict"), http.StatusConflict)
 		default:
-			slog.Error("failed to record claim check", "error", err, "page_id", id, "claim_index", index)
+			slog.Error("failed to record claim check", "error", err, "page_id", id, "claim_index", index, "user_id", middleware.GetUserID(r))
 			http.Error(w, i18n.T(lang, "review.check_failed"), http.StatusInternalServerError)
 		}
 		return

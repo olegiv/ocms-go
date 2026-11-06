@@ -46,7 +46,7 @@ func (m *Module) getAuthoringContext(ctx context.Context, call *toolCall, in gro
 		return AuthoringResult{}, err
 	}
 	value, err := resolver.Build(ctx, in)
-	if errors.Is(err, grounding.ErrInput) || errors.Is(err, editorial.ErrInvalid) || errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, grounding.ErrInput) || errors.Is(err, editorial.ErrInvalid) {
 		return AuthoringResult{}, newValidationError("context", "Use active languages, a known preset and at most eight valid references; reduce oversized input")
 	}
 	if err != nil {

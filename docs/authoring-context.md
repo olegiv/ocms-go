@@ -41,6 +41,10 @@ same-origin HTTP(S) URL. IDs are unambiguous; use a leading slash for a numeric
 slug. A configured HTTP(S) site origin is required, even for ID-based context,
 so returned public links never depend on the request Host.
 
+An explicitly requested unavailable language is an input error. Missing site
+defaults or required records encountered later while building context are
+server errors, logged with the request identity instead of blamed on input.
+
 ## Reference resolution and visibility
 
 `internal/contentpath` owns the pure routing primitives shared with language

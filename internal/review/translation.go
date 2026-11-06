@@ -17,7 +17,7 @@ import (
 )
 
 // ErrTranslationReviewUnavailable means the recorded source is no longer
-// available in this translation group, or the target is not a plain draft.
+// available in this translation group, or the target is missing or not a plain draft.
 var ErrTranslationReviewUnavailable = errors.New("translation review unavailable")
 
 // TranslationSource identifies the live source an editor must review. It is
@@ -95,8 +95,16 @@ func MarkTranslationReviewed(ctx context.Context, q *store.Queries, reviewerID i
 		if in.PageID <= 0 || in.Revision <= 0 || in.SourcePageID <= 0 || in.SourceRevision <= 0 {
 			return ErrTranslationReviewUnavailable
 		}
-		target, err := work.Track(ctx, in.PageID, &in.Revision, true)
+		// Only the initial target lookup can legitimately miss. Track also
+		// loads snapshots, whose missing rows are internal faults.
+		target, err := work.Q.GetPageByID(ctx, in.PageID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrTranslationReviewUnavailable
+		}
 		if err != nil {
+			return err
+		}
+		if _, err = work.Track(ctx, in.PageID, &in.Revision, true); err != nil {
 			return err
 		}
 		if target.Status != "draft" || target.ScheduledAt.Valid {

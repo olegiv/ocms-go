@@ -30,6 +30,10 @@ is rejected. Deleting a reviewer retains the acknowledgment with an unavailable
 reviewer label. The page list has AI-draft badges, unchecked counts and an
 **AI drafts awaiting review** filter.
 
+A missing review target or unavailable claim/source remains a conflict.
+Missing required evidence or revision records is a server error, logged with
+record IDs; failed operations leave the review unchanged.
+
 Translations show their lifecycle and source freshness. Freshness uses the
 same content fingerprint as draft authoring: source text/SEO changes make a
 translation stale; publication, AI-access changes and sibling membership do
