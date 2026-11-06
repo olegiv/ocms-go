@@ -22,7 +22,7 @@ import (
 func TestPageWritersUseTransactionQueries(t *testing.T) {
 	root := filepath.Join("..", "..")
 	set := token.NewFileSet()
-	for _, directory := range []string{"internal", "modules", "custom"} {
+	for _, directory := range []string{"internal", "modules", "custom", "cmd"} {
 		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -48,6 +48,9 @@ func TestPageWritersUseTransactionQueries(t *testing.T) {
 				scan.parameters(bindings, fn.Type.Params)
 				scan.parameters(bindings, fn.Recv)
 				scan.body(fn.Body, bindings)
+				for _, diagnostic := range trackedWriterDiagnostics(set, file, fn) {
+					t.Error(diagnostic)
+				}
 			}
 			return nil
 		})

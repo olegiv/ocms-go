@@ -20,6 +20,23 @@ per changed page, records the committed snapshot and provenance, and skips
 content no-ops. New pages start at revision 1. Webhooks, audit events and cache
 invalidation run after commit. Replays do not repeat mutation side effects.
 
+`TestPageWritersUseTransactionQueries` also checks tracking order across
+`internal`, `modules`, `custom` and `cmd`. Its structural scan follows transaction
+and query aliases and page IDs through the supported writer patterns. Tracking
+in another transaction, on another page, or only in a conditional branch cannot
+authorize a later write. Inserts must register their returned page with
+`Created` before related writes or a successful return; `Insert` callbacks
+receive an already registered page. Deferred/asynchronous writes and unsupported
+mutation method values are refused by the scan.
+
+Compound helpers use `RequireTracked` (or `RequireTrackedEntity` for mixed
+translation kinds) to check their caller's precondition. These checks return
+`ErrPageNotTracked` instead of taking a late snapshot. Import completion asserts
+that every reported page is already tracked. This is a source drift check plus
+runtime helper preconditions, not a replacement for the behavioral writer tests:
+it covers the inventoried query methods and supported Go source shapes, rather
+than arbitrary interprocedural data flow or custom SQL.
+
 JSON/ZIP imports apply configured suspicious-HTML blocking to selected page
 bodies before writes, and sanitize each body at persistence when enabled.
 The editor and importer share the same storage normalization helper. Import

@@ -1766,6 +1766,9 @@ func uniqueTagSlug(ctx context.Context, st *importState, base string) string {
 
 // linkNodeTerms attaches a node's taxonomy references to its oCMS page.
 func (s *Source) linkNodeTerms(ctx context.Context, work *pagewrite.Tx, st *importState, n Node, pageID int64) error {
+	if err := work.RequireTracked(pageID); err != nil {
+		return err
+	}
 	for _, tid := range n.TermIDs {
 		if tagID, ok := st.tags[tid]; ok {
 			if err := work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pageID, TagID: tagID}); err != nil {

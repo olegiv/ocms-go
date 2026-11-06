@@ -40,6 +40,9 @@ func submittedPageRevision(r *http.Request) *int64 {
 func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int64, previous ...store.Page) pageFormWrite {
 	userID := middleware.GetUserID(r)
 	return pageFormWrite{UserID: userID, BaseRevision: base, Related: func(work *pagewrite.Tx, page store.Page) error {
+		if err := work.RequireTracked(page.ID); err != nil {
+			return err
+		}
 		ctx := r.Context()
 		if len(previous) == 0 || previous[0].FeaturedImageID != page.FeaturedImageID {
 			if err := pagewrite.FeaturedImageSize(ctx, work.Q, page.FeaturedImageID); err != nil {

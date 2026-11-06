@@ -29,6 +29,9 @@ func ParamsFor(p store.Page) store.UpdatePageParams {
 // publication/scheduling and the current translation component are retained.
 // A legacy row can restore only its recorded title and body.
 func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVersion, body string) error {
+	if err := t.RequireTracked(page.ID); err != nil {
+		return err
+	}
 	if version.PageID != page.ID {
 		return refuse("version does not belong to this page")
 	}

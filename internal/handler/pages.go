@@ -1799,10 +1799,11 @@ type pageFormWrite struct {
 func (h *PagesHandler) createPageGuarded(ctx context.Context, params store.CreatePageParams, option pageFormWrite) (store.Page, error) {
 	return h.writePageGuarded(ctx, params.Slug, "", option, func(work *pagewrite.Tx) (store.Page, error) {
 		page, err := work.Q.CreatePage(ctx, params)
-		if err == nil {
-			work.Created(page)
+		if err != nil {
+			return store.Page{}, err
 		}
-		return page, err
+		work.Created(page)
+		return page, nil
 	})
 }
 

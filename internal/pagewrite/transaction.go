@@ -366,3 +366,27 @@ func (t *Tx) ChangedPages() []store.Page {
 
 // IsTracked reports whether state was captured before a compound mutation.
 func (t *Tx) IsTracked(id int64) bool { _, ok := t.tracked[id]; return ok }
+
+// ErrPageNotTracked rejects a helper called before its page's initial snapshot.
+var ErrPageNotTracked = errors.New("page must be tracked before mutation")
+
+// RequireTracked checks a compound writer's precondition without taking a late
+// snapshot, which would hide an earlier mutation from Finish.
+func (t *Tx) RequireTracked(id int64) error {
+	if !t.IsTracked(id) {
+		return fmt.Errorf("%w: %d", ErrPageNotTracked, id)
+	}
+	return nil
+}
+
+// RequireTrackedEntity checks page edges in a mixed-entity translation writer.
+func (t *Tx) RequireTrackedEntity(kind string, ids ...int64) error {
+	if kind == "page" {
+		for _, id := range ids {
+			if err := t.RequireTracked(id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

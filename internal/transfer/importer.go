@@ -530,14 +530,9 @@ func (i *Importer) importWithPreCommit(
 
 	if opts.ImportPages {
 		for _, id := range result.IDMaps["pages"] {
-			if work.IsTracked(id) {
-				continue
+			if err := work.RequireTracked(id); err != nil {
+				return result, err
 			}
-			page, loadErr := queries.GetPageByID(ctx, id)
-			if loadErr != nil {
-				return result, loadErr
-			}
-			work.Created(page)
 		}
 	}
 	if err := work.Finish(ctx); err != nil {
@@ -4334,6 +4329,9 @@ func (i *Importer) importPages(
 					continue
 				}
 				// Update categories and tags
+				if err := work.RequireTracked(pageID); err != nil {
+					return err
+				}
 				if err := queries.ClearPageCategories(ctx, pageID); err != nil {
 					result.AddError("page", page.Slug, fmt.Sprintf("clear categories: %v", err))
 					return err
@@ -4361,6 +4359,9 @@ func (i *Importer) importPages(
 			createdPage = true
 		}
 
+		if err := work.RequireTracked(pageID); err != nil {
+			return err
+		}
 		// Add categories
 		for _, catSlug := range page.Categories {
 			catID, ok := categoryMap[catSlug]
@@ -4505,7 +4506,9 @@ func (i *Importer) updateExistingPage(
 	now time.Time,
 	result *ImportResult,
 ) (int64, error) {
-
+	if err := work.RequireTracked(existingID); err != nil {
+		return 0, err
+	}
 	queries := work.Q
 	current, err := queries.GetPageByID(ctx, existingID)
 	if err != nil {
@@ -5484,6 +5487,9 @@ func (i *Importer) importTranslations(
 			if _, ok := ids[sourceID]; ok {
 				continue
 			}
+			if err := work.RequireTrackedEntity(set.entityType, sourceID); err != nil {
+				return err
+			}
 			if err := queries.DeleteTranslationsRelatedToEntity(ctx, store.DeleteTranslationsRelatedToEntityParams{
 				EntityType:    set.entityType,
 				EntityID:      sourceID,
@@ -5564,6 +5570,9 @@ func (i *Importer) importTranslations(
 				return err
 			}
 
+			if err := work.RequireTrackedEntity(set.entityType, sourceID, targetID); err != nil {
+				return err
+			}
 			if _, err := queries.CreateTranslation(ctx, store.CreateTranslationParams{
 				EntityType:    set.entityType,
 				EntityID:      sourceID,

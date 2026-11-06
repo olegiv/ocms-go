@@ -81,6 +81,9 @@ func (s *Service) CreateWith(ctx context.Context, a v2.Actor, in CreatePageBody,
 			return nil, err
 		}
 		if opt.ForceDraft {
+			if err = work.RequireTracked(page.ID); err != nil {
+				return nil, err
+			}
 			if err = work.Q.SetPageAIAccess(ctx, store.SetPageAIAccessParams{PageID: page.ID, AiEditable: true, SetBy: a.ActingUserID(), SetAt: time.Now().UTC()}); err != nil {
 				return nil, err
 			}
