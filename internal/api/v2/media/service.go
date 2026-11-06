@@ -20,7 +20,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/model"
-	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -434,7 +433,7 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		return v2.NewInternalError("Failed to load media", err)
 	}
 	// Files left on disk do not undo the delete: the records are gone.
-	changed, err := s.uploader.DeleteWithPrincipal(ctx, id, provenance.Principal{UserID: a.ActingUserID(), Source: "api", APIKeyID: a.APIKey.ID, Transport: "rest"})
+	changed, err := s.uploader.DeleteWithPrincipal(ctx, id, a.Principal("rest"))
 	if err != nil && !errors.Is(err, service.ErrMediaFilesNotRemoved) {
 		return v2.EditorError(err, "Failed to delete media")
 	}

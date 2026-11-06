@@ -705,7 +705,7 @@ func (s *Service) Delete(ctx context.Context, a v2.Actor, id int64) error {
 		}
 		return v2.NewInternalError("Failed to load page", err)
 	}
-	work, err := pagewrite.InTx(ctx, s.db, principalFor(a), func(work *pagewrite.Tx) error {
+	work, err := pagewrite.InTx(ctx, s.db, a.Principal(a.Transport), func(work *pagewrite.Tx) error {
 		if authorizeErr := s.authorizeWrite(ctx, work.Q, a, WriteOptions{}); authorizeErr != nil {
 			return authorizeErr
 		}

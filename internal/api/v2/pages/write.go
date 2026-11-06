@@ -165,7 +165,7 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 			return nil, writeError(err)
 		}
 	}
-	principal := principalFor(a)
+	principal := a.Principal(a.Transport)
 	var result *Page
 	replayed := false
 	work, err := pagewrite.InTx(ctx, s.db, principal, func(work *pagewrite.Tx) error {
@@ -302,7 +302,7 @@ func (s *Service) ReplayDraft(ctx context.Context, a v2.Actor, opt WriteOptions)
 		return nil, writeError(err)
 	}
 	var result *Page
-	_, err = pagewrite.InTx(ctx, s.db, principalFor(a), func(work *pagewrite.Tx) error {
+	_, err = pagewrite.InTx(ctx, s.db, a.Principal(a.Transport), func(work *pagewrite.Tx) error {
 		if authorizeErr := s.authorizeWrite(ctx, work.Q, a, opt); authorizeErr != nil {
 			return authorizeErr
 		}
@@ -465,16 +465,4 @@ func (s *Service) logSuspicious(ctx context.Context, a v2.Actor, page store.Page
 	if err := s.events.LogSecurityEvent(ctx, model.EventLevelWarning, "Suspicious page content saved", &userID, "", "", map[string]any{"page_id": page.ID, "tokens": security.DetectSuspiciousHTMLTokens(rawBody)}); err != nil {
 		slog.ErrorContext(service.WithoutEventLog(ctx), "failed to log suspicious page content", "error", err, "page_id", page.ID)
 	}
-}
-
-func principalFor(a v2.Actor) provenance.Principal {
-	principal := provenance.Principal{UserID: a.ActingUserID(), Source: "human", Transport: a.Transport, OAuthGrantID: a.OAuthGrantID, OAuthClientID: a.OAuthClientID}
-	if a.APIKey != nil {
-		principal.Source = "api"
-		principal.APIKeyID = a.APIKey.ID
-	}
-	if a.OAuthGrantID != "" {
-		principal.Source = "oauth"
-	}
-	return principal
 }

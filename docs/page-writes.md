@@ -119,6 +119,14 @@ fields are stored separately from server validation JSON and agent report JSON.
 Human and system edits start with empty evidence; they do not inherit claims.
 Registered OAuth client IDs identify registrations, not verified vendors.
 
+REST and MCP adapters derive provenance and preview issuer bindings through
+`v2.Actor.Principal(transport)`. The adapter supplies the transport; the
+credential selects the source and its IDs. API-key identity takes precedence,
+as in write authorization and `ActingUserID`; OAuth fields are carried only
+for an OAuth actor. The conversion does not authenticate an actor or replace
+the existing permission and credential rechecks. A drift test keeps this
+mapping centralized across v2, authoring and MCP adapters.
+
 History is not kept forever for AI drafts. The `core:ai_revision_cleanup`
 scheduler job keeps the newest 20 revisions of each unpublished, unscheduled
 page with AI access, plus any older revision still pinned by an active share

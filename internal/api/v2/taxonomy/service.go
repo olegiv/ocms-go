@@ -14,7 +14,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/pagewrite"
-	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -562,7 +561,7 @@ func buildCategoryTree(rows []store.GetCategoryUsageCountsRow) []*TaxonomyCatego
 // SetCacheManager enables invalidation after taxonomy assignment changes.
 func (s *Service) SetCacheManager(manager *cache.Manager) { s.cache = manager }
 func (s *Service) deleteTerm(ctx context.Context, a v2.Actor, kind string, id int64) error {
-	work, err := pagewrite.InTx(ctx, s.db, provenance.Principal{UserID: a.ActingUserID(), Source: "api", Transport: "rest", APIKeyID: a.APIKey.ID}, func(work *pagewrite.Tx) error {
+	work, err := pagewrite.InTx(ctx, s.db, a.Principal("rest"), func(work *pagewrite.Tx) error {
 		if err := pagewrite.RequireEditor(ctx, work.Q, a.ActingUserID()); err != nil {
 			return err
 		}

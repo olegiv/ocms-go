@@ -22,6 +22,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -196,9 +197,9 @@ func permissionsContain(perms []string, want string) bool {
 // OpenAPI returns the live OpenAPI 3.1 document built from registered operations.
 func (h *Handler) OpenAPI() *huma.OpenAPI { return h.API.OpenAPI() }
 
-// Actor describes the principal making a v2 request. APIKey is nil for
-// unauthenticated callers; Permissions is parsed once so services can make
-// authorization decisions without re-querying the key.
+// Actor describes the principal making a v2 request. APIKey is nil for OAuth,
+// direct-user and unauthenticated callers. Permissions is parsed once for
+// authorization decisions; write services recheck the credential as needed.
 type Actor struct {
 	UserID        int64
 	OAuthGrantID  string
@@ -208,7 +209,7 @@ type Actor struct {
 	Permissions   []string
 }
 
-// HasPermission reports whether the actor's API key grants a permission.
+// HasPermission reports whether the actor has a permission.
 func (a Actor) HasPermission(perm string) bool {
 	for _, p := range a.Permissions {
 		if p == perm {
@@ -238,6 +239,24 @@ func (a Actor) ActingUserID() int64 {
 		return a.APIKey.CreatedBy
 	}
 	return a.UserID
+}
+
+// Principal derives provenance and preview issuer bindings from the credential.
+// The adapter supplies the transport. Like ActingUserID and write authorization,
+// an API key takes precedence; unrelated credential fields are not carried over.
+// This conversion does not authenticate the actor or grant write permission.
+func (a Actor) Principal(transport string) provenance.Principal {
+	principal := provenance.Principal{UserID: a.ActingUserID(), Source: "human", Transport: transport}
+	switch {
+	case a.APIKey != nil:
+		principal.Source = "api"
+		principal.APIKeyID = a.APIKey.ID
+	case a.OAuthGrantID != "":
+		principal.Source = "oauth"
+		principal.OAuthGrantID = a.OAuthGrantID
+		principal.OAuthClientID = a.OAuthClientID
+	}
+	return principal
 }
 
 // ActorForUser narrows explicit permissions to the current editor/admin role.
