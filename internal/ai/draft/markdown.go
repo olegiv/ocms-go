@@ -36,8 +36,8 @@ type inlineImage struct {
 	caption string
 }
 
-// RenderMarkdown parses Markdown with raw HTML disabled, resolves media before
-// sanitization, applies the link policy and bounds the resulting HTML too.
+// RenderMarkdown parses Markdown with raw HTML disabled, resolves media and
+// applies the link policy before final sanitization, and bounds the HTML too.
 func RenderMarkdown(ctx context.Context, body string, options Options) (Rendered, error) {
 	result := Rendered{Issues: validateBody(body, options.UILanguage)}
 	if HasErrors(result.Issues) {
@@ -122,16 +122,17 @@ func RenderMarkdown(ctx context.Context, body string, options Options) (Rendered
 	if err = converter.Renderer().Render(&rendered, source, document); err != nil {
 		return result, fmt.Errorf("render draft Markdown: %w", err)
 	}
-	safe := security.SanitizePageHTML(rendered.String())
-	if len(safe) > MaxBodyBytes {
+	renderedHTML := rendered.String()
+	if len(renderedHTML) > MaxBodyBytes {
 		result.Issues = append(result.Issues, NewIssue("body_too_large", "body_markdown", options.UILanguage))
 		return result, nil
 	}
-	bodyHTML, linkResults, issues, err := applyLinks(ctx, safe, base, options.linkPolicy(), options.Resolver, options.UILanguage)
+	bodyHTML, linkResults, issues, err := applyLinks(ctx, renderedHTML, base, options.linkPolicy(), options.Resolver, options.UILanguage)
 	if err != nil {
 		return result, err
 	}
 	result.Links, result.Issues = linkResults, append(result.Issues, issues...)
+	bodyHTML = security.SanitizePageHTML(bodyHTML)
 	if len(bodyHTML) > MaxBodyBytes {
 		result.Issues = append(result.Issues, NewIssue("body_too_large", "body_markdown", options.UILanguage))
 	}

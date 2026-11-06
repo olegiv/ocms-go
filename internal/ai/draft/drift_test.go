@@ -116,3 +116,85 @@ func TestDraftPackagesCannotFetchURLsOrWritePages(t *testing.T) {
 		}
 	}
 }
+
+// This checks RenderMarkdown's direct HTML pipeline. It deliberately requires
+// an explicit final sanitizer assignment, not interprocedural data-flow proof.
+func TestMarkdownSanitizationFollowsLinkRewriting(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "markdown.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var render *ast.FuncDecl
+	for _, decl := range file.Decls {
+		if function, ok := decl.(*ast.FuncDecl); ok && function.Name.Name == "RenderMarkdown" {
+			render = function
+		}
+	}
+	if render == nil {
+		t.Fatal("RenderMarkdown is missing")
+	}
+	var rewrites, sanitizers, outputs int
+	var rewrittenAt, sanitizedAt token.Pos
+	var htmlName, sanitizedName, sanitizerInput string
+	var assignments []*ast.AssignStmt
+	ast.Inspect(render.Body, func(node ast.Node) bool {
+		assignment, ok := node.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		assignments = append(assignments, assignment)
+		if len(assignment.Rhs) != 1 {
+			return true
+		}
+		call, ok := assignment.Rhs[0].(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		output, ok := assignment.Lhs[0].(*ast.Ident)
+		if !ok {
+			return true
+		}
+		switch function := call.Fun.(type) {
+		case *ast.Ident:
+			if function.Name == "applyLinks" {
+				rewrites++
+				htmlName, rewrittenAt = output.Name, assignment.Pos()
+			}
+		case *ast.SelectorExpr:
+			pkg, qualified := function.X.(*ast.Ident)
+			if qualified && pkg.Name == "security" && function.Sel.Name == "SanitizePageHTML" {
+				sanitizers++
+				sanitizedName, sanitizedAt = output.Name, assignment.Pos()
+				if len(call.Args) == 1 {
+					if input, direct := call.Args[0].(*ast.Ident); direct {
+						sanitizerInput = input.Name
+					}
+				}
+			}
+		}
+		return true
+	})
+	if rewrites != 1 || sanitizers != 1 || rewrittenAt >= sanitizedAt || htmlName != sanitizedName || htmlName != sanitizerInput {
+		t.Fatal("link rewriting must feed one final sanitizer assignment")
+	}
+	for _, assignment := range assignments {
+		for index, left := range assignment.Lhs {
+			if name, ok := left.(*ast.Ident); ok && name.Name == htmlName && assignment.Pos() > sanitizedAt {
+				t.Fatal("HTML must not be rewritten after final sanitization")
+			}
+			if field, ok := left.(*ast.SelectorExpr); ok && field.Sel.Name == "HTML" {
+				outputs++
+				if len(assignment.Rhs) != len(assignment.Lhs) || assignment.Pos() <= sanitizedAt {
+					t.Fatal("Rendered.HTML must receive the final sanitizer output")
+				}
+				value, direct := assignment.Rhs[index].(*ast.Ident)
+				if !direct || value.Name != htmlName {
+					t.Fatal("Rendered.HTML must receive the final sanitizer output")
+				}
+			}
+		}
+	}
+	if outputs != 1 {
+		t.Fatalf("expected one sanitized HTML output, got %d", outputs)
+	}
+}

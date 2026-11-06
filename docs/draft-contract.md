@@ -100,6 +100,10 @@ available responsive sources, dimensions and lazy/async loading. The shared
 sanitizer permits this bounded local-upload markup; it still removes event
 handlers, scripts and arbitrary remote srcsets.
 
+Media resolution and link rewriting run before the shared HTML sanitizer.
+Its output is the final HTML returned for a body replacement. Expanded HTML
+is size-checked before link processing and again after final sanitization.
+
 Stored sanitized HTML is authoritative. A metadata-only update never converts,
 sanitizes or re-renders its existing body. `DeriveMarkdown` is an explicit read
 representation and returns warnings for unsupported rich layout/attributes or
