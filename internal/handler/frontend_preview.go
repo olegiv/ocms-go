@@ -129,7 +129,7 @@ func (h *FrontendHandler) renderCapturedPreview(w http.ResponseWriter, r *http.R
 	page := snapshot.Page
 	language, err := contentpath.RouteLanguage(r.Context(), h.queries, page.LanguageCode)
 	if err != nil {
-		http.NotFound(w, r)
+		previewFailure(w, r, err)
 		return
 	}
 	if requested := chi.URLParam(r, "lang"); requested != "" && requested != language.Code {
