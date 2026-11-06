@@ -1249,8 +1249,8 @@ func ReadZipExportDataBytes(data []byte) (ExportData, error) {
 	return ReadZipExportData(metadata)
 }
 
-// ReadZipExportData applies the same declared-size, decompressed-byte and strict
-// JSON limits to archive metadata in validation, browser previews and imports.
+// ReadZipExportData applies the same declared-size and decompressed-byte limits
+// to archive metadata in validation, browser previews and imports, then parses JSON.
 func ReadZipExportData(file *zip.File) (ExportData, error) {
 	if file.UncompressedSize64 > uint64(maxZipExportJSONUncompressedBytes) {
 		return ExportData{}, fmt.Errorf("export.json exceeds max size (%d bytes)", maxZipExportJSONUncompressedBytes)

@@ -33,7 +33,7 @@ import (
 // the edits on a refused save, and never shows raw error text (2026-11-03
 // review R2-3, S5, S6).
 //
-// Bug state: drop the pageWriteMessageKey handling from Update, TogglePublish
+// Bug state: drop the pageWriteMessage handling from Update, TogglePublish
 // or RestoreVersion, or flash err.Error() again, and this fails.
 func TestRefusedPageWritesExplainWhy(t *testing.T) {
 	if err := i18n.Init(nil); err != nil {

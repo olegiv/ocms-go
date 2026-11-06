@@ -42,9 +42,9 @@ const namespace = "/preview/"
 // active languages. It must not match "/preview/" at any other depth: a page
 // served at /blog/preview/x is public content, not a preview, and treating it
 // as one hides it behind no-store/noindex headers and a script-blocking CSP.
-// Page slugs and aliases cannot have a "preview" segment
-// (util.ShadowsPreviewRoute), so no page can sit under a segment that passes
-// this grammar either.
+// Page slugs and aliases cannot put a "preview" segment first or immediately
+// after a routable language-shaped segment (util.ShadowsPreviewRoute), so no
+// page can occupy a path recognized by this grammar.
 func routeOffset(p string) (int, bool) {
 	if strings.HasPrefix(p, namespace) {
 		return 0, true

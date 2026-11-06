@@ -9,7 +9,9 @@ import (
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 )
 
-// AddRevisionRetention registers bounded pruning of old AI-draft revisions.
+// AddRevisionRetention registers bounded pruning of old revisions written
+// through API keys or OAuth on unpublished AI drafts. Editor and system
+// revisions are always kept.
 // It is independent of the MCP module: drafts and their revisions exist, and
 // grow, whether or not the module is currently active.
 func (s *Scheduler) AddRevisionRetention() error {
@@ -37,7 +39,7 @@ func (s *Scheduler) AddRevisionRetention() error {
 		return err
 	}
 	if s.registry != nil {
-		s.registry.Register(source, name, "Remove old revisions of unpublished AI drafts in bounded batches",
+		s.registry.Register(source, name, "Remove old revisions written through API keys or OAuth from unpublished AI drafts in bounded batches",
 			defaultSchedule, s.cron, entry, job, run)
 	}
 	return nil

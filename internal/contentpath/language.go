@@ -31,7 +31,7 @@ func ActiveLanguages(activeLangs []store.Language) map[string]store.Language {
 	return langMap
 }
 
-// matchLanguagePrefix matches the first path segment against the active
+// MatchLanguagePrefix matches the first path segment against the active
 // language map and returns the path to route after removing that prefix.
 func MatchLanguagePrefix(path string, langMap map[string]store.Language) (store.Language, string, bool) {
 	path = strings.TrimPrefix(path, "/")

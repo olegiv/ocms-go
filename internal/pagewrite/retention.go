@@ -38,6 +38,8 @@ type RevisionPruneResult struct {
 // still referenced by an AI draft's current evidence (see
 // ListPrunableAIDraftRevisions). Published, scheduled and non-AI pages, and
 // legacy title/body history, are never touched.
+// Only revisions written through an API key or OAuth client are removed;
+// editor and system revisions are always kept.
 //
 // A revision's version row, provenance row and claim acknowledgments (cascade)
 // go together. Retained replay receipts of a removed revision are compacted to

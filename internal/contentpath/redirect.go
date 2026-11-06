@@ -91,7 +91,7 @@ func matchPathPartsWithCaptures(sourceParts, requestParts []string) (bool, []str
 	return true, captures
 }
 
-// buildTargetURL builds the final target URL by substituting captured wildcard segments.
+// BuildRedirectTarget builds the final target URL by substituting captured wildcard segments.
 // Each "*" or "**" in the target URL is replaced with the corresponding captured segment.
 func BuildRedirectTarget(rd store.Redirect, captures []string) string {
 	if !rd.IsWildcard || len(captures) == 0 {
@@ -118,7 +118,8 @@ func BuildRedirectTarget(rd store.Redirect, captures []string) string {
 	return targetURL
 }
 
-// ErrUnsafeRedirect is returned for a redirect target rejected by the frontend.
+// ErrUnsafeRedirect matches, via errors.Is, the *UnsafeRedirectError returned
+// by FirstRedirect when a target cannot be parsed or names a host.
 var ErrUnsafeRedirect = errors.New("unsafe content redirect")
 
 // UnsafeRedirectError names the rejected target and, when the target did not

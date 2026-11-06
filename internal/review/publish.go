@@ -58,8 +58,8 @@ func ValidatePublication(ctx context.Context, q *store.Queries, page store.Page)
 			return ErrHardValidation
 		}
 	}
-	// R1.5 recorded the configured origin in validation. Human revisions may
-	// have empty evidence, so the live configured origin is the fallback.
+	// Use the current revision's recorded origin, then the latest authoring
+	// provenance's origin, then the live site_url configuration.
 	origin := validation.SiteURL
 	if origin == "" && historyErr == nil {
 		var saved Validation
