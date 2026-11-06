@@ -158,6 +158,15 @@ tokens for a different client, and expired or rotated access tokens get
 HTTP 200 with no effect. A spent refresh token can still revoke its family.
 A storage fault that prevents revocation returns HTTP 503.
 
+Revocation does not validate a client metadata document or read, refresh or
+fetch the client registry entry. It uses the stored token and grant, so a
+matching client can revoke even when its metadata has expired or is unavailable.
+An unknown or non-matching `client_id` returns HTTP 200 with no effect, provided
+the request passes the normal form and public-client checks: exactly one
+non-empty `client_id` within the size limit, no client secret and no
+`Authorization` header. This does not relax client validation for authorization
+or token issuance.
+
 When a loaded token and grant reveal a client mismatch, the server logs a
 warning with the grant and user IDs. It logs neither the submitted client ID
 nor credentials. The response remains HTTP 200 with no effect; unknown tokens
