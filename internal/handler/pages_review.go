@@ -93,11 +93,7 @@ func (h *PagesHandler) CreatePreviewLink(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	cfg, err := h.queries.GetConfigByKey(r.Context(), model.ConfigKeySiteURL)
-	if errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, i18n.T(h.renderer.GetAdminLang(r), "preview.site_url_required"), http.StatusServiceUnavailable)
-		return
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("failed to load site URL for a preview link", "error", err, "page_id", id)
 		http.Error(w, i18n.T(h.renderer.GetAdminLang(r), "preview.temporarily_unavailable"), http.StatusServiceUnavailable)
 		return
@@ -116,9 +112,16 @@ func (h *PagesHandler) CreatePreviewLink(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		lang := h.renderer.GetAdminLang(r)
 		var conflict *pagewrite.Conflict
+		var limited *preview.RateLimitError
 		switch {
-		case errors.Is(err, preview.ErrLimit):
-			http.Error(w, i18n.T(lang, "preview.limit", preview.MaxActiveLinks, preview.MaxIssuedPerHour), http.StatusTooManyRequests)
+		case errors.Is(err, preview.ErrSiteURL):
+			slog.Error("invalid site URL for a preview link", "error", err, "page_id", id, "revision", revision, "user_id", userID)
+			http.Error(w, i18n.T(lang, "preview.site_url_required"), http.StatusServiceUnavailable)
+		case errors.Is(err, preview.ErrActiveLimit):
+			http.Error(w, i18n.T(lang, "preview.active_limit", preview.MaxActiveLinks), http.StatusTooManyRequests)
+		case errors.As(err, &limited):
+			w.Header().Set("Retry-After", strconv.FormatInt(limited.RetryAfterSeconds, 10))
+			http.Error(w, i18n.T(lang, "preview.rate_limit", preview.MaxIssuedPerHour, limited.RetryAfterSeconds), http.StatusTooManyRequests)
 		case errors.As(err, &conflict):
 			http.Error(w, i18n.T(lang, "pages.error_changed_meanwhile"), http.StatusConflict)
 		case errors.Is(err, preview.ErrUnavailable), errors.Is(err, sql.ErrNoRows):

@@ -28,6 +28,11 @@ SELECT COUNT(*) FROM preview_links WHERE created_by=? AND revoked_at=0 AND expir
 -- name: CountIssuedPreviewLinks :one
 SELECT COUNT(*) FROM preview_links WHERE created_by=? AND created_at>=?;
 
+-- name: GetPreviewIssuanceCutoff :one
+SELECT created_at FROM preview_links
+WHERE created_by=sqlc.arg(created_by) AND created_at>=sqlc.arg(since)
+ORDER BY created_at DESC,id DESC LIMIT 1 OFFSET sqlc.arg(issuance_offset);
+
 -- name: GetLatestAuthoringProvenance :one
 SELECT * FROM content_provenance WHERE page_id=? AND revision<=?
 AND json_extract(CASE WHEN json_valid(validated_json) THEN validated_json ELSE '{}' END,'$.prompt_contract_version') IS NOT NULL

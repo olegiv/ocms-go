@@ -6,6 +6,7 @@ package authoring
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/preview"
@@ -31,8 +32,15 @@ func (s *Service) CreatePreviewLink(ctx context.Context, a v2.Actor, in PreviewI
 	if errors.Is(err, preview.ErrUnavailable) {
 		return preview.Link{}, &Error{Code: "preview_unavailable", Message: "The requested draft revision is unavailable for sharing"}
 	}
-	if errors.Is(err, preview.ErrLimit) {
-		return preview.Link{}, &Error{Code: "quota_exceeded", Message: "Revoke an existing preview link before creating another"}
+	if errors.Is(err, preview.ErrSiteURL) {
+		return preview.Link{}, &v2.Error{Kind: v2.ErrInternal, MachineCode: "site_url_required", Msg: "Ask the administrator to configure a valid HTTPS site URL before sharing previews. HTTP is allowed only for localhost or loopback addresses.", Wrap: fmt.Errorf("issue preview for page %d revision %d: %w", in.PageID, in.Revision, err)}
+	}
+	if errors.Is(err, preview.ErrActiveLimit) {
+		return preview.Link{}, &Error{Code: "preview_limit_reached", Message: "You have reached the active preview link limit. Ask the editor to revoke a link, or wait for one to expire."}
+	}
+	var limited *preview.RateLimitError
+	if errors.As(err, &limited) {
+		return preview.Link{}, &Error{Code: "preview_rate_limited", Message: "Preview link issuance limit reached; retry after the indicated delay. Revoking links does not reset this limit.", Retryable: true, RetryAfterSeconds: limited.RetryAfterSeconds}
 	}
 	return result, err
 }

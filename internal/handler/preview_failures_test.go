@@ -145,7 +145,7 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 		issue()
 	}
 	rr := post(fmt.Sprintf("/admin/pages/%d/preview-links", page.ID), url.Values{"acknowledge": {"on"}, "revision": {revision}, "base_revision": {revision}})
-	if rr.Code != http.StatusTooManyRequests || !strings.Contains(rr.Body.String(), i18n.T("en", "preview.limit", preview.MaxActiveLinks, preview.MaxIssuedPerHour)) {
+	if rr.Code != http.StatusTooManyRequests || !strings.Contains(rr.Body.String(), i18n.T("en", "preview.active_limit", preview.MaxActiveLinks)) {
 		t.Errorf("link past the limit: status %d %q, want 429 with the limit message", rr.Code, rr.Body.String())
 	}
 

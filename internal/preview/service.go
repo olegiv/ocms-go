@@ -81,12 +81,12 @@ func SessionURL(origin, language string, pageID, revision int64) string {
 func (s Service) Issue(ctx context.Context, principal provenance.Principal, pageID, revision int64, origin string, authorize func(context.Context, *store.Queries) error) (Link, error) {
 	base, err := url.Parse(origin)
 	if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Host == "" || base.User != nil || base.RawQuery != "" || base.ForceQuery || base.Fragment != "" || (base.Path != "" && base.Path != "/") {
-		return Link{}, ErrUnavailable
+		return Link{}, ErrSiteURL
 	}
 	if base.Scheme == "http" && base.Hostname() != "localhost" {
 		ip := net.ParseIP(base.Hostname())
 		if ip == nil || !ip.IsLoopback() {
-			return Link{}, ErrUnavailable
+			return Link{}, ErrSiteURL
 		}
 	}
 	ttl := s.TTL
@@ -142,10 +142,16 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 			return workErr
 		}
 		if issued >= MaxIssuedPerHour {
-			return ErrLimit
+			cutoff, cutoffErr := work.Q.GetPreviewIssuanceCutoff(ctx, store.GetPreviewIssuanceCutoffParams{CreatedBy: user.ID, Since: now.Add(-time.Hour).Unix(), IssuanceOffset: MaxIssuedPerHour - 1})
+			if cutoffErr != nil {
+				return fmt.Errorf("load preview issuance cutoff: %w", cutoffErr)
+			}
+			// The count includes the cutoff second. Wait until fewer than
+			// MaxIssuedPerHour records remain, even if old data exceeds it.
+			return &RateLimitError{RetryAfterSeconds: max(1, cutoff+int64(time.Hour/time.Second)+1-now.Unix())}
 		}
 		if count >= MaxActiveLinks {
-			return ErrLimit
+			return ErrActiveLimit
 		}
 		expires := now.Add(ttl)
 		if principal.OAuthGrantID != "" {

@@ -8613,9 +8613,14 @@
             "translation": "Ссылка общего доступа"
         },
         {
-            "id": "preview.limit",
-            "message": "You have reached the share-link limit: at most %d active links and %d per hour. Revoke a link or wait before creating another.",
-            "translation": "Достигнут лимит ссылок для просмотра: не более %d активных и %d в час. Отзовите ссылку или подождите, прежде чем создавать новую."
+            "id": "preview.active_limit",
+            "message": "You have reached the limit of %d active preview links. Revoke a link or wait for one to expire.",
+            "translation": "Достигнут лимит активных ссылок для просмотра: %d. Отзовите ссылку или дождитесь окончания её срока действия."
+        },
+        {
+            "id": "preview.rate_limit",
+            "message": "You have reached the limit of %d preview links per hour. Try again in %d seconds. Revoking links does not reset this limit.",
+            "translation": "Достигнут лимит ссылок для просмотра в час: %d. Повторите попытку через %d секунд. Отзыв ссылок не сбрасывает этот лимит."
         },
         {
             "id": "preview.revoked",
@@ -8644,13 +8649,13 @@
         },
         {
             "id": "preview.site_url_required",
-            "message": "Set the site URL in Site configuration before sharing previews.",
-            "translation": "Укажите URL сайта в настройках сайта, прежде чем делиться предпросмотром."
+            "message": "Set a valid HTTPS site URL in Site configuration before sharing previews. HTTP is allowed only for localhost or loopback addresses.",
+            "translation": "Укажите корректный HTTPS URL сайта в настройках сайта, прежде чем делиться предпросмотром. HTTP разрешён только для localhost или адресов обратной петли."
         },
         {
             "id": "preview.unavailable",
-            "message": "Cannot share this revision. Reload the editor or revoke an existing link.",
-            "translation": "Нельзя открыть общий доступ к этой версии. Обновите редактор или отзовите существующую ссылку."
+            "message": "Cannot share this revision. Reload the editor and check that the draft is eligible for sharing.",
+            "translation": "Нельзя открыть общий доступ к этой версии. Обновите редактор и проверьте, доступен ли общий доступ к черновику."
         },
         {
             "id": "preview.render_error",

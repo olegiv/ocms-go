@@ -179,10 +179,19 @@ an old URL-issuing binary concurrently against the upgraded database.
 
 The default lifetime is 24 hours, bounded by the issuing credential's expiry.
 Set `OCMS_PREVIEW_LINK_TTL_HOURS` to 1–24 to shorten it. Limits are ten active
-links and sixty issuances per user per rolling hour; revocation does not reset
-the issuance limit, and a request past it is answered 429 with that reason.
+links and sixty issuances per user per rolling hour. The editor returns 429
+with a separate reason for each limit. The active limit requires revoking a
+link or waiting for one to expire. The hourly limit includes revoked links
+and returns a `Retry-After` delay; revocation cannot clear it. If both apply,
+the hourly limit is reported first. The delay describes the hourly allowance,
+so an active limit or intervening issuance may still prevent a later request.
 Revoke links from the editor's preview panel. Issuing and revoking a link are
 both recorded in the event log; the token never is.
+
+Sharing requires a valid HTTPS site origin; HTTP is allowed only for localhost
+or loopback addresses. A missing or invalid site URL is a logged configuration
+fault: the editor returns 503 with setup guidance, and MCP returns
+`site_url_required`. It is distinct from an unavailable draft revision.
 
 Each read rechecks current account/role, owner, AI opt-in, draft/schedule and
 issuing key/grant state. Explicit revocation, publication, scheduling, deletion,

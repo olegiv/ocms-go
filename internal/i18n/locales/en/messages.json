@@ -8613,9 +8613,14 @@
             "translation": "Share URL"
         },
         {
-            "id": "preview.limit",
-            "message": "You have reached the share-link limit: at most %d active links and %d per hour. Revoke a link or wait before creating another.",
-            "translation": "You have reached the share-link limit: at most %d active links and %d per hour. Revoke a link or wait before creating another."
+            "id": "preview.active_limit",
+            "message": "You have reached the limit of %d active preview links. Revoke a link or wait for one to expire.",
+            "translation": "You have reached the limit of %d active preview links. Revoke a link or wait for one to expire."
+        },
+        {
+            "id": "preview.rate_limit",
+            "message": "You have reached the limit of %d preview links per hour. Try again in %d seconds. Revoking links does not reset this limit.",
+            "translation": "You have reached the limit of %d preview links per hour. Try again in %d seconds. Revoking links does not reset this limit."
         },
         {
             "id": "preview.revoked",
@@ -8644,13 +8649,13 @@
         },
         {
             "id": "preview.site_url_required",
-            "message": "Set the site URL in Site configuration before sharing previews.",
-            "translation": "Set the site URL in Site configuration before sharing previews."
+            "message": "Set a valid HTTPS site URL in Site configuration before sharing previews. HTTP is allowed only for localhost or loopback addresses.",
+            "translation": "Set a valid HTTPS site URL in Site configuration before sharing previews. HTTP is allowed only for localhost or loopback addresses."
         },
         {
             "id": "preview.unavailable",
-            "message": "Cannot share this revision. Reload the editor or revoke an existing link.",
-            "translation": "Cannot share this revision. Reload the editor or revoke an existing link."
+            "message": "Cannot share this revision. Reload the editor and check that the draft is eligible for sharing.",
+            "translation": "Cannot share this revision. Reload the editor and check that the draft is eligible for sharing."
         },
         {
             "id": "preview.render_error",

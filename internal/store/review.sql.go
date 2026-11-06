@@ -163,6 +163,25 @@ func (q *Queries) GetPageReviewState(ctx context.Context, id int64) (GetPageRevi
 	return i, err
 }
 
+const getPreviewIssuanceCutoff = `-- name: GetPreviewIssuanceCutoff :one
+SELECT created_at FROM preview_links
+WHERE created_by=?1 AND created_at>=?2
+ORDER BY created_at DESC,id DESC LIMIT 1 OFFSET ?3
+`
+
+type GetPreviewIssuanceCutoffParams struct {
+	CreatedBy      int64 `json:"created_by"`
+	Since          int64 `json:"since"`
+	IssuanceOffset int64 `json:"issuance_offset"`
+}
+
+func (q *Queries) GetPreviewIssuanceCutoff(ctx context.Context, arg GetPreviewIssuanceCutoffParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getPreviewIssuanceCutoff, arg.CreatedBy, arg.Since, arg.IssuanceOffset)
+	var created_at int64
+	err := row.Scan(&created_at)
+	return created_at, err
+}
+
 const getPreviewLinkByHash = `-- name: GetPreviewLinkByHash :one
 SELECT l.id, l.token_hash, l.page_id, l.revision, l.created_by, l.session_version, l.issuing_grant_id, l.issuing_key_id, l.created_at, l.expires_at, l.revoked_at FROM preview_links l
 JOIN pages p ON p.id=l.page_id

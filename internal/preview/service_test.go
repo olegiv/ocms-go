@@ -241,7 +241,7 @@ func TestPreviewCapsOwnershipAndMalformedTokens(t *testing.T) {
 		}
 	}
 	for _, origin := range []string{"http://public.test", "https://cms.test/path", "https://user:pass@cms.test", "https://cms.test?x=y", "https://cms.test?"} {
-		if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID}, f.page.ID, 1, origin, nil); !errors.Is(err, preview.ErrUnavailable) {
+		if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID}, f.page.ID, 1, origin, nil); !errors.Is(err, preview.ErrSiteURL) {
 			t.Fatal("unsafe origin accepted")
 		}
 	}

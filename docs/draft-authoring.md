@@ -88,6 +88,16 @@ preview token. Sharing requires the separate explicit `create_preview_link`
 action. See [editorial review](editorial-review.md) for expiry, revocation,
 private rendering and proxy-log configuration.
 
+Share issuance distinguishes configuration and quota refusals.
+`site_url_required` asks the administrator to configure a valid HTTPS site
+origin (HTTP is allowed only for localhost or loopback).
+`preview_limit_reached` means the active-link cap: ask the editor to revoke
+a link or wait for expiry. Both have `retryable=false`.
+`preview_rate_limited` means the rolling hourly issuance cap, including
+revoked links, and has `retryable=true` with `retry_after_seconds`.
+Revoking links cannot clear that hourly cap. A retry still rechecks all
+eligibility and quota rules; another issuance can consume the available slot.
+
 Updates require the last-read `base_revision`. Omission preserves fields;
 arrays replace collections and empty arrays clear them. Explicit null clears
 nullable SEO/image/category fields. Author, language, page type, lifecycle,
