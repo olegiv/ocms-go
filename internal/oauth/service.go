@@ -320,9 +320,11 @@ func (s *Service) RevokeGrant(ctx context.Context, userID int64, id string) erro
 	}
 	g, err := s.q.GetOAuthGrant(ctx, id)
 	if n == 1 {
-		// The revocation is committed; a failed read only costs the audit event.
+		// The revocation is committed; warn if the audit read fails, but keep success.
 		if err == nil {
 			s.audit(ctx, g, "OAuth connection revoked by account", false)
+		} else {
+			slog.WarnContext(ctx, "OAuth connection revoked without audit event", "error", err, "grant_id", id, "user_id", userID)
 		}
 		return nil
 	}
