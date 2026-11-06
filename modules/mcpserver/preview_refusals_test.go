@@ -129,7 +129,7 @@ func TestMCPPreviewRefusalsExplainRecovery(t *testing.T) {
 					}
 				}
 				shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", args))
-				parsed, parseErr := url.Parse(shared.URL)
+				parsed, parseErr := url.Parse(string(shared.URL))
 				if parseErr != nil || parsed.Fragment == "" {
 					t.Fatal("recovery did not issue a share URL")
 				}

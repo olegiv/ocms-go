@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -88,10 +87,19 @@ func Lookup(ctx context.Context, q *store.Queries, request Request, now time.Tim
 	return &record, nil
 }
 
-// Store writes a non-secret result in the same transaction as the mutation.
+// Store writes an approved page receipt in the same transaction as the mutation.
 // InTx's immediate SQLite write lock serializes duplicates before lookup. A busy
 // or canceled transaction is rolled back; the caller retries the same request ID.
-func Store(ctx context.Context, q *store.Queries, request Request, entityType string, entityID, revision int64, result any, now time.Time) error {
+func Store(ctx context.Context, q *store.Queries, request Request, entityType string, entityID, revision int64, result Receipt, now time.Time) error {
+	switch value := result.(type) {
+	case Page:
+	case *Page:
+		if value == nil {
+			return errors.New("idempotent page receipt must not be nil")
+		}
+	default:
+		return errors.New("idempotent result must be an approved page receipt")
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return err
@@ -99,34 +107,5 @@ func Store(ctx context.Context, q *store.Queries, request Request, entityType st
 	if len(encoded) > maxResultBytes {
 		return errors.New("idempotent result exceeds replay limit")
 	}
-	var value any
-	if err = json.Unmarshal(encoded, &value); err != nil {
-		return err
-	}
-	if containsSecret(value) {
-		return errors.New("idempotent results must not contain credentials or preview tokens")
-	}
 	return q.CreateIdempotencyKey(ctx, store.CreateIdempotencyKeyParams{UserID: request.UserID, Tool: request.Tool, RequestID: request.ID, RequestHash: request.Hash, ResultJson: sql.NullString{String: string(encoded), Valid: true}, EntityType: entityType, EntityID: entityID, EntityRevision: revision, CreatedAt: now.UTC()})
-}
-
-func containsSecret(value any) bool {
-	switch item := value.(type) {
-	case map[string]any:
-		for key, child := range item {
-			switch strings.ToLower(key) {
-			case "token", "preview_token", "preview_url", "access_token", "refresh_token", "password", "secret":
-				return true
-			}
-			if containsSecret(child) {
-				return true
-			}
-		}
-	case []any:
-		for _, child := range item {
-			if containsSecret(child) {
-				return true
-			}
-		}
-	}
-	return false
 }

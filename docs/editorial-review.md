@@ -140,6 +140,10 @@ Saving, reading, retrying or listing never creates a share link.
 
 Links contain 32 random bytes; only SHA-256 hashes are stored. Their URL is
 returned once and is absent from later reads, metadata and idempotency receipts.
+The share URL and its issuance result redact ordinary formatting and structured
+logging. Issuance JSON and the editor's copy field deliberately expose the usable
+URL; serialized responses and explicit plain-string conversions must not be
+used as logging representations.
 New links use `/preview/share#<bearer>`. The browser handles the fragment
 outside the HTTP request target ([RFC 3986 §3.5](https://www.rfc-editor.org/rfc/rfc3986#section-3.5)).
 A standalone page, with no theme, integrations or external resources, clears

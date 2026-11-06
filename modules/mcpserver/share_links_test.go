@@ -146,7 +146,7 @@ func TestAgentShareLinksRechecksPolicyInIssuanceTransaction(t *testing.T) {
 			saved := decodeResult[authoring.SaveResult](t, call(t, session, "create_draft_page", draftCreateArgs("Sharing policy changed")))
 			args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
 			shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", args))
-			shareURL, err := url.Parse(shared.URL)
+			shareURL, err := url.Parse(string(shared.URL))
 			if err != nil || shareURL.Fragment == "" {
 				t.Fatal("enabled call did not issue a share link")
 			}

@@ -74,7 +74,7 @@ func (f *fixture) issue(t *testing.T, principal ...provenance.Principal) preview
 }
 func token(t *testing.T, link preview.Link) string {
 	t.Helper()
-	u, err := url.Parse(link.URL)
+	u, err := url.Parse(string(link.URL))
 	if err != nil || u == nil || u.Fragment == "" {
 		t.Fatalf("preview URL has no valid token: %v", err)
 	}
@@ -84,7 +84,7 @@ func token(t *testing.T, link preview.Link) string {
 func TestPreviewShareURLKeepsBearerOutOfRequestTarget(t *testing.T) {
 	f := setup(t)
 	link := f.issue(t)
-	u, err := url.Parse(link.URL)
+	u, err := url.Parse(string(link.URL))
 	if err != nil || u.Path != "/preview/share" || u.RawQuery != "" || u.ForceQuery || len(u.Fragment) != 43 {
 		t.Fatal("share bearer must exist only in the fragment of a fixed-path URL")
 	}

@@ -187,7 +187,7 @@ func TestDraftToolsSDKCreateReadUpdateReplayAndExplicitSharing(t *testing.T) {
 		t.Fatal("save/read silently issued a token")
 	}
 	shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": updated.Revision}))
-	sharedURL, err := url.Parse(shared.URL)
+	sharedURL, err := url.Parse(string(shared.URL))
 	if err != nil || sharedURL.Path != preview.SharePath || sharedURL.RawQuery != "" || len(sharedURL.Fragment) != 43 {
 		t.Fatal("MCP issued a proxy-visible bearer")
 	}

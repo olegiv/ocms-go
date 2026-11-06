@@ -92,7 +92,7 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 	open := func() int {
 		t.Helper()
 		w := httptest.NewRecorder()
-		share.ServeHTTP(w, postedShareRequest(t, link.URL))
+		share.ServeHTTP(w, postedShareRequest(t, string(link.URL)))
 		return w.Code
 	}
 	if _, err = db.ExecContext(ctx, `ALTER TABLE preview_links RENAME TO preview_links_unavailable`); err != nil {

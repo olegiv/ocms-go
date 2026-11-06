@@ -247,3 +247,8 @@ agent receipts omit body HTML and resolve their original validation from the
 immutable saved revision. Per-page evidence prevents translation membership
 updates from copying target claims onto source/sibling revisions. Explicit
 report/reference edits participate in CAS; identical evidence is a no-op.
+
+Replay storage accepts only the approved page response type, including its
+compact agent form. The same field definitions back REST responses and replay
+receipts, preserving their JSON format. Arbitrary response objects, including
+share links or wrappers with extra fields, cannot become replay receipts.
