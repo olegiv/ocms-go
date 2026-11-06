@@ -376,6 +376,8 @@ func (s *Service) Revoke(w http.ResponseWriter, r *http.Request) {
 		if revoked {
 			s.audit(ctx, g, "OAuth connection revoked by client", false)
 		}
+	} else {
+		slog.WarnContext(ctx, "OAuth revocation client mismatch", "grant_id", g.ID, "user_id", g.UserID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{})
 }
