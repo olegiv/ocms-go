@@ -42,6 +42,7 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 		{name: "editor account", edit: true, query: "GetUserByID", message: "failed to load page editor account"},
 		{name: "editor evidence", edit: true, query: "GetContentProvenance", message: "failed to load editorial review"},
 		{name: "editor translation lookup", edit: true, query: "GetLatestTranslationProvenance", message: "failed to load editorial review"},
+		{name: "editor translation AI access", edit: true, corrupt: "translation access", message: "failed to load editorial review"},
 		{name: "editor corrupt evidence", edit: true, corrupt: "evidence", message: "failed to load editorial review"},
 		{name: "revision page", query: "GetPageByID", message: "failed to load page for revision review"},
 		{name: "revision version", query: "GetPageVersion", message: "failed to load recorded revision"},
@@ -49,6 +50,7 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 		{name: "revision corrupt snapshot", corrupt: "snapshot", message: "failed to compare recorded revision"},
 		{name: "revision evidence", query: "GetContentProvenance", message: "failed to load revision evidence"},
 		{name: "revision translation lookup", query: "GetLatestTranslationProvenance", message: "failed to load revision evidence"},
+		{name: "revision translation AI access", corrupt: "translation access", message: "failed to load revision evidence"},
 		{name: "revision corrupt evidence", corrupt: "evidence", message: "failed to load revision evidence"},
 		{name: "editor without AI access", edit: true},
 		{name: "missing editor", edit: true, query: "GetUserByID", missing: "editor"},
@@ -63,19 +65,19 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 			sm := testSessionManager(t)
 			user := createTestAdminUser(t, db)
 			q, ctx := store.New(db), t.Context()
-			create := func(slug string) store.Page {
+			create := func(slug, language string) store.Page {
 				t.Helper()
 				now := time.Now().UTC()
 				page, insertErr := pagewrite.Insert(ctx, q, provenance.Principal{UserID: user.ID, Source: "human"}, store.CreatePageParams{
 					Title: "Review page", Slug: slug, Body: "<p>Recorded content</p>", Status: "draft", AuthorID: user.ID,
-					LanguageCode: "en", PageType: "post", CreatedAt: now, UpdatedAt: now,
+					LanguageCode: language, PageType: "post", CreatedAt: now, UpdatedAt: now,
 				}, nil)
 				if insertErr != nil {
 					t.Fatal(insertErr)
 				}
 				return page
 			}
-			page := create("review-page")
+			page := create("review-page", "en")
 			version, err := q.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{PageID: page.ID, Revision: sql.NullInt64{Int64: page.Revision, Valid: true}})
 			if err != nil {
 				t.Fatal(err)
@@ -100,7 +102,7 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 			case "version":
 				versionID += 10000
 			case "foreign version":
-				pageID = create("another-page").ID
+				pageID = create("another-page", "en").ID
 			}
 			target := fmt.Sprintf("/admin/pages/%d", pageID)
 			if !tc.edit {
@@ -116,8 +118,31 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 			}
 			var restoreQuery string
 			var restoreValue any
+			restoreID := page.ID
 			cause := "unavailable_conflict_data"
 			switch tc.corrupt {
+			case "translation access":
+				now := time.Now().UTC()
+				_, languageErr := q.CreateLanguage(ctx, store.CreateLanguageParams{Code: "ru", Name: "Russian", NativeName: "Русский", IsActive: true, Direction: "ltr", CreatedAt: now, UpdatedAt: now})
+				if languageErr != nil {
+					t.Fatal(languageErr)
+				}
+				translated := create("translated-review", "ru")
+				work, linkErr := pagewrite.InQueriesTx(ctx, q, provenance.Principal{UserID: user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
+					if translationErr := work.LinkTranslation(ctx, page.ID, "ru", translated.ID); translationErr != nil {
+						return translationErr
+					}
+					return work.Q.SetPageAIAccess(ctx, store.SetPageAIAccessParams{PageID: translated.ID, AiEditable: true, SetBy: user.ID, SetAt: now})
+				})
+				if linkErr != nil {
+					t.Fatal(linkErr)
+				}
+				page = work.Pages[page.ID]
+				if _, err = db.ExecContext(ctx, "UPDATE page_ai_access SET ai_editable='sf12_invalid_ai_access' WHERE page_id=?", translated.ID); err != nil {
+					t.Fatal(err)
+				}
+				restoreQuery, restoreValue, restoreID = "UPDATE page_ai_access SET ai_editable=? WHERE page_id=?", true, translated.ID
+				cause = "sf12_invalid_ai_access"
 			case "evidence":
 				if _, err = db.ExecContext(ctx, `UPDATE content_provenance SET validated_json='{"translation_basis":"broken"}' WHERE id=?`, fact.ID); err != nil {
 					t.Fatal(err)
@@ -152,6 +177,12 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 				if !tc.edit {
 					fields = append(fields, fmt.Sprintf("version_id=%d", versionID))
 				}
+				if tc.corrupt == "translation access" {
+					fields = append(fields, fmt.Sprintf("load translation AI access for page %d", restoreID))
+					if strings.Count(logs.String(), tc.message) != 1 {
+						t.Errorf("translation lookup was not logged exactly once: %s", logs.String())
+					}
+				}
 				for _, field := range fields {
 					if !strings.Contains(logs.String(), field) {
 						t.Errorf("failure log lacks %q: %s", field, logs.String())
@@ -163,7 +194,7 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 				// Clearing a read fault or repairing recorded data restores the page.
 				h.queries = q
 				if restoreQuery != "" {
-					if _, err = db.ExecContext(ctx, restoreQuery, restoreValue, page.ID); err != nil {
+					if _, err = db.ExecContext(ctx, restoreQuery, restoreValue, restoreID); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -179,6 +210,9 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 			}
 			if strings.Contains(logs.String(), "level=ERROR") {
 				t.Errorf("healthy or missing-record response logged a server error: %s", logs.String())
+			}
+			if tc.corrupt == "translation access" && !strings.Contains(response.Body.String(), "<strong>ru</strong>: "+i18n.T("en", "review.ai_draft")) {
+				t.Error("repaired linked translation did not render its AI draft status")
 			}
 			testutil.AssertPageRevision(t, q, page.ID, page.Revision)
 		})

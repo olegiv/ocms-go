@@ -225,7 +225,11 @@ func Translations(ctx context.Context, q *store.Queries, page store.Page) ([]Tra
 			item.Revision = p.Revision
 			item.Title = p.Title
 			item.Status = p.Status
-			if access, accessErr := q.GetPageAIAccess(ctx, p.ID); accessErr == nil && access.AiEditable && p.Status == "draft" {
+			access, accessErr := q.GetPageAIAccess(ctx, p.ID)
+			if accessErr != nil && !errors.Is(accessErr, sql.ErrNoRows) {
+				return nil, fmt.Errorf("load translation AI access for page %d: %w", p.ID, accessErr)
+			}
+			if access.AiEditable && p.Status == "draft" {
 				item.Status = "ai_draft"
 			}
 			fact, e := q.GetLatestTranslationProvenance(ctx, store.GetLatestTranslationProvenanceParams{PageID: p.ID, Revision: p.Revision})

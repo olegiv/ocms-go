@@ -39,6 +39,9 @@ same content fingerprint as draft authoring: source text/SEO changes make a
 translation stale; publication, AI-access changes and sibling membership do
 not. Missing or historical bases are labelled explicitly.
 
+AI-access storage faults are reported as server errors. A missing AI-access
+record is valid and leaves a draft labelled as an ordinary draft.
+
 First save any text edits. For an existing translated draft, compare its
 saved text with the linked **Source to review** snapshot, acknowledge that
 it preserves the source's meaning,
