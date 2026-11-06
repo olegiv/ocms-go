@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -178,8 +179,8 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 	}
 	if err == nil && cached.ExpiresAt > c.service.now().Unix() {
 		var redirects []string
-		if json.Unmarshal([]byte(cached.RedirectUris), &redirects) != nil {
-			return registeredClient{}, problem("server_error")
+		if decodeErr := json.Unmarshal([]byte(cached.RedirectUris), &redirects); decodeErr != nil {
+			return registeredClient{}, failure(ctx, "server_error", "stored OAuth client has invalid redirect URIs", decodeErr, "client_id", id)
 		}
 		return registeredClient{
 			ID: id, Name: cached.Name, Redirects: redirects, AuthMethod: "none",
@@ -209,7 +210,7 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 		}
 		client, ok := r.Val.(registeredClient)
 		if !ok {
-			return registeredClient{}, problem("server_error")
+			return registeredClient{}, failure(ctx, "server_error", "OAuth client lookup returned an unexpected result", fmt.Errorf("unexpected result type %T", r.Val), "client_id", id)
 		}
 		return client, nil
 	}
