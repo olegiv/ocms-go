@@ -83,6 +83,16 @@ a cross-origin HTTP redirect directly from the consent POST is blocked by
 Chrome. Success and denial both use this path. Consent remains single-use,
 with fresh login/MFA and the existing ten-minute deadline.
 
+Before a consent decision, errors for dynamically registered clients stay on
+oCMS as local JSON responses. This includes `access_denied` after fresh sign-in
+when the account lacks the requested permissions: no callback link or automatic
+navigation is returned, and the pending authorization is cleared without
+signing the account out. Existing DCR clients retain this policy when new
+registration is disabled. CIMD and pre-registered clients keep their validated
+error callbacks. Explicit consent denial, successful authorization and errors
+after an explicit allow decision still use the validated callback for all
+client sources.
+
 Both authorization and token requests must contain exactly one
 `resource=https://mcp-staging.example.com/api/mcp`. Redirects must match a
 registered URI exactly. Native CIMD clients may register IP-literal loopback

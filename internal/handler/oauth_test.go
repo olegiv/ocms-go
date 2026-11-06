@@ -139,14 +139,7 @@ func TestOAuthPreLoginErrorsRespectClientSource(t *testing.T) {
 	assertLocalError := func(t *testing.T, params url.Values, code string) {
 		t.Helper()
 		rr := authRequest(env.router, http.MethodGet, "/oauth/authorize?"+params.Encode(), nil)
-		if rr.Code != http.StatusBadRequest || rr.Header().Get("Location") != "" ||
-			rr.Header().Get("Content-Type") != "application/json" {
-			t.Fatalf("expected local OAuth error, got status %d and content type %q", rr.Code, rr.Header().Get("Content-Type"))
-		}
-		var body map[string]string
-		if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil || body["error"] != code {
-			t.Fatalf("expected OAuth error %q, got %q (%v)", code, body["error"], err)
-		}
+		assertLocalOAuthProblem(t, rr, code)
 	}
 
 	t.Run("new dynamic client", func(t *testing.T) {
@@ -313,9 +306,13 @@ func TestOAuthConsentDenialPublicRoleAndUnregisteredRedirect(t *testing.T) {
 				nonce, _ := env.session(t, cookie)(oauthNonce).(string)
 				rr = authRequest(env.router, http.MethodPost, "/oauth/authorize", url.Values{"consent_token": {nonce}, "decision": {"deny"}}, cookie)
 			}
-			u := oauthCallbackResponse(t, rr)
-			if u.Query().Get("error") != "access_denied" || u.Query().Get("iss") != "https://cms.test" {
-				t.Fatalf("denied redirect=%d", rr.Code)
+			if role == model.RolePublic {
+				assertLocalOAuthProblem(t, rr, "access_denied")
+			} else {
+				u := oauthCallbackResponse(t, rr)
+				if u.Query().Get("error") != "access_denied" || u.Query().Get("iss") != "https://cms.test" {
+					t.Fatalf("denied redirect=%d", rr.Code)
+				}
 			}
 			// A refused or denied consent is single-use: nothing of the pending
 			// request may survive in the stored session.

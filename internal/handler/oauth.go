@@ -50,11 +50,7 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	req, err := h.oauth.Prepare(r.Context(), values)
 	if err != nil {
-		if redirect := h.oauth.PreLoginErrorRedirect(req, protocolErrorCode(err)); redirect != "" {
-			oauthClientRedirect(w, r, redirect)
-		} else {
-			oauth.WriteProblem(w, err)
-		}
+		h.oauthPreConsentError(w, r, req, err)
 		return
 	}
 	ctx := r.Context()
@@ -79,7 +75,7 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	if len(oauth.IntersectScopes(strings.Fields(req.Scope), user.Role)) != len(strings.Fields(req.Scope)) {
 		// Clear first: the session is saved on the response's first write.
 		h.clearOAuthConsent(r)
-		oauthClientRedirect(w, r, h.oauth.Redirect(req, url.Values{"error": {"access_denied"}}))
+		h.oauthPreConsentError(w, r, req, &oauth.Problem{Code: "access_denied"})
 		return
 	}
 	nonce := rand.Text()
@@ -87,6 +83,15 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	renderTempl(w, r, accountviews.OAuthConsent(h.accountPageContext(r, &user, "oauth.consent_title"),
 		accountviews.ConsentData{Name: req.ClientName, ClientID: req.ClientID, ClientHost: consentURLHost(req.ClientID),
 			RedirectHost: consentURLHost(req.RedirectURI), Scopes: strings.Fields(req.Scope), Nonce: nonce}))
+}
+
+// oauthPreConsentError keeps dynamic-client errors local until a consent decision.
+func (h *AuthHandler) oauthPreConsentError(w http.ResponseWriter, r *http.Request, req oauth.AuthorizationRequest, err error) {
+	if redirect := h.oauth.PreConsentErrorRedirect(req, protocolErrorCode(err)); redirect != "" {
+		oauthClientRedirect(w, r, redirect)
+	} else {
+		oauth.WriteProblem(w, err)
+	}
 }
 
 func consentURLHost(raw string) string {

@@ -86,9 +86,9 @@ func (s *Service) Prepare(ctx context.Context, values url.Values) (Authorization
 	return out, nil
 }
 
-// PreLoginErrorRedirect keeps errors for anonymously registered clients on the
-// server until the browser has gone through the fresh sign-in flow.
-func (s *Service) PreLoginErrorRedirect(req AuthorizationRequest, code string) string {
+// PreConsentErrorRedirect keeps errors for anonymously registered clients on the
+// server until the user makes an explicit consent decision, even after sign-in.
+func (s *Service) PreConsentErrorRedirect(req AuthorizationRequest, code string) string {
 	if req.client.dynamicallyRegistered {
 		return ""
 	}

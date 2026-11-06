@@ -86,7 +86,7 @@ func TestCorruptOAuthClientRedirectsAreLogged(t *testing.T) {
 					if operation == "prepare" {
 						prepared, prepareErr := f.s.Prepare(t.Context(), f.values)
 						if prepareErr != nil {
-							if !Retryable(prepareErr) || f.s.PreLoginErrorRedirect(prepared, problemCode(prepareErr)) != "" {
+							if !Retryable(prepareErr) || f.s.PreConsentErrorRedirect(prepared, problemCode(prepareErr)) != "" {
 								t.Error("corrupt cache was treated as a non-retryable or redirectable authorization error")
 							}
 							WriteProblem(response, prepareErr)
