@@ -2258,6 +2258,7 @@ func run() (runErr error) {
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager, cacheManager)
 	importExportHandler.SetUploadDir(cfg.UploadsDir)
 	importExportHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
+	importExportHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, cfg.UploadsDir)
 	docsHandler := handler.NewDocsHandler(renderer, sessionManager, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
 

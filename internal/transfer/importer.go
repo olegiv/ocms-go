@@ -35,6 +35,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/review"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -195,6 +196,8 @@ type Importer struct {
 	processor             *imaging.Processor
 	beforeMediaImport     func()
 	beforeMediaOwnerCheck func()
+	sanitizePageHTML      bool
+	blockSuspiciousMarkup bool
 }
 
 // NewImporter creates a new Importer instance.
@@ -422,6 +425,7 @@ func (i *Importer) importWithPreCommit(
 
 	// Validate the import data first
 	validationErrors := i.validate(data, opts.ImportLanguages, opts.ImportMedia || opts.ImportMediaFiles, opts.ImportUsers)
+	validationErrors = append(validationErrors, i.validatePageHTMLPolicy(data, opts)...)
 	if len(validationErrors) > 0 {
 		for _, err := range validationErrors {
 			result.AddError(err.Entity, err.ID, err.Message)
@@ -492,6 +496,7 @@ func (i *Importer) importWithPreCommit(
 		result.Updated = make(map[string]int)
 		result.Skipped = make(map[string]int)
 		result.IDMaps = make(map[string]IDMapping)
+		result.Notices = nil
 	}()
 
 	// Create queries with transaction
@@ -4323,7 +4328,7 @@ func (i *Importer) importPages(
 				result.IncrementSkipped("pages")
 				continue
 			case ConflictOverwrite:
-				pageID, existsErr = i.updateExistingPage(ctx, work, page, existing.ID, mediaMap, defaultLangCode, now)
+				pageID, existsErr = i.updateExistingPage(ctx, work, page, existing.ID, mediaMap, defaultLangCode, now, result)
 				if existsErr != nil {
 					result.AddError("page", page.Slug, existsErr.Error())
 					continue
@@ -4348,7 +4353,7 @@ func (i *Importer) importPages(
 
 		if shouldCreate {
 			var createErr error
-			pageID, createErr = i.createNewPage(ctx, work, page, userMap, mediaMap, defaultLangCode, now)
+			pageID, createErr = i.createNewPage(ctx, work, page, userMap, mediaMap, defaultLangCode, now, result)
 			if createErr != nil {
 				result.AddError("page", page.Slug, createErr.Error())
 				continue
@@ -4498,6 +4503,7 @@ func (i *Importer) updateExistingPage(
 	mediaMap map[string]int64,
 	defaultLangCode string,
 	now time.Time,
+	result *ImportResult,
 ) (int64, error) {
 
 	queries := work.Q
@@ -4506,10 +4512,11 @@ func (i *Importer) updateExistingPage(
 		return 0, err
 	}
 	f := extractPageFields(page, mediaMap, defaultLangCode)
+	body, removed := security.NormalizePageHTMLForStorage(page.Body, i.sanitizePageHTML)
 	params := pagewrite.ParamsFor(current)
 	params.Title = page.Title
 	params.Slug = page.Slug
-	params.Body = page.Body
+	params.Body = body
 	params.Status = page.Status
 	params.FeaturedImageID = f.FeaturedImageID
 	params.MetaTitle = f.MetaTitle
@@ -4539,6 +4546,7 @@ func (i *Importer) updateExistingPage(
 	if err != nil {
 		return 0, err
 	}
+	noteImportedPageHTML(result, page.Slug, removed)
 
 	return updated.ID, nil
 }
@@ -4552,6 +4560,7 @@ func (i *Importer) createNewPage(
 	mediaMap map[string]int64,
 	defaultLangCode string,
 	now time.Time,
+	result *ImportResult,
 ) (int64, error) {
 	queries := work.Q
 	// Get author ID
@@ -4579,10 +4588,11 @@ func (i *Importer) createNewPage(
 		}
 	}
 
+	body, removed := security.NormalizePageHTMLForStorage(page.Body, i.sanitizePageHTML)
 	created, err := queries.CreatePage(ctx, store.CreatePageParams{
 		Title:           page.Title,
 		Slug:            page.Slug,
-		Body:            page.Body,
+		Body:            body,
 		Status:          page.Status,
 		AuthorID:        authorID,
 		FeaturedImageID: f.FeaturedImageID,
@@ -4607,6 +4617,7 @@ func (i *Importer) createNewPage(
 	}
 
 	work.Created(created)
+	noteImportedPageHTML(result, page.Slug, removed)
 	return created.ID, nil
 }
 

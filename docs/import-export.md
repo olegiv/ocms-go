@@ -198,6 +198,26 @@ Overwriting a page replaces it as the import finds it, including a page with **A
 
 Users that do not exist yet are created with a random, unknown password; an administrator must set a new one under **Admin > Users** before they can sign in. Overwriting an existing user updates the name and role, but never grants or removes the admin role: that is changed on the user form, which asks for the acting administrator's password. Users whose role was kept are listed under **Notes** in the import result. When users are imported, an archive with a role other than `admin`, `editor`, `public` or the older name `viewer` (imported as `public`) fails validation; an import that leaves users out ignores their roles.
 
+### Page HTML policy
+
+JSON and ZIP page imports use the editor's configured HTML policy.
+`OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` checks unsanitized bodies before dry-run
+counting, database writes or ZIP media extraction. When pages are selected,
+a blocked body refuses the whole import, including when its slug would be
+skipped. Deselecting pages leaves their bodies unchecked and unwritten.
+The initial upload validation remains option-neutral so other content can
+still be selected from an archive containing blocked pages.
+
+`OCMS_SANITIZE_PAGE_HTML` sanitizes created, renamed and overwritten page
+bodies before persistence, using the same allowlist as the editor. Stored
+revisions, snapshots and later exports contain that sanitized body. The
+import result lists a page under **Notes** when unsupported markup was
+removed; harmless formatting normalization does not produce a removal note.
+Skipped pages, dry runs and rolled-back writes produce no removal notes.
+Blocking runs before sanitization, so sanitization does not make blocked
+input acceptable. With both settings disabled, this HTML policy leaves
+bodies unchanged.
+
 ### Import Order
 
 Content is imported in this order to maintain relationships:

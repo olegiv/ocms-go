@@ -2040,11 +2040,10 @@ func validatePageBodySecurityPolicy(body string, blockSuspicious bool) string {
 // OCMS_SANITIZE_PAGE_HTML on it is the sanitized body, together with what the
 // page HTML policy removed (security.RemovedMarkup) for the save message.
 func (h *PagesHandler) normalizePageBodyForStorage(raw string) (body string, removed []string) {
-	if h == nil || !h.sanitizePageHTML {
+	if h == nil {
 		return raw, nil
 	}
-	body = security.SanitizePageHTML(raw)
-	return body, security.RemovedMarkup(raw, body)
+	return security.NormalizePageHTMLForStorage(raw, h.sanitizePageHTML)
 }
 
 // removedMarkupShown caps how many removed items a save warning lists, and

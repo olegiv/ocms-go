@@ -54,6 +54,7 @@ type ImportExportHandler struct {
 	uploadDir      string
 
 	blockSuspiciousMarkup bool
+	sanitizePageHTML      bool
 }
 
 // NewImportExportHandler creates a new ImportExportHandler.
@@ -91,6 +92,8 @@ func (h *ImportExportHandler) newExporter() *transfer.Exporter {
 func (h *ImportExportHandler) newImporter() *transfer.Importer {
 	importer := transfer.NewImporter(h.queries, h.db, h.logger)
 	importer.SetUploadDir(h.configuredUploadDir())
+	importer.SetBlockSuspiciousMarkup(h.blockSuspiciousMarkup)
+	importer.SetSanitizePageHTML(h.sanitizePageHTML)
 	return importer
 }
 
@@ -105,6 +108,11 @@ func (h *ImportExportHandler) configuredUploadDir() string {
 // bodies containing suspicious HTML tokens.
 func (h *ImportExportHandler) SetBlockSuspiciousMarkup(block bool) {
 	h.blockSuspiciousMarkup = block
+}
+
+// SetSanitizePageHTML configures save-time sanitization for imported page bodies.
+func (h *ImportExportHandler) SetSanitizePageHTML(sanitize bool) {
+	h.sanitizePageHTML = sanitize
 }
 
 // ExportFormData holds data for the export form template.

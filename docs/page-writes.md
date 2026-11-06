@@ -20,6 +20,13 @@ per changed page, records the committed snapshot and provenance, and skips
 content no-ops. New pages start at revision 1. Webhooks, audit events and cache
 invalidation run after commit. Replays do not repeat mutation side effects.
 
+JSON/ZIP imports apply configured suspicious-HTML blocking to selected page
+bodies before writes, and sanitize each body at persistence when enabled.
+The editor and importer share the same storage normalization helper. Import
+revisions, snapshots and provenance follow the normalized write; a refusal
+or later transaction failure leaves no imported revision or removal notice.
+Admin overwrite and optional `BaseRevisions` conflict checks are unchanged.
+
 ## REST compatibility and editor conflicts
 
 REST v2 page responses include `revision`. `PUT /api/v2/pages/{id}` accepts

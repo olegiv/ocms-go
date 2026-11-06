@@ -156,6 +156,17 @@ func SanitizePageHTML(raw string) string {
 	return ensureNoOpener(pageHTMLSanitizer.Sanitize(raw))
 }
 
+// NormalizePageHTMLForStorage applies the configured save-time sanitizer and
+// reports removed markup, excluding harmless serialization changes. Disabled
+// sanitization preserves the original bytes.
+func NormalizePageHTMLForStorage(raw string, sanitize bool) (body string, removed []string) {
+	if !sanitize {
+		return raw, nil
+	}
+	body = SanitizePageHTML(raw)
+	return body, RemovedMarkup(raw, body)
+}
+
 // ensureNoOpener gives every link that opens a new tab (target="_blank")
 // rel="noopener", keeping any rel values the policy allowed. The input is
 // sanitizer output; tags other than such links are copied byte for byte.
