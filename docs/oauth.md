@@ -204,6 +204,10 @@ Public registrations cannot consume CIMD admission capacity. Unused expired
 clients can be removed when a source's cap is reached; existing rows can still
 refresh at capacity.
 
+DCR applies admission and capacity limits. Source addresses follow the
+configured trusted-proxy rules. Rate-limited requests return HTTP 429
+with `Retry-After`.
+
 The default hosts cover the planned Claude and ChatGPT CIMD clients. This is
 an allowlist, not proof of account compatibility. Add another exact hostname
 only for a client you intend to support. DCR is a separate opt-in fallback for

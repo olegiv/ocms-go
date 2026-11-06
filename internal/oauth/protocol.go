@@ -23,6 +23,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -430,9 +431,18 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, problem("invalid_client_metadata"))
 		return
 	}
-	if err := s.saveClient(r.Context(), c, "dcr", s.now().Add(DCRUnusedClientLifetime).Unix()); err != nil {
+	retryAfter, err := s.registerDCR(r.Context(), c, middleware.GetClientIP(r))
+	if err != nil {
 		logFault(r.Context(), "failed to register OAuth client", err)
 		WriteProblem(w, problem("temporarily_unavailable"))
+		return
+	}
+	if retryAfter > 0 {
+		seconds := int64((retryAfter + time.Second - 1) / time.Second)
+		w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{
+			"error": "rate_limit_exceeded", "error_description": "Client registration limit reached. Retry later.",
+		})
 		return
 	}
 	writeJSON(w, http.StatusCreated, c)
