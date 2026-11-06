@@ -30,8 +30,9 @@ import (
 
 type conflictQueryFault struct {
 	*sql.DB
-	query string
-	skip  int
+	query   string
+	skip    int
+	missing bool
 }
 
 func (db *conflictQueryFault) shouldFail(query string) bool {
@@ -46,6 +47,9 @@ func (db *conflictQueryFault) shouldFail(query string) bool {
 
 func (db *conflictQueryFault) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	if db.shouldFail(query) {
+		if db.missing {
+			return db.DB.QueryRowContext(ctx, "SELECT 1 WHERE 0")
+		}
 		return db.DB.QueryRowContext(ctx, "SELECT * FROM unavailable_conflict_data")
 	}
 	return db.DB.QueryRowContext(ctx, query, args...)
@@ -65,11 +69,13 @@ func TestPageConflictReadFaultPreservesSubmittedEdits(t *testing.T) {
 	for _, tc := range []struct {
 		name, query, imageField string
 		skip                    int
+		missing                 bool
 	}{
 		{name: "current page", query: "GetPageByID", skip: 1},
 		{name: "second tag", query: "GetTagByID", skip: 1},
 		{name: "categories", query: "ListCategories"},
 		{name: "editor", query: "GetUserByID"},
+		{name: "missing editor", query: "GetUserByID", missing: true},
 		{name: "featured image", query: "GetMediaByID", imageField: "featured_image_id", skip: 1},
 		{name: "Open Graph image", query: "GetMediaByID", imageField: "og_image_id"},
 	} {
@@ -143,20 +149,30 @@ func TestPageConflictReadFaultPreservesSubmittedEdits(t *testing.T) {
 			t.Cleanup(func() { slog.SetDefault(originalLogger) })
 			// Fault the query while rendering the conflict. The transaction's
 			// revision check uses a separate query handle and refuses the write.
-			h.queries = store.New(&conflictQueryFault{DB: db, query: "-- name: " + tc.query + " :", skip: tc.skip})
+			h.queries = store.New(&conflictQueryFault{DB: db, query: "-- name: " + tc.query + " :", skip: tc.skip, missing: tc.missing})
 			response := post(form)
-			if response.Code != http.StatusServiceUnavailable || response.Header().Get("Location") != "" {
-				t.Fatalf("%s fault: status=%d redirect=%q", tc.query, response.Code, response.Header().Get("Location"))
-			}
-			if !strings.Contains(logs.String(), "unavailable_conflict_data") || !strings.Contains(logs.String(), fmt.Sprintf("page_id=%d", page.ID)) {
-				t.Fatalf("fault log omitted the cause or page ID: %q", logs.String())
-			}
-			retained := recoveryFormValues(t, response.Body.String(), path)
-			if retained.Encode() != form.Encode() {
-				t.Fatalf("recovery form values = %v, want %v", retained, form)
-			}
-			if response = post(retained); response.Code != http.StatusServiceUnavailable {
-				t.Fatalf("retry during continuing fault: status=%d", response.Code)
+			retained := form
+			if tc.missing {
+				if response.Code != http.StatusUnauthorized || strings.TrimSpace(response.Body.String()) != "Account unavailable" {
+					t.Fatalf("missing editor: status=%d body=%q", response.Code, response.Body.String())
+				}
+				if strings.Contains(logs.String(), "level=ERROR") {
+					t.Fatalf("missing editor logged as a storage fault: %s", logs.String())
+				}
+			} else {
+				if response.Code != http.StatusServiceUnavailable || response.Header().Get("Location") != "" {
+					t.Fatalf("%s fault: status=%d redirect=%q", tc.query, response.Code, response.Header().Get("Location"))
+				}
+				if !strings.Contains(logs.String(), "unavailable_conflict_data") || !strings.Contains(logs.String(), fmt.Sprintf("page_id=%d", page.ID)) || !strings.Contains(logs.String(), fmt.Sprintf("user_id=%d", user.ID)) {
+					t.Fatalf("fault log omitted the cause or page/user ID: %q", logs.String())
+				}
+				retained = recoveryFormValues(t, response.Body.String(), path)
+				if retained.Encode() != form.Encode() {
+					t.Fatalf("recovery form values = %v, want %v", retained, form)
+				}
+				if response = post(retained); response.Code != http.StatusServiceUnavailable {
+					t.Fatalf("retry during continuing fault: status=%d", response.Code)
+				}
 			}
 			h.queries = q
 			response = post(retained)

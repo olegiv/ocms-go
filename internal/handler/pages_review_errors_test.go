@@ -39,6 +39,7 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 		edit                                   bool
 	}{
 		{name: "editor access", edit: true, query: "GetPageAIAccess", message: "failed to load page AI access"},
+		{name: "editor account", edit: true, query: "GetUserByID", message: "failed to load page editor account"},
 		{name: "editor evidence", edit: true, query: "GetContentProvenance", message: "failed to load editorial review"},
 		{name: "editor translation lookup", edit: true, query: "GetLatestTranslationProvenance", message: "failed to load editorial review"},
 		{name: "editor corrupt evidence", edit: true, corrupt: "evidence", message: "failed to load editorial review"},
@@ -50,6 +51,7 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 		{name: "revision translation lookup", query: "GetLatestTranslationProvenance", message: "failed to load revision evidence"},
 		{name: "revision corrupt evidence", corrupt: "evidence", message: "failed to load revision evidence"},
 		{name: "editor without AI access", edit: true},
+		{name: "missing editor", edit: true, query: "GetUserByID", missing: "editor"},
 		{name: "first revision without predecessor"},
 		{name: "missing page", missing: "page"},
 		{name: "missing version", missing: "version"},
@@ -110,7 +112,7 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 				return response
 			}
 			if tc.query != "" {
-				h.queries = store.New(&conflictQueryFault{DB: db, query: "-- name: " + tc.query + " :"})
+				h.queries = store.New(&conflictQueryFault{DB: db, query: "-- name: " + tc.query + " :", missing: tc.missing == "editor"})
 			}
 			var restoreQuery string
 			var restoreValue any
@@ -134,6 +136,8 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 			wantStatus := http.StatusOK
 			if tc.message != "" {
 				wantStatus = http.StatusInternalServerError
+			} else if tc.missing == "editor" {
+				wantStatus = http.StatusUnauthorized
 			} else if tc.missing != "" {
 				wantStatus = http.StatusNotFound
 			}
@@ -142,6 +146,9 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 			}
 			if tc.message != "" {
 				fields := []string{"level=ERROR", tc.message, "error=", cause, fmt.Sprintf("page_id=%d", pageID)}
+				if tc.query == "GetUserByID" {
+					fields = append(fields, fmt.Sprintf("user_id=%d", user.ID))
+				}
 				if !tc.edit {
 					fields = append(fields, fmt.Sprintf("version_id=%d", versionID))
 				}
@@ -179,10 +186,10 @@ func TestPageReviewReadFailuresAreLogged(t *testing.T) {
 }
 
 // TestPageReviewServerErrorsUseLogging keeps review-load errors on the shared
-// logging helpers. The editor's existing account refusal is the only allowed
-// direct http.Error call; logging helpers must carry the cause and record IDs.
+// logging helpers. Direct account refusals require an explicit missing-row
+// guard; logging helpers must carry the cause and record IDs.
 func TestPageReviewServerErrorsUseLogging(t *testing.T) {
-	for file, function := range map[string]string{"pages.go": "EditForm", "pages_review.go": "RevisionReview"} {
+	for file, function := range map[string]string{"pages.go": "EditForm", "pages_review.go": "RevisionReview", "pages_write.go": "pageConflict"} {
 		parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -194,6 +201,40 @@ func TestPageReviewServerErrorsUseLogging(t *testing.T) {
 				continue
 			}
 			found = true
+			missingRowCalls := make(map[*ast.CallExpr]bool)
+			for node := range ast.Preorder(fn.Body) {
+				branch, ok := node.(*ast.IfStmt)
+				if !ok {
+					continue
+				}
+				condition, ok := branch.Cond.(*ast.CallExpr)
+				if !ok || len(condition.Args) != 2 {
+					continue
+				}
+				predicate, ok := condition.Fun.(*ast.SelectorExpr)
+				if !ok || predicate.Sel.Name != "Is" {
+					continue
+				}
+				pkg, ok := predicate.X.(*ast.Ident)
+				if !ok || pkg.Name != "errors" {
+					continue
+				}
+				missing, ok := condition.Args[1].(*ast.SelectorExpr)
+				if !ok || missing.Sel.Name != "ErrNoRows" {
+					continue
+				}
+				pkg, ok = missing.X.(*ast.Ident)
+				if !ok || pkg.Name != "sql" {
+					continue
+				}
+				for _, statement := range branch.Body.List {
+					if expression, ok := statement.(*ast.ExprStmt); ok {
+						if call, ok := expression.X.(*ast.CallExpr); ok {
+							missingRowCalls[call] = true
+						}
+					}
+				}
+			}
 			ast.Inspect(fn.Body, func(node ast.Node) bool {
 				call, ok := node.(*ast.CallExpr)
 				if !ok {
@@ -202,8 +243,8 @@ func TestPageReviewServerErrorsUseLogging(t *testing.T) {
 				if selected, ok := call.Fun.(*ast.SelectorExpr); ok && selected.Sel.Name == "Error" && len(call.Args) == 3 {
 					if pkg, ok := selected.X.(*ast.Ident); ok && pkg.Name == "http" {
 						status, ok := call.Args[2].(*ast.SelectorExpr)
-						if function != "EditForm" || !ok || status.Sel.Name != "StatusUnauthorized" {
-							t.Errorf("%s: use a logging helper for review-load failures", function)
+						if function == "RevisionReview" || !ok || status.Sel.Name != "StatusUnauthorized" || !missingRowCalls[call] {
+							t.Errorf("%s: use logging helpers for faults and guard account refusals with errors.Is(err, sql.ErrNoRows)", function)
 						}
 					}
 				}
@@ -222,7 +263,7 @@ func TestPageReviewServerErrorsUseLogging(t *testing.T) {
 					}
 				}
 				for _, key := range []string{"error", "page_id", "version_id"} {
-					if key == "version_id" && function == "EditForm" {
+					if key == "version_id" && function != "RevisionReview" {
 						continue
 					}
 					if !keys[strconv.Quote(key)] {

@@ -779,8 +779,12 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, userErr := h.queries.GetUserByID(r.Context(), middleware.GetUserID(r))
-	if userErr != nil {
+	if errors.Is(userErr, sql.ErrNoRows) {
 		http.Error(w, "Account unavailable", http.StatusUnauthorized)
+		return
+	}
+	if userErr != nil {
+		logAndInternalError(w, "failed to load page editor account", "error", userErr, "page_id", id, "user_id", middleware.GetUserID(r))
 		return
 	}
 
