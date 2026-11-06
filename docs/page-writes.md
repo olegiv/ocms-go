@@ -57,6 +57,13 @@ again. If a temporary read error prevents loading the conflict form, the editor
 keeps the submission on a recovery screen. **Retry with these edits** submits
 the same values and revision for another check.
 
+The guarded admin create and update helpers require a `pageFormWrite` context.
+They reject a missing editor and recheck the account's current editor/admin
+role inside the write transaction. Updates always require the displayed base
+revision. Runtime callers use `formWrite` to include relationship changes and
+publication validation in that same transaction; the call-site drift test
+continues to enforce this even though the context argument is required.
+
 The owner or an administrator can toggle **Allow AI edits**. That toggle
 also advances the page revision when its value changes. A save that leaves it
 as it was does not touch `page_ai_access`, so `set_by` and `set_at` keep naming

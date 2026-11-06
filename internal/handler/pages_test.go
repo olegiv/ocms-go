@@ -1293,7 +1293,7 @@ func TestPageWritesRefuseLanguagePrefixInsideTheirTransaction(t *testing.T) {
 	_, err := h.createPageGuarded(ctx, store.CreatePageParams{
 		Title: "Engineering", Slug: "eng", Body: "Content", Status: "published",
 		AuthorID: user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
-	})
+	}, pageFormWrite{UserID: user.ID})
 	if !errors.Is(err, errPageRouteTaken) {
 		t.Fatalf("createPageGuarded() error = %v, want the write itself to refuse", err)
 	}
@@ -1304,14 +1304,14 @@ func TestPageWritesRefuseLanguagePrefixInsideTheirTransaction(t *testing.T) {
 	page, err := h.createPageGuarded(ctx, store.CreatePageParams{
 		Title: "Engineering", Slug: "engineering", Body: "Content", Status: "published",
 		AuthorID: user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
-	})
+	}, pageFormWrite{UserID: user.ID})
 	if err != nil {
 		t.Fatalf("createPageGuarded() for a free slug error = %v", err)
 	}
 	_, err = h.updatePageGuarded(ctx, store.UpdatePageParams{
 		ID: page.ID, Title: page.Title, Slug: "eng", Body: page.Body, Status: page.Status,
 		LanguageCode: page.LanguageCode, UpdatedAt: now,
-	}, page.Slug)
+	}, page.Slug, pageFormWrite{UserID: user.ID, BaseRevision: &page.Revision})
 	if !errors.Is(err, errPageRouteTaken) {
 		t.Fatalf("updatePageGuarded() error = %v, want the rename refused by the write", err)
 	}

@@ -1780,6 +1780,13 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 // path segment, discovered inside the write's own transaction.
 var errPageRouteTaken = errors.New("page route is taken by a language prefix")
 
+// pageFormWrite carries the editor, displayed revision and form-related work.
+type pageFormWrite struct {
+	UserID       int64
+	BaseRevision *int64
+	Related      func(*pagewrite.Tx, store.Page) error
+}
+
 // createPageGuarded writes a page only if no active language owns its slug,
 // deciding both inside one transaction.
 //
@@ -1789,20 +1796,7 @@ var errPageRouteTaken = errors.New("page route is taken by a language prefix")
 // namespace, and both writes land. Reading the languages through this
 // transaction ties the answer to the write, so SQLite refuses the second
 // writer rather than interleaving them.
-type pageFormWrite struct {
-	UserID       int64
-	BaseRevision *int64
-	Related      func(*pagewrite.Tx, store.Page) error
-}
-
-func (h *PagesHandler) createPageGuarded(ctx context.Context, params store.CreatePageParams, options ...pageFormWrite) (store.Page, error) {
-	option := pageFormWrite{UserID: params.AuthorID}
-	if len(options) > 0 {
-		option = options[0]
-		if option.UserID <= 0 {
-			return store.Page{}, errors.New("authenticated editor required")
-		}
-	}
+func (h *PagesHandler) createPageGuarded(ctx context.Context, params store.CreatePageParams, option pageFormWrite) (store.Page, error) {
 	return h.writePageGuarded(ctx, params.Slug, "", option, func(work *pagewrite.Tx) (store.Page, error) {
 		page, err := work.Q.CreatePage(ctx, params)
 		if err == nil {
@@ -1812,16 +1806,9 @@ func (h *PagesHandler) createPageGuarded(ctx context.Context, params store.Creat
 	})
 }
 
-func (h *PagesHandler) updatePageGuarded(ctx context.Context, params store.UpdatePageParams, currentSlug string, options ...pageFormWrite) (store.Page, error) {
-	var option pageFormWrite
-	if len(options) > 0 {
-		option = options[0]
-		if option.UserID <= 0 {
-			return store.Page{}, errors.New("authenticated editor required")
-		}
-	}
+func (h *PagesHandler) updatePageGuarded(ctx context.Context, params store.UpdatePageParams, currentSlug string, option pageFormWrite) (store.Page, error) {
 	return h.writePageGuarded(ctx, params.Slug, currentSlug, option, func(work *pagewrite.Tx) (store.Page, error) {
-		if _, err := work.Track(ctx, params.ID, option.BaseRevision, len(options) > 0); err != nil {
+		if _, err := work.Track(ctx, params.ID, option.BaseRevision, true); err != nil {
 			return store.Page{}, err
 		}
 		return work.Q.UpdatePage(ctx, params)
@@ -1829,12 +1816,13 @@ func (h *PagesHandler) updatePageGuarded(ctx context.Context, params store.Updat
 }
 
 func (h *PagesHandler) writePageGuarded(ctx context.Context, slug, currentSlug string, option pageFormWrite, write func(*pagewrite.Tx) (store.Page, error)) (store.Page, error) {
+	if option.UserID <= 0 {
+		return store.Page{}, pagewrite.ErrEditorRequired
+	}
 	var page store.Page
 	work, err := pagewrite.InTx(ctx, h.db, provenance.Principal{UserID: option.UserID, Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
-		if option.UserID > 0 {
-			if err := pagewrite.RequireEditor(ctx, work.Q, option.UserID); err != nil {
-				return err
-			}
+		if err := pagewrite.RequireEditor(ctx, work.Q, option.UserID); err != nil {
+			return err
 		}
 		if slug != currentSlug {
 			if err := pagewrite.SlugAvailable(ctx, work.Q, slug, 0); err != nil {

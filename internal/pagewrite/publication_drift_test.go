@@ -174,9 +174,9 @@ func TestEveryPublicationPathIsInventoriedAndValidated(t *testing.T) {
 }
 
 // TestPageFormWritersAlwaysCarryTheFormWrite requires every runtime call of the
-// guarded admin writers to pass h.formWrite(...) as its options argument: the
-// writers accept none and then skip the publication validation that formWrite's
-// Related callback runs.
+// guarded admin writers to pass h.formWrite(...) as their required context.
+// A pageFormWrite literal satisfies the signature but can omit the Related
+// callback that validates publication, so this guard is still needed.
 func TestPageFormWritersAlwaysCarryTheFormWrite(t *testing.T) {
 	set := token.NewFileSet()
 	entries, err := filepath.Glob(filepath.Join("..", "handler", "*.go"))
