@@ -28,7 +28,7 @@ func (m *Module) authorizeDraftCall(ctx context.Context, q *store.Queries, id *i
 	}
 	active, err := q.IsModuleActive(ctx, ModuleName)
 	if err != nil {
-		return err
+		return m.credentialFault(ctx, "failed to check MCP draft module status", err, "user_id", id.userID)
 	}
 	if !active {
 		return v2.NewError(v2.ErrForbidden, "MCP server is disabled")
@@ -36,7 +36,7 @@ func (m *Module) authorizeDraftCall(ctx context.Context, q *store.Queries, id *i
 	// Read policy through the supplied transaction handle, never a cached server snapshot.
 	settings, err := loadSettings(ctx, q.DBHandle())
 	if err != nil {
-		return err
+		return m.credentialFault(ctx, "failed to load MCP draft authorization settings", err, "user_id", id.userID)
 	}
 	if !settings.DraftToolsEnabled {
 		return &v2.Error{Kind: v2.ErrForbidden, MachineCode: "draft_tools_disabled", Msg: "An administrator must enable draft authoring"}
@@ -48,7 +48,7 @@ func (m *Module) authorizeDraftCall(ctx context.Context, q *store.Queries, id *i
 	if key != nil {
 		allowed, policyErr := middleware.RecheckAPIKeyPolicy(ctx, q, *key, id.sourceIP)
 		if policyErr != nil {
-			return policyErr
+			return m.credentialFault(ctx, "failed to re-check MCP API key policy", policyErr, "api_key_id", key.ID, "user_id", id.userID)
 		}
 		if !allowed {
 			return credentialUnavailable()
@@ -100,8 +100,8 @@ func credentialUnavailable() error {
 	return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
 }
 
-// credentialFault logs a storage fault met while checking the credential and
-// reports it as retryable, like recheckError does for the OAuth re-check.
+// credentialFault logs a storage fault while checking credentials or their
+// authorization policy and reports it as retryable, like the OAuth re-check.
 func (m *Module) credentialFault(ctx context.Context, msg string, err error, attrs ...any) error {
 	m.logger.ErrorContext(ctx, msg, append([]any{"error", err}, attrs...)...)
 	return retryableCredentialCheck(err)
@@ -138,7 +138,7 @@ func (m *Module) authoringService(ctx context.Context, call *toolCall) (*authori
 	service.CheckPolicy = func(ctx context.Context, q *store.Queries) error {
 		settings, err := loadSettings(ctx, q.DBHandle())
 		if err != nil {
-			return err
+			return m.credentialFault(ctx, "failed to re-check MCP draft write settings", err, "user_id", call.identity.userID)
 		}
 		if linkPolicy(settings) != linkPolicy(call.settings) || settings.AllowDrafts != call.settings.AllowDrafts {
 			return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Draft link policy changed; retry with the same request_id"}
