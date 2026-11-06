@@ -75,8 +75,8 @@ func (s *Service) CreateWith(ctx context.Context, a v2.Actor, in CreatePageBody,
 		return nil, forbiddenFields()
 	}
 	opt.rawBody = in.Body
-	return s.write(ctx, a, opt, "create_page", in, func(service *Service, actor v2.Actor, work *pagewrite.Tx) (*Page, error) {
-		page, err := service.create(ctx, actor, in, work)
+	return s.write(ctx, a, opt, "create_page", in, func(svc *Service, actor v2.Actor, work *pagewrite.Tx) (*Page, error) {
+		page, err := svc.create(ctx, actor, in, work)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (s *Service) UpdateWith(ctx context.Context, a v2.Actor, id int64, in Updat
 		opt.rawBody = *in.Body
 	}
 	input := updateRequest{PageID: id, Changes: in}
-	return s.write(ctx, a, opt, "update_page", input, func(service *Service, actor v2.Actor, work *pagewrite.Tx) (*Page, error) {
+	return s.write(ctx, a, opt, "update_page", input, func(svc *Service, actor v2.Actor, work *pagewrite.Tx) (*Page, error) {
 		if opt.ForceDraft {
 			if err := authorizeDraft(ctx, work.Q, a.ActingUserID(), id); err != nil {
 				return nil, err
@@ -117,7 +117,7 @@ func (s *Service) UpdateWith(ctx context.Context, a v2.Actor, id int64, in Updat
 				return nil, writeError(pagewrite.ErrRevisionRequired)
 			}
 		}
-		return service.update(ctx, actor, id, in, work, opt.ForceDraft)
+		return svc.update(ctx, actor, id, in, work, opt.ForceDraft)
 	})
 }
 
