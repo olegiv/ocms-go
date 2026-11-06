@@ -1,0 +1,1 @@
+../shared/stacks/go/hooks/go-strict-lint.sh

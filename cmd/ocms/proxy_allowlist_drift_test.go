@@ -7,9 +7,11 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -167,4 +169,152 @@ func rulesByTool(rules []string) map[string][]string {
 // Go CI workflow checks it out and sets OCMS_REQUIRE_SHARED_TOOLING=1.
 func sharedToolingRequired() bool {
 	return os.Getenv("OCMS_REQUIRE_SHARED_TOOLING") == "1"
+}
+
+// TestCodeQualityProxyRequiresStrictLint exercises the real proxy and stack
+// hook with a stub linter and Claude executable. A-T1 let a proxy session
+// report success without ever running strict lint. Findings, unavailable
+// tooling and broken installation must stop before Claude can report a pass.
+func TestCodeQualityProxyRequiresStrictLint(t *testing.T) {
+	root := filepath.Join("..", "..")
+	proxy, err := os.ReadFile(filepath.Join(root, "scripts", "codex", "proxy-claude-command.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook, err := os.ReadFile(filepath.Join(root, ".claude", "hooks", "go-strict-lint.sh"))
+	if errors.Is(err, fs.ErrNotExist) && !sharedToolingRequired() {
+		if _, sharedErr := os.Stat(filepath.Join(root, ".claude", "shared", ".git")); errors.Is(sharedErr, fs.ErrNotExist) {
+			t.Skip("the .claude/shared submodule is not checked out")
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name       string
+		command    string
+		linterExit int
+		claudeExit int
+		damage     string
+		wantExit   int
+		wantCalls  string
+		wantOutput string
+	}{
+		{name: "clean", command: "/code-quality", wantCalls: "lint\nclaude\n"},
+		{name: "alias", command: "code-quality", wantCalls: "lint\nclaude\n"},
+		{name: "findings", command: "/code-quality", linterExit: 1, wantExit: 1, wantCalls: "lint\n", wantOutput: "strict fixture finding"},
+		{name: "linter failure", command: "/code-quality", linterExit: 7, wantExit: 3, wantCalls: "lint\n", wantOutput: "could not run"},
+		{name: "missing link", command: "/code-quality", damage: "link", wantExit: 3, wantOutput: "requires executable"},
+		{name: "missing target", command: "/code-quality", damage: "target", wantExit: 3, wantOutput: "requires executable"},
+		{name: "nonexecutable", command: "/code-quality", damage: "mode", wantExit: 3, wantOutput: "requires executable"},
+		{name: "unexpected hook exit", command: "/code-quality", damage: "exit", wantExit: 3, wantOutput: "exit 127"},
+		{name: "Claude failure", command: "/code-quality", claudeExit: 9, wantExit: 9, wantCalls: "lint\nclaude\n"},
+		{name: "other command", command: "/security-audit", linterExit: 1, wantCalls: "claude\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "repository with spaces")
+			write := func(name, content string, mode fs.FileMode) {
+				t.Helper()
+				path := filepath.Join(dir, name)
+				if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o750); mkdirErr != nil {
+					t.Fatal(mkdirErr)
+				}
+				if writeErr := os.WriteFile(path, []byte(content), mode); writeErr != nil {
+					t.Fatal(writeErr)
+				}
+			}
+			write("scripts/codex/proxy-claude-command.sh", string(proxy), 0o755)
+			write(".claude/shared/stacks/go/hooks/go-strict-lint.sh", string(hook), 0o755)
+			write("go.mod", "module example.test/strict\n\ngo 1.22\n", 0o600)
+			write("fixture.go", "package strict\n", 0o600)
+			write("calls", "", 0o600)
+			write("args", "", 0o600)
+			write("bin/linter", `#!/bin/sh
+[ "$PWD" -ef "$STRICT_TEST_REPO" ] || exit 8
+printf 'lint\n' >> "$STRICT_TEST_REPO/calls"
+if [ "$STRICT_TEST_LINT_EXIT" = 1 ]; then echo 'strict fixture finding (errcheck)'; fi
+exit "$STRICT_TEST_LINT_EXIT"
+`, 0o755)
+			write("bin/claude", `#!/bin/sh
+if [ "$STRICT_TEST_COMMAND" = code-quality ]; then
+  [ "$PWD" -ef "$STRICT_TEST_REPO" ] || exit 8
+fi
+printf 'claude\n' >> "$STRICT_TEST_REPO/calls"
+printf '%s\n' "$@" > "$STRICT_TEST_REPO/args"
+exit "$STRICT_TEST_CLAUDE_EXIT"
+`, 0o755)
+			link := filepath.Join(dir, ".claude", "hooks", "go-strict-lint.sh")
+			if mkdirErr := os.MkdirAll(filepath.Dir(link), 0o750); mkdirErr != nil {
+				t.Fatal(mkdirErr)
+			}
+			if linkErr := os.Symlink("../shared/stacks/go/hooks/go-strict-lint.sh", link); linkErr != nil {
+				t.Fatal(linkErr)
+			}
+			target := filepath.Join(dir, ".claude", "shared", "stacks", "go", "hooks", "go-strict-lint.sh")
+			switch tt.damage {
+			case "link":
+				if removeErr := os.Remove(link); removeErr != nil {
+					t.Fatal(removeErr)
+				}
+			case "target":
+				if removeErr := os.Remove(target); removeErr != nil {
+					t.Fatal(removeErr)
+				}
+			case "mode":
+				if modeErr := os.Chmod(target, 0o600); modeErr != nil {
+					t.Fatal(modeErr)
+				}
+			case "exit":
+				write(".claude/shared/stacks/go/hooks/go-strict-lint.sh", "#!/bin/sh\nexit 127\n", 0o755)
+			}
+			env := []string{
+				"PATH=" + filepath.Join(dir, "bin") + ":/usr/bin:/bin",
+				"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+				"GO_STRICT_LINT_BIN=" + filepath.Join(dir, "bin", "linter"),
+				"STRICT_TEST_REPO=" + dir,
+				"STRICT_TEST_COMMAND=" + strings.TrimPrefix(tt.command, "/"),
+				"STRICT_TEST_LINT_EXIT=" + strconv.Itoa(tt.linterExit),
+				"STRICT_TEST_CLAUDE_EXIT=" + strconv.Itoa(tt.claudeExit),
+			}
+			initRepo := exec.Command("git", "init", "--quiet", dir)
+			initRepo.Env = env
+			if out, initErr := initRepo.CombinedOutput(); initErr != nil {
+				t.Fatalf("initializing fixture: %v\n%s", initErr, out)
+			}
+			command := exec.Command("bash", filepath.Join(dir, "scripts", "codex", "proxy-claude-command.sh"), tt.command, "scope note")
+			command.Dir = t.TempDir() // the proxy must find its own checkout
+			command.Env = env
+			out, runErr := command.CombinedOutput()
+			exitCode := 0
+			if runErr != nil {
+				var exitErr *exec.ExitError
+				if !errors.As(runErr, &exitErr) {
+					t.Fatal(runErr)
+				}
+				exitCode = exitErr.ExitCode()
+			}
+			if exitCode != tt.wantExit || !strings.Contains(string(out), tt.wantOutput) {
+				t.Errorf("exit %d, want %d and output containing %q:\n%s", exitCode, tt.wantExit, tt.wantOutput, out)
+			}
+			calls, readErr := os.ReadFile(filepath.Join(dir, "calls"))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if string(calls) != tt.wantCalls {
+				t.Errorf("execution order %q, want %q", calls, tt.wantCalls)
+			}
+			args, argsErr := os.ReadFile(filepath.Join(dir, "args"))
+			if argsErr != nil {
+				t.Fatal(argsErr)
+			}
+			if strings.Contains(tt.wantCalls, "claude") {
+				if !strings.Contains(string(args), "--permission-mode\ndontAsk\n") || !strings.Contains(string(args), "-p\n/"+strings.TrimPrefix(tt.command, "/")+" scope note\n") {
+					t.Errorf("proxy lost the permission mode or request arguments: %s", args)
+				}
+				if strings.TrimPrefix(tt.command, "/") == "code-quality" && !strings.Contains(string(args), "--append-system-prompt\nThe repository proxy already ran .claude/hooks/go-strict-lint.sh --check successfully (exit 0).") {
+					t.Error("Claude was not given the completed strict-lint result")
+				}
+			}
+		})
+	}
 }

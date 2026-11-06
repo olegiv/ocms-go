@@ -7,6 +7,9 @@ Usage:
   ./scripts/codex/proxy-claude-command.sh /command [args...]
 
 Commands: /commit-prepare, /commit-do, /code-quality, /security-audit
+
+/code-quality runs the repository's strict lint check before Claude.
+Exit 1 means findings; exit 3 means the check could not run.
 EOT
 }
 
@@ -75,4 +78,32 @@ if [[ $# -gt 0 ]]; then
 fi
 
 echo "Proxying to Claude command: $prompt"
-exec claude --permission-mode dontAsk --allowedTools "${tools[@]}" -p "$prompt"
+claude_args=(--permission-mode dontAsk --allowedTools "${tools[@]}" -p "$prompt")
+if [[ "$slash_command" == /code-quality ]]; then
+  # The shared command's variable-based hook invocation is not auto-approved.
+  # Run the fixed local check here so dontAsk cannot silently omit it. This
+  # grants no extra shell or install permissions to the Claude session.
+  project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  strict_hook="$project_dir/.claude/hooks/go-strict-lint.sh"
+  if [[ ! -x "$strict_hook" ]]; then
+    echo "Error: /code-quality requires executable .claude/hooks/go-strict-lint.sh; initialize .claude/shared and restore the hook link." >&2
+    exit 3
+  fi
+  echo "== Strict lint (touched Go files) =="
+  strict_status=0
+  cd "$project_dir"
+  "$strict_hook" --check || strict_status=$?
+  case "$strict_status" in
+    0) ;;
+    1)
+      echo "Error: strict lint found issues; fix them before rerunning /code-quality." >&2
+      exit 1
+      ;;
+    *)
+      echo "Error: strict lint could not run (exit $strict_status); /code-quality is incomplete." >&2
+      exit 3
+      ;;
+  esac
+  claude_args+=(--append-system-prompt 'The repository proxy already ran .claude/hooks/go-strict-lint.sh --check successfully (exit 0). Use that result for the strict touched-file lint step; do not rerun the fallback hook invocation. Continue with the remaining /code-quality checks and report any checks that cannot run.')
+fi
+exec claude "${claude_args[@]}"
