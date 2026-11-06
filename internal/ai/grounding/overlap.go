@@ -20,8 +20,8 @@ type Overlap struct {
 // CheckOverlap compares bounded word shingles against example references only.
 // Short quotations and source/parent references do not trigger this style warning.
 func CheckOverlap(body string, references []Reference, language string) ([]Overlap, []draft.Issue) {
-	hits := []Overlap{}
-	issues := []draft.Issue{}
+	var hits []Overlap
+	var issues []draft.Issue
 	candidate := shingles(body)
 	if len(candidate) < 40 {
 		return hits, issues

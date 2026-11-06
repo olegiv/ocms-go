@@ -169,7 +169,7 @@ func (s *Service) validation(ctx context.Context, result draft.Result, body stri
 			v.Issues = append(v.Issues, issues...)
 		}
 	}
-	examples := []grounding.Reference{}
+	var examples []grounding.Reference
 	seen := map[int64]store.Page{}
 	for _, ref := range result.References {
 		p, err := r.Resolve(ctx, ref.Ref)
@@ -235,7 +235,7 @@ func (s *Service) inheritReferences(ctx context.Context, p store.Page, v *Valida
 	if err != nil {
 		return nil, err
 	}
-	examples := []grounding.Reference{}
+	var examples []grounding.Reference
 	for _, ref := range previous.References {
 		if ref.Role != "example" {
 			continue

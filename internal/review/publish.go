@@ -91,6 +91,7 @@ func ValidatePublication(ctx context.Context, q *store.Queries, page store.Page)
 	content := draft.Content{ID: page.ID, Title: page.Title, Slug: page.Slug, Summary: page.Summary, LanguageCode: page.LanguageCode, PageType: page.PageType, BodyHTML: page.Body, MetaTitle: page.MetaTitle, MetaDescription: page.MetaDescription}
 	changes := draft.Changes{Title: draft.Set(page.Title), Summary: draft.Set(page.Summary), BodyMarkdown: draft.Set(derived.Markdown), MetaTitle: draft.SetNullable(page.MetaTitle), MetaDescription: draft.SetNullable(page.MetaDescription)}
 	changes.Slug = draft.Set(page.Slug)
+	// Keep an empty JSON array: draft validation rejects null collections.
 	keywords := []string{}
 	if page.MetaKeywords != "" {
 		for _, word := range strings.Split(page.MetaKeywords, ",") {
