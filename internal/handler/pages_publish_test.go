@@ -174,7 +174,7 @@ func TestRestorePublishedAIContentRunsSharedHardValidation(t *testing.T) {
 	user := createTestAdminUser(t, db)
 	q := store.New(db)
 	now := time.Now()
-	p, err := pagewrite.Insert(t.Context(), q, provenance.Principal{UserID: user.ID, Source: "api"}, store.CreatePageParams{Title: "Current valid title", Slug: "r16-restore", Body: "<p>Current valid body</p>", Status: "published", AuthorID: user.ID, LanguageCode: "en", PageType: "post", CreatedAt: now, UpdatedAt: now}, func(tx *pagewrite.Tx, p store.Page) error {
+	p, err := pagewrite.Insert(t.Context(), q, provenance.Principal{UserID: user.ID, Source: "api", APIKeyID: 1}, store.CreatePageParams{Title: "Current valid title", Slug: "r16-restore", Body: "<p>Current valid body</p>", Status: "published", AuthorID: user.ID, LanguageCode: "en", PageType: "post", CreatedAt: now, UpdatedAt: now}, func(tx *pagewrite.Tx, p store.Page) error {
 		tx.SetEvidence(provenance.Evidence{Validated: []byte(`{"prompt_contract_version":"1.2.0","site_url":"https://example.com"}`)})
 		return tx.Q.SetPageAIAccess(t.Context(), store.SetPageAIAccessParams{PageID: p.ID, AiEditable: true, SetBy: user.ID, SetAt: now})
 	})

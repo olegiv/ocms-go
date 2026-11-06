@@ -74,7 +74,7 @@ func TestRefusedPageWritesExplainWhy(t *testing.T) {
 	now := time.Now()
 	aiPage := func(title, slug, status string) store.Page {
 		t.Helper()
-		p, insertErr := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: user.ID, Source: "api"}, store.CreatePageParams{
+		p, insertErr := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: user.ID, Source: "api", APIKeyID: 1}, store.CreatePageParams{
 			Title: title, Slug: slug, Body: "<p>Body</p>", Status: status, AuthorID: user.ID, LanguageCode: "en",
 			PageType: "post", CreatedAt: now, UpdatedAt: now,
 		}, func(tx *pagewrite.Tx, p store.Page) error {

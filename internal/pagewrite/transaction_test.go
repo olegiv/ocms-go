@@ -62,7 +62,7 @@ func TestRevisionCoversRelationsNoOpsAndFreshProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	work, err := pagewrite.InTx(ctx, f.db, provenance.Principal{UserID: f.user.ID, Source: "oauth", OAuthGrantID: "authenticated-grant"}, func(work *pagewrite.Tx) error {
+	work, err := pagewrite.InTx(ctx, f.db, provenance.Principal{UserID: f.user.ID, Source: "oauth", OAuthGrantID: "authenticated-grant", OAuthClientID: "authenticated-client"}, func(work *pagewrite.Tx) error {
 		if _, trackErr := work.Track(ctx, f.page.ID, &base, true); trackErr != nil {
 			return trackErr
 		}
@@ -135,7 +135,11 @@ func TestCASRaceAndConflictFields(t *testing.T) {
 	for _, source := range []string{"human", "oauth"} {
 		wg.Go(func() {
 			<-start
-			_, err := pagewrite.InTx(ctx, f.db, provenance.Principal{UserID: f.user.ID, Source: source}, func(work *pagewrite.Tx) error {
+			principal := provenance.Principal{UserID: f.user.ID, Source: source}
+			if source == "oauth" {
+				principal.OAuthGrantID, principal.OAuthClientID = "grant-1", "client-1"
+			}
+			_, err := pagewrite.InTx(ctx, f.db, principal, func(work *pagewrite.Tx) error {
 				current, err := work.Track(ctx, f.page.ID, &f.page.Revision, true)
 				if err != nil {
 					return err

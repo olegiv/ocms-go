@@ -110,7 +110,14 @@ func (f *retentionFixture) page(spec pageSpec) int64 {
 		if _, err = f.q.CreateCompletePageVersion(f.ctx, store.CreateCompletePageVersionParams{PageID: page.ID, Title: "Page", Body: "<p>Body</p>", ChangedBy: spec.author, CreatedAt: now, Revision: sql.NullInt64{Int64: revision, Valid: true}, SnapshotJson: sql.NullString{String: `{"title":"Page"}`, Valid: true}}); err != nil {
 			f.t.Fatal(err)
 		}
-		err = f.q.CreateContentProvenance(f.ctx, store.CreateContentProvenanceParams{PageID: page.ID, Revision: revision, UserID: sql.NullInt64{Int64: spec.author, Valid: true}, Source: spec.source(revision), Transport: "mcp", ValidatedJson: spec.evidence(revision), ReportedJson: `{}`, CreatedAt: now})
+		fact := store.CreateContentProvenanceParams{PageID: page.ID, Revision: revision, UserID: sql.NullInt64{Int64: spec.author, Valid: true}, Source: spec.source(revision), Transport: "mcp", ValidatedJson: spec.evidence(revision), ReportedJson: `{}`, CreatedAt: now}
+		switch fact.Source {
+		case "api":
+			fact.ApiKeyID = sql.NullInt64{Int64: 1, Valid: true}
+		case "oauth":
+			fact.OauthGrantID, fact.OauthClientID = "grant-1", "client-1"
+		}
+		err = f.q.CreateContentProvenance(f.ctx, fact)
 		if err != nil {
 			f.t.Fatal(err)
 		}

@@ -25,6 +25,28 @@ type Principal struct {
 	Transport     string
 }
 
+// ErrInvalidPrincipal refuses inconsistent identity before recording a revision.
+var ErrInvalidPrincipal = errors.New("invalid provenance principal")
+
+func (p Principal) valid() bool {
+	if p.UserID < 0 || p.APIKeyID < 0 {
+		return false
+	}
+	noOAuth := p.OAuthGrantID == "" && p.OAuthClientID == ""
+	switch p.Source {
+	case "human":
+		return p.UserID > 0 && p.APIKeyID == 0 && noOAuth
+	case "api":
+		return p.UserID > 0 && p.APIKeyID > 0 && noOAuth
+	case "oauth":
+		return p.UserID > 0 && p.APIKeyID == 0 && p.OAuthGrantID != "" && p.OAuthClientID != ""
+	case "system", "migration":
+		return p.APIKeyID == 0 && noOAuth
+	default:
+		return false
+	}
+}
+
 // Evidence contains only validation results and explicitly untrusted reports.
 // Human and system writes supply the zero value; they inherit no agent claims.
 type Evidence struct {
@@ -34,6 +56,9 @@ type Evidence struct {
 
 // Record appends provenance in the transaction that saves its revision.
 func Record(ctx context.Context, q *store.Queries, page store.Page, principal Principal, evidence Evidence) error {
+	if !principal.valid() {
+		return ErrInvalidPrincipal
+	}
 	validated, reported := evidence.Validated, evidence.Reported
 	if len(validated) == 0 {
 		validated = json.RawMessage(`{}`)
@@ -44,14 +69,10 @@ func Record(ctx context.Context, q *store.Queries, page store.Page, principal Pr
 	if !json.Valid(validated) || !json.Valid(reported) {
 		return errors.New("provenance evidence must be valid JSON")
 	}
-	source := principal.Source
-	if source == "" {
-		source = "system"
-	}
 	return q.CreateContentProvenance(ctx, store.CreateContentProvenanceParams{
 		PageID: page.ID, Revision: page.Revision,
 		UserID: sql.NullInt64{Int64: principal.UserID, Valid: principal.UserID > 0},
-		Source: source, ApiKeyID: sql.NullInt64{Int64: principal.APIKeyID, Valid: principal.APIKeyID > 0},
+		Source: principal.Source, ApiKeyID: sql.NullInt64{Int64: principal.APIKeyID, Valid: principal.APIKeyID > 0},
 		OauthGrantID: principal.OAuthGrantID, OauthClientID: principal.OAuthClientID,
 		Transport: principal.Transport, ValidatedJson: string(validated), ReportedJson: string(reported), CreatedAt: time.Now().UTC(),
 	})

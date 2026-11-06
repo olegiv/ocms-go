@@ -127,6 +127,21 @@ for an OAuth actor. The conversion does not authenticate an actor or replace
 the existing permission and credential rechecks. A drift test keeps this
 mapping centralized across v2, authoring and MCP adapters.
 
+New provenance must name a known source: `human`, `api`, `oauth`, `system`
+or `migration`. Human, API-key and OAuth writes require a positive user ID.
+API provenance also requires a positive key ID; OAuth requires both grant and
+client IDs. Credential fields cannot be mixed or attached to human, system
+or migration provenance. System and migration writes may retain an initiating
+user ID, or omit it. Empty sources and negative IDs are refused.
+
+`provenance.Record` rejects inconsistent principals before storage, and the
+page transaction rolls back. Database triggers enforce the same rules on
+inserts and identity changes made through direct SQL. The migration preserves
+existing history and claim checks without rewriting old attribution. Deleting
+an editor who owns no content still clears their historical user reference
+through `ON DELETE SET NULL`; credential IDs and evidence remain intact. This
+consistency check does not replace authentication or credential rechecks.
+
 History is not kept forever for AI drafts. The `core:ai_revision_cleanup`
 scheduler job keeps the newest 20 revisions of each unpublished, unscheduled
 page with AI access, plus any older revision still pinned by an active share

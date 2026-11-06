@@ -237,7 +237,7 @@ func testScheduledInvalidAIContent(t *testing.T, title, body string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api"}, store.CreatePageParams{
+	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api", APIKeyID: 1}, store.CreatePageParams{
 		Title: title, Slug: "invalid-ai", Body: body, Status: model.PageStatusDraft, AuthorID: author.ID,
 		ScheduledAt: sql.NullTime{Time: now.Add(-time.Minute), Valid: true}, LanguageCode: "en", PageType: "post",
 		CreatedAt: now, UpdatedAt: now,
@@ -290,7 +290,7 @@ func TestScheduledPublishingKeepsScheduleWithoutSiteURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api"}, store.CreatePageParams{
+	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api", APIKeyID: 1}, store.CreatePageParams{
 		Title: "Valid title", Slug: "valid-ai", Body: "<p>Body</p>", Status: model.PageStatusDraft, AuthorID: author.ID,
 		ScheduledAt: sql.NullTime{Time: now.Add(-time.Minute), Valid: true}, LanguageCode: "en", PageType: "post",
 		CreatedAt: now, UpdatedAt: now,
@@ -341,7 +341,7 @@ func TestCancelScheduleSkipsAPageChangedSinceTheAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api"}, store.CreatePageParams{
+	page, err := pagewrite.Insert(ctx, queries, provenance.Principal{UserID: author.ID, Source: "api", APIKeyID: 1}, store.CreatePageParams{
 		Title: "Fixed", Slug: "fixed", Body: "<p>Body</p>", Status: model.PageStatusDraft, AuthorID: author.ID,
 		ScheduledAt: sql.NullTime{Time: now.Add(-time.Minute), Valid: true}, LanguageCode: "en", PageType: "post",
 		CreatedAt: now, UpdatedAt: now,

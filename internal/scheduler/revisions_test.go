@@ -36,7 +36,7 @@ func seedAIDraftRevisions(t *testing.T, db *sql.DB, n int64) int64 {
 		if _, err = db.Exec(`INSERT INTO page_versions(page_id,title,body,changed_by,created_at,revision,snapshot_json,legacy) VALUES (?,?,?,?,?,?,?,0)`, page.ID, "Draft", "<p>x</p>", user.ID, now, revision, `{"title":"Draft"}`); err != nil {
 			t.Fatal(err)
 		}
-		if _, err = db.Exec(`INSERT INTO content_provenance(page_id,revision,user_id,source,transport,validated_json,reported_json,created_at) VALUES (?,?,?,'api','mcp','{}','{}',?)`, page.ID, revision, user.ID, now); err != nil {
+		if _, err = db.Exec(`INSERT INTO content_provenance(page_id,revision,user_id,source,api_key_id,transport,validated_json,reported_json,created_at) VALUES (?,?,?,'api',1,'mcp','{}','{}',?)`, page.ID, revision, user.ID, now); err != nil {
 			t.Fatal(err)
 		}
 	}

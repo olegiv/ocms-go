@@ -75,7 +75,9 @@ func setupLoad(t *testing.T) loadFixture {
 // and each fault case returns a review with an empty actor.
 func TestLoadNamesTheRecordedActorAndReportsFaultsInTheLookups(t *testing.T) {
 	ctx := context.Background()
-	ofClient := provenance.Principal{UserID: 0, Source: "oauth", OAuthClientID: "client-1", Transport: "mcp"}
+	ofClient := func(f loadFixture) provenance.Principal {
+		return provenance.Principal{UserID: f.author.ID, Source: "oauth", OAuthGrantID: "grant-1", OAuthClientID: "client-1", Transport: "mcp"}
+	}
 	ofKey := func(f loadFixture) provenance.Principal {
 		return provenance.Principal{UserID: f.author.ID, Source: "api", APIKeyID: f.key.ID, Transport: "rest"}
 	}
@@ -92,7 +94,7 @@ func TestLoadNamesTheRecordedActorAndReportsFaultsInTheLookups(t *testing.T) {
 		if err != nil || got.ActorName != f.author.Name || got.RegisteredApp != f.key.Name {
 			t.Fatalf("API key revision: %+v %v", got, err)
 		}
-		got, err = review.Load(ctx, f.q, f.revised(ofClient), f.viewer.ID)
+		got, err = review.Load(ctx, f.q, f.revised(ofClient(f)), f.viewer.ID)
 		if err != nil || got.RegisteredApp != "Recorded client" {
 			t.Fatalf("OAuth revision: %+v %v", got, err)
 		}
@@ -100,7 +102,7 @@ func TestLoadNamesTheRecordedActorAndReportsFaultsInTheLookups(t *testing.T) {
 
 	t.Run("an actor that no longer exists is shown as nothing", func(t *testing.T) {
 		f := setupLoad(t)
-		keyPage, clientPage := f.revised(ofKey(f)), f.revised(ofClient)
+		keyPage, clientPage := f.revised(ofKey(f)), f.revised(ofClient(f))
 		exec(t, f, `DELETE FROM api_keys WHERE id = ?`, f.key.ID)
 		exec(t, f, `DELETE FROM oauth_clients WHERE id = 'client-1'`)
 		for _, page := range []store.Page{keyPage, clientPage} {
@@ -123,7 +125,7 @@ func TestLoadNamesTheRecordedActorAndReportsFaultsInTheLookups(t *testing.T) {
 		}, func(f loadFixture) store.Page { return f.revised(ofKey(f)) }},
 		{"OAuth client lookup fails", func(t *testing.T, f loadFixture) {
 			exec(t, f, `ALTER TABLE oauth_clients RENAME TO oauth_clients_away`)
-		}, func(f loadFixture) store.Page { return f.revised(ofClient) }},
+		}, func(f loadFixture) store.Page { return f.revised(ofClient(f)) }},
 		{"API key lookup fails", func(t *testing.T, f loadFixture) {
 			exec(t, f, `ALTER TABLE api_keys RENAME TO api_keys_away`)
 		}, func(f loadFixture) store.Page { return f.revised(ofKey(f)) }},
