@@ -8628,6 +8628,11 @@
             "translation": "That share link was already revoked or no longer exists."
         },
         {
+            "id": "preview.revoke_failed",
+            "message": "The share link was not revoked. Try again shortly.",
+            "translation": "The share link was not revoked. Try again shortly."
+        },
+        {
             "id": "preview.temporarily_unavailable",
             "message": "The preview is temporarily unavailable. Try again shortly.",
             "translation": "The preview is temporarily unavailable. Try again shortly."

@@ -8628,6 +8628,11 @@
             "translation": "Эта ссылка уже отозвана или больше не существует."
         },
         {
+            "id": "preview.revoke_failed",
+            "message": "The share link was not revoked. Try again shortly.",
+            "translation": "Ссылка для просмотра не была отозвана. Повторите попытку позже."
+        },
+        {
             "id": "preview.temporarily_unavailable",
             "message": "The preview is temporarily unavailable. Try again shortly.",
             "translation": "Предпросмотр временно недоступен. Повторите попытку позже."

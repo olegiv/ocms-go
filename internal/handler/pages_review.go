@@ -134,15 +134,27 @@ func (h *PagesHandler) CreatePreviewLink(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *PagesHandler) RevokePreviewLink(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		http.NotFound(w, r)
+		return
+	}
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	linkID, _ := strconv.ParseInt(chi.URLParam(r, "linkID"), 10, 64)
 	user, err := h.queries.GetUserByID(r.Context(), middleware.GetUserID(r))
-	if err != nil || (user.Role != model.RoleAdmin && user.Role != model.RoleEditor) || middleware.IsDemoMode() {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.previewRevokeReadFailure(w, r, id, linkID, fmt.Errorf("load account for preview revocation: %w", err))
+		return
+	}
+	if errors.Is(err, sql.ErrNoRows) || (user.Role != model.RoleAdmin && user.Role != model.RoleEditor) {
 		http.NotFound(w, r)
 		return
 	}
 	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil || (page.AuthorID != user.ID && user.Role != model.RoleAdmin) {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.previewRevokeReadFailure(w, r, id, linkID, fmt.Errorf("load page for preview revocation: %w", err))
+		return
+	}
+	if errors.Is(err, sql.ErrNoRows) || (page.AuthorID != user.ID && user.Role != model.RoleAdmin) {
 		http.NotFound(w, r)
 		return
 	}
@@ -160,6 +172,12 @@ func (h *PagesHandler) RevokePreviewLink(w http.ResponseWriter, r *http.Request)
 	}
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Preview share link revoked", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "link_id": linkID})
 	flashSuccess(w, r, h.renderer, target, i18n.T(lang, "preview.revoked"))
+}
+
+func (h *PagesHandler) previewRevokeReadFailure(w http.ResponseWriter, r *http.Request, pageID, linkID int64, err error) {
+	message := i18n.T(h.renderer.GetAdminLang(r), "preview.revoke_failed")
+	h.renderer.SetFlash(r, message, "error")
+	logAndHTTPError(w, message, http.StatusServiceUnavailable, "failed to revoke preview link", "error", err, "page_id", pageID, "link_id", linkID, "user_id", middleware.GetUserID(r))
 }
 
 // RevisionReview compares only recorded fields with the preceding recorded version.

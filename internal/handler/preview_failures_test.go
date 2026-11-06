@@ -5,6 +5,9 @@ package handler
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -36,7 +39,7 @@ import (
 //
 // Bug state: map Resolve's storage errors to preview.ErrUnavailable, answer
 // every Issue error with 409, drop the issue/revoke events or ignore the
-// revoked row count, and this fails.
+// revoked row count, or map pre-revoke lookup faults to 404, and this fails.
 func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 	if err := i18n.Init(nil); err != nil {
 		t.Fatal(err)
@@ -112,13 +115,16 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := NewPagesHandler(db, renderer, sm)
-	var flash string
+	var flash, flashType string
+	actor, adminLang := user, "en"
 	admin := chi.NewRouter()
 	admin.Use(sm.LoadAndSave)
 	admin.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, withUser(r, user))
+			sm.Put(r.Context(), render.SessionKeyAdminLang, adminLang)
+			next.ServeHTTP(w, withUser(r, actor))
 			flash = sm.GetString(r.Context(), "flash")
+			flashType = sm.GetString(r.Context(), "flash_type")
 		})
 	})
 	admin.Post("/admin/pages/{id}/claims/{index}", h.CheckClaim)
@@ -126,7 +132,7 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 	admin.Post("/admin/pages/{id}/preview-links/{linkID}/revoke", h.RevokePreviewLink)
 	post := func(target string, form url.Values) *httptest.ResponseRecorder {
 		t.Helper()
-		flash = ""
+		flash, flashType = "", ""
 		r := httptest.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		w := httptest.NewRecorder()
@@ -148,11 +154,74 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 		t.Fatal(err)
 	}
 	revoke := fmt.Sprintf("/admin/pages/%d/preview-links/%d/revoke", page.ID, linkID)
+	// Discover every direct prerequisite query from the handler so a new
+	// lookup cannot silently bypass this fault/missing-row coverage.
+	for _, query := range previewRevokeLookups(t) {
+		for _, lang := range []string{"en", "ru"} {
+			for _, missing := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/missing=%t", query, lang, missing), func(t *testing.T) {
+					adminLang = lang
+					h.queries = store.New(&conflictQueryFault{DB: db, query: "-- name: " + query + " :", missing: missing})
+					t.Cleanup(func() { h.queries, adminLang = q, "en" })
+					logs := captureLogs(t)
+					response := post(revoke, nil)
+					if missing {
+						if response.Code != http.StatusNotFound || flash != "" || strings.Contains(logs.String(), "level=ERROR") {
+							t.Errorf("missing record: status=%d flash=%q logs=%q", response.Code, flash, logs.String())
+						}
+					} else {
+						message := i18n.T(lang, "preview.revoke_failed")
+						if message == "preview.revoke_failed" {
+							t.Fatal("missing revocation-failure translation")
+						}
+						if response.Code != http.StatusServiceUnavailable || strings.TrimSpace(response.Body.String()) != message || flash != message || flashType != "error" {
+							t.Errorf("lookup fault: status=%d body=%q flash=%q type=%q", response.Code, response.Body.String(), flash, flashType)
+						}
+						for _, field := range []string{"level=ERROR", "failed to revoke preview link", "error=", "unavailable_conflict_data", fmt.Sprintf("page_id=%d", page.ID), fmt.Sprintf("link_id=%d", linkID), fmt.Sprintf("user_id=%d", user.ID)} {
+							if !strings.Contains(logs.String(), field) {
+								t.Errorf("lookup fault log lacks %q: %s", field, logs.String())
+							}
+						}
+						if strings.Contains(response.Body.String(), "unavailable_conflict_data") {
+							t.Error("internal cause leaked into response")
+						}
+					}
+					if response.Header().Get("Location") != "" || countEvents("Preview share link revoked") != 0 {
+						t.Error("failed lookup redirected or recorded a successful revocation")
+					}
+					if code := open(); code != http.StatusOK {
+						t.Errorf("refused revocation changed the shared preview: status=%d", code)
+					}
+				})
+			}
+		}
+	}
+	for _, role := range []string{model.RolePublic, model.RoleEditor} {
+		t.Run("refused "+role, func(t *testing.T) {
+			other, createErr := q.CreateUser(ctx, store.CreateUserParams{Email: "preview-" + role + "@example.test", PasswordHash: user.PasswordHash, Role: role, Name: "Other account", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+			if createErr != nil {
+				t.Fatal(createErr)
+			}
+			actor = other
+			t.Cleanup(func() { actor = user })
+			logs := captureLogs(t)
+			response := post(revoke, nil)
+			if response.Code != http.StatusNotFound || flash != "" || strings.Contains(logs.String(), "level=ERROR") {
+				t.Errorf("role/ownership refusal: status=%d flash=%q logs=%q", response.Code, flash, logs.String())
+			}
+			if countEvents("Preview share link revoked") != 0 || open() != http.StatusOK {
+				t.Error("refused account revoked the link or recorded a revocation")
+			}
+		})
+	}
 	if rr = post(revoke, nil); rr.Code != http.StatusSeeOther || flash != i18n.T("en", "preview.revoked") {
 		t.Errorf("revoke: status %d flash %q", rr.Code, flash)
 	}
 	if got := countEvents("Preview share link revoked"); got != 1 {
 		t.Errorf("revoked link recorded %d events, want 1", got)
+	}
+	if code := open(); code != http.StatusNotFound {
+		t.Errorf("share after successful revocation: status=%d, want 404", code)
 	}
 	if rr = post(revoke, nil); rr.Code != http.StatusSeeOther || flash != i18n.T("en", "preview.revoke_missing") {
 		t.Errorf("second revoke: status %d flash %q, want the already-revoked message", rr.Code, flash)
@@ -173,4 +242,42 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Errorf("claim check during storage fault: status %d, want 500", rr.Code)
 	}
+}
+
+// previewRevokeLookups discovers the direct store calls before the revoke
+// write. The runtime test above must distinguish faults from missing rows
+// for every one of them, including newly added prerequisite queries.
+func previewRevokeLookups(t *testing.T) []string {
+	t.Helper()
+	parsed, err := parser.ParseFile(token.NewFileSet(), "pages_review.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, declaration := range parsed.Decls {
+		fn, ok := declaration.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "RevokePreviewLink" {
+			continue
+		}
+		var queries []string
+		for node := range ast.Preorder(fn.Body) {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			method, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				continue
+			}
+			receiver, ok := method.X.(*ast.SelectorExpr)
+			if !ok || receiver.Sel.Name != "queries" {
+				continue
+			}
+			if method.Sel.Name == "RevokePagePreviewLink" && len(queries) > 0 {
+				return queries
+			}
+			queries = append(queries, method.Sel.Name)
+		}
+	}
+	t.Fatal("missing prerequisite queries or revoke write in RevokePreviewLink")
+	return nil
 }
