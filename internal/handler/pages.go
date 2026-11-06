@@ -775,7 +775,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	access, accessErr := h.queries.GetPageAIAccess(r.Context(), id)
 	if accessErr != nil && !errors.Is(accessErr, sql.ErrNoRows) {
-		http.Error(w, "Cannot load AI access", http.StatusInternalServerError)
+		logAndHTTPError(w, "Cannot load AI access", http.StatusInternalServerError, "failed to load page AI access", "error", accessErr, "page_id", id)
 		return
 	}
 	user, userErr := h.queries.GetUserByID(r.Context(), middleware.GetUserID(r))
@@ -810,7 +810,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	viewData.PublicURL = sessionPreviewPath(page)
 	viewData.Review, err = h.reviewPanel(r, page, page.Revision)
 	if err != nil {
-		http.Error(w, "Cannot load editorial review", http.StatusInternalServerError)
+		logAndHTTPError(w, "Cannot load editorial review", http.StatusInternalServerError, "failed to load editorial review", "error", err, "page_id", id, "revision", page.Revision)
 		return
 	}
 	renderTempl(w, r, adminviews.PageFormPage(pc, viewData))

@@ -168,22 +168,34 @@ func (h *PagesHandler) RevisionReview(w http.ResponseWriter, r *http.Request) {
 	versionID, _ := strconv.ParseInt(chi.URLParam(r, "versionId"), 10, 64)
 	page, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+		} else {
+			logAndHTTPError(w, "Cannot load page", http.StatusInternalServerError, "failed to load page for revision review", "error", err, "page_id", id, "version_id", versionID)
+		}
 		return
 	}
 	version, err := h.queries.GetPageVersion(r.Context(), versionID)
-	if err != nil || version.PageID != id {
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+		} else {
+			logAndHTTPError(w, "Cannot load revision", http.StatusInternalServerError, "failed to load recorded revision", "error", err, "page_id", id, "version_id", versionID)
+		}
+		return
+	}
+	if version.PageID != id {
 		http.NotFound(w, r)
 		return
 	}
 	previous, err := h.queries.GetPreviousPageVersion(r.Context(), store.GetPreviousPageVersionParams{PageID: id, ID: version.ID})
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "Cannot load revision", 500)
+		logAndHTTPError(w, "Cannot load revision", http.StatusInternalServerError, "failed to load previous revision", "error", err, "page_id", id, "version_id", versionID)
 		return
 	}
 	differences, err := review.Compare(previous, version)
 	if err != nil {
-		http.Error(w, "Cannot compare recorded revision", 500)
+		logAndHTTPError(w, "Cannot compare recorded revision", http.StatusInternalServerError, "failed to compare recorded revision", "error", err, "page_id", id, "version_id", versionID)
 		return
 	}
 	data := adminviews.RevisionReviewData{PageID: id, VersionID: version.ID, Revision: version.Revision.Int64, BaseRevision: page.Revision, Title: version.Title, Legacy: version.Legacy, Differences: differences}
@@ -192,7 +204,7 @@ func (h *PagesHandler) RevisionReview(w http.ResponseWriter, r *http.Request) {
 		selected.Revision = version.Revision.Int64
 		data.Panel, err = h.reviewPanel(r, selected, page.Revision)
 		if err != nil {
-			http.Error(w, "Cannot load revision evidence", 500)
+			logAndHTTPError(w, "Cannot load revision evidence", http.StatusInternalServerError, "failed to load revision evidence", "error", err, "page_id", id, "version_id", versionID, "revision", version.Revision.Int64)
 			return
 		}
 	}
