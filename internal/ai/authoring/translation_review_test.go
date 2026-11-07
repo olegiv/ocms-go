@@ -110,9 +110,22 @@ func TestTranslationReviewRefreshesBasisWithoutRewritingContentOrHistory(t *test
 	if err = review.ValidatePublication(f.ctx, f.q, reviewed); err != nil {
 		t.Fatalf("valid reviewed draft failed existing publication checks: %v", err)
 	}
-	// A later ordinary edit keeps the refreshed basis. Another source edit
-	// makes it stale again rather than inheriting an unconditional sign-off.
-	_, err = f.svc.Update(f.ctx, f.actor, authoring.UpdateInput{RequestID: uuid.NewString(), PageID: reviewed.ID, BaseRevision: reviewed.Revision, Changes: draft.Changes{Summary: draft.Set("Updated translation summary")}})
+	// A source edit requires a new review even when the target is unchanged.
+	changed, err := f.svc.Update(f.ctx, f.actor, authoring.UpdateInput{RequestID: uuid.NewString(), PageID: source.ID, BaseRevision: source.Revision, Changes: draft.Changes{MetaTitle: draft.SetNullable("Changed source SEO")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err = f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: target.ID})
+	if err != nil || after.TranslationStatus != "stale" {
+		t.Fatalf("source changes stopped invalidating review: %+v %v", after, err)
+	}
+	source.Revision = changed.Revision
+	reviewedAgain, err := review.MarkTranslationReviewed(f.ctx, f.q, f.user.ID, reviewInput(source, reviewed))
+	if err != nil || reviewedAgain.Revision != reviewed.Revision+1 {
+		t.Fatalf("changed source review did not add a revision: %+v %v", reviewedAgain, err)
+	}
+	// A later translation edit keeps the source basis but requires its own review.
+	updated, err := f.svc.Update(f.ctx, f.actor, authoring.UpdateInput{RequestID: uuid.NewString(), PageID: reviewedAgain.ID, BaseRevision: reviewedAgain.Revision, Changes: draft.Changes{Summary: draft.Set("Updated translation summary")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,13 +133,10 @@ func TestTranslationReviewRefreshesBasisWithoutRewritingContentOrHistory(t *test
 	if err != nil || after.TranslationStatus != "current" {
 		t.Fatalf("ordinary update lost reviewed basis: %+v %v", after, err)
 	}
-	_, err = f.svc.Update(f.ctx, f.actor, authoring.UpdateInput{RequestID: uuid.NewString(), PageID: source.ID, BaseRevision: source.Revision, Changes: draft.Changes{MetaTitle: draft.SetNullable("Changed source SEO")}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	after, err = f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: target.ID})
-	if err != nil || after.TranslationStatus != "stale" {
-		t.Fatalf("source changes stopped invalidating review: %+v %v", after, err)
+	reviewedAgain.Revision = updated.Revision
+	reviewed, err = review.MarkTranslationReviewed(f.ctx, f.q, f.user.ID, reviewInput(source, reviewedAgain))
+	if err != nil || reviewed.Revision != updated.Revision+1 {
+		t.Fatalf("changed translation review did not add a revision: %+v %v", reviewed, err)
 	}
 }
 
@@ -167,16 +177,25 @@ func TestTranslationReviewPreservesEvidence(t *testing.T) {
 		}
 		delete(fields, "translation_basis")
 		delete(fields, "translation_reviewed_revision")
+		delete(fields, "translation_status")
 		return fields, fact.ReportedJson
 	}
 	before, reported := loadEvidence(target.Revision)
+	detail, err := f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: target.ID})
+	if err != nil || detail.TranslationStatus != "stale" || detail.Validated.TranslationStatus != "stale" {
+		t.Fatalf("expected stale live and validated status before review, got %q and %q: %v", detail.TranslationStatus, detail.Validated.TranslationStatus, err)
+	}
 	reviewed, err := review.MarkTranslationReviewed(f.ctx, f.q, f.user.ID, reviewInput(source, target))
 	if err != nil {
 		t.Fatal(err)
 	}
+	detail, err = f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: target.ID})
+	if err != nil || detail.TranslationStatus != "current" || detail.Validated.TranslationStatus != "current" {
+		t.Errorf("expected current live and validated status after review, got %q and %q: %v", detail.TranslationStatus, detail.Validated.TranslationStatus, err)
+	}
 	after, afterReported := loadEvidence(reviewed.Revision)
 	if !reflect.DeepEqual(before, after) {
-		t.Errorf("review changed validation fields outside the translation basis and reviewed revision: before=%v after=%v", before, after)
+		t.Errorf("review changed unrelated validation fields: before=%v after=%v", before, after)
 	}
 	if afterReported != reported {
 		t.Error("review changed the agent report")
@@ -186,6 +205,39 @@ func TestTranslationReviewPreservesEvidence(t *testing.T) {
 	if err != nil || !slices.ContainsFunc(result.Issues, func(issue draft.Issue) bool { return issue.Code == "overlap_with_example" }) {
 		t.Fatalf("next agent edit lost the example overlap check: %+v, %v", result.Issues, err)
 	}
+}
+
+func TestTranslationReviewRepairsLegacyStatusOnce(t *testing.T) {
+	f, source, target := staleReviewFixture(t)
+	reviewed, err := review.MarkTranslationReviewed(f.ctx, f.q, f.user.ID, reviewInput(source, target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Reproduce the stale status previously saved alongside a current basis.
+	if _, err = f.db.ExecContext(f.ctx, `UPDATE content_provenance SET validated_json=json_set(validated_json, '$.translation_status', 'stale') WHERE page_id=? AND revision=?`, reviewed.ID, reviewed.Revision); err != nil {
+		t.Fatal(err)
+	}
+	repaired, err := review.MarkTranslationReviewed(f.ctx, f.q, f.user.ID, reviewInput(source, reviewed))
+	if err != nil || repaired.Revision != reviewed.Revision+1 {
+		t.Fatalf("legacy status repair did not add a revision: %+v %v", repaired, err)
+	}
+	detail, err := f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: target.ID})
+	if err != nil || detail.TranslationStatus != "current" || detail.Validated.TranslationStatus != "current" {
+		t.Fatalf("legacy status repair yielded live and validated status %q and %q: %v", detail.TranslationStatus, detail.Validated.TranslationStatus, err)
+	}
+	prior, err := f.q.GetContentProvenance(f.ctx, store.GetContentProvenanceParams{PageID: reviewed.ID, Revision: reviewed.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var validated authoring.Validation
+	if err = json.Unmarshal([]byte(prior.ValidatedJson), &validated); err != nil || validated.TranslationStatus != "stale" {
+		t.Fatalf("legacy evidence was rewritten: %q %v", prior.ValidatedJson, err)
+	}
+	repeated, err := review.MarkTranslationReviewed(f.ctx, f.q, f.user.ID, reviewInput(source, repaired))
+	if err != nil || !reflect.DeepEqual(repeated, repaired) {
+		t.Fatalf("same editor repeat after repair returned revision %d, want %d: %v", repeated.Revision, repaired.Revision, err)
+	}
+	testutil.AssertPageRevision(t, f.q, target.ID, repaired.Revision)
 }
 
 func TestTranslationReviewPreservesSiblingRevisionsAndRecordsAnotherEditor(t *testing.T) {
@@ -215,12 +267,13 @@ func TestTranslationReviewPreservesSiblingRevisionsAndRecordsAnotherEditor(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	reviewed, err := review.MarkTranslationReviewed(f.ctx, f.q, editor.ID, reviewInput(source, target))
+	first, err := review.MarkTranslationReviewed(f.ctx, f.q, f.user.ID, reviewInput(source, target))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reviewed.AuthorID != target.AuthorID {
-		t.Fatal("review transferred ownership")
+	reviewed, err := review.MarkTranslationReviewed(f.ctx, f.q, editor.ID, reviewInput(source, first))
+	if err != nil || reviewed.Revision != first.Revision+1 || reviewed.AuthorID != target.AuthorID {
+		t.Fatalf("second editor did not add a review revision with the same owner: %+v %v", reviewed, err)
 	}
 	panel, err := review.Load(f.ctx, f.q, reviewed, f.user.ID)
 	if err != nil || panel.Fact.UserID.Int64 != editor.ID || panel.ActorName != editor.Name {

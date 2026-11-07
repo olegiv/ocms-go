@@ -144,11 +144,15 @@ func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing
 				form.Set("base_revision", fmt.Sprint(target.Revision+1))
 				want = http.StatusConflict
 			}
-			request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
-			request.Header.Set("Content-Type", contentType)
-			request.Header.Set("Sec-Fetch-Site", fetchSite)
-			w := httptest.NewRecorder()
-			router.ServeHTTP(w, request)
+			submitReview := func() *httptest.ResponseRecorder {
+				request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+				request.Header.Set("Content-Type", contentType)
+				request.Header.Set("Sec-Fetch-Site", fetchSite)
+				response := httptest.NewRecorder()
+				router.ServeHTTP(response, request)
+				return response
+			}
+			w := submitReview()
 			if w.Code != want {
 				t.Fatalf("status=%d, want %d: %s", w.Code, want, w.Body.String())
 			}
@@ -177,7 +181,8 @@ func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing
 			if after.Revision != target.Revision+1 || after.Body != target.Body || after.Status != "draft" || after.ScheduledAt.Valid {
 				t.Fatal("review failed to add only a review revision")
 			}
-			if w.Header().Get("Location") != fmt.Sprintf("/admin/pages/%d", target.ID) {
+			location := fmt.Sprintf("/admin/pages/%d", target.ID)
+			if w.Header().Get("Location") != location {
 				t.Fatal("wrong redirect")
 			}
 			var events int
@@ -206,15 +211,36 @@ func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing
 			}
 			testutil.AssertPageRevision(t, q, target.ID, after.Revision)
 			// An already-submitted form must not create another revision.
-			replay := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
-			replay.Header.Set("Content-Type", contentType)
-			replay.Header.Set("Sec-Fetch-Site", fetchSite)
-			w = httptest.NewRecorder()
-			router.ServeHTTP(w, replay)
+			w = submitReview()
 			if w.Code != http.StatusConflict {
 				t.Fatalf("form replay=%d", w.Code)
 			}
 			testutil.AssertPageRevision(t, q, target.ID, after.Revision)
+
+			// The same editor can review again with a refreshed form without
+			// replacing the current evidence or emitting update side effects.
+			if _, err = caches.Sitemap.Get(ctx, "https://example.test"); err != nil {
+				t.Fatal(err)
+			}
+			form.Set("base_revision", fmt.Sprint(after.Revision))
+			repeat := submitReview()
+			if repeat.Code != http.StatusSeeOther || repeat.Header().Get("Location") != location {
+				t.Fatalf("repeat review status=%d location=%q", repeat.Code, repeat.Header().Get("Location"))
+			}
+			testutil.AssertPageRevision(t, q, target.ID, after.Revision)
+			unchanged, err := q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: target.ID, Revision: after.Revision})
+			if err != nil || unchanged != fact {
+				t.Fatalf("repeat review changed provenance: %+v %v", unchanged, err)
+			}
+			if err = db.QueryRow("SELECT COUNT(*) FROM events WHERE message='Translation reviewed'").Scan(&events); err != nil || events != 1 {
+				t.Errorf("repeat review left %d audit events, want 1: %v", events, err)
+			}
+			if err = db.QueryRow("SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id=?", hook.ID).Scan(&deliveries); err != nil || deliveries != 1 {
+				t.Errorf("repeat review left %d webhook deliveries, want 1: %v", deliveries, err)
+			}
+			if !caches.Sitemap.IsCached() {
+				t.Error("repeat review invalidated sitemap cache")
+			}
 		})
 	}
 }

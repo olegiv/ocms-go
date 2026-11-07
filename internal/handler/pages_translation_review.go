@@ -73,8 +73,10 @@ func (h *PagesHandler) ReviewTranslation(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}
-	h.invalidatePageCache(page.ID)
-	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, page, middleware.GetUserEmail(r))
-	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Translation reviewed", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": page.ID, "revision": page.Revision, "source_page_id": in.SourcePageID, "source_revision": in.SourceRevision})
+	if page.Revision != in.Revision {
+		h.invalidatePageCache(page.ID)
+		h.dispatchPageEvent(r.Context(), model.EventPageUpdated, page, middleware.GetUserEmail(r))
+		_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Translation reviewed", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": page.ID, "revision": page.Revision, "source_page_id": in.SourcePageID, "source_revision": in.SourceRevision})
+	}
 	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", id), i18n.T(lang, "review.translation_saved"))
 }

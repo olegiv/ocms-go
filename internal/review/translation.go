@@ -83,12 +83,14 @@ func translationSource(ctx context.Context, q *store.Queries, page store.Page) (
 	return &source, nil
 }
 
-// MarkTranslationReviewed records an editor's explicit review in a new target
-// revision after checking both displayed revisions in one transaction. The
-// revision carries forward validation and agent reports. Claim checks stay
-// with the revision where the editor made them.
+// MarkTranslationReviewed checks both displayed revisions in one transaction
+// and records the review unless the latest revision already records it for
+// this editor. A new revision carries forward validation and agent reports.
+// Claim checks stay with the revision where the editor made them.
 func MarkTranslationReviewed(ctx context.Context, q *store.Queries, reviewerID int64, in TranslationReviewInput) (store.Page, error) {
-	work, err := pagewrite.InQueriesTx(ctx, q, provenance.Principal{UserID: reviewerID, Source: "human", Transport: "translation_review"}, func(work *pagewrite.Tx) error {
+	const currentStatus = `"current"`
+	principal := provenance.Principal{UserID: reviewerID, Source: "human", Transport: "translation_review"}
+	work, err := pagewrite.InQueriesTx(ctx, q, principal, func(work *pagewrite.Tx) error {
 		if err := pagewrite.RequireEditor(ctx, work.Q, reviewerID); err != nil {
 			return err
 		}
@@ -131,11 +133,20 @@ func MarkTranslationReviewed(ctx context.Context, q *store.Queries, reviewerID i
 		if fields == nil {
 			fields = make(map[string]json.RawMessage)
 		}
-		basis, err := json.Marshal(Basis{SourcePageID: source.ID, SourceRevision: source.Revision, Fingerprint: provenance.PageFingerprint(*source)})
+		basis := Basis{SourcePageID: source.ID, SourceRevision: source.Revision, Fingerprint: provenance.PageFingerprint(*source)}
+		if previous.Source == principal.Source && previous.Transport == principal.Transport &&
+			previous.UserID.Valid && previous.UserID.Int64 == reviewerID && string(fields["translation_status"]) == currentStatus {
+			var recorded Basis
+			if decodeErr := json.Unmarshal(fields["translation_basis"], &recorded); decodeErr == nil && recorded == basis {
+				return nil
+			}
+		}
+		basisJSON, err := json.Marshal(basis)
 		if err != nil {
 			return err
 		}
-		fields["translation_basis"] = basis
+		fields["translation_basis"] = basisJSON
+		fields["translation_status"] = json.RawMessage(currentStatus)
 		fields["translation_reviewed_revision"] = json.RawMessage(strconv.FormatInt(target.Revision, 10))
 		validated, err := json.Marshal(fields)
 		if err != nil {

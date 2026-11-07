@@ -51,12 +51,15 @@ revisions and rechecks the source relationship and editor role in one
 transaction. A changed source or translation, an unavailable source, or a
 published/scheduled target refuses the review; reload and compare again.
 
-A successful review creates a new translation revision with the current
-source fingerprint and records the reviewer, time and reviewed revisions.
-It changes no article text, metadata, taxonomy, AI access, publication state,
-source or sibling revision. The new revision carries forward validation
-evidence and agent-reported claims. Claim acknowledgments stay with the
-revision where they were recorded.
+A new review creates a translation revision that records the reviewer, time
+and reviewed revisions. It saves the current source fingerprint and sets the
+translation status to Current. A repeat by the latest reviewer for the same
+source revision and unchanged translation keeps the existing revision. A
+different editor's review creates its own revision. The review changes no
+article text, metadata, taxonomy, AI access, publication state, source or
+sibling revision. A new revision carries forward validation evidence and
+agent-reported claims. Claim acknowledgments stay with the revision where
+they were recorded.
 Ordinary draft updates retain the reviewed basis. A subsequent source
 text/SEO change makes the translation stale again. This action is available
 through the normal editor session and CSRF protection; MCP cannot approve
