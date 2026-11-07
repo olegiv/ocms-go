@@ -189,8 +189,9 @@ message and changes nothing; repeating a revoke of your own, already revoked
 connection is a harmless success, and a storage failure is a logged 500. See
 [connected apps](connected-apps.md).
 
-A dynamically registered client is valid for one day until a consent creates a
-grant for it, then for 90 days from that consent. That covers the longest
+A dynamically registered client expires after one day unless consent creates
+a grant. A provisional client can also be reclaimed at capacity. A consented
+client is valid for 90 days from consent. That covers the longest
 refresh family (`OCMS_OAUTH_REFRESH_TTL_DAYS` is at most 90, `MaxRefreshTTL`), so
 a used client never lapses before its grants.
 
@@ -220,10 +221,9 @@ with `Retry-After`.
 The default hosts cover the planned Claude and ChatGPT CIMD clients. This is
 an allowlist, not proof of account compatibility. Add another exact hostname
 only for a client you intend to support. DCR is a separate opt-in fallback for
-public clients; it creates a random client ID and no secret. A registration is
-valid for one day; creating a grant for the client (consent) extends it to
-ninety days from that consent, so a client that is never used lapses, is
-reclaimed at once when the registry is full and is deleted by retention.
+public clients. It creates a random client ID and no secret. A provisional
+registration expires after one day and can be reclaimed earlier at capacity.
+Creating a grant for the client extends its lifetime to 90 days from consent.
 DCR accepts only code/refresh grant metadata. CIMD documents
 must advertise authorization code support when `grant_types` is present;
 additional advertised grant types do not enable those flows in oCMS. Both

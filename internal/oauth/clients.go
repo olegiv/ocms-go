@@ -417,13 +417,24 @@ func validClientMetadata(c registeredClient, checkRedirect func(string) bool) bo
 	return true
 }
 
+var errOAuthClientCapacity = errors.New("OAuth client registry is full")
+
 func (s *Service) saveClient(ctx context.Context, c registeredClient, source string, expires int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer rollback(tx)
-	q := s.q.WithTx(tx)
+	if err = s.saveClientTx(ctx, s.q.WithTx(tx), c, source, expires); errors.Is(err, errOAuthClientCapacity) {
+		return problem("temporarily_unavailable")
+	}
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Service) saveClientTx(ctx context.Context, q *store.Queries, c registeredClient, source string, expires int64) error {
 	existing, err := q.GetOAuthClient(ctx, c.ID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
@@ -443,17 +454,17 @@ func (s *Service) saveClient(ctx context.Context, c registeredClient, source str
 			return deleteErr
 		}
 		count, err = q.CountOAuthClientsBySource(ctx, source)
-		if err != nil || count >= 1000 {
-			return problem("temporarily_unavailable")
+		if err != nil {
+			return err
+		}
+		if count >= 1000 {
+			return errOAuthClientCapacity
 		}
 	}
 	raw, err := json.Marshal(c.Redirects)
 	if err != nil {
 		return err
 	}
-	if err := q.UpsertOAuthClient(ctx, store.UpsertOAuthClientParams{
-		ID: c.ID, Name: c.Name, RedirectUris: string(raw), Source: source, ExpiresAt: expires}); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return q.UpsertOAuthClient(ctx, store.UpsertOAuthClientParams{
+		ID: c.ID, Name: c.Name, RedirectUris: string(raw), Source: source, ExpiresAt: expires})
 }

@@ -302,10 +302,10 @@ func TestDCRFloodClearsWithinADay(t *testing.T) {
 
 // TestDCRRegistrationsUseTheShortLifetime keeps a second registration path
 // from restoring the 90-day lifetime for clients nobody has used (A-6): every
-// saveClient call for source "dcr" in runtime code must pass
+// saveClientTx call for source "dcr" in runtime code must pass
 // DCRUnusedClientLifetime. Consent extends the client in Authorize.
 //
-// Bug state: pass DCRClientLifetime in Register (protocol.go) and this names
+// Bug state: pass DCRClientLifetime in registerDCR and this names
 // the call.
 func TestDCRRegistrationsUseTheShortLifetime(t *testing.T) {
 	names, err := filepath.Glob("*.go")
@@ -324,16 +324,16 @@ func TestDCRRegistrationsUseTheShortLifetime(t *testing.T) {
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
-			if !ok || calleeName(call) != "saveClient" || len(call.Args) != 4 {
+			if !ok || calleeName(call) != "saveClientTx" || len(call.Args) != 5 {
 				return true
 			}
-			source, ok := call.Args[2].(*ast.BasicLit)
+			source, ok := call.Args[3].(*ast.BasicLit)
 			if !ok || source.Value != `"dcr"` {
 				return true
 			}
 			calls++
 			uses := false
-			ast.Inspect(call.Args[3], func(n ast.Node) bool {
+			ast.Inspect(call.Args[4], func(n ast.Node) bool {
 				if ident, ok := n.(*ast.Ident); ok && ident.Name == "DCRUnusedClientLifetime" {
 					uses = true
 				}
@@ -346,6 +346,6 @@ func TestDCRRegistrationsUseTheShortLifetime(t *testing.T) {
 		})
 	}
 	if calls == 0 {
-		t.Fatal("no saveClient call for source dcr found; the scan is broken")
+		t.Fatal("no saveClientTx call for source dcr found; the scan is broken")
 	}
 }

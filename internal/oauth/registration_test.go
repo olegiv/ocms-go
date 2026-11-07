@@ -4,6 +4,7 @@
 package oauth
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -117,6 +118,7 @@ func TestDCRRegistrationBudgetUsesTrustedClientIP(t *testing.T) {
 			secondHeaders: http.Header{"X-Forwarded-For": {"198.51.100.3"}, "X-Real-IP": {"198.51.100.4"}}},
 		{name: "mapped IPv4", first: "192.0.2.1:1", second: "[::ffff:192.0.2.1]:2"},
 		{name: "IPv6 spelling", first: "[2001:db8::1]:1", second: "[2001:0db8:0:0:0:0:0:1]:2"},
+		{name: "IPv6 privacy address rotation", first: "[2001:db8:1234:5678::1]:1", second: "[2001:db8:1234:5678:ffff::2]:2"},
 		{name: "trusted XFF chain", proxies: "127.0.0.1,10.0.0.0/8", first: "127.0.0.1:1", second: "127.0.0.1:2",
 			firstHeaders:  http.Header{"X-Forwarded-For": {"198.51.100.1, 192.0.2.1, 10.0.0.1"}},
 			secondHeaders: http.Header{"X-Forwarded-For": {"198.51.100.2, ::ffff:192.0.2.1, 10.0.0.2"}}},
@@ -143,12 +145,89 @@ func TestDCRRegistrationBudgetUsesTrustedClientIP(t *testing.T) {
 	}
 }
 
+func TestDCRIPv6BudgetSurvivesRestart(t *testing.T) {
+	f, now := registrationFixture(t)
+	for i := range 20 {
+		requireRegistration(t, registerFrom(f.s, fmt.Sprintf("[2001:db8:1234:5678::%x]:1234", i+1), registrationMetadata, nil))
+	}
+	s, err := New(f.db, f.s.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.now = func() time.Time { return *now }
+	requireRegistrationLimit(t, registerFrom(s, "[2001:db8:1234:5678:ffff::2]:4321", registrationMetadata, nil), 3600)
+	requireRegistration(t, registerFrom(s, "[2001:db8:1234:5679::1]:1234", registrationMetadata, nil))
+}
+
+func TestDCRRateRefusalDoesNotWaitForSQLiteWriter(t *testing.T) {
+	f, _ := registrationFixture(t)
+	const peer = "192.0.2.1:3000"
+	fillRegistrationBudget(t, f.s, peer, nil)
+	tx, err := f.db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollback(tx)
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- registerFrom(f.s, peer, registrationMetadata, nil) }()
+	select {
+	case w := <-done:
+		requireRegistrationLimit(t, w, 3600)
+	case <-time.After(2 * time.Second):
+		rollback(tx)
+		<-done
+		t.Fatal("exhausted source waited behind a SQLite writer")
+	}
+}
+
+func TestDCRQueuedWritesLeaveDatabaseConnectionsAvailable(t *testing.T) {
+	f, _ := registrationFixture(t)
+	f.db.SetMaxOpenConns(3)
+	tx, err := f.db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var waiters sync.WaitGroup
+	defer func() {
+		rollback(tx)
+		waiters.Wait()
+	}()
+	for range 12 {
+		waiters.Go(func() { registerFrom(f.s, "192.0.2.1:3000", registrationMetadata, nil) })
+	}
+	deadline := time.Now().Add(time.Second)
+	for f.db.Stats().InUse < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("DCR writers did not reach the connection pool")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// Keep making ordinary database reads while the admitted writer waits.
+	// Without the write queue, the waiting transactions consume the pool.
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	for range 10 {
+		if _, err = f.s.q.GetUserByID(ctx, f.user.ID); err != nil {
+			t.Fatalf("DCR writers exhausted the connection pool: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestDCRRegistrationBudgetConcurrent(t *testing.T) {
 	f, _ := registrationFixture(t)
+	second, err := New(f.db, f.s.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.now = f.s.now
+	services := []*Service{f.s, second}
 	var wg sync.WaitGroup
 	responses := make([]*httptest.ResponseRecorder, 60)
 	for i := range responses {
-		wg.Go(func() { responses[i] = registerFrom(f.s, "192.0.2.1:3000", registrationMetadata, nil) })
+		wg.Go(func() {
+			responses[i] = registerFrom(services[i%len(services)], "192.0.2.1:3000", registrationMetadata, nil)
+		})
 	}
 	wg.Wait()
 	accepted := make(map[string]bool)
@@ -232,41 +311,32 @@ func TestDCRRegistrationLimitPreservesConnections(t *testing.T) {
 	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 3600)
 }
 
-func TestDCRRegistrationSourceCapacityRetainsLiveBudgets(t *testing.T) {
+func TestDCRGlobalRateRetainsLiveBudgets(t *testing.T) {
 	f, now := registrationFixture(t)
 	const peer = "192.0.2.1:3000"
 	requireRegistration(t, registerFrom(f.s, peer, registrationMetadata, nil))
-	*now = now.Add(15 * time.Minute)
+	*now = now.Add(5 * time.Minute)
 	for range 19 {
 		requireRegistration(t, registerFrom(f.s, peer, registrationMetadata, nil))
 	}
-	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 2700)
-	// Delete only fixture rows to isolate the in-memory source bound from the
-	// separate database cap. A live source must never be evicted under pressure.
-	for i := 1; i < 1000; i++ {
+	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 3300)
+	// Reclaim fixture clients to isolate the burst rate from the registry
+	// cap. More than 1,000 distinct sources can use the shared rate budget.
+	for i := range 1980 {
 		if _, err := f.db.Exec(`DELETE FROM oauth_clients WHERE source = 'dcr'`); err != nil {
 			t.Fatal(err)
 		}
 		peerIP := fmt.Sprintf("198.18.%d.%d:3000", i/256, i%256)
 		requireRegistration(t, registerFrom(f.s, peerIP, registrationMetadata, nil))
 	}
-	*now = now.Add(15 * time.Minute)
-	// Each other source's newest success must expire before its key is free.
-	for i := 1; i < 1000; i++ {
-		if _, err := f.db.Exec(`DELETE FROM oauth_clients WHERE source = 'dcr'`); err != nil {
-			t.Fatal(err)
-		}
-		requireRegistration(t, registerFrom(f.s, fmt.Sprintf("198.18.%d.%d:3000", i/256, i%256), registrationMetadata, nil))
-	}
-	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 1800)
-	requireRegistrationLimit(t, registerFrom(f.s, "203.0.113.1:3000", registrationMetadata, nil), 2700)
-	*now = now.Add(30 * time.Minute)
-	// Only the first source's oldest event expires. Refreshing that source
-	// leaves every key live until another source's LAST event expires.
-	requireRegistration(t, registerFrom(f.s, peer, registrationMetadata, nil))
-	requireRegistrationLimit(t, registerFrom(f.s, "203.0.113.1:3000", registrationMetadata, nil), 1800)
-	*now = now.Add(30 * time.Minute)
+	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 3300)
+	requireRegistrationLimit(t, registerFrom(f.s, "203.0.113.1:3000", registrationMetadata, nil), 300)
+	*now = now.Add(5 * time.Minute)
 	requireRegistration(t, registerFrom(f.s, "203.0.113.1:3000", registrationMetadata, nil))
+	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 3000)
+	requireRegistrationLimit(t, registerFrom(f.s, "203.0.113.2:3000", registrationMetadata, nil), 300)
+	*now = now.Add(5 * time.Minute)
+	requireRegistration(t, registerFrom(f.s, "203.0.113.2:3000", registrationMetadata, nil))
 }
 
 // TestDCRSourceCannotExhaustRegistry pins the capacity invariant over multiple

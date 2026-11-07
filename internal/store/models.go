@@ -295,6 +295,19 @@ type OauthCode struct {
 	ConsumedAt  int64  `json:"consumed_at"`
 }
 
+type OauthDcrPending struct {
+	ClientID     string `json:"client_id"`
+	SourceKey    string `json:"source_key"`
+	RegisteredAt int64  `json:"registered_at"`
+}
+
+type OauthDcrRegistration struct {
+	ClientID     string `json:"client_id"`
+	SourceKey    string `json:"source_key"`
+	RegisteredAt int64  `json:"registered_at"`
+	Provisional  int64  `json:"provisional"`
+}
+
 type OauthGrant struct {
 	ID             string `json:"id"`
 	UserID         int64  `json:"user_id"`

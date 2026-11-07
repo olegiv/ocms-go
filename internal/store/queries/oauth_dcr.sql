@@ -1,0 +1,32 @@
+-- name: GetOAuthDCRRegistrationBudget :one
+SELECT CAST((SELECT COUNT(*) FROM oauth_dcr_registrations global_count
+    WHERE global_count.registered_at > sqlc.arg(global_cutoff)) AS INTEGER) AS total,
+    CAST(COALESCE((SELECT MIN(global_first.registered_at) FROM oauth_dcr_registrations global_first
+        WHERE global_first.registered_at > sqlc.arg(global_cutoff)), 0) AS INTEGER) AS oldest,
+    CAST((SELECT COUNT(*) FROM oauth_dcr_registrations source_count
+        WHERE source_count.source_key = sqlc.arg(source_key)
+        AND source_count.registered_at > sqlc.arg(source_cutoff)) AS INTEGER) AS source_total,
+    CAST(COALESCE((SELECT MIN(source_first.registered_at) FROM oauth_dcr_registrations source_first
+        WHERE source_first.source_key = sqlc.arg(source_key)
+        AND source_first.registered_at > sqlc.arg(source_cutoff)), 0) AS INTEGER) AS source_oldest;
+
+-- name: RecordOAuthDCRRegistration :exec
+INSERT INTO oauth_dcr_registrations (client_id, source_key, registered_at)
+VALUES (?, ?, ?);
+
+-- name: DeleteOldOAuthDCRRegistrations :exec
+DELETE FROM oauth_dcr_registrations WHERE registered_at <= sqlc.arg(cutoff)
+AND (provisional = 0 OR NOT EXISTS (SELECT 1 FROM oauth_clients WHERE id = oauth_dcr_registrations.client_id));
+
+-- Prefer the oldest provisional client from a source holding more slots than
+-- the requester. Give a source's only provisional client a grace period.
+-- name: EvictOAuthDCRClient :execrows
+DELETE FROM oauth_clients WHERE id = (
+    SELECT p.client_id FROM oauth_dcr_pending p
+    JOIN (SELECT d.source_key, COUNT(*) AS clients FROM oauth_dcr_pending d GROUP BY d.source_key) h
+        ON h.source_key = p.source_key
+    WHERE h.clients > (SELECT COUNT(*) FROM oauth_dcr_pending requester WHERE requester.source_key = sqlc.arg(source_key))
+    AND (h.clients > 1 OR p.registered_at <= sqlc.arg(grace_cutoff))
+    ORDER BY h.clients DESC, p.registered_at, p.client_id
+    LIMIT 1
+);

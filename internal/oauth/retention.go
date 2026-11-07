@@ -18,7 +18,7 @@ const (
 	EvidenceRetention = 30 * 24 * time.Hour
 	// CodeRetention retains expired code and unused client metadata for a day.
 	CodeRetention = 24 * time.Hour
-	// CleanupBatchSize bounds each of the six deletion classes per run.
+	// CleanupBatchSize bounds each batch of historical OAuth rows.
 	CleanupBatchSize = 250
 	// DCRUnusedClientLifetime is how long a dynamically registered client is
 	// valid from its registration unless a grant is created for it. Registration
@@ -79,6 +79,9 @@ func cleanupAt(ctx context.Context, db *sql.DB, now time.Time) (CleanupResult, e
 	}
 	if result.Clients, err = q.DeleteRetainedOAuthClients(ctx, store.DeleteRetainedOAuthClientsParams{Cutoff: shortCutoff, BatchLimit: CleanupBatchSize}); err != nil {
 		return CleanupResult{}, fmt.Errorf("clean OAuth clients: %w", err)
+	}
+	if err = q.DeleteOldOAuthDCRRegistrations(ctx, now.Add(-dcrRegistrationWindow).UnixNano()); err != nil {
+		return CleanupResult{}, fmt.Errorf("clean OAuth registration budget: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return CleanupResult{}, fmt.Errorf("commit OAuth retention: %w", err)

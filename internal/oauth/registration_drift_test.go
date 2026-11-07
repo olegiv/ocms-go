@@ -43,10 +43,14 @@ func TestDCRWritersUseRegistrationBudget(t *testing.T) {
 				switch selector.Sel.Name {
 				case "UpsertOAuthClient":
 					upserts++
-					if fn.Name.Name != "saveClient" {
+					if fn.Name.Name != "saveClientTx" {
 						t.Errorf("%s: client write outside the shared persistence boundary", fset.Position(node.Pos()))
 					}
-				case "saveClient":
+				case "RecordOAuthDCRRegistration", "EvictOAuthDCRClient":
+					if fn.Name.Name != "registerDCR" {
+						t.Errorf("%s: DCR admission write outside registerDCR", fset.Position(node.Pos()))
+					}
+				case "saveClient", "saveClientTx":
 					// Inspect the enclosing call separately; method aliases cannot
 					// establish their client source at this boundary.
 					var call *ast.CallExpr
@@ -57,8 +61,16 @@ func TestDCRWritersUseRegistrationBudget(t *testing.T) {
 						return true
 					})
 					source := ""
-					if call != nil && len(call.Args) == 4 {
-						if literal, isLiteral := call.Args[2].(*ast.BasicLit); isLiteral && literal.Kind == token.STRING {
+					sourceArg := 2
+					if selector.Sel.Name == "saveClientTx" {
+						sourceArg++
+					}
+					if call != nil && len(call.Args) == sourceArg+2 {
+						if ident, isIdent := call.Args[sourceArg].(*ast.Ident); isIdent && ident.Name == "source" &&
+							selector.Sel.Name == "saveClientTx" && fn.Name.Name == "saveClient" {
+							return true
+						}
+						if literal, isLiteral := call.Args[sourceArg].(*ast.BasicLit); isLiteral && literal.Kind == token.STRING {
 							var decodeErr error
 							source, decodeErr = strconv.Unquote(literal.Value)
 							if decodeErr != nil {
@@ -69,7 +81,8 @@ func TestDCRWritersUseRegistrationBudget(t *testing.T) {
 					if source == "dcr" {
 						dcrWriters++
 					}
-					if source != "cimd" && (source != "dcr" || fn.Name.Name != "registerDCR") {
+					if !(source == "cimd" && selector.Sel.Name == "saveClient") &&
+						!(source == "dcr" && selector.Sel.Name == "saveClientTx" && fn.Name.Name == "registerDCR") {
 						t.Errorf("%s: client source %q bypasses the DCR admission boundary", fset.Position(node.Pos()), source)
 					}
 				}

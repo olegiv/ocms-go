@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -73,12 +74,13 @@ type Principal struct {
 
 // Service owns OAuth persistence and protocol integration.
 type Service struct {
-	db               *sql.DB
-	q                *store.Queries
-	options          Options
-	clients          *clientResolver
-	now              func() time.Time
-	dcrRegistrations dcrRegistrationBudget
+	db             *sql.DB
+	q              *store.Queries
+	options        Options
+	clients        *clientResolver
+	now            func() time.Time
+	dcrWrites      chan struct{}
+	dcrRefusalLogs [dcrRefusalKinds]atomic.Int64
 }
 
 // New constructs an issuer. HTTP is permitted only for literal development loopback origins.
@@ -106,7 +108,7 @@ func New(db *sql.DB, options Options) (*Service, error) {
 	if err := validateAllowedHosts(options.AllowedHosts); err != nil {
 		return nil, err
 	}
-	s := &Service{db: db, q: store.New(db), options: options, now: time.Now}
+	s := &Service{db: db, q: store.New(db), options: options, now: time.Now, dcrWrites: make(chan struct{}, 1)}
 	s.clients = newClientResolver(s)
 	if err := s.clients.loadPreRegistered(options.PreRegisteredClients); err != nil {
 		return nil, err

@@ -135,6 +135,15 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 		return "", problem("access_denied")
 	}
 	now := s.now().Unix()
+	if req.client.dynamicallyRegistered {
+		client, loadErr := q.GetOAuthClient(ctx, req.ClientID)
+		if loadErr != nil && !errors.Is(loadErr, sql.ErrNoRows) {
+			return "", failure(ctx, "temporarily_unavailable", "failed to reload consenting OAuth client", loadErr, "client_id", req.ClientID)
+		}
+		if loadErr != nil || client.ExpiresAt <= now {
+			return "", problem("invalid_client")
+		}
+	}
 	g, err := q.CreateOAuthGrant(ctx, store.CreateOAuthGrantParams{ID: randomCredential(""),
 		UserID: user.ID, ClientID: req.ClientID, Scopes: req.Scope, Resource: s.Resource(),
 		SessionVersion: user.SessionVersion, CreatedAt: now, ExpiresAt: now + int64(s.options.RefreshTTL/time.Second)})
@@ -431,14 +440,19 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, problem("invalid_client_metadata"))
 		return
 	}
-	retryAfter, err := s.registerDCR(r.Context(), c, middleware.GetClientIP(r))
+	refusal, err := s.registerDCR(r.Context(), c, middleware.GetClientIP(r))
 	if err != nil {
-		logFault(r.Context(), "failed to register OAuth client", err)
+		if errors.Is(err, errOAuthClientCapacity) {
+			s.logDCRRefusal(r.Context(), dcrRegistryFull)
+		} else {
+			logFault(r.Context(), "failed to register OAuth client", err)
+		}
 		WriteProblem(w, problem("temporarily_unavailable"))
 		return
 	}
-	if retryAfter > 0 {
-		seconds := int64((retryAfter + time.Second - 1) / time.Second)
+	if refusal.retryAfter > 0 {
+		s.logDCRRefusal(r.Context(), refusal.kind)
+		seconds := int64((refusal.retryAfter + time.Second - 1) / time.Second)
 		w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{
 			"error": "rate_limit_exceeded", "error_description": "Client registration limit reached. Retry later.",
