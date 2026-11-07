@@ -218,16 +218,30 @@ You can also run the Claude slash-command workflow directly from shell:
 ./scripts/codex/proxy-claude-command.sh /security-audit
 ```
 
-The proxy runs `claude -p` with `--permission-mode dontAsk` and a per-command
-`--allowedTools` list. Rules for tools that run project or package code are
-exact (`scripts/test-gate.sh`, `go vet ./...`, `golangci-lint run ./...`,
-`npm audit`); git commands are allowed by prefix, so `git commit` runs the
-repository's hooks and `git diff --output=<file>` can write a file. Anything
-else is denied without a prompt, so a check that needs another tool is skipped
-and reported by the command rather than run. This is a best-effort fence, not
-a sandbox. Avoid `--dangerously-skip-permissions`: these
-commands read diffs, logs and scan output, and text in them could otherwise
-steer the session into any shell command.
+`commit-prepare` tests the staged tree by default. To prepare an exact
+selection without changing the real index, use
+`./scripts/codex-commands commit-prepare -- FILE ...` with individual
+repository-relative files. Put `quality` or `q` before `--` to also run
+`golangci-lint` in the snapshot. Preparation runs the asset build and full
+test gate in a fresh snapshot with the recorded shared tooling revision.
+Claude drafts from the tested diff with tools disabled. The local variant
+uses the same gate and saves a draft for you to edit.
+
+`commit-do` and `commit-do-local` run the same terminal command. Stage the
+files listed at preparation, then review and approve the displayed draft by
+typing `YES`. The command verifies the prepared parent and staged tree,
+reruns the snapshot gate, and keeps Git's hooks enabled. An active commit hook
+other than the shipped read-only checks requires a guarded commit workflow.
+
+`security-audit` archives older loose reports under `.audit/` and saves
+Claude's final Markdown in a new dated run directory. Dated reports and
+archives stay in place. The launcher handles file creation and archive moves.
+The model's audit checks are listed in `scripts/codex/security-audit-proxy.md`.
+
+Code quality and audit sessions use `dontAsk` with command-specific tool
+permissions. The proxy reports checks that require manual execution.
+Run snapshot preparation only for trusted code. A fresh snapshot controls
+which source is tested, and the proxy allowlist is a best-effort guard.
 
 ## When to Use Which
 

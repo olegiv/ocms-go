@@ -24,7 +24,7 @@ var proxyBashRule = regexp.MustCompile(`"Bash\(([^)]*)\)"`)
 var codeRunningCommands = map[string]bool{
 	"go": true, "staticcheck": true, "errcheck": true, "golangci-lint": true, "nilaway": true,
 	"npm": true, "npx": true, "make": true, "sh": true, "bash": true, "python": true, "python3": true,
-	"node": true, "scripts/test-gate.sh": true, "./scripts/test-gate.sh": true,
+	"node": true, "govulncheck": true, "scripts/test-gate.sh": true, "./scripts/test-gate.sh": true,
 }
 
 // TestProxyRulesForCodeRunningToolsAreExact fails when the Codex proxy allows
@@ -66,12 +66,12 @@ func TestProxyRulesForCodeRunningToolsAreExact(t *testing.T) {
 }
 
 // TestProxyReadRulesKeepCommandBoundaries inspects the permissions actually
-// passed to Claude by every proxy entry point. A-T2's git diff* rule also
+// passed to Claude by proxy entry points that use Bash. A-T2's git diff* rule also
 // authorized git difftool --extcmd, and the old code-running-tool inventory
 // did not cover Git or date. Wildcards may vary arguments, not command names.
 func TestProxyReadRulesKeepCommandBoundaries(t *testing.T) {
 	root := filepath.Join("..", "..")
-	for _, workflow := range []string{"code-quality", "commit-prepare", "commit-do", "security-audit"} {
+	for _, workflow := range []string{"code-quality", "security-audit"} {
 		t.Run(workflow, func(t *testing.T) {
 			dir := t.TempDir()
 			write := func(name string, data []byte) {
@@ -93,7 +93,10 @@ func TestProxyReadRulesKeepCommandBoundaries(t *testing.T) {
 			}
 			// The strict-lint gate has its own real-hook regression test below.
 			write(".claude/hooks/go-strict-lint.sh", []byte("#!/bin/sh\nexit 0\n"))
-			write("bin/claude", []byte("#!/bin/sh\nprintf '%s\\0' \"$@\" > \"$PROXY_TEST_ARGS\"\n"))
+			// The audit's report lifecycle is covered by the real helper test.
+			write("scripts/codex/security-audit.sh", []byte("#!/bin/sh\npwd\n"))
+			write("scripts/codex/security-audit-proxy.md", []byte("Audit prompt\n"))
+			write("bin/claude", []byte("#!/bin/sh\nprintf '%s\\0' \"$@\" > \"$PROXY_TEST_ARGS\"\necho 'Fixture audit report'\n"))
 			argsFile := filepath.Join(dir, "args")
 			command := exec.Command("bash", filepath.Join(dir, "scripts", "codex-commands"), workflow)
 			command.Dir = dir
@@ -281,7 +284,6 @@ func TestCodeQualityProxyRequiresStrictLint(t *testing.T) {
 		{name: "nonexecutable", command: "/code-quality", damage: "mode", wantExit: 3, wantOutput: "requires executable"},
 		{name: "unexpected hook exit", command: "/code-quality", damage: "exit", wantExit: 3, wantOutput: "exit 127"},
 		{name: "Claude failure", command: "/code-quality", claudeExit: 9, wantExit: 9, wantCalls: "lint\nclaude\n"},
-		{name: "other command", command: "/security-audit", linterExit: 1, wantCalls: "claude\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "repository with spaces")

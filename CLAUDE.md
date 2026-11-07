@@ -466,9 +466,13 @@ Never tell the user to "restart the server and test" - always run the tests your
 
 It runs at these points, and a failing test blocks each:
 
-1. **`/commit-prepare`** (and `scripts/codex/commit-prepare.sh`), before a commit message is drafted
-2. **`scripts/codex/commit-do.sh`** (`make commit-do-local`), on the staged tree before it commits (gitignored files in the working tree are tested too, though not committed)
+1. **`/commit-prepare`** (and `scripts/codex/commit-prepare.sh`), on the exact candidate tree in a fresh snapshot before a commit message is drafted. The launcher uses the staged tree or the individual files named after `--`.
+2. **`scripts/codex/commit-do.sh`** (`make commit-do` and `make commit-do-local`), in a fresh snapshot of the prepared staged tree. The terminal prompt requires an explicit `YES` for that message and tree before Git runs the commit hooks.
 3. **`git push`**, through the `pre-push` hook (`.githooks/pre-push`), on exactly the commit being pushed. The hook refuses to push a ref that is not `HEAD`, or a tree with uncommitted or untracked files, because it tests the working tree.
+
+The local snapshot helper rebuilds assets with `CI=true` and checks out the
+recorded `.claude/shared` revision. It requires the build tools and versioned
+Go dependencies. Use a trusted checkout for these commands.
 
 Install the hook once per clone:
 

@@ -1,74 +1,91 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-AUDIT_DIR="$ROOT_DIR/.audit"
+case "${1:-}" in
+  -h|--help)
+    echo 'Usage: ./scripts/codex/security-audit.sh [--prepare]'
+    exit 0
+    ;;
+  ''|--prepare) ;;
+  *) echo 'Usage: ./scripts/codex/security-audit.sh [--prepare]' >&2; exit 2 ;;
+esac
+if [[ $# -gt 1 ]]; then
+  echo 'The audit destination is fixed at .audit/.' >&2
+  exit 2
+fi
 
-usage() {
-  cat <<'EOT'
-Usage:
-  ./scripts/codex/security-audit.sh
-EOT
-}
+root=$(git rev-parse --show-toplevel)
+cd -P "$root"
+audit_dir="$PWD/.audit"
+if [[ -L "$audit_dir" || ( -e "$audit_dir" && ! -d "$audit_dir" ) ]] ||
+  [[ -n $(git ls-files -- .audit) ]] || ! git check-ignore -q -- .audit/; then
+  echo 'Use a real, gitignored .audit directory in the repository.' >&2
+  exit 2
+fi
+mkdir -p -- "$audit_dir"
+lock_dir="$audit_dir/.archive.lock"
+if ! mkdir -- "$lock_dir"; then
+  echo 'Another audit is preparing its report directory.' >&2
+  exit 2
+fi
+trap 'rmdir -- "$lock_dir"' EXIT
+timestamp=$(date '+%Y-%m-%d_%H-%M-%S')
+archive_dir=
+shopt -s nullglob dotglob
+for path in "$audit_dir"/*; do
+  # Keep timestamped reports and archives in place on later runs.
+  if [[ -d "$path" && ! -L "$path" ]]; then
+    case "${path##*/}" in
+      .archive.lock|run-*|archive-*|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]) continue ;;
+    esac
+  fi
+  if [[ -z "$archive_dir" ]]; then
+    archive_dir=$(mktemp -d "$audit_dir/archive-$timestamp.XXXXXXXX")
+    printf 'Archiving previous audit files in %s\n' "$archive_dir" >&2
+  fi
+  mv -- "$path" "$archive_dir/"
+done
+shopt -u nullglob dotglob
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
+run_dir=$(mktemp -d "$audit_dir/run-$timestamp.XXXXXXXX")
+rmdir -- "$lock_dir"
+trap - EXIT
+if [[ ${1:-} == --prepare ]]; then
+  printf '%s\n' "$run_dir"
   exit 0
 fi
 
-cd "$ROOT_DIR"
-mkdir -p "$AUDIT_DIR"
-
-timestamp="$(date '+%Y-%m-%d_%H-%M-%S')"
-archive_dir="$AUDIT_DIR/$timestamp"
-
-shopt -s nullglob dotglob
-existing=("$AUDIT_DIR"/*)
-if [[ ${#existing[@]} -gt 0 ]]; then
-  mkdir -p "$archive_dir"
-  for path in "${existing[@]}"; do
-    [[ "$path" == "$archive_dir" ]] && continue
-    mv "$path" "$archive_dir"/
-  done
-  echo "Archived previous audit files to: $archive_dir"
-fi
-shopt -u nullglob dotglob
-
-govuln_log="$AUDIT_DIR/govulncheck-$timestamp.log"
-npm_log="$AUDIT_DIR/npm-audit-$timestamp.log"
-report_file="$AUDIT_DIR/security-audit-$timestamp.md"
-
 overall_status=0
-govuln_status="skipped (govulncheck missing)"
-npm_status="skipped (npm/package.json missing)"
+govuln_status='skipped (govulncheck missing)'
+npm_status='skipped (npm/package.json missing)'
 
 if command -v govulncheck >/dev/null 2>&1; then
-  if govulncheck ./... >"$govuln_log" 2>&1; then
-    govuln_status="ok"
+  if govulncheck ./... >"$run_dir/govulncheck.log" 2>&1; then
+    govuln_status=ok
   else
-    govuln_status="issues found"
+    govuln_status='issues found'
     overall_status=1
   fi
 else
-  printf 'govulncheck is not installed\n' >"$govuln_log"
+  printf 'govulncheck is not installed\n' >"$run_dir/govulncheck.log"
 fi
 
 if command -v npm >/dev/null 2>&1 && [[ -f package.json ]]; then
-  if npm audit --json >"$npm_log" 2>&1; then
-    npm_status="ok"
+  if npm audit --json >"$run_dir/npm-audit.log" 2>&1; then
+    npm_status=ok
   else
-    npm_status="issues found"
+    npm_status='issues found'
     overall_status=1
   fi
 else
-  printf 'npm is not installed or package.json is missing\n' >"$npm_log"
+  printf 'npm is not installed or package.json is missing\n' >"$run_dir/npm-audit.log"
 fi
 
-cat >"$report_file" <<EOT
+cat >"$run_dir/report.md" <<EOT
 # Security Audit Report
 
 Date: $(date -u '+%Y-%m-%d %H:%M:%SZ')
-Project: $(basename "$ROOT_DIR")
+Project: $(basename "$root")
 
 ## Scan Summary
 
@@ -77,15 +94,8 @@ Project: $(basename "$ROOT_DIR")
 
 ## Raw Logs
 
-- \`$govuln_log\`
-- \`$npm_log\`
+- govulncheck.log
+- npm-audit.log
 EOT
-
-echo "Security audit report generated: $report_file"
-
-if [[ "$overall_status" -ne 0 ]]; then
-  echo "Security audit completed with findings. Review logs in .audit/."
-  exit 1
-fi
-
-echo "Security audit completed with no findings from executed scanners."
+printf 'Security audit report generated: %s/report.md\n' "$run_dir"
+exit "$overall_status"

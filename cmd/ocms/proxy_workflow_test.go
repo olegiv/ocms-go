@@ -1,0 +1,332 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package main
+
+import (
+	"bytes"
+	"errors"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+)
+
+type proxyWorkflowFixture struct {
+	t   *testing.T
+	dir string
+	bin string
+	env []string
+}
+
+func newProxyWorkflowFixture(t *testing.T) proxyWorkflowFixture {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "checkout with spaces")
+	bin := t.TempDir()
+	f := proxyWorkflowFixture{t: t, dir: dir, bin: bin, env: []string{
+		"PATH=" + bin + ":" + os.Getenv("PATH"),
+		"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_AUTHOR_NAME=Fixture", "GIT_AUTHOR_EMAIL=fixture@example.invalid",
+		"GIT_COMMITTER_NAME=Fixture", "GIT_COMMITTER_EMAIL=fixture@example.invalid",
+		"FIXTURE_ROOT=" + dir, "FIXTURE_BIN=" + bin,
+	}}
+	for _, name := range []string{
+		"scripts/codex-commands", "scripts/codex/proxy-claude-command.sh",
+		"scripts/codex/commit-prepare.sh", "scripts/codex/commit-do.sh",
+		"scripts/codex/test-snapshot.sh", "scripts/codex/security-audit.sh",
+		"scripts/codex/security-audit-proxy.md",
+	} {
+		data, err := os.ReadFile(filepath.Join("..", "..", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.write(name, string(data))
+	}
+	f.write(".gitignore", ".audit/\n.env\n")
+	f.git("init", "-q", "--template=")
+	f.script("claude", `#!/bin/sh
+printf '%s\0' "$@" > "$FIXTURE_BIN/claude-args"
+if [ "${1:-}" = --permission-mode ] && [ "${3:-}" = --tools ]; then
+  cat > "$FIXTURE_BIN/draft-input"
+  printf 'Update the fixture\n\nApply the tested edits.\n'
+else
+  printf '# Fixture audit report\n'
+fi
+exit "${FIXTURE_CLAUDE_EXIT:-0}"
+`)
+	return f
+}
+
+func (f proxyWorkflowFixture) write(name, contents string) {
+	f.t.Helper()
+	target := filepath.Join(f.dir, name)
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		f.t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(contents), 0o755); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+func (f proxyWorkflowFixture) script(name, contents string) {
+	f.t.Helper()
+	if err := os.WriteFile(filepath.Join(f.bin, name), []byte(contents), 0o755); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+func (f proxyWorkflowFixture) command(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = f.dir
+	cmd.Env = f.env
+	return cmd
+}
+
+func (f proxyWorkflowFixture) git(args ...string) string {
+	f.t.Helper()
+	out, err := f.command("git", args...).CombinedOutput()
+	if err != nil {
+		f.t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func (f proxyWorkflowFixture) run(input string, want int, args ...string) string {
+	f.t.Helper()
+	cmd := f.command("bash", append([]string{"scripts/codex-commands"}, args...)...)
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.CombinedOutput()
+	var exitErr *exec.ExitError
+	status := 0
+	if err != nil {
+		if !errors.As(err, &exitErr) {
+			f.t.Fatal(err)
+		}
+		status = exitErr.ExitCode()
+	}
+	if status != want {
+		f.t.Fatalf("%v: exit %d, want %d\n%s", args, status, want, out)
+	}
+	return string(out)
+}
+
+func readWorkflowFile(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func requireWorkflowFileAbsent(t *testing.T, name string) {
+	t.Helper()
+	if _, err := os.Lstat(name); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("expected %s to be absent, stat error: %v", name, err)
+	}
+}
+
+func (f proxyWorkflowFixture) seedSnapshot() {
+	f.t.Helper()
+	f.write("go.mod", "module example.invalid/fixture\n\ngo 1.22\n")
+	f.write("page with spaces.txt", "base\n")
+	f.write("unrelated.txt", "base\n")
+	f.write("scripts/build-assets.sh", `#!/bin/bash
+set -euo pipefail
+[[ ! "$PWD" -ef "$FIXTURE_ROOT" && ! -e .env && ! -e ignored.go && ! -e untracked.go ]]
+[[ "$CI" == true && "$GOWORK" == off && "$OCMS_REQUIRE_SHARED_TOOLING" == 1 ]]
+[[ $(cat .claude/shared/version) == pinned ]]
+printf 'assets\n' >> "$FIXTURE_BIN/trace"
+if [[ ${FIXTURE_MUTATE:-0} == 1 ]]; then echo changed > unrelated.txt; fi
+`)
+	f.write("scripts/test-gate.sh", `#!/bin/bash
+set -euo pipefail
+[[ ! "$PWD" -ef "$FIXTURE_ROOT" && $(cat unrelated.txt) == base ]]
+[[ $(cat 'page with spaces.txt') == "$FIXTURE_EXPECTED" ]]
+printf 'gate\n' >> "$FIXTURE_BIN/trace"
+exit "${FIXTURE_GATE_EXIT:-0}"
+`)
+	f.write(".gitignore", ".audit/\n.env\nignored.go\n")
+	f.git("add", "--all")
+	f.git("init", "-q", "--template=", ".claude/shared")
+	f.write(".claude/shared/version", "pinned\n")
+	f.git("-C", ".claude/shared", "add", "--", "version")
+	shared := f.git("-C", ".claude/shared", "commit-tree", f.git("-C", ".claude/shared", "write-tree"), "-m", "Fixture shared")
+	f.git("-C", ".claude/shared", "read-tree", shared)
+	f.write(".claude/shared/.git/HEAD", shared+"\n")
+	f.git("update-index", "--add", "--cacheinfo", "160000,"+shared+",.claude/shared")
+	base := f.git("commit-tree", f.git("write-tree"), "-m", "Fixture base")
+	f.write(".git/HEAD", base+"\n")
+	f.write(".claude/shared/version", "dirty shared checkout\n")
+	f.write(".env", "not part of the candidate\n")
+	f.write("ignored.go", "not part of the candidate\n")
+	f.write("untracked.go", "not part of the candidate\n")
+	f.write("unrelated.txt", "unrelated worktree edits\n")
+}
+
+func TestProxyCommitWorkflowTestsCandidateBeforeDrafting(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		args   []string
+		env    []string
+		trace  string
+		status int
+	}{
+		{name: "staged only", args: []string{"commit-prepare"}, trace: "assets\ngate\n"},
+		{name: "named file", args: []string{"commit-prepare", "--", "page with spaces.txt"}, trace: "assets\ngate\n"},
+		{name: "gate failure", args: []string{"commit-prepare"}, env: []string{"FIXTURE_GATE_EXIT=7"}, trace: "assets\ngate\n", status: 7},
+		{name: "tracked asset drift", args: []string{"commit-prepare"}, env: []string{"FIXTURE_MUTATE=1"}, trace: "assets\n", status: 2},
+		{name: "local replacement", args: []string{"commit-prepare"}, status: 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newProxyWorkflowFixture(t)
+			f.seedSnapshot()
+			f.write("page with spaces.txt", "intended\n")
+			if tt.name != "named file" {
+				f.git("add", "--", "page with spaces.txt")
+				f.write("page with spaces.txt", "later worktree edit\n")
+			}
+			if tt.name == "local replacement" {
+				f.write("go.mod", "module example.invalid/fixture\n\ngo 1.22\n\nreplace example.invalid/lib => ../outside\n")
+				f.git("add", "--", "go.mod")
+			}
+			f.env = append(f.env, "FIXTURE_EXPECTED=intended")
+			f.env = append(f.env, tt.env...)
+			f.write(".git/.codex/tested-tree", "stale receipt\n")
+			index := f.git("write-tree")
+			indexFile := filepath.Join(f.dir, ".git/index")
+			indexBytes := readWorkflowFile(t, indexFile)
+			out := f.run("", tt.status, tt.args...)
+			if !bytes.Equal(readWorkflowFile(t, indexFile), indexBytes) {
+				t.Fatalf("preparation changed the index for tree %s", index)
+			}
+			if tt.trace == "" {
+				requireWorkflowFileAbsent(t, filepath.Join(f.bin, "trace"))
+			} else if trace := readWorkflowFile(t, filepath.Join(f.bin, "trace")); string(trace) != tt.trace {
+				t.Fatalf("gate order: %q, want %q", trace, tt.trace)
+			}
+			receiptFile := filepath.Join(f.dir, ".git/.codex/tested-tree")
+			if tt.status != 0 {
+				requireWorkflowFileAbsent(t, receiptFile)
+				requireWorkflowFileAbsent(t, filepath.Join(f.bin, "claude-args"))
+				return
+			}
+			receipt := strings.Fields(string(readWorkflowFile(t, receiptFile)))
+			if len(receipt) != 2 || !strings.Contains(out, "Verified tree "+receipt[1]) ||
+				f.git("show", receipt[1]+":page with spaces.txt") != "intended" {
+				t.Fatalf("wrong tested tree: %q\n%s", receipt, out)
+			}
+			args := readWorkflowFile(t, filepath.Join(f.bin, "claude-args"))
+			if !bytes.Contains(args, []byte("--tools\x00\x00")) ||
+				!bytes.Contains(args, []byte("--strict-mcp-config\x00")) || bytes.Contains(args, []byte("--allowedTools")) {
+				t.Fatalf("draft session has unexpected tool permissions: %q", args)
+			}
+			diff := readWorkflowFile(t, filepath.Join(f.bin, "draft-input"))
+			if !bytes.Contains(diff, []byte("+intended\n")) || bytes.Contains(diff, []byte("later worktree edit")) ||
+				bytes.Contains(diff, []byte("unrelated worktree edits")) {
+				t.Fatalf("draft did not receive the tested diff:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestProxyCommitWorkflowRequiresTerminal(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	f.seedSnapshot()
+	f.write("page with spaces.txt", "intended\n")
+	f.git("add", "--", "page with spaces.txt")
+	f.env = append(f.env, "FIXTURE_EXPECTED=intended")
+	f.run("", 0, "commit-prepare-local")
+	for _, workflow := range []string{"commit-do", "commit-do-local"} {
+		if out := f.run("YES\n", 2, workflow); !strings.Contains(out, "requires an interactive terminal") {
+			t.Fatal(out)
+		}
+	}
+	f.write(".git/hooks/prepare-commit-msg", "#!/bin/sh\nexit 0\n")
+	if out := f.run("", 2, "commit-do"); !strings.Contains(out, "active prepare-commit-msg hook") {
+		t.Fatal(out)
+	}
+	f.write("unrelated.txt", "staged after preparation\n")
+	f.git("add", "--", "unrelated.txt")
+	if out := f.run("", 2, "commit-do"); !strings.Contains(out, "staged tree differs") {
+		t.Fatal(out)
+	}
+	requireWorkflowFileAbsent(t, filepath.Join(f.bin, "claude-args"))
+}
+
+func TestProxyAuditOwnsReportDestination(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	f.write(".audit/old-report.md", "previous report\n")
+	f.write(".audit/2026-11-05_20-00-00/history.md", "older archive\n")
+	f.run("", 0, "security-audit", "scope note")
+	reports, err := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.md"))
+	if err != nil || len(reports) != 1 || string(readWorkflowFile(t, reports[0])) != "# Fixture audit report\n" {
+		t.Fatalf("new report: %v, %v", reports, err)
+	}
+	archived, err := filepath.Glob(filepath.Join(f.dir, ".audit/archive-*/old-report.md"))
+	if err != nil || len(archived) != 1 || string(readWorkflowFile(t, archived[0])) != "previous report\n" {
+		t.Fatalf("archived report: %v, %v", archived, err)
+	}
+	requireWorkflowFileAbsent(t, filepath.Join(f.dir, ".audit/old-report.md"))
+	readWorkflowFile(t, filepath.Join(f.dir, ".audit/2026-11-05_20-00-00/history.md"))
+
+	data := readWorkflowFile(t, filepath.Join(f.bin, "claude-args"))
+	args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
+	start, end := slices.Index(args, "--allowedTools"), slices.Index(args, "-p")
+	toolFlag := slices.Index(args, "--tools")
+	if start < 0 || end <= start || toolFlag < 0 || toolFlag+1 >= len(args) || args[toolFlag+1] != "Bash,Read,Glob,Grep" {
+		t.Fatalf("unexpected audit tools: %q", args)
+	}
+	allowed := args[start+1 : end]
+	for _, rule := range allowed {
+		if strings.HasPrefix(rule, "Write") || strings.HasPrefix(rule, "Edit") ||
+			strings.HasPrefix(rule, "Bash(mkdir") || strings.HasPrefix(rule, "Bash(mv") {
+			t.Errorf("audit must not grant filesystem writes: %q", rule)
+		}
+	}
+	// Every shell command in the effective audit prompt is allowed exactly.
+	// Other checks are explicitly manual, rather than silently skipped.
+	promptIndex := slices.Index(args, "--append-system-prompt")
+	if promptIndex < 0 || promptIndex+1 >= len(args) {
+		t.Fatalf("missing proxy audit instructions: %q", args)
+	}
+	prompt := args[promptIndex+1]
+	_, commands, found := strings.Cut(prompt, "```bash\n")
+	body, _, closed := strings.Cut(commands, "\n```")
+	if !found || !closed || !strings.Contains(prompt, "are manual") {
+		t.Fatal("audit prompt must list executable checks and the manual fallback")
+	}
+	for _, command := range strings.Split(body, "\n") {
+		if !slices.Contains(allowed, "Bash("+command+")") {
+			t.Errorf("audit prompt requests a shell command without permission: %q", command)
+		}
+	}
+
+	f.env = append(f.env, "FIXTURE_CLAUDE_EXIT=9")
+	f.run("", 9, "security-audit")
+	if pending, pendingErr := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.incomplete")); pendingErr != nil || len(pending) != 0 {
+		t.Fatalf("failed audit left partial report: %v, %v", pending, pendingErr)
+	}
+	if current, currentErr := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.md")); currentErr != nil || !slices.Equal(current, reports) {
+		t.Fatalf("failed audit replaced a completed report: %v, %v", current, currentErr)
+	}
+}
+
+func TestProxyAuditRefusesOutsideDestination(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(f.dir, ".audit")); err != nil {
+		t.Fatal(err)
+	}
+	if out := f.run("", 2, "security-audit"); !strings.Contains(out, "real, gitignored .audit directory") {
+		t.Fatal(out)
+	}
+	requireWorkflowFileAbsent(t, filepath.Join(f.bin, "claude-args"))
+	entries, err := os.ReadDir(outside)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("audit wrote outside its repository: %v, %v", entries, err)
+	}
+}
