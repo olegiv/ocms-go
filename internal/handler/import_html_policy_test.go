@@ -65,12 +65,11 @@ func TestAdminImportAppliesConfiguredHTMLPolicy(t *testing.T) {
 				if err = h.stageImportPayload(req.Context(), payload); err != nil {
 					t.Fatal(err)
 				}
+				t.Cleanup(func() { h.discardStagedImport(req.Context()) })
 				recorder := httptest.NewRecorder()
 				h.Import(recorder, req)
 				if block {
-					if !strings.Contains(sm.GetString(req.Context(), "flash_error"), "blocked by policy") {
-						t.Fatal("raw suspicious markup was not refused")
-					}
+					assertImportErrorAlert(t, recorder, "Import failed: import contains pages with suspicious HTML markup that is blocked by policy")
 					// The shared importer receives the blocking flag as well as the
 					// handler's existing early refusal/audit check.
 					result, importErr := h.newImporter().Import(req.Context(), &data, transfer.ImportOptions{ImportPages: true})
@@ -85,6 +84,9 @@ func TestAdminImportAppliesConfiguredHTMLPolicy(t *testing.T) {
 				}
 				if !strings.Contains(recorder.Body.String(), "Unsupported HTML was removed from the page body") || strings.Contains(recorder.Body.String(), "B2_PRIVATE_BODY") {
 					t.Fatal("removal note absent or body exposed in result")
+				}
+				if !strings.Contains(recorder.Body.String(), `class="import-success"`) || strings.Contains(recorder.Body.String(), `class="alert alert-error`) {
+					t.Fatal("successful import did not render its normal result")
 				}
 			})
 		}

@@ -112,7 +112,9 @@ func TestImportZipMetadataLimitsAcrossPreviewAndStagedImport(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/admin/import/validate", &body)
 			req.Header.Set("Content-Type", writer.FormDataContentType())
 			req = addUserToContext(requestWithSession(sm, req), &user)
-			h.ImportValidate(httptest.NewRecorder(), req)
+			preview := httptest.NewRecorder()
+			h.ImportValidate(preview, req)
+			assertImportErrorAlert(t, preview, importZipUnreadableMessage)
 			if _, staged, err := h.loadStagedImport(req.Context()); err != nil || staged {
 				t.Fatalf("rejected preview staged its payload: %v, %v", staged, err)
 			}
@@ -122,11 +124,11 @@ func TestImportZipMetadataLimitsAcrossPreviewAndStagedImport(t *testing.T) {
 			if err := h.stageImportPayload(confirm.Context(), archive); err != nil {
 				t.Fatal(err)
 			}
+			t.Cleanup(func() { h.discardStagedImport(confirm.Context()) })
 			sm.Put(confirm.Context(), "import_is_zip", true)
-			h.Import(httptest.NewRecorder(), confirm)
-			if message := sm.GetString(confirm.Context(), "flash_error"); message != importZipUnreadableMessage {
-				t.Fatalf("staged metadata reached later import processing: %q", message)
-			}
+			recorder := httptest.NewRecorder()
+			h.Import(recorder, confirm)
+			assertImportErrorAlert(t, recorder, importZipUnreadableMessage)
 			var count int
 			if err := db.QueryRow(`SELECT COUNT(*) FROM config WHERE key IN ('oversized', 'r17_zip_fixture')`).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("rejected import wrote settings: %d, %v", count, err)

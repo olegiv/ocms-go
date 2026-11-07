@@ -293,7 +293,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 
 	// Parse multipart form (max 100MB for zip files with media)
 	if err := r.ParseMultipartForm(maxImportUploadBytes); err != nil {
-		h.renderImportError(w, r, user, "Failed to parse form: "+err.Error())
+		h.logger.Warn("failed to parse import upload", "error", err, "user_id", middleware.GetUserID(r))
+		h.renderImportError(w, r, user, "Failed to read the upload form. Check the file size and try again.")
 		return
 	}
 
@@ -323,7 +324,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	// Read file content with a hard cap to prevent memory exhaustion.
 	content, err := readImportFileContent(file, maxImportUploadBytes)
 	if err != nil {
-		h.renderImportError(w, r, user, err.Error())
+		h.logger.Error("failed to read import upload", "error", err, "user_id", middleware.GetUserID(r))
+		h.renderImportError(w, r, user, "Failed to read the uploaded file. Please upload it again.")
 		return
 	}
 
@@ -339,7 +341,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		// Validate zip file
 		validationResult, err = importer.ValidateZipBytes(r.Context(), content)
 		if err != nil {
-			h.renderImportError(w, r, user, "Validation failed: "+err.Error())
+			h.logger.Error("failed to validate import archive", "error", err, "user_id", middleware.GetUserID(r))
+			h.renderImportError(w, r, user, importValidationFailedMessage)
 			return
 		}
 
@@ -365,7 +368,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		// Validate JSON data
 		validationResult, err = importer.ValidateData(r.Context(), &exportData)
 		if err != nil {
-			h.renderImportError(w, r, user, "Validation failed: "+err.Error())
+			h.logger.Error("failed to validate import data", "error", err, "user_id", middleware.GetUserID(r))
+			h.renderImportError(w, r, user, importValidationFailedMessage)
 			return
 		}
 	}
@@ -592,8 +596,8 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		// for a nil or dry-run result, so it belongs ahead of every branch.
 		h.invalidateCachesAfterImport(r.Context(), result)
 		if err != nil {
-			h.logger.Error("zip import failed", "error", err)
-			h.renderImportError(w, r, user, "Import failed: "+err.Error())
+			h.logger.Error("zip import failed", "error", err, "user_id", middleware.GetUserID(r))
+			h.renderImportError(w, r, user, importExecutionFailedMessage)
 			return
 		}
 
@@ -615,8 +619,8 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		result, err = importer.Import(r.Context(), &exportData, opts)
 		h.invalidateCachesAfterImport(r.Context(), result)
 		if err != nil {
-			h.logger.Error("import failed", "error", err)
-			h.renderImportError(w, r, user, "Import failed: "+err.Error())
+			h.logger.Error("import failed", "error", err, "user_id", middleware.GetUserID(r))
+			h.renderImportError(w, r, user, importExecutionFailedMessage)
 			return
 		}
 
@@ -625,18 +629,6 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	// Clear common session data
 	h.sessionManager.Remove(r.Context(), "import_is_zip")
-
-	// Set flash message based on result
-	if result.Success {
-		if result.DryRun {
-			h.sessionManager.Put(r.Context(), "flash_success", "Dry run completed successfully. No changes were made.")
-		} else {
-			h.sessionManager.Put(r.Context(), "flash_success", fmt.Sprintf("Import completed: %d created, %d updated, %d skipped",
-				result.TotalCreated(), result.TotalUpdated(), result.TotalSkipped()))
-		}
-	} else {
-		h.sessionManager.Put(r.Context(), "flash_error", fmt.Sprintf("Import completed with %d errors", len(result.Errors)))
-	}
 
 	h.renderImportPage(w, r, user, ImportFormData{
 		ConflictStrategies: defaultConflictStrategies(),
@@ -662,11 +654,16 @@ func (h *ImportExportHandler) invalidateCachesAfterImport(ctx context.Context, r
 
 // renderImportError renders the import form with an error message.
 func (h *ImportExportHandler) renderImportError(w http.ResponseWriter, r *http.Request, user interface{}, errMsg string) {
-	h.sessionManager.Put(r.Context(), "flash_error", errMsg)
+	h.renderer.SetFlash(r, errMsg, "error")
 	h.renderImportPage(w, r, user, ImportFormData{
 		ConflictStrategies: defaultConflictStrategies(),
 	})
 }
+
+const (
+	importValidationFailedMessage = "The uploaded file could not be validated. Check the server log for details."
+	importExecutionFailedMessage  = "The import could not be completed. Check the server log for details."
+)
 
 // importZipUnreadableMessage is shown instead of the raw archive error, which
 // can name server paths; the detail goes to the log.
