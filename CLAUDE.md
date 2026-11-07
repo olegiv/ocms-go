@@ -27,10 +27,10 @@ npm update                # Update htmx, alpine.js in package.json
 make assets               # Reinstall and copy to static/dist/js
 
 # Codex-compatible workflow commands
-make commit-prepare       # Proxy to Claude /commit-prepare
-make commit-do            # Proxy to Claude /commit-do
+make commit-prepare       # Test the staged tree, then draft from its diff
+make commit-do            # Approve the prepared commit in a terminal
 make code-quality         # Proxy to Claude /code-quality
-make security-audit       # Proxy to Claude /security-audit
+make security-audit       # Run a report-only Claude audit
 make commit-prepare-local # Test gate, then draft a commit message locally
 make commit-do-local      # Commit staged files after the test gate
 make code-quality-local   # Run local quality checks shell script
@@ -38,7 +38,7 @@ make security-audit-local # Run local security audit shell script
 # Codex note: /code-quality, /security-audit, /commit-prepare, and /commit-do
 # are not registered UI slash commands and may show "No commands". Use make
 # targets or ask in chat: "run code-quality", "run security-audit", etc.
-# Run Claude slash command from CLI (non-interactive, scoped tool allowlist):
+# Run the guarded workflow launchers from a terminal:
 ./scripts/codex/proxy-claude-command.sh /commit-prepare
 ./scripts/codex/proxy-claude-command.sh /commit-do
 ./scripts/codex/proxy-claude-command.sh /code-quality
@@ -837,7 +837,7 @@ Module system specialist. Creates and manages modules with lifecycle hooks and i
 **Invoke:** `@module-developer`
 
 ### security-auditor
-Security vulnerability scanner and auditor. Identifies security issues and ensures best practices.
+Read-only security reviewer. Analyzes source, configuration and existing scan reports, then returns findings and proposed remediation.
 
 **Usage examples:**
 - "Scan for vulnerabilities"
@@ -845,7 +845,7 @@ Security vulnerability scanner and auditor. Identifies security issues and ensur
 - "Review CSRF protection"
 - "Audit API authentication"
 
-**Invoke:** `@security-auditor` or use the `/security-audit` command
+**Invoke:** `@security-auditor` for review. Use `/security-audit` for a fresh scan.
 
 ### code-quality-auditor
 Code quality scanner for Go applications. Detects duplicate code, unhandled errors, constant comparisons, empty slice literals, package name collisions, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
@@ -875,7 +875,7 @@ Admin Dashboard UX developer. Creates and modifies admin UI components using tem
 Quick commands for common development tasks:
 
 ### /test
-Run all Go tests with verbose output and coverage reporting. Sets the required `OCMS_SESSION_SECRET` environment variable automatically.
+Run all Go tests uncached with verbose output, coverage reporting and a development session secret.
 
 ### /build
 Build the production binary. Compiles SCSS assets and creates the `bin/ocms` binary.
@@ -893,13 +893,13 @@ Start the development server with asset compilation. Runs `make dev` and reports
 Test REST API endpoints with actual HTTP requests. Starts server, runs curl tests, and reports results.
 
 ### /security-audit
-Perform a comprehensive security audit and store reports in `.audit/`.
+Hand off to the report-only terminal launcher, which saves results in `.audit/`.
 
 ### /code-quality
 Scan the project for code quality issues including unhandled errors, duplicate code, constant comparisons, empty slice literals, package name collisions, CSP template safety, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
 
 ### /commit-prepare
-Review changes and prepare a commit message. Runs `/code-quality` first and asks for confirmation if issues are found before proceeding with the commit message.
+Test the exact candidate tree before preparing a draft. Use `quality` or `q` to include quality checks. `/commit-do` hands off approval of the tested tree and message to the terminal helper.
 
 ### /templui-add
 Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps (`templ generate`, `go mod tidy`, `make assets`).

@@ -276,6 +276,10 @@ func TestProxyAuditOwnsReportDestination(t *testing.T) {
 	data := readWorkflowFile(t, filepath.Join(f.bin, "claude-args"))
 	args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
 	start, end := slices.Index(args, "--allowedTools"), slices.Index(args, "-p")
+	if end < 0 || end+1 >= len(args) || !slices.Contains(args, "--disable-slash-commands") ||
+		!strings.HasPrefix(args[end+1], "Perform the oCMS security audit.") || !strings.HasSuffix(args[end+1], "scope note") {
+		t.Fatalf("expected a direct audit prompt with the caller's scope, got %q", args)
+	}
 	toolFlag := slices.Index(args, "--tools")
 	if start < 0 || end <= start || toolFlag < 0 || toolFlag+1 >= len(args) || args[toolFlag+1] != "Bash,Read,Glob,Grep" {
 		t.Fatalf("unexpected audit tools: %q", args)

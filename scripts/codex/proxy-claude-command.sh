@@ -86,6 +86,9 @@ if [[ $# -gt 0 ]]; then
 fi
 
 echo "Proxying to Claude command: $prompt"
+if [[ "$slash_command" == /security-audit ]]; then
+  prompt="Perform the oCMS security audit. Scope notes: $*"
+fi
 claude_args=(--permission-mode dontAsk --allowedTools "${tools[@]}" -p "$prompt")
 if [[ "$slash_command" == /code-quality ]]; then
   # The shared command's variable-based hook invocation is not auto-approved.
@@ -118,7 +121,7 @@ if [[ "$slash_command" == /security-audit ]]; then
   run_dir=$("$project_dir/scripts/codex/security-audit.sh" --prepare)
   # Keep the report's destination under launcher control. The session
   # produces Markdown on stdout and gets no file-editing or agent tools.
-  claude_args+=(--tools Bash,Read,Glob,Grep --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+  claude_args+=(--disable-slash-commands --tools Bash,Read,Glob,Grep --strict-mcp-config --mcp-config '{"mcpServers":{}}'
     --disallowedTools 'Bash(mkdir *)' 'Bash(mv *)'
     --append-system-prompt "$(cat "$project_dir/scripts/codex/security-audit-proxy.md")")
   (

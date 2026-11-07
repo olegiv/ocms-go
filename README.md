@@ -433,10 +433,10 @@ make run
 | `make sqlc` | Regenerate sqlc code from SQL queries |
 | `make templ` | Regenerate templ Go code from `.templ` files |
 | `make deploy-binary` | Deploy binary to remote server (no custom content) |
-| `make commit-prepare` | Proxy to Claude slash command `/commit-prepare` |
-| `make commit-do` | Proxy to Claude slash command `/commit-do` |
+| `make commit-prepare` | Test the staged tree and draft a message from its diff |
+| `make commit-do` | Recheck the prepared tree and approve the commit in a terminal |
 | `make code-quality` | Proxy to Claude slash command `/code-quality` |
-| `make security-audit` | Proxy to Claude slash command `/security-audit` |
+| `make security-audit` | Run a report-only Claude audit and save it under `.audit/` |
 | `make commit-prepare-local` | Run the test gate, then draft a commit message locally |
 | `make commit-do-local` | Commit the staged files with the drafted message after the test gate |
 | `make code-quality-local` | Run local code quality shell script (`golangci-lint`, `nilaway`, `go test`) |
@@ -957,17 +957,17 @@ for the full rationale.
 
 Run all tests:
 ```bash
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test ./...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 ./...
 ```
 
 Run tests with verbose output:
 ```bash
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v ./...
 ```
 
 Run tests for a specific package:
 ```bash
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/store/...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v ./internal/store/...
 ```
 
 Check for vulnerabilities:
@@ -1035,16 +1035,16 @@ You can run slash-command equivalents through Claude CLI:
 ./scripts/codex/proxy-claude-command.sh /security-audit
 ```
 
-The proxy runs `claude -p` with `--permission-mode dontAsk` and a per-command
-`--allowedTools` list. Rules for tools that run project or package code are
-exact (`scripts/test-gate.sh`, `go vet ./...`, `golangci-lint run ./...`,
-`npm audit`); git commands are allowed by prefix, so `git commit` runs the
-repository's hooks and `git diff --output=<file>` can write a file. Anything
-else is denied without a prompt, so a check that needs another tool is skipped
-and reported by the command rather than run. This is a best-effort fence, not
-a sandbox. Avoid `--dangerously-skip-permissions`: these
-commands read diffs, logs and scan output, and text in them could otherwise
-steer the session into any shell command.
+Commit preparation tests a fresh snapshot before handing the tested diff to
+a tool-free draft session. Commit execution runs in a terminal and checks
+the staged tree and effective Git hooks before asking for approval.
+
+Quality and audit sessions use `--permission-mode dontAsk` and an explicit
+tool allowlist. Shell rules for project and package checks are exact, such
+as `go vet ./...` and `npm audit`. Git read commands accept arguments, so
+`git diff --output=<file>` can write a file. This is a best-effort fence.
+The audit launcher owns the report destination and saves the session's
+Markdown under `.audit/`.
 
 Codex wrapper commands (Claude proxy by default):
 
