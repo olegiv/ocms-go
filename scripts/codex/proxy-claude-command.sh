@@ -32,15 +32,18 @@ fi
 # reads. Rules for tools that run project or package code (go, the linters,
 # npm) are exact: a prefix such as "go test*" would also allow "go test -exec
 # <program>", "go env*" would allow "go env -w", and "npm audit*" would allow
-# "npm audit fix", which installs packages. The git rules stay prefixes:
-# "git commit" runs the repository's own hooks, and diff, log and show accept
-# --output=<file>, which writes a file. This is a best-effort fence, not a
-# sandbox.
+# "npm audit fix", which installs packages. Git/date argument rules keep a
+# space after the command name: "git diff *" must not allow "git difftool".
+# Git arguments and configuration still matter: commit runs hooks, and
+# diff/log/show can write --output files or invoke configured diff helpers.
+# This is a best-effort fence, not a sandbox.
 read_tools=(
   Read Glob Grep Agent Skill TodoWrite
-  "Bash(git status*)" "Bash(git diff*)" "Bash(git log*)" "Bash(git show*)"
-  "Bash(git rev-parse*)" "Bash(git ls-files*)" "Bash(git write-tree*)"
-  "Bash(date*)" "Bash(go version)" "Bash(go env GOWORK)" "Bash(go env GOTOOLDIR)"
+  "Bash(git status)" "Bash(git status *)" "Bash(git diff)" "Bash(git diff *)"
+  "Bash(git log)" "Bash(git log *)" "Bash(git show)" "Bash(git show *)"
+  "Bash(git rev-parse)" "Bash(git rev-parse *)" "Bash(git ls-files)" "Bash(git ls-files *)"
+  "Bash(git write-tree)" "Bash(git write-tree *)"
+  "Bash(date)" "Bash(date *)" "Bash(go version)" "Bash(go env GOWORK)" "Bash(go env GOTOOLDIR)"
   "Bash(grep *)"
 )
 check_tools=(

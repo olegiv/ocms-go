@@ -65,6 +65,78 @@ func TestProxyRulesForCodeRunningToolsAreExact(t *testing.T) {
 	}
 }
 
+// TestProxyReadRulesKeepCommandBoundaries inspects the permissions actually
+// passed to Claude by every proxy entry point. A-T2's git diff* rule also
+// authorized git difftool --extcmd, and the old code-running-tool inventory
+// did not cover Git or date. Wildcards may vary arguments, not command names.
+func TestProxyReadRulesKeepCommandBoundaries(t *testing.T) {
+	root := filepath.Join("..", "..")
+	for _, workflow := range []string{"code-quality", "commit-prepare", "commit-do", "security-audit"} {
+		t.Run(workflow, func(t *testing.T) {
+			dir := t.TempDir()
+			write := func(name string, data []byte) {
+				t.Helper()
+				path := filepath.Join(dir, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, data, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, name := range []string{"scripts/codex-commands", "scripts/codex/proxy-claude-command.sh"} {
+				data, err := os.ReadFile(filepath.Join(root, name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				write(name, data)
+			}
+			// The strict-lint gate has its own real-hook regression test below.
+			write(".claude/hooks/go-strict-lint.sh", []byte("#!/bin/sh\nexit 0\n"))
+			write("bin/claude", []byte("#!/bin/sh\nprintf '%s\\0' \"$@\" > \"$PROXY_TEST_ARGS\"\n"))
+			argsFile := filepath.Join(dir, "args")
+			command := exec.Command("bash", filepath.Join(dir, "scripts", "codex-commands"), workflow)
+			command.Dir = dir
+			command.Env = []string{"PATH=" + filepath.Join(dir, "bin") + ":/usr/bin:/bin", "PROXY_TEST_ARGS=" + argsFile}
+			if out, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("proxy dispatch: %v\n%s", err, out)
+			}
+			data, err := os.ReadFile(argsFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
+			start, end := slices.Index(args, "--allowedTools"), slices.Index(args, "-p")
+			if start < 0 || end <= start+1 {
+				t.Fatalf("proxy passed no permission list: %q", args)
+			}
+			allowed := args[start+1 : end]
+			for _, name := range []string{"git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files", "git write-tree", "date"} {
+				for _, suffix := range []string{"", " *"} {
+					rule := "Bash(" + name + suffix + ")"
+					if !slices.Contains(allowed, rule) {
+						t.Errorf("missing %s; preserve bare commands and space-delimited arguments", rule)
+					}
+				}
+			}
+			for _, rule := range allowed {
+				pattern, bash := strings.CutPrefix(rule, "Bash(")
+				if !bash {
+					continue
+				}
+				fields := strings.Fields(strings.TrimSuffix(pattern, ")"))
+				if len(fields) == 0 {
+					t.Errorf("empty Bash permission: %s", rule)
+					continue
+				}
+				if strings.Contains(fields[0], "*") || (fields[0] == "git" && len(fields) > 1 && strings.Contains(fields[1], "*")) {
+					t.Errorf("%s lets a wildcard change the command name; put it after a complete command and a space", rule)
+				}
+			}
+		})
+	}
+}
+
 // commandBashRule matches a Bash(...) rule in a command's allowed-tools line.
 var commandBashRule = regexp.MustCompile(`Bash\(([^)]*)\)`)
 
