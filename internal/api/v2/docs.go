@@ -12,7 +12,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -50,11 +49,9 @@ func NewDocsServer(templatesFS fs.FS, h *Handler) (*DocsServer, error) {
 func (s *DocsServer) ServeDocs(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		SiteName string
-		BaseURL  string
 		CSPNonce string
 	}{
 		SiteName: s.siteName(r.Context()),
-		BaseURL:  buildBaseURL(r),
 		CSPNonce: middleware.GetCSPNonce(r),
 	}
 	var buf bytes.Buffer
@@ -129,18 +126,4 @@ func (s *DocsServer) siteName(ctx context.Context) string {
 		return cfg.Value
 	}
 	return "oCMS"
-}
-
-func buildBaseURL(r *http.Request) string {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	switch strings.ToLower(r.Header.Get("X-Forwarded-Proto")) {
-	case "https":
-		scheme = "https"
-	case "http":
-		scheme = "http"
-	}
-	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }

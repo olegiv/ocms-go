@@ -5,10 +5,8 @@
 package middleware
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	csrf "filippo.io/csrf/gorilla"
 )
@@ -35,35 +33,17 @@ func DefaultCSRFConfig(authKey []byte, isDev bool) CSRFConfig {
 		AuthKey: authKey,
 	}
 
-	// In development, trust localhost origins for easier testing. The csrf
-	// library matches a scheme-less entry only as https://host:port.
+	// The CSRF check compares the complete origin, including its scheme.
 	if isDev {
 		cfg.TrustedOrigins = []string{
-			"localhost:8080",
-			"127.0.0.1:8080",
+			"http://localhost:8080",
+			"http://127.0.0.1:8080",
+			"https://localhost:8080",
+			"https://127.0.0.1:8080",
 		}
 	}
 
 	return cfg
-}
-
-// ValidateTrustedOrigins checks that origins are in host:port form. The
-// application does not call it: filippo.io/csrf also accepts full URLs, and
-// matches a scheme-less entry only as https://host:port.
-func ValidateTrustedOrigins(origins []string) error {
-	for _, origin := range origins {
-		// Check for URL schemes (should not be present)
-		if strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://") {
-			return fmt.Errorf("trusted origin must be host:port format, not full URL: %s "+
-				"(use 'localhost:8080' instead of 'http://localhost:8080')", origin)
-		}
-
-		// Check for trailing slash
-		if strings.HasSuffix(origin, "/") {
-			return fmt.Errorf("trusted origin should not have trailing slash: %s", origin)
-		}
-	}
-	return nil
 }
 
 // CSRF returns a middleware that provides CSRF protection.

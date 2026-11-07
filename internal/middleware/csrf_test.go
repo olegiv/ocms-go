@@ -6,7 +6,6 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -19,25 +18,8 @@ func TestDefaultCSRFConfig_Development(t *testing.T) {
 		t.Errorf("expected 32-byte AuthKey, got %d bytes", len(cfg.AuthKey))
 	}
 
-	// Check TrustedOrigins are host-only (not full URLs)
-	// This is critical for the csrf library to work correctly
-	if len(cfg.TrustedOrigins) != 2 {
-		t.Errorf("expected 2 TrustedOrigins in dev mode, got %d", len(cfg.TrustedOrigins))
-	}
-
-	expectedOrigins := map[string]bool{
-		"localhost:8080": true,
-		"127.0.0.1:8080": true,
-	}
-
-	for _, origin := range cfg.TrustedOrigins {
-		if !expectedOrigins[origin] {
-			t.Errorf("unexpected TrustedOrigin: %s (should be host:port, not full URL)", origin)
-		}
-		// Verify it's not a full URL (should not contain "http")
-		if len(origin) > 4 && origin[:4] == "http" {
-			t.Errorf("TrustedOrigin should be host:port, not full URL: %s", origin)
-		}
+	if len(cfg.TrustedOrigins) != 4 {
+		t.Errorf("expected four loopback origins, got %v", cfg.TrustedOrigins)
 	}
 }
 
@@ -175,99 +157,35 @@ func TestCSRF_WithCustomErrorHandler(t *testing.T) {
 	_ = customCalled
 }
 
-// TestTrustedOriginsFormat validates that TrustedOrigins use the correct format.
-// The csrf library expects host:port format, NOT full URLs.
-// Using full URLs (http://localhost:8080) causes "origin invalid" errors.
-func TestTrustedOriginsFormat(t *testing.T) {
-	authKey := []byte("12345678901234567890123456789012")
-	cfg := DefaultCSRFConfig(authKey, true) // dev mode
-
-	for _, origin := range cfg.TrustedOrigins {
-		// Check it doesn't start with http:// or https://
-		if len(origin) > 7 && (origin[:7] == "http://" || origin[:8] == "https://") {
-			t.Errorf("TrustedOrigin '%s' should be host:port format, not full URL", origin)
-		}
-
-		// Check it contains a port (host:port format)
-		hasPort := false
-		for _, c := range origin {
-			if c == ':' {
-				hasPort = true
-				break
-			}
-		}
-		if !hasPort {
-			t.Errorf("TrustedOrigin '%s' should include port (e.g., localhost:8080)", origin)
-		}
-	}
-}
-
-func TestValidateTrustedOrigins(t *testing.T) {
-	tests := []struct {
-		name    string
-		origins []string
-		wantErr bool
-		errMsg  string
+func TestCSRFDevelopmentTrustsExplicitLoopbackOrigins(t *testing.T) {
+	for _, tc := range []struct {
+		name, origin, fetchSite string
+		dev                     bool
+		want                    int
 	}{
-		{
-			name:    "valid host:port format",
-			origins: []string{"localhost:8080", "127.0.0.1:8080"},
-			wantErr: false,
-		},
-		{
-			name:    "valid single origin",
-			origins: []string{"example.com:443"},
-			wantErr: false,
-		},
-		{
-			name:    "empty list",
-			origins: []string{},
-			wantErr: false,
-		},
-		{
-			name:    "nil list",
-			origins: nil,
-			wantErr: false,
-		},
-		{
-			name:    "http URL rejected",
-			origins: []string{"http://localhost:8080"},
-			wantErr: true,
-			errMsg:  "must be host:port format, not full URL",
-		},
-		{
-			name:    "https URL rejected",
-			origins: []string{"https://example.com:443"},
-			wantErr: true,
-			errMsg:  "must be host:port format, not full URL",
-		},
-		{
-			name:    "trailing slash rejected",
-			origins: []string{"localhost:8080/"},
-			wantErr: true,
-			errMsg:  "should not have trailing slash",
-		},
-		{
-			name:    "mixed valid and invalid",
-			origins: []string{"localhost:8080", "http://invalid:8080"},
-			wantErr: true,
-			errMsg:  "must be host:port format, not full URL",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTrustedOrigins(tt.origins)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("ValidateTrustedOrigins() expected error, got nil")
-					return
-				}
-				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
-					t.Errorf("ValidateTrustedOrigins() error = %q, want error containing %q", err.Error(), tt.errMsg)
-				}
-			} else if err != nil {
-				t.Errorf("ValidateTrustedOrigins() unexpected error: %v", err)
+		{"localhost HTTP", "http://localhost:8080", "cross-site", true, http.StatusNoContent},
+		{"IPv4 HTTP without fetch metadata", "http://127.0.0.1:8080", "", true, http.StatusNoContent},
+		{"localhost HTTPS", "https://localhost:8080", "cross-site", true, http.StatusNoContent},
+		{"IPv4 HTTPS", "https://127.0.0.1:8080", "cross-site", true, http.StatusNoContent},
+		{"wrong port", "http://localhost:8081", "cross-site", true, http.StatusForbidden},
+		{"similar host", "http://localhost.example.test:8080", "cross-site", true, http.StatusForbidden},
+		{"production HTTP", "http://localhost:8080", "cross-site", false, http.StatusForbidden},
+		{"production HTTPS", "https://127.0.0.1:8080", "cross-site", false, http.StatusForbidden},
+		{"production same origin", "https://site.example.test", "same-origin", false, http.StatusNoContent},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := CSRF(DefaultCSRFConfig(nil, tc.dev))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			req := httptest.NewRequest(http.MethodPost, "https://site.example.test/admin/pages", nil)
+			req.Header.Set("Origin", tc.origin)
+			if tc.fetchSite != "" {
+				req.Header.Set("Sec-Fetch-Site", tc.fetchSite)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			if response.Code != tc.want {
+				t.Fatalf("status=%d, want %d: %s", response.Code, tc.want, response.Body.String())
 			}
 		})
 	}
