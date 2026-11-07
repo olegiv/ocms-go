@@ -241,6 +241,11 @@ Each delivery shows:
 - Attempt count
 - Timestamps
 
+The dispatcher rejects events submitted while it is stopped. Dispatch errors
+appear in the server log with the event type and, when available, its entity ID
+(the submission ID for form events). Manual retry applies to deliveries already
+recorded in Delivery History.
+
 ### Webhook Health
 
 The webhook list shows:
@@ -264,6 +269,8 @@ To prevent webhook floods from rapid updates, oCMS includes event debouncing:
 - Maximum 5-second wait before dispatch
 
 This means if a page is updated 10 times in 2 seconds, only 1 webhook is sent with the final state.
+On shutdown, the dispatcher closes the debounce queue to new events and flushes
+the events it already accepted before stopping the delivery workers.
 
 ## Best Practices
 

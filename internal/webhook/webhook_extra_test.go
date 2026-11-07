@@ -183,9 +183,8 @@ func TestDebounceStats_Enabled(t *testing.T) {
 func newTestDebouncer(t *testing.T, interval, maxWait time.Duration) *Debouncer {
 	t.Helper()
 	// Build a minimal dispatcher without DB for debouncer unit tests.
-	// Dispatch() on the inner dispatcher will be called by the debouncer;
-	// since there is no DB the call will crash – we keep interval very small
-	// and call Stop() before any timer fires, or we test PendingCount only.
+	// The inner dispatcher is stopped, so a flush reports the rejection
+	// without needing a database.
 	d := &Dispatcher{
 		logger: slog.Default(),
 		queue:  make(chan *QueuedDelivery, 16),
@@ -873,18 +872,17 @@ func TestIsValidWebhookDeliveryHeaderName(t *testing.T) {
 
 func TestDispatchEvent_NotRunning(t *testing.T) {
 	d := NewDispatcher(nil, slog.Default(), Config{EnableDebounce: false, Workers: 1})
-	// Not started — Dispatch returns nil with a warning log.
 	err := d.DispatchEvent(t.Context(), "page.created", PageEventData{ID: 1})
-	if err != nil {
-		t.Errorf("DispatchEvent() on stopped dispatcher returned error: %v", err)
+	if err != ErrDispatcherStopped {
+		t.Errorf("DispatchEvent() error = %v, want %v", err, ErrDispatcherStopped)
 	}
 }
 
 func TestDispatchImmediate_NotRunning(t *testing.T) {
 	d := NewDispatcher(nil, slog.Default(), Config{EnableDebounce: false, Workers: 1})
 	err := d.DispatchImmediate(t.Context(), "page.deleted", PageEventData{ID: 2})
-	if err != nil {
-		t.Errorf("DispatchImmediate() on stopped dispatcher returned error: %v", err)
+	if err != ErrDispatcherStopped {
+		t.Errorf("DispatchImmediate() error = %v, want %v", err, ErrDispatcherStopped)
 	}
 }
 

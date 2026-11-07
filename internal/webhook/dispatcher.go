@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -31,6 +32,9 @@ type Dispatcher struct {
 	debouncer *Debouncer // Optional event debouncer for batching rapid-fire events
 	config    Config
 }
+
+// ErrDispatcherStopped means a webhook event was rejected before dispatch.
+var ErrDispatcherStopped = errors.New("webhook dispatcher is stopped")
 
 // QueuedDelivery represents a delivery queued for processing.
 type QueuedDelivery struct {
@@ -123,18 +127,14 @@ func (d *Dispatcher) Start(ctx context.Context) {
 
 // Stop stops the dispatcher and waits for workers to finish.
 func (d *Dispatcher) Stop() {
-	d.mu.RLock()
-	running := d.running
-	d.mu.RUnlock()
-	if !running {
+	if !d.isRunning() {
 		return
 	}
 
 	d.logger.Info("stopping webhook dispatcher")
 
-	// Flush the debouncer's pending events while the dispatcher still runs:
-	// Dispatch drops every event once running is false, which lost whatever
-	// was still in the debounce window at shutdown.
+	// Close the debounce queue to new events and dispatch its pending ones
+	// while the dispatcher still runs.
 	if d.debouncer != nil {
 		d.debouncer.Stop()
 	}
@@ -150,6 +150,12 @@ func (d *Dispatcher) Stop() {
 	close(d.done)
 	d.wg.Wait()
 	d.logger.Info("webhook dispatcher stopped")
+}
+
+func (d *Dispatcher) isRunning() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.running
 }
 
 // worker processes queued deliveries.
@@ -295,19 +301,14 @@ func (d *Dispatcher) cleanupOldDeliveries(ctx context.Context) {
 
 // Dispatch dispatches an event to all subscribed webhooks.
 func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
-	d.mu.RLock()
-	running := d.running
-	d.mu.RUnlock()
-
-	if !running {
-		d.logger.Warn("dispatcher not running, cannot dispatch event", "event_type", event.Type)
-		return nil
+	if !d.isRunning() {
+		return d.rejectStopped(event)
 	}
 
 	// Find all active webhooks subscribed to this event
 	webhooks, err := d.queries.ListWebhooksForEvent(ctx, sql.NullString{String: event.Type, Valid: true})
 	if err != nil {
-		d.logger.Error("failed to list webhooks for event", "error", err, "event_type", event.Type)
+		d.logDispatchError("failed to list webhooks for event", event, err)
 		return err
 	}
 
@@ -319,7 +320,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 	// Serialize the event payload
 	payload, err := json.Marshal(event)
 	if err != nil {
-		d.logger.Error("failed to marshal event payload", "error", err, "event_type", event.Type)
+		d.logDispatchError("failed to marshal event payload", event, err)
 		return err
 	}
 
@@ -342,10 +343,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 			UpdatedAt: now,
 		})
 		if err != nil {
-			d.logger.Error("failed to create delivery record",
-				"error", err,
-				"webhook_id", wh.ID,
-				"event_type", event.Type)
+			d.logDispatchError("failed to create delivery record", event, err, "webhook_id", wh.ID)
 			continue
 		}
 
@@ -377,11 +375,27 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 	return nil
 }
 
+func (d *Dispatcher) rejectStopped(event *Event) error {
+	d.logDispatchError("webhook event dropped", event, ErrDispatcherStopped)
+	return ErrDispatcherStopped
+}
+
+func (d *Dispatcher) logDispatchError(message string, event *Event, err error, attrs ...any) {
+	attrs = append(attrs, "error", err, "event_type", event.Type)
+	if id, ok := event.entityID(); ok && id != 0 {
+		attrs = append(attrs, "entity_id", id)
+	}
+	d.logger.Error(message, attrs...)
+}
+
 // DispatchEvent is a convenience method to dispatch an event with the given type and data.
 // If debouncing is enabled, events will be debounced; otherwise, they are dispatched immediately.
 func (d *Dispatcher) DispatchEvent(ctx context.Context, eventType string, data any) error {
 	event := NewEvent(eventType, data)
 	if d.debouncer != nil {
+		if !d.isRunning() {
+			return d.rejectStopped(event)
+		}
 		return d.debouncer.Dispatch(ctx, event)
 	}
 	return d.Dispatch(ctx, event)

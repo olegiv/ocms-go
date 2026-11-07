@@ -49,6 +49,7 @@ type Debouncer struct {
 	config     DebounceConfig
 	pending    map[string]*pendingEvent // key -> pending event
 	mu         sync.Mutex
+	stopped    bool // guarded by mu
 	ctx        context.Context
 	cancel     context.CancelFunc
 	wg         sync.WaitGroup
@@ -72,38 +73,10 @@ func NewDebouncer(dispatcher *Dispatcher, config DebounceConfig) *Debouncer {
 // eventKey generates a unique key for deduplicating events.
 // The key is based on event type and entity ID (extracted from the event data).
 func eventKey(event *Event) string {
-	// Try to extract entity ID from common event data structures
-	var entityID int64
-
-	switch data := event.Data.(type) {
-	case PageEventData:
-		entityID = data.ID
-	case *PageEventData:
-		entityID = data.ID
-	case MediaEventData:
-		entityID = data.ID
-	case *MediaEventData:
-		entityID = data.ID
-	case UserEventData:
-		entityID = data.ID
-	case *UserEventData:
-		entityID = data.ID
-	case FormEventData:
-		entityID = data.SubmissionID
-	case *FormEventData:
-		entityID = data.SubmissionID
-	case map[string]any:
-		if id, ok := data["id"].(int64); ok {
-			entityID = id
-		} else if id, ok := data["id"].(float64); ok {
-			entityID = int64(id)
-		}
-	default:
-		// For unknown types, use the event type only (no entity-level deduplication)
-		return event.Type
+	if id, ok := event.entityID(); ok {
+		return fmt.Sprintf("%s:%d", event.Type, id)
 	}
-
-	return fmt.Sprintf("%s:%d", event.Type, entityID)
+	return event.Type
 }
 
 // Dispatch queues an event for debounced delivery.
@@ -114,6 +87,10 @@ func (d *Debouncer) Dispatch(ctx context.Context, event *Event) error {
 	now := time.Now()
 
 	d.mu.Lock()
+	if d.stopped {
+		d.mu.Unlock()
+		return d.dispatcher.rejectStopped(event)
+	}
 	if existing, ok := d.pending[key]; ok {
 		// Update existing pending event with new data
 		existing.event = event
@@ -188,9 +165,7 @@ func (d *Debouncer) dispatchLocked(key string) {
 	go func(event *Event) {
 		defer d.wg.Done()
 		if err := d.dispatcher.Dispatch(d.ctx, event); err != nil {
-			d.dispatcher.logger.Error("failed to dispatch debounced event",
-				"error", err,
-				"event_type", event.Type)
+			d.dispatcher.logDispatchError("failed to dispatch debounced event", event, err)
 		}
 	}(pe.event)
 }
@@ -206,9 +181,12 @@ func (d *Debouncer) Flush() {
 	}
 }
 
-// Stop flushes all pending events and waits until they are dispatched; only
-// then does it cancel the context their dispatch runs with.
+// Stop closes admission, flushes pending events and waits for their dispatch
+// before cancelling the dispatch context.
 func (d *Debouncer) Stop() {
+	d.mu.Lock()
+	d.stopped = true
+	d.mu.Unlock()
 	d.Flush()
 	d.wg.Wait()
 	d.cancel()

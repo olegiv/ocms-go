@@ -135,7 +135,8 @@ func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, s
 		slog.Error("failed to dispatch webhook event",
 			"error", err,
 			"event_type", model.EventFormSubmitted,
-			"form_id", form.ID)
+			"form_id", form.ID,
+			"submission_id", submissionID)
 	}
 }
 

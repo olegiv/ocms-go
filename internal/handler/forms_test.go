@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
 func TestNewFormsHandler(t *testing.T) {
@@ -30,6 +32,51 @@ func TestNewFormsHandler(t *testing.T) {
 	}
 	if h.queries == nil {
 		t.Error("queries should not be nil")
+	}
+}
+
+func TestFormSubmissionLogsStoppedWebhook(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	ctx, now := t.Context(), time.Now()
+	form, err := queries.CreateForm(ctx, store.CreateFormParams{
+		Name: "Contact", Slug: "contact", Title: "Contact", IsActive: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queries.CreateFormField(ctx, store.CreateFormFieldParams{
+		FormID: form.ID, Type: "text", Name: "message", Label: "Message", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tm := loadedFrontendThemeManager(t, "default")
+	menu := service.NewMenuService(db, nil)
+	frontend := NewFrontendHandler(db, tm, nil, slog.Default(), menu, nil)
+	h := NewFormsHandler(db, nil, sm, nil, tm, nil, menu, frontend)
+	h.SetDispatcher(webhook.NewDispatcher(db, slog.New(slog.DiscardHandler), webhook.DefaultConfig()))
+	logs := captureLogs(t)
+	req := httptest.NewRequest(http.MethodPost, "/forms/contact", strings.NewReader("message=private-fixture-message"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = requestWithURLParams(req, map[string]string{"slug": "contact"})
+	w := httptest.NewRecorder()
+	h.Submit(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("submission status = %d, want 200", w.Code)
+	}
+	submissions, err := queries.GetFormSubmissions(ctx, store.GetFormSubmissionsParams{FormID: form.ID, Limit: 10})
+	if err != nil || len(submissions) != 1 {
+		t.Fatalf("saved %d submissions, want one: %v", len(submissions), err)
+	}
+	logged := logs.String()
+	if !strings.Contains(logged, "failed to dispatch webhook event") ||
+		!strings.Contains(logged, "event_type=form.submitted") ||
+		!strings.Contains(logged, "form_id="+strconv.FormatInt(form.ID, 10)) ||
+		!strings.Contains(logged, "submission_id="+strconv.FormatInt(submissions[0].ID, 10)) {
+		t.Errorf("missing form and submission IDs in dispatch error:\n%s", logged)
+	}
+	if strings.Contains(logged, "private-fixture-message") {
+		t.Error("dispatch error logged the submission payload")
 	}
 }
 

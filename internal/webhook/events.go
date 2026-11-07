@@ -28,6 +28,47 @@ func NewEvent(eventType string, data any) *Event {
 	}
 }
 
+// entityID identifies the entity for both debouncing and error diagnostics.
+// A form event identifies the submission, so different submissions stay distinct.
+func (e *Event) entityID() (int64, bool) {
+	switch data := e.Data.(type) {
+	case PageEventData:
+		return data.ID, true
+	case *PageEventData:
+		if data != nil {
+			return data.ID, true
+		}
+	case MediaEventData:
+		return data.ID, true
+	case *MediaEventData:
+		if data != nil {
+			return data.ID, true
+		}
+	case UserEventData:
+		return data.ID, true
+	case *UserEventData:
+		if data != nil {
+			return data.ID, true
+		}
+	case FormEventData:
+		return data.SubmissionID, true
+	case *FormEventData:
+		if data != nil {
+			return data.SubmissionID, true
+		}
+	case map[string]any:
+		switch id := data["id"].(type) {
+		case int64:
+			return id, true
+		case float64:
+			return int64(id), true
+		}
+		// Keep the existing debounce key for maps without a numeric ID.
+		return 0, true
+	}
+	return 0, false
+}
+
 // PageEventData contains data for page-related events.
 type PageEventData struct {
 	ID           int64   `json:"id"`
