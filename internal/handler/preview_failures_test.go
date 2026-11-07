@@ -35,7 +35,8 @@ import (
 // link look expired, the per-user limit says so, issuing and revoking a link
 // are both recorded in the event log, revoking a link that is already gone
 // says so, and a claim check that hits a storage fault is not reported as a
-// conflict (2026-11-03 review S7, S8, S9).
+// conflict (2026-11-03 review S7, S8, S9). It also checks that only an
+// administrator can revoke another author's link (2026-11-05 review TG-4).
 //
 // Bug state: map Resolve's storage errors to preview.ErrUnavailable, answer
 // every Issue error with 409, drop the issue/revoke events or ignore the
@@ -153,6 +154,14 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 	if err = db.QueryRowContext(ctx, `SELECT id FROM preview_links WHERE revoked_at = 0 ORDER BY id LIMIT 1`).Scan(&linkID); err != nil {
 		t.Fatal(err)
 	}
+	revokedAt := func(t *testing.T) int64 {
+		t.Helper()
+		var stamp int64
+		if scanErr := db.QueryRowContext(ctx, `SELECT revoked_at FROM preview_links WHERE id = ?`, linkID).Scan(&stamp); scanErr != nil {
+			t.Fatal(scanErr)
+		}
+		return stamp
+	}
 	revoke := fmt.Sprintf("/admin/pages/%d/preview-links/%d/revoke", page.ID, linkID)
 	// Discover every direct prerequisite query from the handler so a new
 	// lookup cannot silently bypass this fault/missing-row coverage.
@@ -209,13 +218,20 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 			if response.Code != http.StatusNotFound || flash != "" || strings.Contains(logs.String(), "level=ERROR") {
 				t.Errorf("role/ownership refusal: status=%d flash=%q logs=%q", response.Code, flash, logs.String())
 			}
+			if stamp := revokedAt(t); stamp != 0 {
+				t.Errorf("refused account set revoked_at to %d", stamp)
+			}
 			if countEvents("Preview share link revoked") != 0 || open() != http.StatusOK {
 				t.Error("refused account revoked the link or recorded a revocation")
 			}
 		})
 	}
+	actor = createTestUser(t, db, testUser{Email: "preview-other-admin@example.test", Name: "Non-author admin", Role: model.RoleAdmin})
 	if rr = post(revoke, nil); rr.Code != http.StatusSeeOther || flash != i18n.T("en", "preview.revoked") {
-		t.Errorf("revoke: status %d flash %q", rr.Code, flash)
+		t.Errorf("non-author admin revoke: status %d flash %q", rr.Code, flash)
+	}
+	if stamp := revokedAt(t); stamp <= 0 {
+		t.Errorf("non-author admin did not set revoked_at: %d", stamp)
 	}
 	if got := countEvents("Preview share link revoked"); got != 1 {
 		t.Errorf("revoked link recorded %d events, want 1", got)
@@ -226,6 +242,7 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 	if rr = post(revoke, nil); rr.Code != http.StatusSeeOther || flash != i18n.T("en", "preview.revoke_missing") {
 		t.Errorf("second revoke: status %d flash %q, want the already-revoked message", rr.Code, flash)
 	}
+	actor = user
 
 	// Claim check: a storage fault is a 500, a missing claim a 409.
 	claim := fmt.Sprintf("/admin/pages/%d/claims/0", page.ID)
