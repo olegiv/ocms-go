@@ -476,6 +476,9 @@ validation error; it matches whole options, so `Post` is not checked by `Postcar
 ```
 
 `contains` matches substrings of the joined value and checks such boxes wrongly.
+When loading a custom HTML theme, oCMS logs the theme and template location if
+it finds a `contains` condition that emits a `checked` attribute in the form or a
+partial it calls. Replace that condition with `checkedOption` as shown above.
 
 ## Translations
 

@@ -209,7 +209,7 @@ func (m *Manager) loadFilesystemTheme(name, path string) (*Theme, error) {
 	// Load theme-specific translations from filesystem
 	translations := m.loadThemeTranslationsFromFilesystem(path)
 
-	return &Theme{
+	theme := &Theme{
 		Name:         name,
 		Path:         path,
 		Config:       config,
@@ -218,7 +218,11 @@ func (m *Manager) loadFilesystemTheme(name, path string) (*Theme, error) {
 		Translations: translations,
 		IsEmbedded:   false,
 		EmbeddedFS:   nil,
-	}, nil
+	}
+	if theme.RenderEngine() == EngineHTML {
+		m.warnLegacyCheckboxMatching(theme)
+	}
+	return theme, nil
 }
 
 // loadThemeTranslationsFromFS loads translations from an embedded filesystem.
