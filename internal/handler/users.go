@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -732,26 +731,26 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
 	if middleware.IsDemoMode() {
-		h.sendDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteUser))
+		writeDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteUser))
 		return
 	}
 
 	currentUser := middleware.GetUser(r)
 	if currentUser == nil {
-		h.sendDeleteError(w, "Unauthorized")
+		writeDeleteError(w, "Unauthorized")
 		return
 	}
 
 	// Get user ID from URL
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.sendDeleteError(w, "Invalid user ID")
+		writeDeleteError(w, "Invalid user ID")
 		return
 	}
 
 	// Business rule: Cannot delete yourself
 	if currentUser.ID == id {
-		h.sendDeleteError(w, "Cannot delete your own account")
+		writeDeleteError(w, "Cannot delete your own account")
 		return
 	}
 
@@ -759,10 +758,10 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	deleteUser, err := h.queries.GetUserByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.sendDeleteError(w, "User not found")
+			writeDeleteError(w, "User not found")
 		} else {
 			slog.Error("failed to get user", "error", err)
-			h.sendDeleteError(w, "Error loading user")
+			writeDeleteError(w, "Error loading user")
 		}
 		return
 	}
@@ -772,11 +771,11 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		adminCount, err := h.queries.CountUsersByRole(r.Context(), model.RoleAdmin)
 		if err != nil {
 			slog.Error("failed to count admins", "error", err)
-			h.sendDeleteError(w, "Error checking admin count")
+			writeDeleteError(w, "Error checking admin count")
 			return
 		}
 		if adminCount <= 1 {
-			h.sendDeleteError(w, "Cannot delete the last admin")
+			writeDeleteError(w, "Cannot delete the last admin")
 			return
 		}
 	}
@@ -786,11 +785,11 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	owns, err := h.userOwnsContent(r.Context(), id)
 	if err != nil {
 		slog.Error("failed to check content owned by user", "error", err, "user_id", id)
-		h.sendDeleteError(w, "Error deleting user")
+		writeDeleteError(w, "Error deleting user")
 		return
 	}
 	if owns {
-		h.sendDeleteError(w, i18n.T(h.deleteLang(r), "users.delete_owns_content"))
+		writeDeleteError(w, i18n.T(h.deleteLang(r), "users.delete_owns_content"))
 		return
 	}
 
@@ -798,7 +797,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	err = h.queries.DeleteUser(r.Context(), id)
 	if err != nil {
 		slog.Error("failed to delete user", "error", err)
-		h.sendDeleteError(w, "Error deleting user")
+		writeDeleteError(w, "Error deleting user")
 		return
 	}
 
@@ -913,17 +912,6 @@ func (h *UsersHandler) deleteLang(r *http.Request) string {
 		return i18n.GetDefaultLanguage()
 	}
 	return h.renderer.GetAdminLang(r)
-}
-
-// sendDeleteError sends an error response for delete operations. The
-// message is the plain-text body, which the admin's htmx error handler shows
-// as the toast; a header could not carry translated (non-ASCII) text, and no
-// listener read the former showToast trigger.
-func (h *UsersHandler) sendDeleteError(w http.ResponseWriter, message string) {
-	w.Header().Set("HX-Reswap", "none")
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusBadRequest)
-	_, _ = io.WriteString(w, message)
 }
 
 // MaxBioLength is the maximum allowed length for a user bio.

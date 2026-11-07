@@ -366,6 +366,14 @@ document.body.addEventListener('htmx:finally:request', function(e) {
     }
 });
 
+// Listen on document to also receive events without a connected target.
+document.addEventListener('showToast', function(e) {
+    const message = e.detail?.value;
+    if (typeof message === 'string' && message.trim()) {
+        showToast(message, 'success');
+    }
+});
+
 // HTMX error response handler (HTTP >= 400) - show error messages as alerts
 document.body.addEventListener('htmx:response:error', function(e) {
     const text = e.detail.ctx.text;

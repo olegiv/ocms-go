@@ -406,13 +406,13 @@ func (h *APIKeysHandler) updateAPIKey(ctx context.Context, params store.UpdateAP
 func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
 	if middleware.IsDemoMode() {
-		h.sendDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys))
+		writeDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys))
 		return
 	}
 
 	id, _, ok := parseAPIKeyID(r)
 	if !ok {
-		h.sendDeleteError(w, "Invalid API key ID")
+		writeDeleteError(w, "Invalid API key ID")
 		return
 	}
 
@@ -430,7 +430,7 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to deactivate API key", "error", err)
-		h.sendDeleteError(w, "Error revoking API key")
+		writeDeleteError(w, "Error revoking API key")
 		return
 	}
 
@@ -492,13 +492,6 @@ func (h *APIKeysHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeBulkActionSuccess(w, deleted, failed)
-}
-
-// sendDeleteError sends an error response for delete operations.
-func (h *APIKeysHandler) sendDeleteError(w http.ResponseWriter, message string) {
-	w.Header().Set("HX-Reswap", "none")
-	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
-	w.WriteHeader(http.StatusBadRequest)
 }
 
 // apiKeyFormInput holds parsed form input for API key creation/update.
@@ -719,12 +712,12 @@ func (h *APIKeysHandler) fetchAPIKey(w http.ResponseWriter, r *http.Request, id 
 }
 
 // fetchAPIKeyForDelete fetches an API key by ID for delete operations.
-// Uses sendDeleteError for error responses (HTMX-compatible).
+// Uses writeDeleteError for error responses (HTMX-compatible).
 // Returns the API key and true if successful, or zero value and false if an error occurred.
 func (h *APIKeysHandler) fetchAPIKeyForDelete(w http.ResponseWriter, r *http.Request, id int64) (store.ApiKey, bool) {
 	return requireEntityWithCustomError(w, "API key", id,
 		func(id int64) (store.ApiKey, error) { return h.queries.GetAPIKeyByID(r.Context(), id) },
-		h.sendDeleteError)
+		writeDeleteError)
 }
 
 // renderAPIKeyForm renders the API key form using templ.
