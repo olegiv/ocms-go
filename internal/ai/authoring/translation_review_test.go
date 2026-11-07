@@ -235,7 +235,7 @@ func TestTranslationReviewPreservesSiblingRevisionsAndRecordsAnotherEditor(t *te
 }
 
 func TestTranslationReviewRejectsChangedPagesAndUnavailableSources(t *testing.T) {
-	for _, scenario := range []string{"target changed", "source changed", "wrong source", "unlinked", "inactive source", "published", "scheduled", "demoted reviewer", "missing reviewer", "invalid revision"} {
+	for _, scenario := range []string{"target changed", "source changed", "wrong source", "unlinked", "same language source", "inactive source", "inactive target", "deleted source", "self reference", "published", "scheduled", "demoted reviewer", "missing reviewer", "invalid revision"} {
 		t.Run(scenario, func(t *testing.T) {
 			f, source, target := staleReviewFixture(t)
 			in := reviewInput(source, target)
@@ -249,8 +249,18 @@ func TestTranslationReviewRejectsChangedPagesAndUnavailableSources(t *testing.T)
 				in.SourcePageID = target.ID
 			case "unlinked":
 				_, err = f.db.Exec("DELETE FROM translations")
+			case "same language source":
+				_, err = f.db.Exec("UPDATE pages SET language_code=? WHERE id=?", target.LanguageCode, source.ID)
 			case "inactive source":
 				_, err = f.db.Exec("UPDATE languages SET is_active=0 WHERE code='en'")
+			case "inactive target":
+				_, err = f.db.Exec("UPDATE languages SET is_active=0 WHERE code=?", target.LanguageCode)
+			case "deleted source":
+				_, err = f.db.Exec("DELETE FROM pages WHERE id=?", source.ID)
+			case "self reference":
+				_, err = f.db.Exec(`UPDATE content_provenance SET validated_json=json_set(validated_json, '$.translation_basis.source_page_id', ?)
+					WHERE page_id=? AND revision=?`, target.ID, target.ID, target.Revision)
+				in.SourcePageID, in.SourceRevision = target.ID, target.Revision
 			case "published":
 				_, err = f.db.Exec("UPDATE pages SET status='published' WHERE id=?", target.ID)
 			case "scheduled":
@@ -268,6 +278,12 @@ func TestTranslationReviewRejectsChangedPagesAndUnavailableSources(t *testing.T)
 			before, err := f.q.GetPageByID(f.ctx, target.ID)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if scenario == "published" || scenario == "scheduled" {
+				panel, loadErr := review.Load(f.ctx, f.q, before, f.user.ID)
+				if loadErr != nil || panel.TranslationSource != nil {
+					t.Fatalf("non-draft review panel offered a source: %v, %v", panel.TranslationSource, loadErr)
+				}
 			}
 			fact, err := f.q.GetContentProvenance(f.ctx, store.GetContentProvenanceParams{PageID: before.ID, Revision: before.Revision})
 			if err != nil {

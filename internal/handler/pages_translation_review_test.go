@@ -17,18 +17,21 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/review"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
 func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing.T) {
-	for _, scenario := range []string{"accepted", "no acknowledgment", "duplicate acknowledgment", "missing revision", "duplicate revision", "query selector", "oversized", "JSON", "cross site", "changed source", "demoted account", "historical form"} {
+	for _, scenario := range []string{"accepted", "storage fault", "no acknowledgment", "duplicate acknowledgment", "missing revision", "duplicate revision", "query selector", "oversized", "JSON", "cross site", "changed source", "demoted account", "historical form"} {
 		t.Run(scenario, func(t *testing.T) {
 			db, cleanup := testutil.TestDB(t)
 			t.Cleanup(cleanup)
@@ -71,6 +74,23 @@ func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing
 				t.Fatal(err)
 			}
 			h := NewPagesHandler(db, renderer, sm)
+			caches := cache.NewManager(q)
+			if _, err = caches.Sitemap.Get(ctx, "https://example.test"); err != nil || !caches.Sitemap.IsCached() {
+				t.Fatalf("warm sitemap cache: %v", err)
+			}
+			h.SetCacheManager(caches)
+			hook, err := q.CreateWebhook(ctx, store.CreateWebhookParams{Name: "Review webhook", Url: "http://127.0.0.1:1/",
+				Secret: "unused", Events: `["page.updated"]`, IsActive: true, Headers: "{}", CreatedBy: user.ID, CreatedAt: now, UpdatedAt: now})
+			if err != nil {
+				t.Fatal(err)
+			}
+			dispatcher := webhook.NewDispatcher(db, nil, webhook.Config{Workers: 1})
+			// Exercise queueing without running outbound delivery workers.
+			workerCtx, cancelWorkers := context.WithCancel(ctx)
+			cancelWorkers()
+			dispatcher.Start(workerCtx)
+			t.Cleanup(dispatcher.Stop)
+			h.SetDispatcher(dispatcher)
 			router := chi.NewRouter()
 			router.Use(sm.LoadAndSave, middleware.CSRF(middleware.DefaultCSRFConfig(nil, false)))
 			router.Use(func(next http.Handler) http.Handler {
@@ -82,6 +102,12 @@ func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing
 			want := http.StatusSeeOther
 			contentType, fetchSite := "application/x-www-form-urlencoded", "same-origin"
 			switch scenario {
+			case "storage fault":
+				if _, err = db.Exec(`CREATE TRIGGER fail_translation_evidence BEFORE INSERT ON content_provenance
+					BEGIN SELECT RAISE(ABORT, 'translation fixture fault'); END`); err != nil {
+					t.Fatal(err)
+				}
+				want = http.StatusInternalServerError
 			case "no acknowledgment":
 				form.Del("acknowledge")
 				want = http.StatusForbidden
@@ -126,6 +152,10 @@ func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing
 			if w.Code != want {
 				t.Fatalf("status=%d, want %d: %s", w.Code, want, w.Body.String())
 			}
+			if scenario == "storage fault" && (!strings.Contains(w.Body.String(), i18n.T("en", "review.translation_failed")) ||
+				strings.Contains(w.Body.String(), "translation fixture fault")) {
+				t.Fatalf("storage fault returned an incorrect notice: %s", w.Body.String())
+			}
 			after, err := q.GetPageByID(ctx, target.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -138,6 +168,10 @@ func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing
 				if err = db.QueryRow("SELECT COUNT(*) FROM events WHERE message='Translation reviewed'").Scan(&events); err != nil || events != 0 {
 					t.Fatalf("refused review logged success: %d %v", events, err)
 				}
+				var deliveries int
+				if err = db.QueryRow("SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id=?", hook.ID).Scan(&deliveries); err != nil || deliveries != 0 || !caches.Sitemap.IsCached() {
+					t.Fatal("refused review invalidated cache or dispatched a webhook")
+				}
 				return
 			}
 			if after.Revision != target.Revision+1 || after.Body != target.Body || after.Status != "draft" || after.ScheduledAt.Valid {
@@ -145,6 +179,26 @@ func TestTranslationReviewHTTPRequiresExplicitCurrentSameOriginReview(t *testing
 			}
 			if w.Header().Get("Location") != fmt.Sprintf("/admin/pages/%d", target.ID) {
 				t.Fatal("wrong redirect")
+			}
+			var events int
+			if err = db.QueryRow(`SELECT COUNT(*) FROM events WHERE message='Translation reviewed' AND user_id=?
+				AND json_extract(metadata, '$.page_id')=? AND json_extract(metadata, '$.revision')=?
+				AND json_extract(metadata, '$.source_page_id')=? AND json_extract(metadata, '$.source_revision')=?`,
+				user.ID, target.ID, after.Revision, source.ID, source.Revision).Scan(&events); err != nil || events != 1 {
+				t.Fatalf("translation review logged %d matching events: %v", events, err)
+			}
+			if caches.Sitemap.IsCached() {
+				t.Fatal("translation review left the sitemap cached")
+			}
+			var deliveries int
+			var eventType, payload string
+			if err = db.QueryRow("SELECT COUNT(*), COALESCE(MAX(event), ''), COALESCE(MAX(payload), '') FROM webhook_deliveries WHERE webhook_id=?", hook.ID).
+				Scan(&deliveries, &eventType, &payload); err != nil || deliveries != 1 || eventType != model.EventPageUpdated {
+				t.Fatalf("translation review dispatched %d %q deliveries: %v", deliveries, eventType, err)
+			}
+			var dispatched struct{ Data webhook.PageEventData }
+			if err = json.Unmarshal([]byte(payload), &dispatched); err != nil || dispatched.Data.ID != target.ID || dispatched.Data.AuthorEmail != user.Email {
+				t.Fatalf("wrong page.updated data: %+v %v", dispatched.Data, err)
 			}
 			fact, err := q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: target.ID, Revision: after.Revision})
 			if err != nil || fact.UserID.Int64 != user.ID || fact.Transport != "translation_review" {

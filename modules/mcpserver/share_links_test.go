@@ -15,15 +15,20 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"modernc.org/sqlite"
 
 	"github.com/olegiv/ocms-go/internal/ai/authoring"
+	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/preview"
+	"github.com/olegiv/ocms-go/internal/provenance"
+	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/session"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -41,15 +46,15 @@ func TestAgentShareLinksPolicyAndAdminRevocation(t *testing.T) {
 		t.Fatalf("migrated site does not allow agent share links: %+v %v", settings, err)
 	}
 	enableDraftTools(env)
-	session := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
-	saved := decodeResult[authoring.SaveResult](t, call(t, session, "create_draft_page", draftCreateArgs("Shared draft")))
-	shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": saved.Revision}))
+	client := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
+	saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Shared draft")))
+	shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": saved.Revision}))
 	if shared.URL == "" {
 		t.Fatal("share link not issued while allowed")
 	}
 
 	env.setSettings(Settings{DraftToolsEnabled: true, ExternalLinks: "keep", AgentShareLinks: false})
-	if code, _, _ := toolErrorBody(t, call(t, session, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": saved.Revision})); code != "share_links_disabled" {
+	if code, _, _ := toolErrorBody(t, call(t, client, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": saved.Revision})); code != "share_links_disabled" {
 		t.Errorf("share link with agent sharing off: code %q", code)
 	}
 	var issued int
@@ -61,23 +66,62 @@ func TestAgentShareLinksPolicyAndAdminRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err = (preview.Service{Q: env.q}).Issue(t.Context(), provenance.Principal{UserID: admin.ID, Source: "human"}, saved.PageID, saved.Revision, "https://cms.test", nil); err != nil {
+		t.Fatal(err)
+	}
+	sm := session.New(env.db, true)
+	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: env.db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.module.ctx.Render = renderer
 	r := chi.NewRouter()
 	r.Route("/admin", env.module.RegisterAdminRoutes)
+	var flash, flashType string
 	request := func(method, path string) *httptest.ResponseRecorder {
+		t.Helper()
 		req := httptest.NewRequest(method, path, strings.NewReader(url.Values{}.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req = req.WithContext(context.WithValue(req.Context(), middleware.ContextKeyUser, admin))
+		ctx, loadErr := sm.Load(req.Context(), "")
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		req = req.WithContext(context.WithValue(ctx, middleware.ContextKeyUser, admin))
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
+		flash, flashType = sm.GetString(ctx, "flash"), sm.GetString(ctx, "flash_type")
 		return w
 	}
-	var linkID int64
-	if err = env.db.QueryRow(`SELECT id FROM preview_links`).Scan(&linkID); err != nil {
+	var linkID, humanLinkID int64
+	if err = env.db.QueryRow(`SELECT id FROM preview_links WHERE issuing_key_id IS NOT NULL`).Scan(&linkID); err != nil {
+		t.Fatal(err)
+	}
+	if err = env.db.QueryRow(`SELECT id FROM preview_links WHERE issuing_key_id IS NULL AND issuing_grant_id IS NULL`).Scan(&humanLinkID); err != nil {
 		t.Fatal(err)
 	}
 	revoke := fmt.Sprintf("%s/share-links/%d/revoke", adminPath, linkID)
-	if w := request(http.MethodGet, adminPath); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Shared draft") || !strings.Contains(w.Body.String(), `action="`+revoke+`"`) {
+	humanRevoke := fmt.Sprintf("%s/share-links/%d/revoke", adminPath, humanLinkID)
+	if w := request(http.MethodGet, adminPath); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Shared draft") || !strings.Contains(w.Body.String(), `action="`+revoke+`"`) || strings.Contains(w.Body.String(), `action="`+humanRevoke+`"`) {
 		t.Fatalf("admin page does not list the agent's share link: %d", w.Code)
+	}
+	if w := request(http.MethodPost, humanRevoke); w.Code != http.StatusSeeOther || flashType != "info" || flash != i18n.T("en", "mcp.share_revoke_missing") {
+		t.Fatalf("editor-issued link revoke: status=%d type=%q message=%q", w.Code, flashType, flash)
+	}
+	if _, err = env.db.Exec(`CREATE TRIGGER fail_agent_revoke BEFORE UPDATE OF revoked_at ON preview_links
+		BEGIN SELECT RAISE(ABORT, 'agent revoke fixture fault'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if w := request(http.MethodPost, revoke); w.Code != http.StatusSeeOther || flashType != "error" || flash != i18n.T("en", "mcp.share_revoke_error") ||
+		!strings.Contains(env.logs.text(), "agent revoke fixture fault") {
+		t.Fatalf("agent revoke fault: status=%d type=%q message=%q", w.Code, flashType, flash)
+	}
+	var changed, failedEvents int
+	if err = env.db.QueryRow(`SELECT (SELECT COUNT(*) FROM preview_links WHERE revoked_at <> 0),
+		(SELECT COUNT(*) FROM events WHERE message = 'Preview share link revoked')`).Scan(&changed, &failedEvents); err != nil || changed != 0 || failedEvents != 0 {
+		t.Fatalf("denied revocations changed %d links and wrote %d success events: %v", changed, failedEvents, err)
+	}
+	if _, err = env.db.Exec(`DROP TRIGGER fail_agent_revoke`); err != nil {
+		t.Fatal(err)
 	}
 	if w := request(http.MethodPost, revoke); w.Code != http.StatusSeeOther {
 		t.Fatalf("revoke: %d", w.Code)

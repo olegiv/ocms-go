@@ -77,6 +77,39 @@ func TestConnectedAppsPageAndRevocationThroughSessionAndCSRF(t *testing.T) {
 	if !still.IsActive {
 		t.Fatal("denied cross-site request changed key")
 	}
+	other := env.createUser(t, "admin")
+	foreign, err := q.CreateAPIKey(t.Context(), store.CreateAPIKeyParams{Name: "Other MCP key", KeyHash: "foreign-hash", KeyPrefix: "foreign", Permissions: `["mcp:access"]`, IsActive: true, CreatedBy: other.ID, CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignForm := url.Values{"kind": {"api_key"}, "id": {strconv.FormatInt(foreign.ID, 10)}}
+	rr = authRequest(env.router, http.MethodPost, RouteAccountConnectedApps+"/revoke", foreignForm, cookie)
+	if rr.Code != http.StatusNotFound || rr.Header().Get("Location") != "" {
+		t.Fatalf("foreign key revoke status=%d, want 404", rr.Code)
+	}
+	if stored, loadErr := q.GetAPIKeyByID(t.Context(), foreign.ID); loadErr != nil || !stored.IsActive {
+		t.Fatalf("foreign key did not stay active: %v", loadErr)
+	}
+	if _, err = env.db.Exec(`CREATE TRIGGER fail_connection_revoke BEFORE UPDATE ON api_keys
+		WHEN OLD.is_active = 1 AND NEW.is_active = 0 BEGIN SELECT RAISE(ABORT, 'connection fixture fault'); END`); err != nil {
+		t.Fatal(err)
+	}
+	logs := captureLogs(t)
+	rr = authRequest(env.router, http.MethodPost, RouteAccountConnectedApps+"/revoke", form, cookie)
+	if rr.Code != http.StatusInternalServerError || strings.Contains(rr.Body.String(), "connection fixture fault") ||
+		!strings.Contains(logs.String(), "connection fixture fault") {
+		t.Fatalf("storage fault status=%d, want a logged 500 with a generic response", rr.Code)
+	}
+	if stored, loadErr := q.GetAPIKeyByID(t.Context(), key.ID); loadErr != nil || !stored.IsActive {
+		t.Fatalf("failed revoke did not leave the key active: %v", loadErr)
+	}
+	var revokeEvents int
+	if err = env.db.QueryRow(`SELECT COUNT(*) FROM events WHERE message='Account revoked connected app access'`).Scan(&revokeEvents); err != nil || revokeEvents != 0 {
+		t.Fatalf("failed revocations logged %d successes: %v", revokeEvents, err)
+	}
+	if _, err = env.db.Exec(`DROP TRIGGER fail_connection_revoke`); err != nil {
+		t.Fatal(err)
+	}
 	rr = authRequest(env.router, http.MethodPost, RouteAccountConnectedApps+"/revoke", form, cookie)
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != RouteAccountConnectedApps {
 		t.Fatalf("own key revoke status=%d", rr.Code)

@@ -86,6 +86,21 @@ func TestDemoModeGuardsWebhookDeliveriesAndOAuthRevoke(t *testing.T) {
 	if deliveries != 1 || status != "failed" {
 		t.Errorf("demo mode queued deliveries: %d rows, retried delivery status %q", deliveries, status)
 	}
+	pages := NewPagesHandler(db, renderer, sm)
+	pagesRouter := chi.NewRouter()
+	pagesRouter.Use(sm.LoadAndSave)
+	pagesRouter.Post("/admin/pages/{id}/translation-review", pages.ReviewTranslation)
+	pagesRouter.Post("/admin/pages/{id}/claims/{index}", pages.CheckClaim)
+	for _, target := range []string{"/admin/pages/1/translation-review", "/admin/pages/1/claims/0"} {
+		form := strings.NewReader("acknowledge=on&checked=on&base_revision=1&source_page_id=2&source_revision=1")
+		req := httptest.NewRequest(http.MethodPost, target, form)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+		pagesRouter.ServeHTTP(rr, withUser(req, user))
+		if rr.Code != http.StatusForbidden || strings.TrimSpace(rr.Body.String()) != "Read only" {
+			t.Errorf("%s in demo mode: status=%d body=%q, want the read-only refusal", target, rr.Code, rr.Body.String())
+		}
+	}
 
 	env := newMFATestEnv(t, false)
 	enableTestOAuth(t, env)

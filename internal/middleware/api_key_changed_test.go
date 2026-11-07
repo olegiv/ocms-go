@@ -47,6 +47,19 @@ func insertKeyOwner(t *testing.T, db *sql.DB) store.User {
 // caller (and the log) were told the key had no source restriction when it had
 // one. The denial stays; its reason is now the real one.
 func TestAPIKeyAuthNamesAKeyThatChangedMidRequest(t *testing.T) {
+	for _, tc := range []struct{ name, change string }{
+		{"permissions", `permissions = '["media:read"]'`},
+		{"deactivated", `is_active = 0`},
+		{"new owner", `created_by = (SELECT id FROM users WHERE email = 'new-owner@example.test')`},
+		{"expiration changed", `expires_at = '2000-01-01 00:00:00'`},
+		{"expiration removed", `expires_at = NULL`},
+	} {
+		t.Run(tc.name, func(t *testing.T) { testAPIKeyChangedMidRequest(t, tc.change) })
+	}
+}
+
+func testAPIKeyChangedMidRequest(t *testing.T, change string) {
+	t.Helper()
 	loaded, resume := make(chan struct{}), make(chan struct{})
 	var armed, paused atomic.Bool
 	function := fmt.Sprintf("pause_changed_key_%d", changedKeyFixtureID.Add(1))
@@ -78,6 +91,9 @@ func TestAPIKeyAuthNamesAKeyThatChangedMidRequest(t *testing.T) {
 	t.Cleanup(func() { SetRequireAPIKeySourceCIDRs(false) })
 
 	user := insertKeyOwner(t, db)
+	if _, err = db.Exec(`INSERT INTO users (email, name, role, password_hash) VALUES ('new-owner@example.test', 'New owner', 'admin', 'x')`); err != nil {
+		t.Fatal(err)
+	}
 	raw, prefix, err := model.GenerateAPIAccessKey()
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +105,8 @@ func TestAPIKeyAuthNamesAKeyThatChangedMidRequest(t *testing.T) {
 	now := time.Now()
 	q := store.New(db)
 	key, err := q.CreateAPIKey(t.Context(), store.CreateAPIKeyParams{Name: "Changing", KeyHash: hash, KeyPrefix: prefix,
-		KeyLookup: sql.NullString{String: model.APIKeyLookup(raw), Valid: true}, Permissions: `["pages:read"]`, IsActive: true, CreatedBy: user.ID, CreatedAt: now, UpdatedAt: now})
+		KeyLookup: sql.NullString{String: model.APIKeyLookup(raw), Valid: true}, Permissions: `["pages:read"]`, IsActive: true,
+		ExpiresAt: sql.NullTime{Time: now.Add(time.Hour), Valid: true}, CreatedBy: user.ID, CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +163,7 @@ func TestAPIKeyAuthNamesAKeyThatChangedMidRequest(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("credential read did not reach the barrier")
 	}
-	if _, err = db.Exec(`UPDATE api_key_rows SET permissions = '["media:read"]' WHERE id = ?`, key.ID); err != nil {
+	if _, err = db.Exec(`UPDATE api_key_rows SET `+change+` WHERE id = ?`, key.ID); err != nil {
 		t.Fatal(err)
 	}
 	close(resume)

@@ -54,6 +54,28 @@ func problemCode(err error) string {
 	return ""
 }
 
+func TestRevokeValidatesClientIDBeforeLookingUpToken(t *testing.T) {
+	f := newFixture(t)
+	tokens := f.redeem(t, f.code(t))
+	raw := access(tokens)
+	restore := f.breakTable(t, "oauth_tokens")
+	for name, id := range map[string]string{"empty": "", "too long": strings.Repeat("x", 2049)} {
+		t.Run(name, func(t *testing.T) {
+			status, response := f.revoke(id, raw)
+			if status != http.StatusBadRequest || response["error"] != "invalid_client" {
+				t.Fatalf("status=%d error=%v, want 400 invalid_client", status, response["error"])
+			}
+		})
+	}
+	restore()
+	if status, response := f.revoke(strings.Repeat("x", 2048), raw); status != http.StatusOK || len(response) != 0 {
+		t.Fatalf("maximum-length mismatched client: status=%d fields=%d", status, len(response))
+	}
+	if _, err := f.s.VerifyAccess(t.Context(), raw); err != nil {
+		t.Fatalf("invalid or unmatched client revoked the token: %v", err)
+	}
+}
+
 func TestRevokeUsesStoredGrantWithoutClientMetadata(t *testing.T) {
 	f := newFixture(t)
 	body := f.redeem(t, f.code(t))
