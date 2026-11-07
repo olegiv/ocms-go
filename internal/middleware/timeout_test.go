@@ -4,7 +4,9 @@
 package middleware
 
 import (
+	"context"
 	"errors"
+	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -20,7 +22,7 @@ import (
 // newTestTimeoutWriter creates a timeoutWriter for testing.
 func newTestTimeoutWriter() (*timeoutWriter, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
-	return newTimeoutWriter(rr), rr
+	return newTimeoutWriter(context.Background(), rr), rr
 }
 
 func TestTimeoutMiddlewareNormalRequest(t *testing.T) {
@@ -98,6 +100,94 @@ func TestTimeoutMiddlewareWithHeaders(t *testing.T) {
 	}
 }
 
+// TestTimeoutAbortsStartedResponses checks the response framing, which a
+// ResponseRecorder cannot see. The client must read the prefix and an error.
+func TestTimeoutAbortsStartedResponses(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		http2, gzip bool
+	}{
+		{name: "HTTP 1.1"},
+		{name: "HTTP 1.1 with gzip", gzip: true},
+		{name: "HTTP 2", http2: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			release := make(chan struct{})
+			defer close(release)
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/plain")
+				switch r.URL.Path {
+				case "/complete":
+					if _, err := io.WriteString(w, "complete"); err != nil {
+						t.Error(err)
+					}
+					return
+				case "/before-headers":
+					<-r.Context().Done()
+					return
+				}
+				if _, err := io.WriteString(w, "partial"); err != nil {
+					t.Error(err)
+					return
+				}
+				if err := http.NewResponseController(w).Flush(); err != nil {
+					t.Error(err)
+					return
+				}
+				<-r.Context().Done()
+				// Keep the handler open until the client has read the result.
+				<-release
+			})
+			server := httptest.NewUnstartedServer(chimw.Recoverer(chimw.Compress(5)(Timeout(300 * time.Millisecond)(handler))))
+			if tc.http2 {
+				server.EnableHTTP2 = true
+				server.StartTLS()
+			} else {
+				server.Start()
+			}
+			t.Cleanup(server.Close)
+			client := server.Client()
+			client.Timeout = 5 * time.Second
+
+			read := func(path string, status int) (string, error) {
+				t.Helper()
+				req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+path, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !tc.gzip {
+					req.Header.Set("Accept-Encoding", "identity")
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if closeErr := resp.Body.Close(); closeErr != nil {
+						t.Error(closeErr)
+					}
+				}()
+				if resp.StatusCode != status || (resp.ProtoMajor == 2) != tc.http2 || resp.Uncompressed != tc.gzip {
+					t.Errorf("unexpected response: %s %s, decoded gzip=%t", resp.Proto, resp.Status, resp.Uncompressed)
+				}
+				body, readErr := io.ReadAll(resp.Body)
+				return string(body), readErr
+			}
+			partial, readErr := read("/slow", http.StatusOK)
+			t.Logf("slow body = %q, read error = %v", partial, readErr)
+			if partial != "partial" || readErr == nil || errors.Is(readErr, context.DeadlineExceeded) {
+				t.Error("want partial body with a transport error")
+			}
+			if body, err := read("/complete", http.StatusOK); body != "complete" || err != nil {
+				t.Errorf("complete body = %q, read error = %v, want complete body without an error", body, err)
+			}
+			if body, err := read("/before-headers", http.StatusServiceUnavailable); body != "Request timeout" || err != nil {
+				t.Errorf("timeout body = %q, read error = %v, want complete timeout message", body, err)
+			}
+		})
+	}
+}
+
 func TestTimeoutWriterWriteHeader(t *testing.T) {
 	tw, rr := newTestTimeoutWriter()
 
@@ -132,7 +222,7 @@ func TestTimeoutWriterFlush(t *testing.T) {
 	}
 	t.Run("unsupported writer", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		tw := newTimeoutWriter(struct{ http.ResponseWriter }{rr})
+		tw := newTimeoutWriter(t.Context(), struct{ http.ResponseWriter }{rr})
 		if err := http.NewResponseController(tw).Flush(); !errors.Is(err, http.ErrNotSupported) {
 			t.Fatalf("Flush error=%v, want unsupported", err)
 		}
@@ -169,6 +259,25 @@ func TestTimeoutWriterWriteAfterWriteHeader(t *testing.T) {
 	}
 	if body := rr.Body.String(); body != "created" {
 		t.Errorf("Body = %q, want %q", body, "created")
+	}
+}
+
+// The handler can see cancellation before the timeout goroutine settles the
+// response. Even then, a write or flush must not commit the handler's headers.
+func TestTimeoutWriterDropsExpiredWrites(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	recorder := httptest.NewRecorder()
+	tw := newTimeoutWriter(ctx, recorder)
+	cancel()
+	tw.WriteHeader(http.StatusTeapot)
+	if n, err := tw.Write([]byte("late")); n != 0 || !errors.Is(err, http.ErrHandlerTimeout) {
+		t.Errorf("expired Write = %d, %v, want 0 and ErrHandlerTimeout", n, err)
+	}
+	if err := http.NewResponseController(tw).Flush(); !errors.Is(err, http.ErrHandlerTimeout) {
+		t.Errorf("expired Flush = %v, want ErrHandlerTimeout", err)
+	}
+	if tw.wroteHeader || recorder.Flushed || recorder.Body.Len() != 0 {
+		t.Errorf("expired writer committed headers=%t, flushed=%t, body=%q", tw.wroteHeader, recorder.Flushed, recorder.Body)
 	}
 }
 
@@ -267,7 +376,7 @@ func (w *lateCallWriter) Flush() {
 // before panicking: a Cache-Control would let caches keep the error, and a
 // Content-Disposition would download it.
 //
-// Bug state: drop the deferred recoverHandlerPanic in Timeout and the test
+// Bug state: drop the deferred finishTimeoutHandler in Timeout and the test
 // binary crashes; call tw.startResponse for the 500 and this fails.
 func TestTimeoutRecoversHandlerPanics(t *testing.T) {
 	logs := captureLog(t)
@@ -308,7 +417,7 @@ func TestTimeoutRecoversHandlerPanics(t *testing.T) {
 // panic and passes it on as http.ErrAbortHandler, so net/http drops the
 // connection, as it does for a panic without Timeout.
 //
-// Bug state: drop tw.wroteHeader from the abort case in recoverHandlerPanic
+// Bug state: drop tw.wroteHeader from the abort case in finishTimeoutHandler
 // and this fails.
 func TestTimeoutAbortsPartialResponsesOnPanic(t *testing.T) {
 	logs := captureLog(t)
@@ -385,13 +494,10 @@ func TestTimeoutKeepsHandlerHeadersApart(t *testing.T) {
 	t.Run("while Timeout answers", func(t *testing.T) {
 		for range 20 {
 			rr := serve(t, func(r *http.Request) { <-r.Context().Done() }, func() {})
-			switch rr.Code {
-			case http.StatusGatewayTimeout: // the handler answered first
-			case http.StatusServiceUnavailable:
-				checkTimeoutAnswer(t, rr)
-			default:
-				t.Errorf("status = %d, want the handler's 504 or the 503 timeout answer", rr.Code)
+			if rr.Code != http.StatusServiceUnavailable {
+				t.Errorf("status = %d, want the 503 timeout answer", rr.Code)
 			}
+			checkTimeoutAnswer(t, rr)
 		}
 	})
 }
