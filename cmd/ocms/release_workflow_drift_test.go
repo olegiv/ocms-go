@@ -44,6 +44,67 @@ func readWorkflow(t *testing.T, name string) workflowFile {
 	return wf
 }
 
+// TestReleaseVersionPolicy checks that preparation and CI use the same
+// stable version check, including the command's optional leading v.
+func TestReleaseVersionPolicy(t *testing.T) {
+	const prepare = `scripts/release-version.sh "v${input#v}"`
+	const validate = `version_no_v=$(scripts/release-version.sh "${GITHUB_REF_NAME}" 2>&1)`
+	root := filepath.Join("..", "..")
+	command := string(readWorkflowFile(t, filepath.Join(root, ".claude", "commands", "release-gh-prepare.md")))
+	preflight, _, found := strings.Cut(command, "## Hard preconditions")
+	if !found || !strings.Contains(preflight, "\n```bash\n"+prepare+"\n```\n") {
+		t.Error("/release-gh-prepare must run the shared validator before the release preconditions")
+	}
+	wf := readWorkflow(t, "release.yml")
+	validated := false
+	for _, step := range wf.Jobs["validate"].Steps {
+		if step.Name == "Validate release tag" {
+			gate := strings.Index(step.Run, "\nif ! "+validate+"; then\n")
+			changelog := strings.Index(step.Run, "CHANGELOG.md")
+			validated = gate >= 0 && gate < changelog
+		}
+	}
+	if !validated {
+		t.Error("release.yml must validate the tag and use the normalized version before checking CHANGELOG.md")
+	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	for _, tc := range []struct {
+		input, prepared, tag string
+	}{
+		{"0.21.0", "0.21.0", ""},
+		{"v10.21.30", "10.21.30", "10.21.30"},
+		{"v0.21.0-rc.1", "", ""},
+		{"0.21.0-rc.1", "", ""},
+		{"v0.21.0+build.1", "", ""},
+		{"v0.21", "", ""},
+		{"vv0.21.0", "", ""},
+		{" v0.21.0", "", ""},
+		{"--delete", "", ""},
+		{"", "", ""},
+	} {
+		t.Run("input="+tc.input, func(t *testing.T) {
+			check := func(source, snippet, want string) {
+				t.Helper()
+				cmd := exec.CommandContext(t.Context(), bash, "-ec", snippet, "release-version", tc.input) // #nosec G204 -- fixed snippets and fixture input
+				cmd.Dir = root
+				got, runErr := cmd.Output()
+				if want == "" {
+					if runErr == nil || len(got) != 0 {
+						t.Errorf("%s accepted invalid input %q: stdout %q, error %v", source, tc.input, got, runErr)
+					}
+				} else if runErr != nil || string(got) != want+"\n" {
+					t.Errorf("%s input %q: stdout %q, error %v, want %q", source, tc.input, got, runErr, want+"\n")
+				}
+			}
+			check("prepare", "input=$1\n"+prepare, tc.prepared)
+			check("tag validation", "GITHUB_REF_NAME=$1\n"+validate+"\nprintf '%s\\n' \"$version_no_v\"", tc.tag)
+		})
+	}
+}
+
 // TestReleaseArchivesAreAttested fails when the release workflow stops
 // signing build provenance for the archives it publishes, or loses the
 // permissions that signing needs.
