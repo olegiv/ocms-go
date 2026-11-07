@@ -1,11 +1,11 @@
 ## Build and Development Commands
 
 ```bash
-# Run development server (requires OCMS_SESSION_SECRET env var)
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make dev
+# Run the local development server
+OCMS_ENV=development OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make dev
 
 # Run without rebuilding assets
-make run
+OCMS_ENV=development OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make run
 
 # Build production binary
 make build
@@ -438,7 +438,7 @@ curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/health
 Example testing workflow:
 ```bash
 # Start server in background
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go run ./cmd/ocms &
+OCMS_ENV=development OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go run ./cmd/ocms &
 
 # Wait for server to start
 sleep 3

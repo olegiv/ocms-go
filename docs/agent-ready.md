@@ -112,7 +112,7 @@ retries.
 
 ```sh
 # Boot
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make dev &
+OCMS_ENV=development OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make dev &
 sleep 3
 
 # Link header on homepage

@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 Oleg Ivanchenko
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+// Package config loads and validates the oCMS runtime configuration.
 package config
 
 import (
@@ -47,7 +48,7 @@ type Config struct {
 	SessionSecret       string `env:"OCMS_SESSION_SECRET,required"`
 	ServerHost          string `env:"OCMS_SERVER_HOST" envDefault:"localhost"`
 	ServerPort          int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
-	Env                 string `env:"OCMS_ENV" envDefault:"development"`
+	Env                 string `env:"OCMS_ENV" envDefault:"production"`
 	LogLevel            string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
 	ErrorLogPath        string `env:"OCMS_ERROR_LOG_PATH"` // Optional path for a separate error log file (5xx/ERROR+)
 	CustomDir           string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
@@ -145,7 +146,7 @@ func (c Config) IsDevelopment() bool {
 // every environment except development, so staging, which serves the public
 // Internet too, cannot start with a weaker posture than production. An empty
 // Env only occurs in a Config built by hand (Load defaults it to
-// development) and is not production-like. Code outside this package asks
+// production) and is not production-like. Code outside this package asks
 // this method instead of comparing Env (TestNothingComparesEnvOutsideConfig).
 func (c Config) IsProductionLike() bool {
 	return c.Env != "" && !c.IsDevelopment()

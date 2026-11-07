@@ -55,8 +55,8 @@ The list comes from `DefaultCSRFConfig`; there is no environment variable for it
 
 ### Development vs Production
 
-Development mode (`OCMS_ENV=development`, the default) uses the list above.
-Production mode sets no trusted cross-origin defaults.
+Development mode (`OCMS_ENV=development`) uses the list above. Production
+is the default and starts with an empty trusted cross-origin list.
 
 ## Template Fields (Legacy)
 

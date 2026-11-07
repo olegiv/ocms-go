@@ -248,7 +248,7 @@ Run the server and test with curl:
 
 ```bash
 # Start server
-OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go run ./cmd/ocms &
+OCMS_ENV=development OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go run ./cmd/ocms &
 
 # Wait for startup
 sleep 3

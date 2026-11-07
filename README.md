@@ -32,7 +32,7 @@ Most modern CMSs are PHP monoliths (WordPress, Drupal), Node-heavy with build st
 ```bash
 git clone https://github.com/olegiv/ocms-go.git && cd ocms-go
 make install-hooks && make assets
-OCMS_SESSION_SECRET=$(openssl rand -hex 32) OCMS_DO_SEED=true make dev
+OCMS_ENV=development OCMS_SESSION_SECRET=$(openssl rand -hex 32) OCMS_DO_SEED=true make dev
 # → http://localhost:8080/admin   admin@example.com / changeme1234
 ```
 
@@ -240,8 +240,9 @@ cd my-site
 `OCMS_SESSION_SECRET` and `OCMS_MFA_KEY`) plus `data/`, `uploads/`, and
 `custom/` directories.
 `ocms serve` starts the server, reading `./.env` from the current directory.
-Running `ocms` with no command still starts the server, so existing
-systemd/Docker setups are unaffected.
+Running `ocms` with no command is equivalent to `ocms serve`. When
+`OCMS_ENV` is unset or empty after loading the environment file, the server
+uses production mode and requires its production configuration.
 
 The server applies pending database migrations when it starts. To run the
 core ones without starting it, use `ocms migrate [-db <path>]
@@ -263,8 +264,9 @@ users can sign in only with recovery codes. Someone who lost both their
 authenticator and recovery codes is reset by an administrator on the user page,
 or with `ocms mfa-reset [-db <path>] <email>`, which reads `./.env` like
 `ocms migrate`.
-Do not set `OCMS_ENV=production` for this seeded bootstrap run. Production
-startup rejects default seeded credentials.
+The generated `.env` explicitly sets `OCMS_ENV=development` for the seeded
+bootstrap. An older scaffold without this setting needs it for a local
+bootstrap. Production startup rejects default seeded credentials.
 
 Available release archives:
 
@@ -335,7 +337,7 @@ controls the issuer, not cleanup of previously stored evidence.
 | `OCMS_ENV_FILE` | Env file to read instead of `./.env` (site instance mode; `site.mk` sets it to the site's `.env`). The server and `ocms migrate` refuse to start if it is missing, unreadable or does not parse; a `./.env` that does not parse is refused too, a missing one ignored. Variables already in the environment win over the file | `./.env` | No |
 | `OCMS_SERVER_HOST` | Server host address | `localhost` | No |
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
-| `OCMS_ENV` | Environment mode: `development`, `staging` or `production`; any other value fails startup. `staging` and `production` both get the production hardening: the secure defaults below, the startup refusals and the secret checks | `development` | No |
+| `OCMS_ENV` | Environment mode (`development`, `staging` or `production`). Unset or empty uses production. An unrecognized value fails startup. `staging` and `production` apply the secure defaults, startup refusals and secret checks | `production` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
 | `OCMS_ERROR_LOG_PATH` | Path for a separate error log file (5xx/ERROR+ also go to stdout) | - | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes (custom modules are compiled in) | `./custom` | No |
@@ -395,7 +397,8 @@ controls the issuer, not cleanup of previously stored evidence.
 ### Quick Start
 
 ```bash
-# Set required environment variable
+# Opt into development for local runs
+export OCMS_ENV=development
 export OCMS_SESSION_SECRET="$(openssl rand -base64 32)"
 
 # Install repository-managed git hooks (run once per clone)

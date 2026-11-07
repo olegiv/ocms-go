@@ -42,7 +42,7 @@ git clone https://github.com/olegiv/ocms-go.git
 cd ocms-go
 make install-hooks
 make assets
-OCMS_SESSION_SECRET="$(openssl rand -base64 32)" make dev
+OCMS_ENV=development OCMS_SESSION_SECRET="$(openssl rand -base64 32)" make dev
 ```
 
 ## Coding Standards

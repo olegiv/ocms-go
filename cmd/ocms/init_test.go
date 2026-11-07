@@ -79,6 +79,9 @@ func TestRunInitCreatesScaffold(t *testing.T) {
 	if perm := info.Mode().Perm(); perm&0o077 != 0 {
 		t.Errorf(".env accessible by group/other: %#o (want owner-only)", perm)
 	}
+	if mode := readEnvValue(t, envPath, "OCMS_ENV"); mode != "development" {
+		t.Errorf("seeded scaffold OCMS_ENV = %q, want explicit development", mode)
+	}
 
 	secret := readEnvValue(t, envPath, "OCMS_SESSION_SECRET")
 	if len(secret) < config.MinSessionSecretLength {

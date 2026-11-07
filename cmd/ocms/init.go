@@ -115,6 +115,7 @@ OCMS_UPLOADS_DIR=./uploads
 OCMS_CUSTOM_DIR=./custom
 OCMS_SERVER_HOST=%s
 OCMS_SERVER_PORT=%d
+OCMS_ENV=development
 OCMS_DO_SEED=true
 `, secret, mfaKey, host, port)
 

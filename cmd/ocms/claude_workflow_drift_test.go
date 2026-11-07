@@ -14,7 +14,7 @@ import (
 )
 
 func TestClaudeWorkflowExamplesUseValidSecretsAndFreshTests(t *testing.T) {
-	developmentCommand := regexp.MustCompile(`(?m)^ *OCMS_SESSION_SECRET=['"]?([^\s'"]+)['"]? +(go (?:run|test) .+)$`)
+	developmentCommand := regexp.MustCompile(`(?m)^ *(?:(OCMS_ENV=development) +)?OCMS_SESSION_SECRET=['"]?([^\s'"]+)['"]? +(go (?:run|test) .+)$`)
 	for _, name := range []string{
 		".claude/commands/test.md", ".claude/agents/test-runner.md",
 		".claude/agents/api-developer.md", "README.md",
@@ -26,10 +26,13 @@ func TestClaudeWorkflowExamplesUseValidSecretsAndFreshTests(t *testing.T) {
 				t.Fatal("missing development session secret example")
 			}
 			for _, match := range matches {
-				if len(match[1]) < config.MinSessionSecretLength {
-					t.Errorf("development session secret is %d bytes, need at least %d", len(match[1]), config.MinSessionSecretLength)
+				if len(match[2]) < config.MinSessionSecretLength {
+					t.Errorf("development session secret is %d bytes, need at least %d", len(match[2]), config.MinSessionSecretLength)
 				}
-				if strings.HasPrefix(match[2], "go test ") && !slices.Contains(strings.Fields(match[2]), "-count=1") {
+				if strings.HasPrefix(match[3], "go run ") && match[1] == "" {
+					t.Error("development server example must opt into OCMS_ENV=development")
+				}
+				if strings.HasPrefix(match[3], "go test ") && !slices.Contains(strings.Fields(match[3]), "-count=1") {
 					t.Error("Go test example can reuse cached results")
 				}
 			}
