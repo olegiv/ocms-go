@@ -217,7 +217,7 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 				action={ categoryFormAction(data) }
 				class="p-6"
 				x-data="slugForm"
-				data-slug-edited={ fmt.Sprint(data.IsEdit) }
+				data-slug-edited={ fmt.Sprint(data.IsEdit || categoryFormValue(data, "slug") != "") }
 			>
 				if data.IsEdit {
 					<input type="hidden" name="_method" value="PUT"/>
