@@ -210,7 +210,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_ENV_FILE` | No | `./.env` | Env file to read instead of `./.env` (site instance mode); missing, unreadable or unparsable fails startup and `ocms migrate` (a missing `./.env` is ignored). Read in `cmd/ocms` (`loadEnvFile`), not `config.go` |
 | `OCMS_SERVER_HOST` | No | `localhost` | Server bind host |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
-| `OCMS_ENV` | No | `development` | `development`, `staging` or `production` (anything else fails startup); `staging` and `production` both get the production hardening ("in prod" below means both; `Config.IsProductionLike`) |
+| `OCMS_ENV` | No | `production` | Unset or empty uses production. Set `development` explicitly for local runs. Staging and production apply the secure defaults marked "in prod" below (`Config.IsProductionLike`). Unknown values fail startup |
 | `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes (custom modules are compiled in) |
@@ -303,7 +303,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 
 ## Default Credentials
 
-When `OCMS_DO_SEED=true`, seeds admin user: `admin@example.com` / `changeme1234`
+Local bootstrap requires explicit `OCMS_ENV=development`. With `OCMS_DO_SEED=true`, it seeds `admin@example.com` / `changeme1234` unless a seed password is configured. Outside development, seeding requires explicit demo mode.
 
 When `OCMS_DEMO_MODE=true`, also seeds demo users: `demo@example.com` (admin; its password is rotated to a random value on every startup and shown in the informer bar, and the default admin's password is rotated too while it is still `changeme1234`) and `editor@example.com` / `demo1234demo` (editor)
 
@@ -425,7 +425,7 @@ curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/health
 **CRITICAL**: After ANY code change (no exceptions - includes refactoring, renaming, style fixes, test changes, etc.), you MUST:
 
 1. **Rebuild assets**: Run `make assets` to install JS deps and compile SCSS
-2. **Restart the server**: Run `make dev` or restart any running server
+2. **Run the server**: Use `OCMS_ENV=development make dev` for local testing
 3. **Test the application with HTTP requests**:
    - Verify homepage loads: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/`
    - Verify admin dashboard loads: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/admin/`

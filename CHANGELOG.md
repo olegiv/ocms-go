@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Production is the default (I-10).** Set `OCMS_ENV` explicitly before
+  upgrading a site that left it unset or empty. Production can refuse
+  startup on flagged page HTML, including drafts, or missing CAPTCHA
+  verification even with no public forms. Rendering sanitizes legacy HTML,
+  and even a title-only editor save can persist the sanitized body. API
+  keys without expiry or with a lifetime over 90 days fail authentication.
+  Check the MFA key, trusted proxies and required allowlists before switching.
+  See the [upgrade checklist](README.md#upgrading-sites-with-no-ocms_env).
+- **Stricter script CSP (L-7).** Production and staging omit `'unsafe-eval'`.
+  Custom themes using the shipped Alpine asset need CSP-compatible
+  expressions and its current integrity hash.
+
 ### Added
 - **Connected apps and OAuth retention (R1.7).** Account-owned OAuth
   and MCP API-key metadata/revocation, administrator oversight, and bounded

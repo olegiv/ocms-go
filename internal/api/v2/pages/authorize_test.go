@@ -16,9 +16,8 @@ import (
 // TestPageWritesTellCredentialFailuresFromStorageFaults checks the three ways
 // the acting account can fail a REST or agent page write: a deleted account is
 // 401, an account that lost its role is 403, and a failed account read is a
-// server error rather than either (2026-11-03 review S12: every lookup error
-// was reported as 401 "Account unavailable"). Both write modes are covered:
-// the ordinary REST write and the trusted draft write.
+// server error for REST or write_retryable for draft writes (reviews S12
+// and N-11). Both write modes still refuse missing and demoted accounts.
 //
 // Bug state: map every GetUserByID error in authorizeWrite to 401 again and
 // the storage-fault cases fail.
@@ -72,9 +71,16 @@ func TestPageWritesTellCredentialFailuresFromStorageFaults(t *testing.T) {
 				actor := m.actor(f)
 				tc.breakIt(t, f)
 				err := m.write(f, actor)
+				want := tc.want
+				if m.name == "draft" && tc.want == v2.ErrInternal {
+					want = v2.ErrConflict
+				}
 				var domain *v2.Error
-				if !errors.As(err, &domain) || domain.Kind != tc.want {
-					t.Fatalf("write returned %v, want a %v error", err, tc.want)
+				if !errors.As(err, &domain) || domain.Kind != want {
+					t.Fatalf("write returned %v, want a %v error", err, want)
+				}
+				if want == v2.ErrConflict && domain.Code() != "write_retryable" {
+					t.Fatalf("draft lookup fault code = %q, want write_retryable", domain.Code())
 				}
 			})
 		}

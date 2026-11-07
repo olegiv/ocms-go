@@ -2030,7 +2030,7 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			gridContainer.className = 'editor-image-grid';
 
 			items.forEach(item => {
-				const isSelected = this.selectedImage && selectedImage.id === item.id;
+				const isSelected = this.selectedImage && this.selectedImage.id === item.id;
 				const thumbnailUrl = item.thumbnail || item.filepath;
 
 				const itemEl = document.createElement('div');

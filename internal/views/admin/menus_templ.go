@@ -1969,7 +1969,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 								"data-page-title": page.Title,
 								"data-page-slug":  page.Slug,
 								"x-bind:checked":  fmt.Sprintf("isPageSelected(%d)", page.ID),
-								"@change":         "togglePage(parseInt($el.dataset.pageId), $el.dataset.pageTitle, $el.dataset.pageSlug)",
+								"@change":         "togglePage($el.dataset.pageId, $el.dataset.pageTitle, $el.dataset.pageSlug)",
 							},
 						}).Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {

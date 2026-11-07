@@ -68,28 +68,21 @@ func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
 		r.Get("/admin/pages/{id}", h.EditForm)
 		r.Post("/admin/pages/{id}", h.Update)
 		r.Get("/admin/pages", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+		r.Get("/admin/media/api", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if _, writeErr := fmt.Fprint(w, `{"items":[{"id":7,"filename":"picker-fixture.ico","filepath":"/static/dist/favicon.ico","alt":"Picker fixture"}]}`); writeErr != nil {
+				t.Error(writeErr)
+			}
+		})
 	})
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 	formURL := fmt.Sprintf("%s/admin/pages/%d", server.URL, page.ID)
 	listURL := server.URL + "/admin/pages"
-	workDir := t.TempDir()
-	browser := func(args ...string) {
-		t.Helper()
-		commandCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(commandCtx, cli, append([]string{"--session", fmt.Sprintf("ocms-tinymce-%d", os.Getpid())}, args...)...)
-		cmd.Dir = workDir
-		out, runErr := cmd.CombinedOutput()
-		if runErr != nil || (args[0] == "run-code" && !strings.Contains(string(out), "TG11 browser step passed")) {
-			t.Fatalf("playwright %s: %v\n%s", args[0], runErr, out)
-		}
-	}
-	browser("open", formURL, "--browser=chrome", "--idle-timeout=60000")
-	t.Cleanup(func() { browser("close") })
+	browser := openAdminChrome(t, cli, "tinymce", formURL)
 	const ready = `await page.waitForFunction(() => window.tinymce?.get('editor')?.initialized);`
 	const submit = `await Promise.all([page.waitForURL(%s), page.locator('form:has(#editor) button[type=submit]').click()]);`
-	browser("run-code", fmt.Sprintf(`async page => {
+	browser(t, "run-code", fmt.Sprintf(`async page => {
 		const errors = [];
 		page.on('pageerror', error => errors.push(error.message));
 		const response = await page.reload();
@@ -113,7 +106,7 @@ func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
 		await alias.waitFor({state: 'detached'});
 		if (errors.length) throw new Error(errors.join('\n'));
 		%s
-		return 'TG11 browser step passed';
+		return 'oCMS browser step passed';
 	}`, ready, strconv.Quote(original), fmt.Sprintf(submit, strconv.Quote(listURL))))
 	assertSaved := func(wantBody string, revision int64) {
 		t.Helper()
@@ -123,7 +116,7 @@ func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
 		}
 	}
 	assertSaved(original, page.Revision+1)
-	browser("run-code", fmt.Sprintf(`async page => {
+	browser(t, "run-code", fmt.Sprintf(`async page => {
 		await page.goto(%s);
 		%s
 		await page.evaluate(body => {
@@ -133,7 +126,74 @@ func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
 			editor.save();
 		}, %s);
 		%s
-		return 'TG11 browser step passed';
+		return 'oCMS browser step passed';
 	}`, strconv.Quote(formURL), ready, strconv.Quote(edited), fmt.Sprintf(submit, strconv.Quote(listURL))))
 	assertSaved(edited, page.Revision+2)
+
+	t.Run("image picker selection and insert", func(t *testing.T) {
+		browser(t, "run-code", fmt.Sprintf(`async page => {
+			const errors = [];
+			page.on('console', message => {
+				if (message.type() === 'error' && message.text().includes('Failed to load media:')) errors.push(message.text());
+			});
+			await page.setViewportSize({width: 1680, height: 1080});
+			await page.goto(%s);
+			%s
+			const imageButton = page.getByRole('button', {name: /insert image/i});
+			if (!await imageButton.isVisible()) {
+				const more = page.getByRole('button', {name: 'Reveal or hide additional toolbar items'});
+				if (await more.isVisible()) await more.click();
+			}
+			if (!await imageButton.isVisible()) {
+				throw new Error('Image toolbar button is absent: ' + JSON.stringify(await page.locator('.tox-editor-header button').evaluateAll(buttons => buttons.map(button => [button.title, button.getAttribute('aria-label'), button.textContent]))));
+			}
+			await imageButton.click();
+			const grid = page.locator('#editor-image-grid');
+			const item = grid.locator('.editor-image-item[data-id="7"]');
+			const checkSelection = async () => {
+				await grid.locator('.editor-image-item, .editor-image-empty').first().waitFor();
+				if (!(await item.evaluateAll(items => items.length === 1 && items[0].classList.contains('is-selected')))) {
+					throw new Error('Picker selection did not survive media reload: ' + await grid.innerText());
+				}
+			};
+			await item.click();
+			await checkSelection();
+			await Promise.all([
+				page.waitForResponse(response => {
+					const url = new URL(response.url());
+					return url.pathname === '/admin/media/api' && url.searchParams.get('q') === 'picker';
+				}),
+				page.locator('#editor-image-search').fill('picker'),
+			]);
+			await checkSelection();
+			if (errors.length) throw new Error(errors.join('\n'));
+			await page.locator('#editor-image-insert-btn').click();
+			await page.locator('#editor-image-modal').waitFor({state: 'hidden'});
+			await page.waitForFunction(() => {
+				const image = tinymce.get('editor').getBody().querySelector('img');
+				return image?.alt === 'Picker fixture' && image.src.endsWith('/static/dist/favicon.ico');
+			});
+			return 'oCMS browser step passed';
+		}`, strconv.Quote(formURL), ready))
+		t.Log("Chrome selected a TinyMCE image, kept it selected after reload and search, and inserted it")
+	})
+}
+
+func openAdminChrome(t *testing.T, cli, name, url string) func(*testing.T, ...string) {
+	t.Helper()
+	workDir := t.TempDir()
+	browser := func(t *testing.T, args ...string) {
+		t.Helper()
+		commandCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(commandCtx, cli, append([]string{"--session", fmt.Sprintf("ocms-%s-%d", name, os.Getpid())}, args...)...)
+		cmd.Dir = workDir
+		out, runErr := cmd.CombinedOutput()
+		if runErr != nil || (args[0] == "run-code" && !strings.Contains(string(out), "oCMS browser step passed")) {
+			t.Fatalf("playwright %s: %v\n%s", args[0], runErr, out)
+		}
+	}
+	browser(t, "open", url, "--browser=chrome", "--idle-timeout=60000")
+	t.Cleanup(func() { browser(t, "close") })
+	return browser
 }

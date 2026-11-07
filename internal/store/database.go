@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,10 +15,21 @@ import (
 	"github.com/pressly/goose/v3"
 
 	_ "modernc.org/sqlite" // SQLite driver for database/sql
+	sqlite "modernc.org/sqlite/lib"
 )
 
 //go:embed migrations/*.sql
 var migrations embed.FS
+
+// IsSQLiteBusy matches SQLite BUSY and LOCKED, including extended codes.
+func IsSQLiteBusy(err error) bool {
+	var driverError interface{ Code() int }
+	if !errors.As(err, &driverError) {
+		return false
+	}
+	code := driverError.Code() & 0xff
+	return code == sqlite.SQLITE_BUSY || code == sqlite.SQLITE_LOCKED
+}
 
 // DBConfig holds database configuration options.
 type DBConfig struct {

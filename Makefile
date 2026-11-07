@@ -49,11 +49,11 @@ install-test-gate:
 check-no-absolute-paths:
 	./scripts/check-no-absolute-paths.sh --all
 
-# Development server with asset build
+# Server with asset build. Select OCMS_ENV=development explicitly for local runs.
 dev: assets
 	go run $(MAIN_DIR)
 
-# Development server (without asset build)
+# Server without asset build, using the same environment selection as dev.
 run:
 	go run $(MAIN_DIR)
 

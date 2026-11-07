@@ -54,6 +54,10 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 			if tw.finished && !tw.abort {
 				return
 			}
+			if r.Context().Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				slog.WarnContext(r.Context(), "request timed out", "method", r.Method, "path", r.URL.Path,
+					"request_id", chimw.GetReqID(r.Context()), "response_started", tw.wroteHeader, "timeout", timeout)
+			}
 			if tw.wroteHeader || tw.abort {
 				panic(http.ErrAbortHandler)
 			}

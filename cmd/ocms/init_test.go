@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,22 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/config"
 )
+
+func TestInitNextStepsExplainProductionAfterBootstrap(t *testing.T) {
+	var output bytes.Buffer
+	printInitNextSteps(&output, "my-site", 8080, true)
+	text := output.String()
+	for _, step := range []string{
+		"Change those credentials",
+		"OCMS_DO_SEED=false",
+		"Before serving public traffic, set OCMS_ENV=production",
+		"production configuration checklist in the README",
+	} {
+		if !strings.Contains(text, step) {
+			t.Errorf("init next steps are missing %q", step)
+		}
+	}
+}
 
 // TestParseCommand locks the back-compat dispatch invariant: bare invocations,
 // flag-only invocations (systemd/Docker style), and unknown tokens must all

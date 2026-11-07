@@ -27,9 +27,9 @@ expiry, global/per-key CIDR, lifetime and anomaly policies. Current account,
 role, module/toggle, credential/scopes and source policy are checked again in
 the write transaction. A changed link/read policy makes a new write retryable
 with its original request ID. Storage faults while checking module state,
-draft settings, credentials or API-key source policy also return
-`write_retryable`, with a server-side diagnostic. This applies to initial
-authorization and transaction-time rechecks. These checks still refuse a
+draft settings, the account or its editor role, credentials or API-key source
+policy return `write_retryable` and produce a server-side diagnostic. This
+applies to initial authorization and transaction-time rechecks. These checks still refuse a
 disabled module or draft toggle; only a credential that is gone, no longer the
 caller's or refused by policy is the 401 "Credential unavailable", so an
 agent never drops a working key over a database hiccup.
@@ -97,6 +97,10 @@ a link or wait for expiry. Both have `retryable=false`.
 revoked links, and has `retryable=true` with `retry_after_seconds`.
 Revoking links cannot clear that hourly cap. A retry still rechecks all
 eligibility and quota rules; another issuance can consume the available slot.
+Storage faults while checking sharing policy or reserving the SQLite writer,
+including SQLite lock contention, return `write_retryable` and produce a
+server-side diagnostic. A failed issuance creates no link and consumes no
+quota. An explicit `share_links_disabled` refusal stays non-retryable.
 
 Updates require the last-read `base_revision`. Omission preserves fields;
 arrays replace collections and empty arrays clear them. Explicit null clears
@@ -122,9 +126,9 @@ Fresh authorization and retained-request lookup precede current validation
 and CAS. The write transaction repeats both checks and prepares the receipt
 before committing. A lost committed response replays its original receipt
 even after the page or mutable defaults changed. Different input under the
-same ID returns `idempotency_key_reused`. If a credential lookup is temporarily
-unavailable, `write_retryable` tells the caller to retry with the same
-`request_id`.
+same ID returns `idempotency_key_reused`. A storage fault while reading
+the committed receipt returns `write_retryable`. Retry with the same
+`request_id` to recover the original receipt without creating a second draft.
 
 The original non-secret receipt is retained for seven days, then compacted to
 a permanent tombstone; deletion also preserves a tombstone. `request_expired`

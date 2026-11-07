@@ -13,9 +13,10 @@ import (
 )
 
 // TestAccountLookupsInPageWritesUseTheEditorErrorMapping fails when a function
-// in this package reads the acting user and does not map the error through
-// v2.RequireEditor and v2.EditorError, which is how a missing account (401), a
-// lost role (403) and a storage fault (500) stay apart (2026-11-03 review S12).
+// in this package reads the acting user without the editor guard and a
+// separate error branch that classifies the lookup. REST faults map through
+// EditorError. The draft snapshot lookup uses the retryable credential
+// mapping while retaining the missing-account refusal (reviews S12 and N-11).
 //
 // Bug state: answer a failed GetUserByID with a fixed 401, as authorizeWrite
 // did, and this fails for that function.
@@ -39,23 +40,72 @@ func TestAccountLookupsInPageWritesUseTheEditorErrorMapping(t *testing.T) {
 			if !ok || fn.Body == nil {
 				continue
 			}
-			names := make(map[string]bool)
-			ast.Inspect(fn.Body, func(node ast.Node) bool {
+			roleGuard, lookups := false, 0
+			for node := range ast.Preorder(fn.Body) {
 				if selected, ok := node.(*ast.SelectorExpr); ok {
-					names[selected.Sel.Name] = true
+					roleGuard = roleGuard || selected.Sel.Name == "RequireEditor"
+					if selected.Sel.Name == "GetUserByID" {
+						lookups++
+					}
 				}
-				return true
-			})
-			if !names["GetUserByID"] {
+			}
+			if lookups == 0 {
 				continue
 			}
-			checked++
-			if !names["RequireEditor"] || !names["EditorError"] {
-				t.Errorf("%s: %s reads the acting user without v2.RequireEditor and v2.EditorError", entry.Name(), fn.Name.Name)
+			checked += lookups
+			if !roleGuard || classifiedAccountLookups(fn) != lookups {
+				t.Errorf("%s: %s reads the acting user without v2.RequireEditor and a classified lookup error", entry.Name(), fn.Name.Name)
 			}
 		}
 	}
 	if checked == 0 {
 		t.Fatal("found no account lookup to check; the scan is out of date")
 	}
+}
+
+func classifiedAccountLookups(fn *ast.FuncDecl) int {
+	classified := 0
+	for node := range ast.Preorder(fn.Body) {
+		block, ok := node.(*ast.BlockStmt)
+		if !ok {
+			continue
+		}
+		for index, statement := range block.List {
+			assignment, ok := statement.(*ast.AssignStmt)
+			if !ok || len(assignment.Rhs) != 1 || index+1 >= len(block.List) {
+				continue
+			}
+			call, ok := assignment.Rhs[0].(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			lookup, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || lookup.Sel.Name != "GetUserByID" {
+				continue
+			}
+			branch, ok := block.List[index+1].(*ast.IfStmt)
+			if !ok || len(branch.Body.List) != 1 {
+				continue
+			}
+			ret, ok := branch.Body.List[0].(*ast.ReturnStmt)
+			if !ok || len(ret.Results) != 1 {
+				continue
+			}
+			mapping, ok := ret.Results[0].(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			switch mapper := mapping.Fun.(type) {
+			case *ast.Ident:
+				if fn.Name.Name == "authorizeWrite" && mapper.Name == "draftCredentialLookupError" {
+					classified++
+				}
+			case *ast.SelectorExpr:
+				if fn.Name.Name != "authorizeWrite" && mapper.Sel.Name == "EditorError" {
+					classified++
+				}
+			}
+		}
+	}
+	return classified
 }

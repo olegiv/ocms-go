@@ -375,9 +375,13 @@ func (s *Service) authorizeWrite(ctx context.Context, q *store.Queries, a v2.Act
 	if middleware.IsDemoMode() {
 		return v2.NewError(v2.ErrForbidden, v2.DemoReadOnlyMessage)
 	}
-	// 401 for a missing account, 403 for a role that lost write access and 500
-	// for a storage fault: a failed read must not look like a bad credential.
+	// Keep role and account refusals definitive. A failed read during a draft
+	// write is retryable because the current role could not be established.
 	if err := v2.RequireEditor(ctx, q, a); err != nil {
+		var accountErr *v2.Error
+		if opt.ForceDraft && errors.As(err, &accountErr) && accountErr.Kind == v2.ErrInternal {
+			return draftCredentialLookupError(ctx, accountErr.Wrap, "Account unavailable", "check", "account", "user_id", a.ActingUserID())
+		}
 		return err
 	}
 	if !opt.ForceDraft {
@@ -385,7 +389,7 @@ func (s *Service) authorizeWrite(ctx context.Context, q *store.Queries, a v2.Act
 	}
 	user, err := q.GetUserByID(ctx, a.ActingUserID())
 	if err != nil {
-		return v2.EditorError(err, "Failed to load account")
+		return draftCredentialLookupError(ctx, err, "Account unavailable", "check", "account", "user_id", a.ActingUserID())
 	}
 	if !a.HasPermission(model.PermissionMCPAccess) || !a.HasPermission(model.PermissionMCPDrafts) {
 		return v2.NewError(v2.ErrForbidden, "mcp:access and mcp:drafts required")
@@ -435,8 +439,7 @@ func draftCredentialLookupError(ctx context.Context, err error, unavailable stri
 }
 
 func writeError(err error) error {
-	var driverError interface{ Code() int }
-	if errors.As(err, &driverError) && (driverError.Code()&255 == 5 || driverError.Code()&255 == 6) {
+	if store.IsSQLiteBusy(err) {
 		return &v2.Error{Kind: v2.ErrConflict, Msg: "Write is busy; retry with the same request_id", MachineCode: "write_retryable", Wrap: err}
 	}
 

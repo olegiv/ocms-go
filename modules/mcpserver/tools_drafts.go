@@ -209,7 +209,7 @@ func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in autho
 	if err != nil {
 		return preview.Link{}, err
 	}
-	if err = checkAgentShareLinks(ctx, m.ctx.DB); err != nil {
+	if err = m.checkAgentShareLinks(ctx, m.ctx.DB, a.ActingUserID(), in.PageID); err != nil {
 		return preview.Link{}, err
 	}
 	// Recheck through the issuance transaction in case sharing was disabled
@@ -220,9 +220,10 @@ func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in autho
 		// connection. Matching no rows keeps settings intact while holding
 		// the write lock through the policy read and link insertion.
 		if _, lockErr := q.DBHandle().ExecContext(ctx, `UPDATE mcp_settings SET agent_share_links = agent_share_links WHERE 0`); lockErr != nil {
-			return lockErr
+			return m.credentialFault(ctx, "failed to reserve MCP preview issuance writer", lockErr,
+				"user_id", a.ActingUserID(), "page_id", in.PageID)
 		}
-		if shareErr := checkAgentShareLinks(ctx, q.DBHandle()); shareErr != nil {
+		if shareErr := m.checkAgentShareLinks(ctx, q.DBHandle(), a.ActingUserID(), in.PageID); shareErr != nil {
 			return shareErr
 		}
 		return checkPolicy(ctx, q)
@@ -230,10 +231,10 @@ func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in autho
 	return s.CreatePreviewLink(ctx, a, in)
 }
 
-func checkAgentShareLinks(ctx context.Context, db settingsReader) error {
+func (m *Module) checkAgentShareLinks(ctx context.Context, db settingsReader, userID, pageID int64) error {
 	settings, err := loadSettings(ctx, db)
 	if err != nil {
-		return err
+		return m.credentialFault(ctx, "failed to check MCP preview sharing policy", err, "user_id", userID, "page_id", pageID)
 	}
 	if !settings.AgentShareLinks {
 		return &v2.Error{Kind: v2.ErrForbidden, MachineCode: "share_links_disabled", Msg: "An administrator has turned off share links for AI clients"}

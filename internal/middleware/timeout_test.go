@@ -188,6 +188,69 @@ func TestTimeoutAbortsStartedResponses(t *testing.T) {
 	}
 }
 
+func TestTimeoutLogsOnlyOwnDeadline(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		started, completed bool
+		cancelled          bool
+	}{
+		{name: "aborted response", started: true},
+		{name: "503 before headers"},
+		{name: "normal response", completed: true},
+		{name: "client cancellation", cancelled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logs := captureLog(t)
+			ctx, cancel := context.WithCancel(context.WithValue(t.Context(), chimw.RequestIDKey, "audit-request"))
+			defer cancel()
+			req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/export?private=ignored", nil)
+			const deadline = 250 * time.Millisecond
+			handler := Timeout(deadline)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.started || tc.completed {
+					w.WriteHeader(http.StatusOK)
+				}
+				if tc.completed {
+					return
+				}
+				if tc.cancelled {
+					cancel()
+				}
+				<-r.Context().Done()
+			}))
+			recorder := httptest.NewRecorder()
+			recovered := serveRecovering(handler, recorder, req)
+			text := logs.String()
+			if tc.completed || tc.cancelled {
+				if text != "" {
+					t.Fatalf("unexpected timeout log: %s", text)
+				}
+				return
+			}
+			if tc.started && recovered != http.ErrAbortHandler {
+				t.Errorf("started response recovered %v, want http.ErrAbortHandler", recovered)
+			}
+			if !tc.started && recorder.Code != http.StatusServiceUnavailable {
+				t.Errorf("unstarted response status %d, want 503", recorder.Code)
+			}
+			if strings.Count(text, "\n") != 1 || !strings.Contains(text, `level=WARN msg="request timed out"`) {
+				t.Fatalf("want exactly one timeout warning, got %q", text)
+			}
+			started := "response_started=false"
+			if tc.started {
+				started = "response_started=true"
+			}
+			for _, field := range []string{"method=POST", "path=/export", "request_id=audit-request", started, "timeout=250ms"} {
+				if !strings.Contains(text, field) {
+					t.Errorf("missing %q in %s", field, text)
+				}
+			}
+			if strings.Contains(text, "private=") {
+				t.Errorf("timeout warning exposed a query string: %s", text)
+			}
+		})
+	}
+}
+
 func TestTimeoutWriterWriteHeader(t *testing.T) {
 	tw, rr := newTestTimeoutWriter()
 

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/idempotency"
 	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/provenance"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -297,7 +299,13 @@ func (s *Service) prepare(a v2.Actor, validation Validation, report draft.AgentR
 func (s *Service) receipt(ctx context.Context, q *store.Queries, p *pages.Page) (SaveResult, error) {
 	fact, err := q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: p.ID, Revision: p.Revision})
 	if err != nil {
-		return SaveResult{}, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return SaveResult{}, err
+		}
+		slog.ErrorContext(service.WithoutEventLog(ctx), "failed to read draft receipt",
+			"error", err, "page_id", p.ID, "revision", p.Revision)
+		return SaveResult{}, &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable",
+			Msg: "Draft receipt is temporarily unavailable; retry with the same request_id", Wrap: err}
 	}
 	v := Validation{Issues: []draft.Issue{}, TranslationStatus: "not_tracked"}
 	if err = json.Unmarshal([]byte(fact.ValidatedJson), &v); err != nil {

@@ -7,9 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/preview"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -35,6 +37,13 @@ func (s *Service) CreatePreviewLink(ctx context.Context, a v2.Actor, in PreviewI
 	var limited *preview.RateLimitError
 	if errors.As(err, &limited) {
 		return preview.Link{}, &Error{Code: "preview_rate_limited", Message: "Preview link issuance limit reached; retry after the indicated delay. Revoking links does not reset this limit.", Retryable: true, RetryAfterSeconds: limited.RetryAfterSeconds}
+	}
+	var domain *v2.Error
+	if !errors.As(err, &domain) && store.IsSQLiteBusy(err) {
+		slog.ErrorContext(service.WithoutEventLog(ctx), "preview link issuance is busy",
+			"error", err, "user_id", a.ActingUserID(), "page_id", in.PageID, "revision", in.Revision)
+		return preview.Link{}, &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable",
+			Msg: "Preview link issuance is busy; retry the call", Wrap: err}
 	}
 	return result, err
 }

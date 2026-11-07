@@ -235,7 +235,8 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if fn.Name.Name == "authorizeDraftCall" {
+		switch fn.Name.Name {
+		case "authorizeDraftCall", "createPreviewLink", "checkAgentShareLinks":
 			roots = append(roots, fn.Body)
 		}
 		if fn.Name.Name == "authoringService" {
@@ -254,8 +255,8 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 			}
 		}
 	}
-	if len(roots) != 2 {
-		t.Fatal("missing draft authorization or write-policy callback; update fault coverage")
+	if len(roots) != 4 {
+		t.Fatal("missing draft authorization, write-policy or preview issuance checks; update fault coverage")
 	}
 	checked := 0
 	check := func(assignment *ast.AssignStmt, branch *ast.IfStmt) {
@@ -266,8 +267,11 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 		if !ok {
 			return
 		}
-		if selected, ok := call.Fun.(*ast.SelectorExpr); ok && selected.Sel.Name == "credentialScopes" {
-			return
+		if selected, ok := call.Fun.(*ast.SelectorExpr); ok {
+			switch selected.Sel.Name {
+			case "credentialScopes", "authoringService", "checkAgentShareLinks":
+				return // These helpers already classify their errors.
+			}
 		}
 		bound, ok := assignment.Lhs[len(assignment.Lhs)-1].(*ast.Ident)
 		if !ok || (bound.Name != "err" && !strings.HasSuffix(bound.Name, "Err")) {

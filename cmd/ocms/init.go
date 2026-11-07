@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -98,7 +99,7 @@ func runInit(args []string) error {
 		return err
 	}
 
-	printInitNextSteps(dir, port, createdEnv)
+	printInitNextSteps(os.Stdout, dir, port, createdEnv)
 	return nil
 }
 
@@ -137,17 +138,18 @@ OCMS_DO_SEED=true
 // printInitNextSteps prints copy-pasteable instructions for starting the new
 // site. It uses the running executable's path so the serve command resolves
 // even when ocms is not on PATH.
-func printInitNextSteps(dir string, port int, createdEnv bool) {
+func printInitNextSteps(w io.Writer, dir string, port int, createdEnv bool) {
 	exe, err := os.Executable()
 	if err != nil || exe == "" {
 		exe = "ocms"
 	}
 
-	_, _ = fmt.Fprintf(os.Stdout, "Scaffolded oCMS site in %s\n\n", dir)
+	_, _ = fmt.Fprintf(w, "Scaffolded oCMS site in %s\n\n", dir)
 	if !createdEnv {
-		_, _ = fmt.Fprintf(os.Stdout, "Kept existing %s (session secret preserved).\n\n", filepath.Join(dir, ".env"))
+		_, _ = fmt.Fprintf(w, "Kept existing %s (session secret preserved).\n\n", filepath.Join(dir, ".env"))
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "Next steps:\n  cd %s\n  %s serve\n\n", dir, exe)
-	_, _ = fmt.Fprintf(os.Stdout, "Then open http://localhost:%d/admin/ and sign in with:\n  admin@example.com / changeme1234\n\n", port)
-	_, _ = fmt.Fprintf(os.Stdout, "Change those credentials, then set OCMS_DO_SEED=false in %s for normal runs.\n", filepath.Join(dir, ".env"))
+	_, _ = fmt.Fprintf(w, "Next steps:\n  cd %s\n  %s serve\n\n", dir, exe)
+	_, _ = fmt.Fprintf(w, "Then open http://localhost:%d/admin/ and sign in with:\n  admin@example.com / changeme1234\n\n", port)
+	_, _ = fmt.Fprintf(w, "Change those credentials, then set OCMS_DO_SEED=false in %s.\n", filepath.Join(dir, ".env"))
+	_, _ = fmt.Fprintln(w, "Before serving public traffic, set OCMS_ENV=production and complete the production configuration checklist in the README.")
 }

@@ -307,6 +307,7 @@ type shareLinkTestConnector struct {
 	driver.Connector
 	beforeWrite  func(context.Context) error
 	beforeInsert func(context.Context) error
+	beforeSQL    func(string) error
 }
 
 func (c shareLinkTestConnector) Connect(ctx context.Context) (driver.Conn, error) {
@@ -314,18 +315,17 @@ func (c shareLinkTestConnector) Connect(ctx context.Context) (driver.Conn, error
 	if err != nil {
 		return nil, err
 	}
-	return shareLinkTestConn{Conn: conn, beforeWrite: c.beforeWrite, beforeInsert: c.beforeInsert}, nil
+	return shareLinkTestConn{Conn: conn, hooks: c}, nil
 }
 
 type shareLinkTestConn struct {
 	driver.Conn
-	beforeWrite  func(context.Context) error
-	beforeInsert func(context.Context) error
+	hooks shareLinkTestConnector
 }
 
 func (c shareLinkTestConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	if !opts.ReadOnly && c.beforeWrite != nil {
-		if err := c.beforeWrite(ctx); err != nil {
+	if !opts.ReadOnly && c.hooks.beforeWrite != nil {
+		if err := c.hooks.beforeWrite(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -333,10 +333,24 @@ func (c shareLinkTestConn) BeginTx(ctx context.Context, opts driver.TxOptions) (
 }
 
 func (c shareLinkTestConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	if c.beforeInsert != nil && strings.Contains(query, "INSERT INTO preview_links") {
-		if err := c.beforeInsert(ctx); err != nil {
+	if c.hooks.beforeSQL != nil {
+		if err := c.hooks.beforeSQL(query); err != nil {
+			return nil, err
+		}
+	}
+	if c.hooks.beforeInsert != nil && strings.Contains(query, "INSERT INTO preview_links") {
+		if err := c.hooks.beforeInsert(ctx); err != nil {
 			return nil, err
 		}
 	}
 	return c.Conn.(driver.QueryerContext).QueryContext(ctx, query, args)
+}
+
+func (c shareLinkTestConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if c.hooks.beforeSQL != nil {
+		if err := c.hooks.beforeSQL(query); err != nil {
+			return nil, err
+		}
+	}
+	return c.Conn.(driver.ExecerContext).ExecContext(ctx, query, args)
 }

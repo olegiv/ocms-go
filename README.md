@@ -254,8 +254,11 @@ goose CLI, which does not know the Go migration and cannot roll it back.
 
 Open `http://localhost:8080/admin/` and log in with
 `admin@example.com` / `changeme1234`. Change the admin email and password
-immediately. Stop the foreground process with `Ctrl+C`, set
-`OCMS_DO_SEED=false` in `my-site/.env`, then run `serve` again for normal runs.
+immediately, then stop the foreground process with `Ctrl+C`. Set
+`OCMS_DO_SEED=false` in `my-site/.env`. Before serving public traffic,
+set `OCMS_ENV=production` and complete the
+[production configuration checklist](#upgrading-sites-with-no-ocms_env)
+before restarting.
 
 Keep `OCMS_SESSION_SECRET` stable; regenerating it invalidates active sessions.
 Keep `OCMS_MFA_KEY` stable too, and back it up with the database: it seals the
@@ -320,6 +323,36 @@ gh attestation verify ocms-linux-amd64.tar.gz --repo olegiv/ocms-go
    ```bash
    make build-prod
    ```
+
+## Upgrading sites with no `OCMS_ENV`
+
+Set `OCMS_ENV` explicitly before upgrading (I-10). An unset or empty value
+now selects production. Keep `development` for local-only sites. For a
+public site, select `production` after checking the database and
+configuration on an isolated copy.
+
+- **Page HTML:** The production startup audit rejects suspicious markup in
+  any stored page, including drafts. Remove or replace flagged markup such
+  as legacy iframes or inline SVG before switching modes. The frontend
+  sanitizes legacy bodies at render time. An editor save can persist the
+  sanitized body even when the title is the only field you changed. Review
+  the result and back up the database before saving.
+- **Public forms:** Configure an active CAPTCHA verifier even if the database
+  has no public forms. Each active public form needs a CAPTCHA field.
+  With the production requirement enabled, missing verification or fields
+  cause startup to refuse.
+- **API keys:** Replace keys with no expiry or a lifetime above the
+  production default of 90 days, measured from creation to expiry. Such
+  keys are rejected at authentication. Verify each replacement's source
+  CIDRs and the global API allowlist.
+- **Production prerequisites:** Supply a strong session secret and MFA key.
+  Configure `OCMS_TRUSTED_PROXIES`, `OCMS_API_ALLOWED_CIDRS` and the allowlists
+  required by enabled integrations such as webhooks, embeds and migration.
+  Keep seeding disabled and rotate any default admin credentials.
+- **Custom themes (L-7):** Production and staging CSP omit `'unsafe-eval'`.
+  Use the shipped Alpine CSP build, convert unsupported expressions and
+  update any integrity hash pinned to the previous Alpine asset. See
+  [custom theme scripting](docs/custom-themes.md).
 
 ## Environment Variables
 
