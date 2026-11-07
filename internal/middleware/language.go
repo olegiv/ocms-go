@@ -28,6 +28,9 @@ const (
 // LanguageCookieName is the cookie name for language preference.
 const LanguageCookieName = "ocms_lang"
 
+// AdminLanguageCookieName stores the login UI preference independently of site content.
+const AdminLanguageCookieName = "ocms_admin_lang"
+
 // secureCookies controls whether cookies are set with the Secure flag.
 // In production mode (HTTPS), this should be true.
 // In development mode (HTTP), this should be false.
@@ -228,14 +231,27 @@ func GetLanguagePrefix(r *http.Request) string {
 // SetLanguageCookie sets the language preference cookie.
 // The Secure flag is set based on the configuration from InitLanguageCookies.
 func SetLanguageCookie(w http.ResponseWriter, langCode string) {
-	cookie := &http.Cookie{
-		Name:     LanguageCookieName,
+	writeLanguageCookie(w, LanguageCookieName, langCode, 365*24*60*60)
+}
+
+// SetAdminLanguageCookie remembers the UI language before sign-in for up to one day.
+func SetAdminLanguageCookie(w http.ResponseWriter, langCode string) {
+	writeLanguageCookie(w, AdminLanguageCookieName, langCode, 24*60*60)
+}
+
+// ClearAdminLanguageCookie lets a new signed-in preference take precedence.
+func ClearAdminLanguageCookie(w http.ResponseWriter) {
+	writeLanguageCookie(w, AdminLanguageCookieName, "", -1)
+}
+
+func writeLanguageCookie(w http.ResponseWriter, name, langCode string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
 		Value:    langCode,
 		Path:     "/",
-		MaxAge:   365 * 24 * 60 * 60, // 1 year
+		MaxAge:   maxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secureCookies,
-	}
-	http.SetCookie(w, cookie)
+	})
 }

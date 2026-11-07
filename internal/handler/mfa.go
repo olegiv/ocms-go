@@ -154,6 +154,9 @@ func (h *AuthHandler) grantSession(r *http.Request, user store.User, secondFacto
 		return fmt.Errorf("renewing the session token: %w", err)
 	}
 	h.clearPendingSignIn(ctx)
+	if lang := middleware.AdminLangPreference(r, h.sessionManager); lang != "" {
+		h.renderer.SetAdminLang(r, lang)
+	}
 
 	// Store user ID in session along with the user's current session_version
 	// so the auth middleware can detect if the credential is rotated under us.

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -235,22 +236,19 @@ func handleDeleteEntity[T any](w http.ResponseWriter, r *http.Request, renderer 
 // LANGUAGE PREFERENCE HELPERS
 // =============================================================================
 
-// setLanguagePreference sets the admin UI language preference from a form value.
-// It validates the language code and redirects to the referer or the provided fallback URL.
+// setLanguagePreference saves the signed-in preference and redirects back.
 func setLanguagePreference(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, fallbackURL string) {
-	lang := r.FormValue("lang")
-	if lang == "" {
-		lang = "en"
+	renderer.SetAdminLang(r, selectedUILanguage(r))
+	if _, err := r.Cookie(middleware.AdminLanguageCookieName); err == nil {
+		middleware.ClearAdminLanguageCookie(w)
 	}
-
-	// Validate the language code
-	if !i18n.IsSupported(lang) {
-		lang = "en"
-	}
-
-	// Set the language preference in session
-	renderer.SetAdminLang(r, lang)
-
-	// Redirect back to a same-origin Referer, or to fallbackURL.
 	middleware.SafeRefererRedirect(w, r, fallbackURL)
+}
+
+func selectedUILanguage(r *http.Request) string {
+	lang := strings.ToLower(r.FormValue("lang"))
+	if i18n.IsSupported(lang) {
+		return lang
+	}
+	return "en"
 }

@@ -316,10 +316,15 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	flashAndRedirect(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.logged_out"), "info")
 }
 
-// SetLanguage changes the UI language preference on the login page.
+// SetLanguage changes the UI language preference on the login or account page.
 // POST /language
 func (h *AuthHandler) SetLanguage(w http.ResponseWriter, r *http.Request) {
-	setLanguagePreference(w, r, h.renderer, redirectLogin)
+	if _, signedIn := middleware.SessionUser(r.Context(), h.sessionManager, h.queries); signedIn {
+		setLanguagePreference(w, r, h.renderer, redirectLogin)
+		return
+	}
+	middleware.SetAdminLanguageCookie(w, selectedUILanguage(r))
+	middleware.SafeRefererRedirect(w, r, redirectLogin)
 }
 
 // formatDuration formats a duration into a human-readable string.

@@ -39,7 +39,7 @@ import (
 )
 
 // SessionKeyAdminLang is the session key for storing admin UI language preference.
-const SessionKeyAdminLang = "admin_lang"
+const SessionKeyAdminLang = middleware.SessionKeyAdminLang
 
 // blankLinesRegex matches two or more consecutive newlines (with optional whitespace between).
 var blankLinesRegex = regexp.MustCompile(`(\r?\n\s*){2,}`)
@@ -776,9 +776,9 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 			data.AdminLang = langInfo.Code
 		}
 	}
-	// Fall back to admin language from session if not already set
-	if data.AdminLang == "" && r.sessionManager != nil {
-		data.AdminLang = r.sessionManager.GetString(req.Context(), SessionKeyAdminLang)
+	// Fall back to the UI preference if no content language was set.
+	if data.AdminLang == "" {
+		data.AdminLang = middleware.AdminLangPreference(req, r.sessionManager)
 	}
 	// Fall back to browser's Accept-Language header
 	if data.AdminLang == "" {
@@ -894,12 +894,10 @@ func (r *Renderer) SetAdminLang(req *http.Request, lang string) {
 	}
 }
 
-// GetAdminLang gets the admin UI language preference from the session.
+// GetAdminLang gets the explicit UI language preference or the default.
 func (r *Renderer) GetAdminLang(req *http.Request) string {
-	if r.sessionManager != nil {
-		if lang := r.sessionManager.GetString(req.Context(), SessionKeyAdminLang); lang != "" {
-			return lang
-		}
+	if lang := middleware.AdminLangPreference(req, r.sessionManager); lang != "" {
+		return lang
 	}
 	return i18n.GetDefaultLanguage()
 }

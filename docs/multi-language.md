@@ -164,6 +164,11 @@ For RTL languages (Arabic, Hebrew, etc.):
 2. Choose your preferred language
 3. The admin interface reloads in the selected language
 
+The login language selector stores the choice for up to 24 hours in
+the `ocms_admin_lang` cookie. Signing in carries the choice into the session,
+where subsequent account and admin language changes are stored. The public
+site's content language uses its own `ocms_lang` cookie.
+
 ### Supported Admin Languages
 
 Currently supported:
