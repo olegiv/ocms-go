@@ -20,7 +20,7 @@ templ Sidebar(pc *PageContext) {
 			<button
 				type="button"
 				class="sidebar-collapse-btn"
-				@click="sidebarCollapsed = !sidebarCollapsed; localStorage.setItem('sidebarCollapsed', sidebarCollapsed)"
+				@click="toggleSidebarCollapsed()"
 				title={ pc.T("nav.collapse_sidebar") }
 				aria-label={ pc.T("nav.collapse_sidebar") }
 				data-collapse-label={ pc.T("nav.collapse_sidebar") }

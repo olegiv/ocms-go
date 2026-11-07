@@ -73,7 +73,7 @@ func TestAdminDeleteToastsInChrome(t *testing.T) {
 	}
 
 	router := chi.NewRouter()
-	router.Use(middleware.SecurityHeaders(middleware.DefaultSecurityHeadersConfig(true)))
+	router.Use(middleware.SecurityHeaders(middleware.DefaultSecurityHeadersConfig(false)))
 	router.Handle("/static/*", http.FileServer(http.FS(web.Static)))
 	router.Group(func(r chi.Router) {
 		r.Use(sm.LoadAndSave, middleware.CSRF(middleware.DefaultCSRFConfig(nil, false)))

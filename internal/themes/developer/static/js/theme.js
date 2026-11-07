@@ -3,6 +3,41 @@
 (function() {
     'use strict';
 
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('developerNavigation', () => ({
+            mobileOpen: false,
+            openMenus: {},
+            closeMobileMenu() {
+                this.mobileOpen = false;
+                this.openMenus = {};
+            },
+            isMobile() {
+                const toggle = document.getElementById('menu-toggle');
+                return toggle && getComputedStyle(toggle).display !== 'none';
+            },
+            toggle(key) {
+                if (this.openMenus[key]) {
+                    this.openMenus[key] = false;
+                } else {
+                    this.openMenus[key] = true;
+                }
+            },
+            open(key) {
+                if (!this.isMobile()) {
+                    this.openMenus[key] = true;
+                }
+            },
+            close(key) {
+                if (!this.isMobile()) {
+                    this.openMenus[key] = false;
+                }
+            },
+            isOpen(key) {
+                return this.openMenus[key] === true;
+            }
+        }));
+    });
+
     // Mobile menu - close when clicking outside
     const menuToggle = document.getElementById('menu-toggle');
     const mainNav = document.getElementById('main-nav');

@@ -58,6 +58,7 @@ func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
 	}
 	h := NewPagesHandler(db, renderer, sm)
 	router := chi.NewRouter()
+	router.Use(middleware.SecurityHeaders(middleware.DefaultSecurityHeadersConfig(false)))
 	router.Handle("/static/*", http.FileServer(http.FS(web.Static)))
 	router.Group(func(r chi.Router) {
 		r.Use(sm.LoadAndSave, middleware.CSRF(middleware.DefaultCSRFConfig(nil, false)))
@@ -89,9 +90,28 @@ func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
 	const ready = `await page.waitForFunction(() => window.tinymce?.get('editor')?.initialized);`
 	const submit = `await Promise.all([page.waitForURL(%s), page.locator('form:has(#editor) button[type=submit]').click()]);`
 	browser("run-code", fmt.Sprintf(`async page => {
+		const errors = [];
+		page.on('pageerror', error => errors.push(error.message));
+		const response = await page.reload();
+		const policy = (await response.allHeaders())['content-security-policy'];
+		if (!policy?.includes("script-src 'self' 'nonce-") || policy.includes("'unsafe-eval'")) {
+			throw new Error('Expected production CSP without unsafe-eval');
+		}
 		%s
 		if (await page.evaluate(() => tinymce.get('editor').getContent()) === %s) throw new Error('fixture did not normalize');
 		await page.locator('input[name=title]').fill('Metadata-only edit');
+		if (await page.locator('input[name=slug]').inputValue() !== 'tinymce-fixture') {
+			throw new Error('Editing the title changed the existing slug');
+		}
+		const aliases = page.locator('details[data-aliases]');
+		await aliases.locator('summary').click();
+		await aliases.locator('button').click();
+		const alias = aliases.locator('input[name="aliases[]"]');
+		await alias.fill(' Team Name / Test ');
+		if (await alias.inputValue() !== 'team-name/test') throw new Error('Alias input did not normalize');
+		await aliases.locator('.alias-item button').click();
+		await alias.waitFor({state: 'detached'});
+		if (errors.length) throw new Error(errors.join('\n'));
 		%s
 		return 'TG11 browser step passed';
 	}`, ready, strconv.Quote(original), fmt.Sprintf(submit, strconv.Quote(listURL))))

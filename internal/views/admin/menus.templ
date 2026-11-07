@@ -15,6 +15,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
+	"github.com/olegiv/ocms-go/internal/views/utils"
 )
 
 // MenuListItem holds data for a menu in the list view.
@@ -417,7 +418,7 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 							</div>
 						</template>
 						<div id="menu-items" class="menu-items-container" x-sort="handleSort" x-sort:config="{ handle: '.menu-item-handle' }">
-							<template x-for="(item, index) in items" :key="`${item.id || item.tempId}-${sortIteration}`">
+							<template x-for="(item, index) in items" :key="(item.id || item.tempId) + '-' + sortIteration">
 								<div class="menu-item" x-sort:item="item.id || item.tempId">
 									<div class="menu-item-header">
 										<div class="menu-item-handle" x-sort:handle>
@@ -437,8 +438,8 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 										</div>
 									</div>
 									<!-- Nested children (Level 2) -->
-									<div class="menu-item-children" x-show="item.children && item.children.length > 0" x-sort="(key, pos) => handleChildSort(item, key, pos)">
-										<template x-for="(child, childIndex) in item.children" :key="`${child.id || child.tempId}-${sortIteration}`">
+									<div class="menu-item-children" x-show="item.children && item.children.length > 0" x-sort="handleChildSort(item, $item, $position)">
+										<template x-for="(child, childIndex) in item.children" :key="(child.id || child.tempId) + '-' + sortIteration">
 											<div class="menu-item menu-item-nested" :data-id="child.id || child.tempId" x-sort:item="child.id || child.tempId">
 												<div class="menu-item-header">
 													<div class="menu-item-handle" x-sort:handle>
@@ -458,8 +459,8 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 													</div>
 												</div>
 												<!-- Level 3: Grandchildren -->
-												<div class="menu-item-children" x-show="child.children && child.children.length > 0" x-sort="(key, pos) => handleGrandchildSort(child, key, pos)">
-													<template x-for="(grandchild, grandchildIndex) in child.children" :key="`${grandchild.id || grandchild.tempId}-${sortIteration}`">
+												<div class="menu-item-children" x-show="child.children && child.children.length > 0" x-sort="handleGrandchildSort(child, $item, $position)">
+													<template x-for="(grandchild, grandchildIndex) in child.children" :key="(grandchild.id || grandchild.tempId) + '-' + sortIteration">
 														<div class="menu-item menu-item-nested menu-item-level-3" :data-id="grandchild.id || grandchild.tempId" x-sort:item="grandchild.id || grandchild.tempId">
 															<div class="menu-item-header">
 																<div class="menu-item-handle" x-sort:handle>
@@ -541,7 +542,7 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 							<select class="form-select" x-model="editingItem.parent_id">
 								<option value="0">&mdash; { pc.T("menus.top_level") } &mdash;</option>
 								<template x-for="opt in flattenItems()" :key="opt.id">
-									<option :value="String(opt.id)" x-text="'\u2014'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title" :disabled="opt.id === editingItem.id"></option>
+									<option :value="opt.id" x-text="'\u2014'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title" :disabled="opt.id === editingItem.id"></option>
 								</template>
 							</select>
 						</div>
@@ -577,7 +578,7 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 			</div>
 		</template>
 	</div>
-	<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/menu-builder.js"></script>
+	<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/menu-builder.js") }></script>
 }
 
 // iconMenusSmall renders a small menu icon for the list table.

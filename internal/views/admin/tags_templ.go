@@ -23,7 +23,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 	"net/url"
-	"strconv"
 	"time"
 )
 
@@ -185,7 +184,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.new"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 116, Col: 22}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 115, Col: 22}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -215,7 +214,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.language"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 123, Col: 57}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 122, Col: 57}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -233,7 +232,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.SearchFilter)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 126, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 125, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 					if templ_7745c5c3_Err != nil {
@@ -252,7 +251,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Pagination.SortField)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 129, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 128, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 					if templ_7745c5c3_Err != nil {
@@ -265,7 +264,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Pagination.SortDir)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 130, Col: 70}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 129, Col: 70}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 					if templ_7745c5c3_Err != nil {
@@ -284,7 +283,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 					var templ_7745c5c3_Var10 string
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 133, Col: 110}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 132, Col: 110}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 					if templ_7745c5c3_Err != nil {
@@ -360,7 +359,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 							var templ_7745c5c3_Var15 string
 							templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.all_languages"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 148, Col: 38}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 147, Col: 38}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 							if templ_7745c5c3_Err != nil {
@@ -391,7 +390,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 								var templ_7745c5c3_Var17 string
 								templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Name)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 155, Col: 21}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 154, Col: 21}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 								if templ_7745c5c3_Err != nil {
@@ -404,7 +403,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 								var templ_7745c5c3_Var18 string
 								templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Code)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 155, Col: 36}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 154, Col: 36}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 								if templ_7745c5c3_Err != nil {
@@ -453,7 +452,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 				var templ_7745c5c3_Var19 string
 				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.LanguageFilter)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 166, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 165, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 				if templ_7745c5c3_Err != nil {
@@ -472,7 +471,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Pagination.SortField)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 169, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 168, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 				if templ_7745c5c3_Err != nil {
@@ -485,7 +484,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Pagination.SortDir)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 170, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 169, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 				if templ_7745c5c3_Err != nil {
@@ -504,7 +503,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 173, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 172, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 				if templ_7745c5c3_Err != nil {
@@ -588,7 +587,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.search_results", data.TotalCount, data.SearchFilter))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 198, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 197, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
@@ -676,7 +675,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 										var templ_7745c5c3_Var31 string
 										templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Pagination.BulkScope())
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 213, Col: 56}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 212, Col: 56}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 										if templ_7745c5c3_Err != nil {
@@ -689,7 +688,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 										var templ_7745c5c3_Var32 string
 										templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.select_all"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 214, Col: 46}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 213, Col: 46}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 										if templ_7745c5c3_Err != nil {
@@ -734,7 +733,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var35 templ.SafeURL
 									templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinURLErrs(data.Pagination.SortURL("name", sortDirAsc))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 220, Col: 60}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 219, Col: 60}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 									if templ_7745c5c3_Err != nil {
@@ -760,7 +759,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var37 string
 									templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(sortStateValue(data.Pagination.SortState("name")))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 222, Col: 77}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 221, Col: 77}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 									if templ_7745c5c3_Err != nil {
@@ -773,7 +772,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var38 string
 									templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.name"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 224, Col: 36}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 223, Col: 36}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 									if templ_7745c5c3_Err != nil {
@@ -794,7 +793,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var39 string
 									templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(sortStateLabelKey(data.Pagination.SortState("name"))))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 226, Col: 92}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 225, Col: 92}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 									if templ_7745c5c3_Err != nil {
@@ -825,7 +824,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var41 string
 									templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.slug"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 229, Col: 44}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 228, Col: 44}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 									if templ_7745c5c3_Err != nil {
@@ -861,7 +860,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var44 templ.SafeURL
 									templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs(data.Pagination.SortURL("language_code", sortDirAsc))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 232, Col: 69}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 231, Col: 69}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 									if templ_7745c5c3_Err != nil {
@@ -887,7 +886,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var46 string
 									templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(sortStateValue(data.Pagination.SortState("language_code")))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 234, Col: 86}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 233, Col: 86}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 									if templ_7745c5c3_Err != nil {
@@ -900,7 +899,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var47 string
 									templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.language"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 236, Col: 40}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 235, Col: 40}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 									if templ_7745c5c3_Err != nil {
@@ -921,7 +920,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var48 string
 									templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(sortStateLabelKey(data.Pagination.SortState("language_code"))))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 238, Col: 101}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 237, Col: 101}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 									if templ_7745c5c3_Err != nil {
@@ -961,7 +960,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var51 templ.SafeURL
 									templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinURLErrs(data.Pagination.SortURL("usage_count", sortDirDesc))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 243, Col: 68}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 242, Col: 68}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 									if templ_7745c5c3_Err != nil {
@@ -987,7 +986,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var53 string
 									templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.ResolveAttributeValue(sortStateValue(data.Pagination.SortState("usage_count")))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 245, Col: 84}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 244, Col: 84}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 									if templ_7745c5c3_Err != nil {
@@ -1000,7 +999,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var54 string
 									templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("nav.pages"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 247, Col: 35}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 246, Col: 35}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 									if templ_7745c5c3_Err != nil {
@@ -1021,7 +1020,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var55 string
 									templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(sortStateLabelKey(data.Pagination.SortState("usage_count"))))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 249, Col: 99}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 248, Col: 99}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 									if templ_7745c5c3_Err != nil {
@@ -1061,7 +1060,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var58 templ.SafeURL
 									templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinURLErrs(data.Pagination.SortURL("created_at", sortDirDesc))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 254, Col: 67}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 253, Col: 67}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 									if templ_7745c5c3_Err != nil {
@@ -1087,7 +1086,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var60 string
 									templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(sortStateValue(data.Pagination.SortState("created_at")))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 256, Col: 83}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 255, Col: 83}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 									if templ_7745c5c3_Err != nil {
@@ -1100,7 +1099,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var61 string
 									templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.created_at"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 258, Col: 42}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 257, Col: 42}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 									if templ_7745c5c3_Err != nil {
@@ -1121,7 +1120,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var62 string
 									templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(sortStateLabelKey(data.Pagination.SortState("created_at"))))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 260, Col: 98}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 259, Col: 98}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 									if templ_7745c5c3_Err != nil {
@@ -1152,7 +1151,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 									var templ_7745c5c3_Var64 string
 									templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.actions"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 263, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 262, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 									if templ_7745c5c3_Err != nil {
@@ -1221,7 +1220,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 											var templ_7745c5c3_Var68 string
 											templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", tag.ID))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 275, Col: 52}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 274, Col: 52}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 											if templ_7745c5c3_Err != nil {
@@ -1234,7 +1233,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 											var templ_7745c5c3_Var69 string
 											templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Pagination.BulkScope())
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 276, Col: 57}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 275, Col: 57}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 											if templ_7745c5c3_Err != nil {
@@ -1247,7 +1246,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 											var templ_7745c5c3_Var70 string
 											templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.select"))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 277, Col: 43}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 276, Col: 43}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 											if templ_7745c5c3_Err != nil {
@@ -1287,7 +1286,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 										var templ_7745c5c3_Var72 templ.SafeURL
 										templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tag.ID)))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 282, Col: 72}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 281, Col: 72}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 										if templ_7745c5c3_Err != nil {
@@ -1300,7 +1299,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 										var templ_7745c5c3_Var73 string
 										templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(tag.Name)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 282, Col: 107}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 281, Col: 107}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 										if templ_7745c5c3_Err != nil {
@@ -1335,7 +1334,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 										var templ_7745c5c3_Var75 string
 										templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(tag.Slug)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 285, Col: 44}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 284, Col: 44}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 										if templ_7745c5c3_Err != nil {
@@ -1379,7 +1378,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 												var templ_7745c5c3_Var78 string
 												templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(tag.LanguageCode)
 												if templ_7745c5c3_Err != nil {
-													return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 290, Col: 30}
+													return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 289, Col: 30}
 												}
 												_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 												if templ_7745c5c3_Err != nil {
@@ -1430,7 +1429,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 											var templ_7745c5c3_Var81 string
 											templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.page_count", tag.UsageCount))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 298, Col: 52}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 297, Col: 52}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 											if templ_7745c5c3_Err != nil {
@@ -1463,7 +1462,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 										var templ_7745c5c3_Var83 string
 										templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(tag.CreatedAt.Format("Jan 02, 2006"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 301, Col: 63}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 300, Col: 63}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 										if templ_7745c5c3_Err != nil {
@@ -1574,7 +1573,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 						var templ_7745c5c3_Var87 string
 						templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.no_results"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 320, Col: 34}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 319, Col: 34}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
 						if templ_7745c5c3_Err != nil {
@@ -1599,7 +1598,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 							var templ_7745c5c3_Var89 string
 							templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.clear_filters"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 323, Col: 35}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 322, Col: 35}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 							if templ_7745c5c3_Err != nil {
@@ -1659,7 +1658,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 						var templ_7745c5c3_Var92 string
 						templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.no_tags"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 334, Col: 31}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 333, Col: 31}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
 						if templ_7745c5c3_Err != nil {
@@ -1672,7 +1671,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 						var templ_7745c5c3_Var93 string
 						templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.create_first_hint"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 335, Col: 63}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 334, Col: 63}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 						if templ_7745c5c3_Err != nil {
@@ -1697,7 +1696,7 @@ func TagsListPage(pc *PageContext, data TagsListData) templ.Component {
 							var templ_7745c5c3_Var95 string
 							templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.new"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 338, Col: 26}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 337, Col: 26}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var95))
 							if templ_7745c5c3_Err != nil {
@@ -1790,7 +1789,7 @@ func deleteTagModal(pc *PageContext, tag TagListItem) templ.Component {
 		var templ_7745c5c3_Var98 string
 		templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.delete_tag"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 363, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 362, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var98))
 		if templ_7745c5c3_Err != nil {
@@ -1803,7 +1802,7 @@ func deleteTagModal(pc *PageContext, tag TagListItem) templ.Component {
 		var templ_7745c5c3_Var99 string
 		templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.close"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 364, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 363, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var99)
 		if templ_7745c5c3_Err != nil {
@@ -1816,7 +1815,7 @@ func deleteTagModal(pc *PageContext, tag TagListItem) templ.Component {
 		var templ_7745c5c3_Var100 string
 		templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.confirm_delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 367, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 366, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
 		if templ_7745c5c3_Err != nil {
@@ -1834,7 +1833,7 @@ func deleteTagModal(pc *PageContext, tag TagListItem) templ.Component {
 			var templ_7745c5c3_Var101 string
 			templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.usage_warning", tag.UsageCount))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 369, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 368, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
 			if templ_7745c5c3_Err != nil {
@@ -1852,7 +1851,7 @@ func deleteTagModal(pc *PageContext, tag TagListItem) templ.Component {
 		var templ_7745c5c3_Var102 string
 		templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.delete_warning"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 371, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 370, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var102))
 		if templ_7745c5c3_Err != nil {
@@ -1877,7 +1876,7 @@ func deleteTagModal(pc *PageContext, tag TagListItem) templ.Component {
 			var templ_7745c5c3_Var104 string
 			templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 375, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 374, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var104))
 			if templ_7745c5c3_Err != nil {
@@ -1904,7 +1903,7 @@ func deleteTagModal(pc *PageContext, tag TagListItem) templ.Component {
 			var templ_7745c5c3_Var106 string
 			templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.delete_tag"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 378, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 377, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 			if templ_7745c5c3_Err != nil {
@@ -1993,7 +1992,7 @@ func TagFormPage(pc *PageContext, data TagFormData) templ.Component {
 					var templ_7745c5c3_Var111 string
 					templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.back_to_tags"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 392, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 391, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 					if templ_7745c5c3_Err != nil {
@@ -2030,20 +2029,20 @@ func TagFormPage(pc *PageContext, data TagFormData) templ.Component {
 				var templ_7745c5c3_Var113 templ.SafeURL
 				templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinURLErrs(tagFormAction(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 399, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 398, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "\" class=\"p-6\" x-data=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "\" class=\"p-6\" x-data=\"slugForm\" data-slug-edited=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var114 string
-				templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.ResolveAttributeValue(tagFormXData(data))
+				templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(data.IsEdit))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 401, Col: 31}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 401, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var114)
 				if templ_7745c5c3_Err != nil {
@@ -2556,23 +2555,6 @@ func TagFormPage(pc *PageContext, data TagFormData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "<script nonce=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var140 string
-			templ_7745c5c3_Var140, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 510, Col: 37}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var140)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, "\">\n\t\tfunction tagForm() {\n\t\t\treturn {\n\t\t\t\tslug: document.getElementById('slug')?.value || '',\n\t\t\t\tslugEdited: document.getElementById('slug')?.value ? true : false,\n\t\t\t\tgenerateSlug(value) {\n\t\t\t\t\tif (!this.slugEdited) {\n\t\t\t\t\t\tthis.slug = value\n\t\t\t\t\t\t\t.toLowerCase()\n\t\t\t\t\t\t\t.trim()\n\t\t\t\t\t\t\t.replace(/[^\\w\\s-]/g, '')\n\t\t\t\t\t\t\t.replace(/[\\s_-]+/g, '-')\n\t\t\t\t\t\t\t.replace(/^-+|-+$/g, '');\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t\t</script>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 			return nil
 		})
 		templ_7745c5c3_Err = AdminLayout(pc).Render(templ.WithChildren(ctx, templ_7745c5c3_Var108), templ_7745c5c3_Buffer)
@@ -2599,12 +2581,12 @@ func tagTranslationsPanel(pc *PageContext, data TagFormData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var141 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var141 == nil {
-			templ_7745c5c3_Var141 = templ.NopComponent
+		templ_7745c5c3_Var140 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var140 == nil {
+			templ_7745c5c3_Var140 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, "<div class=\"translations-panel\" style=\"margin-top: 1.5rem; padding: 1rem;\"><div class=\"translations-header\"><h3 class=\"translations-title\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "<div class=\"translations-panel\" style=\"margin-top: 1.5rem; padding: 1rem;\"><div class=\"translations-header\"><h3 class=\"translations-title\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2612,177 +2594,177 @@ func tagTranslationsPanel(pc *PageContext, data TagFormData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, " ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, " ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var142 string
-		templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.translations"))
+		var templ_7745c5c3_Var141 string
+		templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.translations"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 536, Col: 31}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 518, Col: 31}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var141))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, "</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, "</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if data.Language != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "<span class=\"current-language-badge\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "<span class=\"current-language-badge\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var142 string
+			templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.current_language"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 522, Col: 36}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, ": ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var143 string
-			templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.current_language"))
+			templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(data.Language.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 540, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 522, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, ": ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(data.Translations) > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "<div class=\"translations-list\"><h4 class=\"translations-subtitle\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var144 string
-			templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinStringErrs(data.Language.Name)
+			templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.existing_translations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 540, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 528, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var144))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "</div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if len(data.Translations) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, "<div class=\"translations-list\"><h4 class=\"translations-subtitle\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var145 string
-			templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.existing_translations"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 546, Col: 74}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, "</h4>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "</h4>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, tr := range data.Translations {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "<div class=\"translation-item\"><div class=\"translation-info\"><span class=\"translation-lang-badge\" title=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, "<div class=\"translation-item\"><div class=\"translation-info\"><span class=\"translation-lang-badge\" title=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var145 string
+				templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.ResolveAttributeValue(tr.Language.NativeName)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 532, Col: 74}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var145)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var146 string
-				templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.ResolveAttributeValue(tr.Language.NativeName)
+				templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinStringErrs(tr.Language.Code)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 550, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 532, Col: 95}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var146)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "</span> <a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var147 string
-				templ_7745c5c3_Var147, templ_7745c5c3_Err = templ.JoinStringErrs(tr.Language.Code)
+				var templ_7745c5c3_Var147 templ.SafeURL
+				templ_7745c5c3_Var147, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tr.Tag.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 550, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 533, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var147))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "</span> <a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "\" class=\"translation-link\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var148 templ.SafeURL
-				templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tr.Tag.ID)))
+				var templ_7745c5c3_Var148 string
+				templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinStringErrs(tr.Tag.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 551, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 534, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var148))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "\" class=\"translation-link\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var149 string
-				templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(tr.Tag.Name)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 552, Col: 21}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "</a></div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "</a></div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if len(data.MissingLanguages) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "<div class=\"translations-add\"><h4 class=\"translations-subtitle\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "<div class=\"translations-add\"><h4 class=\"translations-subtitle\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var150 string
-			templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.add_translation"))
+			var templ_7745c5c3_Var149 string
+			templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.add_translation"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 561, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 543, Col: 68}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var150))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "</h4><div class=\"translation-buttons\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "</h4><div class=\"translation-buttons\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, lang := range data.MissingLanguages {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, "<form action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "<form action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var151 templ.SafeURL
-				templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/tags/%d/translate/%s", data.Tag.ID, lang.Code)))
+				var templ_7745c5c3_Var150 templ.SafeURL
+				templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/tags/%d/translate/%s", data.Tag.ID, lang.Code)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 564, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 546, Col: 102}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var151))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "\" method=\"POST\" class=\"inline-form\">")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var150))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var152 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "\" method=\"POST\" class=\"inline-form\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var151 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2798,68 +2780,68 @@ func tagTranslationsPanel(pc *PageContext, data TagFormData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, " ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, " ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var152 string
+					templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Code)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 549, Col: 19}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, " - ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var153 string
-					templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Code)
+					templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 567, Col: 19}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 549, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var153))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, " - ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var154 string
-					templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Name)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 567, Col: 35}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var154))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "translation-add-btn", Attributes: templ.Attributes{"title": "Create " + lang.Name + " translation"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var152), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "translation-add-btn", Attributes: templ.Attributes{"title": "Create " + lang.Name + " translation"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var151), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "</form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "</form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "</div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "</div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if len(data.Translations) == 0 && len(data.MissingLanguages) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "<p class=\"translations-empty\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "<p class=\"translations-empty\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var155 string
-			templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.all_translations_exist"))
+			var templ_7745c5c3_Var154 string
+			templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("tags.all_translations_exist"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 575, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tags.templ`, Line: 557, Col: 70}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var155))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var154))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2874,14 +2856,6 @@ func tagFormAction(data TagFormData) templ.SafeURL {
 		return templ.SafeURL(fmt.Sprintf("/admin/tags/%d", data.Tag.ID))
 	}
 	return "/admin/tags"
-}
-
-func tagFormXData(data TagFormData) string {
-	slug := tagFormValue(data, "slug")
-	if data.IsEdit {
-		return fmt.Sprintf(`{ slug: %s, slugEdited: true, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
-	}
-	return fmt.Sprintf(`{ slug: %s, slugEdited: false, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
 }
 
 func tagFormValue(data TagFormData, field string) string {

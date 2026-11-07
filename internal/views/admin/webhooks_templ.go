@@ -1810,7 +1810,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "</div><!-- Secret --><div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "</div><!-- Secret --><div x-data=\"{ showSecret: false }\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1841,7 +1841,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "<div class=\"flex gap-1\" x-data=\"{ showSecret: false, copied: false }\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "<div class=\"flex gap-1\" x-data=\"copyInput\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1854,6 +1854,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				Attributes: templ.Attributes{
 					":type":       "showSecret ? 'text' : 'password'",
 					"placeholder": secretPlaceholder(data.IsEdit),
+					"x-ref":       "copyValue",
 				},
 			}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
@@ -1864,7 +1865,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				return templ_7745c5c3_Err
 			}
 			if data.IsEdit {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, "<button type=\"button\" class=\"rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700\" @click=\"navigator.clipboard.writeText(document.getElementById('secret').value); copied = true; setTimeout(() => copied = false, 2000)\"><span x-show=\"!copied\">Copy</span> <span x-show=\"copied\" x-cloak>Copied!</span></button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, "<button type=\"button\" class=\"rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700\" @click=\"copy()\"><span x-show=\"!copied\">Copy</span> <span x-show=\"copied\" x-cloak>Copied!</span></button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1881,7 +1882,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var102 string
 				templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 413, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 414, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var102))
 				if templ_7745c5c3_Err != nil {
@@ -1899,7 +1900,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var103 string
 				templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.secret_hint"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 415, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 416, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
 				if templ_7745c5c3_Err != nil {
@@ -1929,7 +1930,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var105 string
 				templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.events"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 421, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 422, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
 				if templ_7745c5c3_Err != nil {
@@ -1953,7 +1954,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var106 string
 				templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 424, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 425, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 				if templ_7745c5c3_Err != nil {
@@ -2001,7 +2002,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 						var templ_7745c5c3_Var108 string
 						templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinStringErrs(ev.Type)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 439, Col: 17}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 440, Col: 17}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
 						if templ_7745c5c3_Err != nil {
@@ -2020,7 +2021,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 					var templ_7745c5c3_Var109 string
 					templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinStringErrs(ev.Description)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 441, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 442, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var109))
 					if templ_7745c5c3_Err != nil {
@@ -2069,7 +2070,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 						var templ_7745c5c3_Var111 string
 						templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinStringErrs(ev.Type)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 459, Col: 17}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 460, Col: 17}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 						if templ_7745c5c3_Err != nil {
@@ -2088,7 +2089,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 					var templ_7745c5c3_Var112 string
 					templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinStringErrs(ev.Description)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 461, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 462, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 					if templ_7745c5c3_Err != nil {
@@ -2137,7 +2138,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 						var templ_7745c5c3_Var114 string
 						templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinStringErrs(ev.Type)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 479, Col: 17}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 480, Col: 17}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var114))
 						if templ_7745c5c3_Err != nil {
@@ -2156,7 +2157,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 					var templ_7745c5c3_Var115 string
 					templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.JoinStringErrs(ev.Description)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 481, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 482, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var115))
 					if templ_7745c5c3_Err != nil {
@@ -2168,14 +2169,14 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "</div></div></div><!-- Custom Headers --><div x-data=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "</div></div></div><!-- Custom Headers --><div x-data=\"webhookHeaders\" data-headers=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var116 string
-			templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("{ headers: %s }", formHeadersJSON(data.FormHeaders)))
+			templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.ResolveAttributeValue(formHeadersJSON(data.FormHeaders))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 490, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 491, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var116)
 			if templ_7745c5c3_Err != nil {
@@ -2200,7 +2201,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var118 string
 				templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.custom_headers"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 492, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 493, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
 				if templ_7745c5c3_Err != nil {
@@ -2219,7 +2220,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 			var templ_7745c5c3_Var119 string
 			templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.headers_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 494, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 495, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
 			if templ_7745c5c3_Err != nil {
@@ -2253,7 +2254,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "</div><button type=\"button\" class=\"rounded-md border border-red-300 px-2 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900\" @click=\"delete headers[key]; headers = {...headers}\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "</div><button type=\"button\" class=\"rounded-md border border-red-300 px-2 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900\" @click=\"removeHeader(key)\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2261,7 +2262,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "</button></div></template><div class=\"flex gap-2\" x-data=\"{ newKey: '', newValue: '' }\"><div class=\"w-1/3\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "</button></div></template><div class=\"flex gap-2\"><div class=\"w-1/3\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2285,7 +2286,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "</div><button type=\"button\" class=\"rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700\" @click=\"if (newKey.trim()) { headers[newKey.trim()] = newValue; newKey = ''; newValue = ''; }\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "</div><button type=\"button\" class=\"rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700\" @click=\"addHeader()\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2325,7 +2326,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var121 string
 				templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.active"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 559, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 560, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
 				if templ_7745c5c3_Err != nil {
@@ -2344,7 +2345,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 			var templ_7745c5c3_Var122 string
 			templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.active_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 561, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 562, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
 			if templ_7745c5c3_Err != nil {
@@ -2374,7 +2375,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 					var templ_7745c5c3_Var124 string
 					templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.info"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 568, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 569, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 					if templ_7745c5c3_Err != nil {
@@ -2393,7 +2394,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var125 string
 				templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.created"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 571, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 572, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var125))
 				if templ_7745c5c3_Err != nil {
@@ -2406,7 +2407,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var126 string
 				templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.JoinStringErrs(data.CreatedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 571, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 572, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var126))
 				if templ_7745c5c3_Err != nil {
@@ -2419,7 +2420,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var127 string
 				templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.updated"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 572, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 573, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
 				if templ_7745c5c3_Err != nil {
@@ -2432,7 +2433,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var128 string
 				templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.JoinStringErrs(data.UpdatedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 572, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 573, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var128))
 				if templ_7745c5c3_Err != nil {
@@ -2455,7 +2456,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var129 string
 				templ_7745c5c3_Var129, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.update"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 581, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 582, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var129))
 				if templ_7745c5c3_Err != nil {
@@ -2465,7 +2466,7 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 				var templ_7745c5c3_Var130 string
 				templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.create"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 583, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 584, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var130))
 				if templ_7745c5c3_Err != nil {
@@ -2479,13 +2480,26 @@ func WebhookFormPage(pc *PageContext, data WebhookFormViewData) templ.Component 
 			var templ_7745c5c3_Var131 string
 			templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 586, Col: 218}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 587, Col: 218}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var131))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "</a></div></form></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "</a></div></form></div></div><script nonce=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var132 string
+			templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 592, Col: 37}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var132)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "\">\n\t\tdocument.addEventListener('alpine:init', () => {\n\t\t\tAlpine.data('webhookHeaders', () => ({\n\t\t\t\theaders: {},\n\t\t\t\tnewKey: '',\n\t\t\t\tnewValue: '',\n\t\t\t\tinit() {\n\t\t\t\t\tthis.headers = JSON.parse(this.$el.dataset.headers);\n\t\t\t\t},\n\t\t\t\tremoveHeader(key) {\n\t\t\t\t\tdelete this.headers[key];\n\t\t\t\t},\n\t\t\t\taddHeader() {\n\t\t\t\t\tconst key = this.newKey.trim();\n\t\t\t\t\tif (!key) return;\n\t\t\t\t\tthis.headers = { ...this.headers, [key]: this.newValue };\n\t\t\t\t\tthis.newKey = '';\n\t\t\t\t\tthis.newValue = '';\n\t\t\t\t}\n\t\t\t}));\n\t\t});\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2529,12 +2543,12 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var132 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var132 == nil {
-			templ_7745c5c3_Var132 = templ.NopComponent
+		templ_7745c5c3_Var133 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var133 == nil {
+			templ_7745c5c3_Var133 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var133 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var134 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2546,7 +2560,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var134 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var135 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -2558,20 +2572,20 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "<div class=\"flex gap-2\"><a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "<div class=\"flex gap-2\"><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var135 templ.SafeURL
-				templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d", data.WebhookID)))
+				var templ_7745c5c3_Var136 templ.SafeURL
+				templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d", data.WebhookID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 612, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 635, Col: 78}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var135))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var136))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "\" class=\"inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "\" class=\"inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2579,33 +2593,33 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var136 string
-				templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.edit"))
+				var templ_7745c5c3_Var137 string
+				templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.edit"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 614, Col: 28}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var136))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "</a><form method=\"POST\" action=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var137 templ.SafeURL
-				templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/test", data.WebhookID)))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 616, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 637, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var137))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "\" class=\"inline\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "</a><form method=\"POST\" action=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var138 templ.SafeURL
+				templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/test", data.WebhookID)))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 639, Col: 102}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var138))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "\" class=\"inline\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2613,7 +2627,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "<button type=\"submit\" class=\"inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "<button type=\"submit\" class=\"inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2621,31 +2635,31 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var138 string
-				templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.send_test"))
+				var templ_7745c5c3_Var139 string
+				templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.send_test"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 620, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 643, Col: 34}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var138))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var139))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "</button></form></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 155, "</button></form></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = PageHeader(pc.T("webhooks.deliveries_title"), fmt.Sprintf("%s - %d %s", data.WebhookName, data.TotalCount, pc.T("webhooks.deliveries"))).Render(templ.WithChildren(ctx, templ_7745c5c3_Var134), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = PageHeader(pc.T("webhooks.deliveries_title"), fmt.Sprintf("%s - %d %s", data.WebhookName, data.TotalCount, pc.T("webhooks.deliveries"))).Render(templ.WithChildren(ctx, templ_7745c5c3_Var135), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(data.Deliveries) > 0 {
-				templ_7745c5c3_Var139 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var140 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2657,11 +2671,11 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 155, "<div class=\"overflow-x-auto\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "<div class=\"overflow-x-auto\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var140 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var141 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -2673,7 +2687,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Var141 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var142 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -2685,7 +2699,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Var142 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_Var143 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 								templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 								templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 								if !templ_7745c5c3_IsBuffer {
@@ -2697,7 +2711,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 									}()
 								}
 								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Var143 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var144 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -2709,22 +2723,22 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var144 string
-									templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.delivery_id"))
+									var templ_7745c5c3_Var145 string
+									templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.delivery_id"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 631, Col: 54}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 654, Col: 54}
 									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var144))
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var143), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var144), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var145 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var146 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -2736,22 +2750,22 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var146 string
-									templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.event"))
+									var templ_7745c5c3_Var147 string
+									templ_7745c5c3_Var147, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.event"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 632, Col: 48}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 655, Col: 48}
 									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var147))
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var145), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var146), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var147 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var148 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -2763,22 +2777,22 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var148 string
-									templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.status"))
+									var templ_7745c5c3_Var149 string
+									templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.status"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 633, Col: 49}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 656, Col: 49}
 									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var148))
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var147), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var148), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var149 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var150 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -2790,22 +2804,22 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var150 string
-									templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.attempts"))
+									var templ_7745c5c3_Var151 string
+									templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.attempts"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 634, Col: 51}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 657, Col: 51}
 									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var150))
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var151))
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var149), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var150), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var151 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var152 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -2817,22 +2831,22 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var152 string
-									templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.response"))
+									var templ_7745c5c3_Var153 string
+									templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.response"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 635, Col: 51}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 658, Col: 51}
 									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var153))
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var151), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var152), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var153 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var154 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -2844,22 +2858,22 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var154 string
-									templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.created"))
+									var templ_7745c5c3_Var155 string
+									templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.created"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 636, Col: 50}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 659, Col: 50}
 									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var154))
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var155))
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var153), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var154), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var155 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var156 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -2871,35 +2885,35 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									var templ_7745c5c3_Var156 string
-									templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.actions"))
+									var templ_7745c5c3_Var157 string
+									templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.actions"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 637, Col: 50}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 660, Col: 50}
 									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var157))
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var155), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var156), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var142), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var143), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var141), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var142), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						for _, d := range data.Deliveries {
-							templ_7745c5c3_Var157 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_Var158 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 								templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 								templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 								if !templ_7745c5c3_IsBuffer {
@@ -2911,7 +2925,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 									}()
 								}
 								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Var158 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var159 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -2923,7 +2937,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Var159 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var160 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -2935,30 +2949,30 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "<code class=\"text-xs\">#")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "<code class=\"text-xs\">#")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										var templ_7745c5c3_Var160 string
-										templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.ID))
+										var templ_7745c5c3_Var161 string
+										templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.ID))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 643, Col: 66}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 666, Col: 66}
 										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var160))
+										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var161))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "</code>")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 158, "</code>")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var159), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var160), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
-									templ_7745c5c3_Var161 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var162 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -2970,30 +2984,30 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 158, "<span class=\"rounded border px-1.5 py-0.5 text-xs\">")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "<span class=\"rounded border px-1.5 py-0.5 text-xs\">")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										var templ_7745c5c3_Var162 string
-										templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinStringErrs(d.Event)
+										var templ_7745c5c3_Var163 string
+										templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.JoinStringErrs(d.Event)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 645, Col: 70}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 668, Col: 70}
 										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
+										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var163))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "</span>")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "</span>")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var161), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var162), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
-									templ_7745c5c3_Var163 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var164 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -3011,11 +3025,11 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var163), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var164), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
-									templ_7745c5c3_Var164 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var165 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -3027,22 +3041,22 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										var templ_7745c5c3_Var165 string
-										templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.Attempts))
+										var templ_7745c5c3_Var166 string
+										templ_7745c5c3_Var166, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.Attempts))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 650, Col: 49}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 673, Col: 49}
 										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
+										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var166))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var164), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var165), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
-									templ_7745c5c3_Var166 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var167 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -3055,66 +3069,66 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}
 										ctx = templ.InitializeContext(ctx)
 										if d.HasResponseCode {
-											var templ_7745c5c3_Var167 = []any{deliveryResponseClass(d.ResponseCode)}
-											templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var167...)
+											var templ_7745c5c3_Var168 = []any{deliveryResponseClass(d.ResponseCode)}
+											templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var168...)
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "<span class=\"")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											var templ_7745c5c3_Var168 string
-											templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var167).String())
-											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 1, Col: 0}
-											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var168)
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "\">")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "<span class=\"")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											var templ_7745c5c3_Var169 string
-											templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.ResponseCode))
+											templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var168).String())
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 653, Col: 93}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 1, Col: 0}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "</span>")
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var169)
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-										} else {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, "<span class=\"text-muted-foreground\">-</span>")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 164, " ")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										if d.HasErrorMessage {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, "<span class=\"ml-1 text-yellow-500\" title=\"")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "\">")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											var templ_7745c5c3_Var170 string
-											templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.ErrorMessage)
+											templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.ResponseCode))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 658, Col: 68}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 676, Col: 93}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var170)
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var170))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "\">")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, "</span>")
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+										} else {
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 164, "<span class=\"text-muted-foreground\">-</span>")
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+										}
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, " ")
+										if templ_7745c5c3_Err != nil {
+											return templ_7745c5c3_Err
+										}
+										if d.HasErrorMessage {
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "<span class=\"ml-1 text-yellow-500\" title=\"")
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+											var templ_7745c5c3_Var171 string
+											templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.ErrorMessage)
+											if templ_7745c5c3_Err != nil {
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 681, Col: 68}
+											}
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var171)
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "\">")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -3122,18 +3136,18 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "</span>")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "</span>")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var166), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var167), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
-									templ_7745c5c3_Var171 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var172 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -3145,22 +3159,22 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										var templ_7745c5c3_Var172 string
-										templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.JoinStringErrs(d.CreatedAt)
+										var templ_7745c5c3_Var173 string
+										templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.JoinStringErrs(d.CreatedAt)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 663, Col: 93}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 686, Col: 93}
 										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var172))
+										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var173))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-xs text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var171), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-xs text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var172), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
-									templ_7745c5c3_Var173 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var174 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -3172,20 +3186,20 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "<div class=\"flex items-center justify-end gap-1\"><button type=\"button\" class=\"rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground\" @click=\"showPayload = !showPayload\" title=\"")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 169, "<div class=\"flex items-center justify-end gap-1\"><button type=\"button\" class=\"rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground\" @click=\"showPayload = !showPayload\" title=\"")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										var templ_7745c5c3_Var174 string
-										templ_7745c5c3_Var174, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("webhooks.view_payload"))
+										var templ_7745c5c3_Var175 string
+										templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("webhooks.view_payload"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 666, Col: 187}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 689, Col: 187}
 										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var174)
+										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var175)
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 169, "\">")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 170, "\">")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
@@ -3193,25 +3207,25 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 170, "</button> ")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, "</button> ")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										if d.CanRetry {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, "<form method=\"POST\" action=\"")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 172, "<form method=\"POST\" action=\"")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											var templ_7745c5c3_Var175 templ.SafeURL
-											templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/deliveries/%d/retry", data.WebhookID, d.ID)))
+											var templ_7745c5c3_Var176 templ.SafeURL
+											templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/deliveries/%d/retry", data.WebhookID, d.ID)))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 670, Col: 131}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 693, Col: 131}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var175))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var176))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 172, "\" class=\"inline\">")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 173, "\" class=\"inline\">")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -3219,20 +3233,20 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 173, "<button type=\"submit\" class=\"rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground\" title=\"")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "<button type=\"submit\" class=\"rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground\" title=\"")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											var templ_7745c5c3_Var176 string
-											templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("webhooks.retry"))
+											var templ_7745c5c3_Var177 string
+											templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("webhooks.retry"))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 672, Col: 146}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 695, Col: 146}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var176)
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var177)
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "\">")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, "\">")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -3240,28 +3254,28 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, "</button></form>")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "</button></form>")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "</div>")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "</div>")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var173), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var174), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var158), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var159), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var177 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var178 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -3273,7 +3287,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Var178 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var179 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -3285,302 +3299,302 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "<div class=\"space-y-4\"><div><h5 class=\"mb-1 text-xs font-semibold uppercase text-muted-foreground\">")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										var templ_7745c5c3_Var179 string
-										templ_7745c5c3_Var179, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.payload"))
-										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 684, Col: 109}
-										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var179))
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "</h5><pre class=\"max-h-64 overflow-auto rounded bg-muted p-3 text-xs\">")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "<div class=\"space-y-4\"><div><h5 class=\"mb-1 text-xs font-semibold uppercase text-muted-foreground\">")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										var templ_7745c5c3_Var180 string
-										templ_7745c5c3_Var180, templ_7745c5c3_Err = templ.JoinStringErrs(d.Payload)
+										templ_7745c5c3_Var180, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.payload"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 685, Col: 88}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 707, Col: 109}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var180))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "</pre></div>")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "</h5><pre class=\"max-h-64 overflow-auto rounded bg-muted p-3 text-xs\">")
+										if templ_7745c5c3_Err != nil {
+											return templ_7745c5c3_Err
+										}
+										var templ_7745c5c3_Var181 string
+										templ_7745c5c3_Var181, templ_7745c5c3_Err = templ.JoinStringErrs(d.Payload)
+										if templ_7745c5c3_Err != nil {
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 708, Col: 88}
+										}
+										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var181))
+										if templ_7745c5c3_Err != nil {
+											return templ_7745c5c3_Err
+										}
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 180, "</pre></div>")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										if d.HasResponseBody {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 180, "<div><h5 class=\"mb-1 text-xs font-semibold uppercase text-muted-foreground\">")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											var templ_7745c5c3_Var181 string
-											templ_7745c5c3_Var181, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.response_body"))
-											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 689, Col: 116}
-											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var181))
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "</h5><pre class=\"max-h-64 overflow-auto rounded bg-muted p-3 text-xs\">")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "<div><h5 class=\"mb-1 text-xs font-semibold uppercase text-muted-foreground\">")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											var templ_7745c5c3_Var182 string
-											templ_7745c5c3_Var182, templ_7745c5c3_Err = templ.JoinStringErrs(d.ResponseBody)
+											templ_7745c5c3_Var182, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.response_body"))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 690, Col: 94}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 712, Col: 116}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var182))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 182, "</pre></div>")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-										}
-										if d.HasErrorMessage {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 183, "<div><h5 class=\"mb-1 text-xs font-semibold uppercase text-red-500\">")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 182, "</h5><pre class=\"max-h-64 overflow-auto rounded bg-muted p-3 text-xs\">")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											var templ_7745c5c3_Var183 string
-											templ_7745c5c3_Var183, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.error_message"))
+											templ_7745c5c3_Var183, templ_7745c5c3_Err = templ.JoinStringErrs(d.ResponseBody)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 695, Col: 107}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 713, Col: 94}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var183))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 184, "</h5><pre class=\"rounded bg-red-50 p-3 text-xs text-red-800 dark:bg-red-900/20 dark:text-red-300\">")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 183, "</pre></div>")
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+										}
+										if d.HasErrorMessage {
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 184, "<div><h5 class=\"mb-1 text-xs font-semibold uppercase text-red-500\">")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											var templ_7745c5c3_Var184 string
-											templ_7745c5c3_Var184, templ_7745c5c3_Err = templ.JoinStringErrs(d.ErrorMessage)
+											templ_7745c5c3_Var184, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.error_message"))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 696, Col: 122}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 718, Col: 107}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var184))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 185, "</pre></div>")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 185, "</h5><pre class=\"rounded bg-red-50 p-3 text-xs text-red-800 dark:bg-red-900/20 dark:text-red-300\">")
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+											var templ_7745c5c3_Var185 string
+											templ_7745c5c3_Var185, templ_7745c5c3_Err = templ.JoinStringErrs(d.ErrorMessage)
+											if templ_7745c5c3_Err != nil {
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 719, Col: 122}
+											}
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var185))
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "</pre></div>")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "<div><h5 class=\"mb-1 text-xs font-semibold uppercase text-muted-foreground\">")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										var templ_7745c5c3_Var185 string
-										templ_7745c5c3_Var185, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.headers_sent"))
-										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 700, Col: 114}
-										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var185))
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 187, "</h5><div class=\"space-y-0.5 text-xs text-muted-foreground\"><div><code>Content-Type</code>: application/json</div><div><code>User-Agent</code>: oCMS/1.0</div><div><code>X-Webhook-Signature</code>: (HMAC-SHA256)</div><div><code>X-Webhook-Event</code>: ")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 187, "<div><h5 class=\"mb-1 text-xs font-semibold uppercase text-muted-foreground\">")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										var templ_7745c5c3_Var186 string
-										templ_7745c5c3_Var186, templ_7745c5c3_Err = templ.JoinStringErrs(d.Event)
+										templ_7745c5c3_Var186, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.headers_sent"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 705, Col: 57}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 723, Col: 114}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var186))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 188, "</div><div><code>X-Delivery-ID</code>: ")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 188, "</h5><div class=\"space-y-0.5 text-xs text-muted-foreground\"><div><code>Content-Type</code>: application/json</div><div><code>User-Agent</code>: oCMS/1.0</div><div><code>X-Webhook-Signature</code>: (HMAC-SHA256)</div><div><code>X-Webhook-Event</code>: ")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										var templ_7745c5c3_Var187 string
-										templ_7745c5c3_Var187, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.ID))
+										templ_7745c5c3_Var187, templ_7745c5c3_Err = templ.JoinStringErrs(d.Event)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 706, Col: 64}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 728, Col: 57}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var187))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 189, "</div></div></div><div><h5 class=\"mb-1 text-xs font-semibold uppercase text-muted-foreground\">")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 189, "</div><div><code>X-Delivery-ID</code>: ")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										var templ_7745c5c3_Var188 string
-										templ_7745c5c3_Var188, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.timing_info"))
+										templ_7745c5c3_Var188, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.ID))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 710, Col: 113}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 729, Col: 64}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var188))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 190, "</h5><div class=\"grid grid-cols-2 gap-1 text-xs text-muted-foreground\"><span>")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 190, "</div></div></div><div><h5 class=\"mb-1 text-xs font-semibold uppercase text-muted-foreground\">")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										var templ_7745c5c3_Var189 string
-										templ_7745c5c3_Var189, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.created"))
+										templ_7745c5c3_Var189, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.timing_info"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 712, Col: 45}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 733, Col: 113}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var189))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 191, "</span><span>")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 191, "</h5><div class=\"grid grid-cols-2 gap-1 text-xs text-muted-foreground\"><span>")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										var templ_7745c5c3_Var190 string
-										templ_7745c5c3_Var190, templ_7745c5c3_Err = templ.JoinStringErrs(d.CreatedAt)
+										templ_7745c5c3_Var190, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.created"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 712, Col: 73}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 735, Col: 45}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var190))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 192, "</span> ")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 192, "</span><span>")
+										if templ_7745c5c3_Err != nil {
+											return templ_7745c5c3_Err
+										}
+										var templ_7745c5c3_Var191 string
+										templ_7745c5c3_Var191, templ_7745c5c3_Err = templ.JoinStringErrs(d.CreatedAt)
+										if templ_7745c5c3_Err != nil {
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 735, Col: 73}
+										}
+										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var191))
+										if templ_7745c5c3_Err != nil {
+											return templ_7745c5c3_Err
+										}
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "</span> ")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										if d.HasDeliveredAt {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "<span>")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											var templ_7745c5c3_Var191 string
-											templ_7745c5c3_Var191, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.delivered_at"))
-											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 714, Col: 51}
-											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var191))
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 194, "</span><span>")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 194, "<span>")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											var templ_7745c5c3_Var192 string
-											templ_7745c5c3_Var192, templ_7745c5c3_Err = templ.JoinStringErrs(d.DeliveredAt)
+											templ_7745c5c3_Var192, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.delivered_at"))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 714, Col: 81}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 737, Col: 51}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var192))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 195, "</span> ")
-											if templ_7745c5c3_Err != nil {
-												return templ_7745c5c3_Err
-											}
-										}
-										if d.HasNextRetryAt {
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "<span>")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 195, "</span><span>")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											var templ_7745c5c3_Var193 string
-											templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.next_retry"))
+											templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.JoinStringErrs(d.DeliveredAt)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 717, Col: 49}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 737, Col: 81}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var193))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "</span><span>")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "</span> ")
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+										}
+										if d.HasNextRetryAt {
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "<span>")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											var templ_7745c5c3_Var194 string
-											templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.JoinStringErrs(d.NextRetryAt)
+											templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.next_retry"))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 717, Col: 79}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 740, Col: 49}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var194))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "</span> ")
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "</span><span>")
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+											var templ_7745c5c3_Var195 string
+											templ_7745c5c3_Var195, templ_7745c5c3_Err = templ.JoinStringErrs(d.NextRetryAt)
+											if templ_7745c5c3_Err != nil {
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 740, Col: 79}
+											}
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var195))
+											if templ_7745c5c3_Err != nil {
+												return templ_7745c5c3_Err
+											}
+											templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, "</span> ")
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, "<span>")
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										var templ_7745c5c3_Var195 string
-										templ_7745c5c3_Var195, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.updated"))
-										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 719, Col: 45}
-										}
-										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var195))
-										if templ_7745c5c3_Err != nil {
-											return templ_7745c5c3_Err
-										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "</span><span>")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "<span>")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										var templ_7745c5c3_Var196 string
-										templ_7745c5c3_Var196, templ_7745c5c3_Err = templ.JoinStringErrs(d.UpdatedAt)
+										templ_7745c5c3_Var196, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.updated"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 719, Col: 73}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 742, Col: 45}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var196))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 201, "</span></div></div></div>")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 201, "</span><span>")
+										if templ_7745c5c3_Err != nil {
+											return templ_7745c5c3_Err
+										}
+										var templ_7745c5c3_Var197 string
+										templ_7745c5c3_Var197, templ_7745c5c3_Err = templ.JoinStringErrs(d.UpdatedAt)
+										if templ_7745c5c3_Err != nil {
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 742, Col: 73}
+										}
+										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var197))
+										if templ_7745c5c3_Err != nil {
+											return templ_7745c5c3_Err
+										}
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 202, "</span></div></div></div>")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "px-4 py-4", Attributes: templ.Attributes{"colspan": "7"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var178), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "px-4 py-4", Attributes: templ.Attributes{"colspan": "7"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var179), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Row(table.RowProps{Class: "bg-muted/50", Attributes: templ.Attributes{"x-show": "showPayload", "x-cloak": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var177), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Row(table.RowProps{Class: "bg-muted/50", Attributes: templ.Attributes{"x-show": "showPayload", "x-cloak": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var178), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = table.Body(table.BodyProps{Attributes: templ.Attributes{"x-data": "{ showPayload: false }"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var157), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Body(table.BodyProps{Attributes: templ.Attributes{"x-data": "{ showPayload: false }"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var158), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Table().Render(templ.WithChildren(ctx, templ_7745c5c3_Var140), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Table().Render(templ.WithChildren(ctx, templ_7745c5c3_Var141), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 202, "</div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 203, "</div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3590,12 +3604,12 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = card.Card().Render(templ.WithChildren(ctx, templ_7745c5c3_Var139), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = card.Card().Render(templ.WithChildren(ctx, templ_7745c5c3_Var140), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 203, "<div class=\"rounded-lg border border-gray-200 bg-white p-12 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "<div class=\"rounded-lg border border-gray-200 bg-white p-12 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3603,46 +3617,46 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "<p class=\"mt-2 text-gray-500 dark:text-gray-400\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var197 string
-				templ_7745c5c3_Var197, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.no_deliveries"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 734, Col: 85}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var197))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "</p><p class=\"text-sm text-gray-400 dark:text-gray-500\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "<p class=\"mt-2 text-gray-500 dark:text-gray-400\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var198 string
-				templ_7745c5c3_Var198, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.no_deliveries_hint"))
+				templ_7745c5c3_Var198, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.no_deliveries"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 735, Col: 93}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 757, Col: 85}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var198))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 206, "</p><div class=\"mt-4\"><form method=\"POST\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 206, "</p><p class=\"text-sm text-gray-400 dark:text-gray-500\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var199 templ.SafeURL
-				templ_7745c5c3_Var199, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/test", data.WebhookID)))
+				var templ_7745c5c3_Var199 string
+				templ_7745c5c3_Var199, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.no_deliveries_hint"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 737, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 758, Col: 93}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var199))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 207, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 207, "</p><div class=\"mt-4\"><form method=\"POST\" action=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var200 templ.SafeURL
+				templ_7745c5c3_Var200, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/test", data.WebhookID)))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 760, Col: 103}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var200))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 208, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3650,27 +3664,27 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 208, "<button type=\"submit\" class=\"inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 209, "<button type=\"submit\" class=\"inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var200 string
-				templ_7745c5c3_Var200, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.send_test"))
+				var templ_7745c5c3_Var201 string
+				templ_7745c5c3_Var201, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.send_test"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 739, Col: 181}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 762, Col: 181}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var200))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var201))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 209, "</button></form></div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 210, "</button></form></div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = AdminLayout(pc).Render(templ.WithChildren(ctx, templ_7745c5c3_Var133), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = AdminLayout(pc).Render(templ.WithChildren(ctx, templ_7745c5c3_Var134), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -3694,81 +3708,81 @@ func deliveryStatusBadge(pc *PageContext, status string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var201 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var201 == nil {
-			templ_7745c5c3_Var201 = templ.NopComponent
+		templ_7745c5c3_Var202 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var202 == nil {
+			templ_7745c5c3_Var202 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		switch status {
 		case "delivered":
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 210, "<span class=\"rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var202 string
-			templ_7745c5c3_Var202, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.status_delivered"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 750, Col: 163}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var202))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 211, "</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		case "pending":
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 212, "<span class=\"rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 211, "<span class=\"rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var203 string
-			templ_7745c5c3_Var203, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.status_pending"))
+			templ_7745c5c3_Var203, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.status_delivered"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 752, Col: 165}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 773, Col: 163}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var203))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 213, "</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 212, "</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		case "dead":
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "<span class=\"rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200\">")
+		case "pending":
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 213, "<span class=\"rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var204 string
-			templ_7745c5c3_Var204, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.status_dead"))
+			templ_7745c5c3_Var204, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.status_pending"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 754, Col: 150}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 775, Col: 165}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var204))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 215, "</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		default:
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 216, "<span class=\"rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300\">")
+		case "dead":
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 215, "<span class=\"rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var205 string
-			templ_7745c5c3_Var205, templ_7745c5c3_Err = templ.JoinStringErrs(status)
+			templ_7745c5c3_Var205, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.status_dead"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 756, Col: 132}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 777, Col: 150}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var205))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 217, "</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 216, "</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		default:
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 217, "<span class=\"rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var206 string
+			templ_7745c5c3_Var206, templ_7745c5c3_Err = templ.JoinStringErrs(status)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 779, Col: 132}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var206))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 218, "</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

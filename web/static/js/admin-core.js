@@ -3,6 +3,67 @@
  * Global utilities for keyboard shortcuts, HTMX handlers, toast notifications, and form validation
  */
 
+document.addEventListener('alpine:init', () => {
+    Alpine.data('adminLayout', () => ({
+        sidebarOpen: false,
+        sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+        toggleSidebarCollapsed() {
+            this.sidebarCollapsed = !this.sidebarCollapsed;
+            localStorage.setItem('sidebarCollapsed', this.sidebarCollapsed);
+        }
+    }));
+
+    Alpine.data('flashAlert', () => ({
+        show: true,
+        dismissing: false,
+        autoDismissTime: 5000,
+        init() {
+            this.dismissTimer = setTimeout(() => this.dismiss(), this.autoDismissTime);
+        },
+        destroy() {
+            clearTimeout(this.dismissTimer);
+            clearTimeout(this.hideTimer);
+        },
+        dismiss() {
+            clearTimeout(this.dismissTimer);
+            this.dismissing = true;
+            this.hideTimer = setTimeout(() => { this.show = false; }, 300);
+        },
+        setProgressState(state) {
+            this.$el.querySelector('.alert-progress').style.animationPlayState = state;
+        }
+    }));
+
+    Alpine.data('slugForm', () => ({
+        slug: '',
+        slugEdited: false,
+        init() {
+            this.slug = this.$el.elements.slug.value;
+            this.slugEdited = this.$el.dataset.slugEdited === 'true';
+        },
+        generateSlug(value) {
+            if (!this.slugEdited) {
+                this.slug = value.toLowerCase().trim()
+                    .replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
+            }
+        }
+    }));
+
+    Alpine.data('copyInput', () => ({
+        copied: false,
+        async copy() {
+            await navigator.clipboard.writeText(this.$refs.copyValue.value);
+            this.copied = true;
+            clearTimeout(this.copyTimer);
+            this.copyTimer = setTimeout(() => { this.copied = false; }, 2000);
+        },
+        destroy() {
+            clearTimeout(this.copyTimer);
+        }
+    }));
+    Alpine.data('passwordStrength', passwordStrength);
+});
+
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
     // Ctrl+S or Cmd+S to save forms
@@ -53,6 +114,13 @@ function normalizeBulkScope(scope) {
 }
 
 // Declarative helpers for CSP-safe interactions
+document.addEventListener('submit', function(e) {
+    const form = closestMatch(e.target, 'form[data-confirm-submit]');
+    if (form && !window.confirm(form.dataset.confirmSubmit)) {
+        e.preventDefault();
+    }
+});
+
 document.addEventListener('change', function(e) {
     const perPageSelector = closestMatch(e.target, '[data-per-page-selector="true"]');
     if (perPageSelector) {

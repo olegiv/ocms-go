@@ -1315,14 +1315,14 @@ func LanguageFormPage(pc *PageContext, data LanguageFormData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" class=\"form\" x-data=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" class=\"form\" x-data=\"languageForm\" data-language=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var76 string
-					templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.ResolveAttributeValue(languageFormAlpineData(data))
+					templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.ResolveAttributeValue(languageFormJSON(data))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/languages.templ`, Line: 229, Col: 110}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/languages.templ`, Line: 229, Col: 133}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var76)
 					if templ_7745c5c3_Err != nil {
@@ -2279,11 +2279,9 @@ func LanguageFormPage(pc *PageContext, data LanguageFormData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if !data.IsEdit {
-				templ_7745c5c3_Err = languageFormScript().Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
+			templ_7745c5c3_Err = languageFormScript().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
 			}
 			return nil
 		})
@@ -2295,7 +2293,7 @@ func LanguageFormPage(pc *PageContext, data LanguageFormData) templ.Component {
 	})
 }
 
-// languageFormScript renders the Alpine.js script for the quick-select feature.
+// languageFormScript initializes the fields and handles the quick-select feature.
 func languageFormScript() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -2324,13 +2322,13 @@ func languageFormScript() templ.Component {
 		var templ_7745c5c3_Var126 string
 		templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/languages.templ`, Line: 433, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/languages.templ`, Line: 431, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var126)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\">\n\tfunction languageForm() {\n\t\treturn {\n\t\t\tcode: '',\n\t\t\tname: '',\n\t\t\tnativeName: '',\n\t\t\tdirection: 'ltr',\n\t\t\tselectLanguage(value) {\n\t\t\t\tif (!value) return;\n\t\t\t\tconst parts = value.split('|');\n\t\t\t\tif (parts.length >= 4) {\n\t\t\t\t\tthis.code = parts[0];\n\t\t\t\t\tthis.name = parts[1];\n\t\t\t\t\tthis.nativeName = parts[2];\n\t\t\t\t\tthis.direction = parts[3];\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\">\n\tdocument.addEventListener('alpine:init', () => Alpine.data('languageForm', languageForm));\n\n\tfunction languageForm() {\n\t\treturn {\n\t\t\tcode: '',\n\t\t\tname: '',\n\t\t\tnativeName: '',\n\t\t\tdirection: 'ltr',\n\t\t\tinit() {\n\t\t\t\tObject.assign(this, JSON.parse(this.$el.dataset.language));\n\t\t\t},\n\t\t\tselectLanguage(value) {\n\t\t\t\tif (!value) return;\n\t\t\t\tconst parts = value.split('|');\n\t\t\t\tif (parts.length >= 4) {\n\t\t\t\t\tthis.code = parts[0];\n\t\t\t\t\tthis.name = parts[1];\n\t\t\t\t\tthis.nativeName = parts[2];\n\t\t\t\t\tthis.direction = parts[3];\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2411,21 +2409,21 @@ func languageCurrentDirection(data LanguageFormData) string {
 	return "ltr"
 }
 
-func languageFormAlpineData(data LanguageFormData) string {
-	if data.IsEdit {
-		payload := map[string]string{
-			"code":       languageFormValue(data, "code"),
-			"name":       languageFormValue(data, "name"),
-			"nativeName": languageFormValue(data, "native_name"),
-			"direction":  languageCurrentDirection(data),
-		}
-		encoded, err := json.Marshal(payload)
-		if err != nil {
-			return "{}"
-		}
-		return string(encoded)
+func languageFormJSON(data LanguageFormData) string {
+	if !data.IsEdit {
+		return "{}"
 	}
-	return "languageForm()"
+	payload := map[string]string{
+		"code":       languageFormValue(data, "code"),
+		"name":       languageFormValue(data, "name"),
+		"nativeName": languageFormValue(data, "native_name"),
+		"direction":  languageCurrentDirection(data),
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "{}"
+	}
+	return string(encoded)
 }
 
 func languageFormTitle(pc *PageContext, isEdit bool) string {

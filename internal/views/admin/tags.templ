@@ -6,7 +6,6 @@ package admin
 import (
 	"fmt"
 	"net/url"
-	"strconv"
 	"time"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
@@ -398,7 +397,8 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 				method="POST"
 				action={ tagFormAction(data) }
 				class="p-6"
-				x-data={ tagFormXData(data) }
+				x-data="slugForm"
+				data-slug-edited={ fmt.Sprint(data.IsEdit) }
 			>
 				if data.IsEdit {
 					<input type="hidden" name="_method" value="PUT"/>
@@ -507,24 +507,6 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 				@tagTranslationsPanel(pc, data)
 			}
 		}
-		<script nonce={ templ.GetNonce(ctx) }>
-		function tagForm() {
-			return {
-				slug: document.getElementById('slug')?.value || '',
-				slugEdited: document.getElementById('slug')?.value ? true : false,
-				generateSlug(value) {
-					if (!this.slugEdited) {
-						this.slug = value
-							.toLowerCase()
-							.trim()
-							.replace(/[^\w\s-]/g, '')
-							.replace(/[\s_-]+/g, '-')
-							.replace(/^-+|-+$/g, '');
-					}
-				}
-			}
-		}
-		</script>
 	}
 }
 
@@ -584,14 +566,6 @@ func tagFormAction(data TagFormData) templ.SafeURL {
 		return templ.SafeURL(fmt.Sprintf("/admin/tags/%d", data.Tag.ID))
 	}
 	return "/admin/tags"
-}
-
-func tagFormXData(data TagFormData) string {
-	slug := tagFormValue(data, "slug")
-	if data.IsEdit {
-		return fmt.Sprintf(`{ slug: %s, slugEdited: true, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
-	}
-	return fmt.Sprintf(`{ slug: %s, slugEdited: false, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
 }
 
 func tagFormValue(data TagFormData, field string) string {

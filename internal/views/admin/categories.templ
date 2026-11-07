@@ -5,7 +5,6 @@ package admin
 
 import (
 	"fmt"
-	"strconv"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
@@ -217,7 +216,8 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 				method="POST"
 				action={ categoryFormAction(data) }
 				class="p-6"
-				x-data={ categoryFormXData(data) }
+				x-data="slugForm"
+				data-slug-edited={ fmt.Sprint(data.IsEdit) }
 			>
 				if data.IsEdit {
 					<input type="hidden" name="_method" value="PUT"/>
@@ -408,24 +408,6 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 				@categoryTranslationsPanel(pc, data)
 			}
 		}
-		<script nonce={ templ.GetNonce(ctx) }>
-		function categoryForm() {
-			return {
-				slug: document.getElementById('slug')?.value || '',
-				slugEdited: document.getElementById('slug')?.value ? true : false,
-				generateSlug(value) {
-					if (!this.slugEdited) {
-						this.slug = value
-							.toLowerCase()
-							.trim()
-							.replace(/[^\w\s-]/g, '')
-							.replace(/[\s_-]+/g, '-')
-							.replace(/^-+|-+$/g, '');
-					}
-				}
-			}
-		}
-		</script>
 	}
 }
 
@@ -485,14 +467,6 @@ func categoryFormAction(data CategoryFormData) templ.SafeURL {
 		return templ.SafeURL(fmt.Sprintf("/admin/categories/%d", data.Category.ID))
 	}
 	return "/admin/categories"
-}
-
-func categoryFormXData(data CategoryFormData) string {
-	slug := categoryFormValue(data, "slug")
-	if data.IsEdit {
-		return fmt.Sprintf(`{ slug: %s, slugEdited: true, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
-	}
-	return fmt.Sprintf(`{ slug: %s, slugEdited: false, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
 }
 
 func categoryFormValue(data CategoryFormData, field string) string {

@@ -18,13 +18,13 @@
     <script nonce="{{.CSPNonce}}" src="{{ scriptURL "/static/dist/js/htmx.min.js" }}" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous"></script>
     <!-- Alpine.js Sort Plugin (must load before Alpine) -->
     <script nonce="{{.CSPNonce}}" defer src="{{ scriptURL "/static/dist/js/alpine-sort.min.js" }}" integrity="sha384-hqiYD2WaUm+VsLVKEqRzzkJ7HQownCb0Mjq/GQJUDyzwA+vztNBwFqsWkbRGZCv+" crossorigin="anonymous"></script>
-    <!-- Alpine.js -->
-    <script nonce="{{.CSPNonce}}" defer src="{{ scriptURL "/static/dist/js/alpine.min.js" }}" integrity="sha384-FYLKjwG3aohNhNZoVG8sY/5ntunm+MqylL90Q+rT3OM7AwV9/BKFjk/RjoIpIgsI" crossorigin="anonymous"></script>
+    <!-- Alpine.js CSP build -->
+    <script nonce="{{.CSPNonce}}" defer src="{{ scriptURL "/static/dist/js/alpine.min.js" }}" integrity="sha384-Q4UOujiwqAb/jTt3ki4pdkETk4I3rIFQX8h271PLI41okj/YIKY7IQQFMw73wkrX" crossorigin="anonymous"></script>
 
     <!-- Admin core utilities: keyboard shortcuts, HTMX handlers, toast notifications, form validation -->
-    <script nonce="{{.CSPNonce}}" src="/static/dist/js/admin-core.js"></script>
+    <script nonce="{{.CSPNonce}}" src="{{ scriptURL "/static/dist/js/admin-core.js" }}"></script>
     <!-- Unified media dropzone component for Alpine.js (select + upload modes) -->
-    <script nonce="{{.CSPNonce}}" src="/static/dist/js/media-dropzone.js"></script>
+    <script nonce="{{.CSPNonce}}" src="{{ scriptURL "/static/dist/js/media-dropzone.js" }}"></script>
     {{block "scripts" .}}{{end}}
 </body>
 </html>

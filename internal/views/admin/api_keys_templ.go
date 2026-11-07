@@ -2014,15 +2014,16 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "<div class=\"key-container\" x-data=\"{ copied: false }\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "<div class=\"key-container\" x-data=\"copyInput\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				templ_7745c5c3_Err = input.Input(input.Props{
-					ID:       "generated-key",
-					Value:    data.GeneratedKey,
-					Readonly: true,
-					Class:    "key-input",
+					ID:         "generated-key",
+					Value:      data.GeneratedKey,
+					Readonly:   true,
+					Class:      "key-input",
+					Attributes: templ.Attributes{"x-ref": "copyValue"},
 				}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -2054,7 +2055,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var118 string
 					templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.copy"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 360, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 361, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
 					if templ_7745c5c3_Err != nil {
@@ -2075,7 +2076,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var119 string
 					templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.copied"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 364, Col: 27}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 365, Col: 27}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
 					if templ_7745c5c3_Err != nil {
@@ -2087,7 +2088,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Class: "copy-btn", Attributes: templ.Attributes{"@click": "navigator.clipboard.writeText(document.getElementById('generated-key').value); copied = true; setTimeout(() => copied = false, 2000)"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var117), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Class: "copy-btn", Attributes: templ.Attributes{"@click": "copy()"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var117), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2103,7 +2104,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var120 string
 					templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.name"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 372, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 373, Col: 53}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var120))
 					if templ_7745c5c3_Err != nil {
@@ -2116,7 +2117,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var121 string
 					templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinStringErrs(data.APIKey.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 373, Col: 51}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 374, Col: 51}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
 					if templ_7745c5c3_Err != nil {
@@ -2129,7 +2130,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var122 string
 					templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.key_prefix"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 376, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 377, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
 					if templ_7745c5c3_Err != nil {
@@ -2142,7 +2143,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var123 string
 					templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(data.APIKey.KeyPrefix)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 377, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 378, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 					if templ_7745c5c3_Err != nil {
@@ -2155,7 +2156,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var124 string
 					templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.permissions"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 380, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 381, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 					if templ_7745c5c3_Err != nil {
@@ -2181,7 +2182,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 							var templ_7745c5c3_Var126 string
 							templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.JoinStringErrs(perm)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 384, Col: 15}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 385, Col: 15}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var126))
 							if templ_7745c5c3_Err != nil {
@@ -2206,7 +2207,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var127 string
 						templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.expires"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 391, Col: 60}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 392, Col: 60}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
 						if templ_7745c5c3_Err != nil {
@@ -2219,7 +2220,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var128 string
 						templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.JoinStringErrs(data.APIKey.ExpiresAt)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 392, Col: 57}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 393, Col: 57}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var128))
 						if templ_7745c5c3_Err != nil {
@@ -2254,7 +2255,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var130 string
 					templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.done"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 399, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 400, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var130))
 					if templ_7745c5c3_Err != nil {
@@ -2281,7 +2282,7 @@ func apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var132 string
 					templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.create_another"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 402, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 403, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var132))
 					if templ_7745c5c3_Err != nil {
@@ -2370,7 +2371,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 				var templ_7745c5c3_Var136 string
 				templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.back_to_keys"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 414, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 415, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var136))
 				if templ_7745c5c3_Err != nil {
@@ -2419,7 +2420,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 				var templ_7745c5c3_Var139 templ.SafeURL
 				templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.JoinURLErrs(apiKeyFormAction(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 419, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 420, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var139))
 				if templ_7745c5c3_Err != nil {
@@ -2454,7 +2455,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var141 string
 					templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.name"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 425, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 426, Col: 26}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var141))
 					if templ_7745c5c3_Err != nil {
@@ -2493,7 +2494,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var142 string
 					templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["name"])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 440, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 441, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 					if templ_7745c5c3_Err != nil {
@@ -2511,7 +2512,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var143 string
 					templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.name_hint"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 442, Col: 58}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 443, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
 					if templ_7745c5c3_Err != nil {
@@ -2541,7 +2542,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var145 string
 					templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.permissions"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 447, Col: 36}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 448, Col: 36}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
 					if templ_7745c5c3_Err != nil {
@@ -2565,7 +2566,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var146 string
 					templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["permissions"])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 450, Col: 76}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 451, Col: 76}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
 					if templ_7745c5c3_Err != nil {
@@ -2588,7 +2589,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var147 string
 					templ_7745c5c3_Var147, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(group.TitleKey))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 455, Col: 65}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 456, Col: 65}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var147))
 					if templ_7745c5c3_Err != nil {
@@ -2606,7 +2607,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var148 string
 						templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.ResolveAttributeValue(perm.Value)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 461, Col: 29}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 462, Col: 29}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var148)
 						if templ_7745c5c3_Err != nil {
@@ -2629,7 +2630,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var149 string
 						templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(perm.Value)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 465, Col: 31}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 466, Col: 31}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
 						if templ_7745c5c3_Err != nil {
@@ -2642,7 +2643,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var150 string
 						templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T(perm.DescKey))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 466, Col: 38}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 467, Col: 38}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var150))
 						if templ_7745c5c3_Err != nil {
@@ -2677,7 +2678,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var152 string
 					templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.expiration_date"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 476, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 477, Col: 40}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
 					if templ_7745c5c3_Err != nil {
@@ -2710,7 +2711,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var153 string
 					templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["expires_at"])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 489, Col: 58}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 490, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var153))
 					if templ_7745c5c3_Err != nil {
@@ -2728,7 +2729,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var154 string
 					templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.expiration_hint"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 491, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 492, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var154))
 					if templ_7745c5c3_Err != nil {
@@ -2784,7 +2785,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var156 string
 					templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["source_cidrs"])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 507, Col: 60}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 508, Col: 60}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
 					if templ_7745c5c3_Err != nil {
@@ -2824,7 +2825,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var158 string
 						templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.status"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 515, Col: 29}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 516, Col: 29}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var158))
 						if templ_7745c5c3_Err != nil {
@@ -2853,7 +2854,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var159 string
 					templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.active"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 525, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 526, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var159))
 					if templ_7745c5c3_Err != nil {
@@ -2866,7 +2867,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var160 string
 					templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.revoke_hint"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 526, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 527, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var160))
 					if templ_7745c5c3_Err != nil {
@@ -2896,7 +2897,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 							var templ_7745c5c3_Var162 string
 							templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.key_info"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 533, Col: 35}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 534, Col: 35}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
 							if templ_7745c5c3_Err != nil {
@@ -2915,7 +2916,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var163 string
 						templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.key_prefix"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 537, Col: 63}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 538, Col: 63}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var163))
 						if templ_7745c5c3_Err != nil {
@@ -2928,7 +2929,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var164 string
 						templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.JoinStringErrs(data.APIKey.KeyPrefix)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 538, Col: 38}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 539, Col: 38}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var164))
 						if templ_7745c5c3_Err != nil {
@@ -2941,7 +2942,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var165 string
 						templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.created"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 541, Col: 60}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 542, Col: 60}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
 						if templ_7745c5c3_Err != nil {
@@ -2954,7 +2955,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var166 string
 						templ_7745c5c3_Var166, templ_7745c5c3_Err = templ.JoinStringErrs(data.APIKey.CreatedAt)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 542, Col: 38}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 543, Col: 38}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var166))
 						if templ_7745c5c3_Err != nil {
@@ -2972,7 +2973,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 							var templ_7745c5c3_Var167 string
 							templ_7745c5c3_Var167, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.last_used"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 546, Col: 63}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 547, Col: 63}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var167))
 							if templ_7745c5c3_Err != nil {
@@ -2985,7 +2986,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 							var templ_7745c5c3_Var168 string
 							templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.JoinStringErrs(data.APIKey.LastUsedAt)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 547, Col: 40}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 548, Col: 40}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var168))
 							if templ_7745c5c3_Err != nil {
@@ -3026,7 +3027,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var170 string
 						templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.update"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 558, Col: 32}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 559, Col: 32}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var170))
 						if templ_7745c5c3_Err != nil {
@@ -3036,7 +3037,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 						var templ_7745c5c3_Var171 string
 						templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("api_keys.create"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 560, Col: 32}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 561, Col: 32}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var171))
 						if templ_7745c5c3_Err != nil {
@@ -3064,7 +3065,7 @@ func apiKeyEditForm(pc *PageContext, data APIKeyFormData) templ.Component {
 					var templ_7745c5c3_Var173 string
 					templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 564, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/api_keys.templ`, Line: 565, Col: 26}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var173))
 					if templ_7745c5c3_Err != nil {

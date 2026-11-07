@@ -2866,20 +2866,20 @@ func userMFACard(pc *PageContext, userID int64, status UserMFAStatus) templ.Comp
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "\" x-data data-confirm=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "\" data-confirm-submit=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var159 string
 					templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("users.mfa_reset_confirm"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/users.templ`, Line: 617, Col: 51}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/users.templ`, Line: 616, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var159)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "\" @submit=\"if (!confirm($el.dataset.confirm)) $event.preventDefault()\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -2894,7 +2894,7 @@ func userMFACard(pc *PageContext, userID int64, status UserMFAStatus) templ.Comp
 					var templ_7745c5c3_Var160 string
 					templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("users.mfa_reset_help"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/users.templ`, Line: 621, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/users.templ`, Line: 619, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var160))
 					if templ_7745c5c3_Err != nil {
@@ -2919,7 +2919,7 @@ func userMFACard(pc *PageContext, userID int64, status UserMFAStatus) templ.Comp
 						var templ_7745c5c3_Var162 string
 						templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("users.current_password"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/users.templ`, Line: 624, Col: 39}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/users.templ`, Line: 622, Col: 39}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
 						if templ_7745c5c3_Err != nil {
@@ -2962,7 +2962,7 @@ func userMFACard(pc *PageContext, userID int64, status UserMFAStatus) templ.Comp
 						var templ_7745c5c3_Var164 string
 						templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("users.mfa_reset"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/users.templ`, Line: 637, Col: 31}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/users.templ`, Line: 635, Col: 31}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var164))
 						if templ_7745c5c3_Err != nil {

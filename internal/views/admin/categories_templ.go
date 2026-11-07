@@ -23,7 +23,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 	"github.com/olegiv/ocms-go/internal/views/components/textarea"
-	"strconv"
 )
 
 // CategoryListItem holds data for a category in the list view.
@@ -144,7 +143,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.new"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 75, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 74, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -230,7 +229,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 									var templ_7745c5c3_Var11 string
 									templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.name"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 84, Col: 44}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 83, Col: 44}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 									if templ_7745c5c3_Err != nil {
@@ -257,7 +256,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 									var templ_7745c5c3_Var13 string
 									templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.slug"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 85, Col: 44}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 84, Col: 44}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 									if templ_7745c5c3_Err != nil {
@@ -284,7 +283,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 									var templ_7745c5c3_Var15 string
 									templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.language"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 86, Col: 48}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 85, Col: 48}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 									if templ_7745c5c3_Err != nil {
@@ -311,7 +310,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 									var templ_7745c5c3_Var17 string
 									templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.description"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 87, Col: 51}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 86, Col: 51}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 									if templ_7745c5c3_Err != nil {
@@ -338,7 +337,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 									var templ_7745c5c3_Var19 string
 									templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("nav.pages"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 88, Col: 43}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 87, Col: 43}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 									if templ_7745c5c3_Err != nil {
@@ -365,7 +364,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 									var templ_7745c5c3_Var21 string
 									templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.actions"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 89, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 88, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 									if templ_7745c5c3_Err != nil {
@@ -433,7 +432,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 										var templ_7745c5c3_Var25 templ.SafeURL
 										templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/categories/%d", cat.ID)))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 97, Col: 76}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 96, Col: 76}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 										if templ_7745c5c3_Err != nil {
@@ -446,7 +445,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 										var templ_7745c5c3_Var26 string
 										templ_7745c5c3_Var26, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("padding-left: %dpx;", cat.Depth*20))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 99, Col: 67}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 98, Col: 67}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 										if templ_7745c5c3_Err != nil {
@@ -473,7 +472,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 										var templ_7745c5c3_Var27 string
 										templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(cat.Name)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 106, Col: 21}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 105, Col: 21}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 										if templ_7745c5c3_Err != nil {
@@ -508,7 +507,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 										var templ_7745c5c3_Var29 string
 										templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(cat.Slug)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 110, Col: 44}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 109, Col: 44}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 										if templ_7745c5c3_Err != nil {
@@ -552,7 +551,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 												var templ_7745c5c3_Var32 string
 												templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(cat.LanguageCode)
 												if templ_7745c5c3_Err != nil {
-													return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 115, Col: 30}
+													return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 114, Col: 30}
 												}
 												_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 												if templ_7745c5c3_Err != nil {
@@ -592,7 +591,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 											var templ_7745c5c3_Var34 string
 											templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(truncateStr(cat.Description, 50))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 123, Col: 45}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 122, Col: 45}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 											if templ_7745c5c3_Err != nil {
@@ -637,7 +636,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 											var templ_7745c5c3_Var37 string
 											templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.page_count", cat.UsageCount))
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 130, Col: 58}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 129, Col: 58}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 											if templ_7745c5c3_Err != nil {
@@ -750,7 +749,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 						var templ_7745c5c3_Var41 string
 						templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.no_categories"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 150, Col: 43}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 149, Col: 43}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 						if templ_7745c5c3_Err != nil {
@@ -763,7 +762,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 						var templ_7745c5c3_Var42 string
 						templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.create_first_hint"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 151, Col: 69}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 150, Col: 69}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 						if templ_7745c5c3_Err != nil {
@@ -788,7 +787,7 @@ func CategoriesListPage(pc *PageContext, data CategoriesListData) templ.Componen
 							var templ_7745c5c3_Var44 string
 							templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.new"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 154, Col: 32}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 153, Col: 32}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 							if templ_7745c5c3_Err != nil {
@@ -881,7 +880,7 @@ func deleteCategoryModal(pc *PageContext, cat CategoryListItem) templ.Component 
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.delete_category"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 179, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 178, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -894,7 +893,7 @@ func deleteCategoryModal(pc *PageContext, cat CategoryListItem) templ.Component 
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.close"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 180, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 179, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 		if templ_7745c5c3_Err != nil {
@@ -907,7 +906,7 @@ func deleteCategoryModal(pc *PageContext, cat CategoryListItem) templ.Component 
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.confirm_delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 183, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 182, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 		if templ_7745c5c3_Err != nil {
@@ -925,7 +924,7 @@ func deleteCategoryModal(pc *PageContext, cat CategoryListItem) templ.Component 
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.usage_warning", cat.UsageCount))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 185, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 184, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {
@@ -944,7 +943,7 @@ func deleteCategoryModal(pc *PageContext, cat CategoryListItem) templ.Component 
 			var templ_7745c5c3_Var51 string
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.subcategories_warning"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 188, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 187, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 			if templ_7745c5c3_Err != nil {
@@ -962,7 +961,7 @@ func deleteCategoryModal(pc *PageContext, cat CategoryListItem) templ.Component 
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.delete_warning"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 190, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 189, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 		if templ_7745c5c3_Err != nil {
@@ -987,7 +986,7 @@ func deleteCategoryModal(pc *PageContext, cat CategoryListItem) templ.Component 
 			var templ_7745c5c3_Var54 string
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 194, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 193, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 			if templ_7745c5c3_Err != nil {
@@ -1014,7 +1013,7 @@ func deleteCategoryModal(pc *PageContext, cat CategoryListItem) templ.Component 
 			var templ_7745c5c3_Var56 string
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.delete_category"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 197, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 196, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 			if templ_7745c5c3_Err != nil {
@@ -1103,7 +1102,7 @@ func CategoryFormPage(pc *PageContext, data CategoryFormData) templ.Component {
 					var templ_7745c5c3_Var61 string
 					templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.back_to_categories"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 211, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 210, Col: 43}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 					if templ_7745c5c3_Err != nil {
@@ -1140,20 +1139,20 @@ func CategoryFormPage(pc *PageContext, data CategoryFormData) templ.Component {
 				var templ_7745c5c3_Var63 templ.SafeURL
 				templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinURLErrs(categoryFormAction(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 218, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 217, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\" class=\"p-6\" x-data=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\" class=\"p-6\" x-data=\"slugForm\" data-slug-edited=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var64 string
-				templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(categoryFormXData(data))
+				templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(data.IsEdit))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 220, Col: 36}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 220, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 				if templ_7745c5c3_Err != nil {
@@ -2031,23 +2030,6 @@ func CategoryFormPage(pc *PageContext, data CategoryFormData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "<script nonce=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var110 string
-			templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 411, Col: 37}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var110)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "\">\n\t\tfunction categoryForm() {\n\t\t\treturn {\n\t\t\t\tslug: document.getElementById('slug')?.value || '',\n\t\t\t\tslugEdited: document.getElementById('slug')?.value ? true : false,\n\t\t\t\tgenerateSlug(value) {\n\t\t\t\t\tif (!this.slugEdited) {\n\t\t\t\t\t\tthis.slug = value\n\t\t\t\t\t\t\t.toLowerCase()\n\t\t\t\t\t\t\t.trim()\n\t\t\t\t\t\t\t.replace(/[^\\w\\s-]/g, '')\n\t\t\t\t\t\t\t.replace(/[\\s_-]+/g, '-')\n\t\t\t\t\t\t\t.replace(/^-+|-+$/g, '');\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t\t</script>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 			return nil
 		})
 		templ_7745c5c3_Err = AdminLayout(pc).Render(templ.WithChildren(ctx, templ_7745c5c3_Var58), templ_7745c5c3_Buffer)
@@ -2074,12 +2056,12 @@ func categoryTranslationsPanel(pc *PageContext, data CategoryFormData) templ.Com
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var111 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var111 == nil {
-			templ_7745c5c3_Var111 = templ.NopComponent
+		templ_7745c5c3_Var110 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var110 == nil {
+			templ_7745c5c3_Var110 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "<div class=\"translations-panel\" style=\"margin-top: 1.5rem; padding: 1rem;\"><div class=\"translations-header\"><h3 class=\"translations-title\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "<div class=\"translations-panel\" style=\"margin-top: 1.5rem; padding: 1rem;\"><div class=\"translations-header\"><h3 class=\"translations-title\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2087,177 +2069,177 @@ func categoryTranslationsPanel(pc *PageContext, data CategoryFormData) templ.Com
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, " ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, " ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var112 string
-		templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.translations"))
+		var templ_7745c5c3_Var111 string
+		templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.translations"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 437, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 419, Col: 37}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if data.Language != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "<span class=\"current-language-badge\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "<span class=\"current-language-badge\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var112 string
+			templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.current_language"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 423, Col: 42}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, ": ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var113 string
-			templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.current_language"))
+			templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(data.Language.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 441, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 423, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, ": ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(data.Translations) > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "<div class=\"translations-list\"><h4 class=\"translations-subtitle\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var114 string
-			templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinStringErrs(data.Language.Name)
+			templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.existing_translations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 441, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 429, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var114))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "</div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if len(data.Translations) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "<div class=\"translations-list\"><h4 class=\"translations-subtitle\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var115 string
-			templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.existing_translations"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 447, Col: 80}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var115))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "</h4>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "</h4>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, tr := range data.Translations {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "<div class=\"translation-item\"><div class=\"translation-info\"><span class=\"translation-lang-badge\" title=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "<div class=\"translation-item\"><div class=\"translation-info\"><span class=\"translation-lang-badge\" title=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var115 string
+				templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.ResolveAttributeValue(tr.Language.NativeName)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 433, Col: 74}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var115)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var116 string
-				templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.ResolveAttributeValue(tr.Language.NativeName)
+				templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.JoinStringErrs(tr.Language.Code)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 451, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 433, Col: 95}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var116)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var116))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "</span> <a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var117 string
-				templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.JoinStringErrs(tr.Language.Code)
+				var templ_7745c5c3_Var117 templ.SafeURL
+				templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/categories/%d", tr.Category.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 451, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 434, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var117))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "</span> <a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "\" class=\"translation-link\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var118 templ.SafeURL
-				templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/categories/%d", tr.Category.ID)))
+				var templ_7745c5c3_Var118 string
+				templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(tr.Category.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 452, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 435, Col: 26}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "\" class=\"translation-link\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var119 string
-				templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(tr.Category.Name)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 453, Col: 26}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "</a></div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "</a></div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if len(data.MissingLanguages) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "<div class=\"translations-add\"><h4 class=\"translations-subtitle\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "<div class=\"translations-add\"><h4 class=\"translations-subtitle\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var120 string
-			templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.add_translation"))
+			var templ_7745c5c3_Var119 string
+			templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.add_translation"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 462, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 444, Col: 74}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var120))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "</h4><div class=\"translation-buttons\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "</h4><div class=\"translation-buttons\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, lang := range data.MissingLanguages {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, "<form action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "<form action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var121 templ.SafeURL
-				templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/categories/%d/translate/%s", data.Category.ID, lang.Code)))
+				var templ_7745c5c3_Var120 templ.SafeURL
+				templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/categories/%d/translate/%s", data.Category.ID, lang.Code)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 465, Col: 113}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 447, Col: 113}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, "\" method=\"POST\" class=\"inline-form\">")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var120))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var122 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "\" method=\"POST\" class=\"inline-form\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var121 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2273,68 +2255,68 @@ func categoryTranslationsPanel(pc *PageContext, data CategoryFormData) templ.Com
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, " ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, " ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var122 string
+					templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Code)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 450, Col: 19}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, " - ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var123 string
-					templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Code)
+					templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 468, Col: 19}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 450, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, " - ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var124 string
-					templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Name)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 468, Col: 35}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "translation-add-btn", Attributes: templ.Attributes{"title": "Create " + lang.Name + " translation"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var122), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "translation-add-btn", Attributes: templ.Attributes{"title": "Create " + lang.Name + " translation"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var121), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "</form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, "</form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 104, "</div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "</div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if len(data.Translations) == 0 && len(data.MissingLanguages) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 105, "<p class=\"translations-empty\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "<p class=\"translations-empty\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var125 string
-			templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.all_translations_exist"))
+			var templ_7745c5c3_Var124 string
+			templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("categories.all_translations_exist"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 476, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/categories.templ`, Line: 458, Col: 76}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var125))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 106, "</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 104, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 105, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2349,14 +2331,6 @@ func categoryFormAction(data CategoryFormData) templ.SafeURL {
 		return templ.SafeURL(fmt.Sprintf("/admin/categories/%d", data.Category.ID))
 	}
 	return "/admin/categories"
-}
-
-func categoryFormXData(data CategoryFormData) string {
-	slug := categoryFormValue(data, "slug")
-	if data.IsEdit {
-		return fmt.Sprintf(`{ slug: %s, slugEdited: true, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
-	}
-	return fmt.Sprintf(`{ slug: %s, slugEdited: false, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, strconv.Quote(slug))
 }
 
 func categoryFormValue(data CategoryFormData, field string) string {

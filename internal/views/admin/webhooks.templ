@@ -382,11 +382,11 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 						}
 					</div>
 					<!-- Secret -->
-					<div>
+					<div x-data="{ showSecret: false }">
 						@label.Label(label.Props{For: "secret", Class: "block mb-1"}) {
 							{ pc.T("webhooks.secret") }
 						}
-						<div class="flex gap-1" x-data="{ showSecret: false, copied: false }">
+						<div class="flex gap-1" x-data="copyInput">
 							@input.Input(input.Props{
 								ID:        "secret",
 								Name:      "secret",
@@ -396,6 +396,7 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 								Attributes: templ.Attributes{
 									":type":        "showSecret ? 'text' : 'password'",
 									"placeholder":  secretPlaceholder(data.IsEdit),
+									"x-ref":        "copyValue",
 								},
 							})
 							<button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700" @click="showSecret = !showSecret">
@@ -403,7 +404,7 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 								<span x-show="showSecret" x-cloak>Hide</span>
 							</button>
 							if data.IsEdit {
-								<button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700" @click="navigator.clipboard.writeText(document.getElementById('secret').value); copied = true; setTimeout(() => copied = false, 2000)">
+								<button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700" @click="copy()">
 									<span x-show="!copied">Copy</span>
 									<span x-show="copied" x-cloak>Copied!</span>
 								</button>
@@ -487,7 +488,7 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 						</div>
 					</div>
 					<!-- Custom Headers -->
-					<div x-data={ fmt.Sprintf("{ headers: %s }", formHeadersJSON(data.FormHeaders)) }>
+					<div x-data="webhookHeaders" data-headers={ formHeadersJSON(data.FormHeaders) }>
 						@label.Label(label.Props{Class: "block mb-1"}) {
 							{ pc.T("webhooks.custom_headers") }
 						}
@@ -513,12 +514,12 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 											Attributes:  templ.Attributes{":value": "value"},
 										})
 									</div>
-									<button type="button" class="rounded-md border border-red-300 px-2 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900" @click="delete headers[key]; headers = {...headers}">
+									<button type="button" class="rounded-md border border-red-300 px-2 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900" @click="removeHeader(key)">
 										@iconTrash()
 									</button>
 								</div>
 							</template>
-							<div class="flex gap-2" x-data="{ newKey: '', newValue: '' }">
+							<div class="flex gap-2">
 								<div class="w-1/3">
 									@input.Input(input.Props{
 										Type:        input.TypeText,
@@ -533,7 +534,7 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 										Attributes:  templ.Attributes{"x-model": "newValue", "maxlength": "255"},
 									})
 								</div>
-								<button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700" @click="if (newKey.trim()) { headers[newKey.trim()] = newValue; newKey = ''; newValue = ''; }">
+								<button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700" @click="addHeader()">
 									@iconPlus()
 								</button>
 							</div>
@@ -588,6 +589,28 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 				</form>
 			</div>
 		</div>
+		<script nonce={ templ.GetNonce(ctx) }>
+		document.addEventListener('alpine:init', () => {
+			Alpine.data('webhookHeaders', () => ({
+				headers: {},
+				newKey: '',
+				newValue: '',
+				init() {
+					this.headers = JSON.parse(this.$el.dataset.headers);
+				},
+				removeHeader(key) {
+					delete this.headers[key];
+				},
+				addHeader() {
+					const key = this.newKey.trim();
+					if (!key) return;
+					this.headers = { ...this.headers, [key]: this.newValue };
+					this.newKey = '';
+					this.newValue = '';
+				}
+			}));
+		});
+		</script>
 	}
 }
 

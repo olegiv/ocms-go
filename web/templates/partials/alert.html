@@ -2,20 +2,11 @@
 {{if .Flash}}
 <div class="alert-container">
     <div class="alert alert-{{.FlashType}} alert-animated"
-         x-data="{
-             show: true,
-             dismissing: false,
-             autoDismissTime: 5000,
-             dismiss() {
-                 this.dismissing = true;
-                 setTimeout(() => { this.show = false; }, 300);
-             }
-         }"
+         x-data="flashAlert"
          x-show="show"
-         x-init="setTimeout(() => dismiss(), autoDismissTime)"
          :class="{ 'alert-dismissing': dismissing }"
-         @mouseenter="$el.querySelector('.alert-progress').style.animationPlayState = 'paused'"
-         @mouseleave="$el.querySelector('.alert-progress').style.animationPlayState = 'running'">
+         @mouseenter="setProgressState('paused')"
+         @mouseleave="setProgressState('running')">
         <span class="alert-message">{{.Flash}}</span>
         <button type="button" class="alert-close" @click="dismiss()" aria-label="{{T .AdminLang "btn.close"}}">&times;</button>
         <div class="alert-progress" :style="'animation-duration: ' + autoDismissTime + 'ms'"></div>

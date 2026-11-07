@@ -608,6 +608,14 @@ iterate on.
 - Use `DOMContentLoaded` for initialization
 - Keep dependencies minimal — Alpine.js and htmx are already loaded by oCMS
 
+The bundled `/static/dist/js/alpine.min.js` now uses the Alpine CSP build.
+If your layout pins this asset's integrity hash, copy the updated script tag
+from the starter theme. In production, register components with `Alpine.data()`
+on `alpine:init` from a theme script and call their methods from Alpine
+attributes. Move inline function bodies, arrow functions, and browser-global
+access into those methods. See the [Alpine CSP build documentation](https://alpinejs.dev/advanced/csp)
+for the supported expression syntax.
+
 ## Overriding Core Themes
 
 To customize a core theme (`default` or `developer`), create a theme with the same name:

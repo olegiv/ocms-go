@@ -18,36 +18,9 @@
             </button>
 
             <nav class="dev-nav" id="main-nav" aria-label="Main navigation"
-                 x-data="{
-                     mobileOpen: false,
-                     openMenus: {},
-                     isMobile() {
-                         const toggle = document.getElementById('menu-toggle');
-                         return toggle && getComputedStyle(toggle).display !== 'none';
-                     },
-                     toggle(key) {
-                         if (this.openMenus[key]) {
-                             this.openMenus[key] = false;
-                         } else {
-                             this.openMenus[key] = true;
-                         }
-                     },
-                     open(key) {
-                         if (!this.isMobile()) {
-                             this.openMenus[key] = true;
-                         }
-                     },
-                     close(key) {
-                         if (!this.isMobile()) {
-                             this.openMenus[key] = false;
-                         }
-                     },
-                     isOpen(key) {
-                         return this.openMenus[key] === true;
-                     }
-                 }"
+                 x-data="developerNavigation"
                  @toggle-mobile-menu.window="mobileOpen = !mobileOpen"
-                 @close-mobile-menu.window="mobileOpen = false; openMenus = {}"
+                 @close-mobile-menu.window="closeMobileMenu()"
                  :class="{ 'active': mobileOpen }">
                 {{if .Navigation}}
                 <ul class="dev-nav-list" role="menubar">

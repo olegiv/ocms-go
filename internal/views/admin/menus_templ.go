@@ -23,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
+	"github.com/olegiv/ocms-go/internal/views/utils"
 	"time"
 )
 
@@ -137,7 +138,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.new"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 68, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 69, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -223,7 +224,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 									var templ_7745c5c3_Var11 string
 									templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.name"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 77, Col: 44}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 78, Col: 44}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 									if templ_7745c5c3_Err != nil {
@@ -250,7 +251,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 									var templ_7745c5c3_Var13 string
 									templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.slug"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 78, Col: 44}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 79, Col: 44}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 									if templ_7745c5c3_Err != nil {
@@ -277,7 +278,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 									var templ_7745c5c3_Var15 string
 									templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.language"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 79, Col: 48}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 80, Col: 48}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 									if templ_7745c5c3_Err != nil {
@@ -304,7 +305,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 									var templ_7745c5c3_Var17 string
 									templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.updated"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 80, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 81, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 									if templ_7745c5c3_Err != nil {
@@ -331,7 +332,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 									var templ_7745c5c3_Var19 string
 									templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.actions"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 81, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 82, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 									if templ_7745c5c3_Err != nil {
@@ -399,7 +400,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 										var templ_7745c5c3_Var23 templ.SafeURL
 										templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/menus/%d", menu.ID)))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 88, Col: 74}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 89, Col: 74}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 										if templ_7745c5c3_Err != nil {
@@ -420,7 +421,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 										var templ_7745c5c3_Var24 string
 										templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(menu.Name)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 90, Col: 22}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 91, Col: 22}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 										if templ_7745c5c3_Err != nil {
@@ -455,7 +456,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 										var templ_7745c5c3_Var26 string
 										templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(menu.Slug)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 94, Col: 45}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 95, Col: 45}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 										if templ_7745c5c3_Err != nil {
@@ -499,7 +500,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 												var templ_7745c5c3_Var29 string
 												templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(menu.LanguageCode)
 												if templ_7745c5c3_Err != nil {
-													return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 99, Col: 31}
+													return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 100, Col: 31}
 												}
 												_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 												if templ_7745c5c3_Err != nil {
@@ -556,7 +557,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 										var templ_7745c5c3_Var32 string
 										templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(menu.UpdatedAt.Format("Jan 02, 2006"))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 107, Col: 64}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 108, Col: 64}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 										if templ_7745c5c3_Err != nil {
@@ -609,7 +610,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 												var templ_7745c5c3_Var35 string
 												templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.protected"))
 												if templ_7745c5c3_Err != nil {
-													return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 115, Col: 38}
+													return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 116, Col: 38}
 												}
 												_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 												if templ_7745c5c3_Err != nil {
@@ -693,7 +694,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 						var templ_7745c5c3_Var38 string
 						templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.no_menus"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 131, Col: 33}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 132, Col: 33}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 						if templ_7745c5c3_Err != nil {
@@ -706,7 +707,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 						var templ_7745c5c3_Var39 string
 						templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.no_menus_hint"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 132, Col: 60}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 133, Col: 60}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 						if templ_7745c5c3_Err != nil {
@@ -731,7 +732,7 @@ func MenusListPage(pc *PageContext, data MenusListData) templ.Component {
 							var templ_7745c5c3_Var41 string
 							templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.create"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 135, Col: 30}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 136, Col: 30}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 							if templ_7745c5c3_Err != nil {
@@ -824,7 +825,7 @@ func deleteMenuModal(pc *PageContext, menu MenuListItem) templ.Component {
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.delete_menu"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 160, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 161, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
@@ -837,7 +838,7 @@ func deleteMenuModal(pc *PageContext, menu MenuListItem) templ.Component {
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.close"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 161, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 162, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 		if templ_7745c5c3_Err != nil {
@@ -850,7 +851,7 @@ func deleteMenuModal(pc *PageContext, menu MenuListItem) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.confirm_delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 165, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 166, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
@@ -863,7 +864,7 @@ func deleteMenuModal(pc *PageContext, menu MenuListItem) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(menu.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 166, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 167, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -876,7 +877,7 @@ func deleteMenuModal(pc *PageContext, menu MenuListItem) templ.Component {
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.items_deleted_warning"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 168, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 169, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
@@ -889,7 +890,7 @@ func deleteMenuModal(pc *PageContext, menu MenuListItem) templ.Component {
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.action_cannot_undone"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 169, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 170, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 		if templ_7745c5c3_Err != nil {
@@ -914,7 +915,7 @@ func deleteMenuModal(pc *PageContext, menu MenuListItem) templ.Component {
 			var templ_7745c5c3_Var51 string
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 173, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 174, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 			if templ_7745c5c3_Err != nil {
@@ -941,7 +942,7 @@ func deleteMenuModal(pc *PageContext, menu MenuListItem) templ.Component {
 			var templ_7745c5c3_Var53 string
 			templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.delete_menu"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 176, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 177, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 			if templ_7745c5c3_Err != nil {
@@ -1030,7 +1031,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var58 string
 					templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.back_to_menus"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 190, Col: 33}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 191, Col: 33}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 					if templ_7745c5c3_Err != nil {
@@ -1091,7 +1092,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var62 string
 						templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.settings"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 197, Col: 29}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 198, Col: 29}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 						if templ_7745c5c3_Err != nil {
@@ -1128,7 +1129,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var64 templ.SafeURL
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinURLErrs(menuFormAction(data))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 203, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 204, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 					if templ_7745c5c3_Err != nil {
@@ -1163,7 +1164,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var66 string
 						templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.name"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 212, Col: 27}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 213, Col: 27}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 						if templ_7745c5c3_Err != nil {
@@ -1199,7 +1200,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var67 string
 						templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["name"])
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 224, Col: 53}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 225, Col: 53}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 						if templ_7745c5c3_Err != nil {
@@ -1229,7 +1230,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var69 string
 						templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.slug"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 229, Col: 27}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 230, Col: 27}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 						if templ_7745c5c3_Err != nil {
@@ -1265,7 +1266,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var70 string
 						templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["slug"])
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 241, Col: 53}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 242, Col: 53}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 						if templ_7745c5c3_Err != nil {
@@ -1283,7 +1284,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var71 string
 						templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.slug_hint"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 243, Col: 56}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 244, Col: 56}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 						if templ_7745c5c3_Err != nil {
@@ -1313,7 +1314,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var73 string
 						templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.language"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 248, Col: 31}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 249, Col: 31}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 						if templ_7745c5c3_Err != nil {
@@ -1390,7 +1391,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 									var templ_7745c5c3_Var78 string
 									templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(lang.NativeName)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 263, Col: 27}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 264, Col: 27}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 									if templ_7745c5c3_Err != nil {
@@ -1403,7 +1404,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 									var templ_7745c5c3_Var79 string
 									templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Code)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 263, Col: 42}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 264, Col: 42}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 									if templ_7745c5c3_Err != nil {
@@ -1443,7 +1444,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var80 string
 						templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(data.Errors["language_code"])
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 269, Col: 62}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 270, Col: 62}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 						if templ_7745c5c3_Err != nil {
@@ -1461,7 +1462,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var81 string
 						templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.language_hint"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 271, Col: 60}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 272, Col: 60}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 						if templ_7745c5c3_Err != nil {
@@ -1492,7 +1493,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 							var templ_7745c5c3_Var83 string
 							templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.save_settings"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 278, Col: 36}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 279, Col: 36}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 							if templ_7745c5c3_Err != nil {
@@ -1502,7 +1503,7 @@ func MenuFormPage(pc *PageContext, data MenuFormData) templ.Component {
 							var templ_7745c5c3_Var84 string
 							templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.create"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 280, Col: 29}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 281, Col: 29}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 							if templ_7745c5c3_Err != nil {
@@ -1576,7 +1577,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var86 string
 		templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", data.Menu.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 298, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 299, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var86)
 		if templ_7745c5c3_Err != nil {
@@ -1589,7 +1590,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var87 string
 		templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ItemsJSON)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 299, Col: 29}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 300, Col: 29}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var87)
 		if templ_7745c5c3_Err != nil {
@@ -1602,7 +1603,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var88 string
 		templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("label.confirm_delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 300, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 301, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var88)
 		if templ_7745c5c3_Err != nil {
@@ -1615,7 +1616,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var89 string
 		templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("menus.item_page"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 301, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 302, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var89)
 		if templ_7745c5c3_Err != nil {
@@ -1628,7 +1629,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var90 string
 		templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("menus.item_custom"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 302, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 303, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var90)
 		if templ_7745c5c3_Err != nil {
@@ -1677,7 +1678,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var94 string
 					templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.add_items"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 310, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 311, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var94))
 					if templ_7745c5c3_Err != nil {
@@ -1714,7 +1715,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 				var templ_7745c5c3_Var96 string
 				templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.custom_link"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 316, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 317, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var96))
 				if templ_7745c5c3_Err != nil {
@@ -1739,7 +1740,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var98 string
 					templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.title"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 319, Col: 30}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 320, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var98))
 					if templ_7745c5c3_Err != nil {
@@ -1812,7 +1813,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var101 string
 					templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.target"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 339, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 340, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
 					if templ_7745c5c3_Err != nil {
@@ -1836,7 +1837,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var102 string
 					templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.ResolveAttributeValue(target)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 343, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 344, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var102)
 					if templ_7745c5c3_Err != nil {
@@ -1849,7 +1850,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var103 string
 					templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(target)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 343, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 344, Col: 43}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
 					if templ_7745c5c3_Err != nil {
@@ -1879,7 +1880,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var105 string
 					templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.parent_item"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 349, Col: 36}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 350, Col: 36}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
 					if templ_7745c5c3_Err != nil {
@@ -1898,7 +1899,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 				var templ_7745c5c3_Var106 string
 				templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.top_level"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 352, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 353, Col: 60}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 				if templ_7745c5c3_Err != nil {
@@ -1923,7 +1924,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var108 string
 					templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.add_to_menu"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 359, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 360, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
 					if templ_7745c5c3_Err != nil {
@@ -1947,7 +1948,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var109 string
 					templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.title"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 365, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 366, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var109))
 					if templ_7745c5c3_Err != nil {
@@ -1981,7 +1982,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var110 string
 						templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.JoinStringErrs(page.Title)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 379, Col: 30}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 380, Col: 30}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var110))
 						if templ_7745c5c3_Err != nil {
@@ -2011,7 +2012,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var112 string
 						templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.parent_item"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 386, Col: 37}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 387, Col: 37}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 						if templ_7745c5c3_Err != nil {
@@ -2030,7 +2031,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var113 string
 					templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.top_level"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 389, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 390, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 					if templ_7745c5c3_Err != nil {
@@ -2055,7 +2056,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 						var templ_7745c5c3_Var115 string
 						templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.add_selected"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 396, Col: 37}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 397, Col: 37}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var115))
 						if templ_7745c5c3_Err != nil {
@@ -2127,7 +2128,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var119 string
 					templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.structure"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 408, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 409, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
 					if templ_7745c5c3_Err != nil {
@@ -2146,7 +2147,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 				var templ_7745c5c3_Var120 string
 				templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.unsaved_changes"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 410, Col: 82}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 411, Col: 82}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var120))
 				if templ_7745c5c3_Err != nil {
@@ -2181,13 +2182,13 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 				var templ_7745c5c3_Var122 string
 				templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.no_items"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 416, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 417, Col: 35}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</p></div></template><div id=\"menu-items\" class=\"menu-items-container\" x-sort=\"handleSort\" x-sort:config=\"{ handle: '.menu-item-handle' }\"><template x-for=\"(item, index) in items\" :key=\"`${item.id || item.tempId}-${sortIteration}`\"><div class=\"menu-item\" x-sort:item=\"item.id || item.tempId\"><div class=\"menu-item-header\"><div class=\"menu-item-handle\" x-sort:handle><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"9\" cy=\"5\" r=\"1\"></circle><circle cx=\"9\" cy=\"12\" r=\"1\"></circle><circle cx=\"9\" cy=\"19\" r=\"1\"></circle><circle cx=\"15\" cy=\"5\" r=\"1\"></circle><circle cx=\"15\" cy=\"12\" r=\"1\"></circle><circle cx=\"15\" cy=\"19\" r=\"1\"></circle></svg></div><div class=\"menu-item-info\"><span class=\"menu-item-title\" x-text=\"item.title\"></span> <span class=\"menu-item-type\" x-text=\"item.page_id ? labels.itemPage : labels.itemCustom\"></span></div><div class=\"menu-item-actions\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</p></div></template><div id=\"menu-items\" class=\"menu-items-container\" x-sort=\"handleSort\" x-sort:config=\"{ handle: '.menu-item-handle' }\"><template x-for=\"(item, index) in items\" :key=\"(item.id || item.tempId) + '-' + sortIteration\"><div class=\"menu-item\" x-sort:item=\"item.id || item.tempId\"><div class=\"menu-item-header\"><div class=\"menu-item-handle\" x-sort:handle><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"9\" cy=\"5\" r=\"1\"></circle><circle cx=\"9\" cy=\"12\" r=\"1\"></circle><circle cx=\"9\" cy=\"19\" r=\"1\"></circle><circle cx=\"15\" cy=\"5\" r=\"1\"></circle><circle cx=\"15\" cy=\"12\" r=\"1\"></circle><circle cx=\"15\" cy=\"19\" r=\"1\"></circle></svg></div><div class=\"menu-item-info\"><span class=\"menu-item-title\" x-text=\"item.title\"></span> <span class=\"menu-item-type\" x-text=\"item.page_id ? labels.itemPage : labels.itemCustom\"></span></div><div class=\"menu-item-actions\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2235,7 +2236,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</div></div><!-- Nested children (Level 2) --><div class=\"menu-item-children\" x-show=\"item.children && item.children.length > 0\" x-sort=\"(key, pos) => handleChildSort(item, key, pos)\"><template x-for=\"(child, childIndex) in item.children\" :key=\"`${child.id || child.tempId}-${sortIteration}`\"><div class=\"menu-item menu-item-nested\" :data-id=\"child.id || child.tempId\" x-sort:item=\"child.id || child.tempId\"><div class=\"menu-item-header\"><div class=\"menu-item-handle\" x-sort:handle><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"9\" cy=\"5\" r=\"1\"></circle><circle cx=\"9\" cy=\"12\" r=\"1\"></circle><circle cx=\"9\" cy=\"19\" r=\"1\"></circle><circle cx=\"15\" cy=\"5\" r=\"1\"></circle><circle cx=\"15\" cy=\"12\" r=\"1\"></circle><circle cx=\"15\" cy=\"19\" r=\"1\"></circle></svg></div><div class=\"menu-item-info\"><span class=\"menu-item-title\" x-text=\"child.title\"></span> <span class=\"menu-item-type\" x-text=\"child.page_id ? labels.itemPage : labels.itemCustom\"></span></div><div class=\"menu-item-actions\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</div></div><!-- Nested children (Level 2) --><div class=\"menu-item-children\" x-show=\"item.children && item.children.length > 0\" x-sort=\"handleChildSort(item, $item, $position)\"><template x-for=\"(child, childIndex) in item.children\" :key=\"(child.id || child.tempId) + '-' + sortIteration\"><div class=\"menu-item menu-item-nested\" :data-id=\"child.id || child.tempId\" x-sort:item=\"child.id || child.tempId\"><div class=\"menu-item-header\"><div class=\"menu-item-handle\" x-sort:handle><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"9\" cy=\"5\" r=\"1\"></circle><circle cx=\"9\" cy=\"12\" r=\"1\"></circle><circle cx=\"9\" cy=\"19\" r=\"1\"></circle><circle cx=\"15\" cy=\"5\" r=\"1\"></circle><circle cx=\"15\" cy=\"12\" r=\"1\"></circle><circle cx=\"15\" cy=\"19\" r=\"1\"></circle></svg></div><div class=\"menu-item-info\"><span class=\"menu-item-title\" x-text=\"child.title\"></span> <span class=\"menu-item-type\" x-text=\"child.page_id ? labels.itemPage : labels.itemCustom\"></span></div><div class=\"menu-item-actions\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2283,7 +2284,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "</div></div><!-- Level 3: Grandchildren --><div class=\"menu-item-children\" x-show=\"child.children && child.children.length > 0\" x-sort=\"(key, pos) => handleGrandchildSort(child, key, pos)\"><template x-for=\"(grandchild, grandchildIndex) in child.children\" :key=\"`${grandchild.id || grandchild.tempId}-${sortIteration}`\"><div class=\"menu-item menu-item-nested menu-item-level-3\" :data-id=\"grandchild.id || grandchild.tempId\" x-sort:item=\"grandchild.id || grandchild.tempId\"><div class=\"menu-item-header\"><div class=\"menu-item-handle\" x-sort:handle><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"9\" cy=\"5\" r=\"1\"></circle><circle cx=\"9\" cy=\"12\" r=\"1\"></circle><circle cx=\"9\" cy=\"19\" r=\"1\"></circle><circle cx=\"15\" cy=\"5\" r=\"1\"></circle><circle cx=\"15\" cy=\"12\" r=\"1\"></circle><circle cx=\"15\" cy=\"19\" r=\"1\"></circle></svg></div><div class=\"menu-item-info\"><span class=\"menu-item-title\" x-text=\"grandchild.title\"></span> <span class=\"menu-item-type\" x-text=\"grandchild.page_id ? labels.itemPage : labels.itemCustom\"></span></div><div class=\"menu-item-actions\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "</div></div><!-- Level 3: Grandchildren --><div class=\"menu-item-children\" x-show=\"child.children && child.children.length > 0\" x-sort=\"handleGrandchildSort(child, $item, $position)\"><template x-for=\"(grandchild, grandchildIndex) in child.children\" :key=\"(grandchild.id || grandchild.tempId) + '-' + sortIteration\"><div class=\"menu-item menu-item-nested menu-item-level-3\" :data-id=\"grandchild.id || grandchild.tempId\" x-sort:item=\"grandchild.id || grandchild.tempId\"><div class=\"menu-item-header\"><div class=\"menu-item-handle\" x-sort:handle><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"9\" cy=\"5\" r=\"1\"></circle><circle cx=\"9\" cy=\"12\" r=\"1\"></circle><circle cx=\"9\" cy=\"19\" r=\"1\"></circle><circle cx=\"15\" cy=\"5\" r=\"1\"></circle><circle cx=\"15\" cy=\"12\" r=\"1\"></circle><circle cx=\"15\" cy=\"19\" r=\"1\"></circle></svg></div><div class=\"menu-item-info\"><span class=\"menu-item-title\" x-text=\"grandchild.title\"></span> <span class=\"menu-item-type\" x-text=\"grandchild.page_id ? labels.itemPage : labels.itemCustom\"></span></div><div class=\"menu-item-actions\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2354,7 +2355,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var130 string
 					templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.save_order"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 492, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 493, Col: 57}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var130))
 					if templ_7745c5c3_Err != nil {
@@ -2367,7 +2368,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					var templ_7745c5c3_Var131 string
 					templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.saving"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 493, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 494, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var131))
 					if templ_7745c5c3_Err != nil {
@@ -2406,7 +2407,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var132 string
 		templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.edit_item"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 505, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 506, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var132))
 		if templ_7745c5c3_Err != nil {
@@ -2419,7 +2420,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var133 string
 		templ_7745c5c3_Var133, templ_7745c5c3_Err = templ.ResolveAttributeValue(pc.T("btn.close"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 506, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 507, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var133)
 		if templ_7745c5c3_Err != nil {
@@ -2444,7 +2445,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 			var templ_7745c5c3_Var135 string
 			templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.title"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 511, Col: 29}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 512, Col: 29}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var135))
 			if templ_7745c5c3_Err != nil {
@@ -2515,7 +2516,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 			var templ_7745c5c3_Var138 string
 			templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.target"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 529, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 530, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var138))
 			if templ_7745c5c3_Err != nil {
@@ -2539,7 +2540,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 			var templ_7745c5c3_Var139 string
 			templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.ResolveAttributeValue(target)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 533, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 534, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var139)
 			if templ_7745c5c3_Err != nil {
@@ -2552,7 +2553,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 			var templ_7745c5c3_Var140 string
 			templ_7745c5c3_Var140, templ_7745c5c3_Err = templ.JoinStringErrs(target)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 533, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 534, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var140))
 			if templ_7745c5c3_Err != nil {
@@ -2582,7 +2583,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 			var templ_7745c5c3_Var142 string
 			templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.parent_item"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 539, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 540, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 			if templ_7745c5c3_Err != nil {
@@ -2601,13 +2602,13 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var143 string
 		templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.top_level"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 542, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 543, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, " &mdash;</option><template x-for=\"opt in flattenItems()\" :key=\"opt.id\"><option :value=\"String(opt.id)\" x-text=\"'\\u2014'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title\" :disabled=\"opt.id === editingItem.id\"></option></template></select></div><div class=\"form-group\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, " &mdash;</option><template x-for=\"opt in flattenItems()\" :key=\"opt.id\"><option :value=\"opt.id\" x-text=\"'\\u2014'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title\" :disabled=\"opt.id === editingItem.id\"></option></template></select></div><div class=\"form-group\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2626,7 +2627,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 			var templ_7745c5c3_Var145 string
 			templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("menus.css_class"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 550, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 551, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
 			if templ_7745c5c3_Err != nil {
@@ -2664,7 +2665,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var146 string
 		templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.active"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 564, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 565, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
 		if templ_7745c5c3_Err != nil {
@@ -2689,7 +2690,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 			var templ_7745c5c3_Var148 string
 			templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 570, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 571, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var148))
 			if templ_7745c5c3_Err != nil {
@@ -2716,7 +2717,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 			var templ_7745c5c3_Var150 string
 			templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.save_changes"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 573, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 574, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var150))
 			if templ_7745c5c3_Err != nil {
@@ -2735,13 +2736,26 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 		var templ_7745c5c3_Var151 string
 		templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 580, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 581, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var151)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "\" src=\"/static/dist/js/menu-builder.js\"></script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "\" src=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var152 string
+		templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.ResolveAttributeValue(utils.ScriptURL("/static/dist/js/menu-builder.js"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/menus.templ`, Line: 581, Col: 95}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var152)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "\"></script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2766,12 +2780,12 @@ func iconMenusSmall() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var152 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var152 == nil {
-			templ_7745c5c3_Var152 = templ.NopComponent
+		templ_7745c5c3_Var153 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var153 == nil {
+			templ_7745c5c3_Var153 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"icon-inline\"><line x1=\"3\" x2=\"21\" y1=\"6\" y2=\"6\"></line><line x1=\"3\" x2=\"21\" y1=\"12\" y2=\"12\"></line><line x1=\"3\" x2=\"21\" y1=\"18\" y2=\"18\"></line></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"icon-inline\"><line x1=\"3\" x2=\"21\" y1=\"6\" y2=\"6\"></line><line x1=\"3\" x2=\"21\" y1=\"12\" y2=\"12\"></line><line x1=\"3\" x2=\"21\" y1=\"18\" y2=\"18\"></line></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

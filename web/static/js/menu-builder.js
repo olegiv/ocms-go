@@ -10,6 +10,8 @@
  *   data-i18n-item-custom  - Translated "Custom Link" label
  */
 
+document.addEventListener('alpine:init', () => Alpine.data('menuBuilder', menuBuilder));
+
 function menuBuilder() {
     return {
         // Properties
