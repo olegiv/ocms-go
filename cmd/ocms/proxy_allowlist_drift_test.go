@@ -69,6 +69,8 @@ func TestProxyRulesForCodeRunningToolsAreExact(t *testing.T) {
 // passed to Claude by proxy entry points that use Bash. A-T2's git diff* rule also
 // authorized git difftool --extcmd, and the old code-running-tool inventory
 // did not cover Git or date. Wildcards may vary arguments, not command names.
+// N-18 also requires exact list-only formatter rules and denies for write flags
+// that the shared command or user settings could otherwise allow.
 func TestProxyReadRulesKeepCommandBoundaries(t *testing.T) {
 	root := filepath.Join("..", "..")
 	for _, workflow := range []string{"code-quality", "security-audit"} {
@@ -134,6 +136,34 @@ func TestProxyReadRulesKeepCommandBoundaries(t *testing.T) {
 				}
 				if strings.Contains(fields[0], "*") || (fields[0] == "git" && len(fields) > 1 && strings.Contains(fields[1], "*")) {
 					t.Errorf("%s lets a wildcard change the command name; put it after a complete command and a space", rule)
+				}
+			}
+			for _, formatter := range []string{"gofmt", "goimports"} {
+				want := "Bash(" + formatter + " -l .)"
+				if !slices.Contains(allowed, want) {
+					t.Errorf("missing list-only formatter rule %s", want)
+				}
+				for _, rule := range allowed {
+					if strings.HasPrefix(rule, "Bash("+formatter) && rule != want {
+						t.Errorf("unexpected formatter allow rule %s; allow only %s", rule, want)
+					}
+				}
+			}
+			denyFlag := slices.Index(args, "--disallowedTools")
+			if denyFlag <= end {
+				t.Fatalf("missing explicit denials after the prompt flag: %q", args)
+			}
+			denied := args[denyFlag+1:]
+			if nextFlag := slices.IndexFunc(denied, func(arg string) bool { return strings.HasPrefix(arg, "--") }); nextFlag >= 0 {
+				denied = denied[:nextFlag]
+			}
+			wantDenials := []string{"Bash(gofmt *-w*)", "Bash(goimports *-w*)"}
+			if workflow == "security-audit" {
+				wantDenials = append(wantDenials, "Bash(mkdir *)", "Bash(mv *)")
+			}
+			for _, want := range wantDenials {
+				if !slices.Contains(denied, want) {
+					t.Errorf("missing explicit deny rule %s", want)
 				}
 			}
 		})

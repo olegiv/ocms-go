@@ -48,10 +48,10 @@ read_tools=(
 )
 check_tools=(
   "Bash(scripts/test-gate.sh)" "Bash(./scripts/test-gate.sh)"
-  "Bash(go vet ./...)" "Bash(go build ./...)" "Bash(gofmt -l *)"
+  "Bash(go vet ./...)" "Bash(go build ./...)" "Bash(gofmt -l .)"
   "Bash(staticcheck ./...)" "Bash(errcheck -ignoregenerated ./...)" "Bash(golangci-lint run ./...)"
   "Bash(golangci-lint version)"
-  "Bash(nilaway ./...)" "Bash(goimports -l *)"
+  "Bash(nilaway ./...)" "Bash(goimports -l .)"
 )
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 tools=("${read_tools[@]}" "${check_tools[@]}")
@@ -86,10 +86,14 @@ if [[ $# -gt 0 ]]; then
 fi
 
 echo "Proxying to Claude command: $prompt"
+# A shared command or local settings can also approve formatter invocations.
+# Deny the write flag even when another allow rule matches.
+denied_tools=('Bash(gofmt *-w*)' 'Bash(goimports *-w*)')
 if [[ "$slash_command" == /security-audit ]]; then
   prompt="Perform the oCMS security audit. Scope notes: $*"
+  denied_tools+=('Bash(mkdir *)' 'Bash(mv *)')
 fi
-claude_args=(--permission-mode dontAsk --allowedTools "${tools[@]}" -p "$prompt")
+claude_args=(--permission-mode dontAsk --allowedTools "${tools[@]}" -p "$prompt" --disallowedTools "${denied_tools[@]}")
 if [[ "$slash_command" == /code-quality ]]; then
   # The shared command's variable-based hook invocation is not auto-approved.
   # Run the fixed local check here so dontAsk cannot silently omit it. This
@@ -114,15 +118,14 @@ if [[ "$slash_command" == /code-quality ]]; then
       exit 3
       ;;
   esac
-  claude_args+=(--append-system-prompt 'The repository proxy already ran .claude/hooks/go-strict-lint.sh --check successfully (exit 0). Use that result for the strict touched-file lint step; do not rerun the fallback hook invocation. Continue with the remaining /code-quality checks and report any checks that cannot run.')
+  claude_args+=(--append-system-prompt 'The repository proxy already ran .claude/hooks/go-strict-lint.sh --check successfully (exit 0). Use that result for the strict touched-file lint step; do not rerun the fallback hook invocation. Use goimports -l . and gofmt -l . for formatter checks and exclude generated files from the findings. Continue with the remaining /code-quality checks and report any checks that cannot run.')
 fi
 if [[ "$slash_command" == /security-audit ]]; then
   cd "$project_dir"
   run_dir=$("$project_dir/scripts/codex/security-audit.sh" --prepare)
   # Keep the report's destination under launcher control. The session
   # produces Markdown on stdout and gets no file-editing or agent tools.
-  claude_args+=(--disable-slash-commands --tools Bash,Read,Glob,Grep --strict-mcp-config --mcp-config '{"mcpServers":{}}'
-    --disallowedTools 'Bash(mkdir *)' 'Bash(mv *)'
+  claude_args+=(--disable-slash-commands --tools 'Bash,Read,Glob,Grep' --strict-mcp-config --mcp-config '{"mcpServers":{}}'
     --append-system-prompt "$(cat "$project_dir/scripts/codex/security-audit-proxy.md")")
   (
     cd "$run_dir"
