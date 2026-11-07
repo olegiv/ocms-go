@@ -196,9 +196,11 @@ func (m *Manager) InvalidateConfig() {
 	m.Config.Invalidate()
 }
 
-// InvalidateSitemap invalidates the sitemap cache.
+// InvalidateSitemap invalidates the sitemap cache. A nil manager has no cache.
 func (m *Manager) InvalidateSitemap() {
-	m.Sitemap.Invalidate()
+	if m != nil {
+		m.Sitemap.Invalidate()
+	}
 }
 
 // InvalidateThemeSettings invalidates theme settings in the config cache.

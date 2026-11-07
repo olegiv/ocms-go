@@ -151,6 +151,7 @@ func (s *Service) CreateTag(ctx context.Context, a v2.Actor, in CreateTagBody) (
 	if err != nil {
 		return nil, v2.NewInternalError("Failed to create tag", err)
 	}
+	s.cache.InvalidateSitemap()
 	s.logTagAudit(ctx, a, "API: Tag created", map[string]any{
 		"tag_id": tag.ID,
 		"name":   tag.Name,
@@ -206,6 +207,7 @@ func (s *Service) UpdateTag(ctx context.Context, a v2.Actor, id int64, in Update
 	if err != nil {
 		return nil, v2.NewInternalError("Failed to update tag", err)
 	}
+	s.cache.InvalidateSitemap()
 	count, _ := s.queries.CountPagesForTag(ctx, tag.ID)
 	s.logTagAudit(ctx, a, "API: Tag updated", map[string]any{
 		"tag_id": tag.ID,
@@ -338,6 +340,7 @@ func (s *Service) CreateCategory(ctx context.Context, a v2.Actor, in CreateCateg
 	if err != nil {
 		return nil, v2.NewInternalError("Failed to create category", err)
 	}
+	s.cache.InvalidateSitemap()
 	s.logCategoryAudit(ctx, a, "API: Category created", map[string]any{
 		"category_id": cat.ID,
 		"name":        cat.Name,
@@ -418,6 +421,7 @@ func (s *Service) UpdateCategory(ctx context.Context, a v2.Actor, id int64, in U
 	if err != nil {
 		return nil, v2.NewInternalError("Failed to update category", err)
 	}
+	s.cache.InvalidateSitemap()
 	count, _ := s.queries.CountPagesByCategory(ctx, cat.ID)
 	s.logCategoryAudit(ctx, a, "API: Category updated", map[string]any{
 		"category_id": cat.ID,
@@ -558,7 +562,7 @@ func buildCategoryTree(rows []store.GetCategoryUsageCountsRow) []*TaxonomyCatego
 	return roots
 }
 
-// SetCacheManager enables invalidation after taxonomy assignment changes.
+// SetCacheManager enables cache invalidation after taxonomy writes.
 func (s *Service) SetCacheManager(manager *cache.Manager) { s.cache = manager }
 func (s *Service) deleteTerm(ctx context.Context, a v2.Actor, kind string, id int64) error {
 	work, err := pagewrite.InTx(ctx, s.db, a.Principal("rest"), func(work *pagewrite.Tx) error {
@@ -571,6 +575,11 @@ func (s *Service) deleteTerm(ctx context.Context, a v2.Actor, kind string, id in
 		return err
 	}
 	if s.cache != nil {
+		// InvalidatePage also clears the sitemap. An unused term still has
+		// a sitemap entry even when there are no affected pages.
+		if len(work.Pages) == 0 {
+			s.cache.InvalidateSitemap()
+		}
 		for pageID := range work.Pages {
 			s.cache.InvalidatePage(pageID)
 		}

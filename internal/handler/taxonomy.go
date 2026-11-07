@@ -51,7 +51,7 @@ type TaxonomyHandler struct {
 	cacheManager   *cache.Manager
 }
 
-// SetCacheManager enables translation-cache invalidation after taxonomy writes.
+// SetCacheManager enables cache invalidation after taxonomy writes.
 func (h *TaxonomyHandler) SetCacheManager(cm *cache.Manager) {
 	h.cacheManager = cm
 }
@@ -274,6 +274,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.cacheManager.InvalidateSitemap()
 	slog.Info("tag created", "tag_id", newTag.ID, "slug", newTag.Slug, "created_by", middleware.GetUserID(r))
 	_ = h.eventService.LogTagEvent(r.Context(), model.EventLevelInfo, "Tag created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"tag_id": newTag.ID, "name": newTag.Name, "slug": newTag.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag created successfully")
@@ -388,6 +389,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.cacheManager.InvalidateSitemap()
 	slog.Info("tag updated", "tag_id", updatedTag.ID, "slug", updatedTag.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogTagEvent(r.Context(), model.EventLevelInfo, "Tag updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"tag_id": updatedTag.ID, "name": updatedTag.Name, "slug": updatedTag.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag updated successfully")
@@ -534,6 +536,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	} else if h.cacheManager != nil {
 		h.cacheManager.Translation.InvalidateType(model.EntityTypeTag)
 	}
+	h.cacheManager.InvalidateSitemap()
 
 	slog.Info("tag translation created",
 		"source_tag_id", id,
@@ -868,6 +871,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.cacheManager.InvalidateSitemap()
 	slog.Info("category created", "category_id", newCategory.ID, "slug", newCategory.Slug, "created_by", middleware.GetUserID(r))
 	_ = h.eventService.LogCategoryEvent(r.Context(), model.EventLevelInfo, "Category created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"category_id": newCategory.ID, "name": newCategory.Name, "slug": newCategory.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category created successfully")
@@ -1019,6 +1023,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.cacheManager.InvalidateSitemap()
 	slog.Info("category updated", "category_id", updatedCategory.ID, "slug", updatedCategory.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogCategoryEvent(r.Context(), model.EventLevelInfo, "Category updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"category_id": updatedCategory.ID, "name": updatedCategory.Name, "slug": updatedCategory.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category updated successfully")
@@ -1102,6 +1107,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	} else if h.cacheManager != nil {
 		h.cacheManager.Translation.InvalidateType(model.EntityTypeCategory)
 	}
+	h.cacheManager.InvalidateSitemap()
 
 	slog.Info("category translation created",
 		"source_category_id", id,
@@ -1399,6 +1405,9 @@ func (h *TaxonomyHandler) deleteTermAtomic(ctx context.Context, userID int64, ki
 		return err
 	}
 	if h.cacheManager != nil {
+		if len(work.Pages) == 0 {
+			h.cacheManager.InvalidateSitemap()
+		}
 		for pageID := range work.Pages {
 			h.cacheManager.InvalidatePage(pageID)
 		}
