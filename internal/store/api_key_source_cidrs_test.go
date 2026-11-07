@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -22,8 +23,12 @@ func TestAPIKeySourceReplacementCancellationPreservesCallerTransaction(t *testin
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	function := fmt.Sprintf("cancel_source_insert_%d", sourcePolicyTestID.Add(1))
+	var inserts int
 	if err := sqlite.RegisterScalarFunction(function, 0, func(*sqlite.FunctionContext, []driver.Value) (driver.Value, error) {
+		inserts++
 		cancel()
+		// Keep the statement active so the driver's cancellation watcher can run.
+		time.Sleep(20 * time.Millisecond)
 		return nil, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -48,14 +53,27 @@ func TestAPIKeySourceReplacementCancellationPreservesCallerTransaction(t *testin
 		t.Fatal(err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := q.WithTx(tx).ReplaceAPIKeySourceCIDRs(ctx, key.ID, []string{"203.0.113.4/32"}); err == nil {
-		t.Fatal("canceled replacement succeeded")
+	if _, err := tx.ExecContext(parent, `UPDATE api_keys SET name = ? WHERE id = ?`, "caller update", key.ID); err != nil {
+		t.Fatal(err)
+	}
+	writer := q.WithTx(tx)
+	if err := writer.ReplaceAPIKeySourceCIDRs(ctx, key.ID, []string{"203.0.113.4/32", "203.0.113.5/32"}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("replacement error = %v, want context.Canceled", err)
+	}
+	if err := writer.ReplaceAPIKeySourceCIDRs(ctx, key.ID, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("already canceled replacement error = %v, want context.Canceled", err)
+	}
+	if inserts != 1 {
+		t.Fatalf("attempted %d inserts, want one before cancellation", inserts)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := q.ListAPIKeySourceCIDRs(parent, key.ID); err != nil || !reflect.DeepEqual(got, old) {
 		t.Fatalf("cancellation left a partial policy in caller transaction: %v, %v", got, err)
+	}
+	if got, err := q.GetAPIKeyByID(parent, key.ID); err != nil || got.Name != "caller update" {
+		t.Fatalf("cancellation lost caller update: %q, %v", got.Name, err)
 	}
 }
 

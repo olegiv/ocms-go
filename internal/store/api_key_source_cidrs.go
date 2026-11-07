@@ -7,7 +7,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 )
 
 // ListAPIKeySourceCIDRs returns all CIDR/IP allowlist entries for an API key.
@@ -46,39 +45,40 @@ func (q *Queries) ReplaceAPIKeySourceCIDRs(ctx context.Context, apiKeyID int64, 
 			return err
 		}
 		defer func() { _ = tx.Rollback() }()
-		if err := q.WithTx(tx).replaceAPIKeySourceCIDRs(ctx, apiKeyID, cidrs); err != nil {
+		if err := q.WithTx(tx).replaceAPIKeySourceCIDRs(ctx, ctx, apiKeyID, cidrs); err != nil {
 			return err
 		}
 		return tx.Commit()
 	case *sql.Tx:
-		// Participate in the caller's transaction; never commit it here.
-		if _, err := db.ExecContext(ctx, "SAVEPOINT api_key_source_replace"); err != nil {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		replaceErr := q.replaceAPIKeySourceCIDRs(ctx, apiKeyID, cidrs)
-		if replaceErr == nil {
-			replaceErr = ctx.Err()
+		// Interrupting a SQLite write can roll back the entire transaction.
+		// Observe child cancellation between statements and undo only our savepoint.
+		queryCtx := context.WithoutCancel(ctx)
+		if _, err := db.ExecContext(queryCtx, "SAVEPOINT api_key_source_replace"); err != nil {
+			return err
 		}
-		// Closing the savepoint must survive cancellation of a child request:
-		// the caller may still commit its longer-lived transaction.
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
+		replaceErr := q.replaceAPIKeySourceCIDRs(ctx, queryCtx, apiKeyID, cidrs)
 		if replaceErr == nil {
-			_, replaceErr = db.ExecContext(cleanupCtx, "RELEASE api_key_source_replace")
+			_, replaceErr = db.ExecContext(queryCtx, "RELEASE api_key_source_replace")
 			if replaceErr == nil {
 				return nil
 			}
 		}
-		_, rollbackErr := db.ExecContext(cleanupCtx, "ROLLBACK TO api_key_source_replace")
-		_, releaseErr := db.ExecContext(cleanupCtx, "RELEASE api_key_source_replace")
+		_, rollbackErr := db.ExecContext(queryCtx, "ROLLBACK TO api_key_source_replace")
+		_, releaseErr := db.ExecContext(queryCtx, "RELEASE api_key_source_replace")
 		return errors.Join(replaceErr, rollbackErr, releaseErr)
 	default:
 		return errors.New("API key source replacement requires a database or transaction")
 	}
 }
 
-func (q *Queries) replaceAPIKeySourceCIDRs(ctx context.Context, apiKeyID int64, cidrs []string) error {
-	if _, err := q.db.ExecContext(ctx, `
+func (q *Queries) replaceAPIKeySourceCIDRs(ctx, queryCtx context.Context, apiKeyID int64, cidrs []string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if _, err := q.db.ExecContext(queryCtx, `
 		DELETE FROM api_key_source_cidrs
 		WHERE api_key_id = ?
 	`, apiKeyID); err != nil {
@@ -86,7 +86,10 @@ func (q *Queries) replaceAPIKeySourceCIDRs(ctx context.Context, apiKeyID int64, 
 	}
 
 	for _, cidr := range cidrs {
-		if _, err := q.db.ExecContext(ctx, `
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, err := q.db.ExecContext(queryCtx, `
 			INSERT INTO api_key_source_cidrs (api_key_id, cidr)
 			VALUES (?, ?)
 		`, apiKeyID, cidr); err != nil {
@@ -94,5 +97,5 @@ func (q *Queries) replaceAPIKeySourceCIDRs(ctx context.Context, apiKeyID int64, 
 		}
 	}
 
-	return nil
+	return ctx.Err()
 }
