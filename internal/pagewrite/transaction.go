@@ -381,11 +381,12 @@ func (t *Tx) RequireTracked(id int64) error {
 
 // RequireTrackedEntity checks page edges in a mixed-entity translation writer.
 func (t *Tx) RequireTrackedEntity(kind string, ids ...int64) error {
-	if kind == "page" {
-		for _, id := range ids {
-			if err := t.RequireTracked(id); err != nil {
-				return err
-			}
+	if kind != "page" {
+		return nil
+	}
+	for _, id := range ids {
+		if err := t.RequireTracked(id); err != nil {
+			return err
 		}
 	}
 	return nil

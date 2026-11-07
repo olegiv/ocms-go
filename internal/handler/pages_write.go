@@ -226,10 +226,10 @@ func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err 
 
 func (h *PagesHandler) preservePageEdits(w http.ResponseWriter, r *http.Request, pageID int64, cause error) {
 	lang := h.renderer.GetAdminLang(r)
-	status, messageKey := http.StatusServiceUnavailable, "pages.edit_recovery_retry"
-	if errors.Is(cause, sql.ErrNoRows) {
-		status, messageKey = http.StatusNotFound, "pages.edit_recovery_missing"
-	} else {
+	retryable := !errors.Is(cause, sql.ErrNoRows)
+	status, messageKey := http.StatusNotFound, "pages.edit_recovery_missing"
+	if retryable {
+		status, messageKey = http.StatusServiceUnavailable, "pages.edit_recovery_retry"
 		slog.ErrorContext(r.Context(), "failed to load page edit data", "error", cause, "page_id", pageID, "user_id", middleware.GetUserID(r))
 	}
 	title := i18n.T(lang, "pages.edit_recovery_title")
@@ -237,7 +237,7 @@ func (h *PagesHandler) preservePageEdits(w http.ResponseWriter, r *http.Request,
 	w.Header().Set(HeaderContentType, "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	renderTempl(w, r, adminviews.PageEditRecovery(pc, pageID, r.Form, i18n.T(lang, messageKey), status == http.StatusServiceUnavailable))
+	renderTempl(w, r, adminviews.PageEditRecovery(pc, pageID, r.Form, i18n.T(lang, messageKey), retryable))
 }
 
 // revisionForAction rejects malformed/missing revisions before an editor action.
