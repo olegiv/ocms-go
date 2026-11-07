@@ -224,6 +224,7 @@ history.
 | Writer | Boundary and revision coverage | Direct checks |
 |---|---|---|
 | v2 create/update, trusted agent options | Shared transaction; initial taxonomy, flag, translation, history, provenance, retry result | `internal/api/v2/pages/write_test.go`: lost responses, duplicates, ownership/role/key/policy changes, rollback, lifecycle fields, compatibility, no-op and webhook count |
+| `/create-page` command and `scripts/codex/create-page` client | REST v2 create for local and remote sites. The client requires a private API key file and a confirmed HTTPS origin or local HTTP loopback origin. | `TestPageCreationToolsUseInventoriedBoundary`; client tests cover transport, authorization, successful and partial batch results |
 | Admin create/edit, dates, taxonomy, aliases, AI toggle | `createPageGuarded` / `writePageGuarded` callbacks use `Tx.Q`; displayed CAS; `set_by` rewritten only when the AI setting changes | Actual local HTTP saves and AI toggle; two-browser conflict and confirmed overwrite; `TestUnchangedSaveKeepsAIAccessAttribution`; existing handler tests |
 | Admin translate | Source CAS, target insert, guarded namespace and component link in one transaction | Shared translation fixtures; local HTTP acceptance; existing route tests |
 | Admin publish/schedule | Displayed CAS plus existing lifecycle predicates | `TestTogglePublishAppliesOnlyToTheStatusItRead`, local HTTP; form scheduling goes through the same editor save |

@@ -22,7 +22,7 @@ import (
 func TestPageWritersUseTransactionQueries(t *testing.T) {
 	root := filepath.Join("..", "..")
 	set := token.NewFileSet()
-	for _, directory := range []string{"internal", "modules", "custom", "cmd"} {
+	for _, directory := range []string{"internal", "modules", "custom", "cmd", "scripts"} {
 		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err

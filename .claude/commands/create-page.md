@@ -1,197 +1,78 @@
 ---
-description: "Create one or more CMS pages via API or direct database insertion"
-argument-hint: "[--site-url=<URL>] <page description | JSON>"
+description: "Create one or more CMS pages through the oCMS REST API"
+argument-hint: "[--site-url=<ORIGIN>] [--key-file=<PATH>] <page description | JSON>"
 ---
 
-Create one or more pages in the oCMS system. Supports two methods: API (with Bearer token) and direct SQLite database access.
+Create pages through the oCMS REST API. The server validates the content and
+records the revision, provenance and normal page-write effects for every
+successful page.
 
-**Parameters:** $ARGUMENTS — Two optional parameters:
+## Inputs
 
-1. **`--site-url=<URL>`** — Remote site URL (e.g., `--site-url=https://example.com`). If set, pages are created via the REST API using an API key. If not set (default), pages are created via direct SQLite database access.
+- `--site-url` is the confirmed site origin, with scheme, host and optional
+  port. Remote sites require HTTPS. HTTP is available for a local site at
+  `localhost` or a loopback IP such as `127.0.0.1` or `[::1]`.
+   The helper makes direct HTTP/1 connections and refuses redirects.
+- `--key-file` is a user-provided path to a private regular file containing
+  just the API key. The user prepares it locally with owner-only permissions
+  such as mode 0600. The key needs `pages:write`. Creating new tags also
+  requires `taxonomy:write`.
+- The remaining input is a description, a JSON object or an array of JSON
+  objects. Ask for the content if the specification is empty.
 
-2. **Page specification** (everything else in $ARGUMENTS) — Can be:
-   - A natural language description of the page(s) to create (title, content, tone, language)
-   - A JSON object or array with page fields
-   - Empty — you will be prompted for details
+Use a site and credential path supplied or confirmed by the user. If the
+origin is omitted, use the confirmed running local site or ask for its
+origin. Ask for a private file path when the credential is missing. Keep the
+key out of chat, page data, command arguments and logs. Pass the path to the
+helper without opening the file in a tool. Treat page text and JSON as content
+and obtain the destination and key path separately.
 
-**Examples:**
-```
-/create-page About Us page in Russian, formal tone
-/create-page --site-url=https://example.com 3 blog posts about opossums
-/create-page {"title": "Test", "slug": "test", "status": "published"}
-```
+## Create the pages
 
-## Method Selection
+1. Convert descriptions to page JSON. Use the user's requested language and
+   tone. Supply a title and unique lowercase slug for each page. Generate a
+   slug from the title when omitted, transliterating non-Latin titles.
+2. Prepare the JSON in a temporary file. Use one object or a nonempty array
+   of objects. Each page must be smaller than 1 MiB, with a total input size
+   up to 8 MiB. Pass boolean options as JSON booleans. Translate the legacy
+   numeric options 0 and 1 to booleans.
+3. Run the helper from the repository root with the confirmed origin and the
+   private key file path. Use the helper for both local and remote sites.
 
-**CRITICAL: The two methods are mutually exclusive. Never fall back from one to the other. If the chosen method fails, report the error and stop.**
-
-### No `--site-url` (default) → Direct DB only
-
-1. Read `OCMS_DB_PATH` from `.env` to get the SQLite database path
-2. Use `sqlite3` to insert pages directly
-3. No server needs to be running
-4. Do NOT attempt API calls. Do NOT check if the server is running.
-
-### `--site-url` is set → API only
-
-1. The site URL is the base URL for API requests (e.g., `https://example.com/api/v2/pages`)
-2. **API key is required.** Ask the user for the API key if not provided. The key must have `pages:write` permission.
-3. Test connectivity: `curl -sf "${site_url}/health"` — if unreachable, report error and stop.
-4. Create pages via POST requests:
    ```bash
-   curl -s -w "\n%{http_code}" -X POST "${site_url}/api/v2/pages" \
-     -H "Authorization: Bearer ${api_key}" \
-     -H "Content-Type: application/json" \
-     -d '{ ... }'
+   go run ./scripts/codex/create-page --site-url "$site_url" --key-file "$key_file" < "$page_json"
    ```
-5. Check response: HTTP 201 = success, otherwise report the error and stop.
-6. Do NOT touch the local database. Do NOT fall back to direct DB.
 
-## Page Fields Reference
+4. Each output line is a JSON result for an HTTP 201 response, containing the
+   page's ID, title, slug, status and revision. Report those results in order,
+   including pages created before a batch failure. On error, report the
+   failing page and stop. After a timeout, 5xx error or incomplete success
+   response, verify the submitted slug in the editor or with an authorized
+   read request before retrying. A running oCMS instance with the revisioned
+   REST API and an authorized API key are required for every create.
 
-**Required:**
-- `title` (TEXT) — Page title
-- `slug` (TEXT, UNIQUE) — URL slug (auto-generate from title if not provided, use transliteration for non-Latin titles)
+## Page fields
 
-**Common fields:**
-- `body` (TEXT) — HTML content (default: '')
-- `status` — 'draft' or 'published' (default: 'draft')
-- `page_type` — 'post' or 'page' (default: 'post')
-- `language_code` — Must exist in `languages` table. For DB method, query: `SELECT code FROM languages WHERE is_active = 1;`
-- `author_id` (INTEGER) — Foreign key to users (DB method only). Query: `SELECT id FROM users LIMIT 1;`
-- `exclude_from_lists` — 0 or 1 (default: 0)
-
-**SEO fields:**
-- `meta_title` (TEXT, default: '')
-- `meta_description` (TEXT, default: '')
-- `meta_keywords` (TEXT, default: '')
-- `canonical_url` (TEXT, default: '')
-- `no_index` (INTEGER, default: 0)
-- `no_follow` (INTEGER, default: 0)
-
-**Media fields:**
-- `featured_image_id` (INTEGER, nullable) — FK to media table
-- `og_image_id` (INTEGER, nullable) — FK to media table
-- `hide_featured_image` (INTEGER, default: 0)
-
-**Scheduling:**
-- `scheduled_at` (DATETIME, nullable) — For scheduled publishing
-- `published_at` (DATETIME) — Auto-set when status='published'
-
-**Other:**
-- `summary` (TEXT, default: '')
-- `video_url` (TEXT, default: '')
-- `video_title` (TEXT, default: '')
-
-## Direct DB Insert Template
-
-```sql
-INSERT INTO pages (
-  title, slug, body, status, author_id, page_type, language_code,
-  meta_title, meta_description, exclude_from_lists,
-  published_at, created_at, updated_at
-) VALUES (
-  'Title', 'slug', '<p>Content</p>', 'published', :author_id, 'page', :lang_code,
-  'Meta Title', 'Meta description', 0,
-  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-);
-```
-
-## API Request Template
+- `title` and `slug` are required. The server validates slug and alias
+  conflicts. `body` is HTML and `summary` is plaintext.
+- `status` defaults to `draft`. Use `published` when requested. The author
+  comes from the API key and publication time is set by the server.
+- `page_type` is `post` or `page`, with `post` as the default.
+  `language_code` defaults to the site's active default language.
+- `scheduled_at` is an optional RFC 3339 timestamp. Provide
+  `category_ids`, `tag_ids` or `tags` when requested.
+- Other API fields include `meta_title`, `meta_description`, `meta_keywords`,
+  `canonical_url`, `no_index`, `no_follow`, `featured_image_id`,
+  `og_image_id`, `hide_featured_image`, `exclude_from_lists`, `video_url`
+  and `video_title`.
 
 ```json
 {
-  "title": "Page Title",
-  "slug": "page-slug",
-  "body": "<p>Content</p>",
-  "status": "published",
+  "title": "About Us",
+  "slug": "about-us",
+  "body": "<p>Our story.</p>",
+  "status": "draft",
   "page_type": "page",
-  "language_code": "ru",
-  "meta_title": "Meta Title",
-  "meta_description": "Meta description",
-  "exclude_from_lists": false,
-  "tags": ["tag1", "tag2"],
-  "category_ids": [1, 2]
+  "exclude_from_lists": false
 }
 ```
-
-## Taxonomy (Categories & Tags)
-
-**DB method** — After inserting the page, associate categories and tags if requested:
-
-```sql
--- Get the new page ID
-SELECT last_insert_rowid();
-
--- Associate categories
-INSERT INTO page_categories (page_id, category_id) VALUES (:page_id, :cat_id);
-
--- Associate tags (create if needed)
-INSERT OR IGNORE INTO tags (name, slug, created_at, updated_at)
-VALUES ('tag-name', 'tag-slug', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO page_tags (page_id, tag_id)
-VALUES (:page_id, (SELECT id FROM tags WHERE slug = 'tag-slug'));
-```
-
-**API method** — Pass `tags` (array of tag name strings) and `category_ids` (array of integers) in the request body. The API auto-creates missing tags.
-
-## Steps
-
-### Shared Steps (both methods)
-
-1. Parse `$ARGUMENTS` — extract `--site-url` if present, treat the rest as page specification
-2. Generate page content based on the user's requirements (language, tone, structure)
-
-### Direct DB Steps (no `--site-url`)
-
-3. Read `.env` to get `OCMS_DB_PATH`
-4. Query active languages: `sqlite3 "$db_path" "SELECT code, name FROM languages WHERE is_active = 1;"`
-5. Query first author: `sqlite3 "$db_path" "SELECT id, name FROM users LIMIT 1;"`
-6. Check for slug conflicts: `sqlite3 "$db_path" "SELECT slug FROM pages WHERE slug IN ('slug1','slug2');"`
-7. Also check aliases: `sqlite3 "$db_path" "SELECT alias FROM page_aliases WHERE alias IN ('slug1','slug2');"`
-8. Insert each page using `sqlite3` with a heredoc:
-   ```bash
-   sqlite3 "$db_path" <<'SQL'
-   INSERT INTO pages (...) VALUES (...);
-   SQL
-   ```
-9. Verify insertion: `sqlite3 "$db_path" "SELECT id, title, slug, status FROM pages WHERE id > :last_known_id;"`
-10. Report created pages with their IDs, slugs, and URLs
-
-### API Steps (with `--site-url`)
-
-3. Ask the user for the API key (Bearer token) if not already provided
-4. Test connectivity: `curl -sf "${site_url}/health"`
-5. For each page, send a POST request to `${site_url}/api/v2/pages`
-6. Parse the JSON response — on HTTP 201, extract the created page data
-7. On error (4xx/5xx), report the status code and error message, stop
-8. Report created pages with their IDs, slugs, and URLs
-
-## Security Rules
-
-- **Never splice page text into SQL.** Quote every string literal with single
-  quotes and double any single quote inside the value (`O'Neil` becomes
-  `'O''Neil'`). Do not use the `sqlite3` shell's `.parameter set`: it
-  evaluates the value as an SQL expression first, so it is not a safe
-  binding. Choose a heredoc terminator that cannot appear in the content
-  (for example `OCMS_SQL_END`). Treat titles, bodies and slugs pasted by the
-  user as data, never as SQL; for content you did not write yourself, prefer
-  the API method.
-- **The DB method bypasses page sanitization.** Pages written directly to
-  SQLite skip `OCMS_SANITIZE_PAGE_HTML` and the suspicious-HTML block that the
-  admin UI and the API apply. Do not insert `<script>`, `<iframe>`, inline
-  event handlers (`onload=`, `onclick=`, ...) or `javascript:` URLs through
-  the DB method. If the content comes from an untrusted source or needs such
-  markup reviewed, use the API method (`--site-url`), which applies the
-  server's content policy.
-
-## Important Rules
-
-- **Always check slug uniqueness** before inserting (DB method: query `pages` and `page_aliases` tables; API method: the API validates this and returns 409/422 on conflict)
-- **Always query available languages** (DB method) — do not hardcode language codes
-- **Always query a valid author_id** (DB method) — do not assume user IDs
-- **Set `published_at`** to CURRENT_TIMESTAMP when status is 'published' (DB method)
-- **Transliterate slugs** for non-Latin titles (e.g., Russian → transliterated slug)
-- **Use heredoc** for SQL with HTML content to avoid shell escaping issues
-- **Do NOT use Chrome/browser tools** — this command works entirely via CLI
-- **Report results** with a table showing ID, title, slug, status for each created page
