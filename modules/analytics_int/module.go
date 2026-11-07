@@ -43,6 +43,9 @@ type Module struct {
 	// touches the field; TestSettingsAccessHoldsTheLock checks that every
 	// access takes the lock.
 	settingsMu sync.RWMutex
+	// settingsWriteMu orders database reloads, form saves and salt rotation.
+	// Writers take it before settingsMu when they need both.
+	settingsWriteMu sync.Mutex
 
 	// reload tracks whether the stored settings are in effect. While they
 	// cannot be read the module runs on fallback values with tracking off,

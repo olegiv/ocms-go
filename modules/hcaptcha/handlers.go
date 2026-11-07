@@ -83,6 +83,11 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Keep the preserved secret and the database write in the same order
+	// as other saves and reloads. The settings have loaded above.
+	m.settingsWriteMu.Lock()
+	defer m.settingsWriteMu.Unlock()
+
 	// Build new settings from form
 	newSettings := &Settings{
 		Enabled: r.FormValue("enabled") == "1",

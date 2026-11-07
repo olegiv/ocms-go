@@ -154,6 +154,10 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		newSettings.Services = services
 	}
 
+	// Keep the database write and its publication ordered with reloads.
+	m.settingsWriteMu.Lock()
+	defer m.settingsWriteMu.Unlock()
+
 	// Save to database
 	if err := saveSettings(m.ctx.DB, newSettings); err != nil {
 		m.ctx.Logger.Error("failed to save privacy settings", "error", err)

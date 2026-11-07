@@ -44,6 +44,9 @@ type Module struct {
 	// got. TestSettingsAccessHoldsTheLock checks that every access to the
 	// field takes the lock.
 	settingsMu sync.RWMutex
+	// settingsWriteMu orders database reloads and saves through publication.
+	// Request readers only need settingsMu to take a snapshot.
+	settingsWriteMu sync.Mutex
 	// reload records whether the stored settings are in effect. If they fail
 	// to load, the module runs on the environment keys alone; currentSettings retries the
 	// load and the settings form refuses to save until it succeeds.
@@ -306,6 +309,9 @@ func (m *Module) Migrations() []module.Migration {
 
 // ReloadSettings reloads settings from the database.
 func (m *Module) ReloadSettings() error {
+	m.settingsWriteMu.Lock()
+	defer m.settingsWriteMu.Unlock()
+
 	settings, err := loadSettings(m.ctx.DB)
 	if err != nil {
 		return err

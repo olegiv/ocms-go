@@ -88,6 +88,9 @@ func (m *Module) storeSettings(settings *Settings) {
 // publishes it only when the save succeeds. The lock is held across the save
 // so a concurrent salt rotation cannot be overwritten by a stale copy.
 func (m *Module) updateSettings(change func(*Settings)) error {
+	m.settingsWriteMu.Lock()
+	defer m.settingsWriteMu.Unlock()
+
 	m.settingsMu.Lock()
 	defer m.settingsMu.Unlock()
 	if m.settings == nil {
@@ -146,6 +149,9 @@ func (m *Module) saveSalt(newSalt string) error {
 
 // ReloadSettings reloads settings from the database.
 func (m *Module) ReloadSettings() error {
+	m.settingsWriteMu.Lock()
+	defer m.settingsWriteMu.Unlock()
+
 	settings, err := m.loadSettings()
 	if err != nil {
 		return err
