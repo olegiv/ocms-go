@@ -63,6 +63,13 @@ if [ ! -f "$NEW_BINARY" ]; then
     exit 1
 fi
 
+for deploy_path in "$BINARY_PATH" "$BACKUP_PATH" "${BINARY_PATH}.new"; do
+    if [ "$NEW_BINARY" -ef "$deploy_path" ]; then
+        echo_error "New binary must be separate from $deploy_path"
+        exit 1
+    fi
+done
+
 if ! file "$NEW_BINARY" | grep -q "executable\|ELF"; then
     echo_error "$NEW_BINARY is not a valid executable"
     exit 1
