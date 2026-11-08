@@ -17,7 +17,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/oauth"
-	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -214,13 +213,22 @@ func (m *Module) getTranslationStatus(ctx context.Context, call *toolCall, in au
 	return s.TranslationStatus(ctx, a, in)
 }
 
-func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in authoring.PreviewInput) (preview.Link, error) {
+// issuedPreviewLink is the wire result for the explicit issuance tool.
+type issuedPreviewLink struct {
+	PageID    int64     `json:"page_id"`
+	Revision  int64     `json:"revision"`
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Warning   string    `json:"warning"`
+}
+
+func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in authoring.PreviewInput) (issuedPreviewLink, error) {
 	s, a, err := m.authoringService(ctx, call)
 	if err != nil {
-		return preview.Link{}, err
+		return issuedPreviewLink{}, err
 	}
 	if err = m.checkAgentShareLinks(ctx, m.ctx.DB, a.ActingUserID(), in.PageID); err != nil {
-		return preview.Link{}, err
+		return issuedPreviewLink{}, err
 	}
 	// Recheck through the issuance transaction in case sharing was disabled
 	// after preflight.
@@ -238,7 +246,14 @@ func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in autho
 		}
 		return checkPolicy(ctx, q)
 	}
-	return s.CreatePreviewLink(ctx, a, in)
+	link, err := s.CreatePreviewLink(ctx, a, in)
+	if err != nil {
+		return issuedPreviewLink{}, err
+	}
+	return issuedPreviewLink{
+		PageID: link.PageID, Revision: link.Revision, URL: link.URL.Reveal(),
+		ExpiresAt: link.ExpiresAt, Warning: link.Warning,
+	}, nil
 }
 
 func (m *Module) checkAgentShareLinks(ctx context.Context, db settingsReader, userID, pageID int64) error {

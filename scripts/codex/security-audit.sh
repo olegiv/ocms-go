@@ -26,14 +26,15 @@ mkdir -p -- "$audit_dir"
 lock_dir="$audit_dir/.archive.lock"
 if ! mkdir -- "$lock_dir"; then
   echo 'Another audit is preparing its report directory.' >&2
+  echo 'If preparation stopped and no audit is active, remove the empty lock with rmdir -- .audit/.archive.lock and retry.' >&2
   exit 2
 fi
 trap 'rmdir -- "$lock_dir"' EXIT
 timestamp=$(date '+%Y-%m-%d_%H-%M-%S')
 archive_dir=
 shopt -s nullglob
-# The legacy scanner wrote its dated report after the logs. Use the report
-# to identify finished runs and leave in-progress logs and notes in place.
+# A top-level dated report marks a finished run, regardless of its producer.
+# Leave logs without a matching report and active notes in place.
 for report in "$audit_dir"/security-audit-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].md; do
   [[ -f "$report" && ! -L "$report" ]] || continue
   report_stamp=${report##*/security-audit-}

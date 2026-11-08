@@ -56,11 +56,41 @@ func TestAccountLookupsInPageWritesUseTheEditorErrorMapping(t *testing.T) {
 			if !roleGuard || classifiedAccountLookups(fn) != lookups {
 				t.Errorf("%s: %s reads the acting user without v2.RequireEditor and a classified lookup error", entry.Name(), fn.Name.Name)
 			}
+			if fn.Name.Name == "authorizeWrite" && !draftRoleFaultClassified(fn.Body) {
+				t.Error("authorizeWrite must classify draft role lookup faults before returning the editor refusal")
+			}
 		}
 	}
 	if checked == 0 {
 		t.Fatal("found no account lookup to check; the scan is out of date")
 	}
+}
+
+func draftRoleFaultClassified(body *ast.BlockStmt) bool {
+	for _, statement := range body.List {
+		branch, ok := statement.(*ast.IfStmt)
+		if !ok {
+			continue
+		}
+		init, ok := branch.Init.(*ast.AssignStmt)
+		if !ok || len(init.Rhs) != 1 {
+			continue
+		}
+		call, ok := init.Rhs[0].(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		role, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || role.Sel.Name != "RequireEditor" {
+			continue
+		}
+		for node := range ast.Preorder(branch.Body) {
+			if name, ok := node.(*ast.Ident); ok && name.Name == "draftCredentialLookupError" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func classifiedAccountLookups(fn *ast.FuncDecl) int {

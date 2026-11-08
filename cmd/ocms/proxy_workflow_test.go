@@ -383,6 +383,24 @@ exit 1
 	}
 }
 
+func TestAuditPreparationReportsStaleLockRecovery(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	lock := filepath.Join(f.dir, ".audit", ".archive.lock")
+	if err := os.MkdirAll(lock, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if out := f.run("", 2, "security-audit-local"); !strings.Contains(out, "no audit is active") || !strings.Contains(out, "rmdir -- .audit/.archive.lock") {
+		t.Fatalf("audit lock diagnostic lacks recovery instructions: %s", out)
+	}
+	if err := os.Remove(lock); err != nil {
+		t.Fatalf("contending launcher changed the lock: %v", err)
+	}
+	cmd := f.command("bash", "scripts/codex/security-audit.sh", "--prepare")
+	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), ".audit/run-") {
+		t.Fatalf("audit did not recover after lock removal: %v\n%s", err, out)
+	}
+}
+
 func TestProxyAuditRefusesOutsideDestination(t *testing.T) {
 	f := newProxyWorkflowFixture(t)
 	outside := t.TempDir()

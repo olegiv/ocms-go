@@ -15,7 +15,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/preview"
 )
 
-func TestShareLinkRedactsLogsButPreservesIssuanceJSON(t *testing.T) {
+func TestShareLinkRedactsLogsAndDefaultJSON(t *testing.T) {
 	f := setup(t)
 	link := f.issue(t)
 	raw := link.URL.Reveal()
@@ -52,12 +52,11 @@ func TestShareLinkRedactsLogsButPreservesIssuanceJSON(t *testing.T) {
 	var response struct {
 		URL string `json:"url"`
 	}
-	if err = json.Unmarshal(encoded, &response); err != nil || response.URL != raw {
-		t.Fatal("issuance JSON lost the usable share URL")
+	if err = json.Unmarshal(encoded, &response); err != nil || response.URL != "[REDACTED]" || strings.Contains(string(encoded), bearer) {
+		t.Fatal("default link JSON exposed the share URL")
 	}
-	var decoded preview.Link
-	if err = json.Unmarshal(encoded, &decoded); err != nil || !reflect.DeepEqual(decoded, link) {
-		t.Fatal("typed issuance response no longer round trips")
+	if raw == "" {
+		t.Fatal("explicit reveal lost the usable share URL")
 	}
 	if _, err = f.svc.Resolve(t.Context(), bearer); err != nil {
 		t.Fatal("issued bearer no longer resolves its snapshot")
@@ -89,25 +88,28 @@ func TestShareLinkRedactsWrappedDiagnostics(t *testing.T) {
 	slog.New(slog.NewTextHandler(&output, nil)).Info("share issued", "receipt", wrapped)
 	check("text slog with private fields", output.String())
 	check("slog.Value.String with private fields", slog.AnyValue(wrapped).String())
+	output.Reset()
+	exported := struct{ Link preview.Link }{link}
+	links := []preview.Link{link}
+	slog.New(slog.NewJSONHandler(&output, nil)).Info("share issued", "receipt", exported, "links", links)
+	check("JSON slog with nested links", output.String())
+	encoded, err := json.Marshal(map[string]any{"link": link, "url": link.URL, "links": links})
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("JSON with nested links", string(encoded))
+	if !strings.Contains(output.String(), "REDACTED") || !strings.Contains(string(encoded), "REDACTED") {
+		t.Fatal("nested JSON lost the redaction marker")
+	}
 }
 
-func TestShareURLJSONPreservesZeroValueAndCopies(t *testing.T) {
+func TestShareURLJSONPreservesZeroValue(t *testing.T) {
 	var value preview.ShareURL
 	encoded, err := json.Marshal(value)
 	if err != nil || string(encoded) != `""` || value.Reveal() != "" {
 		t.Fatal("zero share URL lost its empty string representation")
 	}
-	if err := json.Unmarshal([]byte(`"fixture-url"`), &value); err != nil {
-		t.Fatal(err)
-	}
-	copyOfURL := value
-	if err := json.Unmarshal([]byte(`null`), &value); err != nil || value.Reveal() != "fixture-url" {
-		t.Fatal("JSON null replaced a share URL")
-	}
-	if err := json.Unmarshal([]byte(`1`), &value); err == nil || value.Reveal() != "fixture-url" {
-		t.Fatal("invalid JSON replaced a share URL")
-	}
-	if err := json.Unmarshal([]byte(`""`), &value); err != nil || value.Reveal() != "" || copyOfURL.Reveal() != "fixture-url" {
-		t.Fatal("decoding did not replace only the target share URL")
+	if _, canDecode := any(&value).(json.Unmarshaler); canDecode {
+		t.Fatal("a share URL can be constructed by decoding JSON")
 	}
 }

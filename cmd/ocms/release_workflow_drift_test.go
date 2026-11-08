@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -418,6 +419,68 @@ func TestCIRunsChromeRegressions(t *testing.T) {
 		return
 	}
 	t.Fatal("go.yml does not run the test gate for the Chrome regressions")
+}
+
+func TestAssetBuildUsesLockedToolsWithoutLifecycleScripts(t *testing.T) {
+	root := filepath.Join("..", "..")
+	for path, commands := range map[string][]string{
+		"scripts/build-assets.sh": {"npm ci --ignore-scripts", "npm install --ignore-scripts", "./node_modules/.bin/sass", "./node_modules/.bin/tailwindcss"},
+		"Dockerfile":              {"npm ci --ignore-scripts", "./node_modules/.bin/sass", "./node_modules/.bin/tailwindcss"},
+	} {
+		body, err := os.ReadFile(filepath.Join(root, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, command := range commands {
+			if !strings.Contains(string(body), command) {
+				t.Errorf("%s must run %s", path, command)
+			}
+		}
+		if strings.Contains(string(body), "npm install -g sass") {
+			t.Errorf("%s installs Sass outside the lockfile", path)
+		}
+	}
+	for _, name := range []string{"go.yml", "release.yml"} {
+		for _, job := range readWorkflow(t, name).Jobs {
+			for _, step := range job.Steps {
+				if strings.Contains(step.Run, "npm install -g sass") {
+					t.Errorf("%s installs Sass outside the lockfile", name)
+				}
+			}
+		}
+	}
+	lock, err := os.ReadFile(filepath.Join(root, "package-lock.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct {
+		Packages map[string]struct{ Version, Integrity string }
+	}
+	if err = json.Unmarshal(lock, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	stable := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+	for _, tool := range []string{"sass", "playwright"} {
+		entry := manifest.Packages["node_modules/"+tool]
+		if !stable.MatchString(entry.Version) || entry.Integrity == "" {
+			t.Errorf("%s must be locked to a stable release with an integrity hash", tool)
+		}
+	}
+	coreFound := false
+	for path, entry := range manifest.Packages {
+		if strings.HasSuffix(path, "/playwright-core") {
+			coreFound = true
+			if entry.Version != manifest.Packages["node_modules/playwright"].Version || entry.Integrity == "" {
+				t.Errorf("%s must match the stable Playwright release with an integrity hash", path)
+			}
+		}
+	}
+	if !coreFound {
+		t.Error("the Playwright runtime is missing from the lockfile")
+	}
+	if _, found := manifest.Packages["node_modules/@playwright/cli"]; found {
+		t.Error("use the CLI bundled with stable Playwright")
+	}
 }
 
 // TestCIRacesConcurrentCode fails when the Go workflow stops running the

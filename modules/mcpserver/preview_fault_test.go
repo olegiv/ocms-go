@@ -92,13 +92,13 @@ func TestPreviewIssuanceFaultsAreRetryable(t *testing.T) {
 				if rollbackErr := tx.Rollback(); rollbackErr != nil {
 					t.Fatal(rollbackErr)
 				}
-				if !store.IsSQLiteBusy(issueErr) || reserved == tc.immediate || link.URL.Reveal() != "" {
+				if !store.IsSQLiteBusy(issueErr) || reserved == tc.immediate || link.URL != "" {
 					t.Fatalf("did not reach the intended SQLite lock boundary: reservation=%t, error=%v", reserved, issueErr)
 				}
 				requirePreviewRetryMessage(t, issueErr)
 			} else {
 				link, issueErr := env.module.createPreviewLink(ctx, call, in)
-				if !errors.Is(issueErr, fault) || link.URL.Reveal() != "" {
+				if !errors.Is(issueErr, fault) || link.URL != "" {
 					t.Fatalf("did not reach %s: error=%v", tc.name, issueErr)
 				}
 				requirePreviewRetryMessage(t, issueErr)
@@ -122,7 +122,7 @@ func TestPreviewIssuanceFaultsAreRetryable(t *testing.T) {
 
 			inject = false
 			link, err := env.module.createPreviewLink(ctx, call, in)
-			if err != nil || link.URL.Reveal() == "" || link.PageID != in.PageID || link.Revision != in.Revision {
+			if err != nil || link.URL == "" || link.PageID != in.PageID || link.Revision != in.Revision {
 				t.Fatalf("same issuance after recovery failed: %v", err)
 			}
 			assertPreviewIssuanceRows(t, env, 1)
@@ -133,7 +133,7 @@ func TestPreviewIssuanceFaultsAreRetryable(t *testing.T) {
 			}
 			link, err = env.module.createPreviewLink(ctx, call, in)
 			refusal, _ := toToolError(err)
-			if link.URL.Reveal() != "" || refusal == nil || refusal.Code != "share_links_disabled" || refusal.Retryable {
+			if link.URL != "" || refusal == nil || refusal.Code != "share_links_disabled" || refusal.Retryable {
 				t.Fatalf("sharing-disabled refusal = %+v", refusal)
 			}
 			if len(env.logs.find(tc.diagnostic)) != 1 {

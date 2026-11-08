@@ -12,7 +12,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/olegiv/ocms-go/internal/preview"
 )
 
 // schemaDefsPrefix is where named nested types land: huma emits $ref values
@@ -52,8 +51,6 @@ func buildSchema(t reflect.Type) (*jsonschema.Schema, error) {
 		return nil, fmt.Errorf("schema root %s must be a named struct", t)
 	}
 	registry := huma.NewMapRegistry(schemaDefsPrefix, huma.DefaultSchemaNamer)
-	// The opaque ShareURL marshals to a JSON string in issuance responses.
-	registry.RegisterTypeAlias(reflect.TypeFor[preview.ShareURL](), reflect.TypeFor[string]())
 	root, err := convertSchema(registry.Schema(t, false, ""))
 	if err != nil {
 		return nil, fmt.Errorf("converting schema for %s: %w", t, err)

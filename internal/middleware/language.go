@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -231,13 +232,15 @@ func GetLanguagePrefix(r *http.Request) string {
 // SetLanguageCookie sets the language preference cookie.
 // The Secure flag is set based on the configuration from InitLanguageCookies.
 func SetLanguageCookie(w http.ResponseWriter, langCode string) {
-	writeLanguageCookie(w, LanguageCookieName, langCode, 365*24*60*60)
+	writeLanguageCookie(w, LanguageCookieName, langCode, 365*secondsPerDay)
 }
 
 // SetAdminLanguageCookie remembers the UI language before sign-in for up to one day.
 func SetAdminLanguageCookie(w http.ResponseWriter, langCode string) {
-	writeLanguageCookie(w, AdminLanguageCookieName, langCode, 24*60*60)
+	writeLanguageCookie(w, AdminLanguageCookieName, langCode, secondsPerDay)
 }
+
+const secondsPerDay = int(24 * time.Hour / time.Second)
 
 // ClearAdminLanguageCookie lets a new signed-in preference take precedence.
 func ClearAdminLanguageCookie(w http.ResponseWriter) {

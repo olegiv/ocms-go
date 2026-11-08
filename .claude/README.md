@@ -234,9 +234,12 @@ other than the shipped read-only checks requires a guarded commit workflow.
 `make security-audit` saves Claude's final Markdown in a new
 `.audit/run-*/report.md`. `make security-audit-local` runs the dependency
 scanners directly and saves its summary and logs in its own run directory.
-Both launchers archive regular legacy `security-audit-YYYY-MM-DD_HH-MM-SS.md`
-reports with their matching `govulncheck` and `npm-audit` logs. Other files and
+Both launchers archive regular top-level `security-audit-YYYY-MM-DD_HH-MM-SS.md`
+reports with their matching `govulncheck` and `npm-audit` logs. This also
+includes manually produced reports with that name. Other files and
 directories, including `TODO.md`, section notes and prior runs, stay in place.
+If preparation was interrupted and no audit is active, run
+`rmdir -- .audit/.archive.lock` before retrying.
 When you ask `@security-auditor` for a section review, save its returned
 Markdown yourself if the section needs a separate file. The proxy's available
 checks are listed in `scripts/codex/security-audit-proxy.md`.

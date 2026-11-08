@@ -211,11 +211,10 @@ Prebuilt release binaries have no external runtime dependencies beyond the opera
 Building from source requires:
 
 - Go 1.27.3 or later
-- [Node.js](https://nodejs.org/) (npm) for frontend dependencies
+- [Node.js 24](https://nodejs.org/) with npm for frontend dependencies
 - [sqlc](https://sqlc.dev/) for SQL code generation
 - [templ](https://templ.guide/) for type-safe HTML templates
 - [goose](https://github.com/pressly/goose) for database migrations
-- [Dart Sass](https://sass-lang.com/dart-sass) for SCSS compilation
 
 ## Installation
 
@@ -1027,8 +1026,8 @@ OCMS_TEST_BROWSER=1 ./scripts/test-gate.sh
 
 To test a candidate Git tree, run
 `OCMS_TEST_BROWSER=1 ./scripts/codex/test-snapshot.sh <tree>`. The snapshot
-builds its own assets and uses its lockfile's Playwright CLI. Without browser
-opt-in, the local gate runs the Go suite with browser tests skipped.
+builds its own assets and uses the CLI bundled with its locked Playwright
+release. The local gate runs browser tests when browser mode is enabled.
 
 Check for vulnerabilities:
 ```bash

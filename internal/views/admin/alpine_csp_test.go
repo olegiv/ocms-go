@@ -42,19 +42,10 @@ type alpineSource struct {
 // values. Arbitrary generated attribute expressions, runtime property values
 // and third-party markup need separate coverage.
 func TestAlpineCSPTemplateScopes(t *testing.T) {
-	root := filepath.Join("..", "..", "..")
-	node, err := exec.LookPath("node")
-	_, parserErr := os.Stat(filepath.Join(root, filepath.FromSlash("node_modules/@alpinejs/csp/src/parser.js")))
-	if err != nil || parserErr != nil {
-		if os.Getenv("OCMS_REQUIRE_SHARED_TOOLING") == "1" {
-			t.Fatalf("Alpine scope check requires Node and built assets: node=%v parser=%v", err, parserErr)
-		}
-		t.Skip("install Node and build assets to check Alpine scopes")
-	}
-
+	root, node := alpineChecker(t)
 	var sources []alpineSource
 	for _, dir := range []string{"internal", "modules", "web", "custom/themes"} {
-		err = filepath.WalkDir(filepath.Join(root, dir), func(path string, entry fs.DirEntry, walkErr error) error {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
@@ -81,6 +72,50 @@ func TestAlpineCSPTemplateScopes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	output, err := runAlpineChecker(t, root, node, sources)
+	if err != nil {
+		t.Fatalf("Alpine CSP scope check: %v\n%s", err, output)
+	}
+	t.Log(strings.TrimSpace(string(output)))
+}
+
+func TestAlpineCSPChecksStaticDataMembers(t *testing.T) {
+	root, node := alpineChecker(t)
+	for _, expression := range []string{"$data.selected", "$data['selected']", "$data.missing", "$data['missing']"} {
+		t.Run(expression, func(t *testing.T) {
+			source := alpineSource{Path: "fixture", Roots: []alpineElement{{Attrs: map[string]string{
+				"x-data": "{ selected: true }", "x-text": expression,
+			}}}}
+			output, err := runAlpineChecker(t, root, node, []alpineSource{source})
+			if strings.Contains(expression, "missing") {
+				if err == nil || !strings.Contains(string(output), "undefined $data member: missing") {
+					t.Fatalf("unknown $data member was not rejected: %v\n%s", err, output)
+				}
+			} else if err != nil {
+				t.Fatalf("known $data member was rejected: %v\n%s", err, output)
+			}
+		})
+	}
+}
+
+func alpineChecker(t *testing.T) (root, node string) {
+	t.Helper()
+	root = filepath.Join("..", "..", "..")
+	node, nodeErr := exec.LookPath("node")
+	for _, path := range []string{"node_modules/@alpinejs/csp/src/parser.js", "node_modules/acorn/package.json", "node_modules/eslint-scope/package.json"} {
+		_, dependencyErr := os.Stat(filepath.Join(root, filepath.FromSlash(path)))
+		if nodeErr != nil || dependencyErr != nil {
+			if os.Getenv("OCMS_REQUIRE_SHARED_TOOLING") == "1" {
+				t.Fatalf("Alpine scope check requires Node and built assets: node=%v %s=%v", nodeErr, path, dependencyErr)
+			}
+			t.Skip("install Node and build assets to check Alpine scopes")
+		}
+	}
+	return root, node
+}
+
+func runAlpineChecker(t *testing.T, root, node string, sources []alpineSource) ([]byte, error) {
+	t.Helper()
 	input, err := json.Marshal(sources)
 	if err != nil {
 		t.Fatal(err)
@@ -88,11 +123,7 @@ func TestAlpineCSPTemplateScopes(t *testing.T) {
 	cmd := exec.CommandContext(t.Context(), node, "internal/views/admin/testdata/check-alpine-csp.mjs")
 	cmd.Dir = root
 	cmd.Stdin = bytes.NewReader(input)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Alpine CSP scope check: %v\n%s", err, output)
-	}
-	t.Log(strings.TrimSpace(string(output)))
+	return cmd.CombinedOutput()
 }
 
 var goTemplateAction = regexp.MustCompile(`(?s)\{\{.*?\}\}`)
@@ -134,7 +165,7 @@ func (s *alpineSource) read(path string) error {
 }
 
 func (s *alpineSource) addScript(body string) {
-	if strings.Contains(body, "Alpine.data(") {
+	if strings.Contains(body, "Alpine.data(") || strings.Contains(body, "editorImagePicker") {
 		s.Scripts = append(s.Scripts, body)
 	}
 }

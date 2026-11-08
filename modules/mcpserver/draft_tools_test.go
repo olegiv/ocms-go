@@ -5,6 +5,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -186,8 +187,17 @@ func TestDraftToolsSDKCreateReadUpdateReplayAndExplicitSharing(t *testing.T) {
 	if err := env.db.QueryRow("SELECT COUNT(*) FROM preview_links").Scan(&count); err != nil || count != 0 {
 		t.Fatal("save/read silently issued a token")
 	}
-	shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": updated.Revision}))
-	sharedURL, err := url.Parse(shared.URL.Reveal())
+	shareResult := call(t, session, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": updated.Revision})
+	shared := decodeResult[map[string]any](t, shareResult)
+	var textResult map[string]any
+	if err := json.Unmarshal([]byte(resultText(shareResult)), &textResult); err != nil || !reflect.DeepEqual(shared, textResult) {
+		t.Fatal("MCP share text and structured results differ")
+	}
+	rawURL, hasURL := shared["url"].(string)
+	if !hasURL || len(shared) != 5 || shared["page_id"] != float64(saved.PageID) || shared["revision"] != float64(updated.Revision) || shared["warning"] == "" || shared["warning"] == nil || shared["expires_at"] == nil {
+		t.Fatal("MCP share receipt fields changed")
+	}
+	sharedURL, err := url.Parse(rawURL)
 	if err != nil || sharedURL.Path != preview.SharePath || sharedURL.RawQuery != "" || len(sharedURL.Fragment) != 43 {
 		t.Fatal("MCP issued a proxy-visible bearer")
 	}

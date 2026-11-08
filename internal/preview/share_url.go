@@ -12,7 +12,7 @@ import (
 
 // ShareURL holds a bearer URL for an issuance response. The pointer keeps the
 // bearer out of fmt diagnostics even when formatting skips methods on private
-// fields. Reveal and JSON marshaling return the raw URL.
+// fields. Only Reveal returns the raw URL.
 type ShareURL struct {
 	raw *string
 }
@@ -36,24 +36,15 @@ func (u ShareURL) Format(state fmt.State, _ rune) {
 
 func (u ShareURL) LogValue() slog.Value { return slog.StringValue(u.String()) }
 
-// MarshalJSON preserves the URL in the explicitly requested issuance response.
-func (u ShareURL) MarshalJSON() ([]byte, error) { return json.Marshal(u.Reveal()) }
-
-// UnmarshalJSON decodes the string in an issuance response.
-func (u *ShareURL) UnmarshalJSON(data []byte) error {
-	var raw *string
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+// MarshalJSON redacts the bearer even when nested in a JSON diagnostic.
+func (u ShareURL) MarshalJSON() ([]byte, error) {
+	if u.raw == nil {
+		return json.Marshal("")
 	}
-	if raw != nil {
-		u.raw = raw
-	}
-	return nil
+	return json.Marshal(u.String())
 }
 
-// LogValue prevents slog's JSON fallback from serializing the bearer when the
-// entire issuance result is logged. Deliberate JSON serialization still exposes
-// it for the response and must not be used as a logging representation.
+// LogValue keeps the issuance metadata available in structured diagnostics.
 func (l Link) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.Int64("page_id", l.PageID),

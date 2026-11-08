@@ -26,7 +26,7 @@ var (
 
 // SQLCMutation locates a named SQL statement that writes to a tracked table.
 type SQLCMutation struct {
-	Path, Name string
+	Path, Name, SQL string
 }
 
 // SQLCMutations inventories writes in both the SQL source and generated Go.
@@ -38,7 +38,7 @@ func SQLCMutations(t *testing.T, storeDir string, tables ...string) []SQLCMutati
 	check := func(path, name, query string) {
 		t.Helper()
 		if mutates(path, name, query) {
-			mutations = append(mutations, SQLCMutation{Path: path, Name: name})
+			mutations = append(mutations, SQLCMutation{Path: path, Name: name, SQL: query})
 		}
 	}
 
@@ -102,8 +102,8 @@ func sqlcCatalogFiles(t *testing.T, pattern string) []string {
 	return paths
 }
 
-// SQLite reports operations during PrepareContext, including foreign-key
-// cascades. The scanner never executes the prepared queries.
+// sqlcMutationDetector observes operations during PrepareContext, including
+// foreign-key cascades. The scanner never executes the prepared queries.
 func sqlcMutationDetector(t *testing.T, tables []string) func(path, name, query string) bool {
 	t.Helper()
 	db, cleanup := TestDB(t)

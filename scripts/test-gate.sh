@@ -12,8 +12,8 @@ if [[ -z "${OCMS_SESSION_SECRET:-}" ]]; then
 fi
 
 if [[ ${OCMS_TEST_BROWSER:-} == 1 && -z ${OCMS_PLAYWRIGHT_CLI:-} ]]; then
-  export OCMS_PLAYWRIGHT_CLI="$PWD/node_modules/.bin/playwright-cli"
-  if [[ ! -x "$OCMS_PLAYWRIGHT_CLI" ]]; then
+  export OCMS_PLAYWRIGHT_CLI="$PWD/scripts/playwright-cli.sh"
+  if [[ ! -x "$OCMS_PLAYWRIGHT_CLI" || ! -x "$PWD/node_modules/.bin/playwright" ]]; then
     echo 'Chrome tests require the Playwright CLI. Run make assets first.' >&2
     exit 1
   fi

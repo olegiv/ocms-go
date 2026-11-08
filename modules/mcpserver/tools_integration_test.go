@@ -47,6 +47,14 @@ func TestToolsListMatchesCatalog(t *testing.T) {
 				t.Errorf("%s: %s schema is not an object schema: %v", tool.Name, name, schema)
 			}
 		}
+		if tool.Name == "create_preview_link" {
+			schema, _ := tool.OutputSchema.(map[string]any)
+			properties, _ := schema["properties"].(map[string]any)
+			urlSchema, _ := properties["url"].(map[string]any)
+			if len(properties) != 5 || urlSchema["type"] != "string" {
+				t.Error("create_preview_link must advertise a string URL in its five-field receipt")
+			}
+		}
 	}
 	var want []string
 	for _, spec := range toolCatalog() {

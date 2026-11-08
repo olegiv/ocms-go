@@ -281,7 +281,7 @@ func TestTimeoutLogsOnlyOwnDeadline(t *testing.T) {
 				}
 				return
 			}
-			if tc.started && recovered != http.ErrAbortHandler {
+			if abort, _ := recovered.(error); tc.started && !errors.Is(abort, http.ErrAbortHandler) {
 				t.Errorf("started response recovered %v, want http.ErrAbortHandler", recovered)
 			}
 			if !tc.started && recorder.Code != http.StatusServiceUnavailable {

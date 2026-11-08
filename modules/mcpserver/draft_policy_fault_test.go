@@ -145,7 +145,7 @@ func TestDraftAccountReadFaultsAreRetryable(t *testing.T) {
 				issue := func() (int64, error) {
 					if tc.share {
 						link, err := env.module.createPreviewLink(ctx, call, authoring.PreviewInput{PageID: seed.PageID, Revision: seed.Revision})
-						if link.URL.Reveal() == "" {
+						if link.URL == "" {
 							return 0, err
 						}
 						return link.PageID, err
@@ -481,7 +481,7 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 		}
 		if selected, isSelector := call.Fun.(*ast.SelectorExpr); isSelector {
 			switch selected.Sel.Name {
-			case "credentialScopes", "authoringService", "checkAgentShareLinks":
+			case "credentialScopes", "authoringService", "checkAgentShareLinks", "CreatePreviewLink":
 				return // These helpers already classify their errors.
 			}
 		}
@@ -512,7 +512,7 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 		for inner := range ast.Preorder(branch.Body) {
 			if returned, ok := inner.(*ast.ReturnStmt); ok {
 				for _, value := range returned.Results {
-					if name, ok := value.(*ast.Ident); ok && name.Name == bound.Name {
+					if unclassifiedLookupFault(value, bound.Name) {
 						t.Errorf("%s: raw %s must be classified as a retryable authorization fault", positions.Position(returned.Pos()), bound.Name)
 					}
 				}
@@ -547,4 +547,20 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 			t.Error("no authorization lookups found in a guarded root")
 		}
 	}
+}
+
+func unclassifiedLookupFault(value ast.Expr, bound string) bool {
+	switch node := ast.Unparen(value).(type) {
+	case *ast.Ident:
+		return node.Name == bound
+	case *ast.CallExpr:
+		if wrapper, ok := node.Fun.(*ast.SelectorExpr); ok && (wrapper.Sel.Name == "Errorf" || wrapper.Sel.Name == "Join") {
+			for _, arg := range node.Args {
+				if unclassifiedLookupFault(arg, bound) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

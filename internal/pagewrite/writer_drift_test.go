@@ -11,6 +11,7 @@ import (
 	"maps"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -41,11 +42,17 @@ func TestPageWritersUseTransactionQueries(t *testing.T) {
 				return err
 			}
 			for _, declaration := range file.Decls {
+				scan := writerScan{t: t, set: set, path: filepath.ToSlash(relative), localPackage: file.Name.Name}
 				fn, ok := declaration.(*ast.FuncDecl)
-				if !ok || fn.Body == nil {
+				if !ok {
+					scan.body(declaration, nil)
 					continue
 				}
-				scan := writerScan{t: t, set: set, path: filepath.ToSlash(relative), function: fn.Name.Name, localPackage: file.Name.Name, manual: manualPageTransaction(fn.Body)}
+				if fn.Body == nil {
+					continue
+				}
+				scan.function = fn.Name.Name
+				scan.manual = manualPageTransaction(fn.Body)
 				bindings := make(map[string]string)
 				scan.parameters(bindings, fn.Type.Params)
 				scan.parameters(bindings, fn.Recv)
@@ -86,7 +93,7 @@ var pageMutations = map[string]bool{
 	"DeleteTag": true, "DeleteCategory": true, "DeleteMedia": true,
 }
 
-var rawPageMutation = regexp.MustCompile(`(?i)\b(?:UPDATE|INSERT(?:\s+OR\s+\w+)?\s+INTO|DELETE\s+FROM)\s+(?:pages|page_tags|page_categories|page_aliases|translations|page_ai_access)\b`)
+var rawPageMutation = regexp.MustCompile(`(?i)\b(?:UPDATE(?:\s+OR\s+\w+)?|(?:INSERT(?:\s+OR\s+\w+)?|REPLACE)\s+INTO|DELETE\s+FROM)\s+(?:main\s*\.\s*)?["'\x60\[]?(?:` + strings.Join(pageMutationTables, "|") + `)\b`)
 
 func (s writerScan) parameters(bindings map[string]string, fields *ast.FieldList) {
 	if fields == nil {
@@ -137,11 +144,14 @@ func (s writerScan) binding(expr ast.Expr, bindings map[string]string) string {
 	return ""
 }
 
-func (s writerScan) body(body *ast.BlockStmt, bindings map[string]string) {
-	ast.Inspect(body, func(node ast.Node) bool {
+func (s writerScan) body(body ast.Node, bindings map[string]string) {
+	ast.PreorderStack(body, nil, func(node ast.Node, stack []ast.Node) bool {
 		switch value := node.(type) {
 		case *ast.FuncLit:
 			nested := maps.Clone(bindings)
+			if nested == nil {
+				nested = make(map[string]string)
+			}
 			s.parameters(nested, value.Type.Params)
 			s.body(value.Body, nested)
 			return false
@@ -153,8 +163,20 @@ func (s writerScan) body(body *ast.BlockStmt, bindings map[string]string) {
 				}
 			}
 		case *ast.SelectorExpr:
-			if owner, guarded := pageMutationBoundaries[value.Sel.Name]; guarded && (s.path != owner.path || s.function != owner.function) {
-				s.t.Errorf("%s: %s is reserved for %s in %s", s.set.Position(node.Pos()), value.Sel.Name, owner.function, owner.path)
+			if owners, guarded := pageMutationBoundaries[value.Sel.Name]; guarded &&
+				!slices.Contains(owners, writerLocation{s.path, s.function}) && !s.nonQueryEntryPoint(value) {
+				s.t.Errorf("%s: %s is outside its inventoried writer", s.set.Position(node.Pos()), value.Sel.Name)
+			}
+			if pageMutations[value.Sel.Name] && !s.nonQueryEntryPoint(value) {
+				var parent ast.Node
+				if len(stack) > 0 {
+					parent = stack[len(stack)-1]
+				}
+				call, direct := parent.(*ast.CallExpr)
+				_, methodExpression := ast.Unparen(value.X).(*ast.StarExpr)
+				if !direct || call.Fun != value || methodExpression {
+					s.t.Errorf("%s: %s must be called directly on tracked queries", s.set.Position(node.Pos()), value.Sel.Name)
+				}
 			}
 		case *ast.CallExpr:
 			selected, ok := value.Fun.(*ast.SelectorExpr)
@@ -167,18 +189,46 @@ func (s writerScan) body(body *ast.BlockStmt, bindings map[string]string) {
 			if !seed && s.binding(selected.X, bindings) != "queries" {
 				s.t.Errorf("%s: %s uses queries outside the page-write transaction", s.set.Position(node.Pos()), selected.Sel.Name)
 			}
-		case *ast.BasicLit:
-			if value.Kind != token.STRING {
-				return true
-			}
-			query, err := strconv.Unquote(value.Value)
+		case *ast.BasicLit, *ast.BinaryExpr:
+			query, ok := literalSQL(value.(ast.Expr))
 			languageRename := s.path == "internal/handler/languages.go" && s.function == "updateLanguage" && s.manual
-			if err == nil && rawPageMutation.MatchString(query) && !languageRename {
+			if ok && rawPageMutation.MatchString(query) && !languageRename {
 				s.t.Errorf("%s: raw page SQL needs an inventoried transactional writer", s.set.Position(node.Pos()))
+				return false
 			}
 		}
 		return true
 	})
+}
+
+func literalSQL(expr ast.Expr) (string, bool) {
+	switch node := ast.Unparen(expr).(type) {
+	case *ast.BasicLit:
+		if node.Kind == token.STRING {
+			text, err := strconv.Unquote(node.Value)
+			return text, err == nil
+		}
+	case *ast.BinaryExpr:
+		if node.Op == token.ADD {
+			left, leftOK := literalSQL(node.X)
+			right, rightOK := literalSQL(node.Y)
+			return left + right, leftOK && rightOK
+		}
+	}
+	return "", false
+}
+
+func (s writerScan) nonQueryEntryPoint(selector *ast.SelectorExpr) bool {
+	receiver, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	if s.path == "cmd/ocms/main.go" && s.function == "run" {
+		return receiver.Name == "pagesHandler" && selector.Sel.Name == "CreatePreviewLink" ||
+			receiver.Name == "taxonomyHandler" && (selector.Sel.Name == "DeleteTag" || selector.Sel.Name == "DeleteCategory")
+	}
+	return s.path == "modules/mcpserver/tools_drafts.go" && s.function == "createPreviewLink" &&
+		receiver.Name == "s" && selector.Sel.Name == "CreatePreviewLink"
 }
 
 func nonPageTranslation(call *ast.CallExpr) bool {

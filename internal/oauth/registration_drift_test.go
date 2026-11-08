@@ -78,8 +78,10 @@ func TestDCRWritersUseRegistrationBudget(t *testing.T) {
 					if source == "dcr" {
 						dcrWriters++
 					}
-					if !(source == "cimd" && selector.Sel.Name == "saveClient") &&
-						!(source == "dcr" && selector.Sel.Name == "saveClientTx" && fn.Name.Name == "registerDCR") {
+					switch {
+					case source == "cimd" && selector.Sel.Name == "saveClient":
+					case source == "dcr" && selector.Sel.Name == "saveClientTx" && fn.Name.Name == "registerDCR":
+					default:
 						t.Errorf("%s: client source %q bypasses the DCR admission boundary", fset.Position(node.Pos()), source)
 					}
 				}

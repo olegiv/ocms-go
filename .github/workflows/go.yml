@@ -35,9 +35,6 @@ jobs:
         node-version: '24'
         cache: 'npm'
 
-    - name: Install Dart Sass
-      run: npm install -g sass@1.105.1
-
     - name: Build assets
       run: make assets
 

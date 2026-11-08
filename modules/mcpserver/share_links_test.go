@@ -46,8 +46,8 @@ func TestExistingAgentPreviewLinksHonorDisableSwitches(t *testing.T) {
 	const marker = "Shared preview policy marker"
 	saved := decodeResult[authoring.SaveResult](t, call(t, keyClient, "create_draft_page", draftCreateArgs(marker)))
 	args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
-	keyLink := decodeResult[preview.Link](t, call(t, keyClient, "create_preview_link", args))
-	grantLink := decodeResult[preview.Link](t, call(t, env.connect(oauthTokenValue), "create_preview_link", args))
+	keyLink := decodeResult[issuedPreviewLink](t, call(t, keyClient, "create_preview_link", args))
+	grantLink := decodeResult[issuedPreviewLink](t, call(t, env.connect(oauthTokenValue), "create_preview_link", args))
 	humanLink, err := env.previewResolver().Issue(t.Context(), provenance.Principal{UserID: env.userID, Source: "human", Transport: "admin"},
 		saved.PageID, saved.Revision, "https://cms.test", nil)
 	if err != nil {
@@ -64,14 +64,14 @@ func TestExistingAgentPreviewLinksHonorDisableSwitches(t *testing.T) {
 		t.Helper()
 		for _, tc := range []struct {
 			name   string
-			link   preview.Link
+			rawURL string
 			status int
 		}{
-			{"API key", keyLink, agentStatus},
-			{"OAuth grant", grantLink, agentStatus},
-			{"human", humanLink, http.StatusOK},
+			{"API key", keyLink.URL, agentStatus},
+			{"OAuth grant", grantLink.URL, agentStatus},
+			{"human", humanLink.URL.Reveal(), http.StatusOK},
 		} {
-			parsed, parseErr := url.Parse(tc.link.URL.Reveal())
+			parsed, parseErr := url.Parse(tc.rawURL)
 			if parseErr != nil || parsed.Fragment == "" {
 				t.Fatalf("%s share URL missing a bearer", tc.name)
 			}
@@ -167,8 +167,8 @@ func TestAgentShareLinksPolicyAndAdminRevocation(t *testing.T) {
 	enableDraftTools(env)
 	client := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
 	saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Shared draft")))
-	shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": saved.Revision}))
-	if shared.URL.Reveal() == "" {
+	shared := decodeResult[issuedPreviewLink](t, call(t, client, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": saved.Revision}))
+	if shared.URL == "" {
 		t.Fatal("share link not issued while allowed")
 	}
 
@@ -308,8 +308,8 @@ func TestAgentShareLinksRechecksPolicyInIssuanceTransaction(t *testing.T) {
 			client := env.connect(token)
 			saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Sharing policy changed")))
 			args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
-			shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", args))
-			shareURL, err := url.Parse(shared.URL.Reveal())
+			shared := decodeResult[issuedPreviewLink](t, call(t, client, "create_preview_link", args))
+			shareURL, err := url.Parse(shared.URL)
 			if err != nil || shareURL.Fragment == "" {
 				t.Fatal("enabled call did not issue a share link")
 			}
@@ -391,8 +391,8 @@ func TestAgentShareLinksSerializeDisableWithDeferredIssuance(t *testing.T) {
 	client := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
 	saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Deferred share issuance")))
 	args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
-	shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", args))
-	if shared.URL.Reveal() == "" || shared.PageID != saved.PageID || shared.Revision != saved.Revision {
+	shared := decodeResult[issuedPreviewLink](t, call(t, client, "create_preview_link", args))
+	if shared.URL == "" || shared.PageID != saved.PageID || shared.Revision != saved.Revision {
 		t.Fatal("enabled issuance did not create the requested link")
 	}
 	select {

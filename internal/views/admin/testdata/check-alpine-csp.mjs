@@ -3,6 +3,8 @@
 
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { parse as parseScript } from 'acorn';
+import { analyze } from 'eslint-scope';
 
 // The package ships these test exports from the same parser used by cdn.min.js.
 const source = readFileSync('node_modules/@alpinejs/csp/src/parser.js');
@@ -12,9 +14,36 @@ const components = new Map();
 const magics = new Set(['$el', '$refs', '$store', '$watch', '$dispatch', '$nextTick', '$root', '$data', '$id']);
 const errors = [];
 let checked = 0;
+let editorPickers = 0;
+const pageTemplate = 'internal/views/admin/pages.templ';
+
+function checkEditorImagePicker(file, script) {
+    const tree = parseScript(script, { ecmaVersion: 'latest', locations: true, ranges: true });
+    const picker = tree.body.filter(node => node.type === 'VariableDeclaration')
+        .flatMap(node => node.declarations)
+        .find(node => node.id.name === 'editorImagePicker')?.init;
+    if (picker?.type !== 'ObjectExpression') return;
+    editorPickers++;
+    const members = new Set(picker.properties.filter(prop => !prop.computed && prop.key)
+        .map(prop => prop.key.name ?? prop.key.value));
+    const { globalScope } = analyze(tree, { ecmaVersion: 2025, optimistic: true });
+    for (const { identifier } of globalScope.through) {
+        if (identifier.start >= picker.start && identifier.end <= picker.end && members.has(identifier.name)) {
+            errors.push(`${file}:${identifier.loc.start.line}: unqualified editorImagePicker member: ${identifier.name}`);
+        }
+    }
+}
 
 for (const file of files) {
     for (const script of file.scripts || []) {
+        if (file.path === pageTemplate && script.includes('editorImagePicker')) {
+            try {
+                checkEditorImagePicker(file.path, script);
+            } catch (error) {
+                errors.push(`${file.path}: checking editor image picker: ${error.message}`);
+            }
+        }
+        if (!script.includes('Alpine.data(')) continue;
         const callbacks = [];
         const emptyElement = { addEventListener() {}, appendChild() {} };
         const environment = {
@@ -48,11 +77,19 @@ for (const file of files) {
     }
 }
 
+if (files.some(file => file.path === pageTemplate) && editorPickers !== 1) {
+    errors.push(`${pageTemplate}: expected one checked editorImagePicker object`);
+}
+
 function verifyNames(node, scope) {
     if (!node || typeof node !== 'object') return;
     if (node.type === 'Identifier') {
         if (!scope.has(node.name)) throw new Error('undefined scope identifier: ' + node.name);
         return;
+    }
+    if (node.type === 'MemberExpression' && node.object?.type === 'Identifier' && node.object.name === '$data') {
+        const name = node.computed ? node.property.value : node.property.name;
+        if (typeof name === 'string' && !scope.has(name)) throw new Error('undefined $data member: ' + name);
     }
     for (const [key, value] of Object.entries(node)) {
         // Plain property names are looked up on the receiver, not the scope.

@@ -15,8 +15,11 @@
     "tinymce": "^8.10.0"
   },
   "devDependencies": {
-    "@playwright/cli": "0.1.23",
     "@tailwindcss/cli": "^4.3.3",
+    "acorn": "8.19.0",
+    "eslint-scope": "9.1.2",
+    "playwright": "1.65.0",
+    "sass": "1.105.1",
     "tailwindcss": "^4.3.3"
   },
   "overrides": {
