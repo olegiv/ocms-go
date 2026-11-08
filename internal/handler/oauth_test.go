@@ -41,17 +41,14 @@ func TestConsentURLHost(t *testing.T) {
 
 func enableTestOAuth(t *testing.T, env *mfaTestEnv) url.Values {
 	t.Helper()
-	// The shared handler fixture has a minimal schema rather than goose's
-	// migration history. Apply the actual OAuth migrations to that schema.
-	for _, name := range []string{"20261030170000_create_oauth.sql", "20261107180000_oauth_dcr_admission.sql"} {
-		migration, readErr := os.ReadFile("../store/migrations/" + name)
-		if readErr != nil {
-			t.Fatal(readErr)
-		}
-		up, _, _ := strings.Cut(string(migration), "-- +goose Down")
-		if _, execErr := env.db.Exec(up); execErr != nil {
-			t.Fatal(execErr)
-		}
+	// The shared fixture provides the OAuth tables. Add DCR admission for these tests.
+	migration, err := os.ReadFile("../store/migrations/20261107180000_oauth_dcr_admission.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, _, _ := strings.Cut(string(migration), "-- +goose Down")
+	if _, err = env.db.Exec(up); err != nil {
+		t.Fatal(err)
 	}
 	s, err := oauth.New(env.db, oauth.Options{Issuer: "https://cms.test", AllowDCR: true})
 	if err != nil {

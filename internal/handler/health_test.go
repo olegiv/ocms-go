@@ -33,13 +33,14 @@ func createTestAPIKey(t *testing.T, h *HealthHandler) string {
 		t.Fatalf("HashAPIKey failed: %v", err)
 	}
 
+	owner := createTestUser(t, h.db, testUser{Email: "health-key-owner@example.test", Name: "Health key owner", Role: model.RoleEditor})
 	_, err = h.queries.CreateAPIKey(context.Background(), store.CreateAPIKeyParams{
 		Name:        "Health Test Key",
 		KeyHash:     keyHash,
 		KeyPrefix:   keyPrefix,
 		Permissions: `["pages:read"]`,
 		IsActive:    true,
-		CreatedBy:   1,
+		CreatedBy:   owner.ID,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	})

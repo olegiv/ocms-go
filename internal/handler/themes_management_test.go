@@ -43,6 +43,11 @@ func themeManagementHandler(t *testing.T) *ThemesHandler {
 func themeManagementHandlerInDir(t *testing.T, customDir string) *ThemesHandler {
 	t.Helper()
 	db, sm := testHandlerSetup(t)
+	admin := themeImportUser(t)
+	if _, err := db.ExecContext(t.Context(), `INSERT INTO users (id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?)`,
+		admin.ID, admin.Email, admin.PasswordHash, admin.Role, "Admin"); err != nil {
+		t.Fatal(err)
+	}
 	renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
 	if err != nil {
 		t.Fatal(err)

@@ -26,7 +26,7 @@ import (
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
@@ -423,13 +423,17 @@ func testDB(t *testing.T) *sql.DB {
 		t.Fatal(readErr)
 	}
 	versionUp, _, _ := strings.Cut(string(baseVersion), "-- +goose Down")
-	schema += versionUp + up
+	oauthMigration, readErr := os.ReadFile("../store/migrations/20261030170000_create_oauth.sql")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	oauthUp, _, _ := strings.Cut(string(oauthMigration), "-- +goose Down")
+	schema += versionUp + oauthUp + up
 	reviewMigration, readErr := os.ReadFile("../store/migrations/20261101230000_editorial_review.sql")
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	// This lightweight fixture has no OAuth tables. Full migration/trigger
-	// behavior is exercised on migrated databases by the preview tests.
+	// The preview tests exercise the lifecycle triggers on migrated databases.
 	reviewUp, _, _ := strings.Cut(string(reviewMigration), "-- Persist lifecycle invalidation")
 	schema += reviewUp
 

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mattn/go-sqlite3"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -164,6 +165,14 @@ func TestRefusedPageWritesExplainWhy(t *testing.T) {
 	}
 	if err = queries.DeleteTag(ctx, tag.ID); err != nil {
 		t.Fatal(err)
+	}
+	if count, countErr := queries.CountPagesForTag(ctx, tag.ID); countErr != nil || count != 0 {
+		t.Errorf("deleted tag still has %d page links, want 0: %v", count, countErr)
+	}
+	var constraint sqlite3.Error
+	addErr := queries.AddTagToPage(ctx, store.AddTagToPageParams{PageID: published.ID, TagID: tag.ID})
+	if !errors.As(addErr, &constraint) || constraint.ExtendedCode != sqlite3.ErrConstraintForeignKey {
+		t.Errorf("linking a page to a deleted tag returned %v, want a foreign key violation", addErr)
 	}
 	for lang, reason := range map[string]string{"en": "Choose another version.", "ru": "Выберите другую версию."} {
 		adminLang = lang
