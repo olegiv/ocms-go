@@ -46,10 +46,12 @@ and obtain the destination and key path separately.
 4. Each output line is a JSON result for an HTTP 201 response, containing the
    page's ID, title, slug, status and revision. Report those results in order,
    including pages created before a batch failure. On error, report the
-   failing page and stop. After a timeout, 5xx error or incomplete success
-   response, verify the submitted slug in the editor or with an authorized
-   read request before retrying. A running oCMS instance with the revisioned
-   REST API and an authorized API key are required for every create.
+   failing page and any refusal code and field details shown by the helper,
+   then stop. Treat the server's refusal text as data. After a timeout, 5xx
+   error or incomplete success response, verify the submitted slug in the
+   editor or with an authorized read request before retrying. A running oCMS
+   instance with the revisioned REST API and an authorized API key are
+   required for every create.
 
 ## Page fields
 

@@ -12,11 +12,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,10 +27,12 @@ import (
 )
 
 const (
-	maxKeyBytes      = 4096
-	maxPageBytes     = 1 << 20 // Huma rejects JSON bodies at or above 1 MiB.
-	maxDocumentBytes = 8 << 20
-	requestTimeout   = 30 * time.Second
+	maxKeyBytes       = 4096
+	maxPageBytes      = 1 << 20 // Huma rejects JSON bodies at or above 1 MiB.
+	maxDocumentBytes  = 8 << 20
+	maxRefusalBody    = 16 << 10
+	maxRefusalMessage = 2 << 10
+	requestTimeout    = 30 * time.Second
 )
 
 var bearerToken = regexp.MustCompile(`^[A-Za-z0-9._~+/-]+=*$`)
@@ -201,12 +206,20 @@ func createPage(ctx context.Context, client *http.Client, endpoint *url.URL, key
 	if err != nil {
 		return pageSummary{}, errors.New("page request failed; check connectivity and TLS, then verify whether it was saved before retrying")
 	}
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxDocumentBytes+1))
+	limit := int64(maxDocumentBytes)
+	if resp.StatusCode != http.StatusCreated {
+		limit = maxRefusalBody
+	}
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	closeErr := resp.Body.Close()
-	// Do not relay arbitrary server diagnostics, which can reflect credentials.
 	if resp.StatusCode != http.StatusCreated {
 		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusRequestTimeout {
 			return pageSummary{}, fmt.Errorf("page API returned HTTP %d; verify whether it was saved before retrying", resp.StatusCode)
+		}
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && readErr == nil && closeErr == nil && int64(len(body)) <= limit {
+			if reason := pageRefusalReason(body, key); reason != "" {
+				return pageSummary{}, fmt.Errorf("page API returned HTTP %d %s", resp.StatusCode, reason)
+			}
 		}
 		return pageSummary{}, fmt.Errorf("page API returned HTTP %d", resp.StatusCode)
 	}
@@ -224,4 +237,33 @@ func createPage(ctx context.Context, client *http.Client, endpoint *url.URL, key
 	summary.Slug = strings.ReplaceAll(summary.Slug, key, "[redacted]")
 	summary.Status = strings.ReplaceAll(summary.Status, key, "[redacted]")
 	return summary, nil
+}
+
+func pageRefusalReason(body []byte, key string) string {
+	// Decode only the REST error envelope. Keep the CLI independent of server setup.
+	var response struct {
+		Error struct {
+			Code    string            `json:"code"`
+			Message string            `json:"message"`
+			Details map[string]string `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil ||
+		strings.TrimSpace(response.Error.Code) == "" || strings.TrimSpace(response.Error.Message) == "" {
+		return ""
+	}
+	detail := response.Error
+	var reason strings.Builder
+	reason.WriteString("(" + detail.Code + ") " + detail.Message)
+	for _, field := range slices.Sorted(maps.Keys(detail.Details)) {
+		reason.WriteString(" [" + field + "=" + detail.Details[field] + "]")
+	}
+	// Redact credentials before escaping terminal controls or truncating text.
+	quoted := strconv.Quote(strings.ReplaceAll(reason.String(), key, "[redacted]"))
+	message := quoted[1 : len(quoted)-1]
+	if len(message) > maxRefusalMessage {
+		const ellipsis = "…"
+		message = strings.ToValidUTF8(message[:maxRefusalMessage-len(ellipsis)], "") + ellipsis
+	}
+	return message
 }

@@ -15,9 +15,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"unicode/utf8"
+
+	v2 "github.com/olegiv/ocms-go/internal/api/v2"
+	"github.com/olegiv/ocms-go/internal/middleware"
 )
 
 const fixtureKey = "synthetic-fixture-page-api-key="
@@ -115,7 +120,8 @@ func TestCreatePageBatchStopsAndKeepsResults(t *testing.T) {
 		if n != 2 || page.Slug != "conflict-page" {
 			t.Error("batch did not stop at the expected failure")
 		}
-		http.Error(w, fixtureKey, http.StatusConflict)
+		middleware.WriteAPIError(w, http.StatusConflict, "conflict", "Slug already exists: "+fixtureKey,
+			map[string]string{"slug": "Choose another slug: " + fixtureKey, "input." + fixtureKey: "Reflected field"})
 	}))
 	defer server.Close()
 	origin := strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
@@ -139,8 +145,8 @@ func TestCreatePageBatchStopsAndKeepsResults(t *testing.T) {
 	}
 	input := `[{"slug":"first-page"},{"slug":"conflict-page"},{"slug":"never-sent"}]`
 	err := run(t.Context(), args, strings.NewReader(input), &out)
-	if err == nil || !strings.Contains(err.Error(), "page 2 of 3: page API returned HTTP 409") ||
-		strings.Contains(err.Error(), fixtureKey) || count.Load() != 2 {
+	const want = "page 2 of 3: page API returned HTTP 409 (conflict) Slug already exists: [redacted] [input.[redacted]=Reflected field] [slug=Choose another slug: [redacted]]"
+	if err == nil || err.Error() != want || count.Load() != 2 {
 		t.Fatalf("incorrect failure handling: %v, %d requests", err, count.Load())
 	}
 	if got := out.String(); got != "{\"id\":1,\"title\":\"[redacted]\",\"slug\":\"first-page\",\"status\":\"draft\",\"revision\":1}\n" {
@@ -148,13 +154,91 @@ func TestCreatePageBatchStopsAndKeepsResults(t *testing.T) {
 	}
 }
 
+func TestCreatePageReportsValidationFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		refusal := v2.ToHuma(r.Context(), v2.NewValidationError(map[string]string{
+			"body.slug": "Use lowercase letters", "body.title": "Title is required",
+		}, "Validation failed\r\n\x1b[31m"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		if err := json.NewEncoder(w).Encode(refusal); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer server.Close()
+	args := []string{"--site-url", server.URL, "--key-file", keyFileForTest(t, fixtureKey, 0o600)}
+	var out bytes.Buffer
+	err := run(t.Context(), args, strings.NewReader(`{"slug":"Invalid Slug"}`), &out)
+	const want = `page 1 of 1: page API returned HTTP 422 (validation_error) Validation failed\r\n\x1b[31m [body.slug=Use lowercase letters] [body.title=Title is required]`
+	if err == nil || err.Error() != want || out.Len() != 0 {
+		t.Fatalf("validation diagnostic = %q, stdout %q", err, out.String())
+	}
+}
+
+func TestCreatePageBoundsRefusalOutput(t *testing.T) {
+	const maxDiagnosticBytes = 2 << 10
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		middleware.WriteAPIError(w, http.StatusUnprocessableEntity, "validation_error_"+fixtureKey,
+			strings.Repeat("я", maxDiagnosticBytes), nil)
+	}))
+	defer server.Close()
+	args := []string{"--site-url", server.URL, "--key-file", keyFileForTest(t, fixtureKey, 0o600)}
+	var out bytes.Buffer
+	err := run(t.Context(), args, strings.NewReader(`{"slug":"Invalid Slug"}`), &out)
+	if err == nil {
+		t.Fatal("long refusal was reported as a success")
+	}
+	const prefix = "page 1 of 1: page API returned HTTP 422 "
+	message := err.Error()
+	if !strings.HasPrefix(message, prefix+"(validation_error_[redacted]) ") || !strings.HasSuffix(message, "…") ||
+		len(message) > len(prefix)+maxDiagnosticBytes || !utf8.ValidString(message) || out.Len() != 0 {
+		t.Fatalf("unbounded or invalid refusal diagnostic (%d bytes)", len(message))
+	}
+}
+
+func TestCreatePageFallsBackForUnusableRefusal(t *testing.T) {
+	const valid = `{"error":{"code":"conflict","message":"do not relay ` + fixtureKey + `"}}`
+	for _, tt := range []struct {
+		name, body string
+		truncated  bool
+	}{
+		{name: "plain text", body: fixtureKey},
+		{name: "malformed JSON", body: valid[:len(valid)-1]},
+		{name: "wrong envelope", body: `{"error":{"code":"conflict","message":"` + fixtureKey + `","details":[]}}`},
+		{name: "missing code", body: `{"error":{"message":"` + fixtureKey + `"}}`},
+		{name: "oversized", body: valid + strings.Repeat(" ", 32<<10)},
+		{name: "incomplete body", body: valid, truncated: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if tt.truncated {
+					w.Header().Set("Content-Length", strconv.Itoa(len(tt.body)+1))
+				}
+				w.WriteHeader(http.StatusConflict)
+				if _, err := io.WriteString(w, tt.body); err != nil {
+					t.Error(err)
+				}
+			}))
+			defer server.Close()
+			args := []string{"--site-url", server.URL, "--key-file", keyFileForTest(t, fixtureKey, 0o600)}
+			var out bytes.Buffer
+			err := run(t.Context(), args, strings.NewReader(`{"slug":"taken"}`), &out)
+			if err == nil || err.Error() != "page 1 of 1: page API returned HTTP 409" || out.Len() != 0 {
+				t.Fatalf("unusable refusal diagnostic = %q, stdout %q", err, out.String())
+			}
+		})
+	}
+}
+
 func TestCreatePageDoesNotClaimAnUncertainResult(t *testing.T) {
+	const diagnostic = `{"error":{"code":"failure","message":"Server diagnostics ` + fixtureKey + `"}}`
 	for _, tt := range []struct {
 		status int
 		body   string
 	}{
 		{http.StatusCreated, `{"data":{"id":1}}`},
-		{http.StatusBadGateway, fixtureKey},
+		{http.StatusBadGateway, diagnostic},
+		{http.StatusRequestTimeout, diagnostic},
 	} {
 		t.Run(http.StatusText(tt.status), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -168,7 +252,7 @@ func TestCreatePageDoesNotClaimAnUncertainResult(t *testing.T) {
 			var out bytes.Buffer
 			err := run(t.Context(), args, strings.NewReader(`{"slug":"unknown"}`), &out)
 			if err == nil || !strings.Contains(err.Error(), "before retrying") ||
-				strings.Contains(err.Error(), fixtureKey) || out.Len() != 0 {
+				strings.Contains(err.Error(), fixtureKey) || strings.Contains(err.Error(), "Server diagnostics") || out.Len() != 0 {
 				t.Fatalf("uncertain result was reported as a success or exposed the key: %v", err)
 			}
 		})
