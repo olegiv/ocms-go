@@ -23,37 +23,68 @@ if [[ -L "$audit_dir" || ( -e "$audit_dir" && ! -d "$audit_dir" ) ]] ||
   exit 2
 fi
 mkdir -p -- "$audit_dir"
-lock_dir="$audit_dir/.archive.lock"
-if ! mkdir -- "$lock_dir"; then
-  echo 'Another audit is preparing its report directory.' >&2
-  echo 'If preparation stopped and no audit is active, remove the empty lock with rmdir -- .audit/.archive.lock and retry.' >&2
+lock_file="$audit_dir/.archive.lock"
+if [[ -L "$lock_file" ]]; then
+  echo 'Use a regular file for .audit/.archive.lock.' >&2
   exit 2
 fi
-trap 'rmdir -- "$lock_dir"' EXIT
-timestamp=$(date '+%Y-%m-%d_%H-%M-%S')
-archive_dir=
-shopt -s nullglob
-# A top-level dated report marks a finished run, regardless of its producer.
-# Leave logs without a matching report and active notes in place.
-for report in "$audit_dir"/security-audit-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].md; do
-  [[ -f "$report" && ! -L "$report" ]] || continue
-  report_stamp=${report##*/security-audit-}
-  report_stamp=${report_stamp%.md}
-  if [[ -z "$archive_dir" ]]; then
-    archive_dir=$(mktemp -d "$audit_dir/archive-$timestamp.XXXXXXXX")
-    printf 'Archiving previous audit files in %s\n' "$archive_dir" >&2
-  fi
-  for path in "$audit_dir/govulncheck-$report_stamp.log" "$audit_dir/npm-audit-$report_stamp.log" "$report"; do
-    if [[ -f "$path" && ! -L "$path" ]]; then
-      mv -- "$path" "$archive_dir/"
-    fi
-  done
-done
-shopt -u nullglob
+if [[ -d "$lock_file" ]]; then
+  echo 'Another audit is preparing its report directory.' >&2
+  echo 'If preparation stopped and no audit is active, remove the empty legacy lock with rmdir -- .audit/.archive.lock and retry.' >&2
+  exit 2
+fi
+if [[ -e "$lock_file" && ! -f "$lock_file" ]]; then
+  echo 'Use a regular file for .audit/.archive.lock.' >&2
+  exit 2
+fi
 
-run_dir=$(mktemp -d "$audit_dir/run-$timestamp.XXXXXXXX")
-rmdir -- "$lock_dir"
-trap - EXIT
+run_dir=$(
+  set -e
+  umask 077
+  # The descriptor and its lock are released even if preparation is killed.
+  # Keep the empty file so contenders always lock the same inode.
+  exec 9>>"$lock_file"
+  if command -v lockf >/dev/null 2>&1; then
+    locker=(lockf -s -t 0 9)
+  elif command -v flock >/dev/null 2>&1; then
+    locker=(flock -n -E 75 9)
+  else
+    echo 'Audit preparation requires lockf or flock.' >&2
+    exit 2
+  fi
+  if "${locker[@]}"; then
+    :
+  else
+    status=$?
+    if [[ $status == 75 ]]; then
+      echo 'Another audit is preparing its report directory.' >&2
+    else
+      echo 'Could not lock the audit archive.' >&2
+    fi
+    exit 2
+  fi
+
+  timestamp=$(date '+%Y-%m-%d_%H-%M-%S')
+  archive_dir=
+  shopt -s nullglob
+  # A top-level dated report marks a finished run, regardless of its producer.
+  # Leave logs without a matching report and active notes in place.
+  for report in "$audit_dir"/security-audit-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].md; do
+    [[ -f "$report" && ! -L "$report" ]] || continue
+    report_stamp=${report##*/security-audit-}
+    report_stamp=${report_stamp%.md}
+    if [[ -z "$archive_dir" ]]; then
+      archive_dir=$(mktemp -d "$audit_dir/archive-$timestamp.XXXXXXXX")
+      printf 'Archiving previous audit files in %s\n' "$archive_dir" >&2
+    fi
+    for path in "$audit_dir/govulncheck-$report_stamp.log" "$audit_dir/npm-audit-$report_stamp.log" "$report"; do
+      if [[ -f "$path" && ! -L "$path" ]]; then
+        mv -- "$path" "$archive_dir/"
+      fi
+    done
+  done
+  mktemp -d "$audit_dir/run-$timestamp.XXXXXXXX"
+)
 if [[ ${1:-} == --prepare ]]; then
   printf '%s\n' "$run_dir"
   exit 0
@@ -64,7 +95,7 @@ govuln_status='skipped (govulncheck missing)'
 npm_status='skipped (npm/package.json missing)'
 
 if command -v govulncheck >/dev/null 2>&1; then
-  if govulncheck ./... >"$run_dir/govulncheck.log" 2>&1; then
+  if ./scripts/with-go-packages.sh govulncheck >"$run_dir/govulncheck.log" 2>&1; then
     govuln_status=ok
   else
     govuln_status='issues found'

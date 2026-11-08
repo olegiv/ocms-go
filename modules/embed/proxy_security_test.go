@@ -6,13 +6,107 @@ package embed
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/module"
 )
+
+type streamTestTransport func(*http.Request) (*http.Response, error)
+
+func (f streamTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type stalledStreamBody struct {
+	io.Reader
+	ctx         context.Context
+	interrupted chan<- error
+}
+
+func (b stalledStreamBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if errors.Is(err, io.EOF) {
+		<-b.ctx.Done()
+		err = b.ctx.Err()
+		b.interrupted <- err
+	}
+	return n, err
+}
+
+func (stalledStreamBody) Close() error { return nil }
+
+func TestDifyStreamingHonorsOuterRequestDeadline(t *testing.T) {
+	const first = "data: {\"event\":\"message\"}\n\n"
+	const last = "data: {\"event\":\"message_end\"}\n\n"
+	for _, tc := range []struct {
+		name    string
+		stalled bool
+	}{{"complete stream", false}, {"stalled stream", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				mod := New()
+				mod.ctx = &module.Context{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+				const outerTimeout = time.Second
+				deadline := time.Now().Add(outerTimeout)
+				observed := make(chan time.Time, 1)
+				interrupted := make(chan error, 1)
+				previous := difyProxyHTTPClient
+				difyProxyHTTPClient = &http.Client{Timeout: difyProxyTimeout, Transport: streamTestTransport(func(r *http.Request) (*http.Response, error) {
+					upstreamDeadline, _ := r.Context().Deadline()
+					observed <- upstreamDeadline
+					body := io.NopCloser(strings.NewReader(first + last))
+					if tc.stalled {
+						body = stalledStreamBody{Reader: strings.NewReader(first), ctx: r.Context(), interrupted: interrupted}
+					}
+					return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/event-stream"}}, Body: body}, nil
+				})}
+				t.Cleanup(func() { difyProxyHTTPClient = previous })
+				handler := middleware.Timeout(outerTimeout)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					mod.proxyDifyRequest(w, r, "https://dify.example.test/v1", "fixture-key", http.MethodPost, "/chat-messages", nil, nil)
+				}))
+				recorder := httptest.NewRecorder()
+				serve := func() (recovered any) {
+					defer func() { recovered = recover() }()
+					handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/embed/dify/chat-messages", nil))
+					return nil
+				}
+				recovered := serve()
+				synctest.Wait()
+				select {
+				case got := <-observed:
+					if !got.Equal(deadline) {
+						t.Fatalf("Dify upstream deadline = %v, want outer deadline %v", got, deadline)
+					}
+				default:
+					t.Fatal("Dify proxy never contacted the upstream transport")
+				}
+				if tc.stalled {
+					abort, _ := recovered.(error)
+					if !errors.Is(abort, http.ErrAbortHandler) || recorder.Body.String() != first {
+						t.Fatalf("unfinished Dify stream was not aborted: panic=%v body=%q", recovered, recorder.Body.String())
+					}
+					select {
+					case err := <-interrupted:
+						if !errors.Is(err, context.DeadlineExceeded) {
+							t.Fatalf("upstream interruption = %v", err)
+						}
+					default:
+						t.Fatal("the outer timeout did not cancel the upstream body")
+					}
+				} else if recovered != nil || recorder.Code != http.StatusOK || recorder.Body.String() != first+last {
+					t.Fatalf("complete Dify stream failed: panic=%v status=%d body=%q", recovered, recorder.Code, recorder.Body.String())
+				}
+			})
+		})
+	}
+}
 
 // TestDifyProxyCheckRedirect_ReChecksUpstreamAllowlist asserts the shared Dify
 // proxy HTTP client re-applies the upstream-host allowlist on every redirect

@@ -103,6 +103,12 @@ func TestClaudeCommandsRouteValidatedInputs(t *testing.T) {
 				".audit/run-*/report.md", "returns Markdown"},
 			forbidden: []string{"Move all existing audit files", "launch the security-auditor agent"},
 		},
+		{
+			name: "create-page",
+			required: []string{"disable-model-invocation: true", "disallowed-tools: [Read, Grep, Glob]",
+				`--key-file "$key_file"`, "usual shell approval"},
+			forbidden: []string{"\nallowed-tools:"},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			body := string(readWorkflowFile(t, filepath.Join("..", "..", ".claude", "commands", tt.name+".md")))

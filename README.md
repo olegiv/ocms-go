@@ -468,7 +468,7 @@ make run
 | `make build-linux-arm64` | Cross-compile no-cgo Linux ARM64 binary |
 | `make build-darwin-arm64` | Cross-compile no-cgo macOS ARM64 binary |
 | `make build-all-platforms` | Build no-cgo Linux AMD64/ARM64 and macOS ARM64 binaries |
-| `make test` | Run all tests |
+| `make test` | Run the project Go suite, excluding the top-level `output/` artifact directory |
 | `make clean` | Remove build artifacts |
 | `make clean-db` | Remove database files |
 | `make migrate-up` | Apply pending migrations (`ocms migrate up`) |
@@ -1001,14 +1001,17 @@ for the full rationale.
 
 ## Testing
 
-Run all tests:
+Run all project tests. The package selector skips the top-level `output/`
+directory so local verification artifacts do not enter the test suite.
+
 ```bash
-OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 ./...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' ./scripts/with-go-packages.sh go test -count=1
 ```
 
-Run tests with verbose output:
+Add `-v` for verbose output.
+
 ```bash
-OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v ./...
+OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' ./scripts/with-go-packages.sh go test -count=1 -v
 ```
 
 Run tests for a specific package:

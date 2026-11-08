@@ -4,7 +4,9 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 type proxyWorkflowFixture struct {
@@ -37,7 +40,7 @@ func newProxyWorkflowFixture(t *testing.T) proxyWorkflowFixture {
 		"scripts/codex-commands", "scripts/codex/proxy-claude-command.sh",
 		"scripts/codex/commit-prepare.sh", "scripts/codex/commit-do.sh",
 		"scripts/codex/test-snapshot.sh", "scripts/codex/security-audit.sh",
-		"scripts/codex/security-audit-proxy.md",
+		"scripts/codex/security-audit-proxy.md", "scripts/with-go-packages.sh",
 	} {
 		data, err := os.ReadFile(filepath.Join("..", "..", name))
 		if err != nil {
@@ -352,8 +355,11 @@ func TestLocalAuditPreservesInProgressWork(t *testing.T) {
 	f := newProxyWorkflowFixture(t)
 	f.write(".audit/TODO.md", "active audit notes\n")
 	f.write("package.json", "{}\n")
+	f.write("go.mod", "module example.invalid/auditfixture\n\ngo 1.27\n")
+	f.write("fixture.go", "package auditfixture\n")
+	f.write("output/old/broken.go", "package old\nfunc =\n")
 	f.script("govulncheck", `#!/bin/sh
-[ "$*" = ./... ] || exit 2
+[ "$*" = . ] || exit 2
 printf 'Go scan output\n'
 `)
 	f.script("npm", `#!/bin/sh
@@ -383,7 +389,7 @@ exit 1
 	}
 }
 
-func TestAuditPreparationReportsStaleLockRecovery(t *testing.T) {
+func TestAuditPreparationHandlesLegacyLock(t *testing.T) {
 	f := newProxyWorkflowFixture(t)
 	lock := filepath.Join(f.dir, ".audit", ".archive.lock")
 	if err := os.MkdirAll(lock, 0o750); err != nil {
@@ -398,6 +404,100 @@ func TestAuditPreparationReportsStaleLockRecovery(t *testing.T) {
 	cmd := f.command("bash", "scripts/codex/security-audit.sh", "--prepare")
 	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), ".audit/run-") {
 		t.Fatalf("audit did not recover after lock removal: %v\n%s", err, out)
+	}
+}
+
+func TestAuditArchiveLockReleasesAfterOwnerDies(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	f.write(".audit/TODO.md", "active notes\n")
+	lock := filepath.Join(f.dir, ".audit", ".archive.lock")
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	holder := exec.CommandContext(ctx, "bash", "-c", `set -e
+exec 9>>"$1"
+if command -v lockf >/dev/null 2>&1; then lockf -s -t 0 9; else flock -n -E 75 9; fi
+printf 'locked\n'
+read -r release
+`, "holder", lock)
+	holder.Dir, holder.Env = f.dir, f.env
+	in, err := holder.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = in.Close() }()
+	out, err := holder.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = holder.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if holder.ProcessState == nil {
+			_ = holder.Process.Kill()
+			_ = holder.Wait()
+		}
+	})
+	if line, readErr := bufio.NewReader(out).ReadString('\n'); readErr != nil || line != "locked\n" {
+		t.Fatalf("lock holder did not start: %q, %v", line, readErr)
+	}
+	prepare := func() ([]byte, error) {
+		return f.command("bash", "scripts/codex/security-audit.sh", "--prepare").CombinedOutput()
+	}
+	var exitErr *exec.ExitError
+	if output, prepareErr := prepare(); !errors.As(prepareErr, &exitErr) || exitErr.ExitCode() != 2 || !strings.Contains(string(output), "Another audit is preparing") {
+		t.Fatalf("preparation entered a locked archive: %v\n%s", prepareErr, output)
+	}
+	if err = holder.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	if err = holder.Wait(); err == nil {
+		t.Fatal("lock owner unexpectedly exited normally")
+	}
+	if info, statErr := os.Stat(lock); statErr != nil || !info.Mode().IsRegular() {
+		t.Fatalf("the lock file did not survive the killed owner: %v", statErr)
+	}
+	if output, prepareErr := prepare(); prepareErr != nil || !strings.Contains(string(output), ".audit/run-") {
+		t.Fatalf("preparation did not recover from the killed owner: %v\n%s", prepareErr, output)
+	}
+}
+
+func TestAuditPreparationRefusesSymlinkedLock(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	f.write(".audit/TODO.md", "active notes\n")
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.Symlink(outside, filepath.Join(f.dir, ".audit", ".archive.lock")); err != nil {
+		t.Fatal(err)
+	}
+	cmd := f.command("bash", "scripts/codex/security-audit.sh", "--prepare")
+	if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "Use a regular file") {
+		t.Fatalf("audit accepted a symlinked lock: %v\n%s", err, out)
+	}
+	requireWorkflowFileAbsent(t, outside)
+}
+
+func TestProjectGoPackagesExcludeOnlyTopLevelOutput(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	cache, err := exec.Command("go", "env", "GOCACHE").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.env = append(f.env, "GOCACHE="+strings.TrimSpace(string(cache)))
+	f.write("go.mod", "module example.invalid/pkgfixture\n\ngo 1.27\n")
+	f.write("pkg/owned.go", "package pkg\n")
+	f.write("pkg/owned_test.go", "package pkg\nimport \"testing\"\nfunc TestOwned(t *testing.T) {}\n")
+	f.write("nested/output/owned.go", "package output\n")
+	f.write("output/generated/broken.go", "package generated\nfunc =\n")
+	f.write("output/generated/broken_test.go", "package generated\nimport \"testing\"\nfunc TestGenerated(t *testing.T) {}\n")
+	output, err := f.command("bash", "scripts/with-go-packages.sh", "go", "test", "-count=1").CombinedOutput()
+	if err != nil || !strings.Contains(string(output), "example.invalid/pkgfixture/pkg") ||
+		!strings.Contains(string(output), "example.invalid/pkgfixture/nested/output") || strings.Contains(string(output), "output/generated") {
+		t.Fatalf("project test selected the wrong packages: %v\n%s", err, output)
+	}
+	f.write("pkg/owned.go", "package pkg\nvar _ = missingName\n")
+	output, err = f.command("bash", "scripts/with-go-packages.sh", "go", "test", "-count=1").CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "missingName") {
+		t.Fatalf("project test hid an owned package error: %v\n%s", err, output)
 	}
 }
 

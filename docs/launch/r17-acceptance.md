@@ -659,6 +659,9 @@ editor screenshot, anonymous responses and `acceptance-summary.json`.
 
 ## Staging rollout of b58b7b51
 
+The user authorized the deployment of `b58b7b51` to Fly staging in the
+Codex chat on 2026-11-08 at 06:14:18 UTC.
+
 On 2026-11-08, Fly deployed a clean archive of
 `b58b7b513f7f94bd4c7e208065e12ab35e01e368` to `ocms-mcp-staging`
 after the browser-enabled Go test gate passed. The running binary reported
@@ -684,6 +687,9 @@ that exact commit, built at `2026-11-08T06:19:05Z` from tree
 | Language switching | English-to-Russian switching worked anonymously and while signed in. The anonymous switch set only the preference cookie and preserved the SQLite session fingerprint. The signed-in switch reused its session. |
 
 Both temporary OAuth grants were revoked and the browser sessions were closed.
+The first browser probe failed when it expected text from a local draft
+fixture. It revoked its grant and logged out. The fresh run checked the
+deployed preview banner and response headers and passed.
 The recorded counts for accounts, pages, revisions, provenance, active
 OAuth grants and non-agent OAuth grants matched before and after verification.
 Temporary database probes were removed from staging. The browser flow used the

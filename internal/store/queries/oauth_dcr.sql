@@ -28,14 +28,20 @@ DELETE FROM oauth_dcr_registrations WHERE registered_at <= sqlc.arg(cutoff)
 AND (provisional = 0 OR NOT EXISTS (SELECT 1 FROM oauth_clients WHERE id = oauth_dcr_registrations.client_id));
 
 -- Prefer the oldest provisional client from a source holding more slots than
--- the requester. Give a source's only provisional client a grace period.
+-- the requester. Give a source's only provisional client the normal grace
+-- period, with a shorter minimum age at capacity for a source with no recent
+-- successful registration. The pending view excludes clients with grants.
 -- name: EvictOAuthDCRClient :execrows
 DELETE FROM oauth_clients WHERE id = (
     SELECT p.client_id FROM oauth_dcr_pending p
     JOIN (SELECT d.source_key, COUNT(*) AS clients FROM oauth_dcr_pending d GROUP BY d.source_key) h
         ON h.source_key = p.source_key
     WHERE h.clients > (SELECT COUNT(*) FROM oauth_dcr_pending requester WHERE requester.source_key = sqlc.arg(source_key))
-    AND (h.clients > 1 OR p.registered_at <= sqlc.arg(grace_cutoff))
+    AND (h.clients > 1 OR p.registered_at <= sqlc.arg(grace_cutoff)
+        OR (p.registered_at <= sqlc.arg(pressure_cutoff) AND 0 = (
+            SELECT COUNT(*) FROM oauth_dcr_registrations recent
+            WHERE recent.source_key = sqlc.arg(source_key) AND recent.registered_at > sqlc.arg(source_cutoff)
+        )))
     ORDER BY h.clients DESC, p.registered_at, p.client_id
     LIMIT 1
 );

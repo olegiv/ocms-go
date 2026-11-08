@@ -20,4 +20,4 @@ if [[ ${OCMS_TEST_BROWSER:-} == 1 && -z ${OCMS_PLAYWRIGHT_CLI:-} ]]; then
 fi
 
 # -count=1 disables the test cache: every test runs, no earlier pass is reused.
-exec go test -count=1 ./...
+exec ./scripts/with-go-packages.sh go test -count=1

@@ -22,6 +22,7 @@ const (
 	dcrRegistrationWindow      = time.Hour
 	dcrGlobalWindow            = 10 * time.Minute
 	dcrSingleClientGrace       = 10 * time.Minute
+	dcrRegistryPressureGrace   = time.Minute
 )
 
 type dcrRefusalKind uint8
@@ -138,7 +139,10 @@ func (s *Service) registerDCR(ctx context.Context, c registeredClient, ip string
 	err = save()
 	if errors.Is(err, errOAuthClientCapacity) {
 		evicted, evictErr := q.EvictOAuthDCRClient(ctx, store.EvictOAuthDCRClientParams{
-			SourceKey: source.key, GraceCutoff: now.Add(-dcrSingleClientGrace).UnixNano(),
+			SourceKey:      source.key,
+			GraceCutoff:    now.Add(-dcrSingleClientGrace).UnixNano(),
+			PressureCutoff: now.Add(-dcrRegistryPressureGrace).UnixNano(),
+			SourceCutoff:   now.Add(-dcrRegistrationWindow).UnixNano(),
 		})
 		if evictErr != nil {
 			return dcrRefusal{}, evictErr

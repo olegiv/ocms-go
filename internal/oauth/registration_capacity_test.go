@@ -78,18 +78,49 @@ func TestDCRCapacityReclaimsOverrepresentedSourceAtomically(t *testing.T) {
 	requireRegistrationLimit(t, registerFrom(f.s, "192.0.2.2:3000", registrationMetadata, nil), 3600)
 }
 
-func TestDCRDistinctSourcesKeepGrace(t *testing.T) {
+func TestDCRFullRegistryAdmitsNewSourceAfterPressureGrace(t *testing.T) {
 	f, now := registrationFixture(t)
 	start := *now
-	for i := range 1000 {
+	const returning = "192.0.2.2:3000"
+	former := requireRegistration(t, registerFrom(f.s, returning, registrationMetadata, nil))
+	retentionExec(t, f, "DELETE FROM oauth_clients WHERE id = ?", former)
+	protected := requireRegistration(t, registerFrom(f.s, "198.18.0.0:3000", registrationMetadata, nil))
+	*now = start.Add(time.Millisecond)
+	victim := requireRegistration(t, registerFrom(f.s, "198.18.0.1:3000", registrationMetadata, nil))
+	pressureAt := now.Add(dcrRegistryPressureGrace)
+	*now = start.Add(2 * time.Millisecond)
+	for i := 2; i < 1000; i++ {
 		requireRegistration(t, registerFrom(f.s, fmt.Sprintf("198.18.%d.%d:3000", i/256, i%256), registrationMetadata, nil))
 	}
+	requireDCRRows(t, f, 1000)
 	const newcomer = "192.0.2.1:3000"
-	if w := registerFrom(f.s, newcomer, registrationMetadata, nil); w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("recent sole clients lost their grace period: %d %s", w.Code, w.Body.String())
+	assertFull := func(peer string) {
+		t.Helper()
+		if w := registerFrom(f.s, peer, registrationMetadata, nil); w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("registry refusal = %d %s", w.Code, w.Body.String())
+		}
 	}
-	*now = start.Add(dcrSingleClientGrace)
+	*now = pressureAt.Add(-time.Second)
+	f.values.Set("client_id", protected)
+	code := f.code(t)
+	assertFull(newcomer)
+	*now = pressureAt
+	assertFull(returning)
+	retentionExec(t, f, `CREATE TRIGGER reject_dcr_pressure BEFORE INSERT ON oauth_dcr_registrations
+		BEGIN SELECT RAISE(ABORT, 'registration evidence write failed'); END`)
+	assertFull(newcomer)
+	if _, err := f.s.q.GetOAuthClient(t.Context(), victim); err != nil {
+		t.Fatalf("failed pressure admission removed the victim: %v", err)
+	}
+	retentionExec(t, f, "DROP TRIGGER reject_dcr_pressure")
 	requireRegistration(t, registerFrom(f.s, newcomer, registrationMetadata, nil))
+	if _, err := f.s.q.GetOAuthClient(t.Context(), victim); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("oldest eligible singleton was not reclaimed: %v", err)
+	}
+	f.redeem(t, code)
+	assertFull(returning)
+	*now = start.Add(dcrSingleClientGrace + 2*time.Millisecond)
+	requireRegistration(t, registerFrom(f.s, returning, registrationMetadata, nil))
 	requireDCRRows(t, f, 1000)
 }
 

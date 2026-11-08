@@ -148,6 +148,9 @@ func requirePreviewRetryMessage(t *testing.T, err error) {
 	t.Helper()
 	requireDraftRetryCode(t, err)
 	mapped, _ := toToolError(err)
+	if mapped == nil {
+		t.Fatalf("preview issuance returned no tool error for %v", err)
+	}
 	if !strings.HasPrefix(mapped.Message, "Preview ") {
 		t.Fatalf("preview issuance reported an unrelated failure: %q", mapped.Message)
 	}

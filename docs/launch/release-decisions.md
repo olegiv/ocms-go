@@ -23,7 +23,7 @@ all Published, with both translations Current. The
 [publication record](r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
 includes the English restore workaround and public readbacks. The earlier
 [rollout record](r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
-includes exact image, preservation and cleanup evidence. Client reconnect,
+includes exact image, preservation and cleanup evidence. Earlier client reconnect,
 dependency and sharing results remain tied to their tested builds.
 
 On the preceding `ba044434` build, fresh Claude web and ChatGPT web

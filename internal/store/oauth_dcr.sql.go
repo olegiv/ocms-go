@@ -25,21 +25,34 @@ DELETE FROM oauth_clients WHERE id = (
     JOIN (SELECT d.source_key, COUNT(*) AS clients FROM oauth_dcr_pending d GROUP BY d.source_key) h
         ON h.source_key = p.source_key
     WHERE h.clients > (SELECT COUNT(*) FROM oauth_dcr_pending requester WHERE requester.source_key = ?1)
-    AND (h.clients > 1 OR p.registered_at <= ?2)
+    AND (h.clients > 1 OR p.registered_at <= ?2
+        OR (p.registered_at <= ?3 AND 0 = (
+            SELECT COUNT(*) FROM oauth_dcr_registrations recent
+            WHERE recent.source_key = ?1 AND recent.registered_at > ?4
+        )))
     ORDER BY h.clients DESC, p.registered_at, p.client_id
     LIMIT 1
 )
 `
 
 type EvictOAuthDCRClientParams struct {
-	SourceKey   string `json:"source_key"`
-	GraceCutoff int64  `json:"grace_cutoff"`
+	SourceKey      string `json:"source_key"`
+	GraceCutoff    int64  `json:"grace_cutoff"`
+	PressureCutoff int64  `json:"pressure_cutoff"`
+	SourceCutoff   int64  `json:"source_cutoff"`
 }
 
 // Prefer the oldest provisional client from a source holding more slots than
-// the requester. Give a source's only provisional client a grace period.
+// the requester. Give a source's only provisional client the normal grace
+// period, with a shorter minimum age at capacity for a source with no recent
+// successful registration. The pending view excludes clients with grants.
 func (q *Queries) EvictOAuthDCRClient(ctx context.Context, arg EvictOAuthDCRClientParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, evictOAuthDCRClient, arg.SourceKey, arg.GraceCutoff)
+	result, err := q.db.ExecContext(ctx, evictOAuthDCRClient,
+		arg.SourceKey,
+		arg.GraceCutoff,
+		arg.PressureCutoff,
+		arg.SourceCutoff,
+	)
 	if err != nil {
 		return 0, err
 	}
