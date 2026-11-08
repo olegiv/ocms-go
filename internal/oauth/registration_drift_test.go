@@ -7,21 +7,27 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/internal/testutil/repotree"
 )
 
-// TestDCRWritersUseRegistrationBudget inventories client persistence in the
-// owning package so a new DCR writer cannot bypass the tested admission path.
+// TestDCRWritersUseRegistrationBudget requires client mutations to have
+// guarded callers and checks how client creation reaches the budget.
 func TestDCRWritersUseRegistrationBudget(t *testing.T) {
+	t.Run("client query catalog", checkOAuthClientWriters)
+
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	fset := token.NewFileSet()
-	dcrWriters, upserts := 0, 0
+	dcrWriters := 0
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
@@ -41,12 +47,7 @@ func TestDCRWritersUseRegistrationBudget(t *testing.T) {
 					return true
 				}
 				switch selector.Sel.Name {
-				case "UpsertOAuthClient":
-					upserts++
-					if fn.Name.Name != "saveClientTx" {
-						t.Errorf("%s: client write outside the shared persistence boundary", fset.Position(node.Pos()))
-					}
-				case "RecordOAuthDCRRegistration", "EvictOAuthDCRClient":
+				case "RecordOAuthDCRRegistration":
 					if fn.Name.Name != "registerDCR" {
 						t.Errorf("%s: DCR admission write outside registerDCR", fset.Position(node.Pos()))
 					}
@@ -90,7 +91,78 @@ func TestDCRWritersUseRegistrationBudget(t *testing.T) {
 			})
 		}
 	}
-	if dcrWriters != 1 || upserts != 1 {
-		t.Fatalf("client writer inventory: DCR=%d upserts=%d", dcrWriters, upserts)
+	if dcrWriters != 1 {
+		t.Fatalf("client writer inventory: DCR=%d, want 1", dcrWriters)
+	}
+}
+
+func checkOAuthClientWriters(t *testing.T) {
+	root := filepath.Join("..", "..")
+	owners := map[string]struct{ path, function string }{
+		"UpsertOAuthClient":               {"internal/oauth/clients.go", "saveClientTx"},
+		"DeleteExpiredUnusedOAuthClients": {"internal/oauth/clients.go", "saveClientTx"},
+		"ExtendDCROAuthClient":            {"internal/oauth/protocol.go", "Authorize"},
+		"DeleteRetainedOAuthClients":      {"internal/oauth/retention.go", "cleanupAt"},
+		"EvictOAuthDCRClient":             {"internal/oauth/registration.go", "registerDCR"},
+	}
+	found := make(map[string]bool)
+	for _, mutation := range testutil.SQLCMutations(t, filepath.Join(root, "internal", "store"), "oauth_clients") {
+		if _, ok := owners[mutation.Name]; !ok {
+			t.Errorf("%s: %s writes oauth_clients without a guarded caller", mutation.Path, mutation.Name)
+		}
+		found[mutation.Name] = true
+	}
+	for name := range owners {
+		if !found[name] {
+			t.Errorf("%s has a caller guard but no OAuth client mutation in the sqlc catalog", name)
+		}
+	}
+
+	fset := token.NewFileSet()
+	calls := make(map[string]int)
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if repotree.Skip(root, path, entry) {
+			return filepath.SkipDir
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") ||
+			strings.HasSuffix(path, ".sql.go") || strings.HasSuffix(path, "_templ.go") {
+			return nil
+		}
+		file, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		for _, declaration := range file.Decls {
+			function := ""
+			if fn, ok := declaration.(*ast.FuncDecl); ok {
+				function = fn.Name.Name
+			}
+			for node := range ast.Preorder(declaration) {
+				selected, ok := node.(*ast.SelectorExpr)
+				if !ok || !found[selected.Sel.Name] {
+					continue
+				}
+				owner, guarded := owners[selected.Sel.Name]
+				if !guarded || owner.path != filepath.ToSlash(relative) || owner.function != function {
+					t.Errorf("%s: %s writes oauth_clients outside its guarded caller", fset.Position(selected.Pos()), selected.Sel.Name)
+				} else {
+					calls[selected.Sel.Name]++
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls["UpsertOAuthClient"] != 1 {
+		t.Errorf("found %d guarded UpsertOAuthClient references, want 1", calls["UpsertOAuthClient"])
 	}
 }

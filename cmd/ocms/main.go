@@ -380,7 +380,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := run(); err != nil {
+	if err := run(nil); err != nil {
 		var logged loggedRunError
 		if !errors.As(err, &logged) {
 			slog.Error("application exited with error", "error", err)
@@ -1810,7 +1810,7 @@ func seedDemoInformer(cfg *config.Config, db *sql.DB, registry *module.Registry,
 	}
 }
 
-func run() (runErr error) {
+func run(inspectRouter func(chi.Router) error) (runErr error) {
 	if err := loadEnvFile(); err != nil {
 		return err
 	}
@@ -2756,6 +2756,11 @@ func run() (runErr error) {
 		WriteTimeout:      60 * time.Second, // Longer to allow for large uploads and slow connections
 		IdleTimeout:       60 * time.Second, // Reduced from 120s to mitigate slowloris attacks
 		MaxHeaderBytes:    1 << 20,          // 1MB max header size
+	}
+
+	// A route integration check can inspect the complete router before serving.
+	if inspectRouter != nil {
+		return inspectRouter(r)
 	}
 
 	// Catch stop signals before the port opens, so a signal sent once the

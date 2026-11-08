@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
+	"golang.org/x/tools/go/packages"
 )
 
 // packageFiles parses the non-test Go files of this package.
@@ -90,13 +92,33 @@ func catalogHandlers(t *testing.T, file *ast.File) map[string]string {
 // content or issue a preview link. Both service factories return that service.
 var draftWriteMethods = []string{"Create", "Update", "Translate", "CreatePreviewLink"}
 
-func callsDraftWrite(body *ast.BlockStmt) bool {
-	for node := range ast.Preorder(body) {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			continue
+func loadDraftWriterPackage(t *testing.T, path string) *packages.Package {
+	t.Helper()
+	pkgs, err := packages.Load(&packages.Config{Mode: packages.LoadSyntax, Context: t.Context()}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pkgs) != 1 {
+		t.Fatalf("loaded %d packages for %s, want 1", len(pkgs), path)
+	}
+	if len(pkgs[0].Errors) != 0 {
+		t.Fatalf("cannot check draft writer references in %s: %v", path, pkgs[0].Errors)
+	}
+	return pkgs[0]
+}
+
+func draftMethodReference(info *types.Info, node ast.Node) string {
+	if selected, ok := node.(*ast.SelectorExpr); ok {
+		if selection := info.Selections[selected]; selection != nil && selection.Kind() != types.FieldVal {
+			return selected.Sel.Name
 		}
-		if sel, ok := call.Fun.(*ast.SelectorExpr); ok && slices.Contains(draftWriteMethods, sel.Sel.Name) {
+	}
+	return ""
+}
+
+func callsDraftWrite(body *ast.BlockStmt, info *types.Info) bool {
+	for node := range ast.Preorder(body) {
+		if slices.Contains(draftWriteMethods, draftMethodReference(info, node)) {
 			return true
 		}
 	}
@@ -105,30 +127,38 @@ func callsDraftWrite(body *ast.BlockStmt) bool {
 
 func TestDraftWriteDetectionUsesTheOperation(t *testing.T) {
 	for _, tc := range []struct {
-		factory, method string
-		writes          bool
+		name, method, operation string
+		writes                  bool
 	}{
-		{"authoringService", "Create", true},
-		{"authoringService", "Update", true},
-		{"authoringService", "Translate", true},
-		{"authoringService", "CreatePreviewLink", true},
-		{"authoringService", "Get", false},
-		{"authoringService", "List", false},
-		{"authoringService", "TranslationStatus", false},
-		{"draftActor", "Create", true},
-		{"draftActor", "Get", false},
+		{"create", "Create", "return svc.Create()", true},
+		{"update", "Update", "return svc.Update()", true},
+		{"translate", "Translate", "return svc.Translate()", true},
+		{"preview link", "CreatePreviewLink", "return svc.CreatePreviewLink()", true},
+		{"get", "Get", "return svc.Get()", false},
+		{"list", "List", "return svc.List()", false},
+		{"translation status", "TranslationStatus", "return svc.TranslationStatus()", false},
+		{"write method value", "Create", "save := svc.Create; return save()", true},
+		{"read method value", "Get", "load := svc.Get; return load()", false},
+		{"schema field", "Create", "return schema.Create", false},
 	} {
-		t.Run(tc.factory+"/"+tc.method, func(t *testing.T) {
-			source := "package mcpserver\nfunc handler() {\n" +
-				"svc, actor, _ := m." + tc.factory + "(ctx, call)\n" +
-				"return svc." + tc.method + "(ctx, actor, in)\n}"
-			file, err := parser.ParseFile(token.NewFileSet(), "handler.go", source, parser.SkipObjectResolution)
+		t.Run(tc.name, func(t *testing.T) {
+			source := "package fixture\ntype writer struct{}\n" +
+				"func (writer) " + tc.method + "() string { return \"\" }\n" +
+				"func handler(svc writer, schema struct{ Create string }) string {\n" +
+				tc.operation + "\n}"
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, "handler.go", source, parser.SkipObjectResolution)
 			if err != nil {
 				t.Fatal(err)
 			}
-			body := file.Decls[0].(*ast.FuncDecl).Body
-			if got := callsDraftWrite(body); got != tc.writes {
-				t.Errorf("%s via %s writes = %v, want %v", tc.method, tc.factory, got, tc.writes)
+			info := &types.Info{Selections: make(map[*ast.SelectorExpr]*types.Selection)}
+			var config types.Config
+			if _, err = config.Check("fixture", fset, []*ast.File{file}, info); err != nil {
+				t.Fatal(err)
+			}
+			body := file.Decls[len(file.Decls)-1].(*ast.FuncDecl).Body
+			if got := callsDraftWrite(body, info); got != tc.writes {
+				t.Errorf("%s writes = %v, want %v", tc.operation, got, tc.writes)
 			}
 		})
 	}
@@ -139,22 +169,28 @@ func TestDraftWriteDetectionUsesTheOperation(t *testing.T) {
 // idempotent) are derived from toolSpec.mutation, so a write tool declared
 // without a class would be advertised as a read-only, idempotent query. The
 // class is therefore checked against what the handler does, found in its
-// source. A handler that directly calls one of the draft write methods must
+// source. A handler that references one of the draft write methods must
 // have a class and require mcp:drafts. A read tool must have no class.
 //
 // Bug state: register a handler that gets its service from authoringService,
 // calls Create, and omits its mutation class. This test names that handler.
 func TestMutatingToolsAreExactlyTheClassifiedOnes(t *testing.T) {
-	files := packageFiles(t)
-	handlers := catalogHandlers(t, files["catalog.go"])
+	pkg := loadDraftWriterPackage(t, ".")
+	var handlers map[string]string
+	for _, file := range pkg.Syntax {
+		if filepath.Base(pkg.Fset.Position(file.Pos()).Filename) == "catalog.go" {
+			handlers = catalogHandlers(t, file)
+			break
+		}
+	}
 	if len(handlers) != len(toolCatalog()) {
 		t.Fatalf("read %d handlers from catalog.go, the catalog has %d tools; the scan is broken", len(handlers), len(toolCatalog()))
 	}
 	writes := map[string]bool{}
-	for _, file := range files {
+	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if ok && fn.Recv != nil && fn.Body != nil && callsDraftWrite(fn.Body) {
+			if ok && fn.Recv != nil && fn.Body != nil && callsDraftWrite(fn.Body, pkg.TypesInfo) {
 				writes[fn.Name.Name] = true
 			}
 		}

@@ -4,10 +4,16 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -90,5 +96,73 @@ func TestOAuthRoutesAnswerOnlyWhileMCPIsActive(t *testing.T) {
 				t.Errorf("%s: %s %s checked MCP state = %v, want %v", state.name, route.method, route.path, checked, gated)
 			}
 		}
+	}
+}
+
+// Start the production assembly with a clean database and inspect its router
+// at the serving boundary. No listener is needed to exercise its middleware.
+func TestProductionOAuthRoutesStayGated(t *testing.T) {
+	const child = "OCMS_TEST_PRODUCTION_OAUTH_ROUTES"
+	if os.Getenv(child) != "1" {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestProductionOAuthRoutesStayGated$")
+		cmd.Dir = t.TempDir()
+		cmd.Env = []string{
+			child + "=1",
+			"OCMS_ENV=development",
+			"OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!!",
+			"OCMS_SITE_URL=http://127.0.0.1:8080",
+			"OCMS_OAUTH_ENABLED=true",
+			"OCMS_OAUTH_ALLOW_DCR=true",
+		}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("production OAuth router: %v\n%s", err, out)
+		}
+		return
+	}
+
+	checked := 0
+	inspect := func(router chi.Router) error {
+		foundDiscovery, foundRevoke := false, false
+		err := chi.Walk(router, func(method, path string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+			if !strings.HasPrefix(path, "/oauth/") && !strings.HasPrefix(path, "/.well-known/oauth-") {
+				return nil
+			}
+			if strings.ContainsAny(path, "{*") {
+				return fmt.Errorf("OAuth route %s %s needs a concrete test path", method, path)
+			}
+			checked++
+			want := http.StatusNotFound
+			foundDiscovery = foundDiscovery || method == http.MethodGet && path == "/.well-known/oauth-authorization-server"
+			req := httptest.NewRequest(method, path, nil)
+			if method == http.MethodPost && path == "/oauth/revoke" {
+				foundRevoke = true
+				want = http.StatusOK
+				req = httptest.NewRequest(method, path, strings.NewReader("client_id=fixture&token=unknown"))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			}
+			// Each route gets its own rate-limit key.
+			req.RemoteAddr = fmt.Sprintf("[2001:db8::%x]:12345", checked)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			if w.Code != want {
+				t.Errorf("inactive MCP: %s %s = %d, want %d", method, path, w.Code, want)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if !foundDiscovery || !foundRevoke {
+			return fmt.Errorf("missing OAuth discovery or revocation in production router")
+		}
+		return nil
+	}
+	if err := run(inspect); err != nil {
+		t.Fatal(err)
+	}
+	if checked == 0 {
+		t.Fatal("production router did not reach the serving boundary")
 	}
 }

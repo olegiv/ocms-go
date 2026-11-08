@@ -15,12 +15,12 @@ import (
 	"testing"
 )
 
-// TestEveryNewDraftPathRunsTheDraftLimit inventories CreateWith calls and
+// TestEveryNewDraftPathRunsTheDraftLimit inventories CreateWith references and
 // explicit ForceDraft options across internal, modules, custom and cmd.
 // AI creates share authoring.Service.create and must opt in to the draft limit
 // through prepare; Update must not (updates never add a draft). The ordinary
 // REST Create wrapper is the only other CreateWith caller and has no ForceDraft
-// option. A new caller or ForceDraft literal needs review and an inventory update.
+// option. A new reference or ForceDraft write needs review and an inventory update.
 func TestEveryNewDraftPathRunsTheDraftLimit(t *testing.T) {
 	type call struct{ function, last string }
 	var creators, forceDrafts []string
@@ -50,9 +50,19 @@ func TestEveryNewDraftPathRunsTheDraftLimit(t *testing.T) {
 					function = fn.Name.Name
 				}
 				ast.Inspect(declaration, func(node ast.Node) bool {
+					if selected, ok := node.(*ast.SelectorExpr); ok && selected.Sel.Name == "CreateWith" {
+						creators = append(creators, relative+":"+function)
+					}
 					if field, ok := node.(*ast.KeyValueExpr); ok {
 						if key, ok := field.Key.(*ast.Ident); ok && key.Name == "ForceDraft" {
 							forceDrafts = append(forceDrafts, relative+":"+function)
+						}
+					}
+					if assign, ok := node.(*ast.AssignStmt); ok {
+						for _, target := range assign.Lhs {
+							if selected, ok := target.(*ast.SelectorExpr); ok && selected.Sel.Name == "ForceDraft" {
+								forceDrafts = append(forceDrafts, relative+":"+function)
+							}
 						}
 					}
 					invoked, ok := node.(*ast.CallExpr)
@@ -60,9 +70,6 @@ func TestEveryNewDraftPathRunsTheDraftLimit(t *testing.T) {
 						return true
 					}
 					name := calledName(invoked)
-					if name == "CreateWith" {
-						creators = append(creators, relative+":"+function)
-					}
 					if !strings.HasPrefix(relative, "internal/ai/authoring/") {
 						return true
 					}
@@ -87,6 +94,7 @@ func TestEveryNewDraftPathRunsTheDraftLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	slices.Sort(forceDrafts)
 	slices.Sort(creators)
 	if want := []string{"internal/ai/authoring/service.go:create", "internal/api/v2/pages/write.go:Create"}; !reflect.DeepEqual(creators, want) {
 		t.Errorf("page creation paths changed: %v; each needs the draft limit and this test updated", creators)

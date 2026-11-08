@@ -4,14 +4,16 @@
 package handler
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -163,11 +165,23 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 		return stamp
 	}
 	revoke := fmt.Sprintf("/admin/pages/%d/preview-links/%d/revoke", page.ID, linkID)
-	// Discover every direct prerequisite query from the handler so a new
-	// lookup cannot silently bypass this fault/missing-row coverage.
-	for _, query := range previewRevokeLookups(t) {
+	// Follow the healthy request through its helpers, stopping at the write
+	// so the same link stays active for each fault injection.
+	trace := &previewRevokeTrace{DB: db, lookups: make(map[string]bool)}
+	h.queries = store.New(trace)
+	traced := post(revoke, nil)
+	h.queries = q
+	if !trace.reachedWrite || trace.unnamedLookup || len(trace.lookups) == 0 || traced.Code != http.StatusSeeOther {
+		t.Fatalf("preview revoke trace did not discover named prerequisites and reach the write: status=%d lookups=%v write=%v unnamed=%v",
+			traced.Code, trace.lookups, trace.reachedWrite, trace.unnamedLookup)
+	}
+	for _, query := range slices.Sorted(maps.Keys(trace.lookups)) {
 		for _, lang := range []string{"en", "ru"} {
 			for _, missing := range []bool{false, true} {
+				// An empty multi-row result is valid for list queries.
+				if missing && !trace.lookups[query] {
+					continue
+				}
 				t.Run(fmt.Sprintf("%s/%s/missing=%t", query, lang, missing), func(t *testing.T) {
 					adminLang = lang
 					h.queries = store.New(&conflictQueryFault{DB: db, query: "-- name: " + query + " :", missing: missing})
@@ -261,40 +275,37 @@ func TestPreviewFailuresAreDistinguishedAndAudited(t *testing.T) {
 	}
 }
 
-// previewRevokeLookups discovers the direct store calls before the revoke
-// write. The runtime test above must distinguish faults from missing rows
-// for every one of them, including newly added prerequisite queries.
-func previewRevokeLookups(t *testing.T) []string {
-	t.Helper()
-	parsed, err := parser.ParseFile(token.NewFileSet(), "pages_review.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
+type previewRevokeTrace struct {
+	*sql.DB
+	lookups       map[string]bool // named query -> single-row lookup
+	reachedWrite  bool
+	unnamedLookup bool
+}
+
+func (trace *previewRevokeTrace) record(query string, single bool) {
+	line, _, _ := strings.Cut(query, "\n")
+	fields := strings.Fields(line)
+	if len(fields) != 4 || fields[0] != "--" || fields[1] != "name:" {
+		trace.unnamedLookup = true
+		return
 	}
-	for _, declaration := range parsed.Decls {
-		fn, ok := declaration.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "RevokePreviewLink" {
-			continue
-		}
-		var queries []string
-		for node := range ast.Preorder(fn.Body) {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				continue
-			}
-			method, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				continue
-			}
-			receiver, ok := method.X.(*ast.SelectorExpr)
-			if !ok || receiver.Sel.Name != "queries" {
-				continue
-			}
-			if method.Sel.Name == "RevokePagePreviewLink" && len(queries) > 0 {
-				return queries
-			}
-			queries = append(queries, method.Sel.Name)
-		}
+	trace.lookups[fields[2]] = single
+}
+
+func (trace *previewRevokeTrace) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	trace.record(query, true)
+	return trace.DB.QueryRowContext(ctx, query, args...)
+}
+
+func (trace *previewRevokeTrace) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	trace.record(query, false)
+	return trace.DB.QueryContext(ctx, query, args...)
+}
+
+func (trace *previewRevokeTrace) ExecContext(_ context.Context, query string, _ ...any) (sql.Result, error) {
+	if !strings.HasPrefix(query, "-- name: RevokePagePreviewLink :") {
+		return nil, fmt.Errorf("unexpected write while tracing preview revocation")
 	}
-	t.Fatal("missing prerequisite queries or revoke write in RevokePreviewLink")
-	return nil
+	trace.reachedWrite = true
+	return driver.RowsAffected(0), nil
 }

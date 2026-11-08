@@ -5,11 +5,7 @@ package mcpserver
 
 import (
 	"go/ast"
-	"go/parser"
-	"go/token"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -20,57 +16,35 @@ import (
 
 func TestSharedDraftWriterBoundary(t *testing.T) {
 	allowed := map[string]map[string]string{
-		// Each MCP write handler calls its authoring operation directly.
+		// Each MCP write handler uses its corresponding authoring operation.
 		".":                           {"createDraftPage": "Create", "updateDraftPage": "Update", "createTranslationDraft": "Translate", "createPreviewLink": "CreatePreviewLink"},
 		"../../internal/ai/authoring": {"create": "CreateWith", "Update": "UpdateWith", "CreatePreviewLink": "Issue"},
 	}
 	for root, expected := range allowed {
 		found := map[string]string{}
-		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-			if err != nil {
-				return err
-			}
+		pkg := loadDraftWriterPackage(t, root)
+		for _, file := range pkg.Syntax {
 			for _, declaration := range file.Decls {
-				fn, ok := declaration.(*ast.FuncDecl)
-				if !ok {
-					continue
+				function := "<package>"
+				if fn, ok := declaration.(*ast.FuncDecl); ok {
+					function = fn.Name.Name
 				}
-				ast.Inspect(fn.Body, func(node ast.Node) bool {
-					call, ok := node.(*ast.CallExpr)
-					if !ok {
-						return true
-					}
-					selector, ok := call.Fun.(*ast.SelectorExpr)
-					if !ok {
-						return true
-					}
-					method := selector.Sel.Name
+				for node := range ast.Preorder(declaration) {
+					method := draftMethodReference(pkg.TypesInfo, node)
 					switch method {
 					case "CreatePage", "UpdatePage", "DeletePage", "PublishPage", "PublishScheduledPage", "SetPageAIAccess":
-						t.Errorf("%s: direct page mutation %s bypasses shared writer", path, method)
+						t.Errorf("%s: direct page mutation %s bypasses shared writer", pkg.Fset.Position(node.Pos()), method)
 					default:
 						if !slices.Contains(draftWriteMethods, method) && method != "CreateWith" && method != "UpdateWith" && method != "Issue" {
-							return true
+							continue
 						}
-						if expected[fn.Name.Name] != method {
-							t.Errorf("%s: unexpected write call %s in %s", path, method, fn.Name.Name)
+						if expected[function] != method {
+							t.Errorf("%s: unexpected write reference %s in %s", pkg.Fset.Position(node.Pos()), method, function)
 						}
-						found[fn.Name.Name] = method
+						found[function] = method
 					}
-					return true
-				})
+				}
 			}
-			return nil
-		})
-		if err != nil {
-			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(expected, found) {
 			t.Errorf("%s: adapter inventory changed: %v", root, found)
