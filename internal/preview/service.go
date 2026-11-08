@@ -96,6 +96,10 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 	if ttl <= 0 || ttl > DefaultTTL || principal.UserID <= 0 || pageID <= 0 || revision <= 0 {
 		return Link{}, ErrUnavailable
 	}
+	// A missing credential binding would let a link survive its revocation.
+	if validationErr := principal.Validate(); validationErr != nil {
+		return Link{}, validationErr
+	}
 	now := s.now()
 	secret := make([]byte, 32)
 	if _, err = rand.Read(secret); err != nil {

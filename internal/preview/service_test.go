@@ -190,21 +190,63 @@ func TestPreviewLifecycleDoesNotResurrect(t *testing.T) {
 	}
 }
 
+func TestIssueRefusesInvalidPrincipal(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		principal provenance.Principal
+	}{
+		{"api without key", provenance.Principal{Source: "api"}},
+		{"oauth without grant", provenance.Principal{Source: "oauth", OAuthClientID: "fixture-client"}},
+		{"empty source", provenance.Principal{}},
+		{"human with client", provenance.Principal{Source: "human", OAuthClientID: "fixture-client"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := setup(t)
+			principal := tc.principal
+			principal.UserID = f.user.ID
+			if err := provenance.Record(f.ctx, f.q, f.page, principal, provenance.Evidence{}); !errors.Is(err, provenance.ErrInvalidPrincipal) {
+				t.Fatalf("Record accepted malformed attribution: %v", err)
+			}
+			called := false
+			link, err := f.svc.Issue(f.ctx, principal, f.page.ID, f.page.Revision, "https://cms.test", func(context.Context, *store.Queries) error {
+				called = true
+				return nil
+			})
+			if !errors.Is(err, provenance.ErrInvalidPrincipal) {
+				t.Errorf("Issue error = %v, want invalid provenance principal", err)
+			}
+			if called || link.URL.Reveal() != "" {
+				t.Error("invalid principal reached authorization or returned a bearer")
+			}
+			var links, unbound, events int
+			if err = f.db.QueryRowContext(f.ctx, `SELECT
+				(SELECT COUNT(*) FROM preview_links),
+				(SELECT COUNT(*) FROM preview_links WHERE issuing_key_id IS NULL AND issuing_grant_id IS NULL),
+				(SELECT COUNT(*) FROM events WHERE message='Preview share link created')`).Scan(&links, &unbound, &events); err != nil {
+				t.Fatal(err)
+			}
+			if links != 0 || events != 0 {
+				t.Errorf("invalid principal created %d links (%d unbound) and %d issuance events", links, unbound, events)
+			}
+		})
+	}
+}
+
 func TestPreviewCredentialRevocationAndExpiry(t *testing.T) {
 	for _, kind := range []string{"key", "grant"} {
 		t.Run(kind, func(t *testing.T) {
 			f := setup(t)
-			p := provenance.Principal{UserID: f.user.ID, Source: kind}
+			p := provenance.Principal{UserID: f.user.ID}
 			if kind == "key" {
 				key, err := f.q.CreateAPIKey(f.ctx, store.CreateAPIKeyParams{Name: "Share fixture", KeyHash: "unused", KeyPrefix: "fixture", Permissions: `["mcp:access","mcp:drafts"]`, CreatedBy: f.user.ID, IsActive: true, CreatedAt: f.now, UpdatedAt: f.now, ExpiresAt: sql.NullTime{Time: f.now.Add(time.Hour), Valid: true}})
 				if err != nil {
 					t.Fatal(err)
 				}
-				p.APIKeyID = key.ID
+				p.Source, p.APIKeyID = "api", key.ID
 			} else {
 				f.exec(t, "INSERT INTO oauth_clients(id,name,redirect_uris,source,expires_at) VALUES('fixture-client','Fixture','[]','cimd',?)", f.now.Add(48*time.Hour).Unix())
 				f.exec(t, "INSERT INTO oauth_grants(id,user_id,client_id,scopes,resource,session_version,created_at,expires_at) VALUES('fixture-grant',?,'fixture-client','mcp:access mcp:drafts','https://cms.test/api/mcp',0,?,?)", f.user.ID, f.now.Unix(), f.now.Add(time.Hour).Unix())
-				p.OAuthGrantID = "fixture-grant"
+				p.Source, p.OAuthGrantID, p.OAuthClientID = "oauth", "fixture-grant", "fixture-client"
 			}
 			link := f.issue(t, p)
 			if link.ExpiresAt.After(f.now.Add(time.Hour)) {
@@ -232,7 +274,7 @@ func TestPreviewCapsOwnershipAndMalformedTokens(t *testing.T) {
 	for range preview.MaxActiveLinks {
 		f.issue(t)
 	}
-	if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID}, f.page.ID, 1, "https://cms.test", nil); !errors.Is(err, preview.ErrLimit) {
+	if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID, Source: "human"}, f.page.ID, 1, "https://cms.test", nil); !errors.Is(err, preview.ErrLimit) {
 		t.Fatal("active cap not enforced")
 	}
 	for _, raw := range []string{"", "short", strings.Repeat("A", 44), strings.Repeat("/", 43)} {
@@ -241,11 +283,11 @@ func TestPreviewCapsOwnershipAndMalformedTokens(t *testing.T) {
 		}
 	}
 	for _, origin := range []string{"http://public.test", "https://cms.test/path", "https://user:pass@cms.test", "https://cms.test?x=y", "https://cms.test?"} {
-		if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID}, f.page.ID, 1, origin, nil); !errors.Is(err, preview.ErrSiteURL) {
+		if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID, Source: "human"}, f.page.ID, 1, origin, nil); !errors.Is(err, preview.ErrSiteURL) {
 			t.Fatal("unsafe origin accepted")
 		}
 	}
-	if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.foreign.ID}, f.page.ID, 1, "https://cms.test", nil); !errors.Is(err, preview.ErrUnavailable) {
+	if _, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.foreign.ID, Source: "human"}, f.page.ID, 1, "https://cms.test", nil); !errors.Is(err, preview.ErrUnavailable) {
 		t.Fatal("foreign draft share accepted")
 	}
 }
@@ -255,7 +297,7 @@ func TestPreviewConcurrentCapAndRevokedIssuanceRate(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 16 {
 		wg.Go(func() {
-			_, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID}, f.page.ID, 1, "https://cms.test", nil)
+			_, err := f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID, Source: "human"}, f.page.ID, 1, "https://cms.test", nil)
 			if err != nil && !errors.Is(err, preview.ErrLimit) {
 				t.Errorf("concurrent issue: %v", err)
 			}
@@ -271,7 +313,7 @@ func TestPreviewConcurrentCapAndRevokedIssuanceRate(t *testing.T) {
 		f.issue(t)
 		f.exec(t, "UPDATE preview_links SET revoked_at=1")
 	}
-	if _, err = f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID}, f.page.ID, 1, "https://cms.test", nil); !errors.Is(err, preview.ErrLimit) {
+	if _, err = f.svc.Issue(f.ctx, provenance.Principal{UserID: f.user.ID, Source: "human"}, f.page.ID, 1, "https://cms.test", nil); !errors.Is(err, preview.ErrLimit) {
 		t.Fatal("revocation bypassed issuance rate")
 	}
 }

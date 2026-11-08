@@ -25,26 +25,30 @@ type Principal struct {
 	Transport     string
 }
 
-// ErrInvalidPrincipal refuses inconsistent identity before recording a revision.
+// ErrInvalidPrincipal reports inconsistent actor or credential fields.
 var ErrInvalidPrincipal = errors.New("invalid provenance principal")
 
-func (p Principal) valid() bool {
+// Validate checks that the actor and credential fields match the source.
+func (p Principal) Validate() error {
 	if p.UserID < 0 || p.APIKeyID < 0 {
-		return false
+		return ErrInvalidPrincipal
 	}
 	noOAuth := p.OAuthGrantID == "" && p.OAuthClientID == ""
+	var valid bool
 	switch p.Source {
 	case "human":
-		return p.UserID > 0 && p.APIKeyID == 0 && noOAuth
+		valid = p.UserID > 0 && p.APIKeyID == 0 && noOAuth
 	case "api":
-		return p.UserID > 0 && p.APIKeyID > 0 && noOAuth
+		valid = p.UserID > 0 && p.APIKeyID > 0 && noOAuth
 	case "oauth":
-		return p.UserID > 0 && p.APIKeyID == 0 && p.OAuthGrantID != "" && p.OAuthClientID != ""
+		valid = p.UserID > 0 && p.APIKeyID == 0 && p.OAuthGrantID != "" && p.OAuthClientID != ""
 	case "system", "migration":
-		return p.APIKeyID == 0 && noOAuth
-	default:
-		return false
+		valid = p.APIKeyID == 0 && noOAuth
 	}
+	if !valid {
+		return ErrInvalidPrincipal
+	}
+	return nil
 }
 
 // Evidence contains only validation results and explicitly untrusted reports.
@@ -56,8 +60,8 @@ type Evidence struct {
 
 // Record appends provenance in the transaction that saves its revision.
 func Record(ctx context.Context, q *store.Queries, page store.Page, principal Principal, evidence Evidence) error {
-	if !principal.valid() {
-		return ErrInvalidPrincipal
+	if err := principal.Validate(); err != nil {
+		return err
 	}
 	validated, reported := evidence.Validated, evidence.Reported
 	if len(validated) == 0 {

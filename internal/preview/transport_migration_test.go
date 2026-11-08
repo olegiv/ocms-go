@@ -26,7 +26,7 @@ func TestFragmentMigrationRevokesDisclosedLinksWithoutRevokingIssuers(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := provenance.Principal{UserID: f.user.ID, Source: "oauth", OAuthGrantID: "fixture-grant"}
+	principal := provenance.Principal{UserID: f.user.ID, Source: "oauth", OAuthGrantID: "fixture-grant", OAuthClientID: "fixture-client"}
 	legacy := f.issue(t, principal)
 	f.issue(t, principal)
 	f.exec(t, "UPDATE preview_links SET revoked_at=123 WHERE id=2")
