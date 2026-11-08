@@ -34,7 +34,12 @@ type Dispatcher struct {
 }
 
 // ErrDispatcherStopped means a webhook event was rejected before dispatch.
-var ErrDispatcherStopped = errors.New("webhook dispatcher is stopped")
+var ErrDispatcherStopped error = loggedDispatchError{errors.New("webhook dispatcher is stopped")}
+
+// loggedDispatchError carries a failure already recorded by the dispatcher.
+type loggedDispatchError struct{ error }
+
+func (e loggedDispatchError) Unwrap() error { return e.error }
 
 // QueuedDelivery represents a delivery queued for processing.
 type QueuedDelivery struct {
@@ -308,8 +313,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 	// Find all active webhooks subscribed to this event
 	webhooks, err := d.queries.ListWebhooksForEvent(ctx, sql.NullString{String: event.Type, Valid: true})
 	if err != nil {
-		d.logDispatchError("failed to list webhooks for event", event, err)
-		return err
+		logDispatchError(d.logger, "failed to list webhooks for event", event, err)
+		return loggedDispatchError{err}
 	}
 
 	if len(webhooks) == 0 {
@@ -320,8 +325,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 	// Serialize the event payload
 	payload, err := json.Marshal(event)
 	if err != nil {
-		d.logDispatchError("failed to marshal event payload", event, err)
-		return err
+		logDispatchError(d.logger, "failed to marshal event payload", event, err)
+		return loggedDispatchError{err}
 	}
 
 	now := time.Now()
@@ -343,7 +348,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 			UpdatedAt: now,
 		})
 		if err != nil {
-			d.logDispatchError("failed to create delivery record", event, err, "webhook_id", wh.ID)
+			logDispatchError(d.logger, "failed to create delivery record", event, err, "webhook_id", wh.ID)
 			continue
 		}
 
@@ -376,16 +381,35 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 }
 
 func (d *Dispatcher) rejectStopped(event *Event) error {
-	d.logDispatchError("webhook event dropped", event, ErrDispatcherStopped)
+	logDispatchError(d.logger, "webhook event dropped", event, ErrDispatcherStopped)
 	return ErrDispatcherStopped
 }
 
-func (d *Dispatcher) logDispatchError(message string, event *Event, err error, attrs ...any) {
+func logDispatchError(logger *slog.Logger, message string, event *Event, err error, attrs ...any) {
 	attrs = append(attrs, "error", err, "event_type", event.Type)
 	if id, ok := event.entityID(); ok && id != 0 {
 		attrs = append(attrs, "entity_id", id)
+		switch data := event.Data.(type) {
+		case PageEventData, *PageEventData:
+			attrs = append(attrs, "page_id", id)
+		case MediaEventData, *MediaEventData:
+			attrs = append(attrs, "media_id", id)
+		case UserEventData, *UserEventData:
+			attrs = append(attrs, "user_id", id)
+		case FormEventData:
+			attrs = append(attrs, "form_id", data.FormID, "submission_id", id)
+		case *FormEventData:
+			attrs = append(attrs, "form_id", data.FormID, "submission_id", id)
+		}
 	}
-	d.logger.Error(message, attrs...)
+	logger.Error(message, attrs...)
+}
+
+func logUnreportedDispatchError(logger *slog.Logger, event *Event, err error) {
+	var logged loggedDispatchError
+	if err != nil && !errors.As(err, &logged) {
+		logDispatchError(logger, "failed to dispatch webhook event", event, err)
+	}
 }
 
 // DispatchEvent is a convenience method to dispatch an event with the given type and data.

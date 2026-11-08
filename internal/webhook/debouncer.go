@@ -164,9 +164,7 @@ func (d *Debouncer) dispatchLocked(key string) {
 	d.wg.Add(1)
 	go func(event *Event) {
 		defer d.wg.Done()
-		if err := d.dispatcher.Dispatch(d.ctx, event); err != nil {
-			d.dispatcher.logDispatchError("failed to dispatch debounced event", event, err)
-		}
+		logUnreportedDispatchError(d.dispatcher.logger, event, d.dispatcher.Dispatch(d.ctx, event))
 	}(pe.event)
 }
 

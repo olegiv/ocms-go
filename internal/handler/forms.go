@@ -131,13 +131,7 @@ func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, s
 		SubmittedAt:  time.Now(),
 	}
 
-	if err := h.dispatcher.DispatchEvent(ctx, model.EventFormSubmitted, eventData); err != nil {
-		slog.Error("failed to dispatch webhook event",
-			"error", err,
-			"event_type", model.EventFormSubmitted,
-			"form_id", form.ID,
-			"submission_id", submissionID)
-	}
+	webhook.DispatchEvent(ctx, h.dispatcher, model.EventFormSubmitted, eventData)
 }
 
 func redactFormEventData(data map[string]string) map[string]string {

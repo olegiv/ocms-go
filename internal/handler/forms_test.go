@@ -54,8 +54,8 @@ func TestFormSubmissionLogsStoppedWebhook(t *testing.T) {
 	menu := service.NewMenuService(db, nil)
 	frontend := NewFrontendHandler(db, tm, nil, slog.Default(), menu, nil)
 	h := NewFormsHandler(db, nil, sm, nil, tm, nil, menu, frontend)
-	h.SetDispatcher(webhook.NewDispatcher(db, slog.New(slog.DiscardHandler), webhook.DefaultConfig()))
 	logs := captureLogs(t)
+	h.SetDispatcher(webhook.NewDispatcher(db, slog.Default(), webhook.DefaultConfig()))
 	req := httptest.NewRequest(http.MethodPost, "/forms/contact", strings.NewReader("message=private-fixture-message"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = requestWithURLParams(req, map[string]string{"slug": "contact"})
@@ -69,14 +69,30 @@ func TestFormSubmissionLogsStoppedWebhook(t *testing.T) {
 		t.Fatalf("saved %d submissions, want one: %v", len(submissions), err)
 	}
 	logged := logs.String()
-	if !strings.Contains(logged, "failed to dispatch webhook event") ||
-		!strings.Contains(logged, "event_type=form.submitted") ||
-		!strings.Contains(logged, "form_id="+strconv.FormatInt(form.ID, 10)) ||
-		!strings.Contains(logged, "submission_id="+strconv.FormatInt(submissions[0].ID, 10)) {
-		t.Errorf("missing form and submission IDs in dispatch error:\n%s", logged)
-	}
+	requireSingleDroppedWebhookLog(t, logged, "form.submitted",
+		"form_id="+strconv.FormatInt(form.ID, 10),
+		"submission_id="+strconv.FormatInt(submissions[0].ID, 10),
+		"entity_id="+strconv.FormatInt(submissions[0].ID, 10))
 	if strings.Contains(logged, "private-fixture-message") {
 		t.Error("dispatch error logged the submission payload")
+	}
+}
+
+func requireSingleDroppedWebhookLog(t *testing.T, logs, event string, attrs ...string) {
+	t.Helper()
+	var matches []string
+	for line := range strings.Lines(logs) {
+		if strings.Contains(line, "level=ERROR") && strings.Contains(line, "event_type="+event) {
+			matches = append(matches, strings.TrimSpace(line))
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("got %d error records for %s, want 1:\n%s", len(matches), event, strings.Join(matches, "\n"))
+	}
+	for _, attr := range append(attrs, `msg="webhook event dropped"`, `error="webhook dispatcher is stopped"`) {
+		if !strings.Contains(matches[0], attr) {
+			t.Errorf("missing %q in dispatch error:\n%s", attr, matches[0])
+		}
 	}
 }
 

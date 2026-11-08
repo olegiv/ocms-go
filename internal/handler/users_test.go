@@ -5,6 +5,7 @@ package handler
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/model"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
 func TestNewUsersHandler(t *testing.T) {
@@ -217,6 +219,8 @@ func TestUsersHandler_Delete_HTMX(t *testing.T) {
 			Role:  "admin",
 		})))
 	req.Header.Set("HX-Request", "true")
+	logs := captureLogs(t)
+	handler.SetDispatcher(webhook.NewDispatcher(db, slog.Default(), webhook.DefaultConfig()))
 
 	handler.Delete(w, req)
 
@@ -236,6 +240,7 @@ func TestUsersHandler_Delete_HTMX(t *testing.T) {
 	if count != 0 {
 		t.Error("user should have been deleted")
 	}
+	requireSingleDroppedWebhookLog(t, logs.String(), model.EventUserDeleted, "user_id="+targetIDStr, "entity_id="+targetIDStr)
 }
 
 // Note: Create, Update, EditForm, NewForm methods require a renderer for GetAdminLang.

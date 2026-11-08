@@ -5,7 +5,11 @@ package webhook
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
 	"log/slog"
 	"strings"
 	"testing"
@@ -15,6 +19,58 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
+
+type dispatchFunc func(context.Context, string, any) error
+
+func (f dispatchFunc) DispatchEvent(ctx context.Context, eventType string, data any) error {
+	return f(ctx, eventType, data)
+}
+
+func TestDispatchCallersLogFailureOnce(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	previous, writer, flags := slog.Default(), log.Writer(), log.Flags()
+	slog.SetDefault(logger)
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+		log.SetOutput(writer)
+		log.SetFlags(flags)
+	})
+	cfg := DefaultConfig()
+	cfg.EnableDebounce = false
+	d := NewDispatcher(db, logger, cfg)
+	ctx := t.Context()
+	DispatchPageEvent(ctx, d, model.EventPageUpdated, store.Page{ID: 31}, "")
+	DispatchMediaEvent(ctx, d, model.EventMediaDeleted, store.Medium{ID: 42})
+	wrapped := dispatchFunc(func(ctx context.Context, eventType string, data any) error {
+		return fmt.Errorf("wrapped: %w", d.DispatchEvent(ctx, eventType, data))
+	})
+	DispatchPageEvent(ctx, wrapped, model.EventPageDeleted, store.Page{ID: 53}, "")
+	failed := dispatchFunc(func(context.Context, string, any) error { return errors.New("unreported failure") })
+	DispatchMediaEvent(ctx, failed, model.EventMediaUploaded, store.Medium{ID: 64})
+
+	d.Start(ctx)
+	defer d.Stop()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	DispatchPageEvent(ctx, d, model.EventPageCreated, store.Page{ID: 75}, "")
+	d.Stop()
+	for _, tc := range []struct {
+		message, event string
+		id             int64
+	}{
+		{"webhook event dropped", model.EventPageUpdated, 31},
+		{"webhook event dropped", model.EventMediaDeleted, 42},
+		{"webhook event dropped", model.EventPageDeleted, 53},
+		{"failed to dispatch webhook event", model.EventMediaUploaded, 64},
+		{"failed to list webhooks for event", model.EventPageCreated, 75},
+	} {
+		requireOnlyDispatchError(t, logs.String(), tc.message, tc.event, tc.id)
+	}
+}
 
 func TestStoppedDispatchReportsEntity(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
@@ -66,8 +122,9 @@ func TestDispatchFailuresLogEntity(t *testing.T) {
 	d.Start(ctx)
 	defer d.Stop()
 
-	if err := d.DispatchImmediate(ctx, model.EventPageUpdated, map[string]any{"id": int64(71), "unsupported": make(chan int)}); err == nil {
-		t.Error("dispatch did not report the marshal failure")
+	var marshalErr *json.UnsupportedTypeError
+	if err := d.DispatchImmediate(ctx, model.EventPageUpdated, map[string]any{"id": int64(71), "unsupported": make(chan int)}); !errors.As(err, &marshalErr) {
+		t.Errorf("dispatch returned %v, want the marshal error", err)
 	}
 	if _, err := db.ExecContext(ctx, `CREATE TRIGGER fail_delivery BEFORE INSERT ON webhook_deliveries
 		BEGIN SELECT RAISE(ABORT, 'injected delivery insert failure'); END`); err != nil {
@@ -85,8 +142,21 @@ func TestDispatchFailuresLogEntity(t *testing.T) {
 	d.Stop() // Flush the real debounce queue and wait for its error log.
 	requireDispatchError(t, logs.String(), "failed to marshal event payload", model.EventPageUpdated, 71, 0)
 	requireDispatchError(t, logs.String(), "failed to create delivery record", model.EventPageUpdated, 82, hook.ID)
-	requireDispatchError(t, logs.String(), "failed to list webhooks for event", model.EventMediaUploaded, 93, 0)
-	requireDispatchError(t, logs.String(), "failed to dispatch debounced event", model.EventMediaUploaded, 93, 0)
+	requireOnlyDispatchError(t, logs.String(), "failed to list webhooks for event", model.EventMediaUploaded, 93)
+}
+
+func requireOnlyDispatchError(t *testing.T, logs, message, event string, entityID int64) {
+	t.Helper()
+	var matches []string
+	for line := range strings.Lines(logs) {
+		if strings.Contains(line, `"level":"ERROR"`) && strings.Contains(line, `"event_type":"`+event+`"`) {
+			matches = append(matches, strings.TrimSpace(line))
+		}
+	}
+	if len(matches) != 1 {
+		t.Errorf("got %d error records for %s, want 1:\n%s", len(matches), event, strings.Join(matches, "\n"))
+	}
+	requireDispatchError(t, logs, message, event, entityID, 0)
 }
 
 func requireDispatchError(t *testing.T, logs, message, event string, entityID, webhookID int64) {

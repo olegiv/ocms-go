@@ -97,12 +97,7 @@ func (h *UsersHandler) dispatchUserEvent(ctx context.Context, eventType string, 
 		Role:  user.Role,
 	}
 
-	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
-		slog.Error("failed to dispatch webhook event",
-			"error", err,
-			"event_type", eventType,
-			"user_id", user.ID)
-	}
+	webhook.DispatchEvent(ctx, h.dispatcher, eventType, data)
 }
 
 // List handles GET /admin/users - displays a paginated list of users.
