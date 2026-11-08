@@ -99,7 +99,7 @@ func TestClaudeCommandsRouteValidatedInputs(t *testing.T) {
 		},
 		{
 			name: "security-audit",
-			required: []string{"\n./scripts/codex-commands security-audit\n", "preserves archived reports and active notes",
+			required: []string{"\n./scripts/codex-commands security-audit\n", "preserves existing reports and active notes in place",
 				".audit/run-*/report.md", "returns Markdown"},
 			forbidden: []string{"Move all existing audit files", "launch the security-auditor agent"},
 		},

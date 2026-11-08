@@ -4,9 +4,7 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -15,7 +13,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 )
 
 type proxyWorkflowFixture struct {
@@ -262,48 +259,31 @@ func TestProxyCommitWorkflowRequiresTerminal(t *testing.T) {
 
 func TestProxyAuditOwnsReportDestination(t *testing.T) {
 	f := newProxyWorkflowFixture(t)
-	legacy := []string{
-		"security-audit-2026-11-05_20-08-27.md",
-		"govulncheck-2026-11-05_20-08-27.log",
-		"npm-audit-2026-11-05_20-08-27.log",
+	const legacyReport = "security-audit-2026-11-05_20-08-27.md"
+	const legacyLog = "govulncheck-2026-11-05_20-08-27.log"
+	protected := map[string]string{
+		"TODO.md":                           "[Previous audit](" + legacyReport + ")\n",
+		legacyReport:                        "[Go scan](" + legacyLog + ")\n",
+		legacyLog:                           "previous Go scan\n",
+		"npm-audit-2026-11-05_20-08-27.log": "previous npm scan\n",
+		"sections-2026-11-07/audit.md":      "section notes\n",
+		"archive-older/history.md":          "archived audit\n",
+		"run-ongoing/report.incomplete":     "partial report\n",
+		"run-finished/report.md":            "[Go scan](govulncheck.log)\n",
+		"run-finished/govulncheck.log":      "completed scan\n",
 	}
-	for _, name := range legacy {
-		f.write(".audit/"+name, "previous audit artifact\n")
-	}
-	protected := []string{
-		"TODO.md", "sections-2026-11-07/audit.md", "codex-2026-11-07/HANDOFF.md",
-		"govulncheck-2026-11-07_18-53-57.log", "npm-audit-2026-11-07_18-53-57.log",
-		"security-audit-in-progress.md", "security-audit-2026-11-08_00-00-00.md/draft.md",
-		"2026-11-05_20-00-00/history.md", "archive-older/history.md", "run-ongoing/report.incomplete",
-	}
-	for _, name := range protected {
-		f.write(".audit/"+name, "preserved audit artifact\n")
+	for name, contents := range protected {
+		f.write(".audit/"+name, contents)
 	}
 	link := filepath.Join(f.dir, ".audit/security-audit-2026-11-08_01-00-00.md")
 	if err := os.Symlink("TODO.md", link); err != nil {
 		t.Fatal(err)
 	}
 	f.run("", 0, "security-audit", "scope note")
-	reports, err := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.md"))
+	reports, err := filepath.Glob(filepath.Join(f.dir, ".audit/run-????-*/report.md"))
 	if err != nil || len(reports) != 1 || string(readWorkflowFile(t, reports[0])) != "# Fixture audit report\n" {
 		t.Fatalf("new report: %v, %v", reports, err)
 	}
-	for _, name := range protected {
-		if got := string(readWorkflowFile(t, filepath.Join(f.dir, ".audit", name))); got != "preserved audit artifact\n" {
-			t.Errorf("audit changed %s: %q", name, got)
-		}
-	}
-	if target, err := os.Readlink(link); err != nil || target != "TODO.md" {
-		t.Errorf("report-shaped symlink: target %q, error %v", target, err)
-	}
-	for _, name := range legacy {
-		archived, err := filepath.Glob(filepath.Join(f.dir, ".audit/archive-*", name))
-		if err != nil || len(archived) != 1 || string(readWorkflowFile(t, archived[0])) != "previous audit artifact\n" {
-			t.Fatalf("archived %s: %v, %v", name, archived, err)
-		}
-		requireWorkflowFileAbsent(t, filepath.Join(f.dir, ".audit", name))
-	}
-
 	data := readWorkflowFile(t, filepath.Join(f.bin, "claude-args"))
 	args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
 	start, end := slices.Index(args, "--allowedTools"), slices.Index(args, "-p")
@@ -346,18 +326,40 @@ func TestProxyAuditOwnsReportDestination(t *testing.T) {
 	if pending, pendingErr := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.incomplete")); pendingErr != nil || !slices.Equal(pending, []string{ongoing}) {
 		t.Fatalf("failed audit left partial report: %v, %v", pending, pendingErr)
 	}
-	if current, currentErr := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.md")); currentErr != nil || !slices.Equal(current, reports) {
+	if current, currentErr := filepath.Glob(filepath.Join(f.dir, ".audit/run-????-*/report.md")); currentErr != nil || !slices.Equal(current, reports) {
 		t.Fatalf("failed audit replaced a completed report: %v, %v", current, currentErr)
+	}
+	for name, want := range protected {
+		if got := string(readWorkflowFile(t, filepath.Join(f.dir, ".audit", name))); got != want {
+			t.Errorf("audit changed %s: %q", name, got)
+		}
+	}
+	if target, err := os.Readlink(link); err != nil || target != "TODO.md" {
+		t.Errorf("report-shaped symlink: target %q, error %v", target, err)
 	}
 }
 
 func TestLocalAuditPreservesInProgressWork(t *testing.T) {
 	f := newProxyWorkflowFixture(t)
-	f.write(".audit/TODO.md", "active audit notes\n")
+	const previous = "security-audit-2026-11-05_20-08-27.md"
+	const notes = "active audit notes\n[Previous audit](" + previous + ")\n"
+	f.write(".audit/TODO.md", notes)
+	f.write(".audit/"+previous, "previous report\n")
 	f.write("package.json", "{}\n")
 	f.write("go.mod", "module example.invalid/auditfixture\n\ngo 1.27\n")
 	f.write("fixture.go", "package auditfixture\n")
 	f.write("output/old/broken.go", "package old\nfunc =\n")
+	f.script("govulncheck", `#!/bin/sh
+printf 'partial scan\n'
+kill -TERM "$PPID"
+`)
+	f.run("", -1, "security-audit-local")
+	interrupted, err := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/govulncheck.log"))
+	if err != nil || len(interrupted) != 1 || string(readWorkflowFile(t, interrupted[0])) != "partial scan\n" {
+		t.Fatalf("interrupted scan: %v, %v", interrupted, err)
+	}
+	requireWorkflowFileAbsent(t, filepath.Join(filepath.Dir(interrupted[0]), "report.md"))
+
 	f.script("govulncheck", `#!/bin/sh
 [ "$*" = . ] || exit 2
 printf 'Go scan output\n'
@@ -368,11 +370,17 @@ printf 'npm scan output\n'
 exit 1
 `)
 	f.run("", 1, "security-audit-local")
-	if notes := string(readWorkflowFile(t, filepath.Join(f.dir, ".audit/TODO.md"))); notes != "active audit notes\n" {
-		t.Errorf("audit changed the active notes: %q", notes)
+	if got := string(readWorkflowFile(t, filepath.Join(f.dir, ".audit/TODO.md"))); got != notes {
+		t.Errorf("audit changed the active notes: %q", got)
+	}
+	if got := string(readWorkflowFile(t, filepath.Join(f.dir, ".audit", previous))); got != "previous report\n" {
+		t.Errorf("audit changed the previous report: %q", got)
+	}
+	if got := string(readWorkflowFile(t, interrupted[0])); got != "partial scan\n" {
+		t.Errorf("audit changed the interrupted scan: %q", got)
 	}
 	if archives, err := filepath.Glob(filepath.Join(f.dir, ".audit/archive-*")); err != nil || len(archives) != 0 {
-		t.Errorf("audit without a legacy report made an archive: %v, %v", archives, err)
+		t.Errorf("audit moved earlier evidence: %v, %v", archives, err)
 	}
 	reports, err := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.md"))
 	if err != nil || len(reports) != 1 {
@@ -383,97 +391,45 @@ exit 1
 		t.Errorf("unexpected scanner summary:\n%s", report)
 	}
 	for name, want := range map[string]string{"govulncheck.log": "Go scan output\n", "npm-audit.log": "npm scan output\n"} {
+		if !strings.Contains(report, "["+name+"]("+name+")") {
+			t.Errorf("report has no local link to %s", name)
+		}
 		if got := string(readWorkflowFile(t, filepath.Join(filepath.Dir(reports[0]), name))); got != want {
 			t.Errorf("%s = %q, want %q", name, got, want)
 		}
 	}
 }
 
-func TestAuditPreparationHandlesLegacyLock(t *testing.T) {
+func TestAuditPreparationCreatesIndependentRuns(t *testing.T) {
 	f := newProxyWorkflowFixture(t)
-	lock := filepath.Join(f.dir, ".audit", ".archive.lock")
-	if err := os.MkdirAll(lock, 0o750); err != nil {
+	const legacy = ".audit/.archive.lock/keep"
+	f.write(legacy, "legacy lock contents\n")
+	f.script("date", "#!/bin/sh\nprintf '2026-11-08_12-00-00\\n'\n")
+	first := f.command("bash", "scripts/codex/security-audit.sh", "--prepare")
+	var firstOutput bytes.Buffer
+	first.Stdout, first.Stderr = &firstOutput, &firstOutput
+	if err := first.Start(); err != nil {
 		t.Fatal(err)
 	}
-	if out := f.run("", 2, "security-audit-local"); !strings.Contains(out, "no audit is active") || !strings.Contains(out, "rmdir -- .audit/.archive.lock") {
-		t.Fatalf("audit lock diagnostic lacks recovery instructions: %s", out)
+	secondOutput, secondErr := f.command("bash", "scripts/codex/security-audit.sh", "--prepare").CombinedOutput()
+	firstErr := first.Wait()
+	if firstErr != nil || secondErr != nil {
+		t.Fatalf("preparation failed: %v (%s), %v (%s)", firstErr, firstOutput.String(), secondErr, secondOutput)
 	}
-	if err := os.Remove(lock); err != nil {
-		t.Fatalf("contending launcher changed the lock: %v", err)
+	firstPath, secondPath := strings.TrimSpace(firstOutput.String()), strings.TrimSpace(string(secondOutput))
+	if firstPath == secondPath {
+		t.Fatalf("two preparations shared %s", firstPath)
 	}
-	cmd := f.command("bash", "scripts/codex/security-audit.sh", "--prepare")
-	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), ".audit/run-") {
-		t.Fatalf("audit did not recover after lock removal: %v\n%s", err, out)
-	}
-}
-
-func TestAuditArchiveLockReleasesAfterOwnerDies(t *testing.T) {
-	f := newProxyWorkflowFixture(t)
-	f.write(".audit/TODO.md", "active notes\n")
-	lock := filepath.Join(f.dir, ".audit", ".archive.lock")
-	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
-	defer cancel()
-	holder := exec.CommandContext(ctx, "bash", "-c", `set -e
-exec 9>>"$1"
-if command -v lockf >/dev/null 2>&1; then lockf -s -t 0 9; else flock -n -E 75 9; fi
-printf 'locked\n'
-read -r release
-`, "holder", lock)
-	holder.Dir, holder.Env = f.dir, f.env
-	in, err := holder.StdinPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = in.Close() }()
-	out, err := holder.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = holder.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if holder.ProcessState == nil {
-			_ = holder.Process.Kill()
-			_ = holder.Wait()
+	for _, path := range []string{firstPath, secondPath} {
+		info, err := os.Stat(path)
+		if err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 ||
+			!strings.HasPrefix(filepath.Base(path), "run-2026-11-08_12-00-00.") {
+			t.Fatalf("invalid private run directory %q: %v, %v", path, info, err)
 		}
-	})
-	if line, readErr := bufio.NewReader(out).ReadString('\n'); readErr != nil || line != "locked\n" {
-		t.Fatalf("lock holder did not start: %q, %v", line, readErr)
 	}
-	prepare := func() ([]byte, error) {
-		return f.command("bash", "scripts/codex/security-audit.sh", "--prepare").CombinedOutput()
+	if got := string(readWorkflowFile(t, filepath.Join(f.dir, legacy))); got != "legacy lock contents\n" {
+		t.Errorf("preparation changed legacy lock data: %q", got)
 	}
-	var exitErr *exec.ExitError
-	if output, prepareErr := prepare(); !errors.As(prepareErr, &exitErr) || exitErr.ExitCode() != 2 || !strings.Contains(string(output), "Another audit is preparing") {
-		t.Fatalf("preparation entered a locked archive: %v\n%s", prepareErr, output)
-	}
-	if err = holder.Process.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	if err = holder.Wait(); err == nil {
-		t.Fatal("lock owner unexpectedly exited normally")
-	}
-	if info, statErr := os.Stat(lock); statErr != nil || !info.Mode().IsRegular() {
-		t.Fatalf("the lock file did not survive the killed owner: %v", statErr)
-	}
-	if output, prepareErr := prepare(); prepareErr != nil || !strings.Contains(string(output), ".audit/run-") {
-		t.Fatalf("preparation did not recover from the killed owner: %v\n%s", prepareErr, output)
-	}
-}
-
-func TestAuditPreparationRefusesSymlinkedLock(t *testing.T) {
-	f := newProxyWorkflowFixture(t)
-	f.write(".audit/TODO.md", "active notes\n")
-	outside := filepath.Join(t.TempDir(), "outside")
-	if err := os.Symlink(outside, filepath.Join(f.dir, ".audit", ".archive.lock")); err != nil {
-		t.Fatal(err)
-	}
-	cmd := f.command("bash", "scripts/codex/security-audit.sh", "--prepare")
-	if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "Use a regular file") {
-		t.Fatalf("audit accepted a symlinked lock: %v\n%s", err, out)
-	}
-	requireWorkflowFileAbsent(t, outside)
 }
 
 func TestProjectGoPackagesExcludeOnlyTopLevelOutput(t *testing.T) {
