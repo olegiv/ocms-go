@@ -61,15 +61,15 @@ func TestPageFormWritersRequireWriteContext(t *testing.T) {
 				state := func() string {
 					t.Helper()
 					var result string
-					if err := db.QueryRowContext(t.Context(), `SELECT
+					if stateErr := db.QueryRowContext(t.Context(), `SELECT
 						(SELECT COUNT(*) FROM pages) || ':' ||
 						(SELECT COUNT(*) FROM page_versions) || ':' ||
-						(SELECT COUNT(*) FROM content_provenance)`).Scan(&result); err != nil {
-						t.Fatal(err)
+						(SELECT COUNT(*) FROM content_provenance)`).Scan(&result); stateErr != nil {
+						t.Fatal(stateErr)
 					}
-					snapshot, err := q.GetPageSnapshot(t.Context(), original.ID)
-					if err != nil {
-						t.Fatal(err)
+					snapshot, snapshotErr := q.GetPageSnapshot(t.Context(), original.ID)
+					if snapshotErr != nil {
+						t.Fatal(snapshotErr)
 					}
 					return result + snapshot
 				}
@@ -147,8 +147,8 @@ func TestPageFormWritersRequireWriteContext(t *testing.T) {
 			t.Fatalf("refused write changed page: %+v, error=%v", current, err)
 		}
 		var versions, records int
-		if err := db.QueryRowContext(t.Context(), `SELECT (SELECT COUNT(*) FROM page_versions), (SELECT COUNT(*) FROM content_provenance)`).Scan(&versions, &records); err != nil {
-			t.Fatal(err)
+		if historyErr := db.QueryRowContext(t.Context(), `SELECT (SELECT COUNT(*) FROM page_versions), (SELECT COUNT(*) FROM content_provenance)`).Scan(&versions, &records); historyErr != nil {
+			t.Fatal(historyErr)
 		}
 		if versions != 1 || records != 1 {
 			t.Fatalf("refused write changed history: versions=%d, provenance=%d", versions, records)

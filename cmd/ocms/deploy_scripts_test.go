@@ -641,24 +641,24 @@ echo "ocmsctl $*" >> "`+calls+`"
 		return cmd.CombinedOutput()
 	}
 	symlink, hardlink := filepath.Join(tmp, "symlink"), filepath.Join(tmp, "hardlink")
-	if err := os.Symlink(installed, symlink); err != nil {
-		t.Fatal(err)
+	if linkErr := os.Symlink(installed, symlink); linkErr != nil {
+		t.Fatal(linkErr)
 	}
-	if err := os.Link(installed, hardlink); err != nil {
-		t.Fatal(err)
+	if linkErr := os.Link(installed, hardlink); linkErr != nil {
+		t.Fatal(linkErr)
 	}
 	for _, source := range []string{installed, symlink, hardlink, backup, installed + ".new"} {
-		out, err := run(source)
-		if err == nil || !strings.Contains(string(out), "New binary must be separate from") {
-			t.Errorf("aliased source %s: %v, want refusal\n%s", source, err, out)
+		out, deployErr := run(source)
+		if deployErr == nil || !strings.Contains(string(out), "New binary must be separate from") {
+			t.Errorf("aliased source %s: %v, want refusal\n%s", source, deployErr, out)
 		}
 	}
-	if _, err := os.Stat(calls); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("deployment touched services for an aliased source: %v", err)
+	if _, statErr := os.Stat(calls); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("deployment touched services for an aliased source: %v", statErr)
 	}
 	for path, want := range map[string]string{installed: "old", backup: "prior backup", installed + ".new": "prior staging"} {
-		if got, err := os.ReadFile(path); err != nil || string(got) != want { // #nosec G304 -- test path
-			t.Errorf("%s after refusal = %q, %v; want %q", path, got, err, want)
+		if got, readErr := os.ReadFile(path); readErr != nil || string(got) != want { // #nosec G304 -- test path
+			t.Errorf("%s after refusal = %q, %v; want %q", path, got, readErr, want)
 		}
 	}
 

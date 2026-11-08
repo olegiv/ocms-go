@@ -270,8 +270,8 @@ func TestPageReviewServerErrorsUseLogging(t *testing.T) {
 				}
 			}
 			ast.Inspect(fn.Body, func(node ast.Node) bool {
-				call, ok := node.(*ast.CallExpr)
-				if !ok {
+				call, isCall := node.(*ast.CallExpr)
+				if !isCall {
 					return true
 				}
 				if selected, ok := call.Fun.(*ast.SelectorExpr); ok && selected.Sel.Name == "Error" && len(call.Args) == 3 {

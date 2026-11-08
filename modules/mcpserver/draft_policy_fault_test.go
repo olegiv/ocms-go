@@ -267,7 +267,7 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 		if !ok {
 			return
 		}
-		if selected, ok := call.Fun.(*ast.SelectorExpr); ok {
+		if selected, isSelector := call.Fun.(*ast.SelectorExpr); isSelector {
 			switch selected.Sel.Name {
 			case "credentialScopes", "authoringService", "checkAgentShareLinks":
 				return // These helpers already classify their errors.

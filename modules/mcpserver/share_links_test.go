@@ -186,16 +186,16 @@ func TestAgentShareLinksRechecksPolicyInIssuanceTransaction(t *testing.T) {
 			})
 			env.module.svc.queries = store.New(db)
 
-			session := env.connect(token)
-			saved := decodeResult[authoring.SaveResult](t, call(t, session, "create_draft_page", draftCreateArgs("Sharing policy changed")))
+			client := env.connect(token)
+			saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Sharing policy changed")))
 			args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
-			shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", args))
+			shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", args))
 			shareURL, err := url.Parse(string(shared.URL))
 			if err != nil || shareURL.Fragment == "" {
 				t.Fatal("enabled call did not issue a share link")
 			}
 			disableBeforeIssue.Store(true)
-			refused := call(t, session, "create_preview_link", args)
+			refused := call(t, client, "create_preview_link", args)
 			settingsAfter, err := loadSettings(ctx, env.db)
 			if err != nil || disableBeforeIssue.Load() || settingsAfter.AgentShareLinks {
 				t.Fatalf("share policy change did not commit before issuance: %v", err)
@@ -218,7 +218,7 @@ func TestAgentShareLinksRechecksPolicyInIssuanceTransaction(t *testing.T) {
 			if err != nil || snapshot.Page.ID != saved.PageID || snapshot.Page.Revision != saved.Revision {
 				t.Fatal("previously issued link failed to resolve")
 			}
-			decodeResult[authoring.SaveResult](t, call(t, session, "create_draft_page", draftCreateArgs("Draft with sharing off")))
+			decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Draft with sharing off")))
 		})
 	}
 }
@@ -270,10 +270,10 @@ func TestAgentShareLinksSerializeDisableWithDeferredIssuance(t *testing.T) {
 		}
 	})
 	env.module.svc.queries = store.New(db)
-	session := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
-	saved := decodeResult[authoring.SaveResult](t, call(t, session, "create_draft_page", draftCreateArgs("Deferred share issuance")))
+	client := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
+	saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Deferred share issuance")))
 	args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
-	shared := decodeResult[preview.Link](t, call(t, session, "create_preview_link", args))
+	shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", args))
 	if shared.URL == "" || shared.PageID != saved.PageID || shared.Revision != saved.Revision {
 		t.Fatal("enabled issuance did not create the requested link")
 	}
@@ -293,7 +293,7 @@ func TestAgentShareLinksSerializeDisableWithDeferredIssuance(t *testing.T) {
 	if err = saveSettings(ctx, admin, disabled); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, _ := toolErrorBody(t, call(t, session, "create_preview_link", args)); code != "share_links_disabled" {
+	if code, _, _ := toolErrorBody(t, call(t, client, "create_preview_link", args)); code != "share_links_disabled" {
 		t.Fatalf("share link after the disable committed: code %q", code)
 	}
 	var links, events int

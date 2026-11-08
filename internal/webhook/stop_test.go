@@ -29,9 +29,9 @@ func TestStopDeliversDebouncedEvents(t *testing.T) {
 	cfg.Debounce.Interval = time.Hour
 	db.SetMaxOpenConns(1)
 	// Keep the flush from reaching SQLite until the late call has run.
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
+	conn, connErr := db.Conn(ctx)
+	if connErr != nil {
+		t.Fatal(connErr)
 	}
 	d := NewDispatcher(db, slog.New(slog.DiscardHandler), cfg)
 	d.Start(ctx)

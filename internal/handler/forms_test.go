@@ -45,10 +45,10 @@ func TestFormSubmissionLogsStoppedWebhook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := queries.CreateFormField(ctx, store.CreateFormFieldParams{
+	if _, fieldErr := queries.CreateFormField(ctx, store.CreateFormFieldParams{
 		FormID: form.ID, Type: "text", Name: "message", Label: "Message", CreatedAt: now, UpdatedAt: now,
-	}); err != nil {
-		t.Fatal(err)
+	}); fieldErr != nil {
+		t.Fatal(fieldErr)
 	}
 	tm := loadedFrontendThemeManager(t, "default")
 	menu := service.NewMenuService(db, nil)

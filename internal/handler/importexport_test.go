@@ -273,9 +273,9 @@ func TestImportStorageFaultRendersSafeError(t *testing.T) {
 			h := NewImportExportHandler(db, renderer, sm)
 			var diagnostics bytes.Buffer
 			h.logger = slog.New(slog.NewTextHandler(&diagnostics, nil))
-			if _, err := db.Exec(`CREATE TRIGGER fail_import_provenance BEFORE INSERT ON content_provenance
-				BEGIN SELECT RAISE(ABORT, 'fixture storage fault'); END`); err != nil {
-				t.Fatal(err)
+			if _, triggerErr := db.Exec(`CREATE TRIGGER fail_import_provenance BEFORE INSERT ON content_provenance
+				BEGIN SELECT RAISE(ABORT, 'fixture storage fault'); END`); triggerErr != nil {
+				t.Fatal(triggerErr)
 			}
 			payload, err := json.Marshal(transfer.ExportData{Version: transfer.ExportVersion, Pages: []transfer.ExportPage{{
 				ID: 1, Title: "Flash fixture", Slug: "flash-fixture", Status: "draft", AuthorEmail: user.Email,

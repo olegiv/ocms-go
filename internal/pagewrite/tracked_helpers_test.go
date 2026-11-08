@@ -15,16 +15,16 @@ import (
 
 func TestCompoundWritersRequireTrackedPages(t *testing.T) {
 	f := setup(t)
-	version, err := f.q.GetPageVersionByRevision(t.Context(), store.GetPageVersionByRevisionParams{PageID: f.page.ID, Revision: sql.NullInt64{Int64: f.page.Revision, Valid: true}})
-	if err != nil {
-		t.Fatal(err)
+	version, versionErr := f.q.GetPageVersionByRevision(t.Context(), store.GetPageVersionByRevisionParams{PageID: f.page.ID, Revision: sql.NullInt64{Int64: f.page.Revision, Valid: true}})
+	if versionErr != nil {
+		t.Fatal(versionErr)
 	}
 	// A legacy restore changes only content, so it isolates the helper's tracking
 	// requirement from reference and route validation.
 	version.Legacy = true
 	version.Title = "Restored title"
 	for _, tracked := range []bool{false, true} {
-		_, err = pagewrite.InTx(t.Context(), f.db, provenance.Principal{UserID: f.user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
+		_, restoreErr := pagewrite.InTx(t.Context(), f.db, provenance.Principal{UserID: f.user.ID, Source: "human"}, func(work *pagewrite.Tx) error {
 			if tracked {
 				if _, err := work.TrackSystem(t.Context(), f.page.ID); err != nil {
 					return err
@@ -37,8 +37,8 @@ func TestCompoundWritersRequireTrackedPages(t *testing.T) {
 			t.Fatal(loadErr)
 		}
 		if !tracked {
-			if !errors.Is(err, pagewrite.ErrPageNotTracked) || current.Title != f.page.Title || current.Revision != f.page.Revision {
-				t.Fatalf("untracked restore: error=%v, title=%q, revision=%d", err, current.Title, current.Revision)
+			if !errors.Is(restoreErr, pagewrite.ErrPageNotTracked) || current.Title != f.page.Title || current.Revision != f.page.Revision {
+				t.Fatalf("untracked restore: error=%v, title=%q, revision=%d", restoreErr, current.Title, current.Revision)
 			}
 			var records int
 			if err := f.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM content_provenance WHERE page_id = ?", f.page.ID).Scan(&records); err != nil {
@@ -47,12 +47,12 @@ func TestCompoundWritersRequireTrackedPages(t *testing.T) {
 			if records != 1 {
 				t.Fatalf("refusal changed provenance: %d records", records)
 			}
-		} else if err != nil || current.Title != version.Title || current.Body != "Restored body" || current.Revision != f.page.Revision+1 {
-			t.Fatalf("tracked restore: error=%v, page=%+v", err, current)
+		} else if restoreErr != nil || current.Title != version.Title || current.Body != "Restored body" || current.Revision != f.page.Revision+1 {
+			t.Fatalf("tracked restore: error=%v, page=%+v", restoreErr, current)
 		}
 	}
 
-	_, err = pagewrite.InTx(t.Context(), f.db, provenance.Principal{Source: "system"}, func(work *pagewrite.Tx) error {
+	_, trackingErr := pagewrite.InTx(t.Context(), f.db, provenance.Principal{Source: "system"}, func(work *pagewrite.Tx) error {
 		for _, id := range []int64{0, f.page.ID, f.page.ID + 100} {
 			if err := work.RequireTracked(id); !errors.Is(err, pagewrite.ErrPageNotTracked) || work.IsTracked(id) {
 				t.Fatalf("precondition took a late snapshot or accepted %d: %v", id, err)
@@ -74,7 +74,7 @@ func TestCompoundWritersRequireTrackedPages(t *testing.T) {
 		}
 		return work.RequireTrackedEntity("page", f.page.ID)
 	})
-	if err != nil {
-		t.Fatal(err)
+	if trackingErr != nil {
+		t.Fatal(trackingErr)
 	}
 }
