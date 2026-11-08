@@ -894,8 +894,10 @@ release hardening and independent security audit remain R1.7 work.
 
 ### Iteration R1.7: Connected Apps, Hardening and Release
 
-**Status updated 2026-11-05:** the latest verified Fly staging build is
-`6c611040` (deployed 2026-11-05). An ordinary editor status save published
+**Status updated 2026-11-08.** The latest verified Fly staging build is
+`b58b7b51`. See the [staging rollout](../../docs/launch/r17-acceptance.md#staging-rollout-of-b58b7b51).
+
+On `6c611040`, an ordinary editor status save published
 the disposable source with byte-identical HTML and both translations
 Current. See the
 [staging verification](../../docs/launch/r17-acceptance.md#editor-preservation-staging-verification--2026-11-05).

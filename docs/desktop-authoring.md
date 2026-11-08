@@ -7,8 +7,10 @@ R1.6 passed the tested Claude web and ChatGPT web draft/review flows on
 the browser traces confirmed token-free HTTP request URLs. R1.7's current
 client coverage and remaining release gates are recorded below.
 
-R1.7's latest verified staging build is `6c611040` (2026-11-05). The normal
-editor publication save preserved HTML and both translation bases.
+R1.7's [latest staging rollout](launch/r17-acceptance.md#staging-rollout-of-b58b7b51)
+verified OAuth/MFA and preview sharing on `b58b7b51` on 2026-11-08.
+The earlier normal editor publication save on `6c611040` preserved HTML
+and both translation bases.
 On `be0e9cc3`, the dedicated Editor's translation review passed. RU 43/6
 and DE 44/5 became Current against EN 27/7. After owner approval and manual
 publication on 2026-11-05, final revisions 9/7/6 are Published with both
@@ -16,8 +18,8 @@ translations Current. See the
 [publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
 and earlier
 [rollout record](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
-This focused rollout did not repeat GUI/native/CLI reconnect or authoring
-acceptance; earlier client results retain their build scope.
+Provider reconnect and authoring acceptance results below retain their
+tested builds.
 
 On `ba044434`, fresh Claude web and ChatGPT web checks passed OAuth/MFA
 revoke/reconnect, draft replay/conflict, share-policy refusal and anonymous

@@ -6,7 +6,10 @@ deploy when **you** run them. Preparing this guide does not execute them.
 The existing `ocms-demo`, `fly.toml`, demo deployment script and the production host are
 outside this procedure.
 
-The latest verified runtime is `6c611040`, deployed 2026-11-05. The
+The latest verified runtime is `b58b7b51`, deployed 2026-11-08. The
+[staging rollout](launch/r17-acceptance.md#staging-rollout-of-b58b7b51)
+records the exact image, recovery snapshot, health, proxy, OAuth/MFA, CSP,
+language and preview-link checks. The earlier
 [editor rollout](launch/r17-acceptance.md#editor-preservation-staging-verification--2026-11-05)
 records the image, recovery snapshot and passing status-only save. The
 earlier

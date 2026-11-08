@@ -1,6 +1,6 @@
 # R1 release decisions
 
-Updated 2026-11-05. The OpenPGP disposition below is owner-approved for the
+Updated 2026-11-08. The OpenPGP disposition below is owner-approved for the
 reviewed build, with the staging-target recheck recorded below; other
 decisions retain their stated status. This record does not authorize
 commit, push, deployment or publication. The
@@ -8,9 +8,13 @@ commit, push, deployment or publication. The
 
 ## Latest staging verification
 
-`6c611040` is the latest verified deployment on `ocms-mcp-staging`
-(2026-11-05). An ordinary status-only editor save preserved the source
-HTML byte for byte and kept both translations Current. See the
+`b58b7b51` is the latest verified deployment on `ocms-mcp-staging`
+(2026-11-08). The [staging rollout](r17-acceptance.md#staging-rollout-of-b58b7b51)
+covers readiness, proxy trust, OAuth/MFA, CSP, language switching and
+preview-link issuance and revocation.
+
+On `6c611040` (2026-11-05), an ordinary status-only editor save preserved
+the source HTML byte for byte and kept both translations Current. See the
 [editor rollout](r17-acceptance.md#editor-preservation-staging-verification--2026-11-05).
 Dedicated Editor login and translation review passed on the earlier
 `be0e9cc3` build. Following explicit owner approval and manual
@@ -19,9 +23,8 @@ all Published, with both translations Current. The
 [publication record](r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
 includes the English restore workaround and public readbacks. The earlier
 [rollout record](r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04)
-includes exact image, preservation and cleanup evidence. This focused
-rollout did not repeat client reconnect, dependency, sharing or proxy-error
-checks; earlier results keep their tested builds.
+includes exact image, preservation and cleanup evidence. Client reconnect,
+dependency and sharing results remain tied to their tested builds.
 
 On the preceding `ba044434` build, fresh Claude web and ChatGPT web
 OAuth/MFA reconnect, draft replay/conflict, share-policy and

@@ -1,6 +1,9 @@
-# R1.7 release acceptance — updated 2026-11-05
+# R1.7 release acceptance — updated 2026-11-08
 
-The latest verified staging build is `6c611040`, deployed on 2026-11-05.
+The latest verified staging build is `b58b7b51`, deployed on 2026-11-08.
+See the [staging rollout](#staging-rollout-of-b58b7b51).
+
+The editor preservation rollout ran on `6c611040` on 2026-11-05.
 An ordinary status-only save published the disposable English source with
 byte-identical HTML and both translations Current. See the
 [editor rollout](#editor-preservation-staging-verification--2026-11-05).
@@ -31,7 +34,10 @@ scoped dependency disposition and sign-off.
 
 - Fly app: `ocms-mcp-staging`, canonical origin
   `https://ocms-mcp-staging.fly.dev`.
-- Latest verified deployed commit: `6c6110403a7ed5a2aca1b44b20e8455d7fa18cda`;
+- Latest verified deployment: `b58b7b513f7f94bd4c7e208065e12ab35e01e368`.
+  The [rollout record](#staging-rollout-of-b58b7b51) identifies the binary,
+  image and checks.
+- Earlier editor preservation deployment: `6c6110403a7ed5a2aca1b44b20e8455d7fa18cda`;
   source tree `54a68972259447803f6d7c3c37f8b75dea5535e8`, binary build time
   `2026-11-05T07:00:04Z`, checked directly on the host. All three Fly checks
   and both public health endpoints passed. Image digest
@@ -650,6 +656,44 @@ client and sharing checks retain their recorded build scopes.
 Evidence is under ignored `output/r17-validation/6c611040-staging-20261105/`.
 It includes the snapshot and image receipts, pre/post HTML hashes,
 editor screenshot, anonymous responses and `acceptance-summary.json`.
+
+## Staging rollout of b58b7b51
+
+On 2026-11-08, Fly deployed a clean archive of
+`b58b7b513f7f94bd4c7e208065e12ab35e01e368` to `ocms-mcp-staging`
+after the browser-enabled Go test gate passed. The running binary reported
+that exact commit, built at `2026-11-08T06:19:05Z` from tree
+`9eb8e9c4a74e56fcb9d99e44ccc8937b0d474aed`.
+
+- Image `[deployment ID redacted]`
+  with digest `[image digest redacted]`.
+- Machine `[machine ID redacted]` in `fra` retained volume `[volume ID redacted]`.
+  Recovery snapshot `[snapshot ID redacted]` was created at
+  `2026-11-08T06:16:51Z` with five-day retention.
+- Zero active forms were recorded before and after rollout. Staging retained
+  its approved `OCMS_REQUIRE_FORM_CAPTCHA=false` override and required MFA.
+  DCR, seeding and demo mode stayed disabled. The DCR admission migration
+  `20261107180000` applied on the existing volume.
+
+| Check | Verified result |
+| --- | --- |
+| Readiness and proxy | Both public health endpoints returned HTTP 200 and all three Fly checks passed. HTTP redirected to HTTPS. Normal and spoofed forwarding requests resolved to the expected client IP. |
+| OAuth and MFA | Discovery kept the canonical HTTPS issuer under spoofed headers. Anonymous MCP returned HTTP 401 and DCR returned HTTP 404. The dedicated Editor completed password, required TOTP, consent, S256 PKCE exchange and MCP initialization in Chrome. The auth event matched the browser client IP. |
+| Preview sharing | MCP advertised a string URL and issued a revision-pinned link for an existing draft owned by the dedicated Editor. Anonymous redemption returned HTTP 200 with the expected page and revision and an isolated, no-store response. Chrome cleared the fragment and submitted the fixed POST path without a session cookie. Revoking the test grant made the token return HTTP 401 and the share return HTTP 404. The sampled logs contained none of the test credentials. |
+| CSP and UI | Public and admin pages used a nonce-based CSP with `'unsafe-eval'` omitted. Chrome verified Alpine integrity and exercised the sidebar, mobile navigation and TinyMCE image selection, reload, search and insertion. The editor change was left unsaved. No page errors or script CSP violations were observed. |
+| Language switching | English-to-Russian switching worked anonymously and while signed in. The anonymous switch set only the preference cookie and preserved the SQLite session fingerprint. The signed-in switch reused its session. |
+
+Both temporary OAuth grants were revoked and the browser sessions were closed.
+The recorded counts for accounts, pages, revisions, provenance, active
+OAuth grants and non-agent OAuth grants matched before and after verification.
+Temporary database probes were removed from staging. The browser flow used the
+pinned Claude Code client identity with a local callback harness. The earlier
+provider, native and CLI client results retain their original build scopes.
+
+Redacted evidence is under ignored
+`output/r17-validation/b58b7b51-staging-20261108/`. The summary is
+`verification.md`, alongside runtime identity, health checks, browser
+results, database counts and the recovery snapshot receipt.
 
 ## Evidence, cleanup and remaining decisions
 
