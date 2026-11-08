@@ -319,7 +319,7 @@ templ PreviewLinkCreated(pc *PageContext, link preview.Link) {
 				@label.Label(label.Props{For: "preview-share-url"}) {
 					{ pc.T("preview.share_url") }
 				}
-				@input.Input(input.Props{ID: "preview-share-url", Value: string(link.URL), Attributes: templ.Attributes{"readonly": true}})
+				@input.Input(input.Props{ID: "preview-share-url", Value: link.URL.Reveal(), Attributes: templ.Attributes{"readonly": true}})
 				<p>{ pc.T("preview.expires") }: { link.ExpiresAt.UTC().Format(time.RFC3339) }</p>
 				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d", link.PageID)}) {
 					{ pc.T("pages.back_to_pages") }

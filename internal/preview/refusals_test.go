@@ -24,8 +24,8 @@ func TestPreviewIssuanceRefusalsIdentifyCause(t *testing.T) {
 		principal := provenance.Principal{UserID: f.user.ID, Source: "human"}
 		for _, origin := range []string{"", ":bad", "ftp://cms.test", "http://public.test", "https://cms.test/path", "https://private:secret@cms.test", "https://cms.test?secret=value", "https://cms.test?", "https://cms.test#secret"} {
 			link, err := f.svc.Issue(f.ctx, principal, f.page.ID, f.page.Revision, origin, nil)
-			if !errors.Is(err, preview.ErrSiteURL) || errors.Is(err, preview.ErrUnavailable) || link.URL != "" {
-				t.Errorf("site configuration refusal: link issued=%t error=%v", link.URL != "", err)
+			if !errors.Is(err, preview.ErrSiteURL) || errors.Is(err, preview.ErrUnavailable) || link.URL.Reveal() != "" {
+				t.Errorf("site configuration refusal: link issued=%t error=%v", link.URL.Reveal() != "", err)
 			}
 		}
 		var count int
@@ -96,8 +96,8 @@ func TestPreviewIssuanceRefusalsIdentifyCause(t *testing.T) {
 			} else if !errors.As(err, &limited) || limited.RetryAfterSeconds != wantDelay || errors.Is(err, preview.ErrActiveLimit) {
 				t.Errorf("hourly cap: %+v, want delay %d", err, wantDelay)
 			}
-			if !errors.Is(err, preview.ErrLimit) || link.URL != "" {
-				t.Errorf("limit category/empty result changed: issued=%t error=%v", link.URL != "", err)
+			if !errors.Is(err, preview.ErrLimit) || link.URL.Reveal() != "" {
+				t.Errorf("limit category/empty result changed: issued=%t error=%v", link.URL.Reveal() != "", err)
 			}
 			var links, events int
 			if err = f.db.QueryRow("SELECT (SELECT COUNT(*) FROM preview_links), (SELECT COUNT(*) FROM events WHERE message='Preview share link created')").Scan(&links, &events); err != nil || links != count || events != 0 {

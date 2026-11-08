@@ -49,7 +49,7 @@ func TestAgentShareLinksPolicyAndAdminRevocation(t *testing.T) {
 	client := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
 	saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Shared draft")))
 	shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", map[string]any{"page_id": saved.PageID, "revision": saved.Revision}))
-	if shared.URL == "" {
+	if shared.URL.Reveal() == "" {
 		t.Fatal("share link not issued while allowed")
 	}
 
@@ -190,7 +190,7 @@ func TestAgentShareLinksRechecksPolicyInIssuanceTransaction(t *testing.T) {
 			saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Sharing policy changed")))
 			args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
 			shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", args))
-			shareURL, err := url.Parse(string(shared.URL))
+			shareURL, err := url.Parse(shared.URL.Reveal())
 			if err != nil || shareURL.Fragment == "" {
 				t.Fatal("enabled call did not issue a share link")
 			}
@@ -274,7 +274,7 @@ func TestAgentShareLinksSerializeDisableWithDeferredIssuance(t *testing.T) {
 	saved := decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Deferred share issuance")))
 	args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
 	shared := decodeResult[preview.Link](t, call(t, client, "create_preview_link", args))
-	if shared.URL == "" || shared.PageID != saved.PageID || shared.Revision != saved.Revision {
+	if shared.URL.Reveal() == "" || shared.PageID != saved.PageID || shared.Revision != saved.Revision {
 		t.Fatal("enabled issuance did not create the requested link")
 	}
 	select {

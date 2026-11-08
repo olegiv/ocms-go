@@ -10,9 +10,20 @@ import (
 	"log/slog"
 )
 
-// ShareURL redacts formatting and structured logging. Explicit string
-// conversion or JSON serialization reveals the bearer for issuance responses.
-type ShareURL string
+// ShareURL holds a bearer URL for an issuance response. The pointer keeps the
+// bearer out of fmt diagnostics even when formatting skips methods on private
+// fields. Reveal and JSON marshaling return the raw URL.
+type ShareURL struct {
+	raw *string
+}
+
+// Reveal returns the URL for delivery to the issuer.
+func (u ShareURL) Reveal() string {
+	if u.raw == nil {
+		return ""
+	}
+	return *u.raw
+}
 
 func (ShareURL) String() string { return "[REDACTED]" }
 
@@ -26,7 +37,19 @@ func (u ShareURL) Format(state fmt.State, _ rune) {
 func (u ShareURL) LogValue() slog.Value { return slog.StringValue(u.String()) }
 
 // MarshalJSON preserves the URL in the explicitly requested issuance response.
-func (u ShareURL) MarshalJSON() ([]byte, error) { return json.Marshal(string(u)) }
+func (u ShareURL) MarshalJSON() ([]byte, error) { return json.Marshal(u.Reveal()) }
+
+// UnmarshalJSON decodes the string in an issuance response.
+func (u *ShareURL) UnmarshalJSON(data []byte) error {
+	var raw *string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw != nil {
+		u.raw = raw
+	}
+	return nil
+}
 
 // LogValue prevents slog's JSON fallback from serializing the bearer when the
 // entire issuance result is logged. Deliberate JSON serialization still exposes

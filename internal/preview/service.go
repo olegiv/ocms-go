@@ -194,7 +194,8 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 			return fmt.Errorf("record preview link: %w", workErr)
 		}
 		base.Path, base.RawPath, base.Fragment = SharePath, "", raw
-		result = Link{PageID: pageID, Revision: revision, URL: ShareURL(base.String()), ExpiresAt: time.Unix(created.ExpiresAt, 0).UTC(), Warning: "Anyone holding this link can read this revision until it expires or is revoked."}
+		rawURL := base.String()
+		result = Link{PageID: pageID, Revision: revision, URL: ShareURL{raw: &rawURL}, ExpiresAt: time.Unix(created.ExpiresAt, 0).UTC(), Warning: "Anyone holding this link can read this revision until it expires or is revoked."}
 		return nil
 	})
 	return result, err

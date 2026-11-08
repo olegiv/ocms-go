@@ -84,7 +84,7 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 	}{
 		{"anonymous session", sessionURL, false, 404},
 		{"editor session", sessionURL, true, 200},
-		{"anonymous explicit share", string(link.URL), false, 200},
+		{"anonymous explicit share", link.URL.Reveal(), false, 200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest("GET", tc.url, nil)
@@ -110,7 +110,7 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 			}
 		})
 	}
-	u, err := neturl.Parse(string(link.URL))
+	u, err := neturl.Parse(link.URL.Reveal())
 	if err != nil || u == nil {
 		t.Fatalf("parse preview URL: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 	h.themeManager = loadedFrontendThemeManager(t, "developer")
 	h.themeManager.GetActiveTheme().Templates = template.New("broken theme")
 	failed := httptest.NewRecorder()
-	router.ServeHTTP(failed, postedShareRequest(t, string(link.URL)))
+	router.ServeHTTP(failed, postedShareRequest(t, link.URL.Reveal()))
 	if failed.Code != 503 || strings.Contains(failed.Body.String(), "Draft content") || strings.Contains(failed.Body.String(), "Later private") {
 		t.Fatal("theme failure fell back to content")
 	}
@@ -164,7 +164,7 @@ func TestRecordedPreviewHTTPIsolationAndMissingSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, postedShareRequest(t, string(link.URL)))
+	router.ServeHTTP(w, postedShareRequest(t, link.URL.Reveal()))
 	if w.Code != 404 || strings.Contains(w.Body.String(), "Later private") {
 		t.Fatal("missing snapshot fell back to live content")
 	}

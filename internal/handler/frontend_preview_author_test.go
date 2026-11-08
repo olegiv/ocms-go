@@ -89,7 +89,7 @@ func TestSharedPreviewShowsOnlyTheIssuersAuthorBox(t *testing.T) {
 			router.Get("/preview/pages/{id}/revisions/{revision}", h.PreviewSession)
 
 			shared := httptest.NewRecorder()
-			router.ServeHTTP(shared, postedShareRequest(t, string(link.URL)))
+			router.ServeHTTP(shared, postedShareRequest(t, link.URL.Reveal()))
 			session := httptest.NewRecorder()
 			router.ServeHTTP(session, withUser(httptest.NewRequest(http.MethodGet, preview.SessionURL("", "", page.ID, page.Revision), nil), issuer))
 			shownIn := func(response *httptest.ResponseRecorder) bool {

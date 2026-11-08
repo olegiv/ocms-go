@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,6 +28,7 @@ import (
 )
 
 func TestAdminPreviewRefusalsExplainRecovery(t *testing.T) {
+	copyField := regexp.MustCompile(`id="preview-share-url"[^>]*\bvalue="([^"]+)"`)
 	for _, lang := range []string{"en", "ru"} {
 		for _, scenario := range []string{"invalid URL", "unset URL", "active", "hourly", "unavailable"} {
 			t.Run(lang+"/"+scenario, func(t *testing.T) {
@@ -150,8 +152,21 @@ func TestAdminPreviewRefusalsExplainRecovery(t *testing.T) {
 					}
 				}
 				logs.Reset()
-				if repaired := post(page.Revision); repaired.Code != http.StatusOK {
+				repaired := post(page.Revision)
+				if repaired.Code != http.StatusOK {
 					t.Fatalf("repaired request: status=%d", repaired.Code)
+				}
+				match := copyField.FindStringSubmatch(repaired.Body.String())
+				if len(match) != 2 {
+					t.Fatal("repaired response did not render the share URL")
+				}
+				shareURL, parseErr := url.Parse(match[1])
+				if parseErr != nil || shareURL.Path != preview.SharePath || shareURL.Fragment == "" {
+					t.Fatal("copy field did not contain a valid share URL")
+				}
+				snapshot, resolveErr := (preview.Service{Q: q}).Resolve(ctx, shareURL.Fragment)
+				if resolveErr != nil || snapshot.Page.ID != page.ID || snapshot.Page.Revision != page.Revision {
+					t.Fatal("copied URL did not resolve the issued revision")
 				}
 				if err = db.QueryRow("SELECT (SELECT COUNT(*) FROM preview_links), (SELECT COUNT(*) FROM events WHERE message='Preview share link created')").Scan(&links, &events); err != nil || links != count+1 || events != 1 {
 					t.Fatalf("recovery did not create exactly one link/event: %d/%d %v", links, events, err)

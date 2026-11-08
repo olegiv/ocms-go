@@ -44,7 +44,7 @@ func TestPreviewLanguageFailuresAreDistinguished(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := url.Parse(string(link.URL))
+	parsed, err := url.Parse(link.URL.Reveal())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestPreviewLanguageFailuresAreDistinguished(t *testing.T) {
 		t.Helper()
 		var request *http.Request
 		if mode == "share" {
-			request = postedShareRequest(t, string(link.URL))
+			request = postedShareRequest(t, link.URL.Reveal())
 		} else {
 			prefix := ""
 			if mode != "session" {

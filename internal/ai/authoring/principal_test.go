@@ -85,7 +85,7 @@ func TestDraftPrincipalMatchesPreviewIssuer(t *testing.T) {
 			if link.ExpiresAt.After(expires) {
 				t.Fatal("preview outlives its credential")
 			}
-			parsed, err := url.Parse(string(link.URL))
+			parsed, err := url.Parse(link.URL.Reveal())
 			if err != nil || parsed == nil || parsed.Fragment == "" {
 				t.Fatal("preview URL has no bearer")
 			}
