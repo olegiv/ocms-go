@@ -223,6 +223,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_OAUTH_ALLOW_DCR` | No | `false` | Allow bounded public-client dynamic registration |
 | `OCMS_OAUTH_ACCESS_TTL` | No | `3600` | OAuth access lifetime in seconds (60–86400) |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | No | `30` | Absolute rotating refresh-family lifetime (1–90 days) |
+| `OCMS_PREVIEW_LINK_TTL_HOURS` | No | `24` | Preview share-link lifetime in hours (1–24), capped by the issuing credential's expiry |
 | `OCMS_AI_DISABLED` | No | `false` | Disable draft authoring while retaining normal reads |
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
 | `OCMS_SEED_ADMIN_PASSWORD` | No | - | Password for the seeded admin instead of the documented default (min 12 characters) |

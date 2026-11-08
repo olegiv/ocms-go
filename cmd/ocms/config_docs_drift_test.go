@@ -26,7 +26,7 @@ func TestDocumentedEnvironmentDefaults(t *testing.T) {
 	for _, name := range []string{"CLAUDE.md", "README.md"} {
 		t.Run(name, func(t *testing.T) {
 			body := readWorkflowFile(t, filepath.Join("..", "..", name))
-			seenEnv := false
+			seen := make(map[string]bool)
 			for line := range strings.SplitSeq(string(body), "\n") {
 				if !strings.HasPrefix(line, "|") {
 					continue
@@ -45,10 +45,12 @@ func TestDocumentedEnvironmentDefaults(t *testing.T) {
 				if !quoted || !closed || got != want {
 					t.Errorf("%s documented default %q, want envDefault %q", key, strings.TrimSpace(cells[3]), want)
 				}
-				seenEnv = seenEnv || key == "OCMS_ENV"
+				seen[key] = true
 			}
-			if !seenEnv {
-				t.Error("missing OCMS_ENV row")
+			for _, key := range []string{"OCMS_ENV", "OCMS_PREVIEW_LINK_TTL_HOURS"} {
+				if !seen[key] {
+					t.Errorf("missing %s row", key)
+				}
 			}
 		})
 	}

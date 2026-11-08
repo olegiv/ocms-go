@@ -382,6 +382,7 @@ controls the issuer, not cleanup of previously stored evidence.
 | `OCMS_OAUTH_ALLOW_DCR` | Allow bounded public-client dynamic registration | `false` | No |
 | `OCMS_OAUTH_ACCESS_TTL` | OAuth access lifetime in seconds (60–86400) | `3600` | No |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | Absolute rotating refresh-family lifetime (1–90 days) | `30` | No |
+| `OCMS_PREVIEW_LINK_TTL_HOURS` | Preview share-link lifetime in hours (1–24), capped by the issuing credential's expiry | `24` | No |
 | `OCMS_AI_DISABLED` | Disable draft authoring while retaining normal content reads | `false` | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
 | `OCMS_SEED_ADMIN_PASSWORD` | Password for the admin `OCMS_DO_SEED` creates instead of the documented default (min 12 characters) | - | No |

@@ -25,11 +25,12 @@ if [[ "$slash_command" != /* ]]; then
   slash_command="/$slash_command"
 fi
 
-# Each command runs with a fixed list of tools; anything else is denied
-# without a prompt (--permission-mode dontAsk), and the command reports the
-# check it could not run. The commands read diffs, logs and scan output, so a
-# session that may run any shell command can be talked into one by text it
-# reads. Rules for tools that run project or package code (go, the linters,
+# The /code-quality and /security-audit sessions use this tool allowlist.
+# The commit commands delegate to separate helpers below.
+# With --permission-mode dontAsk, a denied tool cannot prompt for approval.
+# Audit and lint sessions read diffs, logs and scan output, so a session
+# with unrestricted shell access can be influenced by the text it reads.
+# Rules for tools that run project or package code (go, the linters,
 # npm) are exact: a prefix such as "go test*" would also allow "go test -exec
 # <program>", "go env*" would allow "go env -w", and "npm audit*" would allow
 # "npm audit fix", which installs packages. Git/date argument rules keep a
