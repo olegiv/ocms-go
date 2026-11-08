@@ -20,6 +20,8 @@ import (
 // It follows transaction parameters and query aliases, including closures; a
 // filename or a mention of InTx alone does not exempt an autocommit receiver.
 func TestPageWritersUseTransactionQueries(t *testing.T) {
+	t.Run("sqlc catalog", checkPageMutationQueryCatalog)
+
 	root := filepath.Join("..", "..")
 	set := token.NewFileSet()
 	for _, directory := range []string{"internal", "modules", "custom", "cmd", "scripts"} {
@@ -69,6 +71,8 @@ type writerScan struct {
 	manual       bool
 }
 
+// The catalog scan requires every generated page mutation to be covered by
+// these tracking rules or by a dedicated guard.
 var pageMutations = map[string]bool{
 	"CreatePage": true, "UpdatePage": true, "UpdatePageCreatedAt": true,
 	"PublishPage": true, "PublishUnpublishedPage": true, "UnpublishPage": true,
@@ -147,6 +151,10 @@ func (s writerScan) body(body *ast.BlockStmt, bindings map[string]string) {
 				if ok && index < len(value.Rhs) {
 					bindings[name.Name] = s.binding(value.Rhs[index], bindings)
 				}
+			}
+		case *ast.SelectorExpr:
+			if owner, guarded := pageMutationBoundaries[value.Sel.Name]; guarded && (s.path != owner.path || s.function != owner.function) {
+				s.t.Errorf("%s: %s is reserved for %s in %s", s.set.Position(node.Pos()), value.Sel.Name, owner.function, owner.path)
 			}
 		case *ast.CallExpr:
 			selected, ok := value.Fun.(*ast.SelectorExpr)
