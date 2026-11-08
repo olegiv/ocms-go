@@ -1615,6 +1615,17 @@ func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error 
 	return nil
 }
 
+func loadModuleTemplateFuncs(renderer *render.Renderer, registry *module.Registry) {
+	funcs := registry.AllTemplateFuncs()
+	if len(funcs) == 0 {
+		return
+	}
+	renderer.AddTemplateFuncs(funcs)
+	if err := renderer.ReloadTemplates(); err != nil {
+		slog.Warn("failed to reload admin templates with module funcs", "error", err)
+	}
+}
+
 // loadActiveTheme determines and activates the appropriate theme.
 func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *theme.Manager, renderer *render.Renderer, cfg *config.Config) {
 	themeManager.SetFuncMap(renderer.TemplateFuncs())
@@ -2076,15 +2087,7 @@ func run(inspectRouter func(chi.Router) error) (runErr error) {
 	// Set up hook registry to check module active status
 	hookRegistry.SetIsModuleActive(moduleRegistry.IsActive)
 
-	// Add module template functions to renderer
-	moduleFuncs := moduleRegistry.AllTemplateFuncs()
-	if len(moduleFuncs) > 0 {
-		renderer.AddTemplateFuncs(moduleFuncs)
-		// Reload admin templates with new module functions
-		if err := renderer.ReloadTemplates(); err != nil {
-			slog.Warn("failed to reload admin templates with module funcs", "error", err)
-		}
-	}
+	loadModuleTemplateFuncs(renderer, moduleRegistry)
 
 	slog.Info("module system initialized", "modules", moduleRegistry.Count())
 

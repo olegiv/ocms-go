@@ -925,9 +925,10 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 						action={ templ.SafeURL(pageFormAction(data)) }
 						class="p-6"
 						x-data="slugForm"
-						data-slug-edited={ fmt.Sprint(data.IsEdit) }
+						data-slug-edited={ fmt.Sprint(data.IsEdit || data.FormValues["slug_edited"] == "true") }
 					>
 						@csrfField()
+						<input type="hidden" name="slug_edited" x-bind:value="slugEdited"/>
 						if data.IsEdit {
 							<input type="hidden" name="base_revision" value={ fmt.Sprint(data.BaseRevision) }/>
 						}

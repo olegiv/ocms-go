@@ -1683,6 +1683,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	formValues := map[string]string{
 		"title":               title,
 		"slug":                slug,
+		"slug_edited":         r.PostFormValue("slug_edited"),
 		"body":                body,
 		"summary":             summary,
 		"status":              status,

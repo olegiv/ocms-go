@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -25,10 +24,7 @@ import (
 )
 
 func TestMenuBuilderPageCheckboxSavesUnderCSP(t *testing.T) {
-	cli := os.Getenv("OCMS_PLAYWRIGHT_CLI")
-	if cli == "" {
-		t.Skip("set OCMS_PLAYWRIGHT_CLI to run the Chrome menu regression")
-	}
+	cli := requireChromeCLI(t)
 	if err := i18n.Init(nil); err != nil {
 		t.Fatal(err)
 	}

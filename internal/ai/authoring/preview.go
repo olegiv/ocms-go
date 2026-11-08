@@ -17,7 +17,7 @@ import (
 
 func (s *Service) CreatePreviewLink(ctx context.Context, a v2.Actor, in PreviewInput) (preview.Link, error) {
 	result, err := (preview.Service{Q: s.Q, TTL: s.PreviewTTL, Now: s.Now}).Issue(ctx, a.Principal("mcp"), in.PageID, in.Revision, s.SiteURL, func(ctx context.Context, q *store.Queries) error {
-		if err := s.authorize(ctx, q, a); err != nil {
+		if err := s.authorize(ctx, q, a, in.PageID); err != nil {
 			return err
 		}
 		if s.CheckPolicy != nil {
@@ -27,6 +27,10 @@ func (s *Service) CreatePreviewLink(ctx context.Context, a v2.Actor, in PreviewI
 	})
 	if errors.Is(err, preview.ErrUnavailable) {
 		return preview.Link{}, &Error{Code: "preview_unavailable", Message: "The requested draft revision is unavailable for sharing"}
+	}
+	var issuerErr *preview.IssuerLookupError
+	if errors.As(err, &issuerErr) {
+		return preview.Link{}, accountLookupError(ctx, issuerErr, a.ActingUserID(), in.PageID)
 	}
 	if errors.Is(err, preview.ErrSiteURL) {
 		return preview.Link{}, &v2.Error{Kind: v2.ErrInternal, MachineCode: "site_url_required", Msg: "Ask the administrator to configure a valid HTTPS site URL before sharing previews. HTTP is allowed only for localhost or loopback addresses.", Wrap: fmt.Errorf("issue preview for page %d revision %d: %w", in.PageID, in.Revision, err)}

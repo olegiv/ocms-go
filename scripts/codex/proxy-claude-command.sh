@@ -35,8 +35,8 @@ fi
 # <program>", "go env*" would allow "go env -w", and "npm audit*" would allow
 # "npm audit fix", which installs packages. Git/date argument rules keep a
 # space after the command name: "git diff *" must not allow "git difftool".
-# Git arguments and configuration still matter: diff/log/show can write
-# --output files or invoke configured diff helpers.
+# Explicit Git output-file and external-diff options are denied below.
+# Git configuration and attributes can still select helpers for reads.
 # This is a best-effort fence, not a sandbox.
 read_tools=(
   Read Glob Grep
@@ -90,6 +90,21 @@ echo "Proxying to Claude command: $prompt"
 # A shared command or local settings can also approve formatter invocations.
 # Deny the write flag even when another allow rule matches.
 denied_tools=('Bash(gofmt *-w*)' 'Bash(goimports *-w*)')
+# Match the option boundaries so --output-indicator-* and --extended-regexp
+# still work. Include the abbreviations accepted by git diff --no-index.
+for git_option in --output --ext --ext- --ext-d --ext-di --ext-dif --ext-diff; do
+  for quote in '' "'" '"'; do
+    denied_tools+=("Bash(git * $quote$git_option$quote)" "Bash(git * $quote$git_option$quote *)")
+  done
+done
+denied_tools+=('Bash(git * --output=*)')
+for quote in "'" '"'; do
+  denied_tools+=("Bash(git * $quote--output=*)" "Bash(git * $quote--output$quote=*)")
+done
+# Keep git ls-files -o (list untracked files) available.
+for git_read in diff log show; do
+  denied_tools+=("Bash(git $git_read -o*)" "Bash(git $git_read * -o*)")
+done
 if [[ "$slash_command" == /security-audit ]]; then
   prompt="Perform the oCMS security audit. Scope notes: $*"
   denied_tools+=('Bash(mkdir *)' 'Bash(mv *)')

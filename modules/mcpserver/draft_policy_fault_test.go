@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -16,12 +17,120 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/olegiv/ocms-go/internal/ai/authoring"
+	"github.com/olegiv/ocms-go/internal/ai/draft"
+	"github.com/olegiv/ocms-go/internal/api/v2/pages"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+func TestDraftAccountReadFaultsAreRetryable(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		reads int
+		seed  bool
+		share bool
+	}{
+		{"create", 6, false, false},
+		{"replay", 3, true, false},
+		{"preview", 3, true, true},
+	} {
+		for read := 1; read <= tc.reads; read++ {
+			t.Run(fmt.Sprintf("%s/read_%d", tc.name, read), func(t *testing.T) {
+				env, id := draftKeyFixture(t)
+				ctx := t.Context()
+				call := &toolCall{identity: id, settings: env.module.currentSettings()}
+				in := authoring.CreateInput{
+					RequestID: uuid.NewString(),
+					Draft:     draft.PageDraft{Title: "Account checks", Summary: "Review", BodyMarkdown: "Safe content."},
+				}
+				var seed authoring.SaveResult
+				if tc.seed {
+					var err error
+					seed, err = env.module.createDraftPage(ctx, call, in)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				fault := errors.New("injected draft account read fault")
+				reads, inject := 0, true
+				alternate := openDraftFaultDB(t, env, "immediate", func(query string) error {
+					if strings.Contains(query, "FROM users WHERE id") {
+						reads++
+						if inject && reads == read {
+							return fault
+						}
+					}
+					return nil
+				})
+				env.module.ctx.DB = alternate
+				env.module.svc.queries = store.New(alternate)
+				env.module.svc.pages = pages.NewService(alternate, store.New(alternate), nil, nil, pages.Policy{})
+				previous := slog.Default()
+				slog.SetDefault(slog.New(env.logs))
+				t.Cleanup(func() { slog.SetDefault(previous) })
+
+				issue := func() (int64, error) {
+					if tc.share {
+						link, err := env.module.createPreviewLink(ctx, call, authoring.PreviewInput{PageID: seed.PageID, Revision: seed.Revision})
+						if link.URL.Reveal() == "" {
+							return 0, err
+						}
+						return link.PageID, err
+					}
+					saved, err := env.module.createDraftPage(ctx, call, in)
+					return saved.PageID, err
+				}
+				pageID, err := issue()
+				if pageID != 0 || !errors.Is(err, fault) || reads != read {
+					t.Fatalf("account read %d returned page %d, error %v after %d reads", read, pageID, err, reads)
+				}
+				requireDraftRetryCode(t, err)
+				assertDraftAccountDiagnostic(t, env, fault, seed.PageID, tc.share)
+				draftsBefore := 0
+				if tc.seed {
+					draftsBefore = 1
+				}
+				assertDraftPolicyRows(t, env, draftsBefore)
+				assertPreviewIssuanceRows(t, env, 0)
+
+				inject, reads = false, 0
+				pageID, err = issue()
+				if err != nil || pageID <= 0 || (tc.seed && pageID != seed.PageID) || reads != tc.reads {
+					t.Fatalf("recovery returned page %d, error %v after %d reads, want %d reads", pageID, err, reads, tc.reads)
+				}
+				assertDraftPolicyRows(t, env, 1)
+				links := 0
+				if tc.share {
+					links = 1
+				}
+				assertPreviewIssuanceRows(t, env, links)
+				assertDraftAccountDiagnostic(t, env, fault, seed.PageID, tc.share)
+			})
+		}
+	}
+}
+
+func assertDraftAccountDiagnostic(t *testing.T, env *testEnv, fault error, pageID int64, share bool) {
+	t.Helper()
+	if got := strings.Count(env.logs.text(), fault.Error()); got != 1 {
+		t.Fatalf("want one account diagnostic, got %d: %s", got, env.logs.text())
+	}
+	records := env.logs.find("failed to re-check draft account")
+	if share || len(records) != 0 {
+		if len(records) != 1 {
+			t.Fatalf("account diagnostic missing: %s", env.logs.text())
+		}
+		user, _ := recordAttr(records[0], "user_id")
+		page, found := recordAttr(records[0], "page_id")
+		if !found || user.Int64() != env.userID || (share && page.Int64() != pageID) || (!share && page.Int64() != 0) {
+			t.Fatalf("account diagnostic has incorrect IDs: %v", records[0])
+		}
+	}
+}
 
 func TestDraftAuthorizationPolicyFaultsAreRetryable(t *testing.T) {
 	for _, credential := range []string{"api_key", "oauth"} {
@@ -229,7 +338,12 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var roots []*ast.BlockStmt
+	type lookupRoot struct {
+		body       *ast.BlockStmt
+		account    bool
+		classifier string
+	}
+	var roots []lookupRoot
 	for _, declaration := range parsed.Decls {
 		fn, ok := declaration.(*ast.FuncDecl)
 		if !ok {
@@ -237,7 +351,7 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 		}
 		switch fn.Name.Name {
 		case "authorizeDraftCall", "createPreviewLink", "checkAgentShareLinks":
-			roots = append(roots, fn.Body)
+			roots = append(roots, lookupRoot{body: fn.Body})
 		}
 		if fn.Name.Name == "authoringService" {
 			for node := range ast.Preorder(fn.Body) {
@@ -250,7 +364,7 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 					continue
 				}
 				if callback, ok := assignment.Rhs[0].(*ast.FuncLit); ok {
-					roots = append(roots, callback.Body)
+					roots = append(roots, lookupRoot{body: callback.Body})
 				}
 			}
 		}
@@ -258,8 +372,25 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 	if len(roots) != 4 {
 		t.Fatal("missing draft authorization, write-policy or preview issuance checks; update fault coverage")
 	}
+	for _, target := range []struct{ file, method, classifier string }{
+		{"../../internal/ai/authoring/service.go", "authorize", "accountLookupError"},
+		{"../../internal/preview/service.go", "Issue", "IssuerLookupError"},
+	} {
+		source, parseErr := parser.ParseFile(positions, target.file, nil, 0)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		for _, declaration := range source.Decls {
+			if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Name.Name == target.method {
+				roots = append(roots, lookupRoot{body: fn.Body, account: true, classifier: target.classifier})
+			}
+		}
+	}
+	if len(roots) != 6 {
+		t.Fatal("missing authoring or preview account lookup root")
+	}
 	checked := 0
-	check := func(assignment *ast.AssignStmt, branch *ast.IfStmt) {
+	check := func(root lookupRoot, assignment *ast.AssignStmt, branch *ast.IfStmt) {
 		if len(assignment.Rhs) != 1 || len(assignment.Lhs) == 0 {
 			return
 		}
@@ -273,6 +404,12 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 				return // These helpers already classify their errors.
 			}
 		}
+		if root.account {
+			selected, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || (selected.Sel.Name != "GetUserByID" && selected.Sel.Name != "RequireEditor") {
+				return
+			}
+		}
 		bound, ok := assignment.Lhs[len(assignment.Lhs)-1].(*ast.Ident)
 		if !ok || (bound.Name != "err" && !strings.HasSuffix(bound.Name, "Err")) {
 			return
@@ -282,6 +419,15 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 			return
 		}
 		checked++
+		if root.account {
+			for node := range ast.Preorder(branch.Body) {
+				if name, ok := node.(*ast.Ident); ok && name.Name == root.classifier {
+					return
+				}
+			}
+			t.Errorf("%s: account lookup must use %s", positions.Position(assignment.Pos()), root.classifier)
+			return
+		}
 		for inner := range ast.Preorder(branch.Body) {
 			if returned, ok := inner.(*ast.ReturnStmt); ok {
 				for _, value := range returned.Results {
@@ -293,10 +439,11 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 		}
 	}
 	for _, root := range roots {
-		for node := range ast.Preorder(root) {
+		before := checked
+		for node := range ast.Preorder(root.body) {
 			if branch, ok := node.(*ast.IfStmt); ok {
 				if assignment, ok := branch.Init.(*ast.AssignStmt); ok {
-					check(assignment, branch)
+					check(root, assignment, branch)
 				}
 			}
 			block, ok := node.(*ast.BlockStmt)
@@ -312,11 +459,11 @@ func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 				if i+1 < len(block.List) {
 					branch, _ = block.List[i+1].(*ast.IfStmt)
 				}
-				check(assignment, branch)
+				check(root, assignment, branch)
 			}
 		}
-	}
-	if checked == 0 {
-		t.Fatal("no authorization lookups found; update fault coverage")
+		if checked == before {
+			t.Error("no authorization lookups found in a guarded root")
+		}
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -63,37 +62,84 @@ func TestTaxonomySlugSurvivesValidation(t *testing.T) {
 		{"category", "/admin" + RouteCategories, q.CategorySlugExists},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
-			const customSlug = "keep-my-slug"
-			fresh := httptest.NewRecorder()
-			router.ServeHTTP(fresh, httptest.NewRequest(http.MethodGet, tc.path+RouteSuffixNew, nil))
-			if fresh.Code != http.StatusOK || !strings.Contains(fresh.Body.String(), `data-slug-edited="false"`) {
-				t.Fatalf("blank create form must allow automatic slugs, status %d", fresh.Code)
-			}
+			testSlugRetry(t, router, slugRetryForm{tc.path, "#" + tc.kind + "-form", "name", "Name", tc.slugExists})
+		})
+	}
+}
 
-			form := url.Values{"name": {"X"}, "slug": {customSlug}}
-			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(form.Encode()))
+func TestPageSlugSurvivesValidation(t *testing.T) {
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	user := createTestAdminUser(t, db)
+	sm := testSessionManager(t)
+	renderer, err := render.New(render.Config{TemplatesFS: web.Templates, SessionManager: sm, DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewPagesHandler(db, renderer, sm)
+	router := chi.NewRouter()
+	router.Use(middleware.SecurityHeaders(middleware.DefaultSecurityHeadersConfig(false)))
+	router.Handle("/static/*", http.FileServer(http.FS(web.Static)))
+	const path = "/admin" + RoutePages
+	router.Group(func(r chi.Router) {
+		r.Use(sm.LoadAndSave, middleware.CSRF(middleware.DefaultCSRFConfig(nil, false)))
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { next.ServeHTTP(w, withUser(req, user)) })
+		})
+		r.Get(path+RouteSuffixNew, h.NewForm)
+		r.Post(path, h.Create)
+		r.Get(path, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	})
+	testSlugRetry(t, router, slugRetryForm{path, "form[x-data=slugForm]", "title", "Title", store.New(db).SlugExists})
+}
+
+type slugRetryForm struct {
+	path, selector, field, label string
+	slugExists                   func(context.Context, string) (int64, error)
+}
+
+func testSlugRetry(t *testing.T, router http.Handler, target slugRetryForm) {
+	t.Helper()
+	fresh := httptest.NewRecorder()
+	router.ServeHTTP(fresh, httptest.NewRequest(http.MethodGet, target.path+RouteSuffixNew, nil))
+	if fresh.Code != http.StatusOK || !strings.Contains(fresh.Body.String(), `data-slug-edited="false"`) {
+		t.Fatalf("blank create form must allow automatic slugs, status %d", fresh.Code)
+	}
+
+	for _, tc := range []struct {
+		name, typedSlug, initialSlug, savedSlug string
+	}{
+		{"typed", "keep-my-slug", "keep-my-slug", "keep-my-slug"},
+		{"generated", "", "x", "corrected-name"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			edited := strconv.FormatBool(tc.typedSlug != "")
+			validation := target.label + " must be at least 2 characters"
+			// Leave the generated slug blank to also exercise the server fallback.
+			form := url.Values{target.field: {"X"}, "slug": {tc.typedSlug}, "slug_edited": {edited}}
+			req := httptest.NewRequest(http.MethodPost, target.path, strings.NewReader(form.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req.Header.Set("Sec-Fetch-Site", "same-origin")
 			retry := httptest.NewRecorder()
 			router.ServeHTTP(retry, req)
 			body := retry.Body.String()
-			if retry.Code != http.StatusOK || !strings.Contains(body, "Name must be at least 2 characters") ||
-				!strings.Contains(body, `value="`+customSlug+`"`) {
-				t.Fatalf("validation did not return the form with the submitted slug, status %d", retry.Code)
+			if retry.Code != http.StatusOK || !strings.Contains(body, validation) ||
+				!strings.Contains(body, `value="`+tc.initialSlug+`"`) {
+				t.Fatalf("validation did not return the form with slug %q, status %d", tc.initialSlug, retry.Code)
 			}
-			if !strings.Contains(body, `data-slug-edited="true"`) {
-				t.Error("validation retry did not mark the submitted slug as edited")
+			if !strings.Contains(body, `data-slug-edited="`+edited+`"`) {
+				t.Errorf("validation retry did not preserve slug_edited=%s", edited)
 			}
 
 			t.Run("chrome", func(t *testing.T) {
-				cli := os.Getenv("OCMS_PLAYWRIGHT_CLI")
-				if cli == "" {
-					t.Skip("set OCMS_PLAYWRIGHT_CLI to run the Chrome slug retry")
-				}
+				cli := requireChromeCLI(t)
 				server := httptest.NewServer(router)
 				t.Cleanup(server.Close)
-				action := server.URL + tc.path
-				browser := openAdminChrome(t, cli, tc.kind+"-slug-retry", action+RouteSuffixNew)
+				action := server.URL + target.path
+				browser := openAdminChrome(t, cli, "slug-retry", action+RouteSuffixNew)
 				browser(t, "run-code", fmt.Sprintf(`async page => {
 					const response = await page.reload();
 					const policy = (await response.allHeaders())['content-security-policy'];
@@ -101,30 +147,31 @@ func TestTaxonomySlugSurvivesValidation(t *testing.T) {
 						throw new Error('Expected production CSP without unsafe-eval');
 					}
 					const form = page.locator(%s);
-					const name = form.locator('#name');
+					const name = form.locator(%s);
 					const slug = form.locator('#slug');
 					const custom = %s;
-					const submit = form.locator('button[type=submit]');
+					const submit = form.locator('button[type=submit]').first();
 					const post = () => page.waitForResponse(response => response.url() === %s && response.request().method() === 'POST');
 					await name.fill('First Name');
 					if (await slug.inputValue() !== 'first-name') throw new Error('Blank form did not generate a slug');
 					await name.fill('X');
-					await slug.fill(custom);
+					if (custom) await slug.fill(custom);
 					const [rejected] = await Promise.all([post(), submit.click()]);
 					if (!rejected.ok()) throw new Error('Validation response failed: ' + rejected.status());
-					await form.getByText('Name must be at least 2 characters', {exact: true}).waitFor();
-					if (await slug.inputValue() !== custom) throw new Error('Validation response lost the custom slug');
+					await form.getByText(%s, {exact: true}).first().waitFor();
+					if (await slug.inputValue() !== %s) throw new Error('Validation response lost the original slug');
 					await name.fill('Corrected Name');
-					if (await slug.inputValue() !== custom) throw new Error('Editing the name overwrote the submitted slug');
+					const actual = await slug.inputValue();
+					if (actual !== %s) throw new Error('Unexpected slug after correcting the name: ' + actual);
 					const [saved] = await Promise.all([post(), submit.click()]);
 					if (saved.status() !== 303) throw new Error('Retry did not save: ' + saved.status());
-					await page.getByText('Corrected Name', {exact: true}).waitFor();
 					return 'oCMS browser step passed';
-				}`, strconv.Quote("#"+tc.kind+"-form"), strconv.Quote(customSlug), strconv.Quote(action)))
-				if count, lookupErr := tc.slugExists(t.Context(), customSlug); lookupErr != nil || count != 1 {
-					t.Fatalf("saved custom slug count=%d, want 1: %v", count, lookupErr)
+				}`, strconv.Quote(target.selector), strconv.Quote("#"+target.field), strconv.Quote(tc.typedSlug),
+					strconv.Quote(action), strconv.Quote(validation), strconv.Quote(tc.initialSlug), strconv.Quote(tc.savedSlug)))
+				if count, lookupErr := target.slugExists(t.Context(), tc.savedSlug); lookupErr != nil || count != 1 {
+					t.Fatalf("saved slug %q count=%d, want 1: %v", tc.savedSlug, count, lookupErr)
 				}
-				t.Log("Chrome generated a fresh slug, preserved the custom slug after validation, and saved the retry")
+				t.Logf("Chrome saved %s slug %q after validation", tc.name, tc.savedSlug)
 			})
 		})
 	}

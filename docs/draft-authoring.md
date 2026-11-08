@@ -29,7 +29,9 @@ the write transaction. A changed link/read policy makes a new write retryable
 with its original request ID. Storage faults while checking module state,
 draft settings, the account or its editor role, credentials or API-key source
 policy return `write_retryable` and produce a server-side diagnostic. This
-applies to initial authorization and transaction-time rechecks. These checks still refuse a
+applies to initial authorization and transaction-time rechecks, including
+idempotent draft replays and preview link issuance. A missing account or a
+removed editor role still denies access. These checks still refuse a
 disabled module or draft toggle; only a credential that is gone, no longer the
 caller's or refused by policy is the 401 "Credential unavailable", so an
 agent never drops a working key over a database hiccup.

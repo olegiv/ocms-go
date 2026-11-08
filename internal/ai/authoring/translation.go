@@ -42,7 +42,7 @@ func (s *Service) checkSource(ctx context.Context, q *store.Queries, basis Basis
 
 func (s *Service) Translate(ctx context.Context, a v2.Actor, in TranslateInput) (SaveResult, error) {
 	var receipt SaveResult
-	opt, replayed, err := s.writeOptions(ctx, a, "create_translation_draft", in.RequestID, in, &receipt)
+	opt, replayed, err := s.writeOptions(ctx, a, "create_translation_draft", in.RequestID, in.SourcePageID, in, &receipt)
 	if err != nil {
 		return SaveResult{}, err
 	}

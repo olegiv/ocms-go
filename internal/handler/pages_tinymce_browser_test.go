@@ -30,10 +30,7 @@ import (
 // Run after building assets with Chrome installed and OCMS_PLAYWRIGHT_CLI
 // set to the executable path of playwright-cli (or its local wrapper).
 func TestTinyMCEFormPreservesOriginalBodyUntilEdited(t *testing.T) {
-	cli := os.Getenv("OCMS_PLAYWRIGHT_CLI")
-	if cli == "" {
-		t.Skip("set OCMS_PLAYWRIGHT_CLI to run the Chrome form regression")
-	}
+	cli := requireChromeCLI(t)
 	const original = "<p>Keep this body.</p>\n<pre class=\"language-go\"><code>fmt.Println(&quot;keep&quot;)</code></pre>\n"
 	const edited = "<p>Actual browser edit.</p>"
 	db, cleanup := testutil.TestDB(t)

@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,8 +19,8 @@ import (
 
 // Timeout wraps an http.Handler and applies a request timeout. If the
 // handler has not started its response when the timeout expires, Timeout
-// answers 503 Service Unavailable. It aborts a response already in progress
-// so net/http does not signal that the partial body is complete.
+// answers 503 Service Unavailable. It aborts an incomplete response already
+// in progress so net/http does not signal that the partial body is complete.
 //
 // The handler runs in a goroutine of its own, beyond the reach of any
 // recovering middleware in front of Timeout, so Timeout recovers its panics
@@ -55,6 +56,9 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 				return
 			}
 			if r.Context().Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				if !tw.abort && tw.responseComplete(r.Method) {
+					return
+				}
 				slog.WarnContext(r.Context(), "request timed out", "method", r.Method, "path", r.URL.Path,
 					"request_id", chimw.GetReqID(r.Context()), "response_started", tw.wroteHeader, "timeout", timeout)
 			}
@@ -108,6 +112,8 @@ type timeoutWriter struct {
 	header      http.Header
 	mu          sync.Mutex
 	wroteHeader bool
+	status      int
+	remaining   int64 // -1 when the body length is unknown
 	finished    bool
 	abort       bool
 }
@@ -127,10 +133,25 @@ func (tw *timeoutWriter) Header() http.Header {
 // writes the status code. tw.mu must be held.
 func (tw *timeoutWriter) startResponse(code int) {
 	tw.wroteHeader = true
+	tw.status = code
+	tw.remaining = -1
+	if lengths := tw.header.Values("Content-Length"); len(lengths) == 1 &&
+		tw.header.Get("Transfer-Encoding") == "" && tw.header.Get("Trailer") == "" {
+		if length, err := strconv.ParseInt(lengths[0], 10, 64); err == nil && length >= 0 {
+			tw.remaining = length
+		}
+	}
 	dst := tw.ResponseWriter.Header()
 	clear(dst)
 	maps.Copy(dst, tw.header.Clone())
 	tw.ResponseWriter.WriteHeader(code)
+}
+
+// responseComplete is called under mu. A body with unknown length still
+// needs the handler to return before we can safely end its response.
+func (tw *timeoutWriter) responseComplete(method string) bool {
+	return tw.status >= 200 && (method == http.MethodHead ||
+		tw.status == http.StatusNoContent || tw.status == http.StatusNotModified || tw.remaining == 0)
 }
 
 func (tw *timeoutWriter) FlushError() error {
@@ -166,5 +187,13 @@ func (tw *timeoutWriter) Write(b []byte) (int, error) {
 		}
 		tw.startResponse(http.StatusOK)
 	}
-	return tw.ResponseWriter.Write(b)
+	n, err := tw.ResponseWriter.Write(b)
+	if tw.remaining >= 0 {
+		if err != nil || n != len(b) || int64(n) > tw.remaining || tw.ctx.Err() != nil {
+			tw.remaining = -1
+		} else {
+			tw.remaining -= int64(n)
+		}
+	}
+	return n, err
 }

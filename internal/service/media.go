@@ -254,7 +254,9 @@ func (s *MediaService) DeleteWithPrincipal(ctx context.Context, mediaID int64, p
 	committed := false
 	defer func() {
 		if !committed {
-			resultErr = errors.Join(resultErr, tx.Rollback())
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+				resultErr = errors.Join(resultErr, rollbackErr)
+			}
 		}
 		if uploadRoot == nil {
 			return
@@ -317,7 +319,11 @@ func (s *MediaService) DeleteWithPrincipal(ctx context.Context, mediaID int64, p
 		s.beforeMediaCommit()
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
+		// Cancellation can roll back the transaction before Commit sees it.
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, sql.ErrTxDone) {
+			err = ctxErr
+		}
 		return nil, fmt.Errorf("failed to commit media deletion: %w", err)
 	}
 	committed = true

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
@@ -602,7 +603,7 @@ func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
 
 func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *testing.T) {
 	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := t.Context()
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 	queries := store.New(db)
@@ -640,18 +641,26 @@ func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *test
 	}
 
 	svc := NewMediaService(db, uploadRoot)
-	svc.beforeMediaCommit = cancel
-	pages, err := svc.Delete(ctx, media.ID)
-	if err == nil || !errors.Is(err, context.Canceled) || errors.Is(err, ErrMediaFilesNotRemoved) {
-		t.Fatalf("Delete() error = %v, want context.Canceled, not a completed delete", err)
-	}
-	if len(pages) != 0 {
-		t.Fatalf("Delete() returned pages %+v for a rolled-back delete", pages)
-	}
-	if _, err := queries.GetMediaByID(context.Background(), media.ID); err != nil {
+	synctest.Test(t, func(t *testing.T) {
+		deleteCtx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		svc.beforeMediaCommit = func() {
+			cancel()
+			// Let database/sql finish its automatic rollback before Commit.
+			synctest.Wait()
+		}
+		pages, deleteErr := svc.Delete(deleteCtx, media.ID)
+		if !errors.Is(deleteErr, context.Canceled) || errors.Is(deleteErr, sql.ErrTxDone) || errors.Is(deleteErr, ErrMediaFilesNotRemoved) {
+			t.Fatalf("Delete() error = %v, want cancellation without transaction or cleanup errors", deleteErr)
+		}
+		if len(pages) != 0 {
+			t.Fatalf("Delete() returned pages %+v for a rolled-back delete", pages)
+		}
+	})
+	if _, err := queries.GetMediaByID(ctx, media.ID); err != nil {
 		t.Fatalf("media row was not rolled back: %v", err)
 	}
-	variants, err := queries.GetMediaVariants(context.Background(), media.ID)
+	variants, err := queries.GetMediaVariants(ctx, media.ID)
 	if err != nil || len(variants) != 1 {
 		t.Fatalf("variant rows = %+v, error = %v; want rollback", variants, err)
 	}

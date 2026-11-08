@@ -14,7 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   startup on flagged page HTML, including drafts, or missing CAPTCHA
   verification even with no public forms. Rendering sanitizes legacy HTML,
   and even a title-only editor save can persist the sanitized body. API
-  keys without expiry or with a lifetime over 90 days fail authentication.
+  keys without expiry, with a lifetime over 90 days, or without a per-key
+  source CIDR fail authentication. Existing sessions end. Every account
+  must pass MFA at sign-in, and accounts without MFA must enroll. Sign-in
+  requires HTTPS because the session cookie becomes Secure `__Host-session`.
+  Production also enables HSTS. Startup refuses non-HTTPS URLs for active
+  webhooks, scheduled HTTP tasks and embed providers, and refuses
+  `OCMS_WEBHOOK_FORM_DATA_MODE=full` under the production defaults.
   Check the MFA key, trusted proxies and required allowlists before switching.
   See the [upgrade checklist](README.md#upgrading-sites-with-no-ocms_env).
 - **Stricter script CSP (L-7).** Production and staging omit `'unsafe-eval'`.

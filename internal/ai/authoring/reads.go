@@ -27,7 +27,7 @@ func (s *Service) summary(p store.Page) DraftSummary {
 }
 
 func (s *Service) Get(ctx context.Context, a v2.Actor, in PageInput) (DraftDetail, error) {
-	if err := s.authorize(ctx, s.Q, a); err != nil {
+	if err := s.authorize(ctx, s.Q, a, in.PageID); err != nil {
 		return DraftDetail{}, err
 	}
 	p, err := s.own(ctx, s.Q, in.PageID)
@@ -107,7 +107,7 @@ func decodeReported(raw string) (Reported, error) {
 }
 
 func (s *Service) List(ctx context.Context, a v2.Actor, in ListInput) (ListResult, error) {
-	if err := s.authorize(ctx, s.Q, a); err != nil {
+	if err := s.authorize(ctx, s.Q, a, 0); err != nil {
 		return ListResult{}, err
 	}
 	if in.LanguageCode != "" {
@@ -140,7 +140,7 @@ func (s *Service) List(ctx context.Context, a v2.Actor, in ListInput) (ListResul
 }
 
 func (s *Service) TranslationStatus(ctx context.Context, a v2.Actor, in PageInput) (TranslationResult, error) {
-	if err := s.authorize(ctx, s.Q, a); err != nil {
+	if err := s.authorize(ctx, s.Q, a, in.PageID); err != nil {
 		return TranslationResult{}, err
 	}
 	r, err := grounding.NewResolver(s.Q, s.SiteURL, s.Access)

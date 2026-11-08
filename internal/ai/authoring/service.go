@@ -47,21 +47,31 @@ func (s *Service) now() time.Time {
 	return time.Now().UTC()
 }
 
-func (s *Service) authorize(ctx context.Context, q *store.Queries, actor v2.Actor) error {
+func (s *Service) authorize(ctx context.Context, q *store.Queries, actor v2.Actor, pageID int64) error {
 	if s.Authorize == nil || !actor.HasPermission("mcp:access") || !actor.HasPermission("mcp:drafts") || actor.ActingUserID() <= 0 || actor.ActingUserID() != s.Access.UserID {
 		return v2.NewError(v2.ErrForbidden, "Draft access is unavailable")
 	}
 	u, err := q.GetUserByID(ctx, actor.ActingUserID())
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return v2.NewError(v2.ErrUnauthorized, "Account unavailable")
-		}
-		return err
+		return accountLookupError(ctx, err, actor.ActingUserID(), pageID)
 	}
 	if u.Role != "admin" && u.Role != "editor" {
 		return v2.NewError(v2.ErrForbidden, "Editor role required")
 	}
 	return s.Authorize(ctx, q)
+}
+
+func accountLookupError(ctx context.Context, err error, userID, pageID int64) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return v2.NewError(v2.ErrUnauthorized, "Account unavailable")
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	slog.ErrorContext(service.WithoutEventLog(ctx), "failed to re-check draft account",
+		"error", err, "user_id", userID, "page_id", pageID)
+	return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable",
+		Msg: "Account check is temporarily unavailable; retry the call", Wrap: err}
 }
 
 func (s *Service) options(ctx context.Context) (draft.Options, error) {
@@ -76,12 +86,14 @@ func (s *Service) options(ctx context.Context) (draft.Options, error) {
 	return draft.Options{Resolver: r.DraftResolver(), DefaultLanguage: lang.Code, UILanguage: lang.Code, SiteURL: s.SiteURL, LinkPolicy: s.LinkPolicy}, nil
 }
 
-func (s *Service) writeOptions(ctx context.Context, a v2.Actor, tool, id string, input any, receipt *SaveResult) (pages.WriteOptions, bool, error) {
+func (s *Service) writeOptions(ctx context.Context, a v2.Actor, tool, id string, pageID int64, input any, receipt *SaveResult) (pages.WriteOptions, bool, error) {
 	r, err := idempotency.New(a.ActingUserID(), tool, id, input)
 	if err != nil {
 		return pages.WriteOptions{}, false, &Error{Code: "invalid_request_id", Message: "Use one non-zero UUID request_id for this operation"}
 	}
-	opt := pages.WriteOptions{ForceDraft: true, RequestID: r.ID, Idempotency: &r, Authorize: func(ctx context.Context, q *store.Queries) error { return s.authorize(ctx, q, a) }}
+	opt := pages.WriteOptions{ForceDraft: true, RequestID: r.ID, Idempotency: &r, Authorize: func(ctx context.Context, q *store.Queries) error {
+		return s.authorize(ctx, q, a, pageID)
+	}}
 	opt.PrepareResult = func(ctx context.Context, q *store.Queries, page *pages.Page) error {
 		var receiptErr error
 		*receipt, receiptErr = s.receipt(ctx, q, page)
@@ -93,7 +105,7 @@ func (s *Service) writeOptions(ctx context.Context, a v2.Actor, tool, id string,
 
 func (s *Service) Create(ctx context.Context, a v2.Actor, in CreateInput) (SaveResult, error) {
 	var receipt SaveResult
-	opt, replayed, err := s.writeOptions(ctx, a, "create_draft_page", in.RequestID, in, &receipt)
+	opt, replayed, err := s.writeOptions(ctx, a, "create_draft_page", in.RequestID, 0, in, &receipt)
 	if err != nil {
 		return SaveResult{}, err
 	}
@@ -139,7 +151,7 @@ func (s *Service) create(ctx context.Context, a v2.Actor, input draft.PageDraft,
 
 func (s *Service) Update(ctx context.Context, a v2.Actor, in UpdateInput) (SaveResult, error) {
 	var receipt SaveResult
-	opt, replayed, err := s.writeOptions(ctx, a, "update_draft_page", in.RequestID, in, &receipt)
+	opt, replayed, err := s.writeOptions(ctx, a, "update_draft_page", in.RequestID, in.PageID, in, &receipt)
 	if err != nil {
 		return SaveResult{}, err
 	}

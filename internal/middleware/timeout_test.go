@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -97,6 +98,50 @@ func TestTimeoutMiddlewareWithHeaders(t *testing.T) {
 
 	if h := rr.Header().Get("X-Custom-Header"); h != "test-value" {
 		t.Errorf("X-Custom-Header = %q, want %q", h, "test-value")
+	}
+}
+
+func TestTimeoutKeepsCompleteResponseAfterDeadline(t *testing.T) {
+	const body = "complete-body"
+	release := make(chan struct{})
+	accepted := make(chan error, 1)
+	handler := Timeout(100 * time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		_, err := io.WriteString(w, body)
+		accepted <- err
+		<-r.Context().Done()
+		// The client must receive the whole response before we return.
+		<-release
+	}))
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(release) })
+	client := server.Client()
+	client.Timeout = 5 * time.Second
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, requestErr := client.Do(req)
+	select {
+	case writeErr := <-accepted:
+		if writeErr != nil {
+			t.Fatalf("response was not written before the deadline: %v", writeErr)
+		}
+	default:
+		t.Fatal("handler did not write the response")
+	}
+	if requestErr != nil {
+		t.Fatalf("complete response lost at deadline: %v", requestErr)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Error(closeErr)
+		}
+	}()
+	if got, readErr := io.ReadAll(resp.Body); resp.StatusCode != http.StatusOK || string(got) != body || readErr != nil {
+		t.Fatalf("response at deadline: status=%d body=%q error=%v", resp.StatusCode, got, readErr)
 	}
 }
 

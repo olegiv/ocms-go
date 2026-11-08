@@ -398,8 +398,9 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 				action={ tagFormAction(data) }
 				class="p-6"
 				x-data="slugForm"
-				data-slug-edited={ fmt.Sprint(data.IsEdit || tagFormValue(data, "slug") != "") }
+				data-slug-edited={ fmt.Sprint(data.IsEdit || data.FormValues["slug_edited"] == "true") }
 			>
+				<input type="hidden" name="slug_edited" x-bind:value="slugEdited"/>
 				if data.IsEdit {
 					<input type="hidden" name="_method" value="PUT"/>
 				}

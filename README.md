@@ -343,8 +343,16 @@ configuration on an isolated copy.
   cause startup to refuse.
 - **API keys:** Replace keys with no expiry or a lifetime above the
   production default of 90 days, measured from creation to expiry. Such
-  keys are rejected at authentication. Verify each replacement's source
-  CIDRs and the global API allowlist.
+  keys are rejected at authentication. Every key also needs at least one
+  per-key source CIDR. Check all active keys and the global API allowlist.
+- **Sign-in and MFA:** Set up HTTPS before switching. The session cookie
+  changes to Secure `__Host-session`, so existing sessions end and sign-in
+  requires HTTPS. Production enables HSTS. Every account must pass MFA at
+  sign-in, and accounts without MFA are prompted to enroll.
+- **Outbound integrations:** Startup refuses non-HTTPS URLs for active
+  webhooks, scheduled HTTP tasks and embed providers. Set
+  `OCMS_WEBHOOK_FORM_DATA_MODE` to `redacted` or `none`. The production
+  defaults refuse `full` at startup.
 - **Production prerequisites:** Supply a strong session secret and MFA key.
   Configure `OCMS_TRUSTED_PROXIES`, `OCMS_API_ALLOWED_CIDRS` and the allowlists
   required by enabled integrations such as webhooks, embeds and migration.

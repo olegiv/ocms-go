@@ -41,6 +41,12 @@ const ShareOpenPath = "/preview/share/open"
 var ErrUnavailable = errors.New("preview_unavailable")
 var ErrLimit = errors.New("preview_limit")
 
+// IssuerLookupError identifies an account read that the calling transport can classify.
+type IssuerLookupError struct{ err error }
+
+func (e *IssuerLookupError) Error() string { return e.err.Error() }
+func (e *IssuerLookupError) Unwrap() error { return e.err }
+
 type Service struct {
 	Q   *store.Queries
 	TTL time.Duration
@@ -112,7 +118,7 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 			if errors.Is(editorErr, pagewrite.ErrEditorRequired) {
 				return ErrUnavailable
 			}
-			return fmt.Errorf("check issuer role: %w", editorErr)
+			return &IssuerLookupError{err: fmt.Errorf("check issuer role: %w", editorErr)}
 		}
 		if authorize != nil {
 			if authorizeErr := authorize(ctx, work.Q); authorizeErr != nil {
@@ -121,7 +127,7 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 		}
 		user, workErr := work.Q.GetUserByID(ctx, principal.UserID)
 		if workErr != nil {
-			return workErr
+			return &IssuerLookupError{err: workErr}
 		}
 		page, workErr := work.Q.GetPageByID(ctx, pageID)
 		if workErr != nil {

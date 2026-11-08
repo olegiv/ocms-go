@@ -218,6 +218,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	formValues := map[string]string{
 		"name":          name,
 		"slug":          slug,
+		"slug_edited":   r.PostFormValue("slug_edited"),
 		"language_code": languageCode,
 	}
 
@@ -800,6 +801,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	formValues := map[string]string{
 		"name":          name,
 		"slug":          slug,
+		"slug_edited":   r.PostFormValue("slug_edited"),
 		"description":   description,
 		"parent_id":     parentIDStr,
 		"position":      positionStr,

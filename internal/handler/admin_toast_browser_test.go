@@ -27,10 +27,7 @@ import (
 
 // Run with freshly built assets and OCMS_PLAYWRIGHT_CLI set to playwright-cli.
 func TestAdminDeleteToastsInChrome(t *testing.T) {
-	cli := os.Getenv("OCMS_PLAYWRIGHT_CLI")
-	if cli == "" {
-		t.Skip("set OCMS_PLAYWRIGHT_CLI to run the Chrome toast regression")
-	}
+	cli := requireChromeCLI(t)
 	db, cleanup := testutil.TestDB(t)
 	t.Cleanup(cleanup)
 	if err := i18n.Init(nil); err != nil {

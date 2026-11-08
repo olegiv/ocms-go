@@ -166,7 +166,55 @@ func TestProxyReadRulesKeepCommandBoundaries(t *testing.T) {
 					t.Errorf("missing explicit deny rule %s", want)
 				}
 			}
+			checkProxyGitOptions(t, allowed, denied)
 		})
+	}
+}
+
+func checkProxyGitOptions(t *testing.T, allowed, denied []string) {
+	t.Helper()
+	matches := func(rule, invocation string) bool {
+		pattern := strings.ReplaceAll(regexp.QuoteMeta(rule), `\*`, ".*")
+		return regexp.MustCompile("^" + pattern + "$").MatchString(invocation)
+	}
+	for _, rule := range allowed {
+		command, ok := strings.CutPrefix(rule, "Bash(git ")
+		if !ok {
+			continue
+		}
+		for _, option := range []string{
+			"--output=fixture/path", "--output fixture/path",
+			`"--output" fixture/path`, `'--output'=fixture/path`,
+			"-s --format=format:fixture --output=fixture/path HEAD",
+			"--ext-diff", "--ext-diff HEAD", `"--ext-diff" HEAD`,
+			"--no-index --ext-dif", "--no-index --ext",
+		} {
+			invocation := "Bash(git " + strings.ReplaceAll(command, "*", option)
+			if matches(rule, invocation) && strings.Contains(invocation, option) &&
+				!slices.ContainsFunc(denied, func(deny string) bool { return matches(deny, invocation) }) {
+				t.Errorf("%s permits %s without an explicit deny", rule, invocation)
+			}
+		}
+	}
+	for _, subcommand := range []string{"diff", "log", "show"} {
+		for _, options := range []string{"-o fixture/path", "--stat -o fixture/path"} {
+			invocation := "Bash(git " + subcommand + " " + options + ")"
+			if slices.ContainsFunc(allowed, func(rule string) bool { return matches(rule, invocation) }) &&
+				!slices.ContainsFunc(denied, func(rule string) bool { return matches(rule, invocation) }) {
+				t.Errorf("%s has no explicit deny", invocation)
+			}
+		}
+	}
+	for _, command := range []string{
+		"Bash(git log --oneline -3)", "Bash(git diff --no-ext-diff HEAD)",
+		"Bash(git show --stat HEAD)", "Bash(git ls-files -o)",
+		"Bash(git diff --output-indicator-new=> HEAD)", "Bash(git log --extended-regexp --grep=fixture HEAD)",
+		"Bash(git log --oneline --grep=--output)",
+	} {
+		if !slices.ContainsFunc(allowed, func(rule string) bool { return matches(rule, command) }) ||
+			slices.ContainsFunc(denied, func(rule string) bool { return matches(rule, command) }) {
+			t.Errorf("ordinary read %s must be permitted", command)
+		}
 	}
 }
 
