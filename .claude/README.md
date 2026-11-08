@@ -60,11 +60,9 @@ Creates and manages the module system.
 - Adds i18n translations for modules
 
 ### security-auditor
-Scans for vulnerabilities and ensures security best practices.
-- Runs govulncheck for Go dependency vulnerabilities
-- Runs npm audit for JS dependency vulnerabilities
-- Reviews security configurations (CSRF, auth, rate limiting)
-- Creates audit reports in .audit/ directory
+Reviews source, configuration and existing scanner output with read-only tools.
+Returns Markdown findings and suggested fixes to the caller, who saves any
+separate section reports.
 
 ### frontend-developer
 Creates and modifies admin UI components using templ and templUI.
@@ -97,7 +95,7 @@ Start development server with hot reload.
 Test API endpoints with curl requests.
 
 ### /security-audit
-Perform a comprehensive security audit and store reports in `.audit/`.
+Hands off to the terminal launcher, which runs the audit and saves its report.
 
 ### /code-quality
 Run code quality checks for the Go project, including CSP template safety and high-risk DOM-XSS sink checks (`innerHTML`, redirect sinks).
@@ -132,7 +130,7 @@ Invoke agents with `@agent-name` followed by your task:
 
 @module-developer Create a notification module with email hooks
 
-@security-auditor Scan for vulnerabilities and create audit report
+@security-auditor Review the authentication code and return your findings
 
 @frontend-developer Build a confirmation dialog for page deletion using templUI
 ```
@@ -233,10 +231,15 @@ typing `YES`. The command verifies the prepared parent and staged tree,
 reruns the snapshot gate, and keeps Git's hooks enabled. An active commit hook
 other than the shipped read-only checks requires a guarded commit workflow.
 
-`security-audit` archives older loose reports under `.audit/` and saves
-Claude's final Markdown in a new dated run directory. Dated reports and
-archives stay in place. The launcher handles file creation and archive moves.
-The model's audit checks are listed in `scripts/codex/security-audit-proxy.md`.
+`make security-audit` saves Claude's final Markdown in a new
+`.audit/run-*/report.md`. `make security-audit-local` runs the dependency
+scanners directly and saves its summary and logs in its own run directory.
+Both launchers archive regular legacy `security-audit-YYYY-MM-DD_HH-MM-SS.md`
+reports with their matching `govulncheck` and `npm-audit` logs. Other files and
+directories, including `TODO.md`, section notes and prior runs, stay in place.
+When you ask `@security-auditor` for a section review, save its returned
+Markdown yourself if the section needs a separate file. The proxy's available
+checks are listed in `scripts/codex/security-audit-proxy.md`.
 
 Code quality and audit sessions use `dontAsk` with command-specific tool
 permissions. The proxy reports checks that require manual execution.
@@ -288,10 +291,10 @@ which source is tested, and the proxy allowlist is a best-effort guard.
 
 ### Security Audit
 ```
-# Quick vulnerability scan
-/security-audit
+# Fresh dependency scan in a terminal
+make security-audit-local
 
-# Comprehensive security review
+# Read-only section review in Claude Code
 @security-auditor Review all authentication flows and check for vulnerabilities
 ```
 

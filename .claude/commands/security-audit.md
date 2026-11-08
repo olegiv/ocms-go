@@ -9,7 +9,8 @@ checkout.
 ./scripts/codex-commands security-audit
 ```
 
-The launcher preserves archived reports, limits the audit session's tools
-and saves the new report in `.audit/`. Use the report to discuss findings
-and proposed fixes. Ask for explicit approval before starting a separate
-dependency or source change.
+The launcher preserves archived reports and active notes, limits the audit
+session's tools and saves one combined report under `.audit/run-*/report.md`.
+For a separate section review, `@security-auditor` returns Markdown to the
+caller, who saves it if needed. Ask for explicit approval before starting a
+separate dependency or source change.

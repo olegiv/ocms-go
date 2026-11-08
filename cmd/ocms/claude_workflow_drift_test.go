@@ -4,6 +4,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -40,6 +41,21 @@ func TestClaudeWorkflowExamplesUseValidSecretsAndFreshTests(t *testing.T) {
 	}
 }
 
+func TestSecurityAuditorReferencesExistingPaths(t *testing.T) {
+	root := filepath.Join("..", "..")
+	body := readWorkflowFile(t, filepath.Join(root, ".claude", "agents", "security-auditor.md"))
+	pathBullet := regexp.MustCompile("(?m)^- `((?:internal|docs)/[^`]+)` - ")
+	paths := pathBullet.FindAllSubmatch(body, -1)
+	if len(paths) == 0 {
+		t.Fatal("security-auditor has no repository path references to check")
+	}
+	for _, match := range paths {
+		if _, err := os.Stat(filepath.Join(root, string(match[1]))); err != nil {
+			t.Errorf("invalid security-auditor path %s: %v", match[1], err)
+		}
+	}
+}
+
 func TestClaudeCommandsRouteValidatedInputs(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
@@ -68,8 +84,9 @@ func TestClaudeCommandsRouteValidatedInputs(t *testing.T) {
 			forbidden: []string{"git commit ", "--no-verify"},
 		},
 		{
-			name:      "security-audit",
-			required:  []string{"\n./scripts/codex-commands security-audit\n", "preserves archived reports"},
+			name: "security-audit",
+			required: []string{"\n./scripts/codex-commands security-audit\n", "preserves archived reports and active notes",
+				".audit/run-*/report.md", "returns Markdown"},
 			forbidden: []string{"Move all existing audit files", "launch the security-auditor agent"},
 		},
 	} {

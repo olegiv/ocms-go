@@ -840,12 +840,14 @@ Module system specialist. Creates and manages modules with lifecycle hooks and i
 Read-only security reviewer. Analyzes source, configuration and existing scan reports, then returns findings and proposed remediation.
 
 **Usage examples:**
-- "Scan for vulnerabilities"
-- "Check for security issues in dependencies"
+- "Review these vulnerability scan results"
+- "Assess the dependency findings in this report"
 - "Review CSRF protection"
 - "Audit API authentication"
 
-**Invoke:** `@security-auditor` for review. Use `/security-audit` for a fresh scan.
+**Invoke:** `@security-auditor` for a review of source and existing evidence.
+The caller saves any separate section reports. Use `make security-audit-local`
+in a terminal for fresh dependency scan logs.
 
 ### code-quality-auditor
 Code quality scanner for Go applications. Detects duplicate code, unhandled errors, constant comparisons, empty slice literals, package name collisions, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
@@ -893,7 +895,8 @@ Start the development server with asset compilation. Runs `make dev` and reports
 Test REST API endpoints with actual HTTP requests. Starts server, runs curl tests, and reports results.
 
 ### /security-audit
-Hand off to the report-only terminal launcher, which saves results in `.audit/`.
+Hand off to `make security-audit` in a terminal. The launcher saves the
+combined Markdown report under `.audit/run-*/report.md`.
 
 ### /code-quality
 Scan the project for code quality issues including unhandled errors, duplicate code, constant comparisons, empty slice literals, package name collisions, CSP template safety, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
@@ -942,7 +945,7 @@ Deploy the application to Fly.io. Supports `--reset` (reset database), `--logs` 
 
 /api-test
 
-@security-auditor Scan for vulnerabilities and create an audit report
+@security-auditor Review the authentication code and return your findings
 
 /security-audit
 

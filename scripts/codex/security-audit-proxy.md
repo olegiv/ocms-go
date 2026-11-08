@@ -1,9 +1,9 @@
 Perform a report-only security audit using Read, Glob, Grep and the available
 shell checks. Review authentication, authorization, input validation, APIs,
 configuration, secrets handling, dependency vulnerabilities and Claude command,
-agent and hook definitions. The launcher saves your final Markdown response as
-the report. Include findings, evidence, risk, suggested remediation and any
-checks that could not run. Previous archived reports are available for comparison.
+agent and hook definitions. Organize your findings into sections in one final
+Markdown response. Include evidence, risk, suggested remediation and any checks
+that could not run. Earlier reports in `.audit/` are available for comparison.
 
 Use these dependency checks when their tools and inputs are available:
 

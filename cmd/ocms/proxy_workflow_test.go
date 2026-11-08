@@ -259,19 +259,47 @@ func TestProxyCommitWorkflowRequiresTerminal(t *testing.T) {
 
 func TestProxyAuditOwnsReportDestination(t *testing.T) {
 	f := newProxyWorkflowFixture(t)
-	f.write(".audit/old-report.md", "previous report\n")
-	f.write(".audit/2026-11-05_20-00-00/history.md", "older archive\n")
+	legacy := []string{
+		"security-audit-2026-11-05_20-08-27.md",
+		"govulncheck-2026-11-05_20-08-27.log",
+		"npm-audit-2026-11-05_20-08-27.log",
+	}
+	for _, name := range legacy {
+		f.write(".audit/"+name, "previous audit artifact\n")
+	}
+	protected := []string{
+		"TODO.md", "sections-2026-11-07/audit.md", "codex-2026-11-07/HANDOFF.md",
+		"govulncheck-2026-11-07_18-53-57.log", "npm-audit-2026-11-07_18-53-57.log",
+		"security-audit-in-progress.md", "security-audit-2026-11-08_00-00-00.md/draft.md",
+		"2026-11-05_20-00-00/history.md", "archive-older/history.md", "run-ongoing/report.incomplete",
+	}
+	for _, name := range protected {
+		f.write(".audit/"+name, "preserved audit artifact\n")
+	}
+	link := filepath.Join(f.dir, ".audit/security-audit-2026-11-08_01-00-00.md")
+	if err := os.Symlink("TODO.md", link); err != nil {
+		t.Fatal(err)
+	}
 	f.run("", 0, "security-audit", "scope note")
 	reports, err := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.md"))
 	if err != nil || len(reports) != 1 || string(readWorkflowFile(t, reports[0])) != "# Fixture audit report\n" {
 		t.Fatalf("new report: %v, %v", reports, err)
 	}
-	archived, err := filepath.Glob(filepath.Join(f.dir, ".audit/archive-*/old-report.md"))
-	if err != nil || len(archived) != 1 || string(readWorkflowFile(t, archived[0])) != "previous report\n" {
-		t.Fatalf("archived report: %v, %v", archived, err)
+	for _, name := range protected {
+		if got := string(readWorkflowFile(t, filepath.Join(f.dir, ".audit", name))); got != "preserved audit artifact\n" {
+			t.Errorf("audit changed %s: %q", name, got)
+		}
 	}
-	requireWorkflowFileAbsent(t, filepath.Join(f.dir, ".audit/old-report.md"))
-	readWorkflowFile(t, filepath.Join(f.dir, ".audit/2026-11-05_20-00-00/history.md"))
+	if target, err := os.Readlink(link); err != nil || target != "TODO.md" {
+		t.Errorf("report-shaped symlink: target %q, error %v", target, err)
+	}
+	for _, name := range legacy {
+		archived, err := filepath.Glob(filepath.Join(f.dir, ".audit/archive-*", name))
+		if err != nil || len(archived) != 1 || string(readWorkflowFile(t, archived[0])) != "previous audit artifact\n" {
+			t.Fatalf("archived %s: %v, %v", name, archived, err)
+		}
+		requireWorkflowFileAbsent(t, filepath.Join(f.dir, ".audit", name))
+	}
 
 	data := readWorkflowFile(t, filepath.Join(f.bin, "claude-args"))
 	args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
@@ -311,11 +339,47 @@ func TestProxyAuditOwnsReportDestination(t *testing.T) {
 
 	f.env = append(f.env, "FIXTURE_CLAUDE_EXIT=9")
 	f.run("", 9, "security-audit")
-	if pending, pendingErr := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.incomplete")); pendingErr != nil || len(pending) != 0 {
+	ongoing := filepath.Join(f.dir, ".audit/run-ongoing/report.incomplete")
+	if pending, pendingErr := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.incomplete")); pendingErr != nil || !slices.Equal(pending, []string{ongoing}) {
 		t.Fatalf("failed audit left partial report: %v, %v", pending, pendingErr)
 	}
 	if current, currentErr := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.md")); currentErr != nil || !slices.Equal(current, reports) {
 		t.Fatalf("failed audit replaced a completed report: %v, %v", current, currentErr)
+	}
+}
+
+func TestLocalAuditPreservesInProgressWork(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	f.write(".audit/TODO.md", "active audit notes\n")
+	f.write("package.json", "{}\n")
+	f.script("govulncheck", `#!/bin/sh
+[ "$*" = ./... ] || exit 2
+printf 'Go scan output\n'
+`)
+	f.script("npm", `#!/bin/sh
+[ "$*" = 'audit --json' ] || exit 2
+printf 'npm scan output\n'
+exit 1
+`)
+	f.run("", 1, "security-audit-local")
+	if notes := string(readWorkflowFile(t, filepath.Join(f.dir, ".audit/TODO.md"))); notes != "active audit notes\n" {
+		t.Errorf("audit changed the active notes: %q", notes)
+	}
+	if archives, err := filepath.Glob(filepath.Join(f.dir, ".audit/archive-*")); err != nil || len(archives) != 0 {
+		t.Errorf("audit without a legacy report made an archive: %v, %v", archives, err)
+	}
+	reports, err := filepath.Glob(filepath.Join(f.dir, ".audit/run-*/report.md"))
+	if err != nil || len(reports) != 1 {
+		t.Fatalf("local report: %v, %v", reports, err)
+	}
+	report := string(readWorkflowFile(t, reports[0]))
+	if !strings.Contains(report, "govulncheck: ok") || !strings.Contains(report, "npm audit: issues found") {
+		t.Errorf("unexpected scanner summary:\n%s", report)
+	}
+	for name, want := range map[string]string{"govulncheck.log": "Go scan output\n", "npm-audit.log": "npm scan output\n"} {
+		if got := string(readWorkflowFile(t, filepath.Join(filepath.Dir(reports[0]), name))); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
 	}
 }
 

@@ -31,21 +31,24 @@ fi
 trap 'rmdir -- "$lock_dir"' EXIT
 timestamp=$(date '+%Y-%m-%d_%H-%M-%S')
 archive_dir=
-shopt -s nullglob dotglob
-for path in "$audit_dir"/*; do
-  # Keep timestamped reports and archives in place on later runs.
-  if [[ -d "$path" && ! -L "$path" ]]; then
-    case "${path##*/}" in
-      .archive.lock|run-*|archive-*|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]) continue ;;
-    esac
-  fi
+shopt -s nullglob
+# The legacy scanner wrote its dated report after the logs. Use the report
+# to identify finished runs and leave in-progress logs and notes in place.
+for report in "$audit_dir"/security-audit-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].md; do
+  [[ -f "$report" && ! -L "$report" ]] || continue
+  report_stamp=${report##*/security-audit-}
+  report_stamp=${report_stamp%.md}
   if [[ -z "$archive_dir" ]]; then
     archive_dir=$(mktemp -d "$audit_dir/archive-$timestamp.XXXXXXXX")
     printf 'Archiving previous audit files in %s\n' "$archive_dir" >&2
   fi
-  mv -- "$path" "$archive_dir/"
+  for path in "$audit_dir/govulncheck-$report_stamp.log" "$audit_dir/npm-audit-$report_stamp.log" "$report"; do
+    if [[ -f "$path" && ! -L "$path" ]]; then
+      mv -- "$path" "$archive_dir/"
+    fi
+  done
 done
-shopt -u nullglob dotglob
+shopt -u nullglob
 
 run_dir=$(mktemp -d "$audit_dir/run-$timestamp.XXXXXXXX")
 rmdir -- "$lock_dir"
