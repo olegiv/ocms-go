@@ -444,6 +444,9 @@ func (s *Service) saveClient(ctx context.Context, c registeredClient, source str
 	}
 	defer rollback(tx)
 	if err = s.saveClientTx(ctx, s.q.WithTx(tx), c, source, expires); errors.Is(err, errOAuthClientCapacity) {
+		if source == "cimd" {
+			s.logClientRefusal(ctx, &s.cimdCapacityLog, source, "registry_full")
+		}
 		return problem("temporarily_unavailable")
 	}
 	if err != nil {

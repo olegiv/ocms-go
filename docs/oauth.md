@@ -224,7 +224,8 @@ an allowlist, not proof of account compatibility. Add another exact hostname
 only for a client you intend to support. DCR is a separate opt-in fallback for
 public clients. It creates a random client ID and no secret. A provisional
 registration expires after one day and can be reclaimed earlier at capacity.
-Creating a grant for the client extends its lifetime to 90 days from consent.
+Successful code redemption gives the client at least 90 days from the
+corresponding consent.
 DCR accepts only code/refresh grant metadata. CIMD documents
 must advertise authorization code support when `grant_types` is present;
 additional advertised grant types do not enable those flows in oCMS. Both

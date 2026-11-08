@@ -460,7 +460,7 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, problem("temporarily_unavailable"))
 		return
 	}
-	if refusal.retryAfter > 0 {
+	if refusal.kind != dcrAdmitted {
 		s.logDCRRefusal(r.Context(), refusal.kind)
 		seconds := int64((refusal.retryAfter + time.Second - 1) / time.Second)
 		w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))

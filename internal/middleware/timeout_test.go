@@ -238,16 +238,23 @@ func TestTimeoutLogsOnlyOwnDeadline(t *testing.T) {
 		name               string
 		started, completed bool
 		cancelled          bool
+		parentDeadline     bool
 	}{
 		{name: "aborted response", started: true},
 		{name: "503 before headers"},
 		{name: "normal response", completed: true},
 		{name: "client cancellation", cancelled: true},
+		{name: "parent deadline", parentDeadline: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			logs := captureLog(t)
 			ctx, cancel := context.WithCancel(context.WithValue(t.Context(), chimw.RequestIDKey, "audit-request"))
 			defer cancel()
+			if tc.parentDeadline {
+				var cancelParent context.CancelFunc
+				ctx, cancelParent = context.WithTimeout(ctx, time.Millisecond)
+				defer cancelParent()
+			}
 			req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/export?private=ignored", nil)
 			const deadline = 250 * time.Millisecond
 			handler := Timeout(deadline)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -265,9 +272,12 @@ func TestTimeoutLogsOnlyOwnDeadline(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			recovered := serveRecovering(handler, recorder, req)
 			text := logs.String()
-			if tc.completed || tc.cancelled {
+			if tc.completed || tc.cancelled || tc.parentDeadline {
 				if text != "" {
 					t.Fatalf("unexpected timeout log: %s", text)
+				}
+				if tc.parentDeadline && (!errors.Is(ctx.Err(), context.DeadlineExceeded) || recorder.Code != http.StatusServiceUnavailable) {
+					t.Fatalf("parent deadline err=%v, response status=%d", ctx.Err(), recorder.Code)
 				}
 				return
 			}

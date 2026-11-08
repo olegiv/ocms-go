@@ -47,10 +47,6 @@ func TestDCRWritersUseRegistrationBudget(t *testing.T) {
 					return true
 				}
 				switch selector.Sel.Name {
-				case "RecordOAuthDCRRegistration":
-					if fn.Name.Name != "registerDCR" {
-						t.Errorf("%s: DCR admission write outside registerDCR", fset.Position(node.Pos()))
-					}
 				case "saveClient", "saveClientTx":
 					// Inspect the enclosing call separately; method aliases cannot
 					// establish their client source at this boundary.
@@ -98,7 +94,8 @@ func TestDCRWritersUseRegistrationBudget(t *testing.T) {
 
 func checkOAuthClientWriters(t *testing.T) {
 	root := filepath.Join("..", "..")
-	owners := map[string]struct{ path, function string }{
+	type queryOwner struct{ path, function string }
+	owners := map[string]queryOwner{
 		"UpsertOAuthClient":               {"internal/oauth/clients.go", "saveClientTx"},
 		"DeleteExpiredUnusedOAuthClients": {"internal/oauth/clients.go", "saveClientTx"},
 		"ExtendDCROAuthClient":            {"internal/oauth/protocol.go", "Token"},
@@ -117,6 +114,9 @@ func checkOAuthClientWriters(t *testing.T) {
 			t.Errorf("%s has a caller guard but no OAuth client mutation in the sqlc catalog", name)
 		}
 	}
+	// These queries operate on the DCR admission ledger, not oauth_clients.
+	owners["RecordOAuthDCRRegistration"] = queryOwner{"internal/oauth/registration.go", "registerDCR"}
+	owners["GetOAuthDCRRegistrationBudget"] = queryOwner{"internal/oauth/registration.go", "checkDCRBudget"}
 
 	fset := token.NewFileSet()
 	calls := make(map[string]int)
@@ -146,12 +146,15 @@ func checkOAuthClientWriters(t *testing.T) {
 			}
 			for node := range ast.Preorder(declaration) {
 				selected, ok := node.(*ast.SelectorExpr)
-				if !ok || !found[selected.Sel.Name] {
+				if !ok {
 					continue
 				}
 				owner, guarded := owners[selected.Sel.Name]
+				if !guarded && !found[selected.Sel.Name] {
+					continue
+				}
 				if !guarded || owner.path != filepath.ToSlash(relative) || owner.function != function {
-					t.Errorf("%s: %s writes oauth_clients outside its guarded caller", fset.Position(selected.Pos()), selected.Sel.Name)
+					t.Errorf("%s: %s is referenced outside its guarded OAuth caller", fset.Position(selected.Pos()), selected.Sel.Name)
 				} else {
 					calls[selected.Sel.Name]++
 				}
@@ -162,7 +165,9 @@ func checkOAuthClientWriters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if calls["UpsertOAuthClient"] != 1 {
-		t.Errorf("found %d guarded UpsertOAuthClient references, want 1", calls["UpsertOAuthClient"])
+	for _, name := range []string{"UpsertOAuthClient", "RecordOAuthDCRRegistration", "GetOAuthDCRRegistrationBudget"} {
+		if calls[name] != 1 {
+			t.Errorf("found %d guarded %s references, want 1", calls[name], name)
+		}
 	}
 }

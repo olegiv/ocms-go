@@ -75,13 +75,14 @@ type Principal struct {
 
 // Service owns OAuth persistence and protocol integration.
 type Service struct {
-	db             *sql.DB
-	q              *store.Queries
-	options        Options
-	clients        *clientResolver
-	now            func() time.Time
-	dcrWrites      chan struct{}
-	dcrRefusalLogs [dcrRefusalKinds]atomic.Int64
+	db              *sql.DB
+	q               *store.Queries
+	options         Options
+	clients         *clientResolver
+	now             func() time.Time
+	dcrWrites       chan struct{}
+	dcrRefusalLogs  [dcrRefusalKinds]atomic.Int64
+	cimdCapacityLog atomic.Int64
 }
 
 // New constructs an issuer. HTTP is permitted only for literal development loopback origins.

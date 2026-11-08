@@ -8,23 +8,28 @@ import (
 	"errors"
 	"log/slog"
 	"net/netip"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
 const (
-	dcrRegistrationsPerSource = 20
-	dcrRegistrationsTotal     = 2000
-	dcrRegistrationWindow     = time.Hour
-	dcrGlobalWindow           = 10 * time.Minute
-	dcrSingleClientGrace      = 10 * time.Minute
+	dcrRegistrationsPerSource  = 20
+	dcrRegistrationsPerNetwork = 100
+	dcrRegistrationsTotal      = 2000
+	dcrRegistrationWindow      = time.Hour
+	dcrGlobalWindow            = 10 * time.Minute
+	dcrSingleClientGrace       = 10 * time.Minute
 )
 
 type dcrRefusalKind uint8
 
 const (
-	dcrSourceLimit dcrRefusalKind = iota
+	dcrAdmitted dcrRefusalKind = iota
+	dcrSourceLimit
+	dcrNetworkLimit
 	dcrGlobalLimit
 	dcrRegistryFull
 	dcrRefusalKinds
@@ -35,45 +40,77 @@ type dcrRefusal struct {
 	retryAfter time.Duration
 }
 
-// dcrSourceKey groups privacy addresses in an IPv6 /64. IPv4 and IPv4-mapped
-// IPv6 share the same per-address key. Unparseable peers use one shared key.
-func dcrSourceKey(ip string) string {
-	addr, err := netip.ParseAddr(ip)
-	if err != nil {
-		return "unknown"
-	}
-	addr = addr.Unmap().WithZone("")
-	if addr.Is6() {
-		return netip.PrefixFrom(addr, 64).Masked().String()
-	}
-	return addr.String()
+type dcrSource struct {
+	key        string
+	networkMin string
+	networkEnd string
+	zeroSubnet string
 }
 
-func checkDCRBudget(ctx context.Context, q *store.Queries, source string, now time.Time) (dcrRefusal, error) {
+// parseDCRSource keeps the /64 source key for admission and eviction, while
+// locating all /64 keys from the same /48 in the existing ledger.
+func parseDCRSource(ip string) dcrSource {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return dcrSource{key: "unknown"}
+	}
+	addr = addr.Unmap().WithZone("")
+	if addr.Is4() {
+		return dcrSource{key: addr.String()}
+	}
+	network := netip.PrefixFrom(addr, 48).Masked().Addr()
+	first := network.As16()
+	first[7] = 1
+	// With a nonzero fourth hextet, netip always compresses the four
+	// trailing zeros, so the first three hextets form an indexable range.
+	// A zero fourth hextet can compress farther left and needs an exact key.
+	firstKey := netip.PrefixFrom(netip.AddrFrom16(first), 64).String()
+	prefix := strings.TrimSuffix(firstKey, "1::/64")
+	return dcrSource{
+		key:        netip.PrefixFrom(addr, 64).Masked().String(),
+		networkMin: prefix,
+		networkEnd: strings.TrimSuffix(prefix, ":") + ";",
+		zeroSubnet: netip.PrefixFrom(network, 64).String(),
+	}
+}
+
+// checkDCRBudget uses the same admission evidence for preflight and the write transaction.
+func checkDCRBudget(ctx context.Context, q *store.Queries, source dcrSource, now time.Time) (dcrRefusal, error) {
 	budget, err := q.GetOAuthDCRRegistrationBudget(ctx, store.GetOAuthDCRRegistrationBudgetParams{
-		SourceKey:    source,
-		SourceCutoff: now.Add(-dcrRegistrationWindow).UnixNano(),
-		GlobalCutoff: now.Add(-dcrGlobalWindow).UnixNano(),
+		SourceKey:     source.key,
+		SourceCutoff:  now.Add(-dcrRegistrationWindow).UnixNano(),
+		GlobalCutoff:  now.Add(-dcrGlobalWindow).UnixNano(),
+		NetworkMin:    source.networkMin,
+		NetworkEnd:    source.networkEnd,
+		ZeroSubnet:    source.zeroSubnet,
+		NetworkOffset: dcrRegistrationsPerNetwork - 1,
 	})
 	if err != nil {
 		return dcrRefusal{}, err
 	}
+	var refusal dcrRefusal
 	if budget.SourceTotal >= dcrRegistrationsPerSource {
-		return dcrRefusal{dcrSourceLimit, time.Unix(0, budget.SourceOldest).Add(dcrRegistrationWindow).Sub(now)}, nil
+		refusal = dcrRefusal{dcrSourceLimit, time.Unix(0, budget.SourceOldest).Add(dcrRegistrationWindow).Sub(now)}
+	}
+	if delay := time.Duration(budget.NetworkRetryNs); delay > refusal.retryAfter {
+		refusal = dcrRefusal{dcrNetworkLimit, delay}
 	}
 	if budget.Total >= dcrRegistrationsTotal {
-		return dcrRefusal{dcrGlobalLimit, time.Unix(0, budget.Oldest).Add(dcrGlobalWindow).Sub(now)}, nil
+		// Keep the issuer-wide alert visible even when a source limit
+		// contributes a longer delay.
+		delay := time.Unix(0, budget.Oldest).Add(dcrGlobalWindow).Sub(now)
+		return dcrRefusal{dcrGlobalLimit, max(delay, refusal.retryAfter)}, nil
 	}
-	return dcrRefusal{}, nil
+	return refusal, nil
 }
 
 // registerDCR rechecks admission in the same SQLite write transaction as
 // client creation and any eviction. Failed writes consume no hourly budget.
 func (s *Service) registerDCR(ctx context.Context, c registeredClient, ip string) (dcrRefusal, error) {
-	source := dcrSourceKey(ip)
+	source := parseDCRSource(ip)
 	// An already exhausted source can be refused even while SQLite has a writer.
 	refusal, err := checkDCRBudget(ctx, s.q, source, s.now())
-	if err != nil || refusal.retryAfter > 0 {
+	if err != nil || refusal.kind != dcrAdmitted {
 		return refusal, err
 	}
 	// Queue writes before borrowing a database connection. A stalled
@@ -92,7 +129,7 @@ func (s *Service) registerDCR(ctx context.Context, c registeredClient, ip string
 	q := s.q.WithTx(tx)
 	now := s.now()
 	refusal, err = checkDCRBudget(ctx, q, source, now)
-	if err != nil || refusal.retryAfter > 0 {
+	if err != nil || refusal.kind != dcrAdmitted {
 		return refusal, err
 	}
 	save := func() error {
@@ -101,7 +138,7 @@ func (s *Service) registerDCR(ctx context.Context, c registeredClient, ip string
 	err = save()
 	if errors.Is(err, errOAuthClientCapacity) {
 		evicted, evictErr := q.EvictOAuthDCRClient(ctx, store.EvictOAuthDCRClientParams{
-			SourceKey: source, GraceCutoff: now.Add(-dcrSingleClientGrace).UnixNano(),
+			SourceKey: source.key, GraceCutoff: now.Add(-dcrSingleClientGrace).UnixNano(),
 		})
 		if evictErr != nil {
 			return dcrRefusal{}, evictErr
@@ -118,21 +155,25 @@ func (s *Service) registerDCR(ctx context.Context, c registeredClient, ip string
 		return dcrRefusal{}, err
 	}
 	if err = q.RecordOAuthDCRRegistration(ctx, store.RecordOAuthDCRRegistrationParams{
-		ClientID: c.ID, SourceKey: source, RegisteredAt: now.UnixNano(),
+		ClientID: c.ID, SourceKey: source.key, RegisteredAt: now.UnixNano(),
 	}); err != nil {
 		return dcrRefusal{}, err
 	}
 	return dcrRefusal{}, tx.Commit()
 }
 
-// Public callers can generate unlimited refusals. Log each reason at most
-// once per minute per service, without recording an address or client metadata.
 func (s *Service) logDCRRefusal(ctx context.Context, kind dcrRefusalKind) {
+	reasons := [dcrRefusalKinds]string{dcrSourceLimit: "source_limit", dcrNetworkLimit: "network_limit", dcrGlobalLimit: "global_limit", dcrRegistryFull: "registry_full"}
+	s.logClientRefusal(ctx, &s.dcrRefusalLogs[kind], "dcr", reasons[kind])
+}
+
+// logClientRefusal reports each refusal reason at most once per minute per
+// service, without recording an address or client metadata.
+func (s *Service) logClientRefusal(ctx context.Context, previous *atomic.Int64, source, reason string) {
 	now := s.now().Unix()
-	last := s.dcrRefusalLogs[kind].Load()
-	if (last != 0 && now-last < 60) || !s.dcrRefusalLogs[kind].CompareAndSwap(last, now) {
+	last := previous.Load()
+	if (last != 0 && now-last < 60) || !previous.CompareAndSwap(last, now) {
 		return
 	}
-	reasons := [dcrRefusalKinds]string{"source_limit", "global_limit", "registry_full"}
-	slog.WarnContext(ctx, "OAuth client registration refused", "reason", reasons[kind])
+	slog.WarnContext(ctx, "OAuth client registration refused", "source", source, "reason", reason)
 }

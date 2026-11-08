@@ -410,8 +410,9 @@ func assertDraftPolicyError(t *testing.T, result *mcp.CallToolResult, code strin
 	}
 }
 
-// Every fallible lookup in draft authorization and its write-policy callback
-// must classify its error. credentialScopes already returns classified errors.
+// The tools_drafts.go authorization, write-policy and preview checks must
+// classify lookup faults or delegate to a helper that does. The two account
+// lookup roots are checked separately in the authoring and preview services.
 func TestDraftAuthorizationLookupsClassifyFaults(t *testing.T) {
 	positions := token.NewFileSet()
 	parsed, err := parser.ParseFile(positions, "tools_drafts.go", nil, 0)

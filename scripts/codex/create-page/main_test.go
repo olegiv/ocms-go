@@ -175,6 +175,31 @@ func TestCreatePageReportsValidationFields(t *testing.T) {
 	}
 }
 
+func TestCreatePageEscapesTerminalControlsInSuccessJSON(t *testing.T) {
+	const title = "Заголовок \u009b31m \u202eexample"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(map[string]pageSummary{
+			"data": {ID: 1, Revision: 1, Title: title, Slug: "page", Status: "draft"},
+		}); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer server.Close()
+	args := []string{"--site-url", server.URL, "--key-file", keyFileForTest(t, fixtureKey, 0o600)}
+	var out bytes.Buffer
+	if err := run(t.Context(), args, strings.NewReader(`{"slug":"page"}`), &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(out.String(), "\u009b\u202e") || !strings.Contains(out.String(), `Заголовок \u009b31m \u202eexample`) {
+		t.Fatalf("success JSON contains raw controls or lost text: %q", out.String())
+	}
+	var summary pageSummary
+	if err := json.Unmarshal(out.Bytes(), &summary); err != nil || summary.Title != title || summary.Revision != 1 {
+		t.Fatalf("invalid or altered success result: %+v, %v", summary, err)
+	}
+}
+
 func TestCreatePageBoundsRefusalOutput(t *testing.T) {
 	const maxDiagnosticBytes = 2 << 10
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -223,10 +248,54 @@ func TestCreatePageFallsBackForUnusableRefusal(t *testing.T) {
 			args := []string{"--site-url", server.URL, "--key-file", keyFileForTest(t, fixtureKey, 0o600)}
 			var out bytes.Buffer
 			err := run(t.Context(), args, strings.NewReader(`{"slug":"taken"}`), &out)
-			if err == nil || err.Error() != "page 1 of 1: page API returned HTTP 409" || out.Len() != 0 {
+			const want = "page 1 of 1: page API returned HTTP 409 (refusal body unusable: unreadable, over 16 KiB, or not a JSON error envelope)"
+			if err == nil || err.Error() != want || out.Len() != 0 {
 				t.Fatalf("unusable refusal diagnostic = %q, stdout %q", err, out.String())
 			}
 		})
+	}
+}
+
+func TestCreatePageReportsSafeRetryAndRedirectHints(t *testing.T) {
+	var followed atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { followed.Add(1) }))
+	defer target.Close()
+	for _, tc := range []struct {
+		name, header, value, want string
+		status                    int
+	}{
+		{"seconds", "Retry-After", "17", "rate limited; retry after 17s", http.StatusTooManyRequests},
+		{"date", "Retry-After", "Sun, 08 Nov 2026 12:00:00 GMT", "rate limited; retry after 2026-11-08T12:00:00Z", http.StatusTooManyRequests},
+		{"invalid retry header", "Retry-After", fixtureKey, "rate limited", http.StatusTooManyRequests},
+		{"origin only", "Location", strings.Replace(target.URL, "://", "://private:credentials@", 1) + "/private?key=" + fixtureKey + "#secret", "HTTP 302; redirects to " + target.URL, http.StatusFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set(tc.header, tc.value)
+				middleware.WriteAPIError(w, tc.status, "refused", "rate limited", nil)
+			}))
+			defer server.Close()
+			args := []string{"--site-url", server.URL, "--key-file", keyFileForTest(t, fixtureKey, 0o600)}
+			var out bytes.Buffer
+			err := run(t.Context(), args, strings.NewReader(`{"slug":"page"}`), &out)
+			if err == nil || !strings.HasSuffix(err.Error(), tc.want) || strings.Contains(err.Error(), fixtureKey) || out.Len() != 0 || followed.Load() != 0 {
+				t.Fatalf("unsafe or missing refusal hint: %v", err)
+			}
+		})
+	}
+}
+
+func TestCreatePageOmitsRetryHintContainingBearer(t *testing.T) {
+	const key = "12345678"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", key)
+		middleware.WriteAPIError(w, http.StatusTooManyRequests, "refused", "rate limited", nil)
+	}))
+	defer server.Close()
+	args := []string{"--site-url", server.URL, "--key-file", keyFileForTest(t, key, 0o600)}
+	err := run(t.Context(), args, strings.NewReader(`{"slug":"page"}`), io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "rate limited") || strings.Contains(err.Error(), key) || strings.Contains(err.Error(), "retry after") {
+		t.Fatal("retry hint exposed a reflected numeric bearer")
 	}
 }
 

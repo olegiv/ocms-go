@@ -5,6 +5,7 @@ package webhook
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -873,7 +874,7 @@ func TestIsValidWebhookDeliveryHeaderName(t *testing.T) {
 func TestDispatchEvent_NotRunning(t *testing.T) {
 	d := NewDispatcher(nil, slog.Default(), Config{EnableDebounce: false, Workers: 1})
 	err := d.DispatchEvent(t.Context(), "page.created", PageEventData{ID: 1})
-	if err != ErrDispatcherStopped {
+	if !errors.Is(err, ErrDispatcherStopped) {
 		t.Errorf("DispatchEvent() error = %v, want %v", err, ErrDispatcherStopped)
 	}
 }
@@ -881,7 +882,7 @@ func TestDispatchEvent_NotRunning(t *testing.T) {
 func TestDispatchImmediate_NotRunning(t *testing.T) {
 	d := NewDispatcher(nil, slog.Default(), Config{EnableDebounce: false, Workers: 1})
 	err := d.DispatchImmediate(t.Context(), "page.deleted", PageEventData{ID: 2})
-	if err != ErrDispatcherStopped {
+	if !errors.Is(err, ErrDispatcherStopped) {
 		t.Errorf("DispatchImmediate() error = %v, want %v", err, ErrDispatcherStopped)
 	}
 }

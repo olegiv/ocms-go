@@ -34,7 +34,7 @@ type Dispatcher struct {
 }
 
 // ErrDispatcherStopped means a webhook event was rejected before dispatch.
-var ErrDispatcherStopped error = loggedDispatchError{errors.New("webhook dispatcher is stopped")}
+var ErrDispatcherStopped = errors.New("webhook dispatcher is stopped")
 
 // loggedDispatchError carries a failure already recorded by the dispatcher.
 type loggedDispatchError struct{ error }
@@ -382,7 +382,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 
 func (d *Dispatcher) rejectStopped(event *Event) error {
 	logDispatchError(d.logger, "webhook event dropped", event, ErrDispatcherStopped)
-	return ErrDispatcherStopped
+	return loggedDispatchError{ErrDispatcherStopped}
 }
 
 func logDispatchError(logger *slog.Logger, message string, event *Event, err error, attrs ...any) {

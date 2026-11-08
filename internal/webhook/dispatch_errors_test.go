@@ -50,6 +50,8 @@ func TestDispatchCallersLogFailureOnce(t *testing.T) {
 	DispatchPageEvent(ctx, wrapped, model.EventPageDeleted, store.Page{ID: 53}, "")
 	failed := dispatchFunc(func(context.Context, string, any) error { return errors.New("unreported failure") })
 	DispatchMediaEvent(ctx, failed, model.EventMediaUploaded, store.Medium{ID: 64})
+	stopped := dispatchFunc(func(context.Context, string, any) error { return ErrDispatcherStopped })
+	DispatchPageEvent(ctx, stopped, model.EventPagePublished, store.Page{ID: 86}, "")
 
 	d.Start(ctx)
 	defer d.Stop()
@@ -66,6 +68,7 @@ func TestDispatchCallersLogFailureOnce(t *testing.T) {
 		{"webhook event dropped", model.EventMediaDeleted, 42},
 		{"webhook event dropped", model.EventPageDeleted, 53},
 		{"failed to dispatch webhook event", model.EventMediaUploaded, 64},
+		{"failed to dispatch webhook event", model.EventPagePublished, 86},
 		{"failed to list webhooks for event", model.EventPageCreated, 75},
 	} {
 		requireOnlyDispatchError(t, logs.String(), tc.message, tc.event, tc.id)

@@ -56,30 +56,53 @@ SELECT CAST((SELECT COUNT(*) FROM oauth_dcr_registrations global_count
         AND source_count.registered_at > ?3) AS INTEGER) AS source_total,
     CAST(COALESCE((SELECT MIN(source_first.registered_at) FROM oauth_dcr_registrations source_first
         WHERE source_first.source_key = ?2
-        AND source_first.registered_at > ?3), 0) AS INTEGER) AS source_oldest
+        AND source_first.registered_at > ?3), 0) AS INTEGER) AS source_oldest,
+    CAST(CASE WHEN CAST(?4 AS TEXT) = '' THEN 0 ELSE COALESCE((
+        SELECT network.registered_at - ?3 FROM oauth_dcr_registrations network
+        WHERE network.registered_at > ?3
+        AND ((network.source_key >= ?4 AND network.source_key < ?5)
+            OR network.source_key = ?6)
+        ORDER BY network.registered_at DESC LIMIT 1 OFFSET ?7
+    ), 0) END AS INTEGER) AS network_retry_ns
 `
 
 type GetOAuthDCRRegistrationBudgetParams struct {
-	GlobalCutoff int64  `json:"global_cutoff"`
-	SourceKey    string `json:"source_key"`
-	SourceCutoff int64  `json:"source_cutoff"`
+	GlobalCutoff  int64  `json:"global_cutoff"`
+	SourceKey     string `json:"source_key"`
+	SourceCutoff  int64  `json:"source_cutoff"`
+	NetworkMin    string `json:"network_min"`
+	NetworkEnd    string `json:"network_end"`
+	ZeroSubnet    string `json:"zero_subnet"`
+	NetworkOffset int64  `json:"network_offset"`
 }
 
 type GetOAuthDCRRegistrationBudgetRow struct {
-	Total        int64 `json:"total"`
-	Oldest       int64 `json:"oldest"`
-	SourceTotal  int64 `json:"source_total"`
-	SourceOldest int64 `json:"source_oldest"`
+	Total          int64 `json:"total"`
+	Oldest         int64 `json:"oldest"`
+	SourceTotal    int64 `json:"source_total"`
+	SourceOldest   int64 `json:"source_oldest"`
+	NetworkRetryNs int64 `json:"network_retry_ns"`
 }
 
+// Read all budgets in one snapshot. The /48 check reads the limit-th newest
+// row so legacy entries above the limit yield the actual recovery time.
 func (q *Queries) GetOAuthDCRRegistrationBudget(ctx context.Context, arg GetOAuthDCRRegistrationBudgetParams) (GetOAuthDCRRegistrationBudgetRow, error) {
-	row := q.db.QueryRowContext(ctx, getOAuthDCRRegistrationBudget, arg.GlobalCutoff, arg.SourceKey, arg.SourceCutoff)
+	row := q.db.QueryRowContext(ctx, getOAuthDCRRegistrationBudget,
+		arg.GlobalCutoff,
+		arg.SourceKey,
+		arg.SourceCutoff,
+		arg.NetworkMin,
+		arg.NetworkEnd,
+		arg.ZeroSubnet,
+		arg.NetworkOffset,
+	)
 	var i GetOAuthDCRRegistrationBudgetRow
 	err := row.Scan(
 		&i.Total,
 		&i.Oldest,
 		&i.SourceTotal,
 		&i.SourceOldest,
+		&i.NetworkRetryNs,
 	)
 	return i, err
 }

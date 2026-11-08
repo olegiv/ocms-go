@@ -21,6 +21,7 @@ import (
 // handler has not started its response when the timeout expires, Timeout
 // answers 503 Service Unavailable. It aborts an incomplete response already
 // in progress so net/http does not signal that the partial body is complete.
+// It logs its own deadline when the parent request is still active.
 //
 // The handler runs in a goroutine of its own, beyond the reach of any
 // recovering middleware in front of Timeout, so Timeout recovers its panics

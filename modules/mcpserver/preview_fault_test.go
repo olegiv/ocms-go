@@ -95,13 +95,13 @@ func TestPreviewIssuanceFaultsAreRetryable(t *testing.T) {
 				if !store.IsSQLiteBusy(issueErr) || reserved == tc.immediate || link.URL.Reveal() != "" {
 					t.Fatalf("did not reach the intended SQLite lock boundary: reservation=%t, error=%v", reserved, issueErr)
 				}
-				requireDraftRetryCode(t, issueErr)
+				requirePreviewRetryMessage(t, issueErr)
 			} else {
 				link, issueErr := env.module.createPreviewLink(ctx, call, in)
 				if !errors.Is(issueErr, fault) || link.URL.Reveal() != "" {
 					t.Fatalf("did not reach %s: error=%v", tc.name, issueErr)
 				}
-				requireDraftRetryCode(t, issueErr)
+				requirePreviewRetryMessage(t, issueErr)
 			}
 			diagnostics := env.logs.find(tc.diagnostic)
 			if len(diagnostics) != 1 {
@@ -141,6 +141,15 @@ func TestPreviewIssuanceFaultsAreRetryable(t *testing.T) {
 			}
 			assertPreviewIssuanceRows(t, env, 1)
 		})
+	}
+}
+
+func requirePreviewRetryMessage(t *testing.T, err error) {
+	t.Helper()
+	requireDraftRetryCode(t, err)
+	mapped, _ := toToolError(err)
+	if !strings.HasPrefix(mapped.Message, "Preview ") {
+		t.Fatalf("preview issuance reported an unrelated failure: %q", mapped.Message)
 	}
 }
 

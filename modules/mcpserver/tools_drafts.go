@@ -101,20 +101,26 @@ func credentialUnavailable() error {
 	return v2.NewError(v2.ErrUnauthorized, "Credential unavailable")
 }
 
-// credentialFault logs a storage fault while checking credentials or their
-// authorization policy and reports it as retryable, like the OAuth re-check.
+const credentialCheckRetryMessage = "Credential check is temporarily unavailable; retry the call"
+const previewCheckRetryMessage = "Preview issuance is temporarily unavailable; retry the call"
+
 func (m *Module) credentialFault(ctx context.Context, msg string, err error, attrs ...any) error {
+	return m.draftCheckFault(ctx, credentialCheckRetryMessage, msg, err, attrs...)
+}
+
+// draftCheckFault logs the storage cause and gives the caller a safe retry message.
+func (m *Module) draftCheckFault(ctx context.Context, clientMessage, diagnostic string, err error, attrs ...any) error {
 	if canceled := util.RequestCancellation(ctx, err); canceled != nil {
 		return canceled
 	}
-	m.logger.ErrorContext(ctx, msg, append([]any{"error", err}, attrs...)...)
-	return retryableCredentialCheck(err)
+	m.logger.ErrorContext(ctx, diagnostic, append([]any{"error", err}, attrs...)...)
+	return v2.NewRetryableWriteError(clientMessage, err)
 }
 
 // retryableCredentialCheck is the retryable answer for a credential check that
 // could not run: the credential may well be valid.
 func retryableCredentialCheck(cause error) error {
-	return v2.NewRetryableWriteError("Credential check is temporarily unavailable; retry the call", cause)
+	return v2.NewRetryableWriteError(credentialCheckRetryMessage, cause)
 }
 
 // recheckError keeps a storage fault during the OAuth re-check retryable: an
@@ -224,7 +230,7 @@ func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in autho
 		// connection. Matching no rows keeps settings intact while holding
 		// the write lock through the policy read and link insertion.
 		if _, lockErr := q.DBHandle().ExecContext(ctx, `UPDATE mcp_settings SET agent_share_links = agent_share_links WHERE 0`); lockErr != nil {
-			return m.credentialFault(ctx, "failed to reserve MCP preview issuance writer", lockErr,
+			return m.draftCheckFault(ctx, previewCheckRetryMessage, "failed to reserve MCP preview issuance writer", lockErr,
 				"user_id", a.ActingUserID(), "page_id", in.PageID)
 		}
 		if shareErr := m.checkAgentShareLinks(ctx, q.DBHandle(), a.ActingUserID(), in.PageID); shareErr != nil {
@@ -238,7 +244,7 @@ func (m *Module) createPreviewLink(ctx context.Context, call *toolCall, in autho
 func (m *Module) checkAgentShareLinks(ctx context.Context, db settingsReader, userID, pageID int64) error {
 	settings, err := loadSettings(ctx, db)
 	if err != nil {
-		return m.credentialFault(ctx, "failed to check MCP preview sharing policy", err, "user_id", userID, "page_id", pageID)
+		return m.draftCheckFault(ctx, previewCheckRetryMessage, "failed to check MCP preview sharing policy", err, "user_id", userID, "page_id", pageID)
 	}
 	if !settings.AgentShareLinks {
 		return &v2.Error{Kind: v2.ErrForbidden, MachineCode: "share_links_disabled", Msg: "An administrator has turned off share links for AI clients"}

@@ -1,3 +1,5 @@
+-- Read all budgets in one snapshot. The /48 check reads the limit-th newest
+-- row so legacy entries above the limit yield the actual recovery time.
 -- name: GetOAuthDCRRegistrationBudget :one
 SELECT CAST((SELECT COUNT(*) FROM oauth_dcr_registrations global_count
     WHERE global_count.registered_at > sqlc.arg(global_cutoff)) AS INTEGER) AS total,
@@ -8,7 +10,14 @@ SELECT CAST((SELECT COUNT(*) FROM oauth_dcr_registrations global_count
         AND source_count.registered_at > sqlc.arg(source_cutoff)) AS INTEGER) AS source_total,
     CAST(COALESCE((SELECT MIN(source_first.registered_at) FROM oauth_dcr_registrations source_first
         WHERE source_first.source_key = sqlc.arg(source_key)
-        AND source_first.registered_at > sqlc.arg(source_cutoff)), 0) AS INTEGER) AS source_oldest;
+        AND source_first.registered_at > sqlc.arg(source_cutoff)), 0) AS INTEGER) AS source_oldest,
+    CAST(CASE WHEN CAST(sqlc.arg(network_min) AS TEXT) = '' THEN 0 ELSE COALESCE((
+        SELECT network.registered_at - sqlc.arg(source_cutoff) FROM oauth_dcr_registrations network
+        WHERE network.registered_at > sqlc.arg(source_cutoff)
+        AND ((network.source_key >= sqlc.arg(network_min) AND network.source_key < sqlc.arg(network_end))
+            OR network.source_key = sqlc.arg(zero_subnet))
+        ORDER BY network.registered_at DESC LIMIT 1 OFFSET sqlc.arg(network_offset)
+    ), 0) END AS INTEGER) AS network_retry_ns;
 
 -- name: RecordOAuthDCRRegistration :exec
 INSERT INTO oauth_dcr_registrations (client_id, source_key, registered_at)

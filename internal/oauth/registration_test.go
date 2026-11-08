@@ -4,9 +4,11 @@
 package oauth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -157,6 +159,91 @@ func TestDCRIPv6BudgetSurvivesRestart(t *testing.T) {
 	s.now = func() time.Time { return *now }
 	requireRegistrationLimit(t, registerFrom(s, "[2001:db8:1234:5678:ffff::2]:4321", registrationMetadata, nil), 3600)
 	requireRegistration(t, registerFrom(s, "[2001:db8:1234:5679::1]:1234", registrationMetadata, nil))
+}
+
+func TestDCRIPv6NetworkBudgetAcrossSubnetsAndServices(t *testing.T) {
+	f, now := registrationFixture(t)
+	for i := range 99 {
+		// The zero fourth hextet has the shortened ledger key 2001:db8::/64.
+		peer := fmt.Sprintf("[2001:db8:0:%x::1]:1234", i)
+		requireRegistration(t, registerFrom(f.s, peer, registrationMetadata, nil))
+	}
+	second, err := New(f.db, f.s.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.now = f.s.now
+	services := []*Service{f.s, second}
+	responses := make([]*httptest.ResponseRecorder, 8)
+	var wg sync.WaitGroup
+	for i := range responses {
+		wg.Go(func() {
+			peer := fmt.Sprintf("[2001:0db8:0000:%x:ffff::2]:4321", 256+i)
+			responses[i] = registerFrom(services[i%len(services)], peer, registrationMetadata, nil)
+		})
+	}
+	wg.Wait()
+	accepted := 0
+	for _, w := range responses {
+		if w.Code == http.StatusCreated {
+			accepted++
+		} else {
+			requireRegistrationLimit(t, w, 3600)
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("IPv6 network admitted %d concurrent registrations with one slot left", accepted)
+	}
+	requireDCRRows(t, f, 100)
+	requireRegistration(t, registerFrom(second, "[2001:db8:1::1]:1234", registrationMetadata, nil))
+	requireRegistration(t, registerFrom(second, "[::ffff:192.0.2.1]:1234", registrationMetadata, nil))
+	*now = now.Add(time.Hour)
+	requireRegistration(t, registerFrom(second, "[2001:db8::1]:1234", registrationMetadata, nil))
+}
+
+func TestDCRIPv6NetworkRetryAfterUsesLegacyLedger(t *testing.T) {
+	f, now := registrationFixture(t)
+	retentionExec(t, f, `WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<120)
+		INSERT INTO oauth_dcr_registrations (client_id, source_key, registered_at)
+		SELECT 'legacy' || x, printf('2001:db8:abcd:%x::/64', x), CASE WHEN x<=20 THEN ? ELSE ? END FROM n`,
+		now.Add(-50*time.Minute).UnixNano(), now.Add(-30*time.Minute).UnixNano())
+	const peer = "[2001:db8:abcd::1]:1234"
+	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 1800)
+	*now = now.Add(10 * time.Minute)
+	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 1200)
+	*now = now.Add(20 * time.Minute)
+	requireRegistration(t, registerFrom(f.s, peer, registrationMetadata, nil))
+}
+
+func TestDCRRetryAfterCombinesNetworkAndGlobalBudgets(t *testing.T) {
+	for _, tc := range []struct {
+		name                    string
+		firstNetwork, outsiders time.Duration
+		otherCount, want        int
+	}{
+		{"global outlasts network", -59 * time.Minute, -time.Minute, 1901, 540},
+		{"network outlasts global", -time.Minute, -9 * time.Minute, 1900, 3540},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, now := registrationFixture(t)
+			retentionExec(t, f, `WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<1901)
+				INSERT INTO oauth_dcr_registrations (client_id, source_key, registered_at)
+				SELECT 'other' || x, printf('198.18.%d.%d', x / 256, x % 256), ? FROM n WHERE x<=?
+				UNION ALL SELECT 'net' || x, printf('2001:db8:abcd:%x::/64', x), CASE WHEN x=1 THEN ? ELSE ? END FROM n WHERE x<=100`,
+				now.Add(tc.outsiders).UnixNano(), tc.otherCount, now.Add(tc.firstNetwork).UnixNano(), now.Add(-time.Minute).UnixNano())
+			var logs bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			const peer = "[2001:db8:abcd::1]:1234"
+			requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), tc.want)
+			if !strings.Contains(logs.String(), "reason=global_limit") {
+				t.Fatalf("overlapping budgets hid global saturation: %s", logs.String())
+			}
+			*now = now.Add(time.Duration(tc.want) * time.Second)
+			requireRegistration(t, registerFrom(f.s, peer, registrationMetadata, nil))
+		})
+	}
 }
 
 func TestDCRRateRefusalDoesNotWaitForSQLiteWriter(t *testing.T) {
@@ -329,8 +416,16 @@ func TestDCRGlobalRateRetainsLiveBudgets(t *testing.T) {
 		peerIP := fmt.Sprintf("198.18.%d.%d:3000", i/256, i%256)
 		requireRegistration(t, registerFrom(f.s, peerIP, registrationMetadata, nil))
 	}
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
 	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 3300)
 	requireRegistrationLimit(t, registerFrom(f.s, "203.0.113.1:3000", registrationMetadata, nil), 300)
+	requireRegistrationLimit(t, registerFrom(f.s, "203.0.113.2:3000", registrationMetadata, nil), 300)
+	if strings.Count(logs.String(), "reason=global_limit") != 1 || strings.Contains(logs.String(), "203.0.113.") {
+		t.Fatalf("global refusal diagnostics: %s", logs.String())
+	}
 	*now = now.Add(5 * time.Minute)
 	requireRegistration(t, registerFrom(f.s, "203.0.113.1:3000", registrationMetadata, nil))
 	requireRegistrationLimit(t, registerFrom(f.s, peer, registrationMetadata, nil), 3000)

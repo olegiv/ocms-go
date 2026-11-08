@@ -4,8 +4,10 @@
 package oauth
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -423,6 +425,47 @@ func TestClientCapAllowsRefreshButRefusesNewRegistration(t *testing.T) {
 	c.ID = "new-client"
 	if err := f.s.saveClient(t.Context(), c, "dcr", time.Now().Add(time.Hour).Unix()); err == nil {
 		t.Fatal("client cap exceeded")
+	}
+}
+
+func TestCIMDRegistryCapacityWarningIsThrottled(t *testing.T) {
+	const discovered = "https://client.test/discovered"
+	const pinned = "https://client.test/pinned"
+	f := metadataFixture(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(registeredClient{ID: discovered, Name: "Client", AuthMethod: "none", Redirects: []string{"https://client.test/callback"}}); err != nil {
+			t.Error(err)
+		}
+	})
+	now := time.Now()
+	f.s.now = func() time.Time { return now }
+	retentionExec(t, f, `WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<999)
+		INSERT INTO oauth_clients SELECT 'cap' || x, 'Client', '[]', 'cimd', 9999999999 FROM n`)
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	f.s.clients.preRegistered = map[string]registeredClient{
+		pinned: {ID: pinned, Name: "Pinned", Redirects: []string{"https://client.test/callback"}},
+	}
+	for _, id := range []string{discovered, pinned} {
+		if _, err := f.s.clients.resolve(t.Context(), id); problemCode(err) != "temporarily_unavailable" {
+			t.Fatalf("capacity refusal = %v", err)
+		}
+	}
+	if _, err := f.s.clients.resolve(t.Context(), f.values.Get("client_id")); err != nil {
+		t.Fatalf("cached client was refused at capacity: %v", err)
+	}
+	const warning = `level=WARN msg="OAuth client registration refused" source=cimd reason=registry_full`
+	if strings.Count(logs.String(), warning) != 1 || strings.Contains(logs.String(), "client.test") {
+		t.Fatalf("first capacity diagnostics: %s", logs.String())
+	}
+	now = now.Add(time.Minute)
+	if _, err := f.s.clients.resolve(t.Context(), pinned); problemCode(err) != "temporarily_unavailable" {
+		t.Fatalf("later capacity refusal = %v", err)
+	}
+	if strings.Count(logs.String(), warning) != 2 {
+		t.Fatalf("later capacity diagnostics: %s", logs.String())
 	}
 }
 

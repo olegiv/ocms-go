@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/olegiv/ocms-go/internal/contentpath"
 )
@@ -75,17 +77,35 @@ func run(ctx context.Context, args []string, input io.Reader, output io.Writer) 
 	}
 	client := pageClient(endpoint)
 	defer client.CloseIdleConnections()
-	encoder := json.NewEncoder(output)
 	for i, page := range pages {
 		summary, createErr := createPage(ctx, client, endpoint, key, page)
 		if createErr != nil {
 			return fmt.Errorf("page %d of %d: %w", i+1, len(pages), createErr)
 		}
-		if err = encoder.Encode(summary); err != nil {
+		if err = writePageSummary(output, summary); err != nil {
 			return fmt.Errorf("page %d was created but its result could not be written: %w", i+1, err)
 		}
 	}
 	return nil
+}
+
+func writePageSummary(output io.Writer, summary pageSummary) error {
+	data, err := json.Marshal(summary)
+	if err != nil {
+		return err
+	}
+	line := make([]byte, 0, len(data)+1)
+	// JSON permits C1 and bidi controls in strings. Escape them on the wire
+	// so terminals cannot interpret them and JSON readers recover the value.
+	for _, r := range string(data) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			line = fmt.Appendf(line, `\u%04x`, r)
+		} else {
+			line = utf8.AppendRune(line, r)
+		}
+	}
+	_, err = output.Write(append(line, '\n'))
+	return err
 }
 
 func pageEndpoint(raw string) (*url.URL, error) {
@@ -213,15 +233,10 @@ func createPage(ctx context.Context, client *http.Client, endpoint *url.URL, key
 	body, readErr := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	closeErr := resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusRequestTimeout {
-			return pageSummary{}, fmt.Errorf("page API returned HTTP %d; verify whether it was saved before retrying", resp.StatusCode)
+		if readErr != nil || closeErr != nil || int64(len(body)) > limit {
+			body = nil
 		}
-		if resp.StatusCode >= 400 && resp.StatusCode < 500 && readErr == nil && closeErr == nil && int64(len(body)) <= limit {
-			if reason := pageRefusalReason(body, key); reason != "" {
-				return pageSummary{}, fmt.Errorf("page API returned HTTP %d %s", resp.StatusCode, reason)
-			}
-		}
-		return pageSummary{}, fmt.Errorf("page API returned HTTP %d", resp.StatusCode)
+		return pageSummary{}, pageRefusal(resp, body, key)
 	}
 	var response struct {
 		Data pageSummary `json:"data"`
@@ -237,6 +252,37 @@ func createPage(ctx context.Context, client *http.Client, endpoint *url.URL, key
 	summary.Slug = strings.ReplaceAll(summary.Slug, key, "[redacted]")
 	summary.Status = strings.ReplaceAll(summary.Status, key, "[redacted]")
 	return summary, nil
+}
+
+func pageRefusal(resp *http.Response, body []byte, key string) error {
+	status := resp.StatusCode
+	message := fmt.Sprintf("page API returned HTTP %d", status)
+	switch {
+	case status >= 500 || status == http.StatusRequestTimeout:
+		message += "; verify whether it was saved before retrying"
+	case status >= 400:
+		reason := pageRefusalReason(body, key)
+		if reason == "" {
+			reason = "(refusal body unusable: unreadable, over 16 KiB, or not a JSON error envelope)"
+		}
+		message += " " + reason
+	case status >= 300 && status < 400:
+		if target, err := resp.Location(); err == nil && (target.Scheme == "https" || target.Scheme == "http") && target.Hostname() != "" && len(target.Host) <= 255 {
+			message += "; redirects to " + safeTerminalText(target.Scheme+"://"+target.Host, key)
+		}
+	}
+	if values := resp.Header.Values("Retry-After"); len(values) == 1 && !strings.Contains(values[0], key) {
+		var retry string
+		if seconds, err := strconv.ParseUint(values[0], 10, 63); err == nil {
+			retry = strconv.FormatUint(seconds, 10) + "s"
+		} else if date, dateErr := http.ParseTime(values[0]); dateErr == nil {
+			retry = date.UTC().Format(time.RFC3339)
+		}
+		if retry != "" && !strings.Contains(retry, key) {
+			message += "; retry after " + retry
+		}
+	}
+	return errors.New(message)
 }
 
 func pageRefusalReason(body []byte, key string) string {
@@ -259,11 +305,15 @@ func pageRefusalReason(body []byte, key string) string {
 		reason.WriteString(" [" + field + "=" + detail.Details[field] + "]")
 	}
 	// Redact credentials before escaping terminal controls or truncating text.
-	quoted := strconv.Quote(strings.ReplaceAll(reason.String(), key, "[redacted]"))
-	message := quoted[1 : len(quoted)-1]
+	message := safeTerminalText(reason.String(), key)
 	if len(message) > maxRefusalMessage {
 		const ellipsis = "…"
 		message = strings.ToValidUTF8(message[:maxRefusalMessage-len(ellipsis)], "") + ellipsis
 	}
 	return message
+}
+
+func safeTerminalText(raw, key string) string {
+	quoted := strconv.Quote(strings.ReplaceAll(raw, key, "[redacted]"))
+	return quoted[1 : len(quoted)-1]
 }
