@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/oauth"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 type fakeOAuthEndpoints struct{}
@@ -171,5 +172,62 @@ func TestProductionOAuthRoutesStayGated(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("production router did not reach the serving boundary")
+	}
+}
+
+func TestProductionDCRInitialAccessToken(t *testing.T) {
+	const child = "OCMS_TEST_PRODUCTION_DCR_TOKEN"
+	const token = "a4bc19e5307480df69b6528f7253ee3346de303ff40d9408ee3cbd61a29c5f74"
+	if os.Getenv(child) != "1" {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestProductionDCRInitialAccessToken$")
+		cmd.Dir = t.TempDir()
+		cmd.Env = []string{
+			child + "=1",
+			"OCMS_ENV=development",
+			"OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!!",
+			"OCMS_DB_PATH=oauth.db",
+			"OCMS_SITE_URL=http://127.0.0.1:8080",
+			"OCMS_OAUTH_ENABLED=true",
+			"OCMS_OAUTH_ALLOW_DCR=true",
+			"OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN=" + token,
+		}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("protected registration through the server router: %v\n%s", err, out)
+		}
+		return
+	}
+	db, err := store.NewDB("oauth.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := store.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.New(db).UpsertModule(t.Context(), store.UpsertModuleParams{Name: "mcp", IsActive: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(func(router chi.Router) error {
+		for _, tc := range []struct {
+			header string
+			status int
+		}{{"", http.StatusUnauthorized}, {"Bearer " + token, http.StatusCreated}} {
+			body := strings.NewReader(`{"client_name":"Fixture","redirect_uris":["https://client.test/callback"]}`)
+			r := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8080/oauth/register", body)
+			r.Header.Set("Content-Type", "application/json")
+			if tc.header != "" {
+				r.Header.Set("Authorization", tc.header)
+			}
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, r)
+			if w.Code != tc.status {
+				return fmt.Errorf("registration status = %d, want %d", w.Code, tc.status)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }

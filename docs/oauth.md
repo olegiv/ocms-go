@@ -262,6 +262,27 @@ identity. Registrations use the existing fifteen-minute SQLite metadata
 cache; removing a pin resumes live discovery after that cache expires.
 Revoke account grants separately to remove existing access immediately.
 
+### Protected dynamic registration
+
+Set `OCMS_OAUTH_ALLOW_DCR=true` and supply a separate
+`OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN` to restrict who can register. Generate
+the token with `openssl rand -hex 32`, store it as a server secret and give
+it privately to clients that support initial access tokens. They send it
+in the `Authorization: Bearer <token>` header on `POST /oauth/register`.
+Use HTTPS outside development loopback. Malformed configured values
+prevent startup.
+
+Requests without a valid token cannot consume registration slots or
+admission budgets in protected mode. Clients with the token still share
+the same limits. The token is for registration only. Previously
+registered clients continue to authorize, exchange, refresh and revoke
+as usual. Rotating the setting and restarting changes who can register
+next. Discovery still advertises the registration endpoint when enabled.
+Keep the header out of proxy logs.
+
+Leave DCR disabled when CIMD or pre-registered clients cover the intended
+integrations. If clients need DCR, configure an initial access token.
+
 ## Draft authoring and scope upgrades
 
 R1.5 removes the temporary compatibility probe and its flag. Actual draft

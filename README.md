@@ -389,6 +389,7 @@ controls the issuer, not cleanup of previously stored evidence.
 | `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | Exact HTTPS client metadata host allowlist: bare lowercase hostnames, comma or space separated; unset uses the default, set empty allows no live discovery (pre-registered clients and DCR only) | `claude.ai,chatgpt.com` | No |
 | `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | JSON array of owner-reviewed public client metadata; at most 20 documents / 64 KiB | Empty | No |
 | `OCMS_OAUTH_ALLOW_DCR` | Allow bounded public-client dynamic registration | `false` | No |
+| `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN` | Require a separate Bearer credential for new dynamic client registrations. Generate with `openssl rand -hex 32` | Empty | No |
 | `OCMS_OAUTH_ACCESS_TTL` | OAuth access lifetime in seconds (60–86400) | `3600` | No |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | Absolute rotating refresh-family lifetime (1–90 days) | `30` | No |
 | `OCMS_PREVIEW_LINK_TTL_HOURS` | Preview share-link lifetime in hours (1–24), capped by the issuing credential's expiry | `24` | No |

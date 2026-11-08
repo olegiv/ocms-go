@@ -3,7 +3,43 @@
 
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestDCRInitialAccessTokenConfiguration(t *testing.T) {
+	const name = "OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN"
+	const valid = "a4bc19e5307480df69b6528f7253ee3346de303ff40d9408ee3cbd61a29c5f74"
+	t.Setenv("OCMS_SESSION_SECRET", testSessionSecret)
+	t.Setenv("OCMS_ENV", "development")
+	for _, tc := range []struct {
+		name, value string
+		valid       bool
+	}{
+		{"unset", "", true},
+		{"random hex", valid, true},
+		{"short", valid[:63], false},
+		{"whitespace", " " + valid, false},
+		{"non-hex", "!" + valid[1:], false},
+		{"repeated", strings.Repeat("aB012345", 8), false},
+		{"low diversity", strings.Repeat("0", 63) + "1", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(name, tc.value)
+			cfg, err := Load()
+			if tc.valid {
+				if err != nil || cfg.OAuthDCRInitialAccessToken != tc.value {
+					t.Fatalf("valid token configuration was rejected: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), name) || strings.Contains(err.Error(), tc.value) {
+				t.Fatal("malformed token must fail with a safe configuration error")
+			}
+		})
+	}
+}
 
 func TestOAuthOptInConfiguration(t *testing.T) {
 	for _, tc := range []struct {

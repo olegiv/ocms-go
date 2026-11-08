@@ -27,6 +27,7 @@ import (
 	"github.com/go-oauth2/oauth2/v4/manage"
 	"github.com/go-oauth2/oauth2/v4/server"
 
+	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -59,8 +60,10 @@ type Options struct {
 	// JSON array. Empty keeps live metadata discovery as the only CIMD source.
 	PreRegisteredClients string
 	AllowDCR             bool
-	AccessTTL            time.Duration
-	RefreshTTL           time.Duration
+	// DCRInitialAccessToken restricts new registration when nonempty.
+	DCRInitialAccessToken string
+	AccessTTL             time.Duration
+	RefreshTTL            time.Duration
 }
 
 // Principal is the currently authorized account and grant, never agent-supplied identity.
@@ -75,14 +78,15 @@ type Principal struct {
 
 // Service owns OAuth persistence and protocol integration.
 type Service struct {
-	db              *sql.DB
-	q               *store.Queries
-	options         Options
-	clients         *clientResolver
-	now             func() time.Time
-	dcrWrites       chan struct{}
-	dcrRefusalLogs  [dcrRefusalKinds]atomic.Int64
-	cimdCapacityLog atomic.Int64
+	db                        *sql.DB
+	q                         *store.Queries
+	options                   Options
+	clients                   *clientResolver
+	now                       func() time.Time
+	dcrWrites                 chan struct{}
+	dcrInitialAccessTokenHash string
+	dcrRefusalLogs            [dcrRefusalKinds]atomic.Int64
+	cimdCapacityLog           atomic.Int64
 }
 
 // New constructs an issuer. HTTP is permitted only for literal development loopback origins.
@@ -110,7 +114,18 @@ func New(db *sql.DB, options Options) (*Service, error) {
 	if err := validateAllowedHosts(options.AllowedHosts); err != nil {
 		return nil, err
 	}
-	s := &Service{db: db, q: store.New(db), options: options, now: time.Now, dcrWrites: make(chan struct{}, 1)}
+	if err := config.ValidateDCRInitialAccessToken(options.DCRInitialAccessToken); err != nil {
+		return nil, err
+	}
+	var initialTokenHash string
+	if options.DCRInitialAccessToken != "" {
+		initialTokenHash = tokenHash(options.DCRInitialAccessToken)
+		options.DCRInitialAccessToken = ""
+	}
+	s := &Service{
+		db: db, q: store.New(db), options: options, now: time.Now,
+		dcrWrites: make(chan struct{}, 1), dcrInitialAccessTokenHash: initialTokenHash,
+	}
 	s.clients = newClientResolver(s)
 	if err := s.clients.loadPreRegistered(options.PreRegisteredClients); err != nil {
 		return nil, err

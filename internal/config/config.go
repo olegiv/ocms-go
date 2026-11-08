@@ -5,6 +5,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -56,13 +57,14 @@ type Config struct {
 	ActiveTheme         string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
 	SiteURL             string `env:"OCMS_SITE_URL"` // Full site URL written into site config on startup (overrides the admin setting)
 
-	OAuthEnabled              bool   `env:"OCMS_OAUTH_ENABLED" envDefault:"false"`
-	OAuthCIMDAllowedHosts     string `env:"OCMS_OAUTH_CIMD_ALLOWED_HOSTS" envDefault:"claude.ai,chatgpt.com"`
-	OAuthPreRegisteredClients string `env:"OCMS_OAUTH_PRE_REGISTERED_CLIENTS"`
-	OAuthAllowDCR             bool   `env:"OCMS_OAUTH_ALLOW_DCR" envDefault:"false"`
-	OAuthAccessTTL            int    `env:"OCMS_OAUTH_ACCESS_TTL" envDefault:"3600"`
-	OAuthRefreshTTLDays       int    `env:"OCMS_OAUTH_REFRESH_TTL_DAYS" envDefault:"30"`
-	AIDisabled                bool   `env:"OCMS_AI_DISABLED" envDefault:"false"`
+	OAuthEnabled               bool   `env:"OCMS_OAUTH_ENABLED" envDefault:"false"`
+	OAuthCIMDAllowedHosts      string `env:"OCMS_OAUTH_CIMD_ALLOWED_HOSTS" envDefault:"claude.ai,chatgpt.com"`
+	OAuthPreRegisteredClients  string `env:"OCMS_OAUTH_PRE_REGISTERED_CLIENTS"`
+	OAuthAllowDCR              bool   `env:"OCMS_OAUTH_ALLOW_DCR" envDefault:"false"`
+	OAuthDCRInitialAccessToken string `env:"OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN"`
+	OAuthAccessTTL             int    `env:"OCMS_OAUTH_ACCESS_TTL" envDefault:"3600"`
+	OAuthRefreshTTLDays        int    `env:"OCMS_OAUTH_REFRESH_TTL_DAYS" envDefault:"30"`
+	AIDisabled                 bool   `env:"OCMS_AI_DISABLED" envDefault:"false"`
 
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching
@@ -228,6 +230,9 @@ func Load() (*Config, error) {
 	if cfg.OAuthEnabled && (cfg.OAuthAccessTTL < 60 || cfg.OAuthAccessTTL > 86400 || cfg.OAuthRefreshTTLDays < 1 || cfg.OAuthRefreshTTLDays > 90) {
 		return nil, fmt.Errorf("OAuth access TTL must be 60–86400 seconds and refresh TTL 1–90 days")
 	}
+	if err := ValidateDCRInitialAccessToken(cfg.OAuthDCRInitialAccessToken); err != nil {
+		return nil, err
+	}
 
 	// Production hardening, for staging too: prevent default seeding
 	// (allowed when demo mode is explicitly enabled).
@@ -283,6 +288,25 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// DCRInitialAccessTokenLength is the hex-encoded length of 32 random bytes.
+const DCRInitialAccessTokenLength = 64
+
+// ValidateDCRInitialAccessToken accepts an unset token or a randomly generated
+// hexadecimal credential for protected OAuth client registration.
+func ValidateDCRInitialAccessToken(token string) error {
+	if token == "" {
+		return nil
+	}
+	if len(token) == DCRInitialAccessTokenLength {
+		normalized := strings.ToLower(token)
+		if _, err := hex.DecodeString(token); err == nil &&
+			countDistinctChars(normalized) >= MinProductionSessionSecretDistinctChars && !isRepeatedPattern(normalized) {
+			return nil
+		}
+	}
+	return fmt.Errorf("OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN must be 64 random hex characters; generate it with openssl rand -hex 32")
 }
 
 // MinSeedAdminPasswordLength is the shortest OCMS_SEED_ADMIN_PASSWORD

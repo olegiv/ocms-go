@@ -221,6 +221,7 @@ Summary (grouped by concern; source of truth: `internal/config/config.go`):
 | `OCMS_OAUTH_CIMD_ALLOWED_HOSTS` | No | `claude.ai,chatgpt.com` | Exact HTTPS client metadata host allowlist (bare lowercase hostnames; unset uses the default, set empty allows no live discovery: pre-registered clients and DCR only) |
 | `OCMS_OAUTH_PRE_REGISTERED_CLIENTS` | No | Empty | JSON array of owner-reviewed public client metadata; at most 20 documents / 64 KiB |
 | `OCMS_OAUTH_ALLOW_DCR` | No | `false` | Allow bounded public-client dynamic registration |
+| `OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN` | No | Empty | Require a separate Bearer credential for new dynamic client registrations. Generate with `openssl rand -hex 32` |
 | `OCMS_OAUTH_ACCESS_TTL` | No | `3600` | OAuth access lifetime in seconds (60–86400) |
 | `OCMS_OAUTH_REFRESH_TTL_DAYS` | No | `30` | Absolute rotating refresh-family lifetime (1–90 days) |
 | `OCMS_PREVIEW_LINK_TTL_HOURS` | No | `24` | Preview share-link lifetime in hours (1–24), capped by the issuing credential's expiry |

@@ -417,7 +417,7 @@ func (s *Service) Discovery(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, metadata)
 }
 
-// Register implements optional, bounded public-client registration.
+// Register implements optional, bounded dynamic client registration.
 func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	if !s.options.AllowDCR {
 		http.NotFound(w, r)
@@ -426,6 +426,9 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.authorizeDCR(w, r) {
 		return
 	}
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

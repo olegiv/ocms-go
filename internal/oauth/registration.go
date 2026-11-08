@@ -5,13 +5,16 @@ package oauth
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"log/slog"
+	"net/http"
 	"net/netip"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -46,6 +49,43 @@ type dcrSource struct {
 	networkMin string
 	networkEnd string
 	zeroSubnet string
+}
+
+// authorizeDCR checks protected registration before metadata parsing or admission.
+func (s *Service) authorizeDCR(w http.ResponseWriter, r *http.Request) bool {
+	if s.dcrInitialAccessTokenHash == "" {
+		return true
+	}
+	const challenge = `Bearer realm="client-registration"`
+	headers := r.Header.Values("Authorization")
+	if len(headers) > 1 {
+		w.Header().Set("WWW-Authenticate", challenge+`, error="invalid_request"`)
+		WriteProblem(w, problem("invalid_request"))
+		return false
+	}
+	if len(headers) == 1 {
+		scheme, token, _ := strings.Cut(headers[0], " ")
+		if strings.EqualFold(scheme, "Bearer") {
+			token = strings.TrimLeft(token, " ")
+			if strings.ContainsAny(token, " \t,") {
+				w.Header().Set("WWW-Authenticate", challenge+`, error="invalid_request"`)
+				WriteProblem(w, problem("invalid_request"))
+				return false
+			}
+			if len(token) == config.DCRInitialAccessTokenLength &&
+				subtle.ConstantTimeCompare([]byte(tokenHash(token)), []byte(s.dcrInitialAccessTokenHash)) == 1 {
+				return true
+			}
+			w.Header().Set("WWW-Authenticate", challenge+`, error="invalid_token"`)
+			p := problem("invalid_token")
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": p.Code, "error_description": p.Description})
+			return false
+		}
+	}
+	w.Header().Set("WWW-Authenticate", challenge)
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusUnauthorized)
+	return false
 }
 
 // parseDCRSource keeps the /64 source key for admission and eviction, while

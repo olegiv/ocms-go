@@ -24,11 +24,12 @@ import (
 // A log record carrying one of these writes the secret in clear text to stdout,
 // to OCMS_ERROR_LOG_PATH, and to every log shipper downstream of them.
 var secretConfigFields = map[string]bool{
-	"SessionSecret":     true,
-	"HCaptchaSecretKey": true,
-	"EmbedProxyToken":   true,
-	"MFAKey":            true,
-	"SeedAdminPassword": true,
+	"SessionSecret":              true,
+	"HCaptchaSecretKey":          true,
+	"EmbedProxyToken":            true,
+	"MFAKey":                     true,
+	"SeedAdminPassword":          true,
+	"OAuthDCRInitialAccessToken": true,
 }
 
 // nonSecretConfigFields are fields whose names match secretNamePattern but hold

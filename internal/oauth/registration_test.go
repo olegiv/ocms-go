@@ -78,6 +78,91 @@ func fillRegistrationBudget(t *testing.T, s *Service, remote string, headers htt
 	return first
 }
 
+func TestProtectedDCRRejectsBeforeAdmission(t *testing.T) {
+	f, _ := registrationFixture(t)
+	const token = "a4bc19e5307480df69b6528f7253ee3346de303ff40d9408ee3cbd61a29c5f74"
+	s, err := New(f.db, Options{Issuer: f.s.Issuer(), AllowDCR: true, DCRInitialAccessToken: token})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.now = f.s.now
+	f.s = s
+	if s.options.DCRInitialAccessToken != "" {
+		t.Fatal("issuer retained the plaintext registration token")
+	}
+	const bearer = "Bearer " + token
+	for _, tc := range []struct {
+		name, query string
+		headers     []string
+		status      int
+		code        string
+	}{
+		{name: "missing", status: http.StatusUnauthorized},
+		{name: "query only", query: "?access_token=" + token, status: http.StatusUnauthorized},
+		{name: "unsupported scheme", headers: []string{"Basic " + token}, status: http.StatusUnauthorized},
+		{name: "wrong token", headers: []string{"Bearer " + strings.ToUpper(token)}, status: http.StatusUnauthorized, code: "invalid_token"},
+		{name: "empty bearer", headers: []string{"Bearer"}, status: http.StatusUnauthorized, code: "invalid_token"},
+		{name: "multiple lines", headers: []string{bearer, bearer}, status: http.StatusBadRequest, code: "invalid_request"},
+		{name: "combined", headers: []string{bearer + ", " + bearer}, status: http.StatusBadRequest, code: "invalid_request"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.NewReader(registrationMetadata)
+			r := httptest.NewRequest(http.MethodPost, "/oauth/register"+tc.query, body)
+			r.Header.Set("Content-Type", "application/json")
+			for _, header := range tc.headers {
+				r.Header.Add("Authorization", header)
+			}
+			w := httptest.NewRecorder()
+			s.Register(w, r)
+			challenge := `Bearer realm="client-registration"`
+			if tc.code != "" {
+				challenge += `, error="` + tc.code + `"`
+			}
+			if w.Code != tc.status || w.Header().Get("WWW-Authenticate") != challenge || w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("registration refusal = %d with challenge %q", w.Code, w.Header().Get("WWW-Authenticate"))
+			}
+			if body.Len() != len(registrationMetadata) || strings.Contains(w.Body.String(), token) {
+				t.Fatal("refusal read metadata or returned the token")
+			}
+		})
+	}
+	for i := range dcrRegistrationsTotal + 1 {
+		remote := fmt.Sprintf("198.18.%d.%d:12345", i/256, i%256)
+		if w := registerFrom(s, remote, registrationMetadata, nil); w.Code != http.StatusUnauthorized {
+			t.Fatalf("unauthenticated registration from %s returned %d", remote, w.Code)
+		}
+	}
+	requireDCRRows(t, f, 0)
+	var ledger int
+	if err := f.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM oauth_dcr_registrations").Scan(&ledger); err != nil || ledger != 0 {
+		t.Fatalf("unauthenticated requests left %d admissions: %v", ledger, err)
+	}
+
+	headers := http.Header{"Authorization": {"bEaReR  " + token}}
+	const peer = "192.0.2.3:3000"
+	discovery := httptest.NewRecorder()
+	s.Discovery(discovery, httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil))
+	if !strings.Contains(discovery.Body.String(), s.Issuer()+"/oauth/register") || strings.Contains(discovery.Body.String(), token) {
+		t.Fatal("protected registration discovery changed or disclosed the token")
+	}
+	f.redeem(t, f.code(t)) // Cached CIMD remains available.
+	clientID := fillRegistrationBudget(t, s, peer, headers)
+	f.values.Set("client_id", clientID)
+	requireRegistrationLimit(t, registerFrom(s, peer, registrationMetadata, headers), 3600)
+	first := f.redeem(t, f.code(t)) // The registered public client uses its usual OAuth flow.
+	status, rotated := f.exchange(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh(first)}})
+	if status != http.StatusOK {
+		t.Fatalf("registered client refresh = %d", status)
+	}
+	if status, _ := f.revoke(clientID, refresh(rotated)); status != http.StatusOK {
+		t.Fatalf("registered client revocation = %d", status)
+	}
+	s.options.AllowDCR = false
+	if w := registerFrom(s, peer, registrationMetadata, headers); w.Code != http.StatusNotFound {
+		t.Fatalf("token enabled a disabled registration endpoint: %d", w.Code)
+	}
+}
+
 func TestDCRRegistrationBudgetAndRecovery(t *testing.T) {
 	f, now := registrationFixture(t)
 	const peer = "192.0.2.1:3000"

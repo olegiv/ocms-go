@@ -2024,10 +2024,12 @@ func run(inspectRouter func(chi.Router) error) (runErr error) {
 	if cfg.OAuthEnabled {
 		oauthService, err = oauth.New(db, oauth.Options{
 			Issuer: cfg.SiteURL, Development: cfg.IsDevelopment(),
-			AllowedHosts:         oauth.SplitAllowedHosts(cfg.OAuthCIMDAllowedHosts),
-			PreRegisteredClients: cfg.OAuthPreRegisteredClients,
-			AllowDCR:             cfg.OAuthAllowDCR, AccessTTL: time.Duration(cfg.OAuthAccessTTL) * time.Second,
-			RefreshTTL: time.Duration(cfg.OAuthRefreshTTLDays) * 24 * time.Hour,
+			AllowedHosts:          oauth.SplitAllowedHosts(cfg.OAuthCIMDAllowedHosts),
+			PreRegisteredClients:  cfg.OAuthPreRegisteredClients,
+			AllowDCR:              cfg.OAuthAllowDCR,
+			DCRInitialAccessToken: cfg.OAuthDCRInitialAccessToken,
+			AccessTTL:             time.Duration(cfg.OAuthAccessTTL) * time.Second,
+			RefreshTTL:            time.Duration(cfg.OAuthRefreshTTLDays) * 24 * time.Hour,
 		})
 		if err != nil {
 			return fmt.Errorf("initializing OAuth: %w", err)
