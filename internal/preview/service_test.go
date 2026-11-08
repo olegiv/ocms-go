@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -286,6 +287,64 @@ func TestPreviewCredentialRevocationAndExpiry(t *testing.T) {
 			}
 			if _, err := f.svc.Resolve(f.ctx, token(t, link)); !errors.Is(err, preview.ErrUnavailable) {
 				t.Fatal("revoked credential link resurrected")
+			}
+		})
+	}
+}
+
+func TestPreviewQuotasSeparateHumanAndAgentIssuance(t *testing.T) {
+	for _, scenario := range []string{"active", "hourly"} {
+		t.Run(scenario, func(t *testing.T) {
+			f := setup(t)
+			key, err := f.q.CreateAPIKey(f.ctx, store.CreateAPIKeyParams{
+				Name: "Quota fixture", KeyHash: "unused", KeyPrefix: "fixture", Permissions: `["mcp:access","mcp:drafts"]`,
+				CreatedBy: f.user.ID, IsActive: true, CreatedAt: f.now, UpdatedAt: f.now,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.exec(t, "INSERT INTO oauth_clients(id,name,redirect_uris,source,expires_at) VALUES('quota-client','Fixture','[]','cimd',?)", f.now.Add(48*time.Hour).Unix())
+			f.exec(t, "INSERT INTO oauth_grants(id,user_id,client_id,scopes,resource,session_version,created_at,expires_at) VALUES('quota-grant',?,'quota-client','mcp:access mcp:drafts','https://cms.test/api/mcp',?,?,?)",
+				f.user.ID, f.user.SessionVersion, f.now.Unix(), f.now.Add(time.Hour).Unix())
+
+			count, revokedAt := preview.MaxActiveLinks, int64(0)
+			if scenario == "hourly" {
+				count, revokedAt = preview.MaxIssuedPerHour, f.now.Unix()
+			}
+			insert := func(id string, keyID, grantID any, created int64) {
+				f.exec(t, `INSERT INTO preview_links(token_hash,page_id,revision,created_by,session_version,issuing_key_id,issuing_grant_id,created_at,expires_at,revoked_at)
+					VALUES(?,?,?,?,?,?,?,?,?,?)`,
+					id, f.page.ID, f.page.Revision, f.user.ID, f.user.SessionVersion, keyID, grantID, created, f.now.Add(time.Hour).Unix(), revokedAt)
+			}
+			oldest := f.now.Add(-20 * time.Minute).Unix()
+			for i := range count {
+				var keyID, grantID any
+				if i%2 == 0 {
+					keyID = key.ID
+				} else {
+					grantID = "quota-grant"
+				}
+				insert(fmt.Sprintf("agent-%d", i), keyID, grantID, oldest+int64(i))
+			}
+			humanLink := f.issue(t)
+			if _, resolveErr := f.svc.Resolve(f.ctx, token(t, humanLink)); resolveErr != nil {
+				t.Fatalf("human link did not open: %v", resolveErr)
+			}
+			for _, principal := range []provenance.Principal{
+				{UserID: f.user.ID, Source: "api", APIKeyID: key.ID},
+				{UserID: f.user.ID, Source: "oauth", OAuthGrantID: "quota-grant", OAuthClientID: "quota-client"},
+			} {
+				_, issueErr := f.svc.Issue(f.ctx, principal, f.page.ID, f.page.Revision, "https://cms.test", nil)
+				if scenario == "active" {
+					if !errors.Is(issueErr, preview.ErrActiveLimit) {
+						t.Errorf("%s did not share the agent active cap: %v", principal.Source, issueErr)
+					}
+				} else {
+					var limited *preview.RateLimitError
+					if !errors.As(issueErr, &limited) || limited.RetryAfterSeconds != 2401 {
+						t.Errorf("%s did not share the agent hourly cap and cutoff: %v", principal.Source, issueErr)
+					}
+				}
 			}
 		})
 	}

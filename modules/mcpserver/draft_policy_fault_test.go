@@ -384,14 +384,25 @@ func assertDraftPolicyError(t *testing.T, result *mcp.CallToolResult, code strin
 	}
 	for _, encoded := range []string{resultText(result), string(structured)} {
 		var envelope struct {
-			Error     toolError `json:"error"`
-			Retryable *bool     `json:"retryable"`
+			Error             toolError `json:"error"`
+			Retryable         *bool     `json:"retryable"`
+			RetryAfterSeconds int64     `json:"retry_after_seconds"`
 		}
 		if err = json.Unmarshal([]byte(encoded), &envelope); err != nil {
 			t.Fatal(err)
 		}
 		if !result.IsError || envelope.Error.Code != code || envelope.Retryable == nil || *envelope.Retryable != retryable {
 			t.Errorf("policy result=%s, want %s retryable=%t", encoded, code, retryable)
+		}
+		var wantDelay int64
+		if retryable {
+			wantDelay = 1
+			if !strings.Contains(envelope.Error.Message, "stop after two retries") {
+				t.Errorf("policy result lacks a retry bound: %s", encoded)
+			}
+		}
+		if envelope.RetryAfterSeconds != wantDelay {
+			t.Errorf("policy result=%s, want retry delay %ds", encoded, wantDelay)
 		}
 		if strings.Contains(encoded, "no such column") || strings.Contains(encoded, "sf10_unavailable") {
 			t.Error("internal storage cause leaked into the tool response")

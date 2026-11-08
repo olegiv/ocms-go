@@ -155,16 +155,17 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 		if _, workErr = Load(ctx, work.Q, pageID, revision); workErr != nil {
 			return workErr
 		}
-		count, workErr := work.Q.CountActivePreviewLinks(ctx, store.CountActivePreviewLinksParams{CreatedBy: user.ID, ExpiresAt: now.Unix()})
+		agentIssued := principal.APIKeyID != 0 || principal.OAuthGrantID != ""
+		count, workErr := work.Q.CountActivePreviewLinks(ctx, store.CountActivePreviewLinksParams{CreatedBy: user.ID, ExpiresAt: now.Unix(), AgentIssued: agentIssued})
 		if workErr != nil {
 			return workErr
 		}
-		issued, workErr := work.Q.CountIssuedPreviewLinks(ctx, store.CountIssuedPreviewLinksParams{CreatedBy: user.ID, CreatedAt: now.Add(-time.Hour).Unix()})
+		issued, workErr := work.Q.CountIssuedPreviewLinks(ctx, store.CountIssuedPreviewLinksParams{CreatedBy: user.ID, CreatedAt: now.Add(-time.Hour).Unix(), AgentIssued: agentIssued})
 		if workErr != nil {
 			return workErr
 		}
 		if issued >= MaxIssuedPerHour {
-			cutoff, cutoffErr := work.Q.GetPreviewIssuanceCutoff(ctx, store.GetPreviewIssuanceCutoffParams{CreatedBy: user.ID, Since: now.Add(-time.Hour).Unix(), IssuanceOffset: MaxIssuedPerHour - 1})
+			cutoff, cutoffErr := work.Q.GetPreviewIssuanceCutoff(ctx, store.GetPreviewIssuanceCutoffParams{CreatedBy: user.ID, Since: now.Add(-time.Hour).Unix(), AgentIssued: agentIssued, IssuanceOffset: MaxIssuedPerHour - 1})
 			if cutoffErr != nil {
 				return fmt.Errorf("load preview issuance cutoff: %w", cutoffErr)
 			}

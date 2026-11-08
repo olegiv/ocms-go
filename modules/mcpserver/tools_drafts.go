@@ -114,7 +114,7 @@ func (m *Module) credentialFault(ctx context.Context, msg string, err error, att
 // retryableCredentialCheck is the retryable answer for a credential check that
 // could not run: the credential may well be valid.
 func retryableCredentialCheck(cause error) error {
-	return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Credential check is temporarily unavailable; retry the call", Wrap: cause}
+	return v2.NewRetryableWriteError("Credential check is temporarily unavailable; retry the call", cause)
 }
 
 // recheckError keeps a storage fault during the OAuth re-check retryable: an
@@ -145,14 +145,14 @@ func (m *Module) authoringService(ctx context.Context, call *toolCall) (*authori
 			return m.credentialFault(ctx, "failed to re-check MCP draft write settings", err, "user_id", call.identity.userID)
 		}
 		if linkPolicy(settings) != linkPolicy(call.settings) || settings.AllowDrafts != call.settings.AllowDrafts {
-			return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Draft link policy changed; retry with the same request_id"}
+			return v2.NewRetryableWriteError("Draft link policy changed; retry with the same request_id", nil)
 		}
 		scopes, _, err := m.credentialScopes(ctx, q, call.identity)
 		if err != nil {
 			return err
 		}
 		if (settings.AllowDrafts && slices.Contains(scopes, model.PermissionPagesRead)) != service.Access.AllDrafts {
-			return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable", Msg: "Draft read policy changed; retry with the same request_id"}
+			return v2.NewRetryableWriteError("Draft read policy changed; retry with the same request_id", nil)
 		}
 		return nil
 	}

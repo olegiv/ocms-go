@@ -9,6 +9,33 @@ import (
 	"context"
 )
 
+const canExchangeCodeForDCRClient = `-- name: CanExchangeCodeForDCRClient :one
+SELECT CAST(EXISTS (
+    SELECT 1 FROM oauth_clients o
+    WHERE o.id = ?1 AND o.source = 'dcr'
+      AND (o.expires_at > ?2 OR EXISTS (
+          SELECT 1 FROM oauth_codes c JOIN oauth_grants g ON g.id = c.grant_id
+          WHERE c.code_hash = ?3 AND g.client_id = o.id
+            AND c.consumed_at = 0 AND c.expires_at > ?2
+            AND g.revoked_at = 0 AND g.expires_at > ?2
+      ))
+) AS BOOLEAN)
+`
+
+type CanExchangeCodeForDCRClientParams struct {
+	ClientID string `json:"client_id"`
+	Now      int64  `json:"now"`
+	CodeHash string `json:"code_hash"`
+}
+
+// Check both states together so concurrent redemption cannot hide a replay.
+func (q *Queries) CanExchangeCodeForDCRClient(ctx context.Context, arg CanExchangeCodeForDCRClientParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, canExchangeCodeForDCRClient, arg.ClientID, arg.Now, arg.CodeHash)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const consumeOAuthCode = `-- name: ConsumeOAuthCode :execrows
 UPDATE oauth_codes SET consumed_at = ? WHERE code_hash = ? AND consumed_at = 0
 `
@@ -184,9 +211,8 @@ type ExtendDCROAuthClientParams struct {
 	ID        string `json:"id"`
 }
 
-// A dynamically registered client is created short-lived, so one that is never
-// used lapses on its own. Creating a grant for it (consent) is its first use
-// and gives it the full lifetime; a later grant never shortens it.
+// Successful authorization-code exchange gives a DCR client the full
+// lifetime. Consent alone leaves the registration short-lived.
 func (q *Queries) ExtendDCROAuthClient(ctx context.Context, arg ExtendDCROAuthClientParams) error {
 	_, err := q.db.ExecContext(ctx, extendDCROAuthClient, arg.ExpiresAt, arg.ID)
 	return err

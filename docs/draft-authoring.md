@@ -30,9 +30,12 @@ with its original request ID. Storage faults while checking module state,
 draft settings, the account or its editor role, credentials or API-key source
 policy return `write_retryable` and produce a server-side diagnostic. This
 applies to initial authorization and transaction-time rechecks, including
-idempotent draft replays and preview link issuance. A missing account or a
-removed editor role still denies access. These checks still refuse a
-disabled module or draft toggle; only a credential that is gone, no longer the
+idempotent draft replays and preview link issuance. For `write_retryable`,
+wait at least the indicated `retry_after_seconds` before each retry, keep the
+same `request_id` when the call takes one, and stop after two retries. If
+both fail, report the persistent failure to the editor or administrator.
+A missing account or a removed editor role still denies access. These checks
+still refuse a disabled module or draft toggle; only a credential that is gone, no longer the
 caller's or refused by policy is the 401 "Credential unavailable", so an
 agent never drops a working key over a database hiccup.
 Likewise the HTTP layer answers a failed lookup of an API key's owner with a

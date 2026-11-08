@@ -23,14 +23,19 @@ AND (l.issuing_key_id IS NULL OR EXISTS (
 ));
 
 -- name: CountActivePreviewLinks :one
-SELECT COUNT(*) FROM preview_links WHERE created_by=? AND revoked_at=0 AND expires_at>?;
+SELECT COUNT(*) FROM preview_links
+WHERE created_by=sqlc.arg(created_by) AND revoked_at=0 AND expires_at>sqlc.arg(expires_at)
+AND (issuing_grant_id IS NOT NULL OR issuing_key_id IS NOT NULL) = CAST(sqlc.arg(agent_issued) AS BOOLEAN);
 
 -- name: CountIssuedPreviewLinks :one
-SELECT COUNT(*) FROM preview_links WHERE created_by=? AND created_at>=?;
+SELECT COUNT(*) FROM preview_links
+WHERE created_by=sqlc.arg(created_by) AND created_at>=sqlc.arg(created_at)
+AND (issuing_grant_id IS NOT NULL OR issuing_key_id IS NOT NULL) = CAST(sqlc.arg(agent_issued) AS BOOLEAN);
 
 -- name: GetPreviewIssuanceCutoff :one
 SELECT created_at FROM preview_links
 WHERE created_by=sqlc.arg(created_by) AND created_at>=sqlc.arg(since)
+AND (issuing_grant_id IS NOT NULL OR issuing_key_id IS NOT NULL) = CAST(sqlc.arg(agent_issued) AS BOOLEAN)
 ORDER BY created_at DESC,id DESC LIMIT 1 OFFSET sqlc.arg(issuance_offset);
 
 -- name: GetLatestAuthoringProvenance :one

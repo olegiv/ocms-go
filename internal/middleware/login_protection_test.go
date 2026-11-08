@@ -374,6 +374,41 @@ func TestLoginProtectionSurvivesProcessRestart(t *testing.T) {
 }
 
 func TestGetClientIP(t *testing.T) {
+	t.Run("walks complete forwarding chain without skipping hops", func(t *testing.T) {
+		setTrustedProxiesForTest(t, "127.0.0.1", "10.0.0.0/8", "2001:db8:1::/48")
+		for _, tc := range []struct {
+			name string
+			xff  []string
+			want string
+		}{
+			{"IPv4 with port", []string{"198.51.100.1, 203.0.113.9:443"}, "203.0.113.9"},
+			{"IPv6 with port", []string{"198.51.100.1", "[2001:db8::9]:443, 10.0.0.2"}, "2001:db8::9"},
+			{"bracketed IPv6 without port", []string{"[2001:db8::9]"}, "2001:db8::9"},
+			{"second field", []string{"198.51.100.1", "203.0.113.9"}, "203.0.113.9"},
+			{"malformed trusted-side hop", []string{"198.51.100.1, unknown, 10.0.0.2"}, "127.0.0.1"},
+			{"malformed rightmost field", []string{"198.51.100.1", "unknown"}, "127.0.0.1"},
+			{"unpaired bracket", []string{"198.51.100.1", "[203.0.113.9"}, "127.0.0.1"},
+			{"port within brackets", []string{"198.51.100.1, [10.0.0.2:443]"}, "127.0.0.1"},
+			{"nested brackets", []string{"[[2001:db8::9]:443]"}, "127.0.0.1"},
+			{"zone on trusted hop", []string{"198.51.100.1, [2001:db8:1::9%eth0]:443"}, "127.0.0.1"},
+			{"zone with malformed delimiters", []string{"198.51.100.1, 2001:db8:1::9%zone ]["}, "127.0.0.1"},
+			{"empty forwarding field", []string{""}, "127.0.0.1"},
+			{"ignore left of untrusted peer", []string{"unknown, 203.0.113.9, 10.0.0.2"}, "203.0.113.9"},
+			{"all trusted", []string{"10.0.0.1, 10.0.0.2"}, "10.0.0.1"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.RemoteAddr = "127.0.0.1:8080"
+				req.Header.Set("X-Real-IP", "198.51.100.1")
+				for _, field := range tc.xff {
+					req.Header.Add("X-Forwarded-For", field)
+				}
+				if got := GetClientIP(req); got != tc.want {
+					t.Fatalf("GetClientIP() = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	})
 	t.Run("defaults to RemoteAddr when no trusted proxies", func(t *testing.T) {
 		setTrustedProxiesForTest(t)
 

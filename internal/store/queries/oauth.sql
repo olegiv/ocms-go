@@ -17,12 +17,24 @@ SELECT COUNT(*) FROM oauth_clients WHERE source = ?;
 DELETE FROM oauth_clients WHERE expires_at < ?
 AND NOT EXISTS (SELECT 1 FROM oauth_grants WHERE client_id = oauth_clients.id);
 
--- A dynamically registered client is created short-lived, so one that is never
--- used lapses on its own. Creating a grant for it (consent) is its first use
--- and gives it the full lifetime; a later grant never shortens it.
+-- Successful authorization-code exchange gives a DCR client the full
+-- lifetime. Consent alone leaves the registration short-lived.
 -- name: ExtendDCROAuthClient :exec
 UPDATE oauth_clients SET expires_at = sqlc.arg(expires_at)
 WHERE id = sqlc.arg(id) AND source = 'dcr' AND expires_at < sqlc.arg(expires_at);
+
+-- Check both states together so concurrent redemption cannot hide a replay.
+-- name: CanExchangeCodeForDCRClient :one
+SELECT CAST(EXISTS (
+    SELECT 1 FROM oauth_clients o
+    WHERE o.id = sqlc.arg(client_id) AND o.source = 'dcr'
+      AND (o.expires_at > sqlc.arg(now) OR EXISTS (
+          SELECT 1 FROM oauth_codes c JOIN oauth_grants g ON g.id = c.grant_id
+          WHERE c.code_hash = sqlc.arg(code_hash) AND g.client_id = o.id
+            AND c.consumed_at = 0 AND c.expires_at > sqlc.arg(now)
+            AND g.revoked_at = 0 AND g.expires_at > sqlc.arg(now)
+      ))
+) AS BOOLEAN);
 
 -- name: CreateOAuthGrant :one
 INSERT INTO oauth_grants (id, user_id, client_id, scopes, resource, session_version, created_at, expires_at)

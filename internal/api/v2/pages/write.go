@@ -265,7 +265,7 @@ func (s *Service) write(ctx context.Context, a v2.Actor, opt WriteOptions, tool 
 	if err != nil {
 		mapped := writeError(err)
 		var domain *v2.Error
-		if errors.As(mapped, &domain) && domain.Code() == "write_retryable" && request.ID != "" {
+		if errors.As(mapped, &domain) && domain.RetryAfterSeconds() > 0 && request.ID != "" {
 			domain.Fields = map[string]string{"request_id": request.ID}
 		}
 		return nil, mapped
@@ -439,27 +439,30 @@ func draftCredentialLookupError(ctx context.Context, err error, unavailable stri
 		return v2.NewError(v2.ErrUnauthorized, unavailable)
 	}
 	slog.ErrorContext(service.WithoutEventLog(ctx), "failed to re-check draft write credential", append([]any{"error", err}, attrs...)...)
-	return &v2.Error{Kind: v2.ErrConflict, Msg: "Credential check is temporarily unavailable; retry the call", MachineCode: "write_retryable", Wrap: err}
+	return v2.NewRetryableWriteError("Credential check is temporarily unavailable; retry the call", err)
 }
 
 func writeError(err error) error {
-	if store.IsSQLiteBusy(err) {
-		return &v2.Error{Kind: v2.ErrConflict, Msg: "Write is busy; retry with the same request_id", MachineCode: "write_retryable", Wrap: err}
+	var domain *v2.Error
+	if errors.As(err, &domain) && domain.Kind != v2.ErrInternal {
+		return err
 	}
 
 	var conflict *pagewrite.Conflict
 	if errors.As(err, &conflict) {
-		return &v2.Error{Kind: v2.ErrConflict, Msg: err.Error(), MachineCode: "revision_conflict", Fields: map[string]string{"current_revision": strconv.FormatInt(conflict.CurrentRevision, 10), "changed_fields": strings.Join(conflict.ChangedFields, ",")}, Wrap: err}
+		return &v2.Error{Kind: v2.ErrConflict, Msg: conflict.Error(), MachineCode: "revision_conflict", Fields: map[string]string{"current_revision": strconv.FormatInt(conflict.CurrentRevision, 10), "changed_fields": strings.Join(conflict.ChangedFields, ",")}, Wrap: err}
 	}
-	switch {
-	case errors.Is(err, pagewrite.ErrTranslationExists):
-		return &v2.Error{Kind: v2.ErrConflict, Msg: err.Error(), MachineCode: "translation_exists", Wrap: err}
-	case errors.Is(err, pagewrite.ErrRevisionRequired):
-		return &v2.Error{Kind: v2.ErrConflict, Msg: err.Error(), MachineCode: "revision_required", Wrap: err}
-	case errors.Is(err, idempotency.ErrKeyReused), errors.Is(err, idempotency.ErrExpired):
-		return &v2.Error{Kind: v2.ErrConflict, Msg: err.Error(), MachineCode: err.Error(), Wrap: err}
-	case errors.Is(err, idempotency.ErrInvalidRequest):
-		return &v2.Error{Kind: v2.ErrValidation, Msg: err.Error(), MachineCode: err.Error(), Wrap: err}
+	for _, refusal := range []error{pagewrite.ErrTranslationExists, pagewrite.ErrRevisionRequired, idempotency.ErrKeyReused, idempotency.ErrExpired} {
+		if errors.Is(err, refusal) {
+			return &v2.Error{Kind: v2.ErrConflict, Msg: refusal.Error(), MachineCode: refusal.Error(), Wrap: err}
+		}
+	}
+	if errors.Is(err, idempotency.ErrInvalidRequest) {
+		code := idempotency.ErrInvalidRequest.Error()
+		return &v2.Error{Kind: v2.ErrValidation, Msg: code, MachineCode: code, Wrap: err}
+	}
+	if store.IsSQLiteBusy(err) {
+		return v2.NewRetryableWriteError("Write is busy; retry with the same request_id", err)
 	}
 	return err
 }

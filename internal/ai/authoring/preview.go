@@ -50,8 +50,7 @@ func (s *Service) CreatePreviewLink(ctx context.Context, a v2.Actor, in PreviewI
 	if !errors.As(err, &domain) && store.IsSQLiteBusy(err) {
 		slog.ErrorContext(service.WithoutEventLog(ctx), "preview link issuance is busy",
 			"error", err, "user_id", a.ActingUserID(), "page_id", in.PageID, "revision", in.Revision)
-		return preview.Link{}, &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable",
-			Msg: "Preview link issuance is busy; retry the call", Wrap: err}
+		return preview.Link{}, v2.NewRetryableWriteError("Preview link issuance is busy; retry the call", err)
 	}
 	return result, err
 }

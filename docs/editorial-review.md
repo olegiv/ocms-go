@@ -156,6 +156,10 @@ response uses the ordinary isolated renderer and its script-blocking CSP.
 The two paths differ so reopening another share causes a fresh request rather
 than changing only the fragment of an already-rendered preview.
 
+Each editor has separate limits for human and agent links. Each group allows
+up to 10 active links and 60 issuances per rolling hour. API keys and OAuth
+grants share the editor's agent limit.
+
 The landing and its POST are rate limited per client address (two requests a
 second, burst of twenty). A limited request gets a plain-text 429 page, not the
 API's JSON error, because people open these URLs in a browser.

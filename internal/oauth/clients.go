@@ -160,6 +160,13 @@ func newClientResolver(s *Service) *clientResolver {
 }
 
 func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClient, error) {
+	return c.resolveForExchange(ctx, id, "")
+}
+
+// resolveForExchange lets an unconsumed authorization code retain its full
+// validity if the short DCR registration expires before redemption. The
+// exchange still verifies the code and PKCE inside its write transaction.
+func (c *clientResolver) resolveForExchange(ctx context.Context, id, code string) (registeredClient, error) {
 	if id == "" || len(id) > maxClientIDBytes {
 		return registeredClient{}, problem("invalid_client")
 	}
@@ -177,7 +184,18 @@ func (c *clientResolver) resolve(ctx context.Context, id string) (registeredClie
 		}
 		return client, nil
 	}
-	if err == nil && cached.ExpiresAt > c.service.now().Unix() {
+	now := c.service.now().Unix()
+	active := err == nil && cached.ExpiresAt > now
+	if err == nil && !active && cached.Source == "dcr" && validCredential(code, codePrefix) {
+		var codeErr error
+		active, codeErr = c.service.q.CanExchangeCodeForDCRClient(ctx, store.CanExchangeCodeForDCRClientParams{
+			ClientID: id, CodeHash: tokenHash(code), Now: now,
+		})
+		if codeErr != nil {
+			return registeredClient{}, storageProblem(ctx, "failed to check code for expired OAuth client", codeErr, "client_id", id)
+		}
+	}
+	if active {
 		var redirects []string
 		if decodeErr := json.Unmarshal([]byte(cached.RedirectUris), &redirects); decodeErr != nil {
 			return registeredClient{}, failure(ctx, "server_error", "stored OAuth client has invalid redirect URIs", decodeErr, "client_id", id)

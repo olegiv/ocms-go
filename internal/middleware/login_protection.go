@@ -499,8 +499,8 @@ func GetClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header (can contain multiple IPs).
 	// Use the first untrusted entry from the right side of the chain.
 	// If header is present but unusable, fail closed to remote peer IP.
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if ip, ok := firstUntrustedXFFIP(xff); ok {
+	if xff := r.Header.Values("X-Forwarded-For"); len(xff) != 0 {
+		if ip, ok := firstUntrustedXFFIP(strings.Join(xff, ",")); ok {
 			return ip.String()
 		}
 		return remoteIPString
@@ -516,24 +516,31 @@ func GetClientIP(r *http.Request) string {
 
 func firstUntrustedXFFIP(xff string) (netip.Addr, bool) {
 	parts := strings.Split(xff, ",")
-	ips := make([]netip.Addr, 0, len(parts))
-	for _, part := range parts {
-		if ip, ok := parseIP(part); ok {
-			ips = append(ips, ip)
+	for i := len(parts) - 1; i >= 0; i-- {
+		part := strings.TrimSpace(parts[i])
+		address := part
+		if len(part) > 2 && part[0] == '[' && part[len(part)-1] == ']' {
+			address = part[1 : len(part)-1]
+		}
+		ip, err := netip.ParseAddr(address)
+		if err != nil {
+			endpoint, portErr := netip.ParseAddrPort(part)
+			if portErr != nil {
+				return netip.Addr{}, false
+			}
+			ip = endpoint.Addr()
+		}
+		// An interface zone is local to the forwarding host.
+		if ip.Zone() != "" {
+			return netip.Addr{}, false
+		}
+		ip = ip.Unmap()
+		// The leftmost address is the fallback when every hop is trusted.
+		if i == 0 || !isTrustedProxy(ip) {
+			return ip, true
 		}
 	}
-	if len(ips) == 0 {
-		return netip.Addr{}, false
-	}
-
-	for i := len(ips) - 1; i >= 0; i-- {
-		if !isTrustedProxy(ips[i]) {
-			return ips[i], true
-		}
-	}
-
-	// All entries are trusted proxies; fall back to the left-most address.
-	return ips[0], true
+	return netip.Addr{}, false
 }
 
 // ConfigureTrustedProxies updates trusted proxy ranges from a comma-separated

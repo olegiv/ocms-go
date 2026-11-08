@@ -37,7 +37,7 @@ func TestDCRCapacityReclaimsOverrepresentedSourceAtomically(t *testing.T) {
 			if i == 0 && j == 0 {
 				consented = id
 				f.values.Set("client_id", id)
-				f.code(t)
+				f.redeem(t, f.code(t))
 				// Retention can remove a grant before the client expires.
 				retentionExec(t, f, "DELETE FROM oauth_grants WHERE client_id = ?", id)
 			}
@@ -73,7 +73,7 @@ func TestDCRCapacityReclaimsOverrepresentedSourceAtomically(t *testing.T) {
 		t.Fatalf("consent for reclaimed client: %v", err)
 	}
 	if _, err := f.s.clients.resolve(t.Context(), consented); err != nil {
-		t.Fatalf("previously consented client became unavailable: %v", err)
+		t.Fatalf("previously redeemed client became unavailable: %v", err)
 	}
 	requireRegistrationLimit(t, registerFrom(f.s, "192.0.2.2:3000", registrationMetadata, nil), 3600)
 }
@@ -95,7 +95,7 @@ func TestDCRDistinctSourcesKeepGrace(t *testing.T) {
 
 func TestDCRAdmissionMigrationPreservesLegacyClient(t *testing.T) {
 	f, now := registrationFixture(t)
-	if err := store.RunMigrationCommand(t.Context(), f.db, "down"); err != nil {
+	if err := store.RunMigrationCommand(t.Context(), f.db, "down-to", "20261106120000"); err != nil {
 		t.Fatal(err)
 	}
 	legacy := registeredClient{ID: "legacy-client", Name: "Legacy", Redirects: []string{"https://client.test/callback"}}
@@ -109,6 +109,27 @@ func TestDCRAdmissionMigrationPreservesLegacyClient(t *testing.T) {
 	f.redeem(t, f.code(t))
 	requireRegistration(t, registerFrom(f.s, "192.0.2.1:3000", registrationMetadata, nil))
 	requireDCRRows(t, f, 2)
+}
+
+func TestAbandonedDCRConsentsReleaseRegistryCapacity(t *testing.T) {
+	f, now := registrationFixture(t)
+	for i := range 50 {
+		peer := fmt.Sprintf("192.0.2.%d:3000", i+1)
+		for range 20 {
+			id := requireRegistration(t, registerFrom(f.s, peer, registrationMetadata, nil))
+			f.values.Set("client_id", id)
+			f.code(t)
+		}
+	}
+	requireDCRRows(t, f, 1000)
+	*now = now.Add(DCRUnusedClientLifetime + time.Minute)
+	for range 1000 / CleanupBatchSize {
+		if _, err := cleanupAt(t.Context(), f.db, *now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	requireRegistration(t, registerFrom(f.s, "198.51.100.1:3000", registrationMetadata, nil))
+	requireDCRRows(t, f, 1)
 }
 
 func TestDCRRefusalWarningsAreBounded(t *testing.T) {

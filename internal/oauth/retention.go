@@ -21,14 +21,14 @@ const (
 	// CleanupBatchSize bounds each batch of historical OAuth rows.
 	CleanupBatchSize = 250
 	// DCRUnusedClientLifetime is how long a dynamically registered client is
-	// valid from its registration unless a grant is created for it. Registration
+	// valid from its registration unless a code is redeemed for it. Registration
 	// is unauthenticated, so clients that are never used must not fill the
 	// registry for months: after this they stop resolving, are reclaimed at
 	// once when the registry is full, and are deleted by Cleanup
 	// (security audit 2026-11-03, A-6).
 	DCRUnusedClientLifetime = 24 * time.Hour
-	// DCRClientLifetime is how long such a client is valid once a grant has
-	// been created for it, counted from that consent. It covers the longest
+	// DCRClientLifetime starts at the consent for a successfully redeemed
+	// authorization code. It covers the longest
 	// refresh lifetime, so a used client outlives its grants.
 	DCRClientLifetime = 90 * 24 * time.Hour
 )

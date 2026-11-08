@@ -33,11 +33,12 @@ const (
 // Error is the domain error type returned from services. Callers (v2 huma
 // operation handlers) translate it via ToHuma.
 type Error struct {
-	MachineCode string // Optional stable domain-specific code.
-	Kind        ErrorKind
-	Fields      map[string]string // per-field validation errors, surfaced as error.details
-	Msg         string
-	Wrap        error
+	MachineCode       string // Optional stable domain-specific code.
+	Kind              ErrorKind
+	Fields            map[string]string // per-field validation errors, surfaced as error.details
+	Msg               string
+	Wrap              error
+	retryAfterSeconds int64
 }
 
 // Error implements the error interface.
@@ -62,6 +63,15 @@ func (e *Error) Code() string {
 func NewError(kind ErrorKind, msg string) *Error {
 	return &Error{Kind: kind, Msg: msg}
 }
+
+// NewRetryableWriteError reports a write or precondition check that can be
+// attempted again with the same request ID after a short delay.
+func NewRetryableWriteError(msg string, cause error) *Error {
+	return &Error{Kind: ErrConflict, MachineCode: "write_retryable", Msg: msg, Wrap: cause, retryAfterSeconds: 1}
+}
+
+// RetryAfterSeconds returns the retry delay, or zero for a definitive error.
+func (e *Error) RetryAfterSeconds() int64 { return e.retryAfterSeconds }
 
 // NewInternalError constructs an internal error that keeps its cause. Only
 // msg reaches clients (ToHuma and the MCP server render Msg alone); the cause

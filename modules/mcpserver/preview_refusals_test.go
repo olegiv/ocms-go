@@ -4,6 +4,7 @@
 package mcpserver
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/ai/authoring"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/oauth"
 	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -25,10 +27,17 @@ func TestMCPPreviewRefusalsExplainRecovery(t *testing.T) {
 			t.Run(credential+"/"+scenario, func(t *testing.T) {
 				env := newTestEnv(t)
 				var bearer string
+				var grantID sql.NullString
+				var keyID sql.NullInt64
 				if credential == "oauth" {
-					bearer, _ = oauthToken(t, enableOAuth(t, env, true), env.userID, "mcp:access mcp:drafts")
+					var principal oauth.Principal
+					bearer, principal = oauthToken(t, enableOAuth(t, env, true), env.userID, "mcp:access mcp:drafts")
+					grantID = sql.NullString{String: principal.GrantID, Valid: true}
 				} else {
 					bearer = env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts)
+					if err := env.db.QueryRow("SELECT id FROM api_keys WHERE created_by = ?", env.userID).Scan(&keyID); err != nil {
+						t.Fatal(err)
+					}
 				}
 				enableDraftTools(env)
 				session := env.connect(bearer)
@@ -55,7 +64,11 @@ func TestMCPPreviewRefusalsExplainRecovery(t *testing.T) {
 					wantCode = "preview_unavailable"
 				}
 				for i := range count {
-					if _, err = env.q.CreatePreviewLink(t.Context(), store.CreatePreviewLinkParams{TokenHash: fmt.Sprintf("%064d", i), PageID: saved.PageID, Revision: saved.Revision, CreatedBy: user.ID, SessionVersion: user.SessionVersion, CreatedAt: now.Add(-20 * time.Minute).Unix(), ExpiresAt: now.Add(time.Hour).Unix()}); err != nil {
+					if _, err = env.q.CreatePreviewLink(t.Context(), store.CreatePreviewLinkParams{
+						TokenHash: fmt.Sprintf("%064d", i), PageID: saved.PageID, Revision: saved.Revision,
+						CreatedBy: user.ID, SessionVersion: user.SessionVersion, IssuingGrantID: grantID, IssuingKeyID: keyID,
+						CreatedAt: now.Add(-20 * time.Minute).Unix(), ExpiresAt: now.Add(time.Hour).Unix(),
+					}); err != nil {
 						t.Fatal(err)
 					}
 				}

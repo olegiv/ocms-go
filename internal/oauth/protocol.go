@@ -151,12 +151,6 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest, userI
 	if err != nil {
 		return "", failure(ctx, "server_error", "failed to create OAuth grant", err, "client_id", req.ClientID)
 	}
-	// Consent is the first use of a dynamically registered client: it stops
-	// being the short-lived registration and gets the full lifetime.
-	if err = q.ExtendDCROAuthClient(ctx, store.ExtendDCROAuthClientParams{
-		ExpiresAt: s.now().Add(DCRClientLifetime).Unix(), ID: req.ClientID}); err != nil {
-		return "", failure(ctx, "server_error", "failed to extend OAuth client lifetime", err, "client_id", req.ClientID)
-	}
 	ts := &tokenStore{s: s, q: q, grant: g}
 	manager, _ := s.engine(ts, req.client)
 	info, err := manager.GenerateAuthToken(ctx, lib.Code, &lib.TokenGenerateRequest{
@@ -220,7 +214,11 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, problem("invalid_target"))
 		return
 	}
-	client, err := s.clients.resolve(r.Context(), r.PostForm.Get("client_id"))
+	var code string
+	if grant == "authorization_code" {
+		code = r.PostForm.Get("code")
+	}
+	client, err := s.clients.resolveForExchange(r.Context(), r.PostForm.Get("client_id"), code)
 	if err != nil {
 		WriteProblem(w, err)
 		return
@@ -272,6 +270,15 @@ func (s *Service) Token(w http.ResponseWriter, r *http.Request) {
 		}
 		WriteProblem(w, problem(code))
 		return
+	}
+	if client.dynamicallyRegistered && grant == "authorization_code" {
+		// The exchange has passed PKCE and written a token. Anchor the client
+		// to consent time so it covers this family without sliding on refresh.
+		expires := time.Unix(ts.grant.CreatedAt, 0).Add(DCRClientLifetime).Unix()
+		if extendErr := ts.q.ExtendDCROAuthClient(r.Context(), store.ExtendDCROAuthClientParams{ID: client.ID, ExpiresAt: expires}); extendErr != nil {
+			WriteProblem(w, failure(r.Context(), "server_error", "failed to extend OAuth client lifetime", extendErr, "client_id", client.ID))
+			return
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		WriteProblem(w, failure(r.Context(), "server_error", "failed to commit OAuth token exchange", err, "client_id", client.ID))

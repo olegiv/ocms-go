@@ -189,9 +189,10 @@ message and changes nothing; repeating a revoke of your own, already revoked
 connection is a harmless success, and a storage failure is a logged 500. See
 [connected apps](connected-apps.md).
 
-A dynamically registered client expires after one day unless consent creates
-a grant. A provisional client can also be reclaimed at capacity. A consented
-client is valid for 90 days from consent. That covers the longest
+A dynamically registered client expires after one day unless the client
+redeems an authorization code. A provisional client without a grant can
+also be reclaimed at capacity. Successful code redemption extends the
+registration to 90 days from consent. That covers the longest
 refresh family (`OCMS_OAUTH_REFRESH_TTL_DAYS` is at most 90, `MaxRefreshTTL`), so
 a used client never lapses before its grants.
 

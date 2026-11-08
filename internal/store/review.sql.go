@@ -33,32 +33,38 @@ func (q *Queries) CheckClaim(ctx context.Context, arg CheckClaimParams) error {
 }
 
 const countActivePreviewLinks = `-- name: CountActivePreviewLinks :one
-SELECT COUNT(*) FROM preview_links WHERE created_by=? AND revoked_at=0 AND expires_at>?
+SELECT COUNT(*) FROM preview_links
+WHERE created_by=?1 AND revoked_at=0 AND expires_at>?2
+AND (issuing_grant_id IS NOT NULL OR issuing_key_id IS NOT NULL) = CAST(?3 AS BOOLEAN)
 `
 
 type CountActivePreviewLinksParams struct {
-	CreatedBy int64 `json:"created_by"`
-	ExpiresAt int64 `json:"expires_at"`
+	CreatedBy   int64 `json:"created_by"`
+	ExpiresAt   int64 `json:"expires_at"`
+	AgentIssued bool  `json:"agent_issued"`
 }
 
 func (q *Queries) CountActivePreviewLinks(ctx context.Context, arg CountActivePreviewLinksParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countActivePreviewLinks, arg.CreatedBy, arg.ExpiresAt)
+	row := q.db.QueryRowContext(ctx, countActivePreviewLinks, arg.CreatedBy, arg.ExpiresAt, arg.AgentIssued)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const countIssuedPreviewLinks = `-- name: CountIssuedPreviewLinks :one
-SELECT COUNT(*) FROM preview_links WHERE created_by=? AND created_at>=?
+SELECT COUNT(*) FROM preview_links
+WHERE created_by=?1 AND created_at>=?2
+AND (issuing_grant_id IS NOT NULL OR issuing_key_id IS NOT NULL) = CAST(?3 AS BOOLEAN)
 `
 
 type CountIssuedPreviewLinksParams struct {
-	CreatedBy int64 `json:"created_by"`
-	CreatedAt int64 `json:"created_at"`
+	CreatedBy   int64 `json:"created_by"`
+	CreatedAt   int64 `json:"created_at"`
+	AgentIssued bool  `json:"agent_issued"`
 }
 
 func (q *Queries) CountIssuedPreviewLinks(ctx context.Context, arg CountIssuedPreviewLinksParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countIssuedPreviewLinks, arg.CreatedBy, arg.CreatedAt)
+	row := q.db.QueryRowContext(ctx, countIssuedPreviewLinks, arg.CreatedBy, arg.CreatedAt, arg.AgentIssued)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -166,17 +172,24 @@ func (q *Queries) GetPageReviewState(ctx context.Context, id int64) (GetPageRevi
 const getPreviewIssuanceCutoff = `-- name: GetPreviewIssuanceCutoff :one
 SELECT created_at FROM preview_links
 WHERE created_by=?1 AND created_at>=?2
-ORDER BY created_at DESC,id DESC LIMIT 1 OFFSET ?3
+AND (issuing_grant_id IS NOT NULL OR issuing_key_id IS NOT NULL) = CAST(?3 AS BOOLEAN)
+ORDER BY created_at DESC,id DESC LIMIT 1 OFFSET ?4
 `
 
 type GetPreviewIssuanceCutoffParams struct {
 	CreatedBy      int64 `json:"created_by"`
 	Since          int64 `json:"since"`
+	AgentIssued    bool  `json:"agent_issued"`
 	IssuanceOffset int64 `json:"issuance_offset"`
 }
 
 func (q *Queries) GetPreviewIssuanceCutoff(ctx context.Context, arg GetPreviewIssuanceCutoffParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getPreviewIssuanceCutoff, arg.CreatedBy, arg.Since, arg.IssuanceOffset)
+	row := q.db.QueryRowContext(ctx, getPreviewIssuanceCutoff,
+		arg.CreatedBy,
+		arg.Since,
+		arg.AgentIssued,
+		arg.IssuanceOffset,
+	)
 	var created_at int64
 	err := row.Scan(&created_at)
 	return created_at, err

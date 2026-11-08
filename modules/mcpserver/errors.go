@@ -136,7 +136,11 @@ func toToolError(err error) (*toolError, bool) {
 	}
 	var de *v2.Error
 	if errors.As(err, &de) {
-		te := &toolError{Code: de.Code(), Message: de.Msg, Details: de.Fields, Retryable: de.Code() == "write_retryable"}
+		retryAfter := de.RetryAfterSeconds()
+		te := &toolError{Code: de.Code(), Message: de.Msg, Details: de.Fields, Retryable: retryAfter > 0, RetryAfterSeconds: retryAfter}
+		if te.Retryable {
+			te.Message += ". Wait for retry_after_seconds and stop after two retries."
+		}
 		for _, definition := range draft.Catalog() {
 			if definition.Code == de.Code() {
 				te.Issues = []draft.Issue{draft.NewIssue(de.Code(), "request", "en")}

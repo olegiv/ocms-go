@@ -71,8 +71,7 @@ func accountLookupError(ctx context.Context, err error, userID, pageID int64) er
 	}
 	slog.ErrorContext(service.WithoutEventLog(ctx), "failed to re-check draft account",
 		"error", err, "user_id", userID, "page_id", pageID)
-	return &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable",
-		Msg: "Account check is temporarily unavailable; retry the call", Wrap: err}
+	return v2.NewRetryableWriteError("Account check is temporarily unavailable; retry the call", err)
 }
 
 func (s *Service) options(ctx context.Context) (draft.Options, error) {
@@ -320,8 +319,7 @@ func (s *Service) receipt(ctx context.Context, q *store.Queries, p *pages.Page) 
 		}
 		slog.ErrorContext(service.WithoutEventLog(ctx), "failed to read draft receipt",
 			"error", err, "page_id", p.ID, "revision", p.Revision)
-		return SaveResult{}, &v2.Error{Kind: v2.ErrConflict, MachineCode: "write_retryable",
-			Msg: "Draft receipt is temporarily unavailable; retry with the same request_id", Wrap: err}
+		return SaveResult{}, v2.NewRetryableWriteError("Draft receipt is temporarily unavailable; retry with the same request_id", err)
 	}
 	v := Validation{Issues: []draft.Issue{}, TranslationStatus: "not_tracked"}
 	if err = json.Unmarshal([]byte(fact.ValidatedJson), &v); err != nil {

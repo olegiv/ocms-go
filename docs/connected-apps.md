@@ -105,12 +105,12 @@ rolls back all phases and reports no committed deletions. Logs contain counts
 and failures, not credentials or article bodies. Unused expired client-cache
 entries may still be evicted earlier by the existing registration-cap guard.
 
-A dynamically registered client expires one day after registration unless a
-grant is created for it; consent extends it to 90 days. A client that is never
-used therefore stops resolving after a day, is reclaimed at once when the
-registry is full, and is removed by the client-metadata row above a day after
-that. Unredeemed grants are removed before client metadata, so an abandoned
-consent does not keep its client alive.
+A dynamically registered client expires one day after registration unless it
+redeems an authorization code. Successful redemption extends the client to
+90 days from consent. A code issued before the registration expires keeps
+its normal redemption window. Abandoned consent keeps the short client
+lifetime, and retention removes the unredeemed grant before reclaiming its
+client slot. Existing client expiry dates are preserved on upgrade.
 
 The new migration adds indexes only; its rollback retains credentials and
 content. Cleanup deletions themselves are not undone by rolling that migration

@@ -176,8 +176,8 @@ func assertPreviewIssuanceRows(t *testing.T, env *testEnv, want int) {
 func requireDraftRetryCode(t *testing.T, err error) {
 	t.Helper()
 	mapped, internal := toToolError(err)
-	if mapped == nil || internal || mapped.Code != "write_retryable" || !mapped.Retryable {
-		t.Fatalf("storage fault answered %+v, want write_retryable: %v", mapped, err)
+	if mapped == nil || internal || mapped.Code != "write_retryable" || !mapped.Retryable || mapped.RetryAfterSeconds != 1 {
+		t.Fatalf("storage fault answered %+v, want write_retryable with a delay: %v", mapped, err)
 	}
 	if strings.Contains(mapped.Message, "injected") || strings.Contains(mapped.Message, "no such table") {
 		t.Fatal("retryable response exposed the storage cause")

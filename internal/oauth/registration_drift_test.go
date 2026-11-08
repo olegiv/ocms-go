@@ -101,7 +101,7 @@ func checkOAuthClientWriters(t *testing.T) {
 	owners := map[string]struct{ path, function string }{
 		"UpsertOAuthClient":               {"internal/oauth/clients.go", "saveClientTx"},
 		"DeleteExpiredUnusedOAuthClients": {"internal/oauth/clients.go", "saveClientTx"},
-		"ExtendDCROAuthClient":            {"internal/oauth/protocol.go", "Authorize"},
+		"ExtendDCROAuthClient":            {"internal/oauth/protocol.go", "Token"},
 		"DeleteRetainedOAuthClients":      {"internal/oauth/retention.go", "cleanupAt"},
 		"EvictOAuthDCRClient":             {"internal/oauth/registration.go", "registerDCR"},
 	}
