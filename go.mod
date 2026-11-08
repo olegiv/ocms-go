@@ -2,6 +2,9 @@ module github.com/olegiv/ocms-go
 
 go 1.27.3
 
+// Keep generated artifacts out of recursive package discovery.
+ignore ./output
+
 require (
 	filippo.io/csrf v0.2.1
 	github.com/HugoSmits86/nativewebp v1.3.0

@@ -501,6 +501,28 @@ func TestProjectGoPackagesExcludeOnlyTopLevelOutput(t *testing.T) {
 	}
 }
 
+func TestGoModuleExcludesTopLevelOutput(t *testing.T) {
+	f := newProxyWorkflowFixture(t)
+	manifest, err := os.ReadFile(filepath.Join("..", "..", "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.write("go.mod", string(manifest))
+	f.write("nested/output/owned_test.go", "package output\nimport \"testing\"\nfunc TestOwned(t *testing.T) {}\n")
+	f.write("output/generated/broken.go", "package generated\nfunc =\n")
+
+	const owned = "github.com/olegiv/ocms-go/nested/output"
+	for _, args := range [][]string{{"list", "./..."}, {"test", "-count=1", "./..."}} {
+		cmd := exec.CommandContext(t.Context(), "go", args...)
+		cmd.Dir = f.dir
+		cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=", "GOPROXY=off")
+		output, runErr := cmd.CombinedOutput()
+		if runErr != nil || !strings.Contains(string(output), owned) || strings.Contains(string(output), "/output/generated") {
+			t.Fatalf("go %v selected the wrong packages: %v\n%s", args, runErr, output)
+		}
+	}
+}
+
 func TestProxyAuditRefusesOutsideDestination(t *testing.T) {
 	f := newProxyWorkflowFixture(t)
 	outside := t.TempDir()
