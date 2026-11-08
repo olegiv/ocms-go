@@ -2221,6 +2221,7 @@ func run(inspectRouter func(chi.Router) error) (runErr error) {
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, cfg.UploadsDir)
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService(), eventService)
+	frontendHandler.SetAgentSharePolicy(mcpserver.AgentSharePolicy(cfg))
 	frontendHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	if cfg.SanitizePageHTML {
 		slog.Info("frontend page HTML sanitization enabled")

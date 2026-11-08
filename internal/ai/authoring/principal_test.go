@@ -4,6 +4,7 @@
 package authoring_test
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/url"
@@ -89,7 +90,7 @@ func TestDraftPrincipalMatchesPreviewIssuer(t *testing.T) {
 			if err != nil || parsed == nil || parsed.Fragment == "" {
 				t.Fatal("preview URL has no bearer")
 			}
-			resolver := preview.Service{Q: f.q}
+			resolver := preview.Service{Q: f.q, AgentShareAllowed: func(context.Context, *store.Queries) (bool, error) { return true, nil }}
 			if snapshot, resolveErr := resolver.Resolve(f.ctx, parsed.Fragment); resolveErr != nil || snapshot.Page.Revision != updated.Revision {
 				t.Fatalf("resolve issued revision: %v", resolveErr)
 			}

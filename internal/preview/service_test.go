@@ -57,7 +57,10 @@ func setup(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.svc = preview.Service{Q: f.q, Now: func() time.Time { return f.now }}
+	f.svc = preview.Service{
+		Q: f.q, Now: func() time.Time { return f.now },
+		AgentShareAllowed: func(context.Context, *store.Queries) (bool, error) { return true, nil },
+	}
 	return f
 }
 func (f *fixture) issue(t *testing.T, principal ...provenance.Principal) preview.Link {

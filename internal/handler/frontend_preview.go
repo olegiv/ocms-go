@@ -86,11 +86,17 @@ func (h *FrontendHandler) PreviewShareLanding(w http.ResponseWriter, r *http.Req
 	renderTempl(w, r, previewviews.ShareLanding(i18n.MatchLanguage(r.Header.Get("Accept-Language"))))
 }
 
+// SetAgentSharePolicy wires the live policy for credential-bound share links.
+func (h *FrontendHandler) SetAgentSharePolicy(allowed preview.AgentSharePolicy) {
+	h.agentShareAllowed = allowed
+}
+
 // PreviewShare resolves only a bounded POST body, without session credentials,
 // redirects, bearer cookies or a stored redemption that could bypass revocation.
 func (h *FrontendHandler) PreviewShare(w http.ResponseWriter, r *http.Request) {
 	preview.Headers(w.Header())
-	snapshot, issuer, err := (preview.Service{Q: h.queries}).ResolveWithIssuer(r.Context(), postedPreviewToken(w, r))
+	shares := preview.Service{Q: h.queries, AgentShareAllowed: h.agentShareAllowed}
+	snapshot, issuer, err := shares.ResolveWithIssuer(r.Context(), postedPreviewToken(w, r))
 	if err != nil {
 		previewFailure(w, r, err)
 		return

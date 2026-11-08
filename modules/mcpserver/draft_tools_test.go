@@ -192,7 +192,7 @@ func TestDraftToolsSDKCreateReadUpdateReplayAndExplicitSharing(t *testing.T) {
 		t.Fatal("MCP issued a proxy-visible bearer")
 	}
 	secret := sharedURL.Fragment
-	snapshot, err := (preview.Service{Q: env.q}).Resolve(t.Context(), secret)
+	snapshot, err := env.previewResolver().Resolve(t.Context(), secret)
 	if err != nil || snapshot.Page.ID != saved.PageID || snapshot.Page.Revision != updated.Revision {
 		t.Fatal("explicit share failed to pin the requested revision")
 	}

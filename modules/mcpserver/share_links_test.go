@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"embed"
 	"errors"
 	"fmt"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"modernc.org/sqlite"
 
 	"github.com/olegiv/ocms-go/internal/ai/authoring"
+	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -30,7 +32,124 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/session"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/theme"
 )
+
+func TestExistingAgentPreviewLinksHonorDisableSwitches(t *testing.T) {
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	env := newTestEnv(t)
+	oauthTokenValue, _ := oauthToken(t, enableOAuth(t, env, true), env.userID, "mcp:access mcp:drafts")
+	enableDraftTools(env)
+	keyClient := env.connect(env.createKey(model.PermissionMCPAccess, model.PermissionMCPDrafts))
+	const marker = "Shared preview policy marker"
+	saved := decodeResult[authoring.SaveResult](t, call(t, keyClient, "create_draft_page", draftCreateArgs(marker)))
+	args := map[string]any{"page_id": saved.PageID, "revision": saved.Revision}
+	keyLink := decodeResult[preview.Link](t, call(t, keyClient, "create_preview_link", args))
+	grantLink := decodeResult[preview.Link](t, call(t, env.connect(oauthTokenValue), "create_preview_link", args))
+	humanLink, err := env.previewResolver().Issue(t.Context(), provenance.Principal{UserID: env.userID, Source: "human", Transport: "admin"},
+		saved.PageID, saved.Revision, "https://cms.test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := env.module.ctx.Config
+	logger := env.module.ctx.Logger
+	var emptyFS embed.FS
+	frontend := handler.NewFrontendHandler(env.db, theme.NewManager(emptyFS, "", logger), nil, logger, nil, nil)
+	policy := AgentSharePolicy(cfg)
+	frontend.SetAgentSharePolicy(policy)
+	assertLinks := func(t *testing.T, agentStatus int) {
+		t.Helper()
+		for _, tc := range []struct {
+			name   string
+			link   preview.Link
+			status int
+		}{
+			{"API key", keyLink, agentStatus},
+			{"OAuth grant", grantLink, agentStatus},
+			{"human", humanLink, http.StatusOK},
+		} {
+			parsed, parseErr := url.Parse(tc.link.URL.Reveal())
+			if parseErr != nil || parsed.Fragment == "" {
+				t.Fatalf("%s share URL missing a bearer", tc.name)
+			}
+			form := url.Values{"token": {parsed.Fragment}}
+			r := httptest.NewRequest(http.MethodPost, preview.ShareOpenPath, strings.NewReader(form.Encode()))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			w := httptest.NewRecorder()
+			frontend.PreviewShare(w, r)
+			if hasDraft := strings.Contains(w.Body.String(), marker); w.Code != tc.status || hasDraft != (tc.status == http.StatusOK) {
+				t.Errorf("%s preview: status %d, draft visible %t, want status %d", tc.name, w.Code, hasDraft, tc.status)
+			}
+			if w.Header().Get("Cache-Control") != "private, no-store" {
+				t.Errorf("%s preview lost its no-store policy", tc.name)
+			}
+		}
+	}
+	assertLinks(t, http.StatusOK)
+	for _, tc := range []struct{ name, update string }{
+		{"sharing off", "UPDATE mcp_settings SET agent_share_links = ? WHERE id = 1"},
+		{"draft tools off", "UPDATE mcp_settings SET draft_tools_enabled = ? WHERE id = 1"},
+		{"module inactive", "UPDATE modules SET is_active = ? WHERE name = 'mcp'"},
+		{"AI disabled", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setEnabled := func(enabled bool) {
+				t.Helper()
+				if tc.update == "" {
+					cfg.AIDisabled = !enabled
+					return
+				}
+				if _, updateErr := env.db.ExecContext(t.Context(), tc.update, enabled); updateErr != nil {
+					t.Fatal(updateErr)
+				}
+			}
+			setEnabled(false)
+			assertLinks(t, http.StatusNotFound)
+			setEnabled(true)
+			assertLinks(t, http.StatusOK)
+		})
+	}
+	t.Run("policy missing", func(t *testing.T) {
+		frontend.SetAgentSharePolicy(nil)
+		assertLinks(t, http.StatusNotFound)
+		frontend.SetAgentSharePolicy(policy)
+	})
+	t.Run("policy storage fault", func(t *testing.T) {
+		withTableUnavailable(t, env.db, "mcp_settings", func() { assertLinks(t, http.StatusServiceUnavailable) })
+	})
+	assertLinks(t, http.StatusOK)
+
+	t.Run("revocation before re-enable", func(t *testing.T) {
+		ctx := t.Context()
+		if _, disableErr := env.db.ExecContext(ctx, "UPDATE mcp_settings SET agent_share_links = 0"); disableErr != nil {
+			t.Fatal(disableErr)
+		}
+		reenabled := false
+		frontend.SetAgentSharePolicy(func(ctx context.Context, q *store.Queries) (bool, error) {
+			if !reenabled {
+				// Commit revocation and re-enable before reading the policy.
+				// This request must not combine the earlier link with that policy.
+				if _, revokeErr := env.db.ExecContext(ctx, "UPDATE preview_links SET revoked_at = 1 WHERE issuing_key_id IS NOT NULL OR issuing_grant_id IS NOT NULL"); revokeErr != nil {
+					t.Fatal(revokeErr)
+				}
+				if _, enableErr := env.db.ExecContext(ctx, "UPDATE mcp_settings SET agent_share_links = 1"); enableErr != nil {
+					t.Fatal(enableErr)
+				}
+				reenabled = true
+			}
+			return policy(ctx, q)
+		})
+		assertLinks(t, http.StatusNotFound)
+		if !reenabled {
+			t.Fatal("request did not reach the policy read")
+		}
+		frontend.SetAgentSharePolicy(policy)
+		assertLinks(t, http.StatusNotFound)
+	})
+}
 
 // TestAgentShareLinksPolicyAndAdminRevocation checks the share-link control
 // for AI clients (2026-11-03 audit B-5): sharing is on for an existing site
@@ -214,9 +333,8 @@ func TestAgentShareLinksRechecksPolicyInIssuanceTransaction(t *testing.T) {
 			if code, _, _ := toolErrorBody(t, refused); code != "share_links_disabled" {
 				t.Fatalf("queued share link with sharing disabled: code %q", code)
 			}
-			snapshot, err := (preview.Service{Q: env.q}).Resolve(ctx, shareURL.Fragment)
-			if err != nil || snapshot.Page.ID != saved.PageID || snapshot.Page.Revision != saved.Revision {
-				t.Fatal("previously issued link failed to resolve")
+			if _, err = env.previewResolver().Resolve(ctx, shareURL.Fragment); !errors.Is(err, preview.ErrUnavailable) {
+				t.Fatalf("previously issued link stayed available after sharing was disabled: %v", err)
 			}
 			decodeResult[authoring.SaveResult](t, call(t, client, "create_draft_page", draftCreateArgs("Draft with sharing off")))
 		})

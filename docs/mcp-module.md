@@ -549,9 +549,13 @@ Save/read results remain session-only; see [Editorial review](editorial-review.m
 **Let AI clients create share links** (on by default) controls that tool.
 The server rechecks the setting inside the issuance transaction. With sharing
 off, `create_preview_link` returns `share_links_disabled`.
-The **Share links issued by AI clients** card lists every usable link an OAuth
-grant or API key issued, with its page, account and expiry. Revoking a link
-from the card records a `Preview share link revoked` event.
+Existing agent links also stop working while sharing, draft tools, the MCP
+module or AI (`OCMS_AI_DISABLED=true`) is disabled. Human-issued links
+continue to work under their usual rules. An agent link can work again if all
+four controls allow it before it expires. To revoke it permanently, use the
+page editor or the **Share links issued by AI clients** card while the MCP
+module is active. The card includes paused links and records a
+`Preview share link revoked` event on revocation.
 Three content mutations require stable UUID request
 IDs; updates require the last-read revision. Own reads do not depend on the
 separate general drafts policy. All writes use the shared atomic service.

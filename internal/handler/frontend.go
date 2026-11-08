@@ -425,6 +425,7 @@ type FrontendHandler struct {
 	sanitizePages       bool
 	videoRegistry       *video.Registry
 	moduleFuncsProvider ModuleTemplateFuncsProvider
+	agentShareAllowed   preview.AgentSharePolicy
 
 	// openAPISpecProvider returns the served OpenAPI 3.1 document as bytes
 	// (identical to what /api/v2/openapi.json emits). When set, the SHA-256

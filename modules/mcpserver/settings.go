@@ -11,6 +11,10 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/preview"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // maxInstructionsRunes caps the administrator's agent instructions. They are
@@ -35,11 +39,26 @@ type Settings struct {
 	Instructions      string
 	DraftToolsEnabled bool
 	ExternalLinks     string
-	// AgentShareLinks lets create_preview_link issue anonymous share links.
-	// On by default; an administrator can stop agents from sharing drafts
-	// and revoke the links they issued on the admin page (2026-11-03 audit
-	// B-5).
+	// AgentShareLinks lets agents issue links and readers redeem them.
 	AgentShareLinks bool
+}
+
+// AgentSharePolicy checks the live MCP settings for existing agent links.
+func AgentSharePolicy(cfg *config.Config) preview.AgentSharePolicy {
+	return func(ctx context.Context, q *store.Queries) (bool, error) {
+		if cfg == nil || cfg.AIDisabled {
+			return false, nil
+		}
+		var allowed bool
+		// Read the module and settings in the same SQLite snapshot.
+		err := q.DBHandle().QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM modules m JOIN mcp_settings s ON s.id = 1
+				WHERE m.name = ? AND m.is_active = 1
+					AND s.draft_tools_enabled = 1 AND s.agent_share_links = 1
+			)`, ModuleName).Scan(&allowed)
+		return allowed, err
+	}
 }
 
 // loadSettings reads the settings row. A missing row yields the defaults.

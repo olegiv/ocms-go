@@ -133,7 +133,7 @@ func TestMCPPreviewRefusalsExplainRecovery(t *testing.T) {
 				if parseErr != nil || parsed.Fragment == "" {
 					t.Fatal("recovery did not issue a share URL")
 				}
-				if _, err = (preview.Service{Q: env.q}).Resolve(t.Context(), parsed.Fragment); err != nil {
+				if _, err = env.previewResolver().Resolve(t.Context(), parsed.Fragment); err != nil {
 					t.Fatal("recovered share does not resolve", err)
 				}
 				if err = env.db.QueryRow("SELECT (SELECT COUNT(*) FROM preview_links), (SELECT COUNT(*) FROM events WHERE message='Preview share link created')").Scan(&links, &events); err != nil || links != count+1 || events != 1 {

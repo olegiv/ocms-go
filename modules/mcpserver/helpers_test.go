@@ -23,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -127,6 +128,10 @@ type testEnv struct {
 	logs   *logCapture
 	server *httptest.Server
 	userID int64
+}
+
+func (e *testEnv) previewResolver() preview.Service {
+	return preview.Service{Q: e.q, AgentShareAllowed: AgentSharePolicy(e.module.ctx.Config)}
 }
 
 // newTestEnv builds an initialized module behind a test HTTP server.

@@ -47,10 +47,16 @@ type IssuerLookupError struct{ err error }
 func (e *IssuerLookupError) Error() string { return e.err.Error() }
 func (e *IssuerLookupError) Unwrap() error { return e.err }
 
+// AgentSharePolicy uses the same database snapshot as the preview link lookup.
+type AgentSharePolicy func(context.Context, *store.Queries) (bool, error)
+
 type Service struct {
 	Q   *store.Queries
 	TTL time.Duration
 	Now func() time.Time
+	// AgentShareAllowed is checked on redemption of credential-bound links.
+	// Without a policy, those links are unavailable.
+	AgentShareAllowed AgentSharePolicy
 }
 
 // Link is returned only from explicit issuance. It is never an idempotency receipt.
@@ -236,7 +242,16 @@ func (s Service) ResolveWithIssuer(ctx context.Context, raw string) (Snapshot, i
 	if err != nil || len(decoded) != 32 {
 		return Snapshot{}, 0, ErrUnavailable
 	}
-	link, err := s.Q.GetPreviewLinkByHash(ctx, store.GetPreviewLinkByHashParams{TokenHash: hashToken(raw), ExpiresAt: s.now().Unix()})
+	q := s.Q
+	if db, ok := q.DBHandle().(*sql.DB); ok {
+		tx, beginErr := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if beginErr != nil {
+			return Snapshot{}, 0, fmt.Errorf("start preview read: %w", beginErr)
+		}
+		defer func() { _ = tx.Rollback() }()
+		q = q.WithTx(tx)
+	}
+	link, err := q.GetPreviewLinkByHash(ctx, store.GetPreviewLinkByHashParams{TokenHash: hashToken(raw), ExpiresAt: s.now().Unix()})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Snapshot{}, 0, ErrUnavailable
 	}
@@ -244,7 +259,19 @@ func (s Service) ResolveWithIssuer(ctx context.Context, raw string) (Snapshot, i
 		// A storage fault must not make a valid link look expired.
 		return Snapshot{}, 0, fmt.Errorf("load preview link: %w", err)
 	}
-	snapshot, err := Load(ctx, s.Q, link.PageID, link.Revision)
+	if link.IssuingGrantID.Valid || link.IssuingKeyID.Valid {
+		if _, consistent := q.DBHandle().(*sql.Tx); !consistent || s.AgentShareAllowed == nil {
+			return Snapshot{}, 0, ErrUnavailable
+		}
+		allowed, policyErr := s.AgentShareAllowed(ctx, q)
+		if policyErr != nil {
+			return Snapshot{}, 0, fmt.Errorf("check agent preview policy: %w", policyErr)
+		}
+		if !allowed {
+			return Snapshot{}, 0, ErrUnavailable
+		}
+	}
+	snapshot, err := Load(ctx, q, link.PageID, link.Revision)
 	if err != nil {
 		return Snapshot{}, 0, err
 	}
