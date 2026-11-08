@@ -126,8 +126,15 @@ func TestProductionOAuthRoutesStayGated(t *testing.T) {
 	inspect := func(router chi.Router) error {
 		foundDiscovery, foundRevoke := false, false
 		err := chi.Walk(router, func(method, path string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-			if !strings.HasPrefix(path, "/oauth/") && !strings.HasPrefix(path, "/.well-known/oauth-") {
+			if !strings.HasPrefix(path, "/oauth/") && !strings.HasPrefix(path, "/.well-known/") {
 				return nil
+			}
+			if method == http.MethodGet {
+				switch path {
+				case "/.well-known/security.txt", "/.well-known/api-catalog",
+					"/.well-known/agent-skills/index.json", "/.well-known/mcp/server-card.json":
+					return nil // Public metadata outside the OAuth policy.
+				}
 			}
 			if strings.ContainsAny(path, "{*") {
 				return fmt.Errorf("OAuth route %s %s needs a concrete test path", method, path)

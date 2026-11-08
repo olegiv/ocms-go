@@ -239,6 +239,8 @@ cd my-site
 `ocms init` creates `my-site/` with a `.env` (including a freshly generated
 `OCMS_SESSION_SECRET` and `OCMS_MFA_KEY`) plus `data/`, `uploads/`, and
 `custom/` directories.
+The development scaffold seeds a default password, so `init -host` accepts
+only loopback addresses or `localhost`.
 `ocms serve` starts the server, reading `./.env` from the current directory.
 Running `ocms` with no command is equivalent to `ocms serve`. When
 `OCMS_ENV` is unset or empty after loading the environment file, the server

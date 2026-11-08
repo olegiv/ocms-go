@@ -193,6 +193,25 @@ func TestPreviewLifecycleDoesNotResurrect(t *testing.T) {
 	}
 }
 
+func TestIssueRejectsUnboundPreviewIssuers(t *testing.T) {
+	f := setup(t)
+	for _, principal := range []provenance.Principal{
+		{UserID: f.user.ID, Source: "human", Transport: "mcp"},
+		{UserID: f.user.ID, Source: "system"},
+		{UserID: f.user.ID, Source: "migration"},
+	} {
+		link, err := f.svc.Issue(f.ctx, principal, f.page.ID, f.page.Revision, "https://cms.test", nil)
+		if !errors.Is(err, provenance.ErrInvalidPrincipal) || link.URL.Reveal() != "" {
+			t.Errorf("preview issuer %s/%s received a link or unexpected error %v", principal.Source, principal.Transport, err)
+		}
+	}
+	var issued int
+	if err := f.db.QueryRowContext(f.ctx, "SELECT COUNT(*) FROM preview_links").Scan(&issued); err != nil || issued != 0 {
+		t.Fatalf("unbound issuer left %d links: %v", issued, err)
+	}
+	f.issue(t)
+}
+
 func TestIssueRefusesInvalidPrincipal(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

@@ -90,6 +90,7 @@ One run has a five-second context deadline and one atomic transaction:
 | Grant families | Same condition and no remaining code/token/preview children | 250 |
 | Unredeemed grants | Created at least 24 hours ago, no token and no preview link (the code row goes with it) | 250 |
 | Client metadata | Expired for at least 24 hours and no remaining grant | 250 |
+| DCR admission rows | At least one hour old and either confirmed or no longer linked to a client | No per-run row limit |
 
 The terminal family boundary is the earlier of absolute expiry and first
 revocation. A recent revocation/expiry retains evidence. Every token row of

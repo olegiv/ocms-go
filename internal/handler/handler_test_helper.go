@@ -86,11 +86,11 @@ func testDB(t *testing.T) *sql.DB {
 			summary TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'draft',
 			author_id INTEGER NOT NULL,
-			featured_image_id INTEGER,
+			featured_image_id INTEGER REFERENCES media(id) ON DELETE SET NULL,
 			meta_title TEXT NOT NULL DEFAULT '',
 			meta_description TEXT NOT NULL DEFAULT '',
 			meta_keywords TEXT NOT NULL DEFAULT '',
-			og_image_id INTEGER,
+			og_image_id INTEGER REFERENCES media(id) ON DELETE SET NULL,
 			no_index INTEGER NOT NULL DEFAULT 0,
 			no_follow INTEGER NOT NULL DEFAULT 0,
 			canonical_url TEXT NOT NULL DEFAULT '',
@@ -104,7 +104,7 @@ func testDB(t *testing.T) *sql.DB {
 			exclude_from_lists INTEGER NOT NULL DEFAULT 0,
 			video_url TEXT NOT NULL DEFAULT '',
 			video_title TEXT NOT NULL DEFAULT '',
-			FOREIGN KEY (author_id) REFERENCES users(id)
+			FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
 		);
 		CREATE INDEX idx_pages_slug ON pages(slug);
 		CREATE INDEX idx_pages_status ON pages(status);
@@ -371,9 +371,8 @@ func testDB(t *testing.T) *sql.DB {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE,
-			FOREIGN KEY (parent_id) REFERENCES menu_items(id) ON DELETE SET NULL,
-			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE SET NULL,
-			FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+			FOREIGN KEY (parent_id) REFERENCES menu_items(id) ON DELETE CASCADE,
+			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE SET NULL
 		);
 		CREATE INDEX idx_menu_items_menu ON menu_items(menu_id);
 		CREATE INDEX idx_menu_items_position ON menu_items(position);

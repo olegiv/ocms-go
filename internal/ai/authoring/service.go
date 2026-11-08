@@ -24,6 +24,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Service is constructed from trusted transport policy for one authenticated call.
@@ -311,6 +312,9 @@ func (s *Service) prepare(a v2.Actor, validation Validation, report draft.AgentR
 func (s *Service) receipt(ctx context.Context, q *store.Queries, p *pages.Page) (SaveResult, error) {
 	fact, err := q.GetContentProvenance(ctx, store.GetContentProvenanceParams{PageID: p.ID, Revision: p.Revision})
 	if err != nil {
+		if canceled := util.RequestCancellation(ctx, err); canceled != nil {
+			return SaveResult{}, canceled
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return SaveResult{}, err
 		}

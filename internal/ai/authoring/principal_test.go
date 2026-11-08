@@ -14,9 +14,28 @@ import (
 	"github.com/google/uuid"
 	"github.com/olegiv/ocms-go/internal/ai/authoring"
 	"github.com/olegiv/ocms-go/internal/ai/draft"
+	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+func TestCredentiallessAgentCannotIssuePreview(t *testing.T) {
+	f := setup(t)
+	saved, err := f.svc.Create(f.ctx, f.actor, input("Credential-bound preview"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := authoring.PreviewInput{PageID: saved.PageID, Revision: saved.Revision}
+	human := v2.ActorForUser(f.user, []string{"mcp:access", "mcp:drafts"})
+	link, issueErr := f.svc.CreatePreviewLink(f.ctx, human, req)
+	var refusal *v2.Error
+	if !errors.As(issueErr, &refusal) || refusal.Kind != v2.ErrUnauthorized || link.URL.Reveal() != "" {
+		t.Fatalf("credential-less MCP actor got a link or unexpected error %v", issueErr)
+	}
+	if _, err = f.svc.CreatePreviewLink(f.ctx, f.actor, req); err != nil {
+		t.Fatalf("credential-bound preview failed: %v", err)
+	}
+}
 
 func TestDraftPrincipalMatchesPreviewIssuer(t *testing.T) {
 	for _, credential := range []string{"key", "oauth", "key with unrelated grant fields"} {

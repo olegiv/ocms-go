@@ -25,6 +25,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // AuthorizationRequest contains only validated consent data.
@@ -442,10 +443,12 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	refusal, err := s.registerDCR(r.Context(), c, middleware.GetClientIP(r))
 	if err != nil {
-		if errors.Is(err, errOAuthClientCapacity) {
-			s.logDCRRefusal(r.Context(), dcrRegistryFull)
-		} else {
-			logFault(r.Context(), "failed to register OAuth client", err)
+		if util.RequestCancellation(r.Context(), err) == nil {
+			if errors.Is(err, errOAuthClientCapacity) {
+				s.logDCRRefusal(r.Context(), dcrRegistryFull)
+			} else {
+				logFault(r.Context(), "failed to register OAuth client", err)
+			}
 		}
 		WriteProblem(w, problem("temporarily_unavailable"))
 		return

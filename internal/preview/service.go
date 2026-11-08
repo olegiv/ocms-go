@@ -112,6 +112,12 @@ func (s Service) Issue(ctx context.Context, principal provenance.Principal, page
 	if validationErr := principal.Validate(); validationErr != nil {
 		return Link{}, validationErr
 	}
+	switch {
+	case principal.Source == "api", principal.Source == "oauth":
+	case principal.Source == "human" && (principal.Transport == "" || principal.Transport == "admin"):
+	default:
+		return Link{}, provenance.ErrInvalidPrincipal
+	}
 	now := s.now()
 	secret := make([]byte, 32)
 	if _, err = rand.Read(secret); err != nil {

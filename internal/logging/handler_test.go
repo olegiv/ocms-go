@@ -6,16 +6,19 @@ package logging
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -371,24 +374,18 @@ func TestEventLogHandler_WarnRateLimitedByMessage(t *testing.T) {
 	}
 }
 
-func TestEscapeJSON(t *testing.T) {
-	testCases := []struct {
-		input    string
-		expected string
-	}{
-		{`hello`, `hello`},
-		{`hello "world"`, `hello \"world\"`},
-		{`path\to\file`, `path\\to\\file`},
-		{"line1\nline2", `line1\nline2`},
-		{"col1\tcol2", `col1\tcol2`},
-		{"return\rhere", `return\rhere`},
+func TestEventMetadataEncodesControlCharacters(t *testing.T) {
+	ctx := context.WithValue(t.Context(), middleware.ContextKeyRequestPath, "/path\x00")
+	record := slog.NewRecord(time.Now(), slog.LevelWarn, "warning", 0)
+	record.AddAttrs(slog.String("category", "system"), slog.String("key\x01", "value\b\f\x1f"), slog.Int("count", 4))
+	var metadata map[string]string
+	raw := (&EventLogHandler{}).extractMetadata(ctx, record)
+	if err := json.Unmarshal([]byte(raw), &metadata); err != nil {
+		t.Fatalf("metadata is invalid JSON: %v", err)
 	}
-
-	for _, tc := range testCases {
-		result := escapeJSON(tc.input)
-		if result != tc.expected {
-			t.Errorf("escapeJSON(%q) = %q, want %q", tc.input, result, tc.expected)
-		}
+	want := map[string]string{"path": "/path\x00", "key\x01": "value\b\f\x1f", "count": "4"}
+	if !maps.Equal(metadata, want) {
+		t.Fatalf("metadata = %q, want %q", metadata, want)
 	}
 }
 

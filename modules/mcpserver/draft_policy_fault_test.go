@@ -27,6 +27,75 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
+func TestDraftAndPreviewCancellationDoesNotLogStorageFault(t *testing.T) {
+	for _, tc := range []struct {
+		name, query    string
+		preview, oauth bool
+		read           int
+	}{
+		{"preview sharing preflight", "FROM mcp_settings WHERE", true, false, 2},
+		{"preview writer reservation", "UPDATE mcp_settings SET agent_share_links", true, false, 1},
+		{"draft account check", "FROM users WHERE id", false, false, 1},
+		{"draft receipt", "FROM content_provenance WHERE page_id", false, false, 1},
+		{"OAuth token check", "FROM oauth_tokens WHERE id", false, true, 1},
+		{"OAuth grant check", "FROM oauth_grants WHERE id", false, true, 1},
+		{"OAuth account check", "FROM users WHERE id", false, true, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env, id := draftKeyFixture(t)
+			if tc.oauth {
+				_, grant := oauthToken(t, enableOAuth(t, env, true), env.userID, "mcp:access mcp:drafts")
+				enableDraftTools(env)
+				id = &identity{userID: grant.UserID, grantID: grant.GrantID, clientID: grant.ClientID, tokenID: grant.TokenID, scopes: grant.Scopes}
+			}
+			ctx := t.Context()
+			call := &toolCall{identity: id, settings: env.module.currentSettings()}
+			input := authoring.CreateInput{
+				RequestID: uuid.NewString(),
+				Draft:     draft.PageDraft{Title: "Cancelled draft", Summary: "Review", BodyMarkdown: "Safe content."},
+			}
+			var saved authoring.SaveResult
+			if tc.preview {
+				var err error
+				saved, err = env.module.createDraftPage(ctx, call, input)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			var reads int
+			alternate := openDraftFaultDB(t, env, "immediate", func(query string) error {
+				if strings.Contains(query, tc.query) {
+					reads++
+					if reads == tc.read {
+						return context.Canceled
+					}
+				}
+				return nil
+			})
+			env.module.ctx.DB = alternate
+			env.module.svc.queries = store.New(alternate)
+			env.module.svc.pages = pages.NewService(alternate, store.New(alternate), nil, nil, pages.Policy{})
+			previous := slog.Default()
+			slog.SetDefault(slog.New(env.logs))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			var callErr error
+			drafts := 0
+			if tc.preview {
+				_, callErr = env.module.createPreviewLink(ctx, call, authoring.PreviewInput{PageID: saved.PageID, Revision: saved.Revision})
+				drafts = 1
+			} else {
+				_, callErr = env.module.createDraftPage(ctx, call, input)
+			}
+			if reads < tc.read || !isCancellation(callErr) || strings.Contains(env.logs.text(), "context canceled") {
+				t.Fatalf("cancelled call error=%v reads=%d logged=%s", callErr, reads, env.logs.text())
+			}
+			assertDraftPolicyRows(t, env, drafts)
+			assertPreviewIssuanceRows(t, env, 0)
+		})
+	}
+}
+
 func TestDraftAccountReadFaultsAreRetryable(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -300,10 +369,10 @@ func TestDraftAuthorizationPolicyFaultsAreRetryable(t *testing.T) {
 
 func assertDraftPolicyRows(t *testing.T, env *testEnv, want int) {
 	t.Helper()
-	var pages, versions, receipts int
-	err := env.db.QueryRow(`SELECT (SELECT COUNT(*) FROM pages), (SELECT COUNT(*) FROM page_versions), (SELECT COUNT(*) FROM idempotency_keys)`).Scan(&pages, &versions, &receipts)
-	if err != nil || pages != want || versions != want || receipts != want {
-		t.Fatalf("draft state pages=%d revisions=%d receipts=%d, want %d: %v", pages, versions, receipts, want, err)
+	var pageCount, versions, receipts int
+	err := env.db.QueryRow(`SELECT (SELECT COUNT(*) FROM pages), (SELECT COUNT(*) FROM page_versions), (SELECT COUNT(*) FROM idempotency_keys)`).Scan(&pageCount, &versions, &receipts)
+	if err != nil || pageCount != want || versions != want || receipts != want {
+		t.Fatalf("draft state pages=%d revisions=%d receipts=%d, want %d: %v", pageCount, versions, receipts, want, err)
 	}
 }
 

@@ -5,13 +5,16 @@ package oauth
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
@@ -139,4 +142,34 @@ func TestDCRRefusalWarningsAreBounded(t *testing.T) {
 	if strings.Contains(logs.String(), "192.0.2.1") {
 		t.Fatal("refusal warning included the peer address")
 	}
+}
+
+func TestCancelledDCRRequestDoesNotLogStorageFault(t *testing.T) {
+	f, _ := registrationFixture(t)
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	synctest.Test(t, func(t *testing.T) {
+		f.s.dcrWrites = make(chan struct{}, 1)
+		f.s.dcrWrites <- struct{}{}
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/oauth/register", strings.NewReader(registrationMetadata))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			f.s.Register(w, req)
+		}()
+		synctest.Wait()
+		cancel()
+		<-done
+		if w.Code != http.StatusServiceUnavailable || strings.Contains(logs.String(), "level=ERROR") {
+			t.Fatalf("cancelled registration status=%d logs=%q", w.Code, logs.String())
+		}
+	})
+	requireDCRRows(t, f, 0)
 }

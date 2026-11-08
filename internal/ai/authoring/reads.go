@@ -68,7 +68,7 @@ func (s *Service) Get(ctx context.Context, a v2.Actor, in PageInput) (DraftDetai
 	if err != nil {
 		return DraftDetail{}, err
 	}
-	if result.TranslationStatus != "unavailable" {
+	if basis != nil && result.TranslationStatus != "unavailable" {
 		result.TranslationBasis = basis
 	} else {
 		result.Validated.TranslationBasis = nil

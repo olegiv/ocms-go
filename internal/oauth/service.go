@@ -29,6 +29,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 const (
@@ -194,9 +195,13 @@ func IntersectScopes(scopes []string, role string) []string {
 }
 
 // Problem is a protocol-safe error; descriptions never include submitted credentials.
-type Problem struct{ Code, Description string }
+type Problem struct {
+	Code, Description string
+	cause             error
+}
 
 func (p *Problem) Error() string { return p.Code }
+func (p *Problem) Unwrap() error { return p.cause }
 
 func problem(code string) *Problem {
 	return &Problem{Code: code, Description: "The authorization request could not be completed."}
@@ -426,6 +431,11 @@ func logFault(ctx context.Context, msg string, err error, attrs ...any) {
 func storageProblem(ctx context.Context, msg string, err error, attrs ...any) *Problem {
 	var p *Problem
 	if errors.As(err, &p) {
+		return p
+	}
+	if canceled := util.RequestCancellation(ctx, err); canceled != nil {
+		p = problem("temporarily_unavailable")
+		p.cause = canceled
 		return p
 	}
 	return failure(ctx, "temporarily_unavailable", msg, err, attrs...)

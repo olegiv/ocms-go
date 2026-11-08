@@ -107,7 +107,7 @@ Clean build artifacts and temp files.
 Review changes and prepare a commit message draft.
 
 ### /commit-do
-Create a commit with the prepared commit message.
+Hand off the prepared commit to the terminal helper for final approval.
 
 ### /templui-add
 Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps.

@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"path/filepath"
 )
@@ -41,7 +42,7 @@ func runInit(args []string) error {
 		port  int
 	)
 	fs.BoolVar(&force, "force", false, "Scaffold into an existing non-empty directory")
-	fs.StringVar(&host, "host", "localhost", "Server bind host written to .env")
+	fs.StringVar(&host, "host", "localhost", "Loopback bind host written to .env")
 	fs.IntVar(&port, "port", 8080, "Server port written to .env")
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: ocms init [options] <dir>\n\n")
@@ -55,6 +56,20 @@ func runInit(args []string) error {
 	if fs.NArg() != 1 {
 		fs.Usage()
 		return errors.New("init requires exactly one target directory")
+	}
+	if host != "localhost" {
+		literal := host
+		if len(host) > 2 && host[0] == '[' && host[len(host)-1] == ']' {
+			literal = host[1 : len(host)-1]
+		}
+		addr, parseErr := netip.ParseAddr(literal)
+		if parseErr != nil || addr.Zone() != "" || !addr.Unmap().IsLoopback() {
+			return errors.New("init requires a loopback -host because the development scaffold seeds a default password")
+		}
+		host = addr.String()
+		if addr.Is6() {
+			host = "[" + host + "]"
+		}
 	}
 	dir := fs.Arg(0)
 
@@ -99,7 +114,7 @@ func runInit(args []string) error {
 		return err
 	}
 
-	printInitNextSteps(os.Stdout, dir, port, createdEnv)
+	printInitNextSteps(os.Stdout, dir, host, port, createdEnv)
 	return nil
 }
 
@@ -138,7 +153,7 @@ OCMS_DO_SEED=true
 // printInitNextSteps prints copy-pasteable instructions for starting the new
 // site. It uses the running executable's path so the serve command resolves
 // even when ocms is not on PATH.
-func printInitNextSteps(w io.Writer, dir string, port int, createdEnv bool) {
+func printInitNextSteps(w io.Writer, dir, host string, port int, createdEnv bool) {
 	exe, err := os.Executable()
 	if err != nil || exe == "" {
 		exe = "ocms"
@@ -149,7 +164,11 @@ func printInitNextSteps(w io.Writer, dir string, port int, createdEnv bool) {
 		_, _ = fmt.Fprintf(w, "Kept existing %s (session secret preserved).\n\n", filepath.Join(dir, ".env"))
 	}
 	_, _ = fmt.Fprintf(w, "Next steps:\n  cd %s\n  %s serve\n\n", dir, exe)
-	_, _ = fmt.Fprintf(w, "Then open http://localhost:%d/admin/ and sign in with:\n  admin@example.com / changeme1234\n\n", port)
-	_, _ = fmt.Fprintf(w, "Change those credentials, then set OCMS_DO_SEED=false in %s.\n", filepath.Join(dir, ".env"))
+	if createdEnv {
+		_, _ = fmt.Fprintf(w, "Then open http://%s:%d/admin/ and sign in with:\n  admin@example.com / changeme1234\n\n", host, port)
+		_, _ = fmt.Fprintf(w, "Change those credentials, then set OCMS_DO_SEED=false in %s.\n", filepath.Join(dir, ".env"))
+	} else {
+		_, _ = fmt.Fprintln(w, "Open /admin/ on the host and port in the existing .env and use the site's credentials.")
+	}
 	_, _ = fmt.Fprintln(w, "Before serving public traffic, set OCMS_ENV=production and complete the production configuration checklist in the README.")
 }

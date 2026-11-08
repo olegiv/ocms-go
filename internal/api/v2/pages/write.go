@@ -25,6 +25,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // WriteOptions is supplied by a trusted transport, never decoded from draft
@@ -431,6 +432,9 @@ func (s *Service) authorizeWrite(ctx context.Context, q *store.Queries, a v2.Act
 }
 
 func draftCredentialLookupError(ctx context.Context, err error, unavailable string, attrs ...any) error {
+	if canceled := util.RequestCancellation(ctx, err); canceled != nil {
+		return canceled
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return v2.NewError(v2.ErrUnauthorized, unavailable)
 	}

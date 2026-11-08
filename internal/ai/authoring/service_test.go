@@ -376,6 +376,15 @@ func TestHiddenTranslationSourcesReferencesAndSiblingsStayPrivate(t *testing.T) 
 			t.Fatalf("hidden sibling leaked: %+v", entry)
 		}
 	}
+	if err = f.q.DeleteTranslationsRelatedToEntity(f.ctx, store.DeleteTranslationsRelatedToEntityParams{
+		EntityType: "page", EntityID: target.PageID, TranslationID: target.PageID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	detail, err = f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: target.PageID})
+	if err != nil || detail.TranslationStatus != "not_tracked" || detail.TranslationBasis != nil || detail.Validated.TranslationBasis != nil {
+		t.Fatalf("unlinked source leaked via provenance: %+v %v", detail, err)
+	}
 }
 
 func TestExplicitReportAndReferencesAreRevisionedWithoutCopyingToSource(t *testing.T) {

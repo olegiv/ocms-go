@@ -16,7 +16,11 @@ import (
 )
 
 func (s *Service) CreatePreviewLink(ctx context.Context, a v2.Actor, in PreviewInput) (preview.Link, error) {
-	result, err := (preview.Service{Q: s.Q, TTL: s.PreviewTTL, Now: s.Now}).Issue(ctx, a.Principal("mcp"), in.PageID, in.Revision, s.SiteURL, func(ctx context.Context, q *store.Queries) error {
+	principal := a.Principal("mcp")
+	if principal.Source == "human" {
+		return preview.Link{}, v2.NewError(v2.ErrUnauthorized, "An app credential is required")
+	}
+	result, err := (preview.Service{Q: s.Q, TTL: s.PreviewTTL, Now: s.Now}).Issue(ctx, principal, in.PageID, in.Revision, s.SiteURL, func(ctx context.Context, q *store.Queries) error {
 		if err := s.authorize(ctx, q, a, in.PageID); err != nil {
 			return err
 		}

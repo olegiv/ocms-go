@@ -14,6 +14,20 @@ import (
 	"github.com/olegiv/ocms-go/internal/config"
 )
 
+func TestClaudeDocsPointToCurrentWorkflowOwners(t *testing.T) {
+	guide := string(readWorkflowFile(t, filepath.Join("..", "..", "CLAUDE.md")))
+	if !strings.Contains(guide, "[R1.7 release acceptance](docs/launch/r17-acceptance.md)") ||
+		strings.Contains(guide, "is deployed to MCP staging at `") {
+		t.Error("link to the staging rollout record instead of pinning a build in CLAUDE.md")
+	}
+	readme := string(readWorkflowFile(t, filepath.Join("..", "..", ".claude", "README.md")))
+	_, section, found := strings.Cut(readme, "### /commit-do\n")
+	description, _, _ := strings.Cut(section, "\n\n")
+	if !found || !strings.Contains(description, "terminal helper for final approval") {
+		t.Error("/commit-do README must describe the terminal approval handoff")
+	}
+}
+
 func TestClaudeWorkflowExamplesUseValidSecretsAndFreshTests(t *testing.T) {
 	developmentCommand := regexp.MustCompile(`(?m)^ *(?:(OCMS_ENV=development) +)?OCMS_SESSION_SECRET=['"]?([^\s'"]+)['"]? +(go (?:run|test) .+)$`)
 	for _, name := range []string{

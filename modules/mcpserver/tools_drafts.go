@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/oauth"
 	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 func (m *Module) authorizeDraftCall(ctx context.Context, q *store.Queries, id *identity) error {
@@ -103,6 +104,9 @@ func credentialUnavailable() error {
 // credentialFault logs a storage fault while checking credentials or their
 // authorization policy and reports it as retryable, like the OAuth re-check.
 func (m *Module) credentialFault(ctx context.Context, msg string, err error, attrs ...any) error {
+	if canceled := util.RequestCancellation(ctx, err); canceled != nil {
+		return canceled
+	}
 	m.logger.ErrorContext(ctx, msg, append([]any{"error", err}, attrs...)...)
 	return retryableCredentialCheck(err)
 }
