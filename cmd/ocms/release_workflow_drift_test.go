@@ -359,6 +359,8 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 	}
 }
 
+var ciTestGateCommand = regexp.MustCompile(`(?m)^[ \t]*\./scripts/test-gate\.sh[ \t]*$`)
+
 // TestCIChecksOutSharedTooling fails when the Go workflow stops checking out
 // the .claude/shared submodule before it runs the tests, makes that step
 // conditional or allowed to fail, or stops requiring the submodule in the
@@ -385,7 +387,7 @@ func TestCIChecksOutSharedTooling(t *testing.T) {
 				t.Errorf("go.yml step %q is conditional or allowed to fail", step.Name)
 			}
 		}
-		if tests < 0 && strings.HasPrefix(strings.TrimSpace(step.Run), "go test ") {
+		if tests < 0 && (ciTestGateCommand.MatchString(step.Run) || strings.HasPrefix(strings.TrimSpace(step.Run), "go test ")) {
 			tests = i
 			if step.Env["OCMS_REQUIRE_SHARED_TOOLING"] != "1" {
 				t.Error("go.yml's Test step does not set OCMS_REQUIRE_SHARED_TOOLING=1, so a missing submodule only skips tests")
@@ -400,6 +402,22 @@ func TestCIChecksOutSharedTooling(t *testing.T) {
 	case checkout > tests:
 		t.Error("go.yml checks out the .claude/shared submodule only after it runs the tests")
 	}
+}
+
+// TestCIRunsChromeRegressions catches workflow changes that let the browser
+// tests skip or let their failures pass CI.
+func TestCIRunsChromeRegressions(t *testing.T) {
+	wf := readWorkflow(t, "go.yml")
+	for _, step := range wf.Jobs["build"].Steps {
+		if !ciTestGateCommand.MatchString(step.Run) {
+			continue
+		}
+		if step.Env["OCMS_TEST_BROWSER"] != "1" || step.If != nil || step.ContinueOnError != nil {
+			t.Fatal("go.yml must run the test gate with OCMS_TEST_BROWSER=1 and require it to pass")
+		}
+		return
+	}
+	t.Fatal("go.yml does not run the test gate for the Chrome regressions")
 }
 
 // TestCIRacesConcurrentCode fails when the Go workflow stops running the

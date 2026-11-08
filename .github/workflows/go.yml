@@ -51,8 +51,11 @@ jobs:
       run: git submodule update --init .claude/shared
 
     - name: Test
-      run: go test -v ./...
+      run: |
+        google-chrome --version
+        ./scripts/test-gate.sh
       env:
+        OCMS_TEST_BROWSER: "1"
         OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
         OCMS_REQUIRE_SHARED_TOOLING: "1"
 

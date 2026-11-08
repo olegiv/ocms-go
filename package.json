@@ -15,6 +15,7 @@
     "tinymce": "^8.10.0"
   },
   "devDependencies": {
+    "@playwright/cli": "0.1.23",
     "@tailwindcss/cli": "^4.3.3",
     "tailwindcss": "^4.3.3"
   },

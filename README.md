@@ -1006,6 +1006,19 @@ Run tests for a specific package:
 OCMS_SESSION_SECRET='test-secret-key-32-bytes-long!!!' go test -count=1 -v ./internal/store/...
 ```
 
+The Go CI workflow runs the Chrome regressions as part of the test gate.
+To run the same gate locally, install Google Chrome, then run:
+
+```bash
+make assets
+OCMS_TEST_BROWSER=1 ./scripts/test-gate.sh
+```
+
+To test a candidate Git tree, run
+`OCMS_TEST_BROWSER=1 ./scripts/codex/test-snapshot.sh <tree>`. The snapshot
+builds its own assets and uses its lockfile's Playwright CLI. Without browser
+opt-in, the local gate runs the Go suite with browser tests skipped.
+
 Check for vulnerabilities:
 ```bash
 govulncheck ./...
