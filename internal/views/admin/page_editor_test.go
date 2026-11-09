@@ -84,7 +84,7 @@ func tinymceConfigAttr(fragment, key string) (string, bool) {
 // The plugins, toolbar, menus and image dialog decide which inline styles
 // TinyMCE writes.
 const (
-	reviewedTinyMCEVersion = "8.10.0"
+	reviewedTinyMCEVersion = "8.10.1"
 	reviewedEditorSurface  = "menubar: true,\n" +
 		"plugins: ['advlist','autolink','lists','link','image','charmap','preview','anchor','searchreplace','visualblocks','code','fullscreen','insertdatetime','media','table','help','wordcount','codesample'],\n" +
 		"toolbar: 'undo redo | blocks | bold italic forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link customimage media codesample | code | removeformat | help',\n" +
