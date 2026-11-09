@@ -13,6 +13,9 @@
 bin/
 data/
 uploads/
+logs/
+coverage.out
+/ocms
 
 # Node modules (will be installed fresh in container)
 node_modules/
@@ -69,8 +72,8 @@ docker-compose*.yml
 custom/themes/*
 !custom/themes/.gitkeep
 
-# Custom modules are compiled into the binary, so they
-# must remain in the build context (not excluded here).
+# Custom module source stays in the build context.
+custom/modules/.owners
 
 # Development scripts
 scripts/

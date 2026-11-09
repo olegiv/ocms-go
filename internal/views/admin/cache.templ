@@ -48,8 +48,8 @@ type CacheStatsView struct {
 templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 	@AdminLayout(pc) {
 		@PageHeader(pc.T("cache.title"), pc.T("cache.description")) {
-			<form method="POST" action="/admin/cache/clear" class="d-inline">
-				@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"onclick": "return confirm(this.dataset.msg)", "data-msg": pc.T("cache.clear_confirm")}}) {
+			<form method="POST" action="/admin/cache/clear" class="d-inline" data-confirm-submit={ pc.T("cache.clear_confirm") }>
+				@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit}) {
 					@icon.Trash2(icon.Props{Size: 16})
 					{ pc.T("cache.clear_all") }
 				}

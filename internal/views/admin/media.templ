@@ -801,7 +801,7 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 						@iconDownload16()
 						{ pc.T("media.download_original") }
 					}
-					@button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Type: button.TypeButton, Attributes: templ.Attributes{"data-copy-url": data.Media.OriginalURL, "onclick": "copyMediaURL(this)"}}) {
+					@button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Type: button.TypeButton, Attributes: templ.Attributes{"data-copy-url": data.Media.OriginalURL}}) {
 						@iconCopy16()
 						{ pc.T("media.copy_url") }
 					}
@@ -955,13 +955,13 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 			}
 		}
 		<script nonce={ templ.GetNonce(ctx) }>
-		function copyMediaURL(btn) {
-			var url = btn.getAttribute('data-copy-url');
-			navigator.clipboard.writeText(window.location.origin + url).then(function() {
+		document.querySelector('[data-copy-url]').addEventListener('click', function(event) {
+			const btn = event.currentTarget;
+			navigator.clipboard.writeText(window.location.origin + btn.dataset.copyUrl).then(function() {
 				btn.textContent = '✓ Copied';
 				setTimeout(function() { window.location.reload(); }, 1000);
 			});
-		}
+		});
 		</script>
 	}
 }

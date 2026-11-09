@@ -3136,7 +3136,7 @@ func MediaEditPage(pc *PageContext, data MediaEditViewData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Type: button.TypeButton, Attributes: templ.Attributes{"data-copy-url": data.Media.OriginalURL, "onclick": "copyMediaURL(this)"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var165), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Type: button.TypeButton, Attributes: templ.Attributes{"data-copy-url": data.Media.OriginalURL}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var165), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3955,7 +3955,7 @@ func MediaEditPage(pc *PageContext, data MediaEditViewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "\">\n\t\tfunction copyMediaURL(btn) {\n\t\t\tvar url = btn.getAttribute('data-copy-url');\n\t\t\tnavigator.clipboard.writeText(window.location.origin + url).then(function() {\n\t\t\t\tbtn.textContent = '✓ Copied';\n\t\t\t\tsetTimeout(function() { window.location.reload(); }, 1000);\n\t\t\t});\n\t\t}\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "\">\n\t\tdocument.querySelector('[data-copy-url]').addEventListener('click', function(event) {\n\t\t\tconst btn = event.currentTarget;\n\t\t\tnavigator.clipboard.writeText(window.location.origin + btn.dataset.copyUrl).then(function() {\n\t\t\t\tbtn.textContent = '✓ Copied';\n\t\t\t\tsetTimeout(function() { window.location.reload(); }, 1000);\n\t\t\t});\n\t\t});\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
