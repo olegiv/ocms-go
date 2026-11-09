@@ -16,6 +16,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/ai/prompts"
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/api/v2/pages"
+	"github.com/olegiv/ocms-go/internal/seo/markdown"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -186,20 +187,29 @@ func (s *Service) validation(ctx context.Context, result draft.Result, body stri
 		}
 		v.References = append(v.References, Reference{PageID: p.ID, Revision: p.Revision, Role: ref.Role})
 		if ref.Role == "example" && result.BodyChanged {
-			derived, err := draft.DeriveMarkdown(ctx, p.Body, draft.Options{Resolver: r.DraftResolver(), SiteURL: s.SiteURL, UILanguage: p.LanguageCode})
+			sample, err := v.exampleMarkdown(ctx, p.Body, draft.Options{Resolver: r.DraftResolver(), SiteURL: s.SiteURL, UILanguage: p.LanguageCode})
 			if err != nil {
 				return v, err
 			}
-			runes := []rune(derived.Markdown)
-			if len(runes) > grounding.MaxReferenceRunes {
-				runes = runes[:grounding.MaxReferenceRunes]
-			}
-			examples = append(examples, grounding.Reference{PageID: p.ID, Revision: p.Revision, Role: ref.Role, Markdown: string(runes)})
+			examples = append(examples, grounding.Reference{PageID: p.ID, Revision: p.Revision, Role: ref.Role, Markdown: sample})
 		}
 	}
 	_, warnings := grounding.CheckOverlap(body, examples, result.Content.LanguageCode)
 	v.Issues = append(v.Issues, warnings...)
 	return v, nil
+}
+
+func (v *Validation) exampleMarkdown(ctx context.Context, body string, options draft.Options) (string, error) {
+	derived, err := draft.DeriveMarkdown(ctx, body, options)
+	if errors.Is(err, markdown.ErrBodyTooLarge) {
+		v.Issues = append(v.Issues, draft.NewIssue("html_conversion_lossy", "references", options.UILanguage))
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	runes := []rune(derived.Markdown)
+	return string(runes[:min(len(runes), grounding.MaxReferenceRunes)]), nil
 }
 
 func sourceConflict(language string) error {
@@ -255,13 +265,11 @@ func (s *Service) inheritReferences(ctx context.Context, p store.Page, v *Valida
 		if err != nil {
 			return nil, err
 		}
-		derived, err := draft.DeriveMarkdown(ctx, version.Body, draft.Options{Resolver: r.DraftResolver(), SiteURL: s.SiteURL, UILanguage: p.LanguageCode})
+		sample, err := v.exampleMarkdown(ctx, version.Body, draft.Options{Resolver: r.DraftResolver(), SiteURL: s.SiteURL, UILanguage: p.LanguageCode})
 		if err != nil {
 			return nil, err
 		}
-		runes := []rune(derived.Markdown)
-		runes = runes[:min(len(runes), grounding.MaxReferenceRunes)]
-		examples = append(examples, grounding.Reference{PageID: ref.PageID, Revision: ref.Revision, Role: ref.Role, Markdown: string(runes)})
+		examples = append(examples, grounding.Reference{PageID: ref.PageID, Revision: ref.Revision, Role: ref.Role, Markdown: sample})
 	}
 	_, issues := grounding.CheckOverlap(body, examples, p.LanguageCode)
 	v.Issues = append(v.Issues, issues...)

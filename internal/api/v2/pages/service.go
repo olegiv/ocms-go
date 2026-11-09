@@ -634,7 +634,7 @@ func (s *Service) applyUpdate(ctx context.Context, a v2.Actor, in *UpdatePageBod
 		}
 		params.PageType = *in.PageType
 	}
-	if in.FeaturedImageID != nil {
+	if in.FeaturedImageID != nil && (!existing.FeaturedImageID.Valid || *in.FeaturedImageID != existing.FeaturedImageID.Int64) {
 		params.FeaturedImageID = util.NullInt64FromPtr(in.FeaturedImageID)
 		if err := refusalError(pagewrite.FeaturedImageSize(ctx, s.queries, params.FeaturedImageID), "featured_image_id", "Failed to check featured image"); err != nil {
 			return err

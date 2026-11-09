@@ -607,36 +607,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		validationErrors["video_title"] = "Video title must be at most 255 characters"
 	}
 
-	// If there are validation errors, re-render the form
+	// If there are validation errors, re-render the form.
 	if len(validationErrors) > 0 {
-		// Load all categories and preserve selected categories for re-rendering
-		allCategories, err := h.queries.ListCategories(r.Context())
-		if err != nil {
-			slog.Error("failed to list categories", "error", err)
-			allCategories = []store.Category{}
-		}
-		categoryTree := buildPageCategoryTree(allCategories, nil, 0)
-
-		// Load languages for re-rendering
-		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
-
-		data := PageFormData{
-			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
-			Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
-			AllCategories: categoryTree,
-			AllLanguages:  allLanguages,
-			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
-			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
-			Statuses:      ValidPageStatuses,
-			PageTypes:     ValidPageTypes,
-			Errors:        validationErrors,
-			FormValues:    input.FormValues,
-			IsEdit:        false,
-		}
-
-		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
-		viewData := convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)
-		renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
+		h.renderPageFormErrors(w, r, nil, input, validationErrors, http.StatusOK)
 		return
 	}
 
@@ -677,15 +650,12 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
 	}, h.formWrite(r, input, nil))
-	if errors.Is(err, errPageRouteTaken) {
-		// A language claimed the prefix between validation and this write.
-		flashError(w, r, h.renderer, redirectAdminPagesNew,
-			"Slug conflicts with the URL prefix of an active language")
+	if errs := pageWriteFormErrors(lang, err); errs != nil {
+		h.renderPageFormErrors(w, r, nil, input, errs, http.StatusUnprocessableEntity)
 		return
 	}
 	if err != nil {
-		slog.Error("failed to create page", "error", err)
-		flashError(w, r, h.renderer, redirectAdminPagesNew, "Error creating page")
+		h.preservePageEdits(w, r, 0, fmt.Errorf("create page: %w", err))
 		return
 	}
 
@@ -900,7 +870,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		h.renderEditFormErrors(w, r, existingPage, input, validationErrors, http.StatusOK)
+		h.renderPageFormErrors(w, r, &existingPage, input, validationErrors, http.StatusOK)
 		return
 	}
 
@@ -956,28 +926,16 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
-	}, existingPage.Slug, h.formWrite(r, input, submittedPageRevision(r), existingPage))
-	if errors.Is(err, errPageRouteTaken) {
-		// A language claimed the prefix between validation and this write.
-		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id),
-			"Slug conflicts with the URL prefix of an active language")
-		return
-	}
+	}, existingPage.Slug, h.formWrite(r, input, submittedPageRevision(r)))
 	if h.pageConflict(w, r, err, existingPage, input) {
 		return
 	}
-	if errors.Is(err, review.ErrHardValidation) || errors.Is(err, review.ErrSiteURLRequired) {
-		message, _ := pageWriteMessage(lang, err)
-		h.renderEditFormErrors(w, r, existingPage, input, map[string]string{"body": message}, http.StatusUnprocessableEntity)
-		return
-	}
-	if message, ok := pageWriteMessage(lang, err); ok {
-		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), message)
+	if errs := pageWriteFormErrors(lang, err); errs != nil {
+		h.renderPageFormErrors(w, r, &existingPage, input, errs, http.StatusUnprocessableEntity)
 		return
 	}
 	if err != nil {
-		slog.Error("failed to update page", "error", err, "page_id", id)
-		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Error updating page")
+		h.preservePageEdits(w, r, id, fmt.Errorf("update page: %w", err))
 		return
 	}
 
@@ -1113,45 +1071,66 @@ func (h *PagesHandler) deletePageForBulk(r *http.Request, id int64) (store.Page,
 	return page, nil
 }
 
-// renderEditFormErrors re-renders the edit form with the submitted values and
-// errs, so a refused save keeps the editor's changes.
-func (h *PagesHandler) renderEditFormErrors(w http.ResponseWriter, r *http.Request, existingPage store.Page, input pageFormInput, errs map[string]string, status int) {
+// renderPageFormErrors keeps submitted fields visible after a refused save.
+func (h *PagesHandler) renderPageFormErrors(w http.ResponseWriter, r *http.Request, existingPage *store.Page, input pageFormInput, errs map[string]string, status int) {
 	lang := h.renderer.GetAdminLang(r)
-	// Load all categories and preserve selected categories for re-rendering
-	allCategories, err := h.queries.ListCategories(r.Context())
+	ctx := r.Context()
+	var pageID int64
+	if existingPage != nil {
+		pageID = existingPage.ID
+	}
+	allCategories, err := h.queries.ListCategories(ctx)
 	if err != nil {
-		slog.Error("failed to list categories", "error", err)
-		allCategories = nil
+		h.preservePageEdits(w, r, pageID, fmt.Errorf("load categories for page form: %w", err))
+		return
+	}
+	tags, err := h.submittedPageTags(ctx, r.Form["tags[]"], lang)
+	if err != nil {
+		h.preservePageEdits(w, r, pageID, err)
+		return
+	}
+	featured, err := h.queryImageData(ctx, input.FeaturedImageID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.preservePageEdits(w, r, pageID, fmt.Errorf("load featured image for page form: %w", err))
+		return
+	}
+	ogImage, err := h.queryImageData(ctx, input.OgImageID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.preservePageEdits(w, r, pageID, fmt.Errorf("load Open Graph image for page form: %w", err))
+		return
 	}
 	data := PageFormData{
-		Page:          &existingPage,
-		PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
-		Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
-		Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
-		AllCategories: buildPageCategoryTree(allCategories, nil, 0),
-		FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
-		OgImage:       h.loadImageData(r.Context(), input.OgImageID),
-		Statuses:      ValidPageStatuses,
-		PageTypes:     ValidPageTypes,
-		Errors:        errs,
-		FormValues:    input.FormValues,
-		IsEdit:        true,
+		Page: existingPage, Tags: tags, Categories: selectedPageCategoriesFromForm(r.Form["categories[]"]),
+		Aliases: pageAliasesFromForm(r.Form["aliases[]"]), AllCategories: buildPageCategoryTree(allCategories, nil, 0),
+		FeaturedImage: featured, OgImage: ogImage, Statuses: ValidPageStatuses, PageTypes: ValidPageTypes,
+		Errors: errs, FormValues: input.FormValues, IsEdit: existingPage != nil,
 	}
-	// Keep the AI-access control and the editor's choice, as the edit page does.
-	if user := middleware.GetUser(r); user != nil {
-		data.CanManageAI = existingPage.AuthorID == user.ID || user.Role == model.RoleAdmin
+	titleKey, breadcrumbs := "pages.new", pagesNewBreadcrumbs(lang)
+	if existingPage == nil {
+		data.AllLanguages = ListActiveLanguagesWithFallback(ctx, h.queries)
+	} else {
+		titleKey, breadcrumbs = "pages.edit", pagesEditBreadcrumbs(lang, existingPage.Title, pageID)
+		data.PublicURL = publicPagePath(ctx, h.queries, *existingPage)
+		// Keep the submitted revision, including an explicit conflict confirmation.
+		if revision := submittedPageRevision(r); revision != nil {
+			data.FormValues["base_revision"] = strconv.FormatInt(*revision, 10)
+		}
+		if user := middleware.GetUser(r); user != nil {
+			data.CanManageAI = existingPage.AuthorID == user.ID || user.Role == model.RoleAdmin
+		}
+		access, accessErr := h.queries.GetPageAIAccess(ctx, pageID)
+		if accessErr != nil && !errors.Is(accessErr, sql.ErrNoRows) {
+			h.preservePageEdits(w, r, pageID, fmt.Errorf("load page AI access: %w", accessErr))
+			return
+		}
+		data.AIEditable = access.AiEditable
+		if data.CanManageAI && r.FormValue("ai_access_present") != "" {
+			data.AIEditable = r.FormValue("allow_ai_edits") == "on"
+		}
 	}
-	access, err := h.queries.GetPageAIAccess(r.Context(), existingPage.ID)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		slog.Error("failed to load page AI access", "error", err, "page_id", existingPage.ID)
-	}
-	data.AIEditable = access.AiEditable
-	if data.CanManageAI && r.FormValue("ai_access_present") != "" {
-		data.AIEditable = r.FormValue("allow_ai_edits") == "on"
-	}
-	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, existingPage.ID))
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, titleKey), breadcrumbs)
 	if status != http.StatusOK {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set(HeaderContentType, "text/html; charset=utf-8")
 		w.WriteHeader(status)
 	}
 	renderTempl(w, r, adminviews.PageFormPage(pc, convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)))
@@ -1799,6 +1778,9 @@ type pageFormWrite struct {
 // writer rather than interleaving them.
 func (h *PagesHandler) createPageGuarded(ctx context.Context, params store.CreatePageParams, option pageFormWrite) (store.Page, error) {
 	return h.writePageGuarded(ctx, params.Slug, "", option, func(work *pagewrite.Tx) (store.Page, error) {
+		if err := pagewrite.FeaturedImageSize(ctx, work.Q, params.FeaturedImageID); err != nil {
+			return store.Page{}, err
+		}
 		page, err := work.Q.CreatePage(ctx, params)
 		if err != nil {
 			return store.Page{}, err
@@ -1810,8 +1792,14 @@ func (h *PagesHandler) createPageGuarded(ctx context.Context, params store.Creat
 
 func (h *PagesHandler) updatePageGuarded(ctx context.Context, params store.UpdatePageParams, currentSlug string, option pageFormWrite) (store.Page, error) {
 	return h.writePageGuarded(ctx, params.Slug, currentSlug, option, func(work *pagewrite.Tx) (store.Page, error) {
-		if _, err := work.Track(ctx, params.ID, option.BaseRevision, true); err != nil {
+		current, err := work.Track(ctx, params.ID, option.BaseRevision, true)
+		if err != nil {
 			return store.Page{}, err
+		}
+		if params.FeaturedImageID != current.FeaturedImageID {
+			if err := pagewrite.FeaturedImageSize(ctx, work.Q, params.FeaturedImageID); err != nil {
+				return store.Page{}, err
+			}
 		}
 		return work.Q.UpdatePage(ctx, params)
 	})
@@ -1901,6 +1889,19 @@ func (h *PagesHandler) pageRouteConflict(ctx context.Context, path string) strin
 // edited, or 0 for a new one. It runs before any write, so an update never
 // clears aliases it cannot save again.
 func (h *PagesHandler) validatePageAliases(ctx context.Context, aliases []string, pageID int64) string {
+	err := checkPageAliases(ctx, h.queries, aliases, pageID)
+	if err == nil {
+		return ""
+	}
+	var refusal *pagewrite.Refusal
+	if errors.As(err, &refusal) {
+		return refusal.Reason
+	}
+	slog.ErrorContext(ctx, "failed to validate page aliases", "error", err, "page_id", pageID)
+	return "Error checking for alias conflicts"
+}
+
+func checkPageAliases(ctx context.Context, queries *store.Queries, aliases []string, pageID int64) error {
 	seen := make(map[string]bool, len(aliases))
 	for _, alias := range aliases {
 		alias = strings.TrimSpace(alias)
@@ -1908,32 +1909,30 @@ func (h *PagesHandler) validatePageAliases(ctx context.Context, aliases []string
 			continue
 		}
 		if !util.IsValidAlias(alias) {
-			return fmt.Sprintf("Alias /%s: use lowercase letters, numbers and hyphens, with / between segments", alias)
+			return &pagewrite.Refusal{Reason: fmt.Sprintf("Alias /%s: use lowercase letters, numbers and hyphens, with / between segments", alias)}
 		}
 		if seen[alias] {
-			return fmt.Sprintf("Alias /%s is listed twice", alias)
+			return &pagewrite.Refusal{Reason: fmt.Sprintf("Alias /%s is listed twice", alias)}
 		}
 		seen[alias] = true
-		conflict, err := pagewrite.AliasRouteConflict(ctx, h.queries, alias, pageID)
+		conflict, err := pagewrite.AliasRouteConflict(ctx, queries, alias, pageID)
 		if err != nil {
-			slog.Error("database error checking page route conflicts", "error", err, "path", alias)
-			return "Error checking for route conflicts"
+			return fmt.Errorf("check page alias route: %w", err)
 		}
 		if conflict != "" {
-			return fmt.Sprintf("Alias /%s: %s", alias, conflict)
+			return &pagewrite.Refusal{Reason: fmt.Sprintf("Alias /%s: %s", alias, conflict)}
 		}
-		taken, err := h.queries.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{
+		taken, err := queries.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{
 			Slug: alias, ID: pageID, Alias: alias, PageID: pageID,
 		})
 		if err != nil {
-			slog.Error("database error checking page alias", "error", err, "alias", alias, "page_id", pageID)
-			return "Error checking for alias conflicts"
+			return fmt.Errorf("check page alias availability: %w", err)
 		}
 		if taken != 0 {
-			return fmt.Sprintf("Alias /%s is already used by another page", alias)
+			return &pagewrite.Refusal{Reason: fmt.Sprintf("Alias /%s is already used by another page", alias)}
 		}
 	}
-	return ""
+	return nil
 }
 
 // pageAliasesFromForm returns the submitted aliases, so a form re-rendered

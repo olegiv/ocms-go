@@ -143,11 +143,8 @@ func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVer
 				return err
 			}
 		}
-		if err = t.Q.ClearPageAliases(ctx, page.ID); err != nil {
-			return err
-		}
 		for _, alias := range saved.Aliases {
-			if conflict, err := RouteConflict(ctx, t.Q, alias); err != nil {
+			if conflict, err := AliasRouteConflict(ctx, t.Q, alias, page.ID); err != nil {
 				return err
 			} else if conflict != "" {
 				return refuse(conflict)
@@ -159,6 +156,11 @@ func (t *Tx) Restore(ctx context.Context, page store.Page, version store.PageVer
 			if exists != 0 {
 				return refuse("recorded alias is occupied")
 			}
+		}
+		if err = t.Q.ClearPageAliases(ctx, page.ID); err != nil {
+			return err
+		}
+		for _, alias := range saved.Aliases {
 			if _, err = t.Q.CreatePageAlias(ctx, store.CreatePageAliasParams{PageID: page.ID, Alias: alias, CreatedAt: time.Now().UTC()}); err != nil {
 				return err
 			}

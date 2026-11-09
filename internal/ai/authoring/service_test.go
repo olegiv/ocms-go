@@ -23,6 +23,7 @@ import (
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/api/v2/pages"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/seo/markdown"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -214,6 +215,120 @@ func TestDraftReceiptsSurvivePostCommitProvenanceFault(t *testing.T) {
 				t.Fatalf("revision after replay = %d, %v, want %d", page.Revision, err, first.Revision)
 			}
 		})
+	}
+}
+
+func TestDraftListDistinguishesLanguageFaultFromInvalidInput(t *testing.T) {
+	f := setup(t)
+	if _, err := f.svc.List(f.ctx, f.actor, authoring.ListInput{LanguageCode: "en"}); err != nil {
+		t.Fatalf("active language: %v", err)
+	}
+	if _, err := f.svc.List(f.ctx, f.actor, authoring.ListInput{LanguageCode: "absent"}); code(err) != "validation_error" {
+		t.Fatalf("absent language = %v, want validation error", err)
+	}
+	if _, err := f.db.Exec(`ALTER TABLE languages RENAME TO unavailable_languages`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.List(f.ctx, f.actor, authoring.ListInput{LanguageCode: "en"}); err == nil || code(err) == "validation_error" || !strings.Contains(err.Error(), "no such table") {
+		t.Fatalf("storage fault = %v, want underlying query failure", err)
+	}
+}
+
+func TestDraftReadsAndReferencesHandleOversizedStoredHTML(t *testing.T) {
+	f := setup(t)
+	human := v2.ActorForUser(f.user, []string{model.PermissionPagesWrite})
+	longBody := "<p>" + strings.Repeat("x", markdown.MaxHTMLBytes) + "</p>"
+	example, err := f.pages.Create(f.ctx, human, pages.CreatePageBody{Title: "Large example", Slug: "large-example", Body: longBody, Status: "published"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := input("Draft with a large example")
+	in.Draft.References = draft.Set([]draft.Reference{{Ref: fmt.Sprint(example.ID), Role: "example"}})
+	saved, err := f.svc.Create(f.ctx, f.actor, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertExampleWarning := func(pageID int64) {
+		t.Helper()
+		detail, err := f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: pageID})
+		if err != nil || detail.BodyMarkdown == "" || len(detail.Validated.References) != 1 || detail.Validated.References[0].PageID != example.ID {
+			t.Fatalf("ordinary draft lost its body or reference: %v", err)
+		}
+		for _, issue := range detail.Validated.Issues {
+			if issue.Code == "html_conversion_lossy" && issue.Field == "references" {
+				return
+			}
+		}
+		t.Fatal("oversized example omitted the conversion warning")
+	}
+	assertExampleWarning(saved.PageID)
+	updated, err := f.svc.Update(f.ctx, f.actor, authoring.UpdateInput{
+		RequestID: uuid.NewString(), PageID: saved.PageID, BaseRevision: saved.Revision,
+		Changes: draft.Changes{BodyMarkdown: draft.Set("A new body with the inherited example.")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertExampleWarning(saved.PageID)
+	if _, err = f.pages.Update(f.ctx, human, saved.PageID, pages.UpdatePageBody{BaseRevision: &updated.Revision, Body: &longBody}); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := f.svc.Get(f.ctx, f.actor, authoring.PageInput{PageID: saved.PageID})
+	if err != nil || detail.BodyHTML != longBody || detail.BodyMarkdown != "" {
+		t.Fatalf("oversized draft should return HTML and omit the Markdown conversion: %v", err)
+	}
+	for _, issue := range detail.ConversionWarnings {
+		if issue.Code == "html_conversion_lossy" && issue.Field == "body_markdown" {
+			return
+		}
+	}
+	t.Fatal("oversized draft omitted the conversion warning")
+}
+
+func TestHistoricalFeaturedImageCanBeRetainedByRESTAndMCP(t *testing.T) {
+	f := setup(t)
+	newMedia := func(width int64) int64 {
+		t.Helper()
+		now := time.Now()
+		media, err := f.q.CreateMedia(f.ctx, store.CreateMediaParams{
+			Uuid: uuid.NewString(), Filename: "image.jpg", MimeType: model.MimeTypeJPEG, Size: 1,
+			Width: sql.NullInt64{Int64: width, Valid: true}, Height: sql.NullInt64{Int64: 900, Valid: true},
+			UploadedBy: f.user.ID, LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return media.ID
+	}
+	original, replacement := newMedia(1500), newMedia(100)
+	in := input("Historical image draft")
+	in.Draft.FeaturedImageID = draft.SetNullable(original)
+	saved, err := f.svc.Create(f.ctx, f.actor, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.db.Exec(`UPDATE media SET width = 100 WHERE id = ?`, original); err != nil {
+		t.Fatal(err)
+	}
+	human := v2.ActorForUser(f.user, []string{model.PermissionPagesWrite})
+	title := "REST title"
+	edited, err := f.pages.Update(f.ctx, human, saved.PageID, pages.UpdatePageBody{
+		BaseRevision: &saved.Revision, Title: &title, FeaturedImageID: &original,
+	})
+	if err != nil || edited.FeaturedImageID == nil || *edited.FeaturedImageID != original || edited.Title != title {
+		t.Fatalf("REST retention failed: %+v %v", edited, err)
+	}
+	changed, err := f.svc.Update(f.ctx, f.actor, authoring.UpdateInput{
+		RequestID: uuid.NewString(), PageID: saved.PageID, BaseRevision: edited.Revision,
+		Changes: draft.Changes{Title: draft.Set("MCP title"), FeaturedImageID: draft.SetNullable(original)},
+	})
+	if err != nil || changed.Revision != edited.Revision+1 {
+		t.Fatalf("MCP retention failed: %+v %v", changed, err)
+	}
+	if _, err = f.pages.Update(f.ctx, human, saved.PageID, pages.UpdatePageBody{
+		BaseRevision: &changed.Revision, FeaturedImageID: &replacement,
+	}); code(err) != "validation_error" {
+		t.Fatalf("new undersized image = %v, want validation refusal", err)
 	}
 }
 

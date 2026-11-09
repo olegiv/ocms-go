@@ -14,6 +14,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/ai/grounding"
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/contentpath"
+	"github.com/olegiv/ocms-go/internal/seo/markdown"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -43,7 +44,9 @@ func (s *Service) Get(ctx context.Context, a v2.Actor, in PageInput) (DraftDetai
 		return DraftDetail{}, err
 	}
 	derived, err := draft.DeriveMarkdown(ctx, p.Body, options)
-	if err != nil {
+	if errors.Is(err, markdown.ErrBodyTooLarge) {
+		derived.Issues = append(derived.Issues, draft.NewIssue("html_conversion_lossy", "body_markdown", p.LanguageCode))
+	} else if err != nil {
 		return DraftDetail{}, err
 	}
 	result := DraftDetail{DraftSummary: s.summary(p), Slug: p.Slug, Summary: p.Summary, PageType: p.PageType, BodyHTML: p.Body, BodyMarkdown: derived.Markdown, MetaTitle: p.MetaTitle, MetaDescription: p.MetaDescription, MetaKeywords: c.MetaKeywords, Tags: c.Tags, CategoryIDs: categories, FeaturedImageID: c.FeaturedImageID, Validated: emptyValidation(), Verified: Verified{Source: "not_recorded"}, ConversionWarnings: append([]draft.Issue{}, derived.Issues...)}
@@ -112,7 +115,10 @@ func (s *Service) List(ctx context.Context, a v2.Actor, in ListInput) (ListResul
 	}
 	if in.LanguageCode != "" {
 		if _, err := contentpath.RouteLanguage(ctx, s.Q, in.LanguageCode); err != nil {
-			return ListResult{}, v2.NewValidationError(map[string]string{"language_code": "Choose an active language"}, "Validation failed")
+			if errors.Is(err, sql.ErrNoRows) {
+				return ListResult{}, v2.NewValidationError(map[string]string{"language_code": "Choose an active language"}, "Validation failed")
+			}
+			return ListResult{}, fmt.Errorf("resolve draft list language: %w", err)
 		}
 	}
 	if in.Page == 0 {

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -28,6 +29,108 @@ import (
 	"github.com/olegiv/ocms-go/internal/review"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+func TestPageSaveKeepsSubmittedFormOnTransactionFailure(t *testing.T) {
+	for _, operation := range []string{"create", "update"} {
+		t.Run(operation, func(t *testing.T) {
+			if err := i18n.Init(nil); err != nil {
+				t.Fatal(err)
+			}
+			db, sm := testHandlerSetup(t)
+			user := createTestAdminUser(t, db)
+			renderer, err := render.New(render.Config{TemplatesFS: fstest.MapFS{}, SessionManager: sm, DB: db})
+			if err != nil {
+				t.Fatal(err)
+			}
+			h := NewPagesHandler(db, renderer, sm)
+			router := chi.NewRouter()
+			router.Use(sm.LoadAndSave)
+			router.Post("/admin/pages", h.Create)
+			router.Post("/admin/pages/{id}", h.Update)
+			ctx := t.Context()
+			q := store.New(db)
+			now := time.Now()
+			tag, err := q.CreateTag(ctx, store.CreateTagParams{
+				Name: "Keep this tag", Slug: "keep-this-tag", LanguageCode: "en", CreatedAt: now, UpdatedAt: now,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			const body = "<p>Keep my submitted text &amp; formatting.</p>"
+			target := "/admin/pages"
+			form := url.Values{
+				"title": {"Submitted title"}, "slug": {"submitted-title"}, "body": {body},
+				"status": {"draft"}, "language_code": {"en"}, "page_type": {"post"},
+				"tags[]": {strconv.FormatInt(tag.ID, 10), "9999"},
+			}
+			if operation == "update" {
+				page, err := pagewrite.Insert(ctx, q, provenance.Principal{UserID: user.ID, Source: "human"}, store.CreatePageParams{
+					Title: "Original title", Slug: "submitted-title", Body: "<p>Original text.</p>",
+					Status: "draft", LanguageCode: "en", PageType: "post", AuthorID: user.ID, CreatedAt: now, UpdatedAt: now,
+				}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				target += "/" + strconv.FormatInt(page.ID, 10)
+				form.Set("base_revision", strconv.FormatInt(page.Revision, 10))
+			}
+			post := func() *httptest.ResponseRecorder {
+				t.Helper()
+				req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				rr := httptest.NewRecorder()
+				router.ServeHTTP(rr, withUser(req, user))
+				return rr
+			}
+			assertUnchanged := func() {
+				t.Helper()
+				page, err := q.GetPageBySlug(ctx, "submitted-title")
+				if operation == "create" {
+					if !errors.Is(err, sql.ErrNoRows) {
+						t.Fatalf("refused create left a page: %v", err)
+					}
+				} else if err != nil || page.Title != "Original title" || page.Revision != 1 {
+					t.Fatalf("refused update changed the page: %v", err)
+				}
+			}
+			rr := post()
+			rendered := html.UnescapeString(rr.Body.String())
+			if rr.Code != http.StatusUnprocessableEntity || !strings.Contains(rendered, body) ||
+				!strings.Contains(rendered, i18n.T("en", "pages.conflict_missing_tag", 9999)) ||
+				!strings.Contains(rendered, tag.Name) {
+				t.Errorf("missing tag: status %d, want 422 with the reason, body and valid tag", rr.Code)
+			}
+			assertUnchanged()
+			form["tags[]"] = form["tags[]"][:1]
+			if _, err = db.Exec(`CREATE TRIGGER fail_form_assignment BEFORE INSERT ON page_tags
+				BEGIN SELECT RAISE(ABORT, 'fixture private error'); END`); err != nil {
+				t.Fatal(err)
+			}
+			rr = post()
+			rendered = html.UnescapeString(rr.Body.String())
+			if rr.Code != http.StatusServiceUnavailable || rr.Header().Get("Cache-Control") != "no-store" ||
+				!strings.Contains(rendered, body) || !strings.Contains(rendered, `action="`+target+`"`) ||
+				!strings.Contains(rendered, `name="tags[]"`) || strings.Contains(rendered, "fixture private error") {
+				t.Errorf("storage fault: status %d, want 503 with safe retry and the submitted form", rr.Code)
+			}
+			assertUnchanged()
+			if _, err = db.Exec("DROP TRIGGER fail_form_assignment"); err != nil {
+				t.Fatal(err)
+			}
+			if rr := post(); rr.Code != http.StatusSeeOther {
+				t.Fatalf("retry status %d, want successful redirect", rr.Code)
+			}
+			page, err := q.GetPageBySlug(ctx, "submitted-title")
+			if err != nil || page.Title != "Submitted title" || page.Body != body {
+				t.Fatalf("retry failed to save the original submission: %v", err)
+			}
+			tags, err := q.GetTagsForPage(ctx, page.ID)
+			if err != nil || len(tags) != 1 || tags[0].ID != tag.ID {
+				t.Fatalf("retry lost the valid tag: %v", err)
+			}
+		})
+	}
+}
 
 // TestRefusedPageWritesExplainWhy checks that the admin editor tells an
 // editor why a page write was refused instead of "Error updating page", keeps

@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -37,27 +38,24 @@ func submittedPageRevision(r *http.Request) *int64 {
 	return &revision
 }
 
-func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int64, previous ...store.Page) pageFormWrite {
+func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int64) pageFormWrite {
 	userID := middleware.GetUserID(r)
 	return pageFormWrite{UserID: userID, BaseRevision: base, Related: func(work *pagewrite.Tx, page store.Page) error {
 		if err := work.RequireTracked(page.ID); err != nil {
 			return err
 		}
 		ctx := r.Context()
-		if len(previous) == 0 || previous[0].FeaturedImageID != page.FeaturedImageID {
-			if err := pagewrite.FeaturedImageSize(ctx, work.Q, page.FeaturedImageID); err != nil {
-				return err
-			}
-		}
 		if err := work.Q.ClearPageTags(ctx, page.ID); err != nil {
 			return err
 		}
 		for _, raw := range r.Form["tags[]"] {
 			id, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil {
-				return errors.New("invalid tag ID")
+				return &pagewrite.Refusal{MessageKey: "pages.invalid_taxonomy_selection"}
 			}
-			if _, err = work.Q.GetTagByID(ctx, id); err != nil {
+			if _, err = work.Q.GetTagByID(ctx, id); errors.Is(err, sql.ErrNoRows) {
+				return &pagewrite.Refusal{MessageKey: "pages.conflict_missing_tag", MessageArgs: []any{id}}
+			} else if err != nil {
 				return err
 			}
 			if err = work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: page.ID, TagID: id}); err != nil {
@@ -70,19 +68,19 @@ func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int
 		for _, raw := range r.Form["categories[]"] {
 			id, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil {
-				return errors.New("invalid category ID")
+				return &pagewrite.Refusal{MessageKey: "pages.invalid_taxonomy_selection"}
 			}
-			if _, err = work.Q.GetCategoryByID(ctx, id); err != nil {
+			if _, err = work.Q.GetCategoryByID(ctx, id); errors.Is(err, sql.ErrNoRows) {
+				return &pagewrite.Refusal{MessageKey: "pages.save_missing_category", MessageArgs: []any{id}}
+			} else if err != nil {
 				return err
 			}
 			if err = work.Q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: page.ID, CategoryID: id}); err != nil {
 				return err
 			}
 		}
-		transactional := *h
-		transactional.queries = work.Q
-		if message := transactional.validatePageAliases(ctx, r.Form["aliases[]"], page.ID); message != "" {
-			return fmt.Errorf("%s", message)
+		if err := checkPageAliases(ctx, work.Q, r.Form["aliases[]"], page.ID); err != nil {
+			return err
 		}
 		if err := work.Q.ClearPageAliases(ctx, page.ID); err != nil {
 			return err
@@ -107,7 +105,7 @@ func (h *PagesHandler) formWrite(r *http.Request, input pageFormInput, base *int
 				return err
 			}
 			if page.AuthorID != user.ID && user.Role != model.RoleAdmin {
-				return errors.New("only the owner or an administrator may change AI access")
+				return &pagewrite.Refusal{MessageKey: "pages.error_manage_ai_access"}
 			}
 			enabled := r.FormValue("allow_ai_edits") == "on"
 			// A save that leaves AI access as it was must not re-attribute it:
@@ -160,6 +158,34 @@ func pageWriteMessage(lang string, err error) (message string, ok bool) {
 	return "", false
 }
 
+func pageWriteFormErrors(lang string, err error) map[string]string {
+	if errors.Is(err, errPageRouteTaken) {
+		return map[string]string{"slug": "Slug conflicts with the URL prefix of an active language"}
+	}
+	if message, ok := pageWriteMessage(lang, err); ok {
+		return map[string]string{"body": message}
+	}
+	return nil
+}
+
+func (h *PagesHandler) submittedPageTags(ctx context.Context, values []string, lang string) ([]store.Tag, error) {
+	var tags []store.Tag
+	for _, raw := range values {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			continue
+		}
+		tag, err := h.queries.GetTagByID(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			tag = store.Tag{ID: id, Name: i18n.T(lang, "pages.conflict_missing_tag", id)}
+		} else if err != nil {
+			return nil, fmt.Errorf("load submitted tag %d: %w", id, err)
+		}
+		tags = append(tags, tag)
+	}
+	return tags, nil
+}
+
 func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err error, page store.Page, input pageFormInput) bool {
 	var conflict *pagewrite.Conflict
 	if !errors.As(err, &conflict) && !errors.Is(err, pagewrite.ErrRevisionRequired) {
@@ -176,20 +202,10 @@ func (h *PagesHandler) pageConflict(w http.ResponseWriter, r *http.Request, err 
 		return true
 	}
 	lang := h.renderer.GetAdminLang(r)
-	var tags []store.Tag
-	for _, raw := range r.Form["tags[]"] {
-		id, parseErr := strconv.ParseInt(raw, 10, 64)
-		if parseErr != nil {
-			continue
-		}
-		tag, tagErr := h.queries.GetTagByID(r.Context(), id)
-		if errors.Is(tagErr, sql.ErrNoRows) {
-			tag = store.Tag{ID: id, Name: i18n.T(lang, "pages.conflict_missing_tag", id)}
-		} else if tagErr != nil {
-			h.preservePageEdits(w, r, page.ID, fmt.Errorf("load tag %d for conflict form: %w", id, tagErr))
-			return true
-		}
-		tags = append(tags, tag)
+	tags, loadErr := h.submittedPageTags(r.Context(), r.Form["tags[]"], lang)
+	if loadErr != nil {
+		h.preservePageEdits(w, r, page.ID, loadErr)
+		return true
 	}
 	user, loadErr := h.queries.GetUserByID(r.Context(), middleware.GetUserID(r))
 	if errors.Is(loadErr, sql.ErrNoRows) {
@@ -230,14 +246,19 @@ func (h *PagesHandler) preservePageEdits(w http.ResponseWriter, r *http.Request,
 	status, messageKey := http.StatusNotFound, "pages.edit_recovery_missing"
 	if retryable {
 		status, messageKey = http.StatusServiceUnavailable, "pages.edit_recovery_retry"
-		slog.ErrorContext(r.Context(), "failed to load page edit data", "error", cause, "page_id", pageID, "user_id", middleware.GetUserID(r))
+		slog.ErrorContext(r.Context(), "page save interrupted", "error", cause, "page_id", pageID, "user_id", middleware.GetUserID(r))
 	}
 	title := i18n.T(lang, "pages.edit_recovery_title")
-	pc := buildPageContext(r, h.sessionManager, h.renderer, title, pagesEditBreadcrumbs(lang, r.FormValue("title"), pageID))
+	action, breadcrumbs := redirectAdminPages, pagesNewBreadcrumbs(lang)
+	if pageID > 0 {
+		action = fmt.Sprintf(redirectAdminPagesID, pageID)
+		breadcrumbs = pagesEditBreadcrumbs(lang, r.FormValue("title"), pageID)
+	}
+	pc := buildPageContext(r, h.sessionManager, h.renderer, title, breadcrumbs)
 	w.Header().Set(HeaderContentType, "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	renderTempl(w, r, adminviews.PageEditRecovery(pc, pageID, r.Form, i18n.T(lang, messageKey), retryable))
+	renderTempl(w, r, adminviews.PageEditRecovery(pc, action, r.Form, i18n.T(lang, messageKey), retryable))
 }
 
 // revisionForAction rejects malformed/missing revisions before an editor action.

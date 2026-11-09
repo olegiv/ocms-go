@@ -9679,7 +9679,7 @@ func iconImage16() templ.Component {
 	})
 }
 
-func PageEditRecovery(pc *PageContext, pageID int64, submitted url.Values, message string, retry bool) templ.Component {
+func PageEditRecovery(pc *PageContext, action string, submitted url.Values, message string, retry bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -9733,9 +9733,9 @@ func PageEditRecovery(pc *PageContext, pageID int64, submitted url.Values, messa
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var521 templ.SafeURL
-				templ_7745c5c3_Var521, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/pages/%d", pageID)))
+				templ_7745c5c3_Var521, templ_7745c5c3_Err = templ.JoinURLErrs(action)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2558, Col: 85}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2558, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var521))
 				if templ_7745c5c3_Err != nil {

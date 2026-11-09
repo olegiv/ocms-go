@@ -7844,8 +7844,8 @@
         },
         {
             "id": "pages.edit_recovery_retry",
-            "message": "The editor hit a temporary read error. Retry with your submitted edits below.",
-            "translation": "Редактор столкнулся с временной ошибкой чтения. Повторите попытку с правками, сохранёнными в этой форме."
+            "message": "The editor hit a temporary error. Retry with your submitted edits below.",
+            "translation": "Редактор столкнулся с временной ошибкой. Повторите попытку с правками, сохранёнными в этой форме."
         },
         {
             "id": "pages.edit_recovery_missing",
@@ -7861,6 +7861,21 @@
             "id": "pages.conflict_missing_tag",
             "message": "Tag %d is unavailable. Remove it or select a replacement.",
             "translation": "Тег %d недоступен. Удалите его или выберите другой."
+        },
+        {
+            "id": "pages.invalid_taxonomy_selection",
+            "message": "Choose valid tags and categories.",
+            "translation": "Выберите допустимые теги и категории."
+        },
+        {
+            "id": "pages.save_missing_category",
+            "message": "Category %d is unavailable. Remove it or select a replacement.",
+            "translation": "Категория %d недоступна. Удалите её или выберите другую."
+        },
+        {
+            "id": "pages.error_manage_ai_access",
+            "message": "Only the owner or an administrator can change AI access.",
+            "translation": "Изменить доступ для ИИ может только автор или администратор."
         },
         {
             "id": "pages.revision_conflict_title",

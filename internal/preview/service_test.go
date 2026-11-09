@@ -292,6 +292,65 @@ func TestPreviewCredentialRevocationAndExpiry(t *testing.T) {
 	}
 }
 
+func TestPreviewKeyExpiryCannotExtendIssuedLink(t *testing.T) {
+	for _, scenario := range []string{"shorten", "clear after shortening", "unbounded key", "malformed expiry", "upgrade"} {
+		t.Run(scenario, func(t *testing.T) {
+			f := setup(t)
+			if scenario == "upgrade" {
+				if err := store.RunMigrationCommand(f.ctx, f.db, "down"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			expiry := sql.NullTime{Time: f.now.Add(time.Hour), Valid: scenario != "unbounded key"}
+			key, err := f.q.CreateAPIKey(f.ctx, store.CreateAPIKeyParams{
+				Name: "Share fixture", KeyHash: "unused", KeyPrefix: "fixture",
+				Permissions: `["mcp:access","mcp:drafts"]`, CreatedBy: f.user.ID, IsActive: true,
+				CreatedAt: f.now, UpdatedAt: f.now, ExpiresAt: expiry,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			issuer := provenance.Principal{UserID: f.user.ID, Source: "api", APIKeyID: key.ID}
+			oldLink, humanLink := token(t, f.issue(t, issuer)), token(t, f.issue(t))
+			updateExpiry := func(expiry sql.NullTime) {
+				t.Helper()
+				_, err := f.q.UpdateAPIKey(f.ctx, store.UpdateAPIKeyParams{
+					ID: key.ID, Name: key.Name, Permissions: key.Permissions,
+					IsActive: true, ExpiresAt: expiry, UpdatedAt: f.now,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			checkLink := func(raw string, want error) {
+				t.Helper()
+				if _, err := f.svc.Resolve(f.ctx, raw); !errors.Is(err, want) {
+					t.Fatalf("resolve = %v, want %v", err, want)
+				}
+			}
+			checkLink(oldLink, nil)
+			if scenario == "malformed expiry" {
+				f.exec(t, "UPDATE api_keys SET expires_at='invalid' WHERE id=?", key.ID)
+			} else {
+				cutoff := f.now.Add(15 * time.Minute)
+				updateExpiry(sql.NullTime{Time: cutoff, Valid: true})
+				checkLink(oldLink, nil)
+				f.now = cutoff
+			}
+			checkLink(oldLink, preview.ErrUnavailable)
+			if scenario == "upgrade" {
+				if err = store.Migrate(f.db); err != nil {
+					t.Fatal(err)
+				}
+			}
+			updateExpiry(sql.NullTime{Time: f.now.Add(2 * time.Hour), Valid: scenario != "clear after shortening"})
+			checkLink(oldLink, preview.ErrUnavailable)
+			checkLink(humanLink, nil)
+			checkLink(token(t, f.issue(t, issuer)), nil)
+		})
+	}
+}
+
 func TestPreviewQuotasSeparateHumanAndAgentIssuance(t *testing.T) {
 	for _, scenario := range []string{"active", "hourly"} {
 		t.Run(scenario, func(t *testing.T) {

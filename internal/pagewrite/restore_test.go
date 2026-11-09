@@ -125,6 +125,58 @@ func snapshotWithReferences(t *testing.T, f fixture) store.PageVersion {
 	return store.PageVersion{PageID: f.page.ID, Title: f.page.Title, Body: f.page.Body, SnapshotJson: sql.NullString{String: snapshot, Valid: true}}
 }
 
+func TestRestoreRetainsOwnedLegacyAliasOnly(t *testing.T) {
+	f := setup(t)
+	ctx := t.Context()
+	principal := provenance.Principal{UserID: f.user.ID, Source: "human"}
+	const legacyAlias = "docs/preview/share/guide"
+	work, err := pagewrite.InTx(ctx, f.db, principal, func(tx *pagewrite.Tx) error {
+		if _, err := tx.Track(ctx, f.page.ID, &f.page.Revision, true); err != nil {
+			return err
+		}
+		_, err := tx.Q.CreatePageAlias(ctx, store.CreatePageAliasParams{
+			PageID: f.page.ID, Alias: legacyAlias, CreatedAt: time.Now(),
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := work.Pages[f.page.ID]
+	saved, err := f.q.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{
+		PageID: page.ID, Revision: sql.NullInt64{Int64: page.Revision, Valid: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := func(revision int64) (*pagewrite.Tx, error) {
+		return pagewrite.InTx(ctx, f.db, principal, func(tx *pagewrite.Tx) error {
+			current, err := tx.Track(ctx, page.ID, &revision, true)
+			if err != nil {
+				return err
+			}
+			return tx.Restore(ctx, current, saved, "<p>Restored body</p>")
+		})
+	}
+	work, err = restore(page.Revision)
+	if err != nil {
+		t.Fatalf("restore with the owned alias: %v", err)
+	}
+	restored := work.Pages[page.ID]
+	aliases, err := f.q.GetAliasesForPage(ctx, page.ID)
+	if err != nil || len(aliases) != 1 || aliases[0].Alias != legacyAlias || restored.Body != "<p>Restored body</p>" {
+		t.Fatalf("restore lost the body or alias: %v, %v", aliases, err)
+	}
+	if err = f.q.ClearPageAliases(ctx, page.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, err = restore(restored.Revision)
+	var refusal *pagewrite.Refusal
+	if !errors.As(err, &refusal) {
+		t.Fatalf("restore reintroduced a removed reserved alias: %v", err)
+	}
+}
+
 func TestRestoreCompleteAndLegacyVersionsPreservesCurrentPolicy(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()

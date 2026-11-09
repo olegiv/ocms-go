@@ -131,6 +131,9 @@ func TestUnchangedSaveKeepsAIAccessAttribution(t *testing.T) {
 }
 
 func TestNonOwnerEditorCannotChangeAIAccess(t *testing.T) {
+	if err := i18n.Init(nil); err != nil {
+		t.Fatal(err)
+	}
 	db, cleanup := testutil.TestDB(t)
 	t.Cleanup(cleanup)
 	sm := testSessionManager(t)
@@ -170,7 +173,13 @@ func TestNonOwnerEditorCannotChangeAIAccess(t *testing.T) {
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, withUser(r, user))
-		if response.Code != http.StatusSeeOther {
+		if user.ID != owner.ID && aiChange != "" {
+			if response.Code != http.StatusUnprocessableEntity ||
+				!strings.Contains(response.Body.String(), i18n.T("en", "pages.error_manage_ai_access")) ||
+				!strings.Contains(response.Body.String(), title) {
+				t.Fatalf("%s save returned %d, want refusal with submitted title", user.Name, response.Code)
+			}
+		} else if response.Code != http.StatusSeeOther {
 			t.Fatalf("%s save returned %d", user.Name, response.Code)
 		}
 	}

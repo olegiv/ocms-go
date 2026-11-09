@@ -7844,8 +7844,8 @@
         },
         {
             "id": "pages.edit_recovery_retry",
-            "message": "The editor hit a temporary read error. Retry with your submitted edits below.",
-            "translation": "The editor hit a temporary read error. Retry with your submitted edits below."
+            "message": "The editor hit a temporary error. Retry with your submitted edits below.",
+            "translation": "The editor hit a temporary error. Retry with your submitted edits below."
         },
         {
             "id": "pages.edit_recovery_missing",
@@ -7861,6 +7861,21 @@
             "id": "pages.conflict_missing_tag",
             "message": "Tag %d is unavailable. Remove it or select a replacement.",
             "translation": "Tag %d is unavailable. Remove it or select a replacement."
+        },
+        {
+            "id": "pages.invalid_taxonomy_selection",
+            "message": "Choose valid tags and categories.",
+            "translation": "Choose valid tags and categories."
+        },
+        {
+            "id": "pages.save_missing_category",
+            "message": "Category %d is unavailable. Remove it or select a replacement.",
+            "translation": "Category %d is unavailable. Remove it or select a replacement."
+        },
+        {
+            "id": "pages.error_manage_ai_access",
+            "message": "Only the owner or an administrator can change AI access.",
+            "translation": "Only the owner or an administrator can change AI access."
         },
         {
             "id": "pages.revision_conflict_title",
