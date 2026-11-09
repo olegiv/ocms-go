@@ -37,6 +37,9 @@ scoped dependency disposition and sign-off.
 - Latest verified deployment: `b58b7b513f7f94bd4c7e208065e12ab35e01e368`.
   The [rollout record](#staging-rollout-of-b58b7b51) identifies the binary,
   image and checks.
+- Earlier deployment: `9799b3e662371d0bec3da62b67824ed01c37f8ae`.
+  The [rollout record](#staging-rollout--2026-11-07) identifies the exact
+  binary and checks.
 - Earlier editor preservation deployment: `6c6110403a7ed5a2aca1b44b20e8455d7fa18cda`;
   source tree `54a68972259447803f6d7c3c37f8b75dea5535e8`, binary build time
   `2026-11-05T07:00:04Z`, checked directly on the host. All three Fly checks
@@ -656,6 +659,33 @@ client and sharing checks retain their recorded build scopes.
 Evidence is under ignored `output/r17-validation/6c611040-staging-20261105/`.
 It includes the snapshot and image receipts, pre/post HTML hashes,
 editor screenshot, anonymous responses and `acceptance-summary.json`.
+
+## Staging rollout — 2026-11-07
+
+Fly deployed a clean archive of `9799b3e662371d0bec3da62b67824ed01c37f8ae`
+and confirmed that the running binary matched. All three Fly checks passed,
+and the public liveness and readiness endpoints returned HTTP 200. The new
+provenance migration installed both attribution triggers on the existing
+volume after a snapshot. Counts for pages, revisions, users, provenance and
+active grants matched before and after the rollout. MFA remained required,
+and the approved staging CAPTCHA override remained in use with zero active
+public forms.
+
+HTTP redirected to HTTPS. Access logs resolved the real client IP with
+forged forwarding headers, and the TOTP login event recorded that same IP.
+OAuth discovery advertised the canonical HTTPS issuer. A dedicated Editor
+completed password and TOTP verification, then approved a scoped authorization
+code grant with S256 PKCE. The token listed 21 MCP tools. After revocation,
+that token returned HTTP 401. The observed OAuth logs excluded the test
+credentials.
+
+Browser checks covered the login page, admin sidebar, account security,
+TinyMCE and the developer theme's mobile navigation with no script-policy
+violations. Staging's `script-src` omitted `'unsafe-eval'`. An anonymous
+English-to-Russian language switch set only the UI preference cookie and
+left the SQLite session rows unchanged. The signed-in switch reused its
+session. The earlier authoring, sharing, client and dependency matrices
+retain their recorded build scopes.
 
 ## Staging rollout of b58b7b51
 

@@ -16,7 +16,7 @@
   "featured_image_id": null,
   "og_image_id": null,
   "taxonomy": "Uses existing categories and tags",
-  "media": "The workflow illustration supplies the inline and featured image. The article displays the inline copy.",
+  "media": "The article displays the workflow illustration inline with alt text and a caption.",
   "evidence": "r17-acceptance.md",
   "scope": "Staging candidate report with acceptance results tied to their tested builds",
   "publication_gate": "Editorial review and explicit approval of production publication"

@@ -60,23 +60,21 @@ oCMS implements defense-in-depth security measures:
 - **Per-Key Source CIDR Allowlists**: Restrict keys to specific IP ranges
 - **API Key Maximum Lifetime**: Configurable expiry enforcement (default 90 days in production)
 - **Source IP Anomaly Detection**: Auto-revoke keys on unexpected source IP changes
-- **Global API CIDR Policy**: Restrict all API access to trusted networks
+- **Global API CIDR Policy** limits REST v2 and MCP API-key requests to configured networks when enforced. MCP OAuth bearer requests use their own authorization path.
 - **Fail-Closed Forwarding**: Unparseable X-Forwarded-For entries are skipped, and the connecting peer's address is used when no entry parses
 
 ### MCP Server Security
-- **Opt-in Endpoint**: The MCP Server module starts inactive; `/api/mcp` returns 404 until an admin enables it
-- **Explicit Permission**: API keys need `mcp:access`; REST integration keys never become usable by AI agents implicitly
-- **Shared API Key Policies**: The same authentication middleware as REST v2 (CIDR allowlists, expiry, maximum lifetime, IP-change revocation, Argon2 verification)
-- **Read-Only Tools**: No tool writes data; a drift test fails if a tool without the read-only annotation is registered
-- **Draft Confidentiality**: Drafts are exposed only when an admin enables it and the key holds `pages:read`; hidden drafts answer "not found" (tag and category page counts still include them, as in REST v2)
-- **No Personal Data**: Author email addresses, users, form submissions, settings and keys are never returned
-- **Origin Validation**: Cross-origin browser requests are rejected (`Sec-Fetch-Site` / `Origin`), countering DNS rebinding
-- **Resource Limits**: 256 KiB request body, 32 concurrent requests, per-IP and per-key rate limits, JSON-RPC batches rejected (one call per request), 25 s per tool call
-- **Cancellation**: Client disconnects and timeouts cancel a tool's database work on every protocol version
-- **Panic Isolation**: Panics in the endpoint, the protocol layer and tools become internal errors instead of crashing the process
-- **Prompt-Injection Guidance**: Server instructions tell agents that returned content is website data, not instructions
-- **Private Responses**: `Cache-Control: no-store` and MCP `cacheScope: private`; internal error details are never sent to agents
-- **Audit Logging**: One structured log line per dispatched tool call (key id and prefix, client, outcome; never keys or arguments; the cause of an internal failure is logged as-is and can quote returned data); settings changes go to the event log
+- **Opt-in endpoint.** The MCP Server module starts inactive. `/api/mcp` returns 404 until an admin enables it.
+- **Explicit access.** Both API keys and OAuth grants require `mcp:access` and a current editor or admin account. Only API keys go through REST v2's API-key authentication, including global and per-key CIDRs, expiry, maximum lifetime, IP-change revocation and Argon2 verification. Optional OAuth verifies the access token, resource, grant, account and scopes separately. See [MCP OAuth](docs/oauth.md).
+- **Gated writes.** When draft authoring is enabled, `mcp:drafts` allows eligible owned draft creation, updates and translation. Revision-pinned share issuance also requires the share policy to allow it. The tool catalog distinguishes reads, writes and share issuance. Publishing and deletion remain human actions.
+- **Draft confidentiality.** Generic reads expose drafts only when enabled and the credential holds `pages:read`. Hidden drafts answer “not found”. Tag and category counts still include them, as in REST v2. Own-draft tools follow the separate `mcp:drafts` policy.
+- **Data exposure.** Content responses omit author email addresses, user records, form submissions, private settings and credentials.
+- **Origin validation.** Cross-origin browser requests are rejected using `Sec-Fetch-Site` and `Origin` to counter DNS rebinding.
+- **Resource limits.** The route allows a 512 KiB request body, 32 concurrent requests and one JSON-RPC message per request. Rate limits apply per IP and per API key or OAuth account. Tool calls are capped at 25 seconds.
+- **Cancellation and panic recovery.** Disconnects and timeouts cancel tool database work on every supported protocol version. Panics in the endpoint, protocol layer and tools become internal errors.
+- **Prompt-injection guidance.** Server instructions tell agents to treat returned site content as untrusted data.
+- **Private responses.** The endpoint sets `Cache-Control: no-store`. Cacheable MCP discovery results use `cacheScope: private`. Internal error details stay server-side.
+- **Audit logging.** Dispatched tool calls record credential identifiers, client and outcome. The structured fields exclude bearer credentials and tool arguments. Internal causes can quote returned data. Settings changes go to the Event Log.
 
 ### Request Security
 - **CSRF Protection**: Fetch Metadata headers with Origin/Referer fallback

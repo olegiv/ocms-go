@@ -45,11 +45,11 @@ For each finding:
 ## Step 5: Resolve or explicitly accept
 
 - If the user says "fix now": implement the fix, re-run the full Go test suite, and return to Step 2 on the updated diff.
-- If the user says "defer" or "accept": note each accepted finding in the PR description so the reviewer's context survives.
+- If the user says "defer" or "accept", keep security findings and their disposition in the private review record. Exclude them from the public PR body, including summaries, reproductions, and links to private audit material. Record accepted non-security follow-ups in the PR description when relevant.
 
 ## Step 6: Hand off to `gh pr create`
 
-Only once every finding is either fixed or explicitly accepted do you proceed to create the PR. Use the usual `gh pr create` flow with a Summary + Test plan in the body.
+Once every finding is fixed or explicitly accepted, prepare a public Summary and Test plan from the changes and their verification. Show the exact body to the user and wait for separate approval before running `gh pr create`. Keep the body free of security findings and private review material.
 
 ## Why this command exists
 

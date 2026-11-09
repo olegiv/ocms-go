@@ -68,7 +68,7 @@ a signed-in session. Consent shows the account, client ID, client metadata
 host, callback host and requested permissions. Client names are unverified
 registration data. The decision has a session-bound, single-use nonce,
 origin checks and a ten-minute deadline. Closing or denying it grants nothing.
-Revoke an app in **Account → Security → Connected AI apps**.
+Revoke an app in **Account → Connected apps** (`/account/connected-apps`).
 
 ## Protocol and permissions
 

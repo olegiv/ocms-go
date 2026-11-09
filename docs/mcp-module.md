@@ -60,8 +60,8 @@ verification and production draft are recorded in the
   be an editor or admin; OAuth permissions also follow current grant scopes
   and account credential version. OAuth bearers follow a separate path from
   API keys. The global `OCMS_API_ALLOWED_CIDRS` allowlist and per-key source
-  CIDRs do not apply to OAuth. Both paths still use the endpoint's per-IP
-  rate limit. See [OAuth](oauth.md).
+  CIDRs do not apply to OAuth. Both paths use the endpoint's per-IP rate limit. API-key requests
+  also have a per-key limit and OAuth requests have a per-account limit. See [OAuth](oauth.md).
 - **Drafts are hidden by default.** Generic page tools show unpublished
   content only when **Expose drafts to AI agents** is on and the credential
   holds `pages:read`. With draft authoring enabled, a credential with
@@ -99,8 +99,10 @@ apart from an unusable one, such as `example.com` without a scheme.
 
 ### Production API key policies apply
 
-MCP requests go through the same `middleware.APIKeyAuth` as REST v2. In
-production, each of these defaults to on:
+Requests authenticated with an API key go through the same
+`middleware.APIKeyAuth` as REST v2. OAuth bearer requests use the separate
+[OAuth authorization path](oauth.md). In staging and production, the following
+API-key policies apply by default:
 
 | Variable | Effect on MCP clients |
 |---|---|
@@ -145,8 +147,17 @@ Requests from outside the allowlist are rejected.
 
 ## Connecting clients
 
-The endpoint takes a static bearer token, which is the API key. Every client
-that supports remote HTTP MCP servers with custom headers can connect.
+Use either browser OAuth or a static API-key bearer token.
+
+For OAuth, follow [MCP OAuth setup](oauth.md#enable) and restart. Add the
+HTTPS `/api/mcp` endpoint to the client using its OAuth or browser sign-in
+mode. Sign in as an editor or admin, complete any required MFA and approve
+the requested scopes. For a command-line client, use its remote HTTP MCP
+setup without a static `Authorization` header so it can obtain its own token.
+Use the OAuth setup guide for compatible client registration options.
+
+For API-key authentication, use a key with `mcp:access` and a client that
+supports remote HTTP MCP servers with custom headers.
 
 **Claude Code:**
 
@@ -176,10 +187,8 @@ can read headers from environment variables.
 
 **Claude Desktop and claude.ai remote connectors:**
 
-Request header authentication is a **limited beta**. If **Request headers**
-does not appear in the connector dialog, your organization does not yet have
-access. See Anthropic's
-[custom connector instructions](https://claude.com/docs/connectors/custom/add-unlisted).
+Use these steps when the connector dialog offers **Request headers**. See
+Anthropic's [custom connector instructions](https://claude.com/docs/connectors/custom/add-unlisted).
 
 1. Open **Customize → Connectors → Add custom connector**. For an organization
    connector, an owner uses **Organization settings → Connectors**.
@@ -189,11 +198,9 @@ access. See Anthropic's
    complete value `Bearer <YOUR_API_KEY>`, including the `Bearer ` prefix.
 5. Save the connector and enable it through **+ → Connectors** in the chat.
 
-Configure the source CIDRs described above before connecting. OAuth is not
-implemented by this release; accounts without request header access need a
-local stdio-to-HTTP bridge in Claude Desktop or another client that supports
-bearer headers. OAuth connections reserve the `Authorization` header, so use
-**No sign-in** for this API key setup.
+Configure the source CIDRs described above before connecting with an API key.
+If the connector lacks custom headers, use browser OAuth when enabled and
+supported. The **No sign-in** setting above is for the API-key setup.
 
 ## Tools
 
@@ -218,7 +225,7 @@ Notes:
 
 - **Search:** `search_pages` uses the site's FTS5 index, which covers
   published pages, the same index that powers the public site search. When
-  drafts are visible to the key, it matches titles and body text (never the
+  drafts are visible to the credential, it matches titles and body text (never the
   HTML markup) across all pages instead, as the admin search does.
 - **Markdown bodies:** `body_format: "markdown"` converts the stored HTML with
   the same converter as [Markdown for Agents](agent-ready.md#markdown-negotiation)
@@ -230,10 +237,11 @@ Notes:
   and name.
 - **Pagination:** list results include `total`, `page`, `per_page` and
   `total_pages`.
-- **Tool annotations:** every tool is marked `readOnlyHint: true`,
-  `idempotentHint: true` and `openWorldHint: false`. Results the SDK builds
-  itself, such as `tools/list` and discovery, carry `cacheScope: private`,
-  because each response is produced for one API key.
+- **Tool annotations.** Read tools are read-only and idempotent. Draft
+  creation and updates are write tools with retained idempotency. Share
+  issuance is a write tool with `idempotentHint: false`. All are closed-world
+  tools. Discovery responses use `cacheScope: private` for either credential
+  type.
 
 REST operations without a tool are listed in `restOperationsNotExposed`
 (`modules/mcpserver/catalog.go`), each with its reason: direct REST mutations are covered by draft tools with a different contract,
@@ -243,31 +251,31 @@ has neither a tool nor an entry there.
 
 ### Errors
 
-Tool failures come back as tool results with `isError: true`. Their text is
-the REST v2 error envelope, so an agent can correct its own call:
+Tool failures return an MCP tool result with `isError: true`. Parse its
+text content as JSON. The `error` object has a machine-readable `code`, a
+`message` and optional `details` keyed by field. The top-level `retryable`
+boolean is always present.
 
 ```json
-{"error":{"code":"validation_error","message":"Validation failed","details":{"id":"Give either id or slug, not both"}}}
+{"error":{"code":"validation_error","message":"Validation failed","details":{"id":"Give either id or slug, not both"}},"retryable":false}
 ```
 
-Codes match REST v2: `not_found`, `validation_error`, `forbidden`, `conflict`,
-`unauthorized` and `internal_error`. One code is MCP-only: `timeout`, for a
-call cut short because the client went away or the call hit the 25-second
-limit. Internal failures never expose details; the cause is logged on the
-server.
+Draft failures can also include top-level `issues` with structured feedback
+from the [draft contract](draft-contract.md). A retryable error can carry
+`retry_after_seconds` when the server can specify a delay. A cancelled or
+timed-out call uses code `timeout` with `retryable: true`. When retrying a
+draft write, reuse its request ID under the draft authoring contract.
+Internal tool errors use a generic message and keep the cause server-side.
 
-Arguments that break the input schema, such as an unknown property or a value
-out of range, are rejected before the tool runs. They use the same envelope,
-with the SDK's validation message as the `arguments` detail:
+Arguments rejected by the input schema use the same envelope, with
+`validation_error` and the SDK's validation message under
+`error.details.arguments`. The tool does not run.
 
-```json
-{"error":{"code":"validation_error","message":"Validation failed","details":{"arguments":"validating \"arguments\": validating root: validating /properties/per_page: maximum: 500/1 is greater than 100.000000"}}}
-```
-
-Protocol-level failures are JSON-RPC errors instead. An unknown tool is one.
-So is a tool result that fails its own output schema, which is a server bug:
-that one returns a generic `internal error`, never the SDK's message, because
-the message can quote server data.
+Protocol failures use the JSON-RPC error object, for example an unknown tool.
+A result that fails its own output schema produces a generic JSON-RPC internal
+error. HTTP admission failures, such as a request over the body limit,
+use the HTTP status and headers. Missing OAuth tool scopes can produce
+an HTTP 403 challenge or an in-band challenge in the tool result metadata.
 
 ## Visibility and permissions
 
@@ -379,7 +387,7 @@ security headers) runs before all of it.
 | Per-key or per-account rate limit | 429 |
 | Request body cap | 413 |
 | JSON-RPC batch | 400 `batch_not_supported` |
-| OAuth tool scope check | 403 with an `insufficient_scope` challenge |
+| OAuth tool scope check | HTTP 403 or tool result metadata with an `insufficient_scope` challenge |
 
 | Limit | Value |
 |---|---|

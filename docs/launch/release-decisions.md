@@ -11,7 +11,9 @@ commit, push, deployment or publication. The
 `b58b7b51` is the latest verified deployment on `ocms-mcp-staging`
 (2026-11-08). The [staging rollout](r17-acceptance.md#staging-rollout-of-b58b7b51)
 covers readiness, proxy trust, OAuth/MFA, CSP, language switching and
-preview-link issuance and revocation.
+preview-link issuance and revocation. The
+[November 7 rollout](r17-acceptance.md#staging-rollout--2026-11-07)
+records the earlier checks on `9799b3e6`.
 
 On `6c611040` (2026-11-05), an ordinary status-only editor save preserved
 the source HTML byte for byte and kept both translations Current. See the
@@ -168,10 +170,9 @@ staging views, not continuous footage of the human clicks. The original
 acceptance they cover the final demo segment without claiming a continuous
 end-to-end film.
 
-The planned article is saved as
-an unscheduled production draft. The API
-readback verified the article, metadata, taxonomy and supplied workflow
-image. The public URL and both anonymous API routes returned HTTP 404.
+The article is saved as an unscheduled production draft. The API
+readback verified the article, metadata, taxonomy and inline workflow
+illustration. The public URL and both anonymous API routes returned HTTP 404.
 The draft was absent from published listings, RSS and Atom. Browser preview
 awaits staff sign-in. The
 [local HTML](article-draft.html) and [metadata](article-draft.json) record

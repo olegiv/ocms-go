@@ -48,8 +48,7 @@ preservation pass on staging `6c611040`.
 
 The draft uses the supplied workflow illustration. Decoded
 pixels match the source, and the draft readback preserves its inline alt
-text and caption. The same asset supplies the featured image while the
-article displays it inline. The article uses the existing oCMS category
+text and caption. The article uses the existing oCMS category
 and existing tags. Its URL, ID and slug returned HTTP 404 anonymously,
 and the article was absent from published listings, RSS and Atom.
 Use the [demo script](demo-script.md), [editorial contract](../editorial-review.md)
