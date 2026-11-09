@@ -240,23 +240,23 @@ func (c *clientResolver) resolveForExchange(ctx context.Context, id, code string
 }
 
 func validCIMDID(id string, allowedHosts []string) bool {
-	host, ok := cimdHost(id)
-	return ok && slices.Contains(allowedHosts, host)
+	u := parseCIMDID(id)
+	return u != nil && slices.Contains(allowedHosts, strings.ToLower(u.Hostname()))
 }
 
-// cimdHost returns the lowercased host of a client ID that is a well-formed
+// parseCIMDID parses a client ID that is a well-formed
 // metadata document URL: HTTPS on port 443, a path, no credentials, query or
 // fragment, and not a private address.
-func cimdHost(id string) (string, bool) {
+func parseCIMDID(id string) *url.URL {
 	u, err := url.Parse(id)
 	if err != nil || id == "" || len(id) > maxClientIDBytes || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" ||
 		u.Fragment != "" || u.Path == "" || (u.Port() != "" && u.Port() != "443") {
-		return "", false
+		return nil
 	}
 	if ip := net.ParseIP(u.Hostname()); ip != nil && util.IsPrivateIP(ip) {
-		return "", false
+		return nil
 	}
-	return strings.ToLower(u.Hostname()), true
+	return u
 }
 
 func (c *clientResolver) loadPreRegistered(raw string) error {
@@ -329,8 +329,7 @@ func (c *clientResolver) rememberFailure(id string, err error) {
 func (c *clientResolver) pinnableID(id string) bool {
 	hosts := c.service.options.AllowedHosts
 	if len(hosts) == 0 {
-		_, ok := cimdHost(id)
-		return ok
+		return parseCIMDID(id) != nil
 	}
 	return validCIMDID(id, hosts)
 }
@@ -350,10 +349,26 @@ func (c *clientResolver) fetch(ctx context.Context, id string) (registeredClient
 
 // download retrieves and validates the metadata document at id.
 func (c *clientResolver) download(ctx context.Context, id string) (registeredClient, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, id, nil)
+	u := parseCIMDID(id)
+	if u == nil {
+		return registeredClient{}, problem("invalid_client")
+	}
+	hosts := c.service.options.AllowedHosts
+	i := slices.Index(hosts, strings.ToLower(u.Hostname()))
+	if i < 0 {
+		return registeredClient{}, problem("invalid_client")
+	}
+	// Only the configured authority can set the destination. Preserve the
+	// escaped path so the response can still identify the original client ID.
+	host := hosts[i]
+	if u.Port() == "443" {
+		host += ":443"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+host, nil)
 	if err != nil {
 		return registeredClient{}, problem("invalid_client")
 	}
+	req.URL.Path, req.URL.RawPath, req.URL.ForceQuery = u.Path, u.RawPath, u.ForceQuery
 	req.Header.Set("Accept", "application/json")
 	// A transport fault, a timeout, rate limiting or a 5xx says nothing about
 	// the client's identity, so it is retryable; any other non-200 answer

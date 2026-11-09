@@ -94,7 +94,7 @@ func writePageSummary(output io.Writer, summary pageSummary) error {
 	if err != nil {
 		return err
 	}
-	line := make([]byte, 0, len(data)+1)
+	line := make([]byte, 0, len(data))
 	// JSON permits C1 and bidi controls in strings. Escape them on the wire
 	// so terminals cannot interpret them and JSON readers recover the value.
 	for _, r := range string(data) {

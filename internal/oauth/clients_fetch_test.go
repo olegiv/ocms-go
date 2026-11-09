@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -19,6 +20,33 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/logging"
 )
+
+func TestCIMDDownloadUsesConfiguredAuthority(t *testing.T) {
+	f := newFixture(t)
+	f.s.options.AllowedHosts = []string{"client.test"}
+	const id = "https://CLIENT.test:443//other.test/%2fmetadata?"
+	calls := 0
+	f.s.clients.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if got, want := r.URL.String(), "https://client.test:443//other.test/%2fmetadata?"; got != want {
+			t.Fatalf("requested %q, want %q", got, want)
+		}
+		body, err := json.Marshal(cimdDocument(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(body))}, nil
+	})
+	for _, disallowed := range []string{"https://client.test.other.test/metadata", "https://client.test@other.test/metadata", "https://client.test:444/metadata"} {
+		if _, err := f.s.clients.download(t.Context(), disallowed); problemCode(err) != "invalid_client" || calls != 0 {
+			t.Fatalf("disallowed URL %q reached transport or returned the wrong error: %v", disallowed, err)
+		}
+	}
+	client, err := f.s.clients.download(t.Context(), id)
+	if err != nil || calls != 1 || client.ID != id {
+		t.Fatalf("allowed URL failed or lost its original client ID: %+v, %v", client, err)
+	}
+}
 
 func TestCIMDTransportErrorBoundsBothCopiesOfClientID(t *testing.T) {
 	f := metadataFixture(t, func(http.ResponseWriter, *http.Request) {})
