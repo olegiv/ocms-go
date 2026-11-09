@@ -40,10 +40,11 @@ as_site_user() {
     shift
     local site_uid
     site_uid=$(id -u "$user") || return 1
+    local -a command=(bash -c 'umask 077; exec "$@"' _ "$@")
     if [ "$EUID" -eq "$site_uid" ]; then
-        "$@"
+        "${command[@]}"
     else
-        sudo -n -u "$user" -- "$@"
+        sudo -n -u "$user" -- "${command[@]}"
     fi
 }
 
@@ -65,7 +66,8 @@ backup_site() {
 
     # All site-path writes (including retention) use the site's authority.
     # A replaced directory or output symlink must never gain root's access.
-    as_site_user "$user" mkdir -p "$backup_dir" || return 1
+    as_site_user "$user" mkdir -m 700 -p -- "$backup_dir" || return 1
+    as_site_user "$user" chmod 700 "$backup_dir" || return 1
 
     # Backup database
     if [ -f "$db_path" ]; then
@@ -73,6 +75,7 @@ backup_site() {
         echo "  Database: $db_path"
 
         as_site_user "$user" sqlite3 "$db_path" ".backup '$db_backup'" || return 1
+        as_site_user "$user" chmod 600 "$db_backup" || return 1
 
         if [ -f "$db_backup" ]; then
             if as_site_user "$user" sqlite3 "$db_backup" "PRAGMA integrity_check;" 2>/dev/null | grep -q "ok"; then
@@ -81,6 +84,7 @@ backup_site() {
                 echo_warn "  Integrity check failed!"
             fi
             as_site_user "$user" gzip "$db_backup" || return 1
+            as_site_user "$user" chmod 600 "${db_backup}.gz" || return 1
             echo "  Saved: ${db_backup}.gz ($(ls -lh "${db_backup}.gz" | awk '{print $5}'))"
         else
             echo_error "  Failed to create database backup"
@@ -94,6 +98,7 @@ backup_site() {
     if [ -d "$uploads_path" ] && [ "$(ls -A "$uploads_path" 2>/dev/null)" ]; then
         local uploads_backup="$backup_dir/uploads_${TIMESTAMP}.tar.gz"
         as_site_user "$user" tar -czf "$uploads_backup" -C "$instance_dir" uploads || return 1
+        as_site_user "$user" chmod 600 "$uploads_backup" || return 1
         echo "  Uploads: $uploads_backup ($(ls -lh "$uploads_backup" | awk '{print $5}'))"
     else
         echo "  Uploads: empty (skipping)"
@@ -103,6 +108,7 @@ backup_site() {
     if [ -d "$custom_path" ] && [ "$(find "$custom_path" -mindepth 2 -type f 2>/dev/null | head -1)" ]; then
         local custom_backup="$backup_dir/custom_${TIMESTAMP}.tar.gz"
         as_site_user "$user" tar -czf "$custom_backup" -C "$instance_dir" custom || return 1
+        as_site_user "$user" chmod 600 "$custom_backup" || return 1
         echo "  Custom: $custom_backup ($(ls -lh "$custom_backup" | awk '{print $5}'))"
     else
         echo "  Custom: empty (skipping)"

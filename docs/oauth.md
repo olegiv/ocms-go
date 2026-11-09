@@ -12,7 +12,9 @@ to API keys. OAuth validates the access token, resource, grant, current
 account and scopes, and applies both per-IP and per-account rate limits.
 The API-key configuration requirements at startup still apply in staging
 and production.
-Demo mode refuses browser authorization and consent.
+Startup refuses `OCMS_OAUTH_ENABLED=true` together with
+`OCMS_DEMO_MODE=true`. On OAuth-enabled sites, clients can still revoke
+their tokens when the MCP module is inactive.
 
 The OAuth layer authenticates apps; [R1.5 draft tools](draft-authoring.md)
 separately provide gated CMS writes. No tool publishes or calls a text model

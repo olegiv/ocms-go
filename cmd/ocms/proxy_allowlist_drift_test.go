@@ -157,7 +157,7 @@ func TestProxyReadRulesKeepCommandBoundaries(t *testing.T) {
 			if nextFlag := slices.IndexFunc(denied, func(arg string) bool { return strings.HasPrefix(arg, "--") }); nextFlag >= 0 {
 				denied = denied[:nextFlag]
 			}
-			wantDenials := []string{"Bash(gofmt *-w*)", "Bash(goimports *-w*)"}
+			wantDenials := []string{"Edit(//**)", "Bash(gofmt *-w*)", "Bash(goimports *-w*)"}
 			if workflow == "security-audit" {
 				wantDenials = append(wantDenials, "Bash(mkdir *)", "Bash(mv *)")
 			}

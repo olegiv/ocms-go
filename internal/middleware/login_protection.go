@@ -125,7 +125,7 @@ func NewLoginProtection(db *sql.DB, cfg LoginProtectionConfig) *LoginProtection 
 // CheckIPRateLimit checks if the IP is rate limited.
 // Returns true if the request should be allowed.
 func (lp *LoginProtection) CheckIPRateLimit(ip string) bool {
-	return lp.ipLimiters.get(ip).Allow()
+	return lp.ipLimiters.get(ipRateLimitKey(ip)).Allow()
 }
 
 // accountLockoutMultiplier scales the per-(email, IP) threshold up to the

@@ -234,6 +234,9 @@ func Load() (*Config, error) {
 	if cfg.EventAuditDays < 0 || cfg.EventAuditDays > maxEventRetentionDays {
 		return nil, fmt.Errorf("OCMS_EVENT_AUDIT_RETENTION_DAYS must be 0–%d", maxEventRetentionDays)
 	}
+	if cfg.OAuthEnabled && os.Getenv("OCMS_DEMO_MODE") == "true" {
+		return nil, fmt.Errorf("OCMS_OAUTH_ENABLED must be false when OCMS_DEMO_MODE is true")
+	}
 	if cfg.OAuthEnabled && strings.TrimSpace(cfg.SiteURL) == "" {
 		return nil, fmt.Errorf("OCMS_SITE_URL is required when OAuth is enabled")
 	}

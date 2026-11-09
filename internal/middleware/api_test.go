@@ -14,7 +14,6 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"golang.org/x/time/rate"
 
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -1298,29 +1297,59 @@ func TestGlobalRateLimiter_HTMLMiddleware_DifferentIPs(t *testing.T) {
 
 func TestLimiterCache_EvictOldestWhenMaxEntriesExceeded(t *testing.T) {
 	cache := newLimiterCache[string](10, 5)
-
-	// Freeze time relationships by directly controlling lastUsed values.
+	first := cache.get("key-0")
+	for i := 1; i < limiterCacheMaxEntries; i++ {
+		cache.get(fmt.Sprintf("key-%d", i))
+	}
+	cache.get("key-0")
+	cache.get("overflow")
 	cache.mu.Lock()
-	cache.entries = make(map[string]*limiterEntry, limiterCacheMaxEntries+1)
-	now := time.Now()
-	for i := 0; i < limiterCacheMaxEntries+1; i++ {
-		key := fmt.Sprintf("key-%d", i)
-		cache.entries[key] = &limiterEntry{
-			limiter:  rate.NewLimiter(cache.rate, cache.burst),
-			lastUsed: now.Add(time.Duration(i) * time.Second),
-		}
+	defer cache.mu.Unlock()
+	if len(cache.entries) != limiterCacheMaxEntries || cache.recent.Len() != limiterCacheMaxEntries {
+		t.Fatal("limiter cache exceeded its bound")
 	}
-	cache.evictOldestIfExceedsLocked()
-	cache.mu.Unlock()
-
-	cache.mu.RLock()
-	defer cache.mu.RUnlock()
-
-	if got := len(cache.entries); got != limiterCacheMaxEntries {
-		t.Fatalf("expected %d entries after eviction, got %d", limiterCacheMaxEntries, got)
+	if _, exists := cache.entries["key-1"]; exists {
+		t.Fatal("least recently used key survived eviction")
 	}
+	if entry := cache.entries["key-0"]; entry == nil || entry.Value.(*limiterEntry[string]).limiter != first {
+		t.Fatal("recent access did not preserve the existing bucket")
+	}
+}
 
-	if _, exists := cache.entries["key-0"]; exists {
-		t.Fatalf("expected oldest entry to be evicted")
+func TestIPRateLimitGroupsIPv6(t *testing.T) {
+	for _, name := range []string{"api", "html", "login"} {
+		t.Run(name, func(t *testing.T) {
+			rl := NewGlobalRateLimiter(0, 1)
+			next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			handler := rl.Middleware()(next)
+			switch name {
+			case "html":
+				handler = rl.HTMLMiddleware()(next)
+			case "login":
+				lp := &LoginProtection{ipLimiters: newLimiterCache[string](0, 1)}
+				handler = lp.Middleware()(next)
+			}
+			for _, tc := range []struct {
+				remote string
+				status int
+			}{
+				{"[2001:db8:abcd:1::1]:123", http.StatusOK},
+				{"[2001:db8:abcd:1::ffff]:456", http.StatusTooManyRequests},
+				{"[2001:db8:abcd:2::1]:123", http.StatusOK},
+				{"192.0.2.1:123", http.StatusOK},
+				{"[::ffff:192.0.2.1]:456", http.StatusTooManyRequests},
+				{"192.0.2.2:123", http.StatusOK},
+			} {
+				req := httptest.NewRequest(http.MethodPost, "/", nil)
+				req.RemoteAddr = tc.remote
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, req)
+				if w.Code != tc.status {
+					t.Errorf("%s: status %d, want %d", tc.remote, w.Code, tc.status)
+				}
+			}
+		})
 	}
 }

@@ -89,7 +89,9 @@ fi
 echo "Proxying to Claude command: $prompt"
 # A shared command or local settings can also approve formatter invocations.
 # Deny the write flag even when another allow rule matches.
-denied_tools=('Bash(gofmt *-w*)' 'Bash(goimports *-w*)')
+# Bash redirect destinations are checked with Edit permissions. Deny them
+# even when user or project settings allow editing the destination.
+denied_tools=('Edit(//**)' 'Bash(gofmt *-w*)' 'Bash(goimports *-w*)')
 # Match the option boundaries so --output-indicator-* and --extended-regexp
 # still work. Include the abbreviations accepted by git diff --no-index.
 for git_option in --output --ext --ext- --ext-d --ext-di --ext-dif --ext-diff; do

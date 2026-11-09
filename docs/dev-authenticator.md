@@ -113,8 +113,13 @@ The seed and origin/account binding are stored only in the macOS login
 Keychain under service `tech.ocms.dev-auth.v1`, with a hashed account identifier.
 Both agents must run as the same macOS user. Keychain writes use `security`'s
 private stdin, without secret process arguments, changes to the default
-Keychain or an allow-all-applications ACL. The helper requires an available,
-unlocked login Keychain and does not bypass the Mac's lock screen. Linux builds
+Keychain or an allow-all-applications ACL. The login Keychain and this macOS account are the trust boundary.
+The `security` utility can read the enrolled item on behalf of another
+process running as the same user while the Keychain is unlocked. Treat
+the shared development account as accessible to that user's agents and
+other processes. Use a dedicated macOS account for the agents when
+local processes need to be isolated from the development enrollment.
+The helper requires an available, unlocked login Keychain. Linux builds
 can run the fixture tests; live seed storage currently requires macOS.
 
 ## Verification

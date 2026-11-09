@@ -164,7 +164,7 @@ services:
   # Optional Redis service for distributed caching
   # Enable with: docker compose --profile redis up -d
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
     container_name: ocms-redis
     profiles:
       - redis

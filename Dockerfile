@@ -14,8 +14,8 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_TIME=unknown
 
-# Enable automatic toolchain download for newer Go versions
-ENV GOTOOLCHAIN=auto
+# Use the Go toolchain from the pinned builder image.
+ENV GOTOOLCHAIN=local
 
 # Install build dependencies
 RUN apk add --no-cache \

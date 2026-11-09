@@ -6,6 +6,7 @@
 package middleware
 
 import (
+	"container/list"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -1092,35 +1093,32 @@ func RequireAnyPermission(requiredPerms ...string) func(http.Handler) http.Handl
 	}
 }
 
-// limiterEntry holds a rate limiter and its last access time for TTL eviction.
-type limiterEntry struct {
+// limiterEntry holds a rate limiter and its most recent access time.
+type limiterEntry[K comparable] struct {
+	key      K
 	limiter  *rate.Limiter
 	lastUsed time.Time
 }
 
-// limiterCacheTTL is the time after which idle entries are evicted.
-const limiterCacheTTL = 10 * time.Minute
+const (
+	limiterCacheTTL             = 10 * time.Minute
+	limiterCacheCleanupInterval = 5 * time.Minute
+	limiterCacheMaxEntries      = 10000
+)
 
-// limiterCacheCleanupInterval is how often the cleanup goroutine runs.
-const limiterCacheCleanupInterval = 5 * time.Minute
-
-// limiterCacheMaxEntries bounds in-memory limiter cardinality to protect
-// against unbounded growth from attacker-controlled keys (for example spoofed
-// client IP headers). Oldest entries are evicted when this threshold is hit.
-const limiterCacheMaxEntries = 10000
-
-// limiterCache is a generic rate limiter cache with TTL-based eviction.
+// limiterCache keeps recently used keys at the front, so even a burst of
+// previously unseen addresses costs constant time per insertion.
 type limiterCache[K comparable] struct {
-	entries map[K]*limiterEntry
-	mu      sync.RWMutex
+	entries map[K]*list.Element
+	recent  list.List
+	mu      sync.Mutex
 	rate    rate.Limit
 	burst   int
 }
 
-// newLimiterCache creates a new limiter cache with periodic TTL-based cleanup.
 func newLimiterCache[K comparable](rps float64, burst int) *limiterCache[K] {
 	lc := &limiterCache[K]{
-		entries: make(map[K]*limiterEntry),
+		entries: make(map[K]*list.Element),
 		rate:    rate.Limit(rps),
 		burst:   burst,
 	}
@@ -1128,40 +1126,26 @@ func newLimiterCache[K comparable](rps float64, burst int) *limiterCache[K] {
 	return lc
 }
 
-// get returns the rate limiter for a specific key, creating one if needed.
 func (lc *limiterCache[K]) get(key K) *rate.Limiter {
-	now := time.Now()
-
-	lc.mu.RLock()
-	entry, exists := lc.entries[key]
-	lc.mu.RUnlock()
-
-	if exists {
-		lc.mu.Lock()
-		entry.lastUsed = now
-		lc.mu.Unlock()
-		return entry.limiter
-	}
-
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
-	// Double-check after acquiring write lock
-	if entry, exists = lc.entries[key]; exists {
+	now := time.Now()
+	if element, ok := lc.entries[key]; ok {
+		entry := element.Value.(*limiterEntry[K])
 		entry.lastUsed = now
+		lc.recent.MoveToFront(element)
 		return entry.limiter
 	}
 
 	limiter := rate.NewLimiter(lc.rate, lc.burst)
-	lc.entries[key] = &limiterEntry{
-		limiter:  limiter,
-		lastUsed: now,
+	lc.entries[key] = lc.recent.PushFront(&limiterEntry[K]{key: key, limiter: limiter, lastUsed: now})
+	if len(lc.entries) > limiterCacheMaxEntries {
+		lc.removeOldest()
 	}
-	lc.evictOldestIfExceedsLocked()
 	return limiter
 }
 
-// cleanupLoop periodically evicts entries that haven't been used within the TTL.
 func (lc *limiterCache[K]) cleanupLoop() {
 	ticker := time.NewTicker(limiterCacheCleanupInterval)
 	defer ticker.Stop()
@@ -1171,46 +1155,35 @@ func (lc *limiterCache[K]) cleanupLoop() {
 	}
 }
 
-// evictExpired removes entries older than limiterCacheTTL.
 func (lc *limiterCache[K]) evictExpired() {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
 	cutoff := time.Now().Add(-limiterCacheTTL)
-	for key, entry := range lc.entries {
-		if entry.lastUsed.Before(cutoff) {
-			delete(lc.entries, key)
-		}
+	for tail := lc.recent.Back(); tail != nil && tail.Value.(*limiterEntry[K]).lastUsed.Before(cutoff); tail = lc.recent.Back() {
+		lc.removeOldest()
 	}
 }
 
-// evictOldestIfExceedsLocked removes least-recently-used entries until the
-// cache size is within limiterCacheMaxEntries. Caller must hold lc.mu.
-func (lc *limiterCache[K]) evictOldestIfExceedsLocked() {
-	if len(lc.entries) <= limiterCacheMaxEntries {
-		return
+// removeOldest removes the tail while the caller holds the cache lock.
+func (lc *limiterCache[K]) removeOldest() {
+	entry := lc.recent.Remove(lc.recent.Back()).(*limiterEntry[K])
+	delete(lc.entries, entry.key)
+}
+
+// ipRateLimitKey groups IPv6 privacy addresses by /64 while keeping each
+// IPv4 address independent. The original IP remains available for policy
+// checks and logging.
+func ipRateLimitKey(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ip
 	}
-
-	overflow := len(lc.entries) - limiterCacheMaxEntries
-	for i := 0; i < overflow; i++ {
-		var oldestKey K
-		var oldestTime time.Time
-		oldestSet := false
-
-		for key, entry := range lc.entries {
-			if !oldestSet || entry.lastUsed.Before(oldestTime) {
-				oldestKey = key
-				oldestTime = entry.lastUsed
-				oldestSet = true
-			}
-		}
-
-		if !oldestSet {
-			return
-		}
-
-		delete(lc.entries, oldestKey)
+	addr = addr.Unmap()
+	if addr.Is6() {
+		return netip.PrefixFrom(addr.WithZone(""), 64).Masked().String()
 	}
+	return addr.String()
 }
 
 // APIRateLimit creates middleware that rate limits requests per API key.
@@ -1268,7 +1241,7 @@ func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := GetClientIP(r)
-			if !rl.cache.get(ip).Allow() {
+			if !rl.cache.get(ipRateLimitKey(ip)).Allow() {
 				slog.Debug("API rate limit exceeded", "ip", ip, "path", util.BoundedLogField(r.URL.Path))
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please slow down.", nil)
 				return
@@ -1284,7 +1257,7 @@ func (rl *GlobalRateLimiter) HTMLMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := GetClientIP(r)
-			if !rl.cache.get(ip).Allow() {
+			if !rl.cache.get(ipRateLimitKey(ip)).Allow() {
 				slog.Warn("public rate limit exceeded", "ip", ip, "path", util.BoundedLogField(r.URL.Path))
 				http.Error(w, "Too many requests. Please wait a moment and try again.", http.StatusTooManyRequests)
 				return

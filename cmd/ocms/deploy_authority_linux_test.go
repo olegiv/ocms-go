@@ -214,14 +214,18 @@ source.close()
 		if err == nil || !strings.Contains(string(out), "1/2 succeeded") {
 			t.Fatalf("aggregate backup: %v %s", err, out)
 		}
+		dir, err := os.Stat(filepath.Join(site, "backups"))
+		if err != nil || dir.Mode().Perm() != 0o700 {
+			t.Fatalf("backup directory is not owner-only: %v, %v", dir, err)
+		}
 		for _, archive := range []string{"ocms_20261102_030000.db.gz", "uploads_20261102_030000.tar.gz", "custom_20261102_030000.tar.gz"} {
 			p := filepath.Join(site, "backups", archive)
 			info, err := os.Stat(p)
 			if err != nil || info.Size() == 0 {
 				t.Fatalf("normal backup missing: %s %v", archive, err)
 			}
-			if int(info.Sys().(*syscall.Stat_t).Uid) != uid {
-				t.Errorf("backup is not site-owned: %s", archive)
+			if int(info.Sys().(*syscall.Stat_t).Uid) != uid || info.Mode().Perm() != 0o600 {
+				t.Errorf("backup is not site-owned and private: %s %v", archive, info.Mode())
 			}
 		}
 		out, err = exec.Command("tar", "-xOzf", filepath.Join(site, "backups", "uploads_20261102_030000.tar.gz"), "uploads/example.txt").CombinedOutput()

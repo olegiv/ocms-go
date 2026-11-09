@@ -72,3 +72,24 @@ func TestOAuthOptInConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestDemoModeRejectsOAuthAtStartup(t *testing.T) {
+	t.Setenv("OCMS_SESSION_SECRET", testSessionSecret)
+	t.Setenv("OCMS_ENV", "development")
+	t.Setenv("OCMS_SITE_URL", "https://cms.test")
+	t.Setenv("OCMS_OAUTH_ALLOW_DCR", "false")
+	t.Setenv("OCMS_DEMO_MODE", "true")
+	t.Setenv("OCMS_OAUTH_ENABLED", "true")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "OCMS_OAUTH_ENABLED must be false when OCMS_DEMO_MODE is true") {
+		t.Fatalf("demo OAuth configuration was not refused: %v", err)
+	}
+	t.Setenv("OCMS_OAUTH_ENABLED", "false")
+	if _, err := Load(); err != nil {
+		t.Fatalf("demo without OAuth failed: %v", err)
+	}
+	t.Setenv("OCMS_DEMO_MODE", "false")
+	t.Setenv("OCMS_OAUTH_ENABLED", "true")
+	if _, err := Load(); err != nil {
+		t.Fatalf("OAuth outside demo mode failed: %v", err)
+	}
+}
