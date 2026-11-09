@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -255,6 +258,39 @@ func TestFormsHandlerSubmit_RejectsOversizedPayload(t *testing.T) {
 
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestMalformedPublicFormBodyLogsBoundedWarning(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	now := time.Now()
+	if _, err := store.New(db).CreateForm(t.Context(), store.CreateFormParams{
+		Name: "Contact", Slug: "contact", Title: "Contact", IsActive: true, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+	// A malformed HTTP trailer can make Read return request text in its error.
+	body := iotest.ErrReader(errors.New("malformed trailer\x00" + strings.Repeat("界", 3000)))
+	r := httptest.NewRequest(http.MethodPost, "/forms/contact", body)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r = requestWithURLParams(r, map[string]string{"slug": "contact"})
+	w := httptest.NewRecorder()
+	h.Submit(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("malformed form status = %d, want 400", w.Code)
+	}
+	var entry map[string]string
+	if err := json.NewDecoder(&logs).Decode(&entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := entry["error"]; entry["level"] != "WARN" || !strings.HasPrefix(err, "malformed trailer") ||
+		strings.ContainsRune(err, '\x00') || len([]rune(err)) > 256 {
+		t.Fatalf("malformed form log level=%q, error length=%d", entry["level"], len(err))
 	}
 }
 

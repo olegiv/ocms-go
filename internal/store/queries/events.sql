@@ -77,4 +77,9 @@ SELECT COUNT(*) FROM events WHERE category = ?;
 SELECT COUNT(*) FROM events WHERE level = ? AND category = ?;
 
 -- name: DeleteOldEvents :exec
-DELETE FROM events WHERE created_at < ?;
+DELETE FROM events
+WHERE id IN (
+    SELECT expired.id FROM events AS expired WHERE expired.created_at < ?
+    ORDER BY expired.created_at
+    LIMIT 1000
+);

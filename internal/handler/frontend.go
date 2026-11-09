@@ -905,7 +905,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			h.logger.Error("failed to resolve default page language", "slug", slug, "error", err)
+			h.logger.Error("failed to resolve default page language", "slug", util.BoundedLogField(slug), "error", err)
 			h.renderInternalError(w)
 			return
 		}
@@ -940,7 +940,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			h.logger.Error("failed to get page", "slug", slug, "error", err)
+			h.logger.Error("failed to get page", "slug", util.BoundedLogField(slug), "error", err)
 			h.renderInternalError(w)
 			return
 		}
@@ -973,7 +973,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 			canonical := siteURL + canonicalPath
 			mdBody, mdErr := mdneg.PageToMarkdown(page.Title, page.Summary, page.Body, canonical, publishedAt, h.markdownLabels(r))
 			if mdErr != nil {
-				slog.Error("markdown conversion failed", "error", mdErr, "slug", page.Slug)
+				slog.Error("markdown conversion failed", "error", mdErr, "slug", util.BoundedLogField(page.Slug))
 			} else {
 				mdneg.WriteMarkdown(w, mdBody)
 				return
@@ -1196,7 +1196,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	// language, while an unprefixed URL always belongs to the default language.
 	routeLanguage, validLanguage, err := h.taxonomyRouteLanguage(ctx, r)
 	if err != nil {
-		h.logger.Error("failed to resolve category route language", "slug", slug, "error", err)
+		h.logger.Error("failed to resolve category route language", "slug", util.BoundedLogField(slug), "error", err)
 		h.renderInternalError(w)
 		return
 	}
@@ -1213,7 +1213,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 			h.renderNotFound(w, r)
 			return
 		}
-		h.logger.Error("failed to get category", "slug", slug, "error", err)
+		h.logger.Error("failed to get category", "slug", util.BoundedLogField(slug), "error", err)
 		h.renderInternalError(w)
 		return
 	}
@@ -1234,7 +1234,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	// Fetch pages for this category (with optional language filter)
 	pages, total, err := h.fetchPagesForEntity(ctx, category.ID, languageCode, limit, int64(offset), false)
 	if err != nil {
-		h.logger.Error("failed to get pages for category", "category", slug, "error", err)
+		h.logger.Error("failed to get pages for category", "category", util.BoundedLogField(slug), "error", err)
 		h.renderInternalError(w)
 		return
 	}
@@ -1288,7 +1288,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	// language, while an unprefixed URL always belongs to the default language.
 	routeLanguage, validLanguage, err := h.taxonomyRouteLanguage(ctx, r)
 	if err != nil {
-		h.logger.Error("failed to resolve tag route language", "slug", slug, "error", err)
+		h.logger.Error("failed to resolve tag route language", "slug", util.BoundedLogField(slug), "error", err)
 		h.renderInternalError(w)
 		return
 	}
@@ -1304,7 +1304,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 			h.renderNotFound(w, r)
 			return
 		}
-		h.logger.Error("failed to get tag", "slug", slug, "error", err)
+		h.logger.Error("failed to get tag", "slug", util.BoundedLogField(slug), "error", err)
 		h.renderInternalError(w)
 		return
 	}
@@ -1325,7 +1325,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	// Fetch pages for this tag (with optional language filter)
 	pages, total, err := h.fetchPagesForEntity(ctx, tag.ID, languageCode, limit, int64(offset), true)
 	if err != nil {
-		h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
+		h.logger.Error("failed to get pages for tag", "tag", util.BoundedLogField(slug), "error", err)
 		h.renderInternalError(w)
 		return
 	}
@@ -1504,7 +1504,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		LanguageCode: languageCode,
 	})
 	if err != nil {
-		h.logger.Error("failed to search pages", "query", query, "error", err)
+		h.logger.Error("failed to search pages", "query", util.BoundedLogField(query), "error", err)
 		h.renderInternalError(w)
 		return
 	}

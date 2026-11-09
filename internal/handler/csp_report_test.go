@@ -89,8 +89,8 @@ func TestCSPReportBoundsInput(t *testing.T) {
 	if strings.ContainsAny(field, "\n\x1b") {
 		t.Errorf("control characters survived: %q", field)
 	}
-	if n := len([]rune(field)); n != maxCSPReportField {
-		t.Errorf("field length %d, want %d", n, maxCSPReportField)
+	if n := len([]rune(field)); n != 256 {
+		t.Errorf("field length %d, want 256", n)
 	}
 }
 

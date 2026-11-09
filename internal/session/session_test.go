@@ -4,8 +4,11 @@
 package session
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -123,5 +126,47 @@ func TestNew_StoreInitialized(t *testing.T) {
 
 	if sm.Store == nil {
 		t.Error("expected Store to be initialized")
+	}
+}
+
+func TestSessionCookieIsHashedInStore(t *testing.T) {
+	db := setupTestDB(t)
+	sm := New(db, false)
+	handler := sm.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			sm.Put(r.Context(), "authenticated", true)
+		}
+		if !sm.GetBool(r.Context(), "authenticated") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "https://cms.test/session", nil))
+	cookies := w.Result().Cookies()
+	if w.Code != http.StatusNoContent || len(cookies) != 1 || cookies[0].Value == "" {
+		t.Fatalf("session creation: status %d, cookies %d", w.Code, len(cookies))
+	}
+	cookie := cookies[0]
+	var stored string
+	if err := db.QueryRow("SELECT token FROM sessions").Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte(cookie.Value))
+	if stored == cookie.Value || stored != base64.RawURLEncoding.EncodeToString(digest[:]) {
+		t.Fatal("database did not store a hash of the session cookie")
+	}
+	for _, tc := range []struct {
+		value string
+		want  int
+	}{{cookie.Value, http.StatusNoContent}, {stored, http.StatusUnauthorized}} {
+		r := httptest.NewRequest(http.MethodGet, "https://cms.test/session", nil)
+		r.AddCookie(&http.Cookie{Name: cookie.Name, Value: tc.value})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != tc.want {
+			t.Fatalf("session request status=%d, want %d", w.Code, tc.want)
+		}
 	}
 }

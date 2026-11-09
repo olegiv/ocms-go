@@ -6,6 +6,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	chimw "github.com/go-chi/chi/v5/middleware"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Timeout wraps an http.Handler and applies a request timeout. If the
@@ -60,8 +63,9 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 				if !tw.abort && tw.responseComplete(r.Method) {
 					return
 				}
-				slog.WarnContext(r.Context(), "request timed out", "method", r.Method, "path", r.URL.Path,
-					"request_id", chimw.GetReqID(r.Context()), "response_started", tw.wroteHeader, "timeout", timeout)
+				slog.WarnContext(r.Context(), "request timed out",
+					"method", util.BoundedLogField(r.Method), "path", util.BoundedLogField(r.URL.Path),
+					"request_id", util.BoundedLogField(chimw.GetReqID(r.Context())), "response_started", tw.wroteHeader, "timeout", timeout)
 			}
 			if tw.wroteHeader || tw.abort {
 				panic(http.ErrAbortHandler)
@@ -82,8 +86,9 @@ func finishTimeoutHandler(tw *timeoutWriter, r *http.Request) {
 	err, _ := p.(error)
 	abort := errors.Is(err, http.ErrAbortHandler)
 	if p != nil && !abort {
-		slog.Error("panic serving request", "panic", p, "method", r.Method, "path", r.URL.Path,
-			"request_id", chimw.GetReqID(r.Context()), "stack", string(debug.Stack()))
+		slog.Error("panic serving request", "panic", util.BoundedLogField(fmt.Sprint(p)),
+			"method", util.BoundedLogField(r.Method), "path", util.BoundedLogField(r.URL.Path),
+			"request_id", util.BoundedLogField(chimw.GetReqID(r.Context())), "stack", string(debug.Stack()))
 	}
 	tw.mu.Lock()
 	defer tw.mu.Unlock()

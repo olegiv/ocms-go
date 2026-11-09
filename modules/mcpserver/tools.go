@@ -17,7 +17,6 @@ import (
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
 	"github.com/olegiv/ocms-go/internal/model"
-	"github.com/olegiv/ocms-go/internal/oauth"
 )
 
 // Outcomes recorded in the per-call log line.
@@ -214,7 +213,7 @@ func wrapTool[In, Out any](m *Module, spec toolSpec, fn toolFunc[In, Out]) mcp.T
 		if spec.scope != "" && !slices.Contains(id.scopes, spec.scope) {
 			rec.outcome, rec.errorCode = outcomeToolError, codeForbidden
 			if id.grantID != "" && m.ctx.OAuth != nil {
-				challenge := fmt.Sprintf("Bearer resource_metadata=%q, error=\"insufficient_scope\", scope=%q", m.ctx.OAuth.Issuer()+oauth.MetadataPath, spec.scope)
+				challenge := m.oauthToolScopeChallenge(spec.scope)
 				rec.meta = mcp.Meta{"mcp/www_authenticate": []string{challenge}}
 			}
 			return nil, out, &toolError{Code: codeForbidden, Message: "Additional permission required: " + spec.scope}

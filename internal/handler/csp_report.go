@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 const (
@@ -18,8 +20,6 @@ const (
 	maxCSPReportBytes = 16 << 10
 	// maxCSPReportsPerRequest bounds how many reports one request can log.
 	maxCSPReportsPerRequest = 10
-	// maxCSPReportField bounds each logged field.
-	maxCSPReportField = 256
 )
 
 // CSPReport handles POST /csp-report, where browsers send
@@ -96,7 +96,7 @@ func cspReportURL(report map[string]any, keys ...string) string {
 }
 
 // cspReportField returns the first of keys present in report as a string
-// without control characters, truncated to maxCSPReportField runes.
+// without control characters, truncated to the shared log field limit.
 func cspReportField(report map[string]any, keys ...string) string {
 	for _, key := range keys {
 		var value string
@@ -108,19 +108,7 @@ func cspReportField(report map[string]any, keys ...string) string {
 		default:
 			continue
 		}
-		var b strings.Builder
-		kept := 0
-		for _, c := range value {
-			if c < 0x20 || c == 0x7f || (c >= 0x80 && c < 0xa0) {
-				continue
-			}
-			if kept == maxCSPReportField {
-				break
-			}
-			b.WriteRune(c)
-			kept++
-		}
-		return b.String()
+		return util.BoundedLogField(value)
 	}
 	return ""
 }

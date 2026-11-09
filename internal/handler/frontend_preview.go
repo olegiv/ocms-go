@@ -23,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/util"
 	previewviews "github.com/olegiv/ocms-go/internal/views/preview"
 )
 
@@ -65,7 +66,7 @@ func previewFailure(w http.ResponseWriter, r *http.Request, err error) {
 		http.NotFound(w, r)
 		return
 	}
-	slog.Error("preview unavailable", "error", err, "path", r.URL.Path)
+	slog.Error("preview unavailable", "error", err, "path", util.BoundedLogField(r.URL.Path))
 	http.Error(w, i18n.T(i18n.MatchLanguage(r.Header.Get("Accept-Language")), "preview.temporarily_unavailable"), http.StatusServiceUnavailable)
 }
 

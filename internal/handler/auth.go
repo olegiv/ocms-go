@@ -27,6 +27,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 )
@@ -138,13 +139,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get client IP for event logging
+	// Keep the original email for authentication and bound the audit value.
+	logEmail := util.BoundedLogField(email)
 	clientIP := hcaptcha.GetRemoteIP(r)
 
 	// Check if account is locked
 	if h.loginProtection != nil {
 		if locked, remaining := h.loginProtection.IsAccountLocked(email, clientIP); locked {
-			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email})
+			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": logEmail})
 			flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.account_locked", formatDuration(remaining)))
 			return
 		}
@@ -154,8 +156,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	user, err := h.queries.GetUserByEmail(r.Context(), email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			slog.Debug("login attempt for non-existent user", "email", email)
-			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: user not found", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email})
+			slog.Debug("login attempt for non-existent user", "email", logEmail)
+			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: user not found", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": logEmail})
 		} else {
 			slog.Error("database error during login", "error", err)
 		}
@@ -187,12 +189,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !valid {
-		slog.Debug("invalid password attempt", "email", email)
-		_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: invalid password", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email})
+		slog.Debug("invalid password attempt", "email", logEmail)
+		_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: invalid password", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": logEmail})
 		// Record failed attempt
 		if h.loginProtection != nil {
 			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email, clientIP); locked {
-				_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email, "duration": lockDuration.String()})
+				_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": logEmail, "duration": lockDuration.String()})
 				flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
 				return
 			}

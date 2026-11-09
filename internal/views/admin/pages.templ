@@ -1234,6 +1234,9 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 							}
 						</div>
 					</form>
+					if data.IsEdit && data.HasMultipleLanguages {
+						@pageTranslationForms(data)
+					}
 				}
 			</div>
 			if data.Review!=nil {
@@ -1306,7 +1309,14 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 				<h4 class="translations-subtitle">{ pc.T("pages.add_translation") }</h4>
 				<div class="translation-buttons">
 					for _, lang := range data.MissingLanguages {
-						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "translation-add-btn", Attributes: templ.Attributes{"title": lang.Name, "data-page-id": fmt.Sprintf("%d", data.PageID), "data-lang-code": lang.Code, "onclick": "createTranslation(this.dataset.pageId, this.dataset.langCode)"}}) {
+						@button.Button(button.Props{
+							Variant:    button.VariantOutline,
+							Size:       button.SizeSm,
+							Type:       button.TypeSubmit,
+							Form:       "page-translation-" + lang.Code,
+							Class:      "translation-add-btn",
+							Attributes: templ.Attributes{"title": lang.Name},
+						}) {
 							@iconPlus14()
 							{ lang.Code } - { lang.Name }
 						}
@@ -2201,17 +2211,6 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	});
 	</script>
 	<script nonce={ templ.GetNonce(ctx) }>
-	function createTranslation(pageId, langCode) {
-		fetch(`/admin/pages/${pageId}/translate/${langCode}`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-		}).then(response => {
-			if (response.redirected) window.location.href = response.url;
-			else if (response.ok) window.location.reload();
-			else console.error('Failed to create translation');
-		}).catch(error => { console.error('Error creating translation:', error); });
-	}
-
 	document.addEventListener('alpine:init', () => {
 		Alpine.data('aliasManager', aliasManager);
 		Alpine.data('tagSelector', tagSelector);
@@ -2583,5 +2582,20 @@ templ PageEditRecovery(pc *PageContext, pageID int64, submitted url.Values, mess
 				}
 			</form>
 		}
+	}
+}
+
+// The translation buttons target separate forms so they only submit the saved revision.
+templ pageTranslationForms(data PageFormViewData) {
+	for _, lang := range data.MissingLanguages {
+		<form
+			id={ "page-translation-" + lang.Code }
+			action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/translate/%s", data.PageID, lang.Code)) }
+			method="POST"
+			hidden
+		>
+			@csrfField()
+			<input type="hidden" name="base_revision" value={ fmt.Sprint(data.BaseRevision) }/>
+		</form>
 	}
 }

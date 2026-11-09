@@ -16,5 +16,8 @@ func startCoreScheduler(s *scheduler.Scheduler) error {
 	if err := s.AddRevisionRetention(); err != nil {
 		return fmt.Errorf("registering AI draft revision retention: %w", err)
 	}
+	if err := s.AddEventCleanup(); err != nil {
+		return fmt.Errorf("registering event retention: %w", err)
+	}
 	return s.Start()
 }

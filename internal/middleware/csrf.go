@@ -9,6 +9,8 @@ import (
 	"net/http"
 
 	csrf "filippo.io/csrf/gorilla"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // CSRFConfig holds configuration for CSRF protection.
@@ -74,12 +76,12 @@ func csrfErrorHandler(w http.ResponseWriter, r *http.Request) {
 	if reason != nil {
 		reasonStr = reason.Error()
 	}
-	slog.Error("CSRF validation failed",
+	slog.Warn("CSRF validation failed",
 		"reason", reasonStr,
-		"method", r.Method,
-		"path", r.URL.Path,
-		"origin", r.Header.Get("Origin"),
-		"sec_fetch_site", r.Header.Get("Sec-Fetch-Site"),
+		"method", util.BoundedLogField(r.Method),
+		"path", util.BoundedLogField(r.URL.Path),
+		"origin", util.BoundedLogField(r.Header.Get("Origin")),
+		"sec_fetch_site", util.BoundedLogField(r.Header.Get("Sec-Fetch-Site")),
 	)
 	http.Error(w, "Forbidden - CSRF validation failed", http.StatusForbidden)
 }

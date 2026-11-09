@@ -5,6 +5,7 @@ package handler
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -64,6 +65,30 @@ func TestLoginRoleRedirect(t *testing.T) {
 				t.Errorf("authenticated login form = %d %q, want 303 %q", rr.Code, rr.Header().Get("Location"), tt.want)
 			}
 		})
+	}
+}
+
+func TestUnknownLoginEventBoundsSubmittedEmail(t *testing.T) {
+	h, db, sm := newAuthTestHandler(t)
+	router := authTestRouter(h, db, sm)
+	normal := "unknown@example.test"
+	for _, email := range []string{normal, strings.Repeat("界", 3000) + "@example.test"} {
+		w := authRequest(router, http.MethodPost, RouteLogin, url.Values{"email": {email}, "password": {"invalid"}})
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("failed login status = %d, want 303", w.Code)
+		}
+		var raw string
+		if err := db.QueryRow("SELECT metadata FROM events WHERE message = 'Login failed: user not found' ORDER BY id DESC LIMIT 1").Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		var metadata map[string]string
+		if err := json.Unmarshal([]byte(raw), &metadata); err != nil {
+			t.Fatal(err)
+		}
+		got := metadata["email"]
+		if (email == normal && got != normal) || got == "" || len([]rune(got)) > 256 {
+			t.Fatalf("failed login event has unexpected email length %d", len(got))
+		}
 	}
 }
 

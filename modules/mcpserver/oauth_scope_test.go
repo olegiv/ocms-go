@@ -4,13 +4,54 @@
 package mcpserver
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/olegiv/ocms-go/internal/ai/authoring"
 	"github.com/olegiv/ocms-go/internal/model"
 )
+
+func TestOAuthToolScopeInBandChallenge(t *testing.T) {
+	env := newTestEnv(t)
+	s := enableOAuth(t, env, true)
+	token, _ := oauthToken(t, s, env.userID, model.PermissionMCPAccess)
+
+	// Exercise the SDK's in-band result without the outer HTTP scope preflight.
+	sdk := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		return env.module.currentServer()
+	}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	handler := env.module.mixedAuthentication(http.NotFoundHandler(), sdk)
+	req := httptest.NewRequest(http.MethodPost, EndpointPath, strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_my_draft","arguments":{"page_id":1}}}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	var response struct {
+		Result struct {
+			IsError bool                `json:"isError"`
+			Meta    map[string][]string `json:"_meta"`
+		} `json:"result"`
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200 with an in-band tool error: %s", w.Code, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	challenges := response.Result.Meta["mcp/www_authenticate"]
+	const want = `Bearer resource_metadata="https://cms.test/.well-known/oauth-protected-resource/api/mcp", error="insufficient_scope", scope="mcp:access mcp:drafts"`
+	if !response.Result.IsError || len(challenges) != 1 || challenges[0] != want {
+		t.Fatalf("in-band result=%+v, want a tool error with challenge %q", response.Result, want)
+	}
+}
 
 func TestOAuthToolScopeHTTPChallenge(t *testing.T) {
 	env := newTestEnv(t)

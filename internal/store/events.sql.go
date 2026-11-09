@@ -104,7 +104,12 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event
 }
 
 const deleteOldEvents = `-- name: DeleteOldEvents :exec
-DELETE FROM events WHERE created_at < ?
+DELETE FROM events
+WHERE id IN (
+    SELECT expired.id FROM events AS expired WHERE expired.created_at < ?
+    ORDER BY expired.created_at
+    LIMIT 1000
+)
 `
 
 func (q *Queries) DeleteOldEvents(ctx context.Context, createdAt time.Time) error {

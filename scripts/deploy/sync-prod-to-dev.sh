@@ -36,6 +36,7 @@ SYNC_CUSTOM=false
 # restart_remote_on_exit.
 REMOTE_STOPPED=false
 REMOTE_UNCHECKED=false
+DB_SYNC_TMP=""
 
 # Load local port from .env if available
 LOCAL_PORT=""
@@ -153,6 +154,10 @@ if [[ -z "$VHOST" ]]; then
     exit 1
 fi
 check_health_settings
+if [[ "$SYNC_DB" == true && "$DRY_RUN" != true ]] && ! command -v sqlite3 >/dev/null; then
+    echo_error "Install sqlite3 locally to scrub credentials from the database copy."
+    exit 1
+fi
 
 # Construct remote paths from instance directory
 REMOTE_INSTANCE_DIR="${VHOST}"
@@ -241,6 +246,9 @@ restart_remote_on_exit() {
     local status=$?
     trap - EXIT
     trap '' INT TERM HUP
+    if [[ -n "$DB_SYNC_TMP" ]]; then
+        rm -rf -- "$DB_SYNC_TMP" || echo_warn "Could not remove private database staging directory: $DB_SYNC_TMP"
+    fi
     if [[ "$REMOTE_STOPPED" == true ]]; then
         REMOTE_STOPPED=false
         echo_error "The sync stopped before it finished (status ${status}) while the remote instance was stopped; starting it again"
@@ -263,8 +271,54 @@ trap restart_remote_on_exit EXIT
 
 checkpoint_remote_db() {
     echo_step "Checkpointing remote SQLite WAL..."
-    ssh_cmd "sqlite3 ${REMOTE_DATA_DIR}/ocms.db 'PRAGMA wal_checkpoint(TRUNCATE);'"
+    local database="${REMOTE_DATA_DIR}/ocms.db"
+    ssh_cmd "test ! -f $database || sqlite3 $database 'PRAGMA wal_checkpoint(TRUNCATE);'"
     echo_ok "WAL checkpoint complete"
+}
+
+scrub_database_credentials() {
+    local database="$1" deletes sidecar
+    for sidecar in "$database-wal" "$database-shm" "$database-journal"; do
+        if [[ -L "$sidecar" ]]; then
+            echo_error "Cannot scrub a SQLite database with a symlinked journal or WAL."
+            return 1
+        fi
+    done
+    # Older installations may predate OAuth or share links. Only generate
+    # statements for the fixed allowlist of tables present in the copy.
+    deletes=$(sqlite3 -batch -bail -init /dev/null "$database" "
+        SELECT 'DELETE FROM ' || name || ';' FROM sqlite_master
+        WHERE type = 'table' AND name IN ('sessions', 'oauth_tokens', 'oauth_codes', 'preview_links');")
+    if [[ -z "$deletes" ]]; then
+        return
+    fi
+    sqlite3 -batch -bail -init /dev/null "$database" "
+        PRAGMA journal_mode = DELETE;
+        PRAGMA secure_delete = ON;
+        BEGIN IMMEDIATE;
+        $deletes
+        COMMIT;
+        VACUUM;" >/dev/null
+}
+
+scrub_staged_databases() {
+    local database header found=false
+    # OCMS_DB_PATH may select a different name under data/. Match SQLite's
+    # file signature so the scrub does not depend on a filename or extension.
+    find "${DB_SYNC_TMP}/data" -type f -print0 > "${DB_SYNC_TMP}/files"
+    while IFS= read -r -d '' database; do
+        # Scrubbing a database can remove its WAL and journal files.
+        [[ -f "$database" ]] || continue
+        header=$(LC_ALL=C od -An -tx1 -N16 "$database" | tr -d '[:space:]')
+        if [[ "$header" == 53514c69746520666f726d6174203300 ]]; then
+            found=true
+            scrub_database_credentials "$database"
+        fi
+    done < "${DB_SYNC_TMP}/files"
+    if [[ "$found" != true ]]; then
+        echo_error "No SQLite database found in the synced data directory."
+        return 1
+    fi
 }
 
 sync_database() {
@@ -275,18 +329,25 @@ sync_database() {
 
     echo_step "Syncing database..."
 
-    # Create local data directory if it doesn't exist
-    if [[ "$DRY_RUN" != true ]]; then
-        mkdir -p "${LOCAL_DATA_DIR}"
-    else
-        echo_dry_run "mkdir -p ${LOCAL_DATA_DIR}"
+    if [[ "$DRY_RUN" == true ]]; then
+        echo_dry_run "rsync -avz --progress --delete ${SSH_USER}@${SERVER}:${REMOTE_DATA_DIR}/ <private-staging>/data/"
+        echo_dry_run "Scrub sessions, OAuth tokens and codes, and preview links from staged SQLite databases"
+        echo_dry_run "rsync -a --checksum --delete <private-staging>/data/ ${LOCAL_DATA_DIR}/"
+        return
     fi
 
-    # Sync entire data directory
+    # Keep the production copy private until the scrub has succeeded.
+    DB_SYNC_TMP=$(mktemp -d "${TMPDIR:-/tmp}/ocms-sync-db.XXXXXXXX")
+    mkdir "${DB_SYNC_TMP}/data"
     rsync_cmd -avz --progress --delete \
         "${SSH_USER}@${SERVER}:${REMOTE_DATA_DIR}/" \
-        "${LOCAL_DATA_DIR}/"
+        "${DB_SYNC_TMP}/data/"
 
+    echo_step "Removing copied session and OAuth credentials and preview links..."
+    scrub_staged_databases
+
+    mkdir -p "${LOCAL_DATA_DIR}"
+    rsync_cmd -a --checksum --delete "${DB_SYNC_TMP}/data/" "${LOCAL_DATA_DIR}/"
     echo_ok "Database synced"
 }
 

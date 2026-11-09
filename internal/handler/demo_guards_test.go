@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,13 +24,12 @@ import (
 
 // TestDemoModeGuardsWebhookDeliveriesAndOAuthRevoke checks that demo mode
 // refuses the webhook test and retry actions, which queue outbound
-// deliveries, and the legacy account OAuth revoke route, as it already
+// deliveries, and OAuth authorization, consent and revocation, as it already
 // refuses the other webhook and connected-app changes (2026-11-03 audit B-2,
 // A-12). IsDemoMode is read once per process, so the check runs in a child
 // test process.
 //
-// Bug state: drop the demoGuard call from WebhooksHandler.Test,
-// RetryDelivery or AuthHandler.RevokeOAuthGrant and this fails.
+// Bug state: drop the demo guard from a tested action and this fails.
 func TestDemoModeGuardsWebhookDeliveriesAndOAuthRevoke(t *testing.T) {
 	if os.Getenv("OCMS_HANDLER_DEMO_GUARD_CHILD") != "1" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestDemoModeGuardsWebhookDeliveriesAndOAuthRevoke$", "-test.count=1")
@@ -103,7 +103,7 @@ func TestDemoModeGuardsWebhookDeliveriesAndOAuthRevoke(t *testing.T) {
 	}
 
 	env := newMFATestEnv(t, false)
-	enableTestOAuth(t, env)
+	values := enableTestOAuth(t, env)
 	account := env.createUser(t, "editor")
 	req := httptest.NewRequest(http.MethodPost, "/account/security/oauth/revoke", strings.NewReader("grant_id=probe"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -112,5 +112,42 @@ func TestDemoModeGuardsWebhookDeliveriesAndOAuthRevoke(t *testing.T) {
 	env.h.RevokeOAuthGrant(rr, req)
 	if want := middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys); rr.Code != http.StatusSeeOther || env.sm.GetString(req.Context(), "flash") != want {
 		t.Errorf("legacy OAuth revoke in demo mode: status %d flash %q, want the demo refusal", rr.Code, env.sm.GetString(req.Context(), "flash"))
+	}
+
+	authorize := "/oauth/authorize"
+	cookie, _ := env.signInWithPassword(t, account)
+	ctx, err := env.sm.Load(t.Context(), cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate an already-open consent form from before demo mode was enabled.
+	nowNS := time.Now().UnixNano()
+	env.sm.Put(ctx, oauthPending, values.Encode())
+	env.sm.Put(ctx, oauthNonce, "existing-consent")
+	env.sm.Put(ctx, middleware.SessionKeyOAuthReauthAfter, nowNS)
+	env.sm.Put(ctx, middleware.SessionKeyAuthenticatedAt, nowNS)
+	token, _, err := env.sm.Commit(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie.Value = token
+	for _, attempt := range []struct {
+		method, target string
+		form           url.Values
+	}{
+		{http.MethodPost, authorize, url.Values{"consent_token": {"existing-consent"}, "decision": {"allow"}}},
+		{http.MethodGet, authorize + "?" + values.Encode(), nil},
+	} {
+		w := authRequest(env.router, attempt.method, attempt.target, attempt.form, cookie)
+		if w.Code != http.StatusForbidden || w.Header().Get("Location") != "" || w.Header().Get("Set-Cookie") != "" ||
+			w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Referrer-Policy") != "no-referrer" ||
+			!strings.Contains(w.Body.String(), "disabled in demo mode") || strings.Contains(w.Body.String(), "client.test") {
+			t.Errorf("%s authorization did not return a local demo refusal (status %d)", attempt.method, w.Code)
+		}
+	}
+	var credentials int
+	if err := env.db.QueryRow(`SELECT (SELECT COUNT(*) FROM oauth_grants) +
+		(SELECT COUNT(*) FROM oauth_codes) + (SELECT COUNT(*) FROM oauth_tokens)`).Scan(&credentials); err != nil || credentials != 0 {
+		t.Fatalf("demo authorization created %d credential rows: %v", credentials, err)
 	}
 }

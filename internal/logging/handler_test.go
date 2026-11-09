@@ -12,11 +12,15 @@ import (
 	"log"
 	"log/slog"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -371,6 +375,72 @@ func TestEventLogHandler_WarnRateLimitedByMessage(t *testing.T) {
 
 	if count != 2 {
 		t.Fatalf("expected 2 events after interval elapsed, got %d", count)
+	}
+}
+
+func TestCSRFFailureFloodKeepsBoundedWarnings(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	t.Cleanup(cleanup)
+	logger := newTestHandler(t, discardHandler{}, db)
+	now := time.Now()
+	logger.limiter.now = func() time.Time { return now }
+	old := slog.Default()
+	slog.SetDefault(slog.New(logger))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	next := middleware.CSRF(middleware.DefaultCSRFConfig(nil, false))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for i := range 5000 {
+		req := httptest.NewRequest(http.MethodPost, "https://cms.test/admin/%00"+strings.Repeat("%1b"+"x", 300), nil)
+		req.Header.Set("Sec-Fetch-Site", "cross-site")
+		req.Header.Set("Origin", fmt.Sprintf("https://origin-%d.test/%s", i, strings.Repeat("a", 2048)))
+		w := httptest.NewRecorder()
+		next.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("cross-site request returned %d", w.Code)
+		}
+	}
+	events := fetchEvents(t, db, 2)
+	if len(events) != 1 || events[0].Level != model.EventLevelWarning {
+		t.Fatalf("flood recorded %d events in the first two results, want one warning", len(events))
+	}
+	var metadata map[string]string
+	if err := json.Unmarshal([]byte(events[0].Metadata), &metadata); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"method", "path", "origin", "sec_fetch_site"} {
+		value := metadata[key]
+		if value == "" || utf8.RuneCountInString(value) > 256 || strings.ContainsFunc(value, unicode.IsControl) {
+			t.Errorf("invalid logged %s field (length %d)", key, len(value))
+		}
+	}
+	allowed := httptest.NewRequest(http.MethodPost, "https://cms.test/admin/pages", nil)
+	allowed.Header.Set("Sec-Fetch-Site", "same-origin")
+	w := httptest.NewRecorder()
+	next.ServeHTTP(w, allowed)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("same-origin request returned %d", w.Code)
+	}
+}
+
+func TestEventMetadataCapsEscapedAttributesAndContextPath(t *testing.T) {
+	ctx := context.WithValue(t.Context(), middleware.ContextKeyRequestPath, "/"+strings.Repeat("界", 2000))
+	record := slog.NewRecord(time.Now(), slog.LevelError, "oversized metadata", 0)
+	record.AddAttrs(slog.String("code", "retained"), slog.String("oversized", strings.Repeat("a", 8192)))
+	for i := range 30 {
+		record.AddAttrs(slog.String(fmt.Sprintf("attr%d", i), strings.Repeat("\x00<", 1024)))
+	}
+	raw := (&EventLogHandler{}).extractMetadata(ctx, record)
+	var metadata map[string]string
+	if err := json.Unmarshal([]byte(raw), &metadata); err != nil || len(raw) > 4096 {
+		t.Fatalf("metadata: %d bytes, parse error %v", len(raw), err)
+	}
+	if metadata["code"] != "retained" || metadata["oversized"] == "" || len(metadata["oversized"]) >= 8192 {
+		t.Fatal("metadata lost normal fields or retained an unbounded field")
+	}
+	if path := metadata["path"]; path == "" || len(path) >= 6001 || strings.ContainsRune(path, utf8.RuneError) {
+		t.Fatal("context path was lost or cut through a UTF-8 character")
 	}
 }
 

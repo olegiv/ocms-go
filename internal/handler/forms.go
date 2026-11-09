@@ -429,7 +429,7 @@ func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Reques
 		if errors.Is(err, sql.ErrNoRows) {
 			h.publicFormNotFound(w, r)
 		} else {
-			slog.Error("failed to resolve public form", "error", err, "slug", slug)
+			slog.Error("failed to resolve public form", "error", err, "slug", util.BoundedLogField(slug))
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 		return nil
@@ -1113,7 +1113,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Form payload too large", http.StatusRequestEntityTooLarge)
 			return
 		}
-		slog.Error("failed to parse form", "error", err)
+		slog.Warn("failed to parse form", "error", util.BoundedLogField(err.Error()))
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
 	}

@@ -21,6 +21,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // LoginProtection provides combined IP rate limiting and account lockout
@@ -215,7 +216,7 @@ func (lp *LoginProtection) scopeLocked(scope lockoutScope, email string) (bool, 
 	rec, err := store.New(lp.db).GetLoginProtection(context.Background(), scope.key)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			slog.Error("login_protection: get", "error", err, "email", email, "scope", scope.name)
+			slog.Error("login_protection: get", "error", err, "email", util.BoundedLogField(email), "scope", scope.name)
 		}
 		return false, 0
 	}
@@ -259,7 +260,7 @@ func (lp *LoginProtection) recordScopeFailure(scope lockoutScope, email, ip stri
 	ctx := context.Background()
 	q := store.New(lp.db)
 	now := time.Now()
-	logAttrs := []any{"email", email, "ip", ip, "scope", scope.name}
+	logAttrs := []any{"email", util.BoundedLogField(email), "ip", util.BoundedLogField(ip), "scope", scope.name}
 
 	rec, err := q.GetLoginProtection(ctx, scope.key)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -364,7 +365,7 @@ func (lp *LoginProtection) RecordSuccessfulLogin(email, ip string) {
 	// the other's counter in place, so every scope is attempted.
 	for _, scope := range lp.lockoutScopes(email, ip) {
 		if err := store.New(lp.db).DeleteLoginProtection(context.Background(), scope.key); err != nil {
-			slog.Error("login_protection: delete", "error", err, "email", email, "scope", scope.name)
+			slog.Error("login_protection: delete", "error", err, "email", util.BoundedLogField(email), "scope", scope.name)
 		}
 	}
 	slog.Debug("login attempts cleared", "email", email, "ip", ip)
@@ -381,7 +382,7 @@ func (lp *LoginProtection) GetRemainingAttempts(email, ip string) int {
 		rec, err := store.New(lp.db).GetLoginProtection(context.Background(), scope.key)
 		if err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
-				slog.Error("login_protection: get remaining", "error", err, "email", email, "scope", scope.name)
+				slog.Error("login_protection: get remaining", "error", err, "email", util.BoundedLogField(email), "scope", scope.name)
 			}
 			continue
 		}

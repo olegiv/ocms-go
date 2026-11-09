@@ -57,9 +57,7 @@ func (m *Module) withOAuthToolScopes(next http.Handler) http.Handler {
 				if spec.Name != message.Params.Name || spec.scope == "" || slices.Contains(info.Scopes, spec.scope) {
 					continue
 				}
-				// Basic endpoint access remains required during scope upgrades.
-				required := model.PermissionMCPAccess + " " + spec.scope
-				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Bearer resource_metadata=%q, error=\"insufficient_scope\", scope=%q", m.ctx.OAuth.Issuer()+oauth.MetadataPath, required))
+				w.Header().Set("WWW-Authenticate", m.oauthToolScopeChallenge(spec.scope))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)
 				_ = json.NewEncoder(w).Encode(map[string]string{"error": "insufficient_scope"})
@@ -68,4 +66,10 @@ func (m *Module) withOAuthToolScopes(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (m *Module) oauthToolScopeChallenge(toolScope string) string {
+	// Basic endpoint access remains required during scope upgrades.
+	required := model.PermissionMCPAccess + " " + toolScope
+	return fmt.Sprintf("Bearer resource_metadata=%q, error=\"insufficient_scope\", scope=%q", m.ctx.OAuth.Issuer()+oauth.MetadataPath, required)
 }

@@ -216,7 +216,7 @@ func (s *EventService) LogSecurityEvent(ctx context.Context, level, message stri
 	return s.LogEvent(ctx, level, model.EventCategorySecurity, message, userID, ipAddress, requestURL, metadata)
 }
 
-// DeleteOldEvents removes events older than the specified duration.
+// DeleteOldEvents removes up to 1,000 events older than the specified duration.
 func (s *EventService) DeleteOldEvents(ctx context.Context, olderThan time.Duration) error {
 	cutoff := time.Now().Add(-olderThan)
 	return s.queries.DeleteOldEvents(ctx, cutoff)

@@ -12,9 +12,8 @@ import (
 )
 
 // TestCoreSchedulerRegistersRetentionJobsBeforeStart fails when the process
-// stops registering a retention job. Without core:ai_revision_cleanup the
-// revisions of AI drafts grow without bound; without core:oauth_cleanup the
-// OAuth evidence does. Jobs added after Start would race the cron loop.
+// stops registering a retention job for AI draft revisions, OAuth evidence
+// or event logs. Jobs added after Start would race the cron loop.
 //
 // Bug state: drop the AddRevisionRetention call, or move it after s.Start().
 func TestCoreSchedulerRegistersRetentionJobsBeforeStart(t *testing.T) {
@@ -43,7 +42,7 @@ func TestCoreSchedulerRegistersRetentionJobsBeforeStart(t *testing.T) {
 	if start < 0 {
 		t.Fatal("startCoreScheduler no longer starts the scheduler; this check is vacuous")
 	}
-	for _, job := range []string{"AddOAuthCleanup", "AddRevisionRetention"} {
+	for _, job := range []string{"AddOAuthCleanup", "AddRevisionRetention", "AddEventCleanup"} {
 		if at := slices.Index(calls, job); at < 0 || at > start {
 			t.Errorf("startCoreScheduler must call s.%s before s.Start(); calls: %v", job, calls)
 		}

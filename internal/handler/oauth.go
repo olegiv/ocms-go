@@ -35,6 +35,10 @@ func (h *AuthHandler) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	if middleware.IsDemoMode() {
+		http.Error(w, "OAuth authorization is disabled in demo mode", http.StatusForbidden)
+		return
+	}
 	if r.Method == http.MethodPost {
 		h.oauthConsent(w, r)
 		return

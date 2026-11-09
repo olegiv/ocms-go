@@ -16,6 +16,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -339,19 +340,48 @@ func (h *EventLogHandler) extractCategory(r slog.Record) string {
 	}
 }
 
-// extractMetadata collects all log attributes into a JSON string.
-// It also includes the request path from context if available.
+const (
+	maxEventMetadataBytes  = 4 << 10
+	maxEventAttributeBytes = 1 << 10
+)
+
+// extractMetadata keeps attributes within the budget after JSON escaping.
+// An explicit path attribute takes precedence over the request context.
 func (h *EventLogHandler) extractMetadata(ctx context.Context, r slog.Record) string {
-	attrs := make(map[string]string, r.NumAttrs()+1)
-	if path := middleware.GetRequestPath(ctx); path != "" {
-		attrs["path"] = path
-	}
-	r.Attrs(func(a slog.Attr) bool {
-		if a.Key != "category" {
-			attrs[a.Key] = a.Value.String()
+	attrs := make(map[string]string)
+	budget := maxEventMetadataBytes - len("{}")
+	add := func(key, value string) {
+		if len(key) > maxEventAttributeBytes {
+			return
 		}
-		return true
+		if len(value) > maxEventAttributeBytes {
+			end := maxEventAttributeBytes
+			for end > 0 && !utf8.RuneStart(value[end]) {
+				end--
+			}
+			value = value[:end]
+		}
+		encodedKey, _ := json.Marshal(key)
+		encodedValue, _ := json.Marshal(value)
+		size := len(encodedKey) + len(encodedValue) + len(":,")
+		if size <= budget {
+			attrs[key] = value
+			budget -= size
+		}
+	}
+	hasPath := false
+	r.Attrs(func(a slog.Attr) bool {
+		hasPath = hasPath || a.Key == "path"
+		if a.Key != "category" {
+			add(a.Key, a.Value.String())
+		}
+		return budget > len(`"":"",`)
 	})
+	if !hasPath {
+		if path := middleware.GetRequestPath(ctx); path != "" {
+			add("path", path)
+		}
+	}
 	encoded, err := json.Marshal(attrs)
 	if err != nil {
 		return "{}"

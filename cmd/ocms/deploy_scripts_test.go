@@ -4,6 +4,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"os"
 	"os/exec"
@@ -794,9 +795,16 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			work, stubs := t.TempDir(), t.TempDir()
 			writeStubs(t, stubs, map[string]string{
-				"ssh":   sshStub,
-				"rsync": "#!/bin/sh\necho rsync >> \"$SSH_LOG\"\nif [ \"$RSYNC_EXIT\" = term ]; then kill -TERM \"$PPID\"; exit 0; fi\nexit \"$RSYNC_EXIT\"\n",
-				"lsof":  "#!/bin/sh\nexit 1\n",
+				"ssh": sshStub,
+				"rsync": `#!/bin/sh
+echo rsync >> "$SSH_LOG"
+if [ "$RSYNC_EXIT" = term ]; then kill -TERM "$PPID"; exit 0; fi
+if [ "$RSYNC_EXIT" != 0 ]; then exit "$RSYNC_EXIT"; fi
+for dest do :; done
+case "$dest" in */data/) printf 'SQLite format 3\000' > "$dest/ocms.db";; esac
+`,
+				"lsof":    "#!/bin/sh\nexit 1\n",
+				"sqlite3": "#!/bin/sh\nexit 0\n",
 			})
 			sshLog := filepath.Join(work, "ssh.log")
 
@@ -842,6 +850,132 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 			}
 			if !slices.ContainsFunc(commands[start:], func(c string) bool { return strings.Contains(c, waitFor(tc.instance)) }) {
 				t.Errorf("the sync never waited for %s after starting it; it ran:\n%s", tc.instance, logged)
+			}
+		})
+	}
+}
+
+func TestSyncProdToDevScrubsDatabaseBeforePublishing(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	sqlite, err := exec.LookPath("sqlite3")
+	if err != nil {
+		t.Skip("sqlite3 is not installed")
+	}
+	rsync, err := exec.LookPath("rsync")
+	if err != nil {
+		t.Skip("rsync is not installed")
+	}
+	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "deploy", "sync-prod-to-dev.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqliteQuery := func(path, query string) string {
+		t.Helper()
+		out, err := exec.Command(sqlite, "-batch", "-bail", "-init", "/dev/null", path, query).CombinedOutput() // #nosec G204 -- fixed SQLite tool and fixture
+		if err != nil {
+			t.Fatalf("sqlite fixture: %v: %s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	for _, scenario := range []string{"current schema", "legacy schema", "custom database with WAL", "scrub failure", "--no-db", "--dry-run"} {
+		t.Run(scenario, func(t *testing.T) {
+			work, stubs, source := t.TempDir(), t.TempDir(), t.TempDir()
+			data := filepath.Join(work, "data")
+			if err := os.Mkdir(data, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			name := "ocms.db"
+			if scenario == "custom database with WAL" {
+				name = "site.db"
+			}
+			dst, src := filepath.Join(data, name), filepath.Join(source, name)
+			sqliteQuery(dst, "CREATE TABLE content(value); INSERT INTO content VALUES ('local');")
+			sqliteQuery(src, "CREATE TABLE content(value); INSERT INTO content VALUES ('production');")
+			tables := []string{"sessions"}
+			if scenario != "legacy schema" {
+				tables = append(tables, "oauth_tokens", "oauth_codes", "preview_links")
+			}
+			for _, table := range tables {
+				sqliteQuery(src, "CREATE TABLE "+table+"(token); INSERT INTO "+table+" VALUES ('synthetic-credential-fixture');")
+			}
+			if scenario == "scrub failure" {
+				sqliteQuery(src, "CREATE TRIGGER prevent_scrub BEFORE DELETE ON sessions BEGIN SELECT RAISE(ABORT, 'scrub fault'); END;")
+			}
+			wantContent := "production"
+			if scenario == "custom database with WAL" {
+				// Keep the source connection open so these writes only exist in the WAL.
+				walDB, err := sql.Open("sqlite3", src)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = walDB.Close() })
+				if _, err := walDB.Exec(`PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;
+					UPDATE content SET value='from WAL';
+					UPDATE sessions SET token='synthetic-wal-credential';`); err != nil {
+					t.Fatal(err)
+				}
+				wantContent = "from WAL"
+			}
+			writeStubs(t, stubs, map[string]string{
+				"ssh":  sshStub,
+				"lsof": "#!/bin/sh\nexit 1\n",
+				"rsync": `#!/bin/bash
+args=("$@")
+src=$(($# - 2))
+if [[ "${args[src]}" == *:/srv/site/data/ ]]; then
+    args[src]="$FIXTURE/"
+fi
+exec "$REAL_RSYNC" "${args[@]}"
+`,
+			})
+			args := []string{script, "server.example.com", "site_ok", "-v", "/srv/site", "--no-uploads", "--no-logs"}
+			if strings.HasPrefix(scenario, "--") {
+				args = append(args, scenario)
+			}
+			sshLog := filepath.Join(work, "ssh.log")
+			cmd := exec.Command(bash, args...) // #nosec G204 -- fixed repository script, mocked production commands
+			cmd.Dir = work
+			cmd.Stdin = strings.NewReader("y")
+			cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + work,
+				"TMPDIR=" + work, "SSH_LOG=" + sshLog, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0", "REAL_RSYNC=" + rsync, "FIXTURE=" + source}
+			out, err := cmd.CombinedOutput()
+			if scenario == "scrub failure" {
+				if err == nil || !strings.Contains(string(out), "scrub fault") || !strings.Contains(string(out), "Instance 'site_ok' is healthy") {
+					t.Fatalf("scrub failure did not restore the remote instance and fail the sync: %v\n%s", err, out)
+				}
+			} else if err != nil {
+				t.Fatalf("sync: %v\n%s", err, out)
+			}
+			if staging, err := filepath.Glob(filepath.Join(work, "ocms-sync-db.*")); err != nil || len(staging) != 0 {
+				t.Fatalf("private copy remained after exit: %v, %v", staging, err)
+			}
+			if scenario == "scrub failure" || strings.HasPrefix(scenario, "--") {
+				if got := sqliteQuery(dst, "SELECT value FROM content;"); got != "local" {
+					t.Fatalf("local database was replaced: %s", got)
+				}
+				return
+			}
+			if got := sqliteQuery(dst, "SELECT value FROM content;"); got != wantContent {
+				t.Fatalf("copied content = %s", got)
+			}
+			for _, table := range tables {
+				if got := sqliteQuery(dst, "SELECT COUNT(*) FROM "+table+";"); got != "0" {
+					t.Errorf("synced %s contains %s credential rows", table, got)
+				}
+				if got := sqliteQuery(src, "SELECT COUNT(*) FROM "+table+";"); got != "1" {
+					t.Errorf("production fixture %s was modified", table)
+				}
+			}
+			b, err := os.ReadFile(dst) // #nosec G304 -- local fixture path
+			if err != nil || strings.Contains(string(b), "synthetic-credential-fixture") ||
+				strings.Contains(string(b), "synthetic-wal-credential") {
+				t.Fatal("credential fixture is still present in the copied database bytes", err)
+			}
+			if _, err := os.Stat(dst + "-wal"); !os.IsNotExist(err) {
+				t.Fatalf("published database retained a WAL: %v", err)
 			}
 		})
 	}
