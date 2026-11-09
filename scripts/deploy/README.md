@@ -451,19 +451,40 @@ Options:
 - `--sync-custom` — Also sync custom/ directory (themes only; `custom/modules/` is never synced)
 - `--dry-run` — Print commands without executing
 
-The script asks for confirmation (`y/N`) before touching anything, except with `--dry-run`, then:
-1. Stops the local development server (kills whatever listens on the local port)
-2. Stops remote instance via `ocmsctl`
-3. Checkpoints SQLite WAL on server (flushes to main file)
-4. Syncs the whole `data/` directory via `rsync --delete`
-5. Syncs uploads via `rsync --delete` (mirrors production exactly)
-6. Syncs logs via `rsync` (keeps local logs not on prod)
-7. (If --sync-custom) Syncs custom directory
-8. Restarts remote instance and waits for it to report healthy (`ocmsctl health`, as `deploy.sh` does; `HEALTH_RETRIES` and `HEALTH_INTERVAL` set how long), exiting 1 when it does not
+Install `rsync` locally and `sqlite3` on both ends when copying a database.
+After confirmation, the script stops the local development server. For a
+database or uploads sync, it stops production and captures the requested
+directories into private local staging during the same stop. The remote
+uploads copy uses existing local uploads as a private transfer basis. The
+script prepares it before stopping production and checks file contents
+during capture.
 
-If a step fails, or the sync is interrupted, while the remote instance is stopped, the script starts it again and waits for it before exiting with a non-zero status, so a failed sync does not leave the production site down; another Ctrl-C does not cut that start short. If the stop itself fails, the script exits before copying anything: copying the database of a running instance gives a torn copy.
+The remote checkpoint checks the default `data/ocms.db` when it exists. The copy
+includes the data directory's journal files and any SQLite database with a
+different filename. Production restarts and must pass its health check before
+the script scrubs and publishes the local copy. Logs and optional custom files
+are copied while production is running. Logs retain files that exist only
+locally. `--dry-run` shows the order without running it.
 
-**WARNING:** This overwrites your local `data/`, `uploads/`, and `logs/` directories with production data!
+If capture fails or is interrupted while production is stopped, the script
+attempts to restart it and preserves the original failure status. Local data
+and uploads are published only after capture, health check and database scrub
+succeed. Publishing uses separate `rsync --delete` operations for data and
+uploads, so an interrupted publish can leave the local copy incomplete.
+
+The scrub removes sessions, OAuth tokens and codes, and preview links. It
+clears webhook signing secrets, custom headers and destinations, clears
+scheduled HTTP task destinations, and disables both kinds of integration.
+It also clears the hCaptcha secret and disables stored hCaptcha verification.
+Embed providers are disabled and their stored configuration is reset.
+Configure development destinations and credentials before re-enabling them.
+
+**Treat the result as production data.** It retains password and API-key
+verifiers, sealed MFA secrets and recovery-code hashes, as well as content,
+form submissions, and integration history. Logs and historical records can
+contain previously recorded URLs or credentials. The scrub covers the listed
+fields in regular SQLite files under `data/`. Archives, uploads, logs, custom
+module data and arbitrary file contents can still contain sensitive data.
 
 ## Backups
 

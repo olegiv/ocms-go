@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestDeployBinaryCommands runs the commands scripts/deploy/helper.sh builds
@@ -296,6 +297,7 @@ case "$SIGNAL_ON:$2" in
 esac
 case "$2" in
   "mktemp -d -- "*) echo /opt/ocms/bin/.ocms-upload.TEST0000 ;;
+  *"wal_checkpoint(TRUNCATE)"*) printf '%s\n' "${CHECKPOINT_RESULT:-0|0|0}" ;;
   *"health 'site_bad'"*) echo "FAILED (HTTP 503)"; exit 1 ;;
   *"health 'site_lost'"*) exit 255 ;;
   "/opt/ocms/bin/ocmsctl health site_flaky" | "/opt/ocms/bin/ocmsctl start site_nostart" | "/opt/ocms/bin/ocmsctl stop site_nostop") exit 1 ;;
@@ -748,16 +750,17 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 	}
 	const anyFailure = -1
 	cases := []struct {
-		name     string
-		instance string
-		answer   string
-		rsync    string // the stub's exit status, or "term" to send SIGTERM to the script
-		signalOn string // sshStub's $SIGNAL_ON
-		exit     int    // 0, an exit status, or anyFailure
-		starts   int
-		copied   bool
-		out      []string
-		notOut   []string
+		name       string
+		instance   string
+		answer     string
+		rsync      string // the stub's exit status, or "term" to send SIGTERM to the script
+		signalOn   string // sshStub's $SIGNAL_ON
+		checkpoint string
+		exit       int // 0, an exit status, or anyFailure
+		starts     int
+		copied     bool
+		out        []string
+		notOut     []string
 	}{
 		{name: "synced", instance: "site_ok", answer: "y", rsync: "0", exit: 0, starts: 1, copied: true,
 			out: []string{"Sync complete!"}},
@@ -769,9 +772,12 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 		{name: "interrupted", instance: "site_ok", answer: "y", rsync: "term", exit: anyFailure, starts: 1, copied: true,
 			out:    []string{"The sync stopped before it finished", "Instance 'site_ok' is healthy"},
 			notOut: []string{"Sync complete!"}},
-		{name: "unhealthy after the sync", instance: "site_bad", answer: "y", rsync: "0", exit: 1, starts: 1, copied: true,
-			out:    []string{"FAILED (HTTP 503)", "The data was synced, but the remote instance 'site_bad' is not healthy"},
+		{name: "unhealthy after capture", instance: "site_bad", answer: "y", rsync: "0", exit: 1, starts: 1, copied: true,
+			out:    []string{"FAILED (HTTP 503)", "The remote instance 'site_bad' is not healthy; the local snapshot was not published"},
 			notOut: []string{"Sync complete!", "stopped before it finished"}},
+		{name: "checkpoint busy", instance: "site_ok", answer: "y", rsync: "0", checkpoint: "1|3|0", exit: 1, starts: 1,
+			out:    []string{"Remote database checkpoint did not finish successfully", "Instance 'site_ok' is healthy"},
+			notOut: []string{"checkpoint succeeded", "Sync complete!"}},
 		{name: "copy failed, then unhealthy", instance: "site_bad", answer: "y", rsync: "23", exit: 23, starts: 1, copied: true,
 			out:    []string{"The sync stopped before it finished (status 23)", "The remote instance 'site_bad' did not come back"},
 			notOut: []string{"Sync complete!"}},
@@ -798,6 +804,7 @@ func TestSyncProdToDevRestartsProduction(t *testing.T) {
 				"ssh": sshStub,
 				"rsync": `#!/bin/sh
 echo rsync >> "$SSH_LOG"
+case "$*" in *:/srv/site/logs/*) echo copy-logs >> "$SSH_LOG";; esac
 if [ "$RSYNC_EXIT" = term ]; then kill -TERM "$PPID"; exit 0; fi
 if [ "$RSYNC_EXIT" != 0 ]; then exit "$RSYNC_EXIT"; fi
 for dest do :; done
@@ -812,7 +819,8 @@ case "$dest" in */data/) printf 'SQLite format 3\000' > "$dest/ocms.db";; esac
 			cmd.Dir = work
 			cmd.Stdin = strings.NewReader(tc.answer)
 			cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + work,
-				"SSH_LOG=" + sshLog, "RSYNC_EXIT=" + tc.rsync, "SIGNAL_ON=" + tc.signalOn, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}
+				"SSH_LOG=" + sshLog, "RSYNC_EXIT=" + tc.rsync, "SIGNAL_ON=" + tc.signalOn, "CHECKPOINT_RESULT=" + tc.checkpoint,
+				"HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}
 			out, err := cmd.CombinedOutput()
 			logged, commands := remoteCommands(t, sshLog)
 
@@ -851,6 +859,16 @@ case "$dest" in */data/) printf 'SQLite format 3\000' > "$dest/ocms.db";; esac
 			if !slices.ContainsFunc(commands[start:], func(c string) bool { return strings.Contains(c, waitFor(tc.instance)) }) {
 				t.Errorf("the sync never waited for %s after starting it; it ran:\n%s", tc.instance, logged)
 			}
+			if logCopy := slices.Index(commands, "copy-logs"); logCopy >= 0 && logCopy < start {
+				t.Errorf("logs were copied before production restarted:\n%s", logged)
+			}
+			if tc.name == "unhealthy after capture" {
+				for _, name := range []string{"data", "uploads", "logs"} {
+					if _, err := os.Stat(filepath.Join(work, name)); !errors.Is(err, os.ErrNotExist) {
+						t.Errorf("%s was published before a successful health check: %v", name, err)
+					}
+				}
+			}
 		})
 	}
 }
@@ -860,14 +878,18 @@ func TestSyncProdToDevScrubsDatabaseBeforePublishing(t *testing.T) {
 	if err != nil {
 		t.Skip("bash is not installed")
 	}
-	sqlite, err := exec.LookPath("sqlite3")
-	if err != nil {
-		t.Skip("sqlite3 is not installed")
+	requireTool := func(name string) string {
+		t.Helper()
+		path, err := exec.LookPath(name)
+		if err != nil {
+			if os.Getenv("CI") == "true" {
+				t.Fatalf("%s is required for the production-copy test in CI: %v", name, err)
+			}
+			t.Skipf("%s is not installed", name)
+		}
+		return path
 	}
-	rsync, err := exec.LookPath("rsync")
-	if err != nil {
-		t.Skip("rsync is not installed")
-	}
+	sqlite, rsync := requireTool("sqlite3"), requireTool("rsync")
 	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "deploy", "sync-prod-to-dev.sh"))
 	if err != nil {
 		t.Fatal(err)
@@ -880,9 +902,10 @@ func TestSyncProdToDevScrubsDatabaseBeforePublishing(t *testing.T) {
 		}
 		return strings.TrimSpace(string(out))
 	}
-	for _, scenario := range []string{"current schema", "legacy schema", "custom database with WAL", "scrub failure", "--no-db", "--dry-run"} {
+	for _, scenario := range []string{"current schema", "legacy schema", "custom database with WAL", "scrub failure", "uploads capture failure", "--no-db", "--dry-run"} {
 		t.Run(scenario, func(t *testing.T) {
 			work, stubs, source := t.TempDir(), t.TempDir(), t.TempDir()
+			remoteUploads := t.TempDir()
 			data := filepath.Join(work, "data")
 			if err := os.Mkdir(data, 0o700); err != nil {
 				t.Fatal(err)
@@ -892,6 +915,20 @@ func TestSyncProdToDevScrubsDatabaseBeforePublishing(t *testing.T) {
 				name = "site.db"
 			}
 			dst, src := filepath.Join(data, name), filepath.Join(source, name)
+			uploads := filepath.Join(work, "uploads")
+			if err := os.Mkdir(uploads, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			for dir, contents := range map[string]string{uploads: "local version", remoteUploads: "snapshot data"} {
+				file := filepath.Join(dir, "asset.bin")
+				if err := os.WriteFile(file, []byte(contents), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				stamp := time.Unix(1700000000, 0)
+				if err := os.Chtimes(file, stamp, stamp); err != nil {
+					t.Fatal(err)
+				}
+			}
 			sqliteQuery(dst, "CREATE TABLE content(value); INSERT INTO content VALUES ('local');")
 			sqliteQuery(src, "CREATE TABLE content(value); INSERT INTO content VALUES ('production');")
 			tables := []string{"sessions"}
@@ -900,6 +937,24 @@ func TestSyncProdToDevScrubsDatabaseBeforePublishing(t *testing.T) {
 			}
 			for _, table := range tables {
 				sqliteQuery(src, "CREATE TABLE "+table+"(token); INSERT INTO "+table+" VALUES ('synthetic-credential-fixture');")
+			}
+			sqliteQuery(src, `
+				CREATE TABLE webhooks (url, secret, is_active);
+				INSERT INTO webhooks VALUES ('https://example.test/synthetic-hook-target', 'synthetic-hook-secret', 1);
+				CREATE TABLE scheduled_tasks (url, is_active);
+				INSERT INTO scheduled_tasks VALUES ('https://example.test/synthetic-task-target', 1);
+				CREATE TABLE users (password_hash);
+				INSERT INTO users VALUES ('synthetic-retained-verifier');
+			`)
+			if scenario != "legacy schema" {
+				sqliteQuery(src, `
+					ALTER TABLE webhooks ADD COLUMN headers;
+					UPDATE webhooks SET headers='{"Authorization":"synthetic-hook-header"}';
+					CREATE TABLE hcaptcha_settings (enabled, site_key, secret_key);
+					INSERT INTO hcaptcha_settings VALUES (1, 'public-site-key', 'synthetic-captcha-secret');
+					CREATE TABLE embed_settings (provider, settings, is_enabled);
+					INSERT INTO embed_settings VALUES ('dify', '{"api_key":"synthetic-embed-key"}', 0);
+				`)
 			}
 			if scenario == "scrub failure" {
 				sqliteQuery(src, "CREATE TRIGGER prevent_scrub BEFORE DELETE ON sessions BEGIN SELECT RAISE(ABORT, 'scrub fault'); END;")
@@ -920,43 +975,110 @@ func TestSyncProdToDevScrubsDatabaseBeforePublishing(t *testing.T) {
 				wantContent = "from WAL"
 			}
 			writeStubs(t, stubs, map[string]string{
-				"ssh":  sshStub,
+				"ssh": strings.Replace(sshStub, "case \"$2\" in\n", `case "$2" in
+  "/opt/ocms/bin/ocmsctl start site_ok") printf '%s\n' 'live asset after restart' > "$UPLOAD_FIXTURE/asset.bin" ;;
+`, 1),
 				"lsof": "#!/bin/sh\nexit 1\n",
+				"sqlite3": `#!/bin/sh
+echo scrub >> "$SSH_LOG"
+exec "$REAL_SQLITE" "$@"
+`,
 				"rsync": `#!/bin/bash
+# Apple's openrsync invokes a local sender via PATH even for a local copy.
+if [[ "$1" == --server ]]; then exec "$REAL_RSYNC" "$@"; fi
 args=("$@")
 src=$(($# - 2))
-if [[ "${args[src]}" == *:/srv/site/data/ ]]; then
-    args[src]="$FIXTURE/"
-fi
+dst=$(($# - 1))
+case "${args[src]}" in
+    ./uploads/) echo seed-uploads >> "$SSH_LOG" ;;
+    *:/srv/site/data/) echo capture-data >> "$SSH_LOG"; args[src]="$FIXTURE/" ;;
+    *:/srv/site/uploads/)
+        echo capture-uploads >> "$SSH_LOG"
+        [[ "$SCENARIO" != "uploads capture failure" ]] || exit 23
+        if [[ $(cat "${args[dst]}/asset.bin") != "local version" ]]; then
+            echo 'capture has no private uploads basis' >&2
+            exit 91
+        fi
+        args[src]="$UPLOAD_FIXTURE/" ;;
+    */ocms-sync.*/data/) echo publish-data >> "$SSH_LOG" ;;
+    */ocms-sync.*/uploads/) echo publish-uploads >> "$SSH_LOG" ;;
+    *) printf 'unexpected fixture rsync arguments: %s\n' "$*" >&2; exit 90 ;;
+esac
 exec "$REAL_RSYNC" "${args[@]}"
 `,
 			})
-			args := []string{script, "server.example.com", "site_ok", "-v", "/srv/site", "--no-uploads", "--no-logs"}
+			args := []string{script, "server.example.com", "site_ok", "-v", "/srv/site", "--no-logs"}
 			if strings.HasPrefix(scenario, "--") {
 				args = append(args, scenario)
+			}
+			if scenario == "--no-db" {
+				args = append(args, "--no-uploads")
+			}
+			checkpoint := "0|0|0"
+			if scenario == "custom database with WAL" {
+				checkpoint = "missing"
 			}
 			sshLog := filepath.Join(work, "ssh.log")
 			cmd := exec.Command(bash, args...) // #nosec G204 -- fixed repository script, mocked production commands
 			cmd.Dir = work
 			cmd.Stdin = strings.NewReader("y")
 			cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + work,
-				"TMPDIR=" + work, "SSH_LOG=" + sshLog, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0", "REAL_RSYNC=" + rsync, "FIXTURE=" + source}
+				"TMPDIR=" + work, "SSH_LOG=" + sshLog, "HEALTH_RETRIES=1", "HEALTH_INTERVAL=0",
+				"REAL_RSYNC=" + rsync, "REAL_SQLITE=" + sqlite, "FIXTURE=" + source,
+				"UPLOAD_FIXTURE=" + remoteUploads, "SCENARIO=" + scenario, "CHECKPOINT_RESULT=" + checkpoint}
 			out, err := cmd.CombinedOutput()
 			if scenario == "scrub failure" {
 				if err == nil || !strings.Contains(string(out), "scrub fault") || !strings.Contains(string(out), "Instance 'site_ok' is healthy") {
 					t.Fatalf("scrub failure did not restore the remote instance and fail the sync: %v\n%s", err, out)
 				}
+			} else if scenario == "uploads capture failure" {
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) || exitErr.ExitCode() != 23 || !strings.Contains(string(out), "Instance 'site_ok' is healthy") {
+					t.Fatalf("failed uploads capture did not restore production: %v\n%s", err, out)
+				}
 			} else if err != nil {
 				t.Fatalf("sync: %v\n%s", err, out)
 			}
-			if staging, err := filepath.Glob(filepath.Join(work, "ocms-sync-db.*")); err != nil || len(staging) != 0 {
+			if staging, err := filepath.Glob(filepath.Join(work, "ocms-sync.*")); err != nil || len(staging) != 0 {
 				t.Fatalf("private copy remained after exit: %v, %v", staging, err)
 			}
-			if scenario == "scrub failure" || strings.HasPrefix(scenario, "--") {
+			wantUpload := "snapshot data"
+			noPublish := scenario == "scrub failure" || scenario == "uploads capture failure" || strings.HasPrefix(scenario, "--")
+			if noPublish {
+				wantUpload = "local version"
+			}
+			gotUpload, err := os.ReadFile(filepath.Join(uploads, "asset.bin"))
+			if err != nil || string(gotUpload) != wantUpload {
+				t.Fatalf("local uploads = %q, want %q: %v", gotUpload, wantUpload, err)
+			}
+			logged, commands := remoteCommands(t, sshLog)
+			if !strings.HasPrefix(scenario, "--") {
+				assertSyncOrder(t, logged, commands, scenario)
+			}
+			if noPublish {
 				if got := sqliteQuery(dst, "SELECT value FROM content;"); got != "local" {
 					t.Fatalf("local database was replaced: %s", got)
 				}
 				return
+			}
+			if scenario == "custom database with WAL" &&
+				(!strings.Contains(string(out), "Default remote database not found") || strings.Contains(string(out), "checkpoint succeeded")) {
+				t.Fatal("skipped checkpoint reported as a success")
+			}
+			checks := map[string]string{
+				"SELECT url, secret, is_active FROM webhooks": "||0",
+				"SELECT url, is_active FROM scheduled_tasks":  "|0",
+				"SELECT password_hash FROM users":             "synthetic-retained-verifier",
+			}
+			if scenario != "legacy schema" {
+				checks["SELECT headers FROM webhooks"] = "{}"
+				checks["SELECT enabled, site_key, secret_key FROM hcaptcha_settings"] = "0|public-site-key|"
+				checks["SELECT provider, settings, is_enabled FROM embed_settings"] = "dify|{}|0"
+			}
+			for query, want := range checks {
+				if got := sqliteQuery(dst, query); got != want {
+					t.Errorf("scrubbed result for %q = %q, want %q", query, got, want)
+				}
 			}
 			if got := sqliteQuery(dst, "SELECT value FROM content;"); got != wantContent {
 				t.Fatalf("copied content = %s", got)
@@ -970,14 +1092,44 @@ exec "$REAL_RSYNC" "${args[@]}"
 				}
 			}
 			b, err := os.ReadFile(dst) // #nosec G304 -- local fixture path
-			if err != nil || strings.Contains(string(b), "synthetic-credential-fixture") ||
-				strings.Contains(string(b), "synthetic-wal-credential") {
-				t.Fatal("credential fixture is still present in the copied database bytes", err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, marker := range []string{"synthetic-credential-fixture", "synthetic-wal-credential",
+				"synthetic-hook-secret", "synthetic-hook-header", "synthetic-hook-target", "synthetic-task-target",
+				"synthetic-captcha-secret", "synthetic-embed-key"} {
+				if strings.Contains(string(b), marker) {
+					t.Fatal("credential fixture is still present in the copied database bytes")
+				}
 			}
 			if _, err := os.Stat(dst + "-wal"); !os.IsNotExist(err) {
 				t.Fatalf("published database retained a WAL: %v", err)
 			}
 		})
+	}
+}
+
+func assertSyncOrder(t *testing.T, logged string, commands []string, scenario string) {
+	t.Helper()
+	want := []string{"seed-uploads", ctl("stop", "site_ok"), "capture-data", "capture-uploads", ctl("start", "site_ok")}
+	if scenario != "uploads capture failure" {
+		want = append(want, "scrub")
+	}
+	if scenario != "scrub failure" && scenario != "uploads capture failure" {
+		want = append(want, "publish-data", "publish-uploads")
+	}
+	previous := -1
+	for _, step := range want {
+		pos := slices.Index(commands, step)
+		if pos <= previous {
+			t.Fatalf("expected %q after prior stages, got:\n%s", step, logged)
+		}
+		previous = pos
+	}
+	if scenario == "scrub failure" || scenario == "uploads capture failure" {
+		if slices.Contains(commands, "publish-data") || slices.Contains(commands, "publish-uploads") {
+			t.Fatalf("failed snapshot was published:\n%s", logged)
+		}
 	}
 }
 

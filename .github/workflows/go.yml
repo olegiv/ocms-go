@@ -47,6 +47,13 @@ jobs:
     - name: Check out the shared Claude tooling
       run: git submodule update --init .claude/shared
 
+    - name: Ensure production-copy test tools are installed
+      run: |
+        if ! command -v sqlite3 || ! command -v rsync; then
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 rsync
+        fi
+
     - name: Test
       run: |
         google-chrome --version
