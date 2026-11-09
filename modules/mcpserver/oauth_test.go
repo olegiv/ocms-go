@@ -90,7 +90,14 @@ func oauthToken(t *testing.T, s *oauth.Service, userID int64, scopes string) (st
 func TestOAuthMCPPrincipalDraftRevocationAndKeyCompatibility(t *testing.T) {
 	env := newTestEnv(t)
 	s := enableOAuth(t, env, true)
-	token, p := oauthToken(t, s, env.userID, "mcp:access mcp:drafts")
+	initial := env.rawPost(`{"jsonrpc":"2.0","id":1,"method":"initialize"}`, nil)
+	challenge := initial.Header.Get("WWW-Authenticate")
+	_, requested, hasScope := strings.Cut(challenge, `scope="`)
+	requested, _, closed := strings.Cut(requested, `"`)
+	if initial.StatusCode != 401 || !hasScope || !closed || requested != "mcp:access mcp:drafts" {
+		t.Fatalf("initial draft challenge: %d %q", initial.StatusCode, challenge)
+	}
+	token, p := oauthToken(t, s, env.userID, requested)
 	session := env.connect(token)
 	info := decodeResult[SiteInfo](t, call(t, session, "get_site_info", nil))
 	if info.Access.UserID != env.userID || info.Access.AuthType != "oauth" || info.Access.GrantID != p.GrantID || info.Access.ClientID != p.ClientID || info.Access.ExpiresAt == nil || info.Server.ReadOnly {
@@ -132,6 +139,7 @@ func TestOAuthMCPPrincipalDraftRevocationAndKeyCompatibility(t *testing.T) {
 		t.Fatal("foreign draft disclosed")
 	}
 	limitedToken, _ := oauthToken(t, s, env.userID, "mcp:access")
+	call(t, env.connect(limitedToken), "get_site_info", nil)
 	scopeResponse := env.rawPost(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_draft_page","arguments":{"title":"Denied","body":""}}}`, map[string]string{"Authorization": "Bearer " + limitedToken})
 	if scopeResponse.StatusCode != http.StatusForbidden || !strings.Contains(scopeResponse.Header.Get("WWW-Authenticate"), `error="insufficient_scope"`) {
 		t.Fatal("missing transport-level OAuth scope challenge")
@@ -160,6 +168,24 @@ func TestOAuthMCPPrincipalDraftRevocationAndKeyCompatibility(t *testing.T) {
 	if !strings.Contains(logs, "grant_id="+p.GrantID) || !strings.Contains(logs, fmt.Sprintf("user_id=%d", env.userID)) {
 		t.Fatal("verified audit identity missing")
 	}
+}
+
+func TestInitialOAuthChallengeTracksDraftAvailability(t *testing.T) {
+	env := newTestEnv(t)
+	enableOAuth(t, env, false)
+	check := func(want string) {
+		t.Helper()
+		res := env.rawPost(`{"jsonrpc":"2.0","id":1,"method":"initialize"}`, nil)
+		got := res.Header.Get("WWW-Authenticate")
+		if res.StatusCode != 401 || !strings.Contains(got, `scope="`+want+`"`) {
+			t.Fatalf("initial challenge: %d %q, want %q", res.StatusCode, got, want)
+		}
+	}
+	check("mcp:access")
+	env.setSettings(Settings{DraftToolsEnabled: true})
+	check("mcp:access mcp:drafts")
+	env.module.ctx.Config.AIDisabled = true
+	check("mcp:access")
 }
 
 func TestMCPRejectsChangedAccountAndInvalidOAuthWithoutKeyFallback(t *testing.T) {

@@ -285,6 +285,11 @@ integrations. If clients need DCR, configure an initial access token.
 
 ## Draft authoring and scope upgrades
 
+When draft authoring is enabled, the first MCP OAuth challenge asks for
+`mcp:access` and `mcp:drafts` together. Clients that follow the challenge can
+request both permissions in one sign-in and consent flow. Existing grants
+continue to use their previously approved scopes.
+
 R1.5 removes the temporary compatibility probe and its flag. Actual draft
 creation/update/translation now uses the shared writer, an admin authoring
 toggle and `mcp:drafts`; see [Draft authoring](draft-authoring.md).

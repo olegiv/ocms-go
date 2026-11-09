@@ -60,8 +60,9 @@ func (m *Module) keyAccountGuard(next http.Handler) http.Handler {
 }
 
 func (m *Module) mixedAuthentication(keyHandler, inner http.Handler) http.Handler {
+	metadataURL := m.ctx.OAuth.Issuer() + oauth.MetadataPath
 	oauthHandler := auth.RequireBearerToken(m.verifyOAuth, &auth.RequireBearerTokenOptions{
-		ResourceMetadataURL: m.ctx.OAuth.Issuer() + oauth.MetadataPath,
+		ResourceMetadataURL: metadataURL,
 		Scopes:              []string{model.PermissionMCPAccess},
 	})(middleware.PrincipalRateLimit(func(r *http.Request) string {
 		info := auth.TokenInfoFromContext(r.Context())
@@ -70,8 +71,19 @@ func (m *Module) mixedAuthentication(keyHandler, inner http.Handler) http.Handle
 		}
 		return info.UserID
 	}, keyRateLimitRPS, keyRateLimitBurst)(inner))
+	draftConnectChallenge := auth.RequireBearerToken(m.verifyOAuth, &auth.RequireBearerTokenOptions{
+		ResourceMetadataURL: metadataURL,
+		Scopes:              []string{model.PermissionMCPAccess, model.PermissionMCPDrafts},
+	})(http.NotFoundHandler())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
+		settings, _ := r.Context().Value(requestSettingsKey{}).(Settings)
+		// The SDK uses the same scopes for the challenge and token validation.
+		// Send the draft challenge only on initial requests without credentials.
+		if header == "" && settings.DraftToolsEnabled && m.ctx.Config != nil && !m.ctx.Config.AIDisabled && !middleware.IsDemoMode() {
+			draftConnectChallenge.ServeHTTP(w, r)
+			return
+		}
 		parts := strings.Fields(header)
 		if header == "" || len(parts) >= 2 && strings.EqualFold(parts[0], "Bearer") && oauth.RecognizesAccessToken(parts[1]) {
 			oauthHandler.ServeHTTP(w, r)
