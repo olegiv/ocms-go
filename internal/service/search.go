@@ -498,14 +498,21 @@ func (s *SearchService) SearchAllPages(ctx context.Context, params SearchParams)
 	s.syncIndex(ctx)
 
 	likePattern := "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(params.Query) + "%"
-	const match = `
+	match := `
 		FROM pages p
 		LEFT JOIN page_search ON page_search.rowid = p.id
-		WHERE p.title LIKE ? ESCAPE '!' OR page_search.body LIKE ? ESCAPE '!'`
+		WHERE (p.title LIKE ? ESCAPE '!' OR page_search.body LIKE ? ESCAPE '!')`
+	args := []any{likePattern, likePattern}
+	// The caller's language filter (MCP search_pages) narrows the same
+	// text search; it never falls back to matching stored HTML.
+	if params.LanguageCode != "" {
+		match += ` AND p.language_code = ?`
+		args = append(args, params.LanguageCode)
+	}
 
 	var total int64
 	//goland:noinspection SqlResolve
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*)`+match, likePattern, likePattern).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*)`+match, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -515,8 +522,8 @@ func (s *SearchService) SearchAllPages(ctx context.Context, params SearchParams)
 	//goland:noinspection SqlResolve
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.id, p.title, p.slug, p.body, p.status, p.published_at, p.created_at, p.updated_at, p.featured_image_id`+match+`
-		ORDER BY p.updated_at DESC
-		LIMIT ? OFFSET ?`, likePattern, likePattern, params.Limit, params.Offset)
+		ORDER BY p.updated_at DESC, p.id DESC
+		LIMIT ? OFFSET ?`, append(args, params.Limit, params.Offset)...)
 	if err != nil {
 		return nil, 0, err
 	}

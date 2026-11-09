@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -23,8 +24,52 @@ var wiredClaudeHooks = map[string]string{
 // optInClaudeHooks are the hook scripts in .claude/hooks that
 // .claude/settings.json leaves unwired on purpose, with the reason.
 var optInClaudeHooks = map[string]string{
+	"go-strict-lint.sh":     "run explicitly by /code-quality (the Codex proxy checks it before Claude); not an automatic commit hook",
 	"setup-go-toolchain.sh": "replaces /usr/local/go, a machine-wide change an operator opts into",
 	"validate-go-test.sh":   "advisory only: it always exits 0, so Claude never sees its -race note, and the test gate runs without -race on purpose (CI has a race step)",
+}
+
+// TestClaudeCommandsHaveExecutableHooks checks command references as well as
+// the installed hook inventory. A-T1's missing strict-lint link was invisible
+// to a test that only enumerated the scripts already present in hooks/.
+func TestClaudeCommandsHaveExecutableHooks(t *testing.T) {
+	claudeDir := filepath.Join("..", "..", ".claude")
+	if _, err := os.Stat(filepath.Join(claudeDir, "shared", ".git")); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) || sharedToolingRequired() {
+			t.Fatalf("the shared tooling checkout is required: %v", err)
+		}
+		t.Skip("the .claude/shared submodule is not checked out")
+	}
+	commands, err := os.ReadDir(filepath.Join(claudeDir, "commands"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hookReference := regexp.MustCompile(`\.claude/hooks/([[:alnum:]_.-]+\.sh)`)
+	references := 0
+	for _, command := range commands {
+		if !strings.HasSuffix(command.Name(), ".md") {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(claudeDir, "commands", command.Name()))
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		for _, match := range hookReference.FindAllStringSubmatch(string(data), -1) {
+			references++
+			name := match[1]
+			info, statErr := os.Stat(filepath.Join(claudeDir, "hooks", name))
+			if statErr != nil {
+				t.Errorf("%s references missing hook %s: %v", command.Name(), name, statErr)
+				continue
+			}
+			if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+				t.Errorf("%s references hook %s, which is not an executable file", command.Name(), name)
+			}
+		}
+	}
+	if references == 0 {
+		t.Fatal("no command hook references found; the command format changed and this test is vacuous")
+	}
 }
 
 // TestClaudeHooksAreWired fails when a hook script in .claude/hooks is
@@ -87,6 +132,8 @@ func TestClaudeHooksAreWired(t *testing.T) {
 				switch {
 				case err != nil:
 					t.Errorf("%s hook runs %s: %v", event, name, err)
+				case info == nil:
+					t.Errorf("%s hook runs %s: missing file information", event, name)
 				case info.Mode().IsRegular() && info.Mode().Perm()&0o111 == 0:
 					t.Errorf("%s hook runs %s, which is not executable", event, name)
 				}

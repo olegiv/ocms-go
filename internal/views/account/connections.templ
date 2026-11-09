@@ -1,0 +1,141 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package account
+
+import (
+	"fmt"
+	"net/url"
+	"strconv"
+	"time"
+
+	"github.com/olegiv/ocms-go/internal/connectedapps"
+	"github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+)
+
+// ConnectionsData has no credential material and uses server-owned form paths.
+type ConnectionsData struct {
+	Page connectedapps.Page
+	Admin bool
+	BasePath string
+}
+
+func connectionDate(value time.Time) string {
+	return value.UTC().Format("2006-01-02 15:04:05 UTC")
+}
+
+func connectionPageURL(data ConnectionsData, kind string, delta int64) string {
+	p := data.Page.Pagination
+	if kind == "oauth" { p.OAuthPage += delta } else { p.KeyPage += delta }
+	return data.BasePath + "?" + url.Values{
+		"oauth_page": {strconv.FormatInt(p.OAuthPage, 10)},
+		"key_page": {strconv.FormatInt(p.KeyPage, 10)},
+	}.Encode()
+}
+
+templ ConnectionsPage(pc *admin.PageContext, data ConnectionsData) {
+	@admin.AdminLayout(pc) {
+		@admin.PageHeader(pc.T("connected.title"), pc.T("connected.description")) {}
+		@ConnectionsPanel(pc, data)
+	}
+}
+
+// ConnectionsPanel is shared by the account page and admin MCP overview.
+templ ConnectionsPanel(pc *admin.PageContext, data ConnectionsData) {
+	<div class="space-y-6" id="connected-apps">
+		<p class="text-sm text-muted-foreground">{ pc.T("connected.policy_note") }</p>
+		@connectionCard(pc, data, "oauth", data.Page.OAuth, data.Page.OAuthMore)
+		@connectionCard(pc, data, "api_key", data.Page.APIKeys, data.Page.KeysMore)
+	</div>
+}
+
+templ connectionCard(pc *admin.PageContext, data ConnectionsData, kind string, rows []connectedapps.Connection, more bool) {
+	@card.Card(card.Props{}) {
+		@card.Header() {
+			@card.Title() {
+					if kind == "oauth" {
+						{ pc.T("connected.oauth") }
+					} else {
+						{ pc.T("connected.keys") }
+					}
+			}
+			@card.Description() {
+					if kind == "oauth" {
+						{ pc.T("connected.metadata_note") }
+					} else {
+						{ pc.T("connected.key_note") }
+					}
+			}
+		}
+		@card.Content() {
+			if len(rows) == 0 {
+				<p>{ pc.T("connected.empty") }</p>
+			}
+			for _, row := range rows {
+				<article class="mb-6 space-y-3 rounded-md border p-4 [overflow-wrap:anywhere]">
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<h3 class="font-semibold">{ row.Name }</h3>
+						@badge.Badge(badge.Props{Variant: badge.VariantOutline}) { { pc.T("connected.status_" + row.Status) } }
+					</div>
+					<dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[10rem_1fr]">
+						if data.Admin {
+							<dt class="text-muted-foreground">{ pc.T("connected.owner") }</dt>
+							<dd>{ fmt.Sprintf("%s (#%d)", row.OwnerName, row.OwnerID) }</dd>
+						}
+						if kind == "oauth" {
+							<dt class="text-muted-foreground">{ pc.T("oauth.client_host") }</dt>
+							<dd>
+								if row.Host != "" {
+									{ row.Host }
+								} else {
+									{ pc.T("connected.not_recorded") }
+								}
+							</dd>
+							<dt class="text-muted-foreground">{ pc.T("oauth.client_id") }</dt>
+							<dd><code>{ row.ClientID }</code></dd>
+						}
+						<dt class="text-muted-foreground">{ pc.T("api_keys.permissions") }</dt>
+						<dd>{ row.Scopes }</dd>
+						<dt class="text-muted-foreground">{ pc.T("connected.created") }</dt>
+						<dd>{ connectionDate(row.CreatedAt) }</dd>
+						<dt class="text-muted-foreground">{ pc.T("api_keys.last_used") }</dt>
+						<dd>
+								if row.LastUsedAt.IsZero() {
+									{ pc.T("connected.never_used") }
+								} else {
+									{ connectionDate(row.LastUsedAt) }
+								}
+						</dd>
+						<dt class="text-muted-foreground">{ pc.T("api_keys.expires") }</dt>
+						<dd>
+								if row.ExpiresAt.IsZero() {
+									{ pc.T("connected.no_expiry") }
+								} else {
+									{ connectionDate(row.ExpiresAt) }
+								}
+						</dd>
+					</dl>
+					if row.Status != "revoked" {
+						<form method="POST" action={ templ.SafeURL(data.BasePath + "/revoke") }>
+							@admin.CSRFField()
+							<input type="hidden" name="kind" value={ row.Kind }/>
+							<input type="hidden" name="id" value={ row.ID }/>
+							@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDestructive}) { { pc.T("connected.revoke") } }
+						</form>
+					}
+				</article>
+			}
+			<div class="flex flex-wrap items-center gap-3">
+				if kind == "oauth" && data.Page.Pagination.OAuthPage > 1 || kind == "api_key" && data.Page.Pagination.KeyPage > 1 {
+						@button.Button(button.Props{Href: connectionPageURL(data, kind, -1), Variant: button.VariantOutline}) { { pc.T("pagination.previous") } }
+				}
+				if more {
+						@button.Button(button.Props{Href: connectionPageURL(data, kind, 1), Variant: button.VariantOutline}) { { pc.T("pagination.next") } }
+				}
+			</div>
+		}
+	}
+}

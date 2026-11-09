@@ -7,8 +7,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -51,6 +53,16 @@ func logAndHTTPError(w http.ResponseWriter, message string, statusCode int, logM
 // logAndInternalError logs an error and writes a 500 Internal Server Error response.
 func logAndInternalError(w http.ResponseWriter, logMsg string, args ...any) {
 	logAndHTTPError(w, "Internal Server Error", http.StatusInternalServerError, logMsg, args...)
+}
+
+// writeDeleteError sends the refusal text to the admin's HTMX error toast.
+func writeDeleteError(w http.ResponseWriter, message string) {
+	w.Header().Set("HX-Reswap", "none")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusBadRequest)
+	if _, err := io.WriteString(w, message); err != nil {
+		slog.Debug("failed to write delete error response", "error", err)
+	}
 }
 
 // =============================================================================
@@ -152,7 +164,7 @@ func requireEntityWithJSONError[T any](
 //
 //	apiKey, ok := requireEntityWithCustomError(w, "API key", id,
 //	    func(id int64) (store.ApiKey, error) { return h.queries.GetAPIKeyByID(r.Context(), id) },
-//	    h.sendDeleteError)
+//	    writeDeleteError)
 func requireEntityWithCustomError[T any](
 	w http.ResponseWriter,
 	entityName string,
@@ -224,22 +236,19 @@ func handleDeleteEntity[T any](w http.ResponseWriter, r *http.Request, renderer 
 // LANGUAGE PREFERENCE HELPERS
 // =============================================================================
 
-// setLanguagePreference sets the admin UI language preference from a form value.
-// It validates the language code and redirects to the referer or the provided fallback URL.
+// setLanguagePreference saves the signed-in preference and redirects back.
 func setLanguagePreference(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, fallbackURL string) {
-	lang := r.FormValue("lang")
-	if lang == "" {
-		lang = "en"
+	renderer.SetAdminLang(r, selectedUILanguage(r))
+	if _, err := r.Cookie(middleware.AdminLanguageCookieName); err == nil {
+		middleware.ClearAdminLanguageCookie(w)
 	}
-
-	// Validate the language code
-	if !i18n.IsSupported(lang) {
-		lang = "en"
-	}
-
-	// Set the language preference in session
-	renderer.SetAdminLang(r, lang)
-
-	// Redirect back to a same-origin Referer, or to fallbackURL.
 	middleware.SafeRefererRedirect(w, r, fallbackURL)
+}
+
+func selectedUILanguage(r *http.Request) string {
+	lang := strings.ToLower(r.FormValue("lang"))
+	if i18n.IsSupported(lang) {
+		return lang
+	}
+	return "en"
 }

@@ -4,8 +4,6 @@
 package handler
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -25,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
@@ -55,6 +54,7 @@ type ImportExportHandler struct {
 	uploadDir      string
 
 	blockSuspiciousMarkup bool
+	sanitizePageHTML      bool
 }
 
 // NewImportExportHandler creates a new ImportExportHandler.
@@ -92,6 +92,8 @@ func (h *ImportExportHandler) newExporter() *transfer.Exporter {
 func (h *ImportExportHandler) newImporter() *transfer.Importer {
 	importer := transfer.NewImporter(h.queries, h.db, h.logger)
 	importer.SetUploadDir(h.configuredUploadDir())
+	importer.SetBlockSuspiciousMarkup(h.blockSuspiciousMarkup)
+	importer.SetSanitizePageHTML(h.sanitizePageHTML)
 	return importer
 }
 
@@ -106,6 +108,11 @@ func (h *ImportExportHandler) configuredUploadDir() string {
 // bodies containing suspicious HTML tokens.
 func (h *ImportExportHandler) SetBlockSuspiciousMarkup(block bool) {
 	h.blockSuspiciousMarkup = block
+}
+
+// SetSanitizePageHTML configures save-time sanitization for imported page bodies.
+func (h *ImportExportHandler) SetSanitizePageHTML(sanitize bool) {
+	h.sanitizePageHTML = sanitize
 }
 
 // ExportFormData holds data for the export form template.
@@ -286,7 +293,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 
 	// Parse multipart form (max 100MB for zip files with media)
 	if err := r.ParseMultipartForm(maxImportUploadBytes); err != nil {
-		h.renderImportError(w, r, user, "Failed to parse form: "+err.Error())
+		h.logger.Warn("failed to parse import upload", "error", err, "user_id", middleware.GetUserID(r))
+		h.renderImportError(w, r, user, "Failed to read the upload form. Check the file size and try again.")
 		return
 	}
 
@@ -316,12 +324,14 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	// Read file content with a hard cap to prevent memory exhaustion.
 	content, err := readImportFileContent(file, maxImportUploadBytes)
 	if err != nil {
-		h.renderImportError(w, r, user, err.Error())
+		h.logger.Error("failed to read import upload", "error", err, "user_id", middleware.GetUserID(r))
+		h.renderImportError(w, r, user, "Failed to read the uploaded file. Please upload it again.")
 		return
 	}
 
 	// Create importer
 	importer := h.newImporter()
+	importer.SetPrincipal(provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
 
 	var validationResult *transfer.ValidationResult
 	var exportData transfer.ExportData
@@ -331,7 +341,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		// Validate zip file
 		validationResult, err = importer.ValidateZipBytes(r.Context(), content)
 		if err != nil {
-			h.renderImportError(w, r, user, "Validation failed: "+err.Error())
+			h.logger.Error("failed to validate import archive", "error", err, "user_id", middleware.GetUserID(r))
+			h.renderImportError(w, r, user, importValidationFailedMessage)
 			return
 		}
 
@@ -357,7 +368,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		// Validate JSON data
 		validationResult, err = importer.ValidateData(r.Context(), &exportData)
 		if err != nil {
-			h.renderImportError(w, r, user, "Validation failed: "+err.Error())
+			h.logger.Error("failed to validate import data", "error", err, "user_id", middleware.GetUserID(r))
+			h.renderImportError(w, r, user, importValidationFailedMessage)
 			return
 		}
 	}
@@ -399,32 +411,7 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 
 // extractExportDataFromZip extracts the ExportData from a zip file bytes.
 func (h *ImportExportHandler) extractExportDataFromZip(zipData []byte) (transfer.ExportData, error) {
-	var data transfer.ExportData
-
-	reader := bytes.NewReader(zipData)
-	zipReader, err := zip.NewReader(reader, int64(len(zipData)))
-	if err != nil {
-		return data, fmt.Errorf("failed to read zip: %w", err)
-	}
-
-	for _, f := range zipReader.File {
-		if f.Name == "export.json" {
-			rc, err := f.Open()
-			if err != nil {
-				return data, fmt.Errorf("failed to open export.json: %w", err)
-			}
-
-			decoder := json.NewDecoder(rc)
-			if err := decoder.Decode(&data); err != nil {
-				_ = rc.Close()
-				return data, fmt.Errorf("failed to decode export.json: %w", err)
-			}
-			_ = rc.Close()
-			return data, nil
-		}
-	}
-
-	return data, fmt.Errorf("export.json not found in zip")
+	return transfer.ReadZipExportDataBytes(zipData)
 }
 
 type suspiciousImportPage struct {
@@ -566,6 +553,7 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	// Create importer
 	importer := h.newImporter()
+	importer.SetPrincipal(provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"})
 
 	var result *transfer.ImportResult
 	var err error
@@ -608,8 +596,8 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		// for a nil or dry-run result, so it belongs ahead of every branch.
 		h.invalidateCachesAfterImport(r.Context(), result)
 		if err != nil {
-			h.logger.Error("zip import failed", "error", err)
-			h.renderImportError(w, r, user, "Import failed: "+err.Error())
+			h.logger.Error("zip import failed", "error", err, "user_id", middleware.GetUserID(r))
+			h.renderImportError(w, r, user, importExecutionFailedMessage)
 			return
 		}
 
@@ -631,8 +619,8 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		result, err = importer.Import(r.Context(), &exportData, opts)
 		h.invalidateCachesAfterImport(r.Context(), result)
 		if err != nil {
-			h.logger.Error("import failed", "error", err)
-			h.renderImportError(w, r, user, "Import failed: "+err.Error())
+			h.logger.Error("import failed", "error", err, "user_id", middleware.GetUserID(r))
+			h.renderImportError(w, r, user, importExecutionFailedMessage)
 			return
 		}
 
@@ -641,18 +629,6 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	// Clear common session data
 	h.sessionManager.Remove(r.Context(), "import_is_zip")
-
-	// Set flash message based on result
-	if result.Success {
-		if result.DryRun {
-			h.sessionManager.Put(r.Context(), "flash_success", "Dry run completed successfully. No changes were made.")
-		} else {
-			h.sessionManager.Put(r.Context(), "flash_success", fmt.Sprintf("Import completed: %d created, %d updated, %d skipped",
-				result.TotalCreated(), result.TotalUpdated(), result.TotalSkipped()))
-		}
-	} else {
-		h.sessionManager.Put(r.Context(), "flash_error", fmt.Sprintf("Import completed with %d errors", len(result.Errors)))
-	}
 
 	h.renderImportPage(w, r, user, ImportFormData{
 		ConflictStrategies: defaultConflictStrategies(),
@@ -678,11 +654,16 @@ func (h *ImportExportHandler) invalidateCachesAfterImport(ctx context.Context, r
 
 // renderImportError renders the import form with an error message.
 func (h *ImportExportHandler) renderImportError(w http.ResponseWriter, r *http.Request, user interface{}, errMsg string) {
-	h.sessionManager.Put(r.Context(), "flash_error", errMsg)
+	h.renderer.SetFlash(r, errMsg, "error")
 	h.renderImportPage(w, r, user, ImportFormData{
 		ConflictStrategies: defaultConflictStrategies(),
 	})
 }
+
+const (
+	importValidationFailedMessage = "The uploaded file could not be validated. Check the server log for details."
+	importExecutionFailedMessage  = "The import could not be completed. Check the server log for details."
+)
 
 // importZipUnreadableMessage is shown instead of the raw archive error, which
 // can name server paths; the detail goes to the log.

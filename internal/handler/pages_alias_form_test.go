@@ -102,4 +102,18 @@ func TestPageFormRejectsShadowedAliasesBeforeSaving(t *testing.T) {
 	if len(aliases) != 1 || aliases[0].Alias != "about/stored" {
 		t.Errorf("update: stored aliases = %v, want about/stored untouched", aliases)
 	}
+
+	const legacy = "docs/preview/share/guide"
+	if _, err := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{PageID: page.ID, Alias: legacy, CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	rr = post("/admin/pages/"+strconv.FormatInt(page.ID, 10), url.Values{
+		"title": {"Updated"}, "slug": {"stored-page"}, "body": {"Content"},
+		"status": {"draft"}, "language_code": {"en"}, "aliases[]": {"about/stored", legacy},
+		"base_revision": {strconv.FormatInt(page.Revision, 10)},
+	})
+	updated, err := queries.GetPageByAlias(ctx, legacy)
+	if err != nil || updated.ID != page.ID || updated.Title != "Updated" {
+		t.Fatalf("save with a legacy alias: status %d, page %d, title %q, error %v", rr.Code, updated.ID, updated.Title, err)
+	}
 }

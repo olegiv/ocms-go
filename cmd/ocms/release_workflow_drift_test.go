@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,6 +43,67 @@ func readWorkflow(t *testing.T, name string) workflowFile {
 		t.Fatalf("parsing %s: %v", name, err)
 	}
 	return wf
+}
+
+// TestReleaseVersionPolicy checks that preparation and CI use the same
+// stable version check, including the command's optional leading v.
+func TestReleaseVersionPolicy(t *testing.T) {
+	const prepare = `scripts/release-version.sh "v${input#v}"`
+	const validate = `version_no_v=$(scripts/release-version.sh "${GITHUB_REF_NAME}" 2>&1)`
+	root := filepath.Join("..", "..")
+	command := string(readWorkflowFile(t, filepath.Join(root, ".claude", "commands", "release-gh-prepare.md")))
+	preflight, _, found := strings.Cut(command, "## Hard preconditions")
+	if !found || !strings.Contains(preflight, "\n```bash\n"+prepare+"\n```\n") {
+		t.Error("/release-gh-prepare must run the shared validator before the release preconditions")
+	}
+	wf := readWorkflow(t, "release.yml")
+	validated := false
+	for _, step := range wf.Jobs["validate"].Steps {
+		if step.Name == "Validate release tag" {
+			gate := strings.Index(step.Run, "\nif ! "+validate+"; then\n")
+			changelog := strings.Index(step.Run, "CHANGELOG.md")
+			validated = gate >= 0 && gate < changelog
+		}
+	}
+	if !validated {
+		t.Error("release.yml must validate the tag and use the normalized version before checking CHANGELOG.md")
+	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	for _, tc := range []struct {
+		input, prepared, tag string
+	}{
+		{"0.21.0", "0.21.0", ""},
+		{"v10.21.30", "10.21.30", "10.21.30"},
+		{"v0.21.0-rc.1", "", ""},
+		{"0.21.0-rc.1", "", ""},
+		{"v0.21.0+build.1", "", ""},
+		{"v0.21", "", ""},
+		{"vv0.21.0", "", ""},
+		{" v0.21.0", "", ""},
+		{"--delete", "", ""},
+		{"", "", ""},
+	} {
+		t.Run("input="+tc.input, func(t *testing.T) {
+			check := func(source, snippet, want string) {
+				t.Helper()
+				cmd := exec.CommandContext(t.Context(), bash, "-ec", snippet, "release-version", tc.input) // #nosec G204 -- fixed snippets and fixture input
+				cmd.Dir = root
+				got, runErr := cmd.Output()
+				if want == "" {
+					if runErr == nil || len(got) != 0 {
+						t.Errorf("%s accepted invalid input %q: stdout %q, error %v", source, tc.input, got, runErr)
+					}
+				} else if runErr != nil || string(got) != want+"\n" {
+					t.Errorf("%s input %q: stdout %q, error %v, want %q", source, tc.input, got, runErr, want+"\n")
+				}
+			}
+			check("prepare", "input=$1\n"+prepare, tc.prepared)
+			check("tag validation", "GITHUB_REF_NAME=$1\n"+validate+"\nprintf '%s\\n' \"$version_no_v\"", tc.tag)
+		})
+	}
 }
 
 // TestReleaseArchivesAreAttested fails when the release workflow stops
@@ -298,6 +360,8 @@ func TestWorkflowActionsArePinned(t *testing.T) {
 	}
 }
 
+var ciTestGateCommand = regexp.MustCompile(`(?m)^[ \t]*\./scripts/test-gate\.sh[ \t]*$`)
+
 // TestCIChecksOutSharedTooling fails when the Go workflow stops checking out
 // the .claude/shared submodule before it runs the tests, makes that step
 // conditional or allowed to fail, or stops requiring the submodule in the
@@ -324,7 +388,7 @@ func TestCIChecksOutSharedTooling(t *testing.T) {
 				t.Errorf("go.yml step %q is conditional or allowed to fail", step.Name)
 			}
 		}
-		if tests < 0 && strings.HasPrefix(strings.TrimSpace(step.Run), "go test ") {
+		if tests < 0 && (ciTestGateCommand.MatchString(step.Run) || strings.HasPrefix(strings.TrimSpace(step.Run), "go test ")) {
 			tests = i
 			if step.Env["OCMS_REQUIRE_SHARED_TOOLING"] != "1" {
 				t.Error("go.yml's Test step does not set OCMS_REQUIRE_SHARED_TOOLING=1, so a missing submodule only skips tests")
@@ -338,6 +402,84 @@ func TestCIChecksOutSharedTooling(t *testing.T) {
 		t.Error("go.yml does not check out the .claude/shared submodule")
 	case checkout > tests:
 		t.Error("go.yml checks out the .claude/shared submodule only after it runs the tests")
+	}
+}
+
+// TestCIRunsChromeRegressions catches workflow changes that let the browser
+// tests skip or let their failures pass CI.
+func TestCIRunsChromeRegressions(t *testing.T) {
+	wf := readWorkflow(t, "go.yml")
+	for _, step := range wf.Jobs["build"].Steps {
+		if !ciTestGateCommand.MatchString(step.Run) {
+			continue
+		}
+		if step.Env["OCMS_TEST_BROWSER"] != "1" || step.If != nil || step.ContinueOnError != nil {
+			t.Fatal("go.yml must run the test gate with OCMS_TEST_BROWSER=1 and require it to pass")
+		}
+		return
+	}
+	t.Fatal("go.yml does not run the test gate for the Chrome regressions")
+}
+
+func TestAssetBuildUsesLockedToolsWithoutLifecycleScripts(t *testing.T) {
+	root := filepath.Join("..", "..")
+	for path, commands := range map[string][]string{
+		"scripts/build-assets.sh": {"npm ci --ignore-scripts", "npm install --ignore-scripts", "./node_modules/.bin/sass", "./node_modules/.bin/tailwindcss"},
+		"Dockerfile":              {"npm ci --ignore-scripts", "./node_modules/.bin/sass", "./node_modules/.bin/tailwindcss"},
+	} {
+		body, err := os.ReadFile(filepath.Join(root, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, command := range commands {
+			if !strings.Contains(string(body), command) {
+				t.Errorf("%s must run %s", path, command)
+			}
+		}
+		if strings.Contains(string(body), "npm install -g sass") {
+			t.Errorf("%s installs Sass outside the lockfile", path)
+		}
+	}
+	for _, name := range []string{"go.yml", "release.yml"} {
+		for _, job := range readWorkflow(t, name).Jobs {
+			for _, step := range job.Steps {
+				if strings.Contains(step.Run, "npm install -g sass") {
+					t.Errorf("%s installs Sass outside the lockfile", name)
+				}
+			}
+		}
+	}
+	lock, err := os.ReadFile(filepath.Join(root, "package-lock.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct {
+		Packages map[string]struct{ Version, Integrity string }
+	}
+	if err = json.Unmarshal(lock, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	stable := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+	for _, tool := range []string{"sass", "playwright"} {
+		entry := manifest.Packages["node_modules/"+tool]
+		if !stable.MatchString(entry.Version) || entry.Integrity == "" {
+			t.Errorf("%s must be locked to a stable release with an integrity hash", tool)
+		}
+	}
+	coreFound := false
+	for path, entry := range manifest.Packages {
+		if strings.HasSuffix(path, "/playwright-core") {
+			coreFound = true
+			if entry.Version != manifest.Packages["node_modules/playwright"].Version || entry.Integrity == "" {
+				t.Errorf("%s must match the stable Playwright release with an integrity hash", path)
+			}
+		}
+	}
+	if !coreFound {
+		t.Error("the Playwright runtime is missing from the lockfile")
+	}
+	if _, found := manifest.Packages["node_modules/@playwright/cli"]; found {
+		t.Error("use the CLI bundled with stable Playwright")
 	}
 }
 

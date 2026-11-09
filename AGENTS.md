@@ -83,6 +83,21 @@ action. Approving a larger task (for example "cut the release") is not that
 - Add tests for new handlers, middleware, store queries, and module behavior.
 - Prefer deterministic unit tests; cover edge cases and permission/security paths.
 
+## Development MFA for Coding Agents
+
+- Codex and Claude Code share `bin/ocms-dev-auth`; build it with
+  `make build-dev-authenticator`. Follow `docs/dev-authenticator.md` for enrollment
+  and private code delivery. Use the dedicated development account only.
+- Check `status` before a login attempt. A missing enrollment is pending setup;
+  do not repeatedly ask the owner to enter authenticator codes. Staging's
+  `ocms-agent@example.test` Editor account is enrolled; use its shared Keychain
+  password and helper-generated codes for the resumed acceptance tests.
+- Read each code file privately into the browser controller, fill once, submit
+  once and remove it immediately. Keep seeds/codes out of chat, tool arguments,
+  screenshots and repository files. Preserve required MFA and normal consent.
+- Do not extract the owner's existing seed, reset their MFA or replace their
+  authenticator. Preserve the owner's existing connections during agent tests.
+
 ## Commit & Pull Request Guidelines
 - Commit style in history is imperative and concise (e.g., `Add CSP nonce wiring`, `Fix code quality issues`).
 - Keep subject lines short and specific; group related changes per commit.

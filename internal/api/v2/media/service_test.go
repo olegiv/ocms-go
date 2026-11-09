@@ -75,6 +75,9 @@ func TestListMediaSearchPagination(t *testing.T) {
 		}
 		ids = append(ids, row.ID)
 	}
+	if len(ids) != 4 {
+		t.Fatalf("seeded %d media rows, want 4", len(ids))
+	}
 
 	for _, tt := range []struct {
 		name    string

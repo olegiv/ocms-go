@@ -120,7 +120,7 @@ func TestStopGracePeriodsCoverTheDrain(t *testing.T) {
 		t.Fatal("scripts/deploy/ocmsctl has no graceful-stop wait loop; the script changed and this test is vacuous")
 	}
 	waitSec, _ := strconv.Atoi(wait[1])
-	signal := regexp.MustCompile(`kill -(SIG\w+) "\$pid"`).FindStringSubmatch(ctl)
+	signal := regexp.MustCompile(`signal_site_process (SIG\w+) "\$pid"`).FindStringSubmatch(ctl)
 	if signal == nil {
 		t.Fatal("scripts/deploy/ocmsctl sends no stop signal; the script changed and this test is vacuous")
 	}

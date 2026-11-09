@@ -48,7 +48,7 @@ templ AdminLayout(pc *PageContext) {
 			<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
 		</head>
 		<body>
-			<div class="admin-layout" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true' }" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+			<div class="admin-layout" x-data="adminLayout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
 				<!-- Sidebar overlay for mobile -->
 				<div class="sidebar-overlay" :class="{ 'show': sidebarOpen }" @click="sidebarOpen = false"></div>
 				@Sidebar(pc)
@@ -66,8 +66,8 @@ templ AdminLayout(pc *PageContext) {
 			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/htmx.min.js") } integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous"></script>
 			<!-- Alpine.js Sort Plugin -->
 			<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine-sort.min.js") } integrity="sha384-hqiYD2WaUm+VsLVKEqRzzkJ7HQownCb0Mjq/GQJUDyzwA+vztNBwFqsWkbRGZCv+" crossorigin="anonymous"></script>
-			<!-- Alpine.js -->
-			<script defer nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-FYLKjwG3aohNhNZoVG8sY/5ntunm+MqylL90Q+rT3OM7AwV9/BKFjk/RjoIpIgsI" crossorigin="anonymous"></script>
+			<!-- Alpine.js CSP build -->
+			<script defer nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-Q4UOujiwqAb/jTt3ki4pdkETk4I3rIFQX8h271PLI41okj/YIKY7IQQFMw73wkrX" crossorigin="anonymous"></script>
 			<!-- Admin core utilities -->
 			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/admin-core.js") }></script>
 			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/media-dropzone.js") }></script>
@@ -92,20 +92,11 @@ templ Alert(pc *PageContext) {
 		<div class="alert-container">
 			<div
 				class={ "alert alert-" + pc.FlashType + " alert-animated" }
-				x-data={ `{
-					show: true,
-					dismissing: false,
-					autoDismissTime: 5000,
-					dismiss() {
-						this.dismissing = true;
-						setTimeout(() => { this.show = false; }, 300);
-					}
-				}` }
+				x-data="flashAlert"
 				x-show="show"
-				x-init="setTimeout(() => dismiss(), autoDismissTime)"
 				:class="{ 'alert-dismissing': dismissing }"
-				@mouseenter="$el.querySelector('.alert-progress').style.animationPlayState = 'paused'"
-				@mouseleave="$el.querySelector('.alert-progress').style.animationPlayState = 'running'"
+				@mouseenter="setProgressState('paused')"
+				@mouseleave="setProgressState('running')"
 			>
 				<span class="alert-message">{ pc.Flash }</span>
 				<button type="button" class="alert-close" @click="dismiss()" aria-label={ pc.T("btn.close") }>&times;</button>

@@ -486,6 +486,8 @@ templ PrivacyPage(pc *adminviews.PageContext, data PrivacyViewData) {
 }
 		</style>
 		<script nonce={ templ.GetNonce(ctx) }>
+document.addEventListener('alpine:init', () => Alpine.data('privacySettings', privacySettings));
+
 function privacySettings() {
     // Predefined services configuration
     const predefinedServices = {

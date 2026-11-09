@@ -17,11 +17,13 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/olegiv/ocms-go/internal/auth"
+	"github.com/olegiv/ocms-go/internal/connectedapps"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/mfa"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/oauth"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -38,6 +40,8 @@ type AuthHandler struct {
 	loginProtection *middleware.LoginProtection
 	hookRegistry    *module.HookRegistry
 	mfa             *mfa.Service
+	oauth           *oauth.Service
+	connections     *connectedapps.Service
 }
 
 // NewAuthHandler creates a new AuthHandler. mfaService decides which sign-ins
@@ -45,6 +49,7 @@ type AuthHandler struct {
 func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, lp *middleware.LoginProtection, hr *module.HookRegistry, mfaService *mfa.Service) *AuthHandler {
 	return &AuthHandler{
 		queries:         store.New(db),
+		connections:     connectedapps.New(db),
 		renderer:        renderer,
 		sessionManager:  sm,
 		eventService:    service.NewEventService(db),
@@ -247,17 +252,29 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	h.renderer.SetFlash(r, i18n.T(lang, "auth.welcome_back", user.Name), "success")
 
-	http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
+	http.Redirect(w, r, h.postLoginDestination(r.Context(), user.Role), http.StatusSeeOther)
 }
 
 // signedInDestination returns the landing page of the user this session is
 // signed in as, and false when it is not signed in.
 func (h *AuthHandler) signedInDestination(ctx context.Context) (string, bool) {
+	if h.sessionManager.GetInt64(ctx, middleware.SessionKeyOAuthReauthAfter) >
+		h.sessionManager.GetInt64(ctx, middleware.SessionKeyAuthenticatedAt) {
+		return "", false
+	}
 	user, ok := middleware.SessionUser(ctx, h.sessionManager, h.queries)
 	if !ok {
 		return "", false
 	}
 	return loginDestination(user.Role), true
+}
+
+// postLoginDestination resumes only an authorization request saved by our consent handler.
+func (h *AuthHandler) postLoginDestination(ctx context.Context, role string) string {
+	if target := h.sessionManager.PopString(ctx, middleware.SessionKeyOAuthReturnTo); strings.HasPrefix(target, "/oauth/authorize?") {
+		return target
+	}
+	return loginDestination(role)
 }
 
 // loginDestination keeps fresh-login and existing-session destinations consistent.
@@ -299,10 +316,15 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	flashAndRedirect(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.logged_out"), "info")
 }
 
-// SetLanguage changes the UI language preference on the login page.
+// SetLanguage changes the UI language preference on the login or account page.
 // POST /language
 func (h *AuthHandler) SetLanguage(w http.ResponseWriter, r *http.Request) {
-	setLanguagePreference(w, r, h.renderer, redirectLogin)
+	if _, signedIn := middleware.SessionUser(r.Context(), h.sessionManager, h.queries); signedIn {
+		setLanguagePreference(w, r, h.renderer, redirectLogin)
+		return
+	}
+	middleware.SetAdminLanguageCookie(w, selectedUILanguage(r))
+	middleware.SafeRefererRedirect(w, r, redirectLogin)
 }
 
 // formatDuration formats a duration into a human-readable string.

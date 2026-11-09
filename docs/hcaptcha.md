@@ -137,16 +137,19 @@ This means you can enable hCaptcha immediately in development without setting up
 
 ### Using Custom Keys
 
-To use your own production keys, either set them via environment variables:
+For a local trial with your own keys, start in development mode.
 
 ```bash
+OCMS_ENV=development \
 OCMS_HCAPTCHA_SITE_KEY="your-site-key" \
 OCMS_HCAPTCHA_SECRET_KEY="your-secret-key" \
 OCMS_SESSION_SECRET="$(openssl rand -base64 32)" \
 ./ocms
 ```
 
-Or configure them in the admin interface at **Modules > hCaptcha**.
+For production, add the keys to the site's production configuration. See the
+[production upgrade checklist](../README.md#upgrading-sites-with-no-ocms_env).
+You can also manage keys under **Modules > hCaptcha** in the admin interface.
 
 ## Error Messages
 

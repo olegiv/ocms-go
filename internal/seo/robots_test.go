@@ -31,7 +31,7 @@ func TestRobotsBuilderBuildDefault(t *testing.T) {
 	}
 
 	// Check default disallow paths
-	defaultPaths := []string{"/admin", "/login", "/logout", "/session"}
+	defaultPaths := []string{"/admin", "/account", "/oauth", "/login", "/logout", "/session"}
 	for _, path := range defaultPaths {
 		if !strings.Contains(content, "Disallow: "+path) {
 			t.Errorf("Build() should disallow %q", path)

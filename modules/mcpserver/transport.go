@@ -31,7 +31,7 @@ const bearerRealm = `Bearer realm="oCMS MCP"`
 //
 //	no-store → POST only → per-IP limit → in-flight cap → cross-origin check
 //	→ stored activation/settings → API key auth (+ WWW-Authenticate on 401)
-//	→ mcp:access → TokenInfo → per-key limit → no batches → request context
+//	→ mcp:access → TokenInfo → per-key limit → no batches → OAuth tool scopes → request context
 //	→ SDK Streamable HTTP handler (stateless, JSON responses)
 //
 // Cheap rejections run before API key verification (Argon2), so probing the
@@ -61,7 +61,7 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 			// DNS rebinding is countered by the cross-origin check and the
 			// mandatory bearer authentication instead.
 			DisableLocalhostProtection:   true,
-			MaxRequestBodyBytes:          maxRequestBodyBytes,
+			MaxRequestBodyBytes:          sdkRequestBodyCeiling,
 			PropagateRequestCancellation: true,
 			Logger:                       sdkLogger(m.logger, "mcp-transport"),
 		},
@@ -69,16 +69,22 @@ func (m *Module) buildHTTPHandler(db *sql.DB) http.Handler {
 
 	var h http.Handler = sdkHandler
 	h = withRequestContext(h)
+	h = m.withOAuthToolScopes(h)
 	h = rejectBatches(maxRequestBodyBytes, h)
 	h = middleware.APIRateLimit(keyRateLimitRPS, keyRateLimitBurst)(h)
+	inner := h
 	h = auth.RequireBearerToken(verifyValidatedKey, &auth.RequireBearerTokenOptions{
 		// Keys without an expiry are valid unless OCMS_REQUIRE_API_KEY_EXPIRY
 		// says otherwise, which middleware.APIKeyAuth already enforced.
 		AllowMissingExpiration: true,
 	})(h)
 	h = requireMCPAccess(m.logger, h)
+	h = m.keyAccountGuard(h)
 	h = middleware.APIKeyAuth(db)(h)
 	h = withBearerChallenge(h)
+	if m.ctx.OAuth != nil {
+		h = m.mixedAuthentication(h, inner)
+	}
 	h = m.withStoredState(h)
 	h = crossOriginGuard(m.logger, h)
 	h = limitInFlight(m.logger, maxInFlightRequests, h)

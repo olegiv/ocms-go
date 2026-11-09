@@ -4,9 +4,9 @@ set -euo pipefail
 usage() {
   cat <<'EOT'
 Usage:
-  ./scripts/codex-commands commit-prepare [args...]
-  ./scripts/codex-commands commit-do [args...]
-  ./scripts/codex-commands commit-prepare-local
+  ./scripts/codex-commands commit-prepare [quality|q] [-- FILE ...]
+  ./scripts/codex-commands commit-do
+  ./scripts/codex-commands commit-prepare-local [quality|q] [-- FILE ...]
   ./scripts/codex-commands commit-do-local
   ./scripts/codex-commands code-quality [args...]
   ./scripts/codex-commands security-audit [args...]
@@ -26,10 +26,12 @@ case "$cmd" in
     exec "$(dirname "$0")/codex/proxy-claude-command.sh" "/commit-do" "$@"
     ;;
   commit-prepare-local)
-    exec "$(dirname "$0")/codex/commit-prepare.sh"
+    shift
+    exec "$(dirname "$0")/codex/commit-prepare.sh" "$@"
     ;;
   commit-do-local)
-    exec "$(dirname "$0")/codex/commit-do.sh"
+    shift
+    exec "$(dirname "$0")/codex/commit-do.sh" "$@"
     ;;
   code-quality)
     shift || true

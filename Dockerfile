@@ -22,8 +22,7 @@ RUN apk add --no-cache \
     git \
     make \
     nodejs \
-    npm \
-    && npm install -g sass@1.105.1
+    npm
 
 WORKDIR /build
 
@@ -38,15 +37,15 @@ COPY package.json package-lock.json* ./
 COPY . .
 
 # Build assets (SCSS compilation and JS dependencies)
-RUN npm ci --silent && npm run copy-deps --silent
+RUN npm ci --ignore-scripts --silent && npm --ignore-scripts run copy-deps --silent
 
 # Create dist directories and compile SCSS
 RUN mkdir -p web/static/dist/js \
-    && sass web/static/scss/main.scss web/static/dist/main.css --style=compressed --no-source-map \
-    && cp web/static/favicon.ico web/static/dist/ 2>/dev/null || true
+    && ./node_modules/.bin/sass web/static/scss/main.scss web/static/dist/main.css --style=compressed --no-source-map
+RUN if [ -f web/static/favicon.ico ]; then cp web/static/favicon.ico web/static/dist/; fi
 
 # Compile Tailwind CSS for admin dashboard
-RUN npx @tailwindcss/cli -i web/static/css/admin-tw.css -o web/static/dist/admin-tw.css --minify
+RUN ./node_modules/.bin/tailwindcss -i web/static/css/admin-tw.css -o web/static/dist/admin-tw.css --minify
 
 # Copy source JS files if they exist
 RUN if [ -d "web/static/js" ] && [ "$(ls -A web/static/js 2>/dev/null)" ]; then \

@@ -22,6 +22,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -97,6 +98,9 @@ func Register(r chi.Router, deps Deps) *Handler {
 	// forces multipart/temp-file parsing on POST /media and only then hits the
 	// service-layer auth check. See Codex P1 review on commit 024b94f.
 	api.UseMiddleware(requireAPIKeyWhenDeclared(api))
+	// Demo mode is read-only for every REST write, also before the body is
+	// parsed (TestDemoModeRefusesEveryWriteOperation).
+	api.UseMiddleware(refuseWritesInDemoMode(api))
 
 	h := &Handler{API: api, Deps: deps}
 	registerMeta(h)
@@ -139,6 +143,25 @@ func requireAPIKeyWhenDeclared(api huma.API) func(ctx huma.Context, next func(hu
 	}
 }
 
+// refuseWritesInDemoMode returns a huma API middleware that answers every
+// operation other than GET or HEAD with 403 in demo mode. A demo site has no
+// API keys of its own, but a key created before demo mode was turned on must
+// not change content, taxonomy or media there either (2026-11-03 audit B-2).
+// Guarding the operation method, not each service method, covers every
+// current and future write operation.
+func refuseWritesInDemoMode(api huma.API) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		if middleware.IsDemoMode() && ctx.Method() != http.MethodGet && ctx.Method() != http.MethodHead {
+			_ = huma.WriteErr(api, ctx, http.StatusForbidden, DemoReadOnlyMessage)
+			return
+		}
+		next(ctx)
+	}
+}
+
+// DemoReadOnlyMessage is the refusal every REST write gets in demo mode.
+const DemoReadOnlyMessage = "Content is read-only in demo mode"
+
 // apiKeyScopesFor returns the scopes required by the ApiKeyAuth Security
 // alternative on an operation, and a flag indicating whether authentication is
 // required at all. OpenAPI Security semantics: the top-level list is OR; an
@@ -174,15 +197,19 @@ func permissionsContain(perms []string, want string) bool {
 // OpenAPI returns the live OpenAPI 3.1 document built from registered operations.
 func (h *Handler) OpenAPI() *huma.OpenAPI { return h.API.OpenAPI() }
 
-// Actor describes the principal making a v2 request. APIKey is nil for
-// unauthenticated callers; Permissions is parsed once so services can make
-// authorization decisions without re-querying the key.
+// Actor describes the principal making a v2 request. APIKey is nil for OAuth,
+// direct-user and unauthenticated callers. Permissions is parsed once for
+// authorization decisions; write services recheck the credential as needed.
 type Actor struct {
-	APIKey      *store.ApiKey
-	Permissions []string
+	UserID        int64
+	OAuthGrantID  string
+	OAuthClientID string
+	Transport     string
+	APIKey        *store.ApiKey
+	Permissions   []string
 }
 
-// HasPermission reports whether the actor's API key grants a permission.
+// HasPermission reports whether the actor has a permission.
 func (a Actor) HasPermission(perm string) bool {
 	for _, p := range a.Permissions {
 		if p == perm {
@@ -201,6 +228,49 @@ func ActorFromContext(ctx context.Context) Actor {
 	}
 	return Actor{
 		APIKey:      &key,
+		Transport:   "rest",
 		Permissions: middleware.ParseAPIKeyPermissions(&key),
 	}
+}
+
+// ActingUserID is the sole mapping from credentials to a page/audit owner.
+func (a Actor) ActingUserID() int64 {
+	if a.APIKey != nil {
+		return a.APIKey.CreatedBy
+	}
+	return a.UserID
+}
+
+// Principal derives provenance and preview issuer bindings from the credential.
+// The adapter supplies the transport. Like ActingUserID and write authorization,
+// an API key takes precedence; unrelated credential fields are not carried over.
+// This conversion does not authenticate the actor or grant write permission.
+func (a Actor) Principal(transport string) provenance.Principal {
+	principal := provenance.Principal{UserID: a.ActingUserID(), Source: "human", Transport: transport}
+	switch {
+	case a.APIKey != nil:
+		principal.Source = "api"
+		principal.APIKeyID = a.APIKey.ID
+	case a.OAuthGrantID != "":
+		principal.Source = "oauth"
+		principal.OAuthGrantID = a.OAuthGrantID
+		principal.OAuthClientID = a.OAuthClientID
+	}
+	return principal
+}
+
+// ActorForUser narrows explicit permissions to the current editor/admin role.
+// The user and permission set must come from authentication, never draft input.
+func ActorForUser(user store.User, perms []string) Actor {
+	a := Actor{UserID: user.ID}
+	if user.Role != "admin" && user.Role != "editor" {
+		return a
+	}
+	for _, perm := range perms {
+		switch perm {
+		case "pages:read", "pages:write", "media:read", "media:write", "taxonomy:read", "taxonomy:write", "mcp:access", "mcp:drafts":
+			a.Permissions = append(a.Permissions, perm)
+		}
+	}
+	return a
 }

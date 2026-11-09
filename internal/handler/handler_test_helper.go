@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +26,7 @@ import (
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
@@ -84,11 +86,11 @@ func testDB(t *testing.T) *sql.DB {
 			summary TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'draft',
 			author_id INTEGER NOT NULL,
-			featured_image_id INTEGER,
+			featured_image_id INTEGER REFERENCES media(id) ON DELETE SET NULL,
 			meta_title TEXT NOT NULL DEFAULT '',
 			meta_description TEXT NOT NULL DEFAULT '',
 			meta_keywords TEXT NOT NULL DEFAULT '',
-			og_image_id INTEGER,
+			og_image_id INTEGER REFERENCES media(id) ON DELETE SET NULL,
 			no_index INTEGER NOT NULL DEFAULT 0,
 			no_follow INTEGER NOT NULL DEFAULT 0,
 			canonical_url TEXT NOT NULL DEFAULT '',
@@ -102,7 +104,7 @@ func testDB(t *testing.T) *sql.DB {
 			exclude_from_lists INTEGER NOT NULL DEFAULT 0,
 			video_url TEXT NOT NULL DEFAULT '',
 			video_title TEXT NOT NULL DEFAULT '',
-			FOREIGN KEY (author_id) REFERENCES users(id)
+			FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
 		);
 		CREATE INDEX idx_pages_slug ON pages(slug);
 		CREATE INDEX idx_pages_status ON pages(status);
@@ -250,6 +252,18 @@ func testDB(t *testing.T) *sql.DB {
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 
+		CREATE TABLE scheduled_tasks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			url TEXT NOT NULL,
+			schedule TEXT NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			timeout_seconds INTEGER NOT NULL DEFAULT 30,
+			created_by INTEGER REFERENCES users(id),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
 		CREATE TABLE webhook_deliveries (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
@@ -357,9 +371,8 @@ func testDB(t *testing.T) *sql.DB {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE,
-			FOREIGN KEY (parent_id) REFERENCES menu_items(id) ON DELETE SET NULL,
-			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE SET NULL,
-			FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+			FOREIGN KEY (parent_id) REFERENCES menu_items(id) ON DELETE CASCADE,
+			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE SET NULL
 		);
 		CREATE INDEX idx_menu_items_menu ON menu_items(menu_id);
 		CREATE INDEX idx_menu_items_position ON menu_items(position);
@@ -398,6 +411,30 @@ func testDB(t *testing.T) *sql.DB {
 		CREATE INDEX idx_widgets_theme ON widgets(theme);
 		CREATE INDEX idx_widgets_area ON widgets(area);
 	`
+
+	migration, readErr := os.ReadFile("../store/migrations/20261101150000_page_write_foundations.sql")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	up, _, _ := strings.Cut(string(migration), "-- +goose Down")
+	baseVersion, readErr := os.ReadFile("../store/migrations/00004_create_page_versions.sql")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	versionUp, _, _ := strings.Cut(string(baseVersion), "-- +goose Down")
+	oauthMigration, readErr := os.ReadFile("../store/migrations/20261030170000_create_oauth.sql")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	oauthUp, _, _ := strings.Cut(string(oauthMigration), "-- +goose Down")
+	schema += versionUp + oauthUp + up
+	reviewMigration, readErr := os.ReadFile("../store/migrations/20261101230000_editorial_review.sql")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	// The preview tests exercise the lifecycle triggers on migrated databases.
+	reviewUp, _, _ := strings.Cut(string(reviewMigration), "-- Persist lifecycle invalidation")
+	schema += reviewUp
 
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("failed to create test schema: %v", err)

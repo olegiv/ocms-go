@@ -5,6 +5,7 @@ package security
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/microcosm-cc/bluemonday"
@@ -88,6 +89,22 @@ var pageHTMLSanitizer = buildPageHTMLSanitizer()
 
 func buildPageHTMLSanitizer() *bluemonday.Policy {
 	p := bluemonday.UGCPolicy()
+	// Link policy is explicit. Forcing nofollow here would override an agent's
+	// reviewed keep policy every time the v2 service or frontend sanitizes again.
+	p.RequireNoFollowOnLinks(false)
+	p.AllowAttrs("rel").Matching(regexp.MustCompile(`^(?:noopener|noreferrer|nofollow)(?: (?:noopener|noreferrer|nofollow))*$`)).OnElements("a")
+	// Alt is plain text, escaped by the HTML serializer. The UGC default drops
+	// the entire attribute for common punctuation such as colons or ampersands,
+	// losing accessible descriptions in both generated and human-authored images.
+	p.AllowAttrs("alt").OnElements("img")
+	// Generated draft media uses existing local uploads only. Do not accept
+	// arbitrary remote srcsets or CSS in responsive-image attributes.
+	asset := `/uploads/(?:small|medium|large)/[a-fA-F0-9-]{36}/[^\s"'<>,]+ [1-9][0-9]*w`
+	p.AllowAttrs("srcset").Matching(regexp.MustCompile(`^` + asset + `(?:, ` + asset + `)*$`)).OnElements("img")
+	p.AllowAttrs("sizes").Matching(regexp.MustCompile(`^\(max-width: 800px\) 100vw, 800px$`)).OnElements("img")
+	p.AllowAttrs("data-media-id").Matching(regexp.MustCompile(`^[1-9][0-9]{0,18}$`)).OnElements("img")
+	p.AllowAttrs("loading").Matching(regexp.MustCompile(`^(?:lazy|eager)$`)).OnElements("img")
+	p.AllowAttrs("decoding").Matching(regexp.MustCompile(`^(?:async|sync|auto)$`)).OnElements("img")
 	// Allow Prism.js language classes on pre/code elements for syntax highlighting.
 	// Pattern permits "language-go", "language-bash", etc.
 	p.AllowAttrs("class").Matching(
@@ -102,8 +119,10 @@ func buildPageHTMLSanitizer() *bluemonday.Policy {
 	// colours, fonts, indent, image and table layout); see pageStyleRules.
 	allowPageStyles(p)
 	// Keep "open in new tab": the editor gives every link target="_blank".
-	// bluemonday adds rel="noopener" to any link it keeps the target on, so
-	// the opened page cannot reach back through window.opener.
+	// bluemonday adds rel="noopener" to such a link only while it forces
+	// nofollow or noreferrer, which this policy does not, so SanitizePageHTML
+	// adds it (ensureNoOpener) and the opened page cannot reach back through
+	// window.opener.
 	p.AllowAttrs("target").Matching(regexp.MustCompile(`^_blank$`)).OnElements("a")
 	return p
 }
@@ -134,5 +153,66 @@ func DetectSuspiciousHTMLTokens(body string) []string {
 // SanitizePageHTML sanitizes rich-text page HTML with a conservative UGC policy
 // that also keeps the editor's allowlisted inline styles (pageStyleRules).
 func SanitizePageHTML(raw string) string {
-	return pageHTMLSanitizer.Sanitize(raw)
+	return ensureNoOpener(pageHTMLSanitizer.Sanitize(raw))
+}
+
+// NormalizePageHTMLForStorage applies the configured save-time sanitizer and
+// reports removed markup, excluding harmless serialization changes. Disabled
+// sanitization preserves the original bytes.
+func NormalizePageHTMLForStorage(raw string, sanitize bool) (body string, removed []string) {
+	if !sanitize {
+		return raw, nil
+	}
+	body = SanitizePageHTML(raw)
+	return body, RemovedMarkup(raw, body)
+}
+
+// ensureNoOpener gives every link that opens a new tab (target="_blank")
+// rel="noopener", keeping any rel values the policy allowed. The input is
+// sanitizer output; tags other than such links are copied byte for byte.
+func ensureNoOpener(sanitized string) string {
+	if !strings.Contains(sanitized, `target="_blank"`) {
+		return sanitized
+	}
+	var out strings.Builder
+	z := html.NewTokenizer(strings.NewReader(sanitized))
+	for {
+		tt := z.Next()
+		if tt == html.ErrorToken {
+			return out.String()
+		}
+		raw := z.Raw()
+		if tt != html.StartTagToken && tt != html.SelfClosingTagToken {
+			out.Write(raw)
+			continue
+		}
+		tok := z.Token()
+		if tok.Data != "a" || !hasAttr(tok.Attr, "target", "_blank") {
+			out.Write(raw)
+			continue
+		}
+		found := false
+		for i, attr := range tok.Attr {
+			if attr.Key != "rel" {
+				continue
+			}
+			found = true
+			if !slices.Contains(strings.Fields(attr.Val), "noopener") {
+				tok.Attr[i].Val = strings.TrimSpace(attr.Val + " noopener")
+			}
+		}
+		if !found {
+			tok.Attr = append(tok.Attr, html.Attribute{Key: "rel", Val: "noopener"})
+		}
+		out.WriteString(tok.String())
+	}
+}
+
+func hasAttr(attrs []html.Attribute, key, val string) bool {
+	for _, attr := range attrs {
+		if attr.Key == key && attr.Val == val {
+			return true
+		}
+	}
+	return false
 }

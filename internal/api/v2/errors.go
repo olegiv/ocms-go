@@ -33,10 +33,12 @@ const (
 // Error is the domain error type returned from services. Callers (v2 huma
 // operation handlers) translate it via ToHuma.
 type Error struct {
-	Kind   ErrorKind
-	Fields map[string]string // per-field validation errors, surfaced as error.details
-	Msg    string
-	Wrap   error
+	MachineCode       string // Optional stable domain-specific code.
+	Kind              ErrorKind
+	Fields            map[string]string // per-field validation errors, surfaced as error.details
+	Msg               string
+	Wrap              error
+	retryAfterSeconds int64
 }
 
 // Error implements the error interface.
@@ -50,6 +52,9 @@ func (e *Error) Unwrap() error { return e.Wrap }
 // transports such as MCP report it too, so a failure has the same code
 // whichever transport surfaced it.
 func (e *Error) Code() string {
+	if e.MachineCode != "" {
+		return e.MachineCode
+	}
 	_, code := statusAndCodeForKind(e.Kind)
 	return code
 }
@@ -58,6 +63,15 @@ func (e *Error) Code() string {
 func NewError(kind ErrorKind, msg string) *Error {
 	return &Error{Kind: kind, Msg: msg}
 }
+
+// NewRetryableWriteError reports a write or precondition check that can be
+// attempted again with the same request ID after a short delay.
+func NewRetryableWriteError(msg string, cause error) *Error {
+	return &Error{Kind: ErrConflict, MachineCode: "write_retryable", Msg: msg, Wrap: cause, retryAfterSeconds: 1}
+}
+
+// RetryAfterSeconds returns the retry delay, or zero for a definitive error.
+func (e *Error) RetryAfterSeconds() int64 { return e.retryAfterSeconds }
 
 // NewInternalError constructs an internal error that keeps its cause. Only
 // msg reaches clients (ToHuma and the MCP server render Msg alone); the cause
@@ -90,18 +104,18 @@ type ErrorDetail struct {
 // wire format is identical across domain errors and huma framework errors.
 type statusError struct {
 	status int
-	body   ErrorBody
+	ErrorBody
 }
 
 // Error implements error.
-func (e *statusError) Error() string { return e.body.Error.Message }
+func (e *statusError) Error() string { return e.ErrorBody.Error.Message }
 
 // GetStatus reports the HTTP status to huma.
 func (e *statusError) GetStatus() int { return e.status }
 
 // MarshalJSON emits the body (huma serializes the error value itself).
 func (e *statusError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(e.body)
+	return json.Marshal(e.ErrorBody)
 }
 
 // ToHuma translates any error into a huma.StatusError with the project's
@@ -131,8 +145,8 @@ func ToHuma(ctx context.Context, err error) error {
 	}
 	slog.Log(ctx, level, "v2 unexpected error", append(requestLogAttrs(ctx), "error", err)...)
 	return &statusError{
-		status: http.StatusInternalServerError,
-		body:   ErrorBody{Error: ErrorDetail{Code: "internal_error", Message: "Internal server error"}},
+		status:    http.StatusInternalServerError,
+		ErrorBody: ErrorBody{Error: ErrorDetail{Code: "internal_error", Message: "Internal server error"}},
 	}
 }
 
@@ -147,12 +161,13 @@ func requestLogAttrs(ctx context.Context) []any {
 }
 
 func domainToStatusError(e *Error) huma.StatusError {
-	status, code := statusAndCodeForKind(e.Kind)
+	status, _ := statusAndCodeForKind(e.Kind)
+	code := e.Code()
 	body := ErrorBody{Error: ErrorDetail{Code: code, Message: e.Msg}}
 	if len(e.Fields) > 0 {
 		body.Error.Details = e.Fields
 	}
-	return &statusError{status: status, body: body}
+	return &statusError{status: status, ErrorBody: body}
 }
 
 func statusAndCodeForKind(kind ErrorKind) (int, string) {
@@ -196,7 +211,7 @@ func newStatusError(status int, msg string, errs ...error) huma.StatusError {
 	if len(details) > 0 {
 		body.Error.Details = details
 	}
-	return &statusError{status: status, body: body}
+	return &statusError{status: status, ErrorBody: body}
 }
 
 func codeForStatus(status int) string {

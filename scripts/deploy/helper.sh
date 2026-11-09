@@ -41,14 +41,12 @@ echo_step() {
 }
 
 # install_binary_command prints the shell command that installs binary $1 as
-# $2, the path ocmsctl and ocms@.service run. It copies $1 beside $2 and renames
-# the copy over $2: a rename replaces the file even while an instance still runs
-# it, where copying onto it fails with "Text file busy". The deploy scripts run
-# it before stopping any instance, so a failed install leaves them running.
+# $2, the path ocmsctl and ocms@.service run. The upload is staged on the same
+# filesystem, so a rename replaces $2 even while an instance still runs it.
 # The paths are single-quoted in the command, so they must not contain a
 # single quote.
 install_binary_command() {
-    printf "cp '%s' '%s.new' && chmod 755 '%s.new' && mv -f '%s.new' '%s'" "$1" "$2" "$2" "$2" "$2"
+    printf "chmod 755 '%s' && mv -f '%s' '%s'" "$1" "$1" "$2"
 }
 
 # backup_binary_command prints the shell command that backs up binary $1 to
@@ -59,19 +57,47 @@ backup_binary_command() {
     printf "if [ -e '%s' ]; then cp -p '%s' '%s.backup.new' && mv -f '%s.backup.new' '%s.backup'; else echo 'No %s yet; nothing to back up.' >&2; fi" "$1" "$1" "$1" "$1" "$1" "$1"
 }
 
-# remote_upload_path prints where the deploy scripts upload binary name $2 in
-# directory $1: $1/$2, unless $2 names a file the deploy itself uses there
-# (the running binary, the install's and the backup's staging copies, the
-# backup, ocmsctl), and then $1/ocms.upload. The upload happens while the
-# instances still run, so scp onto ocms failed with "Text file busy", and the
-# other names would have overwritten the install's copy, the backup or the
-# control script.
-remote_upload_path() {
-    case "${2#./}" in
-        ocms|ocms.new|ocms.backup|ocms.backup.new|ocmsctl) printf '%s/ocms.upload' "$1" ;;
-        *) printf '%s/%s' "$1" "$2" ;;
-    esac
-}
+# Stage the upload in a fresh directory. The running binary may be a symlink
+# to a versioned file beside it, so even an ordinary upload name can be live.
+# The subshell keeps the cleanup trap local to the transfer and install.
+deploy_binary() (
+    local name="${REMOTE_BINARY#./}" prefix="${REMOTE_BIN_DIR%/}/.ocms-upload."
+    local stage upload create cleanup
+    if [[ ! "$name" =~ ^[a-zA-Z0-9._-]+$ || "$name" == . || "$name" == .. ]]; then
+        echo_error "REMOTE_BINARY must be a filename"
+        exit 1
+    fi
+    if [[ "$prefix" == *"'"* ]]; then
+        echo_error "REMOTE_BIN_DIR must not contain a single quote"
+        exit 1
+    fi
+
+    echo_step "Backing up current binary on server..."
+    ssh_cmd "$(backup_binary_command "${REMOTE_RUN_BINARY}")"
+    echo_ok "Backup complete"
+
+    echo_step "Transferring binary to server..."
+    create="mktemp -d -- '${prefix}XXXXXXXX'"
+    if [[ "$DRY_RUN" == true ]]; then
+        ssh_cmd "$create"
+        stage="${prefix}DRYRUN00"
+    else
+        stage=$(ssh_cmd "$create")
+        if [[ "$stage" != "$prefix"* || ! "${stage#"$prefix"}" =~ ^[a-zA-Z0-9]{8}$ ]]; then
+            echo_error "Unexpected upload directory returned by the server"
+            exit 1
+        fi
+    fi
+    cleanup="rm -rf -- '$stage'"
+    trap 'ssh_cmd "$cleanup" || echo_warn "Could not remove upload directory ${stage}"' EXIT
+    upload="${stage}/${name}"
+    scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${upload}"
+    echo_ok "Binary transferred"
+
+    echo_step "Installing binary as ${REMOTE_RUN_BINARY}..."
+    ssh_cmd "$(install_binary_command "$upload" "${REMOTE_RUN_BINARY}")"
+    echo_ok "Binary installed"
+)
 
 # wait_healthy_command prints the shell command that waits for instance $2 to
 # report healthy: it runs `$1 health $2` (ocmsctl) up to $3 times, $4 seconds

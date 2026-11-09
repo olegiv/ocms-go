@@ -24,17 +24,21 @@ import (
 // A log record carrying one of these writes the secret in clear text to stdout,
 // to OCMS_ERROR_LOG_PATH, and to every log shipper downstream of them.
 var secretConfigFields = map[string]bool{
-	"SessionSecret":     true,
-	"HCaptchaSecretKey": true,
-	"EmbedProxyToken":   true,
-	"MFAKey":            true,
+	"SessionSecret":              true,
+	"HCaptchaSecretKey":          true,
+	"EmbedProxyToken":            true,
+	"MFAKey":                     true,
+	"SeedAdminPassword":          true,
+	"OAuthDCRInitialAccessToken": true,
 }
 
 // nonSecretConfigFields are fields whose names match secretNamePattern but hold
 // no credential, so TestSecretConfigFieldsAreClassified accepts them unguarded.
-// RequireEmbedProxyToken is a bool policy switch, not the token itself.
+// RequireEmbedProxyToken and RequireSeedAdminPassword are bool policy
+// switches, not the credentials themselves.
 var nonSecretConfigFields = map[string]bool{
-	"RequireEmbedProxyToken": true,
+	"RequireEmbedProxyToken":   true,
+	"RequireSeedAdminPassword": true,
 }
 
 // secretNamePattern matches field names that read as carrying a credential.

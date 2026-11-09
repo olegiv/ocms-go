@@ -19,6 +19,8 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -228,14 +230,12 @@ func (s *Source) createTrackedPageAlias(ctx context.Context, queries *store.Quer
 	if redirectOccupied {
 		return fmt.Errorf("alias %q is shadowed by an existing redirect", alias)
 	}
-	created, err := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
-		PageID: pageID, Alias: alias, CreatedAt: createdAt,
-	})
+	created, err := pagewrite.AddImportedAlias(ctx, queries, pageID, alias, createdAt)
 	if err != nil {
 		return err
 	}
 	if !s.track(ctx, tracker, result, types.EntityAlias, created.ID, func(rollbackCtx context.Context) error {
-		return queries.DeletePageAlias(rollbackCtx, created.ID)
+		return pagewrite.DeleteAliasFromQueries(rollbackCtx, queries, created.ID)
 	}) {
 		return nil
 	}
@@ -613,7 +613,7 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 		}
 
 		if !s.track(ctx, tracker, result, types.EntityTag, tag.ID, func(rollbackCtx context.Context) error {
-			return queries.DeleteTag(rollbackCtx, tag.ID)
+			return pagewrite.DeleteTermFromQueries(rollbackCtx, queries, "tag", tag.ID)
 		}) {
 			continue
 		}
@@ -729,7 +729,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 			}
 
 			if !s.track(ctx, tracker, result, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
-				if err := queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
+				if err := pagewrite.DeleteMediaFromQueries(rollbackCtx, queries, media.ID); err != nil {
 					return err
 				}
 				return s.cleanupMediaFiles(rollbackCtx, tracker, canonicalUploadRoot, fileUUID)
@@ -798,7 +798,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 			}
 
 			if !s.track(ctx, tracker, result, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
-				if err := queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
+				if err := pagewrite.DeleteMediaFromQueries(rollbackCtx, queries, media.ID); err != nil {
 					return err
 				}
 				return s.cleanupMediaFiles(rollbackCtx, tracker, writtenRoot, fileUUID)
@@ -874,11 +874,12 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 		body = security.SanitizePageHTML(body)
 
 		// Create page
-		page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		page, err := pagewrite.Insert(ctx, queries, provenance.Principal{Source: "system", Transport: "migrator"}, store.CreatePageParams{
 			Title:           post.Title,
 			Slug:            slug,
 			Body:            body,
 			Status:          status,
+			PublishedAt:     sql.NullTime{Time: post.Timestamp, Valid: status == "published"},
 			AuthorID:        authorID,
 			LanguageCode:    defaultLangCode,
 			PageType:        "post",
@@ -887,6 +888,17 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			MetaKeywords:    nullStringToString(post.Keywords),
 			CreatedAt:       post.Timestamp,
 			UpdatedAt:       now,
+		}, func(work *pagewrite.Tx, page store.Page) error {
+			if opts.ImportTags && post.Tags != "" {
+				for _, tagSlug := range parseElefantTags(post.Tags) {
+					if tagID, ok := tagMap[util.Slugify(tagSlug)]; ok {
+						if err := work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: page.ID, TagID: tagID}); err != nil {
+							return err
+						}
+					}
+				}
+			}
+			return nil
 		})
 		if err != nil {
 			result.AddError("Failed to create page '%s': %v", post.Title, err)
@@ -894,7 +906,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 		}
 
 		if !s.track(ctx, tracker, result, types.EntityPost, page.ID, func(rollbackCtx context.Context) error {
-			return queries.DeletePage(rollbackCtx, page.ID)
+			return pagewrite.DeleteFromQueries(rollbackCtx, queries, page.ID)
 		}) {
 			continue
 		}
@@ -909,33 +921,6 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 				"page_id", page.ID,
 				"alias", alias,
 				"error", aliasErr)
-		}
-
-		// Set published_at if published
-		if status == "published" {
-			if _, err := queries.PublishPage(ctx, store.PublishPageParams{
-				PublishedAt: sql.NullTime{Time: post.Timestamp, Valid: true},
-				UpdatedAt:   now,
-				ID:          page.ID,
-			}); err != nil {
-				result.AddError("Failed to set published_at for '%s': %v", post.Title, err)
-			}
-		}
-
-		// Parse and associate tags
-		if opts.ImportTags && post.Tags != "" {
-			tagSlugs := parseElefantTags(post.Tags)
-			for _, tagSlug := range tagSlugs {
-				tSlug := util.Slugify(tagSlug)
-				if tagID, ok := tagMap[tSlug]; ok {
-					if err := queries.AddTagToPage(ctx, store.AddTagToPageParams{
-						PageID: page.ID,
-						TagID:  tagID,
-					}); err != nil {
-						result.AddError("Failed to add tag '%s' to page '%s': %v", tagSlug, post.Title, err)
-					}
-				}
-			}
 		}
 
 		result.PostsImported++
@@ -1000,11 +985,12 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 			metaTitle = wp.Title
 		}
 
-		page, err := queries.CreatePage(ctx, store.CreatePageParams{
+		page, err := pagewrite.Insert(ctx, queries, provenance.Principal{Source: "system", Transport: "migrator"}, store.CreatePageParams{
 			Title:           wp.Title,
 			Slug:            slug,
 			Body:            body,
 			Status:          status,
+			PublishedAt:     sql.NullTime{Time: now, Valid: status == "published"},
 			AuthorID:        authorID,
 			LanguageCode:    defaultLangCode,
 			PageType:        "page",
@@ -1013,14 +999,14 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 			MetaKeywords:    nullStringToString(wp.Keywords),
 			CreatedAt:       now,
 			UpdatedAt:       now,
-		})
+		}, nil)
 		if err != nil {
 			result.AddError("Failed to create page '%s': %v", wp.Title, err)
 			continue
 		}
 
 		if !s.track(ctx, tracker, result, types.EntityPage, page.ID, func(rollbackCtx context.Context) error {
-			return queries.DeletePage(rollbackCtx, page.ID)
+			return pagewrite.DeleteFromQueries(rollbackCtx, queries, page.ID)
 		}) {
 			continue
 		}
@@ -1042,17 +1028,6 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 			slog.Warn("skipping unsafe page alias from elefant import",
 				"page_id", page.ID,
 				"alias", wp.ID)
-		}
-
-		// Set published_at if published
-		if status == "published" {
-			if _, err := queries.PublishPage(ctx, store.PublishPageParams{
-				PublishedAt: sql.NullTime{Time: now, Valid: true},
-				UpdatedAt:   now,
-				ID:          page.ID,
-			}); err != nil {
-				result.AddError("Failed to set published_at for page '%s': %v", wp.Title, err)
-			}
 		}
 
 		result.PagesImported++

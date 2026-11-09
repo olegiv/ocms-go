@@ -1310,6 +1310,8 @@ func TestImportNodesSkipsRedundantAlias(t *testing.T) {
 	if len(aliases) != 1 || aliases[0].Alias != "node/1" {
 		t.Errorf("aliases = %v, want only node/1", aliases)
 	}
+	testutil.AssertPageRevision(t, queries, page.ID, 2)
+
 }
 
 func TestImportNodesSkipExisting(t *testing.T) {
@@ -1345,6 +1347,9 @@ func TestImportNodesSkipExistingDoesNotMapAcrossLanguages(t *testing.T) {
 	st, _, queries := newTestState(t, reader, types.ImportOptions{
 		ImportPages: true, ImportMenus: true, SkipExisting: true,
 	})
+	if _, err := queries.CreateLanguage(context.Background(), store.CreateLanguageParams{Code: "fr", Name: "French", NativeName: "Français", IsActive: true, Direction: "ltr", CreatedAt: time.Now(), UpdatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
 	st.addAvailableLanguage("fr")
 	ctx := context.Background()
 	existing, err := queries.CreatePage(ctx, store.CreatePageParams{
@@ -1433,6 +1438,9 @@ func TestMultilingualNodeAliasesKeepEveryConcreteURLAndMenuTarget(t *testing.T) 
 				},
 			}
 			st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true, ImportMenus: true})
+			if _, err := queries.CreateLanguage(context.Background(), store.CreateLanguageParams{Code: "fr", Name: "French", NativeName: "Français", IsActive: true, Direction: "ltr", CreatedAt: time.Now(), UpdatedAt: time.Now()}); err != nil {
+				t.Fatal(err)
+			}
 			st.addAvailableLanguage("fr")
 			ctx := context.Background()
 			source := NewSource()
@@ -1621,6 +1629,9 @@ func TestNonDefaultNodeAliasMayReuseTopLevelOnlyRouteName(t *testing.T) {
 		aliases: []PathAlias{{ID: 1, Path: "/node/1", Alias: "/admin", Langcode: "fr"}},
 	}
 	st, _, queries := newTestState(t, reader, types.ImportOptions{ImportPages: true})
+	if _, err := queries.CreateLanguage(context.Background(), store.CreateLanguageParams{Code: "fr", Name: "French", NativeName: "Français", IsActive: true, Direction: "ltr", CreatedAt: time.Now(), UpdatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
 	st.addAvailableLanguage("fr")
 	if err := NewSource().importNodes(context.Background(), st); err != nil {
 		t.Fatal(err)

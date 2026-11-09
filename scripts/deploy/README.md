@@ -240,10 +240,12 @@ The script:
 1. Builds `bin/ocms-linux-amd64` unless `--skip-build` is set
 2. Backs up the running binary, `/opt/ocms/bin/ocms`, to `/opt/ocms/bin/ocms.backup`; a
    backup that fails stops the deploy
-3. Transfers the binary via `scp` to `/opt/ocms/bin/ocms-linux-amd64`
+3. Transfers the binary via `scp` into a fresh directory under `/opt/ocms/bin`.
+   `REMOTE_BINARY` can override the upload filename within that directory
 4. Installs it as `/opt/ocms/bin/ocms`, the binary `ocmsctl` and `ocms@.service` run, by
-   copying it beside that file and renaming it over, which leaves the running binary alone,
-   so a failed upload or install stops no instance
+   renaming the staged upload over that path and removing the temporary directory. This
+   leaves running executables in place, even if the old path was a symlink to a versioned
+   binary. A failed upload or install stops no instance
 5. Restarts all listed instances via `ocmsctl` (stop, then start). An instance that does not
    stop is left as it is and one that does not start is reported; the deploy goes on with
    the others
@@ -318,6 +320,8 @@ sudo /opt/ocms/deploy-multi.sh /tmp/ocms
 ```
 
 For development builds, replace the release download with `make build-linux-amd64`.
+Use a separate upload file. The script rejects the installed binary, its backup and its
+staging file as input, including paths that point to the same files.
 
 This backs up the current binary to `/opt/ocms/bin/ocms.backup`, installs the new binary as `/opt/ocms/bin/ocms` while the sites still run (renaming it into place, so a failed install stops nothing), stops every site in `sites.conf` with `ocmsctl stop` (through systemd or its PID file, whichever runs it), starts every site in `sites.conf` with `systemctl`, and health-checks each one (`/health` on its port, up to 10 tries 2 seconds apart). A site that fails to stop or start is reported as failed and the others carry on; a site that did not stop is not started, because its old process may still be running. On failure it prints rollback instructions; on success it deletes the uploaded binary.
 
@@ -477,6 +481,11 @@ Backups include:
 - Custom content (`custom_TIMESTAMP.tar.gz`) — only if `custom/` contains files (themes or modules)
 
 Backups are stored in each site's `backups/` directory with 30-day retention.
+Database, compression, archive and retention commands run as the registered
+site account, including when root starts the cron job. Existing backup outputs
+must be writable by that account; the job fails rather than repairing ownership
+through a site-controlled path. PID-mode stops likewise signal as the site
+account. Active systemd instances continue to use unit-bound service control.
 
 ## Health Checks
 

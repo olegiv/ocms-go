@@ -44,7 +44,13 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 	}
 
 	slog.Info("seeding demo content")
-	queries := New(db)
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin demo seed: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	queries := New(db).WithTx(tx)
 
 	// Get default language
 	defaultLang, err := queries.GetDefaultLanguage(ctx)
@@ -90,6 +96,9 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("seeding demo menu items: %w", err)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit demo seed: %w", err)
+	}
 	slog.Info("demo content seeded successfully")
 	return nil
 }
@@ -452,7 +461,7 @@ func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCo
 					PageID:     created.ID,
 					CategoryID: catID,
 				}); err != nil {
-					slog.Warn("failed to add category to page", "page", page.Slug, "category", catSlug, "error", err)
+					return fmt.Errorf("seed page category: %w", err)
 				}
 			}
 		}
@@ -464,10 +473,21 @@ func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCo
 					PageID: created.ID,
 					TagID:  tagID,
 				}); err != nil {
-					slog.Warn("failed to add tag to page", "page", page.Slug, "tag", tagSlug, "error", err)
+					return fmt.Errorf("seed page tag: %w", err)
 				}
 			}
 		}
+		snapshot, err := queries.GetPageSnapshot(ctx, created.ID)
+		if err != nil {
+			return err
+		}
+		if _, err = queries.CreateCompletePageVersion(ctx, CreateCompletePageVersionParams{PageID: created.ID, Title: created.Title, Body: created.Body, ChangedBy: authorID, CreatedAt: now, Revision: sql.NullInt64{Int64: created.Revision, Valid: true}, SnapshotJson: sql.NullString{String: snapshot, Valid: true}}); err != nil {
+			return err
+		}
+		if err = queries.CreateContentProvenance(ctx, CreateContentProvenanceParams{PageID: created.ID, Revision: created.Revision, Source: "system", Transport: "demo_seed", ValidatedJson: "{}", ReportedJson: "{}", CreatedAt: now}); err != nil {
+			return err
+		}
+
 	}
 
 	slog.Info("seeded demo pages", "count", len(pages))
@@ -531,8 +551,8 @@ func getDemoPages() []demoPage {
 			Body:            getGettingStartedBody(),
 			Status:          "published",
 			PageType:        "post",
-			MetaTitle:       "Getting Started with oCMS - A Complete Guide",
-			MetaDescription: "Learn how to set up and configure oCMS for your website in minutes.",
+			MetaTitle:       "Getting Started with oCMS",
+			MetaDescription: "Run a prebuilt oCMS release locally, explore the shared demo, and find current instructions for themes, deployment, and building from source.",
 			CategorySlugs:   []string{"blog", "resources"},
 			TagSlugs:        []string{"tutorial", "featured"},
 			FeaturedImage:   "blog-post-1.png",
@@ -957,46 +977,32 @@ func getContactPageBody() string {
 }
 
 func getGettingStartedBody() string {
-	return `<p class="lead">This guide will help you get oCMS up and running in minutes.</p>
+	return `<p class="lead">Run oCMS locally from a prebuilt release, then use the admin panel to publish and customize your own site. This shared demo lets you explore the interface before installing it.</p>
 
-<h2>Prerequisites</h2>
-<ul>
-<li>Go 1.24 or later</li>
-<li>Node.js 20+ (for asset compilation)</li>
-<li>Make (optional, for convenience)</li>
-</ul>
+<h2>Run a prebuilt release</h2>
+<p>You do not need Go or Node.js installed to run a prebuilt oCMS binary. Release archives include the application and its admin assets.</p>
+<ol>
+<li>Open the <a href="https://ocms.tech/download">Download page</a> and choose Linux AMD64, Linux ARM64, or macOS Apple Silicon to match your machine.</li>
+<li>Follow that platform's quick start in a new directory. It downloads the release, verifies its SHA-256 checksum, extracts the binary, and runs <code>ocms init my-site</code>.</li>
+<li>The commands start the local server from the generated site directory. Open <a href="http://localhost:8080/admin/">localhost:8080/admin/</a> and follow the release README's first-run instructions.</li>
+</ol>
+<p>Change the bootstrap administrator email and password, then set <code>OCMS_DO_SEED=false</code> in the generated <code>my-site/.env</code>. Keep the generated <code>OCMS_SESSION_SECRET</code> and <code>OCMS_MFA_KEY</code> values; back them up with the site rather than replacing them during routine restarts.</p>
 
-<h2>Quick Start</h2>
+<h2>Publish your first page</h2>
+<p>On your own installation, set a site name in Settings. Create an item in Pages, choose the Page type, give it a title and slug, add your content, and publish it. Open its public URL to check the result. Choose the Post type for entries that belong in the blog listing.</p>
+<p>The <a href="https://ocms.tech/build-your-first-ocms-site">Build your first oCMS site walkthrough</a> continues through a first page, custom theme changes, and deployment preparation.</p>
 
-<h3>1. Clone the Repository</h3>
-<pre><code>git clone https://github.com/olegiv/ocms-go.git
-cd ocms-go</code></pre>
+<h2>Explore this shared demo</h2>
+<p>Use the <a href="/admin/">admin panel</a> and the current sign-in details shown in the banner at the top of the demo. Browse Pages, Media, Themes, and the other administration screens.</p>
+<p>Content editing is disabled in the shared demo, and sample data resets daily. Use a local installation to create and edit your own content.</p>
 
-<h3>2. Build Assets</h3>
-<pre><code>make assets</code></pre>
+<h2>Build from source when you need it</h2>
+<p>A source build requires Go and the frontend build tools. Follow the <a href="https://github.com/olegiv/ocms-go#build-from-source">repository's build instructions</a> for their current version requirements and commands.</p>
+<p>Custom HTML themes can live alongside a prebuilt binary. Custom Go modules must be compiled into the application. See the <a href="https://github.com/olegiv/ocms-go/wiki/Theme-System">theme guide</a> and <a href="https://github.com/olegiv/ocms-go/wiki/Module-System">module guide</a> for the two workflows.</p>
 
-<h3>3. Run the Server</h3>
-<pre><code>OCMS_SESSION_SECRET=your-secret-key-here make dev</code></pre>
-
-<h3>4. Access the Admin</h3>
-<p>Open <code>http://localhost:8080/admin</code> and login with the default credentials.</p>
-
-<h2>Configuration</h2>
-<p>oCMS is configured via environment variables:</p>
-<ul>
-<li><code>OCMS_SESSION_SECRET</code> - Required. Min 32 characters.</li>
-<li><code>OCMS_DB_PATH</code> - Database location (default: ./data/ocms.db)</li>
-<li><code>OCMS_SERVER_PORT</code> - HTTP port (default: 8080)</li>
-<li><code>OCMS_ACTIVE_THEME</code> - Theme name (default: default)</li>
-</ul>
-
-<h2>Next Steps</h2>
-<ul>
-<li>Create your first page in the admin panel</li>
-<li>Customize the theme to match your brand</li>
-<li>Set up categories and tags for content organization</li>
-<li>Configure menus for site navigation</li>
-</ul>`
+<h2>Prepare your own site for deployment</h2>
+<p>Before making a local site public, review the release's upgrade requirements and the <a href="https://github.com/olegiv/ocms-go/wiki/Deployment">deployment guide</a>. Configure the production site URL, required security settings, process manager, and HTTPS reverse proxy.</p>
+<p>Back up a consistent SQLite database, uploads, custom themes, and the configuration containing the site's session and MFA keys. Use the Linux release matching the server's architecture when deploying from a Mac.</p>`
 }
 
 func getGoWebsitesBody() string {

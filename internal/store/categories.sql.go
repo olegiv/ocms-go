@@ -182,7 +182,7 @@ func (q *Queries) GetCategoriesForPage(ctx context.Context, pageID int64) ([]Cat
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -264,7 +264,7 @@ func (q *Queries) GetCategoryAvailableTranslations(ctx context.Context, entityID
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetCategoryAvailableTranslationsRow{}
 	for rows.Next() {
 		var i GetCategoryAvailableTranslationsRow
@@ -351,7 +351,7 @@ func (q *Queries) GetCategoryNamesForAllPages(ctx context.Context) ([]GetCategor
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetCategoryNamesForAllPagesRow{}
 	for rows.Next() {
 		var i GetCategoryNamesForAllPagesRow
@@ -387,7 +387,7 @@ func (q *Queries) GetCategoryNamesForPublishedPages(ctx context.Context) ([]GetC
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetCategoryNamesForPublishedPagesRow{}
 	for rows.Next() {
 		var i GetCategoryNamesForPublishedPagesRow
@@ -430,7 +430,7 @@ func (q *Queries) GetCategoryPath(ctx context.Context, id int64) ([]GetCategoryP
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetCategoryPathRow{}
 	for rows.Next() {
 		var i GetCategoryPathRow
@@ -480,7 +480,7 @@ func (q *Queries) GetCategoryUsageCounts(ctx context.Context) ([]GetCategoryUsag
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetCategoryUsageCountsRow{}
 	for rows.Next() {
 		var i GetCategoryUsageCountsRow
@@ -538,7 +538,7 @@ func (q *Queries) GetCategoryUsageCountsByLanguage(ctx context.Context, language
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetCategoryUsageCountsByLanguageRow{}
 	for rows.Next() {
 		var i GetCategoryUsageCountsByLanguageRow
@@ -582,7 +582,7 @@ func (q *Queries) GetDescendantIDs(ctx context.Context, parentID sql.NullInt64) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []int64{}
 	for rows.Next() {
 		var id int64
@@ -627,7 +627,7 @@ func (q *Queries) GetPublishedCategoryUsageCounts(ctx context.Context) ([]GetPub
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetPublishedCategoryUsageCountsRow{}
 	for rows.Next() {
 		var i GetPublishedCategoryUsageCountsRow
@@ -665,7 +665,7 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -706,7 +706,7 @@ func (q *Queries) ListCategoriesByLanguage(ctx context.Context, languageCode str
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -754,7 +754,7 @@ func (q *Queries) ListCategoriesForSitemap(ctx context.Context) ([]ListCategorie
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListCategoriesForSitemapRow{}
 	for rows.Next() {
 		var i ListCategoriesForSitemapRow
@@ -787,7 +787,7 @@ func (q *Queries) ListChildCategories(ctx context.Context, parentID sql.NullInt6
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -816,7 +816,7 @@ func (q *Queries) ListChildCategories(ctx context.Context, parentID sql.NullInt6
 }
 
 const listPagesByCategory = `-- name: ListPagesByCategory :many
-SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title FROM pages p
+SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists, p.summary, p.video_url, p.video_title, p.revision FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ?
 ORDER BY p.updated_at DESC
@@ -834,7 +834,7 @@ func (q *Queries) ListPagesByCategory(ctx context.Context, arg ListPagesByCatego
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -864,6 +864,7 @@ func (q *Queries) ListPagesByCategory(ctx context.Context, arg ListPagesByCatego
 			&i.Summary,
 			&i.VideoUrl,
 			&i.VideoTitle,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -887,7 +888,7 @@ func (q *Queries) ListRootCategories(ctx context.Context) ([]Category, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -940,7 +941,7 @@ func (q *Queries) SearchCategories(ctx context.Context, dollar_1 sql.NullString)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Category{}
 	for rows.Next() {
 		var i Category

@@ -28,7 +28,7 @@ var accountWriteSites = map[string]string{
 	"internal/handler/users.go (*UsersHandler).Update":       "actorPasswordNeeded asks for the acting administrator's password for a new password, email or admin role",
 	"internal/handler/auth.go (*AuthHandler).Login":          "rehashes the password the user has just signed in with",
 	"internal/transfer/importer.go (*Importer).importUsers":  "importRole never grants or removes the admin role; new users get a random password",
-	"internal/store/seed.go Seed":                            "startup seeding of the default administrator, opt-in by OCMS_DO_SEED",
+	"internal/store/seed.go SeedWithAdminPassword":           "startup seeding of the default administrator, opt-in by OCMS_DO_SEED",
 	"internal/store/seed_demo.go RotateDemoAdminPassword":    "demo mode startup; the password is random and shown only in the informer bar",
 	"internal/store/seed_demo.go RotateDefaultAdminPassword": "demo mode startup; replaces the well-known default password with a random one",
 	"internal/store/seed_demo.go seedDemoUsers":              "demo mode startup seeding of the demo accounts",

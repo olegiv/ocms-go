@@ -97,6 +97,8 @@ func authTestRouter(h *AuthHandler, db *sql.DB, sm *scs.SessionManager) http.Han
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(sm), middleware.LoadUser(sm, db), middleware.LoadSiteConfig(db, nil))
 		r.Get("/account", h.Account)
+		admin := NewAdminHandler(db, h.renderer, sm, nil)
+		r.With(middleware.RequireEditor()).Post("/admin/language", admin.SetLanguage)
 		r.With(middleware.RequireEditor()).Get("/admin", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		})

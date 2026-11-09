@@ -18,12 +18,10 @@ import (
 // TestDeployBinaryCommands runs the commands scripts/deploy/helper.sh builds
 // for the deploy scripts. install_binary_command must replace the
 // destination's content, leave it executable and leave no copy behind: it
-// copies beside the destination and renames over it, so a running binary is
-// replaced instead of failing the copy with "Text file busy".
+// renames the staged upload over the destination, which leaves the old inode
+// alone even when a process still runs it.
 // backup_binary_command must copy the binary to .backup, and succeed with a
-// note when there is no binary yet. remote_upload_path must move an upload
-// whose name is a file the deploy uses (ocms, its staging copies, the backup,
-// ocmsctl) to ocms.upload. wait_healthy_command must succeed once ocmsctl
+// note when there is no binary yet. wait_healthy_command must succeed once ocmsctl
 // health does, and fail after the given number of attempts when it never does.
 func TestDeployBinaryCommands(t *testing.T) {
 	bash, err := exec.LookPath("bash")
@@ -78,29 +76,11 @@ func TestDeployBinaryCommands(t *testing.T) {
 		if string(data) != "new binary" || info.Mode().Perm() != 0o755 {
 			t.Errorf("installed %q with mode %v, want the new binary with mode 0755", data, info.Mode().Perm())
 		}
-		if _, err := os.Stat(dst + ".new"); err == nil {
-			t.Error("the copy beside the destination was left behind")
+		if _, err := os.Stat(src); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("staged upload still exists after install: %v", err)
 		}
 		if os.SameFile(before, info) {
 			t.Error("the install wrote into the existing file, as cp onto a running binary would, instead of renaming a new one over it")
-		}
-	})
-
-	t.Run("upload path", func(t *testing.T) {
-		const dir = "/opt/ocms/bin"
-		for name, want := range map[string]string{
-			"ocms-linux-amd64": dir + "/ocms-linux-amd64",
-			"ocms":             dir + "/ocms.upload",
-			"./ocms":           dir + "/ocms.upload",
-			"ocms.new":         dir + "/ocms.upload",
-			"ocms.backup":      dir + "/ocms.upload",
-			"ocms.backup.new":  dir + "/ocms.upload",
-			"ocmsctl":          dir + "/ocms.upload",
-		} {
-			out, err := exec.Command(bash, "-c", `source "$1" && remote_upload_path "$2" "$3"`, "bash", helper, dir, name).CombinedOutput() // #nosec G204 -- fixed script, test values
-			if err != nil || string(out) != want {
-				t.Errorf("remote_upload_path %s %s = %q, %v; want %s", dir, name, out, err, want)
-			}
 		}
 	})
 
@@ -120,16 +100,18 @@ func TestDeployBinaryCommands(t *testing.T) {
 			t.Error("a backup was made of a binary that does not exist")
 		}
 
-		// A backup that cannot be written fails the command, so set -e stops
-		// the deploy before anything is replaced.
-		locked := t.TempDir()
-		write(t, filepath.Join(locked, "ocms"), "running binary")
-		if err := os.Chmod(locked, 0o555); err != nil {
+		// cp treats an existing destination directory as a target directory.
+		// Make the resulting file path a directory too, so cp fails even as root.
+		blocked := filepath.Join(binary+".backup.new", filepath.Base(binary))
+		if err := os.MkdirAll(blocked, 0o750); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = os.Chmod(locked, 0o750) }) // #nosec G302 -- test directory
-		if out, err := try("backup_binary_command", filepath.Join(locked, "ocms")); err == nil {
-			t.Errorf("backing up into a read-only directory succeeded:\n%s", out)
+		write(t, binary, "replacement binary")
+		if out, err := try("backup_binary_command", binary); err == nil {
+			t.Errorf("backing up over a directory succeeded:\n%s", out)
+		}
+		if data, err := os.ReadFile(binary + ".backup"); err != nil || string(data) != "running binary" { // #nosec G304 -- test path
+			t.Errorf("backup after failed copy = %q, %v; want the previous backup", data, err)
 		}
 	})
 
@@ -177,21 +159,14 @@ func TestDeployBinaryCommands(t *testing.T) {
 }
 
 // TestDeployScriptsInstallTheUpload fails when a deploy script visibly copies
-// a binary straight onto the path ocmsctl and ocms@.service run, when deploy.sh or
-// deploy-binary.sh restart the instances without installing the upload
-// there, or when deploy-multi.sh stops only the systemd units. Copying onto a
+// a binary straight onto the path ocmsctl and ocms@.service run, or when
+// deploy-multi.sh stops only the systemd units. Copying onto a
 // running binary fails with "Text file busy", which aborted deploy-multi.sh
 // after it had stopped the units; a site started with ocmsctl kept serving
-// on its port; and deploy.sh and deploy-binary.sh uploaded to
-// ocms-linux-amd64, then restarted the instances on the old binary (review
-// of the 2026-10-17 audit fixes).
+// on its port. The SSH scripts' backup and install order is checked by
+// TestDeployScriptsDryRunOrder.
 //
-// The scripts must also back up the running binary in a way that fails
-// loudly, and install the upload before stopping any instance, so a failed
-// install leaves them running.
-//
-// Bug state: drop the install step from deploy-binary.sh, move it after the
-// stop, have deploy-multi.sh cp "$NEW_BINARY" "$BINARY_PATH", or stop its
+// Bug state: have deploy-multi.sh cp "$NEW_BINARY" "$BINARY_PATH", or stop its
 // sites with systemctl stop, and this fails.
 func TestDeployScriptsInstallTheUpload(t *testing.T) {
 	dir := filepath.Join("..", "..", "scripts", "deploy")
@@ -209,22 +184,6 @@ func TestDeployScriptsInstallTheUpload(t *testing.T) {
 	for _, name := range []string{"deploy.sh", "deploy-binary.sh", "deploy-multi.sh", "helper.sh"} {
 		if m := copyOntoRunBinary.FindString(read(name)); m != "" {
 			t.Errorf("scripts/deploy/%s copies onto the running binary (%q); copy beside it and rename", name, strings.TrimSpace(m))
-		}
-	}
-	for _, name := range []string{"deploy.sh", "deploy-binary.sh"} {
-		src := read(name)
-		install := strings.Index(src, `install_binary_command "${REMOTE_UPLOAD}" "${REMOTE_RUN_BINARY}"`)
-		stop := strings.Index(src, "ocmsctl stop")
-		switch {
-		case install < 0:
-			t.Errorf("scripts/deploy/%s does not install the upload as ${REMOTE_RUN_BINARY}, so the instances restart on the old binary", name)
-		case stop < 0:
-			t.Errorf("scripts/deploy/%s stops no instance; the script changed and this test is vacuous", name)
-		case install > stop:
-			t.Errorf("scripts/deploy/%s installs the upload only after stopping the instances, so a failed install leaves them down", name)
-		}
-		if !strings.Contains(src, `backup_binary_command "${REMOTE_RUN_BINARY}"`) {
-			t.Errorf("scripts/deploy/%s does not back up ${REMOTE_RUN_BINARY} with backup_binary_command", name)
 		}
 	}
 	multi := read("deploy-multi.sh")
@@ -259,11 +218,15 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	order := func(upload, retries, interval string) []string {
+	order := func(name, retries, interval string) []string {
+		stage := "/opt/ocms/bin/.ocms-upload.DRYRUN00"
+		upload := stage + "/" + name
 		return []string{
 			"cp -p '/opt/ocms/bin/ocms' '/opt/ocms/bin/ocms.backup.new'",
+			"mktemp -d -- '/opt/ocms/bin/.ocms-upload.XXXXXXXX'",
 			"scp bin/ocms-linux-amd64 root@server.example.com:" + upload,
-			"cp '" + upload + "' '/opt/ocms/bin/ocms.new' && chmod 755 '/opt/ocms/bin/ocms.new' && mv -f '/opt/ocms/bin/ocms.new' '/opt/ocms/bin/ocms'",
+			"chmod 755 '" + upload + "' && mv -f '" + upload + "' '/opt/ocms/bin/ocms'",
+			"rm -rf -- '" + stage + "'",
 			"/opt/ocms/bin/ocmsctl stop site_a",
 			"/opt/ocms/bin/ocmsctl start site_a",
 			"'/opt/ocms/bin/ocmsctl' health 'site_a' 2>&1); do [ \"$n\" -lt " + retries + " ] || { echo \"$out\"; exit 1; }; n=$((n + 1)); sleep " + interval + "; done",
@@ -276,11 +239,9 @@ func TestDeployScriptsDryRunOrder(t *testing.T) {
 		env  []string
 		want []string
 	}{
-		{"default upload name", nil, order("/opt/ocms/bin/ocms-linux-amd64", "15", "2")},
-		// The upload happens while the instance runs: scp onto the running
-		// binary failed with "Text file busy" (local Codex review).
-		{"REMOTE_BINARY=ocms", []string{"REMOTE_BINARY=ocms"}, order("/opt/ocms/bin/ocms.upload", "15", "2")},
-		{"health settings", []string{"HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}, order("/opt/ocms/bin/ocms-linux-amd64", "1", "0")},
+		{"default upload name", nil, order("ocms-linux-amd64", "15", "2")},
+		{"REMOTE_BINARY=ocms", []string{"REMOTE_BINARY=./ocms"}, order("ocms", "15", "2")},
+		{"health settings", []string{"HEALTH_RETRIES=1", "HEALTH_INTERVAL=0"}, order("ocms-linux-amd64", "1", "0")},
 	}
 	for _, tc := range cases {
 		for _, script := range []string{"deploy.sh", "deploy-binary.sh"} {
@@ -333,6 +294,7 @@ case "$SIGNAL_ON:$2" in
     fi ;;
 esac
 case "$2" in
+  "mktemp -d -- "*) echo /opt/ocms/bin/.ocms-upload.TEST0000 ;;
   *"health 'site_bad'"*) echo "FAILED (HTTP 503)"; exit 1 ;;
   *"health 'site_lost'"*) exit 255 ;;
   "/opt/ocms/bin/ocmsctl health site_flaky" | "/opt/ocms/bin/ocmsctl start site_nostart" | "/opt/ocms/bin/ocmsctl stop site_nostop") exit 1 ;;
@@ -365,6 +327,81 @@ func remoteCommands(t *testing.T, path string) (string, []string) {
 		t.Fatal(err)
 	}
 	return string(logged), strings.Split(strings.TrimSuffix(string(logged), "\n"), "\n")
+}
+
+func TestDeployScriptsStageAwayFromSymlinkTarget(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
+	}
+	for _, script := range []string{"deploy.sh", "deploy-binary.sh"} {
+		for _, fault := range []string{"", "backup", "upload", "install"} {
+			t.Run(script+"/fault="+fault, func(t *testing.T) {
+				dir := t.TempDir()
+				bin := filepath.Join(dir, "bin")
+				if err := os.Mkdir(bin, 0o750); err != nil {
+					t.Fatal(err)
+				}
+				source := filepath.Join(dir, "release")
+				target := filepath.Join(bin, "ocms-linux-amd64")
+				installed := filepath.Join(bin, "ocms")
+				backup := installed + ".backup"
+				for path, content := range map[string]string{source: "new", target: "old", backup: "prior backup"} {
+					if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.Symlink(filepath.Base(target), installed); err != nil {
+					t.Fatal(err)
+				}
+				if fault == "backup" {
+					if err := os.MkdirAll(filepath.Join(backup+".new", "ocms"), 0o750); err != nil {
+						t.Fatal(err)
+					}
+				}
+				writeStubs(t, dir, map[string]string{
+					"ssh": `#!/bin/sh
+case "$DEPLOY_FAULT:$2" in install:chmod\ *) exit 25;; esac
+exec sh -c "$2"
+`,
+					"scp": `#!/bin/sh
+dest=${2#*:}
+if [ "$DEPLOY_FAULT" = upload ]; then printf partial > "$dest"; exit 23; fi
+cp "$1" "$dest"
+`,
+				})
+				calls := filepath.Join(dir, "calls.log")
+				writeStubs(t, bin, map[string]string{"ocmsctl": "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALLS\"\n"})
+				cmd := exec.Command(bash, filepath.Join("..", "..", "scripts", "deploy", script), "server.example.com", "site_a", "--skip-build") // #nosec G204 -- fixed repository script
+				cmd.Env = []string{
+					"PATH=" + dir + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + dir,
+					"LOCAL_BINARY=" + source, "REMOTE_BIN_DIR=" + bin, "CALLS=" + calls, "DEPLOY_FAULT=" + fault,
+				}
+				out, err := cmd.CombinedOutput()
+				if (err == nil) != (fault == "") {
+					t.Fatalf("deploy with fault %q: %v\n%s", fault, err, out)
+				}
+				wantInstalled, wantBackup, wantCalls := "old", "old", ""
+				switch fault {
+				case "":
+					wantInstalled, wantCalls = "new", "stop site_a\nstart site_a\nhealth site_a\nstatus site_a\nhealth site_a\n"
+				case "backup":
+					wantBackup = "prior backup"
+				}
+				for path, want := range map[string]string{installed: wantInstalled, target: "old", backup: wantBackup} {
+					if got, err := os.ReadFile(path); err != nil || string(got) != want { // #nosec G304 -- test path
+						t.Errorf("%s = %q, %v; want %q", path, got, err, want)
+					}
+				}
+				if got, _ := remoteCommands(t, calls); got != wantCalls {
+					t.Errorf("ocmsctl calls = %q, want %q", got, wantCalls)
+				}
+				if leftovers, err := filepath.Glob(filepath.Join(bin, ".ocms-upload.*")); err != nil || len(leftovers) != 0 {
+					t.Errorf("upload directories left behind: %v, %v", leftovers, err)
+				}
+			})
+		}
+	}
 }
 
 // TestDeployScriptsFailOnUnhealthyInstance runs deploy.sh and deploy-binary.sh
@@ -525,8 +562,8 @@ func TestDeployScriptsFailOnUnhealthyInstance(t *testing.T) {
 // moved to a temporary directory and stubs for systemctl, ocmsctl, curl,
 // sleep and file, over three sites: site_a fails to start and site_c fails
 // to stop. The script must still start site_b, leave site_c alone, report
-// both failures and exit 1. Under set -e alone, the first failure ended the
-// script, leaving every site it had stopped but not yet started down.
+// both failures and exit 1. It also checks that aliased sources are rejected
+// before any deployment work and that a successful deploy cleans up the upload.
 //
 // Bug state: drop the `if !` around `systemctl start` or `"$OCMSCTL" stop`
 // and this fails.
@@ -590,13 +627,42 @@ echo "ocmsctl $*" >> "`+calls+`"
 	write(filepath.Join(stubs, "sleep"), "#!/bin/sh\nexit 0\n", 0o755)
 	write(filepath.Join(stubs, "file"), "#!/bin/sh\necho \"$1: ELF 64-bit LSB executable\"\n", 0o755)
 	write(filepath.Join(tmp, "sites.conf"), "site_a /srv/a ocms 8001\nsite_b /srv/b ocms 8002\nsite_c /srv/c ocms 8003\n", 0o644)
-	write(filepath.Join(bin, "ocms"), "old", 0o755)
+	installed := filepath.Join(bin, "ocms")
+	backup := installed + ".backup"
+	write(installed, "old", 0o755)
+	write(backup, "prior backup", 0o755)
+	write(installed+".new", "prior staging", 0o755)
 	newBinary := filepath.Join(tmp, "ocms-new")
 	write(newBinary, "new", 0o755)
 
-	cmd := exec.Command(bash, filepath.Join(scripts, "deploy-multi.sh"), newBinary) // #nosec G204 -- copy of a repository script
-	cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + tmp}
-	out, err := cmd.CombinedOutput()
+	run := func(source string) ([]byte, error) {
+		cmd := exec.Command(bash, filepath.Join(scripts, "deploy-multi.sh"), source) // #nosec G204 -- copy of a repository script
+		cmd.Env = []string{"PATH=" + stubs + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + tmp}
+		return cmd.CombinedOutput()
+	}
+	symlink, hardlink := filepath.Join(tmp, "symlink"), filepath.Join(tmp, "hardlink")
+	if linkErr := os.Symlink(installed, symlink); linkErr != nil {
+		t.Fatal(linkErr)
+	}
+	if linkErr := os.Link(installed, hardlink); linkErr != nil {
+		t.Fatal(linkErr)
+	}
+	for _, source := range []string{installed, symlink, hardlink, backup, installed + ".new"} {
+		out, deployErr := run(source)
+		if deployErr == nil || !strings.Contains(string(out), "New binary must be separate from") {
+			t.Errorf("aliased source %s: %v, want refusal\n%s", source, deployErr, out)
+		}
+	}
+	if _, statErr := os.Stat(calls); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("deployment touched services for an aliased source: %v", statErr)
+	}
+	for path, want := range map[string]string{installed: "old", backup: "prior backup", installed + ".new": "prior staging"} {
+		if got, readErr := os.ReadFile(path); readErr != nil || string(got) != want { // #nosec G304 -- test path
+			t.Errorf("%s after refusal = %q, %v; want %q", path, got, readErr, want)
+		}
+	}
+
+	out, err := run(newBinary)
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 		t.Fatalf("deploy-multi.sh: %v, want exit status 1\n%s", err, out)
@@ -618,8 +684,19 @@ echo "ocmsctl $*" >> "`+calls+`"
 			t.Errorf("the failure report does not list %s:\n%s", site, out)
 		}
 	}
-	if installed, err := os.ReadFile(filepath.Join(bin, "ocms")); err != nil || string(installed) != "new" {
-		t.Errorf("installed binary = %q, %v; want the new one", installed, err)
+	if got, err := os.ReadFile(installed); err != nil || string(got) != "new" {
+		t.Errorf("installed binary = %q, %v; want the new one", got, err)
+	}
+	// Retry the retained upload with only a healthy site registered.
+	write(filepath.Join(tmp, "sites.conf"), "site_b /srv/b ocms 8002\n", 0o644)
+	if out, err := run(newBinary); err != nil || !strings.Contains(string(out), "deployed successfully") {
+		t.Fatalf("retry with a separate source: %v\n%s", err, out)
+	}
+	if got, err := os.ReadFile(installed); err != nil || string(got) != "new" {
+		t.Errorf("installed binary after retry = %q, %v; want the new one", got, err)
+	}
+	if _, err := os.Stat(newBinary); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("separate upload still exists after successful deploy: %v", err)
 	}
 }
 
@@ -928,8 +1005,10 @@ fi
 
 	// Other users must not reach the state: in /tmp, a planted .down marker
 	// or count silenced a site's alerts and restarts.
-	if info, err := os.Stat(stateDir); err != nil || info.Mode().Perm() != 0o700 {
-		t.Errorf("state directory mode = %v, %v; want 0700", info.Mode().Perm(), err)
+	if info, err := os.Stat(stateDir); err != nil || info == nil {
+		t.Fatalf("state directory is unavailable: %v", err)
+	} else if info.Mode().Perm() != 0o700 {
+		t.Errorf("state directory mode = %v; want 0700", info.Mode().Perm())
 	}
 	linked := filepath.Join(tmp, "linked-state")
 	if err := os.Symlink(stateDir, linked); err != nil {

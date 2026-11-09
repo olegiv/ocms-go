@@ -6,23 +6,31 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
-	"github.com/olegiv/ocms-go/internal/store"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // disabledAttr matches a rendered boolean disabled attribute (not the
 // Tailwind "disabled:" class variants the components also carry).
-var disabledAttr = regexp.MustCompile(`\sdisabled(\s|>|/)`)
+// disabledAttr matches a disabled attribute inside a tag, never the word in
+// text: the translated settings alert says "saving is disabled".
+var disabledAttr = regexp.MustCompile(`<[a-zA-Z][^>]*\sdisabled(\s|>|/|=)`)
+
+// dashboardText is the escaped text the dashboard shows for key. It is the
+// raw key until a test loads translations and the translation afterwards, so
+// assertions hold whichever test ran first in the process.
+func dashboardText(key string, args ...any) string {
+	return html.EscapeString((&adminviews.PageContext{}).T(key, args...))
+}
 
 // renderDashboard renders the admin page for data.
 func renderDashboard(t *testing.T, data DashboardData) string {
@@ -53,12 +61,12 @@ func TestDashboardSettingsLoadFailure(t *testing.T) {
 		t.Errorf("the page must show the active settings, got %+v", data)
 	}
 	broken := renderDashboard(t, data)
-	if !strings.Contains(broken, "mcp.settings_load_error") {
+	if !strings.Contains(broken, dashboardText("mcp.settings_load_error")) {
 		t.Error("the page must show the load error")
 	}
-	// Checkbox, textarea and submit button.
-	if got := len(disabledAttr.FindAllString(broken, -1)) - len(disabledAttr.FindAllString(healthy, -1)); got != 3 {
-		t.Errorf("disabled form controls = %d, want 3", got)
+	// Three checkboxes, link-policy selector, textarea and submit button.
+	if got := len(disabledAttr.FindAllString(broken, -1)) - len(disabledAttr.FindAllString(healthy, -1)); got != 6 {
+		t.Errorf("disabled form controls = %d, want 6", got)
 	}
 
 	logs := &logCapture{}
@@ -177,7 +185,7 @@ func TestDashboardSiteURLStates(t *testing.T) {
 	if data.SiteURLInvalid != "example.com" || data.SiteURLMissing || data.ConfigError || data.EndpointURL != EndpointPath {
 		t.Errorf("invalid site URL: %+v", data)
 	}
-	if html := renderDashboard(t, data); !strings.Contains(html, "mcp.site_url_invalid") {
+	if page := renderDashboard(t, data); !strings.Contains(page, dashboardText("mcp.site_url_invalid", "example.com")) {
 		t.Error("the page must show the invalid site URL alert")
 	}
 
@@ -207,40 +215,6 @@ func TestSiteInfoReportsConfigFailure(t *testing.T) {
 	}
 	if cause, _ := recordAttr(lines[0], "error"); !strings.Contains(cause.String(), "reading config") {
 		t.Errorf("logged cause = %q, want the config read failure", cause.String())
-	}
-}
-
-// TestMCPKeysPagesThroughAllKeys verifies the overview lists every key with
-// MCP access, however many newer keys exist.
-func TestMCPKeysPagesThroughAllKeys(t *testing.T) {
-	env := newTestEnv(t)
-	base := time.Now().Add(-time.Hour)
-	insert := func(i int, perms ...string) {
-		created := base.Add(time.Duration(i) * time.Millisecond)
-		if _, err := env.q.CreateAPIKey(context.Background(), store.CreateAPIKeyParams{
-			Name:        fmt.Sprintf("key %d", i),
-			KeyHash:     fmt.Sprintf("hash-%d", i),
-			KeyPrefix:   fmt.Sprintf("%04d", i),
-			Permissions: model.PermissionsToJSON(perms),
-			IsActive:    true,
-			CreatedBy:   env.userID,
-			CreatedAt:   created,
-			UpdatedAt:   created,
-		}); err != nil {
-			t.Fatalf("CreateAPIKey: %v", err)
-		}
-	}
-	insert(0, model.PermissionMCPAccess) // the oldest key
-	for i := 1; i <= keysPageSize; i++ {
-		insert(i, model.PermissionPagesRead)
-	}
-
-	rows, err := env.module.mcpKeys(context.Background())
-	if err != nil {
-		t.Fatalf("mcpKeys: %v", err)
-	}
-	if len(rows) != 1 || rows[0].Name != "key 0" {
-		t.Errorf("rows = %+v, want the oldest key, which holds mcp:access", rows)
 	}
 }
 

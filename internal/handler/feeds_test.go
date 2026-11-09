@@ -210,6 +210,9 @@ func TestFeedsVisibilityAndLimit(t *testing.T) {
 		}
 		f.post(t, fmt.Sprintf("russian-%02d", i), "ru")
 	}
+	if len(enIDs) != 25 {
+		t.Fatalf("seeded %d English posts, want 25", len(enIDs))
+	}
 	for _, slug := range []string{"draft", "scheduled", "excluded", "static-page"} {
 		id := f.post(t, slug, "en")
 		f.exec(t, `INSERT INTO page_categories (page_id, category_id) SELECT ?, id FROM categories WHERE slug = 'tech'`, id)

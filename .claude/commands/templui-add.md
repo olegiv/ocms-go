@@ -8,12 +8,18 @@ Add one or more templUI components to the oCMS project. Handles CLI installation
 Usage: /templui-add button card dialog
        /templui-add "*"
 
+Read the requested components from `$ARGUMENTS`. Before installing tools or
+changing files, require one or more names matching `^[a-z][a-z0-9-]*$`, or a
+single literal `*` (optionally quoted) for all components. For missing or
+invalid arguments, show the usage and stop. Pass each validated component as
+a separate shell argument. Quote `"*"` so the shell leaves it for templUI.
+
 Steps:
 1. Check if `templui` CLI is installed (`which templui`). If not, install it:
    ```bash
    go install github.com/templui/templui/cmd/templui@v1.5.0
    ```
-   Verify with `templui -v`. The pinned version matches the installed
+   Verify with `templui --version`. The pinned version matches the installed
    components (see the first line of `internal/views/components/*/*.templ`);
    raise it only when upgrading every component together.
 
@@ -36,8 +42,10 @@ Steps:
 
 4. Add the requested component(s) using force mode (non-interactive):
    ```bash
-   templui -f add <component-names>
+   templui --force add button card dialog
+   templui --force add "*"
    ```
+   Run only the form for the validated arguments.
 
 5. Run post-install steps:
    ```bash
@@ -55,4 +63,4 @@ Steps:
    - Show the import path: `"github.com/olegiv/ocms-go/internal/views/components/<component>"`
    - Show a basic usage example
 
-Note: Use `templui -f add` (force flag) since Claude Code runs non-interactively. To update existing components, use the same command - it will overwrite with the latest version.
+The force flag lets templUI overwrite existing components from the pinned CLI's default ref.

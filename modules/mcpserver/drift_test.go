@@ -144,7 +144,11 @@ func TestToolInputConstraintsMatchREST(t *testing.T) {
 	for _, spec := range toolCatalog() {
 		props := inputs[spec.Name]
 		for _, opID := range spec.RESTOperations {
-			for _, param := range ops[opID].Parameters {
+			operation := ops[opID]
+			if operation == nil {
+				t.Fatalf("tool %q references missing REST operation %q", spec.Name, opID)
+			}
+			for _, param := range operation.Parameters {
 				if _, skip := restParamsNotMirrored[opID+"."+param.Name]; skip {
 					continue
 				}
@@ -224,11 +228,9 @@ func TestCatalogSpecsWellFormed(t *testing.T) {
 	}
 }
 
-// TestEveryRegisteredToolIsReadOnly guards the scope of the read-only
-// release: no tool may reach the server without readOnlyHint, whether added
-// to the catalog or registered directly. Write tools need their own policy
-// layer (publish and delete gates) before this test may be relaxed.
-func TestEveryRegisteredToolIsReadOnly(t *testing.T) {
+// TestEveryRegisteredToolHasTheExpectedMutationClass verifies read, additive,
+// replacing and explicit share annotations against the closed catalog.
+func TestEveryRegisteredToolHasTheExpectedMutationClass(t *testing.T) {
 	env := newTestEnv(t)
 	session := env.connect(env.createKey(model.PermissionMCPAccess))
 	listed, err := session.ListTools(context.Background(), nil)
@@ -238,9 +240,25 @@ func TestEveryRegisteredToolIsReadOnly(t *testing.T) {
 	if len(listed.Tools) != len(toolCatalog()) {
 		t.Errorf("server registers %d tools, catalog has %d", len(listed.Tools), len(toolCatalog()))
 	}
+	// The expected class comes from the catalog, not from a second list that
+	// has to be kept in step with it. TestMutatingToolsAreExactlyTheClassified
+	// keeps the catalog itself honest against what the handlers do.
+	mutations := make(map[string]string)
+	for _, spec := range toolCatalog() {
+		mutations[spec.Name] = spec.mutation
+	}
 	for _, tool := range listed.Tools {
-		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
-			t.Errorf("tool %s is not read-only", tool.Name)
+		kind, ok := mutations[tool.Name]
+		if !ok {
+			t.Errorf("server registers %s, which the catalog does not list", tool.Name)
+			continue
+		}
+		annotations := tool.Annotations
+		if annotations == nil || annotations.DestructiveHint == nil || annotations.OpenWorldHint == nil || *annotations.OpenWorldHint {
+			t.Fatalf("%s: incomplete annotations", tool.Name)
+		}
+		if annotations.ReadOnlyHint != (kind == "") || *annotations.DestructiveHint != (kind == mutationReplace) || annotations.IdempotentHint != (kind != mutationShare) {
+			t.Errorf("tool %s misclassified: %+v", tool.Name, annotations)
 		}
 	}
 }
@@ -306,6 +324,13 @@ func TestTranslationsCompleteAndUsedKeysExist(t *testing.T) {
 	if len(used) == 0 {
 		t.Fatal("no message keys found in module sources; the scan is broken")
 	}
+	// The other direction: a key left behind when its UI was removed (the API
+	// key card, once) keeps being translated and shipped for nothing.
+	for key := range catalogs["en"] {
+		if !slices.Contains(used, key) {
+			t.Errorf("the module catalogs define %s, which no module code or template uses; delete it from en and ru together", key)
+		}
+	}
 	for _, key := range used {
 		if strings.HasPrefix(key, ModuleName+".") && !catalogs["en"][key] {
 			t.Errorf("module code uses %s, which the module catalogs do not define", key)
@@ -357,6 +382,9 @@ func TestServerCardMatchesInitialize(t *testing.T) {
 		t.Fatal("no initialize result")
 	}
 	card := ServerCardEndpoint()
+	if (init.Capabilities.Prompts != nil) != card.Prompts || (init.Capabilities.Resources != nil) != card.Resources || init.Capabilities.Tools == nil {
+		t.Fatal("server card capabilities differ from initialize")
+	}
 	live := init.ServerInfo
 	if live.Name != card.Name || live.Title != card.Title || live.Version != card.Version {
 		t.Errorf("server card says %s/%s/%s, initialize says %s/%s/%s",

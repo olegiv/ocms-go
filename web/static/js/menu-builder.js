@@ -10,6 +10,8 @@
  *   data-i18n-item-custom  - Translated "Custom Link" label
  */
 
+document.addEventListener('alpine:init', () => Alpine.data('menuBuilder', menuBuilder));
+
 function menuBuilder() {
     return {
         // Properties
@@ -212,7 +214,10 @@ function menuBuilder() {
             return this.selectedPages.some(p => p.id === pageId);
         },
 
-        togglePage(pageId, title, slug) {
+        togglePage(rawPageId, title, slug) {
+            const pageId = Number(rawPageId);
+            if (!Number.isSafeInteger(pageId) || pageId <= 0) return;
+
             const index = this.selectedPages.findIndex(p => p.id === pageId);
             if (index === -1) {
                 this.selectedPages.push({ id: pageId, title: title, slug: slug });

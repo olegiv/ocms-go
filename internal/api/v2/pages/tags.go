@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/api/v2"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -100,9 +101,12 @@ func resolveTagIDs(ctx context.Context, q *store.Queries, ids []int64, names []s
 }
 
 // linkCategories attaches categories to a page inside an existing transaction.
-func linkCategories(ctx context.Context, q *store.Queries, pageID int64, categoryIDs []int64) error {
+func linkCategories(ctx context.Context, work *pagewrite.Tx, pageID int64, categoryIDs []int64) error {
+	if err := work.RequireTracked(pageID); err != nil {
+		return err
+	}
 	for _, catID := range categoryIDs {
-		if err := q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: pageID, CategoryID: catID}); err != nil {
+		if err := work.Q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: pageID, CategoryID: catID}); err != nil {
 			return v2.NewInternalError("Failed to attach category", err)
 		}
 	}
@@ -110,9 +114,12 @@ func linkCategories(ctx context.Context, q *store.Queries, pageID int64, categor
 }
 
 // linkTags attaches tags to a page inside an existing transaction.
-func linkTags(ctx context.Context, q *store.Queries, pageID int64, tagIDs []int64) error {
+func linkTags(ctx context.Context, work *pagewrite.Tx, pageID int64, tagIDs []int64) error {
+	if err := work.RequireTracked(pageID); err != nil {
+		return err
+	}
 	for _, tagID := range tagIDs {
-		if err := q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pageID, TagID: tagID}); err != nil {
+		if err := work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pageID, TagID: tagID}); err != nil {
 			return v2.NewInternalError("Failed to attach tag", err)
 		}
 	}

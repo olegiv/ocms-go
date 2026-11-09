@@ -64,7 +64,9 @@ func TestTopLevelRoutesAreReserved(t *testing.T) {
 // list and to neither of the others (security audit 2026-10-17, L-2).
 //
 // Bug state: remove "/account" from the robots.txt defaults in
-// internal/seo/robots.go and this names the route.
+// internal/seo/robots.go and this names the route; remove "oauth" from
+// util.IsPrivateRoutePath, or "/oauth" from the robots.txt defaults, and this
+// names the /oauth registration.
 func TestAuthenticatedRoutesArePrivate(t *testing.T) {
 	robots := seo.NewRobotsBuilder(seo.RobotsConfig{}).Build()
 	authenticated := 0
@@ -85,10 +87,35 @@ func TestAuthenticatedRoutesArePrivate(t *testing.T) {
 	if authenticated == 0 {
 		t.Fatal("no route behind middleware.Auth found; the scanner is broken and this test is vacuous")
 	}
+	// Routes that read the session themselves (the OAuth consent screen sends an
+	// anonymous visitor to the login form) are not behind middleware.Auth, so
+	// the scan above cannot find them (security audit 2026-11-03, A-11). They
+	// are listed by hand, and each must still be registered, so the list
+	// cannot outlive the route.
+	registered := map[string]string{}
+	for _, route := range scanTopLevelRoutes(t) {
+		registered[route.segment] = route.position
+	}
+	for _, segment := range sessionGatedSegments {
+		if _, ok := registered[segment]; !ok {
+			problems = append(problems, "sessionGatedSegments names /"+segment+", which no route registers; remove it")
+			continue
+		}
+		if !util.IsPrivateRoutePath("/" + segment) {
+			problems = append(problems, registered[segment]+"  /"+segment+" is not in util.IsPrivateRoutePath")
+		}
+		if !strings.Contains(robots, "Disallow: /"+segment+"\n") {
+			problems = append(problems, registered[segment]+"  /"+segment+" is not disallowed in robots.txt")
+		}
+	}
 	if len(problems) > 0 {
 		t.Errorf("session-authenticated routes must be private:\n  %s", strings.Join(problems, "\n  "))
 	}
 }
+
+// sessionGatedSegments are top-level route segments whose handlers check the
+// session themselves instead of sitting behind middleware.Auth.
+var sessionGatedSegments = []string{"oauth"}
 
 // TestExactRoutesReservePageSlugs fails when util.ReservedPageSlugs differs
 // from the single-segment URLs that a route answers on GET.

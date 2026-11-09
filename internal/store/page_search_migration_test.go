@@ -49,6 +49,34 @@ func createSearchTestPage(t *testing.T, q *Queries, ctx context.Context, slug, s
 	return page
 }
 
+// createOldSchemaSearchPage inserts a published page with plain SQL at an
+// older schema version. The generated queries follow the current schema,
+// which later migrations extend (pages.revision, for one), so they cannot
+// write to the schema the upgrade starts from.
+func createOldSchemaSearchPage(t *testing.T, db *sql.DB, slug string) Page {
+	t.Helper()
+	now := time.Now()
+	res, err := db.Exec(`INSERT INTO users (email, password_hash, role, name, created_at, updated_at) VALUES (?, 'unused', 'editor', 'Old', ?, ?)`, slug+"@example.com", now, now)
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	userID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = db.Exec(`INSERT INTO pages (title, slug, body, status, author_id, language_code, created_at, updated_at)
+		VALUES ('Greeting', ?, '<p style="text-align: center">Hello <b>world</b></p>', 'published', ?, (SELECT code FROM languages WHERE is_default = 1 LIMIT 1), ?, ?)`,
+		slug, userID, now, now)
+	if err != nil {
+		t.Fatalf("insert page: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Page{ID: id, Slug: slug}
+}
+
 // TestPageSearchMigrationIsPlainSQL covers the page_search migration (issue
 // #203). Its triggers only queue page IDs, so any program can write pages:
 // nothing in the schema calls oCMS code. Existing pages are queued for
@@ -67,7 +95,7 @@ func TestPageSearchMigrationIsPlainSQL(t *testing.T) {
 	if err := RunMigrationCommand(ctx, db, "up-to", before); err != nil {
 		t.Fatalf("migrate up to %s: %v", before, err)
 	}
-	existing := createSearchTestPage(t, q, ctx, "existing", "published")
+	existing := createOldSchemaSearchPage(t, db, "existing")
 
 	if err := Migrate(db); err != nil {
 		t.Fatalf("Migrate: %v", err)

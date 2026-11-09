@@ -26,6 +26,8 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -710,7 +712,7 @@ func (s *Source) importTag(ctx context.Context, st *importState, t Term, now tim
 	}
 
 	if !st.track(ctx, types.EntityTag, tag.ID, func(rollbackCtx context.Context) error {
-		return st.queries.DeleteTag(rollbackCtx, tag.ID)
+		return pagewrite.DeleteTermFromQueries(rollbackCtx, st.queries, "tag", tag.ID)
 	}) {
 		return
 	}
@@ -764,7 +766,7 @@ func (s *Source) importCategory(ctx context.Context, st *importState, t Term, no
 	}
 
 	if !st.track(ctx, types.EntityCategory, category.ID, func(rollbackCtx context.Context) error {
-		return st.queries.DeleteCategory(rollbackCtx, category.ID)
+		return pagewrite.DeleteTermFromQueries(rollbackCtx, st.queries, "category", category.ID)
 	}) {
 		return
 	}
@@ -1124,7 +1126,7 @@ func (s *Source) importOneFile(ctx context.Context, st *importState, source medi
 		return 0, "", fmt.Errorf("failed to create media record: %w", errors.Join(err, cleanupErr))
 	}
 	if !st.track(ctx, types.EntityMedia, media.ID, func(rollbackCtx context.Context) error {
-		if err := st.queries.DeleteMedia(rollbackCtx, media.ID); err != nil {
+		if err := pagewrite.DeleteMediaFromQueries(rollbackCtx, st.queries, media.ID); err != nil {
 			return err
 		}
 		return st.cleanupMediaFiles(rollbackCtx, canonicalUploadRoot, fileUUID)
@@ -1619,7 +1621,7 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 		authorID = mapped
 	}
 
-	page, err := st.queries.CreatePage(ctx, store.CreatePageParams{
+	page, err := pagewrite.Insert(ctx, st.queries, provenance.Principal{Source: "system", Transport: "migrator"}, store.CreatePageParams{
 		Title:           n.Title,
 		Slug:            slug,
 		Body:            body,
@@ -1634,6 +1636,10 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 		PublishedAt:     publishedAt,
 		CreatedAt:       unixOrNow(n.Created, now),
 		UpdatedAt:       unixOrNow(n.Changed, now),
+	}, func(work *pagewrite.Tx, page store.Page) error {
+		transactional := *st
+		transactional.queries = work.Q
+		return s.linkNodeTerms(ctx, work, &transactional, n, page.ID)
 	})
 	if err != nil {
 		st.result.AddError("failed to create page for node %d (%q): %v", n.NID, n.Title, err)
@@ -1641,7 +1647,7 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 	}
 
 	if !st.track(ctx, entityTypeFor(pageType), page.ID, func(rollbackCtx context.Context) error {
-		return st.queries.DeletePage(rollbackCtx, page.ID)
+		return pagewrite.DeleteFromQueries(rollbackCtx, st.queries, page.ID)
 	}) {
 		return
 	}
@@ -1650,7 +1656,6 @@ func (s *Source) importNode(ctx context.Context, st *importState, n Node, now ti
 	st.nodeLang[n.NID] = n.Langcode
 	countImported(st.result, pageType)
 
-	s.linkNodeTerms(ctx, st, n, page.ID)
 }
 
 // uniqueNodeSlug respects aliases that exist only in the source cache as well
@@ -1760,22 +1765,24 @@ func uniqueTagSlug(ctx context.Context, st *importState, base string) string {
 }
 
 // linkNodeTerms attaches a node's taxonomy references to its oCMS page.
-func (s *Source) linkNodeTerms(ctx context.Context, st *importState, n Node, pageID int64) {
+func (s *Source) linkNodeTerms(ctx context.Context, work *pagewrite.Tx, st *importState, n Node, pageID int64) error {
+	if err := work.RequireTracked(pageID); err != nil {
+		return err
+	}
 	for _, tid := range n.TermIDs {
 		if tagID, ok := st.tags[tid]; ok {
-			if err := st.queries.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pageID, TagID: tagID}); err != nil {
-				slog.Warn("failed to link tag to page", "page_id", pageID, "tag_id", tagID, "error", err)
-				st.result.AddError("page %d kept none of its Drupal tag %d: %v", pageID, tagID, err)
+			if err := work.Q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pageID, TagID: tagID}); err != nil {
+				return fmt.Errorf("link tag %d: %w", tagID, err)
 			}
 			continue
 		}
 		if categoryID, ok := st.categories[tid]; ok {
-			if err := st.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: pageID, CategoryID: categoryID}); err != nil {
-				slog.Warn("failed to link category to page", "page_id", pageID, "category_id", categoryID, "error", err)
-				st.result.AddError("page %d was not linked to category %d: %v", pageID, categoryID, err)
+			if err := work.Q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: pageID, CategoryID: categoryID}); err != nil {
+				return fmt.Errorf("link category %d: %w", categoryID, err)
 			}
 		}
 	}
+	return nil
 }
 
 // importAliases writes Drupal path aliases against their imported pages so the
@@ -2061,7 +2068,9 @@ func reservedPublicPath(st *importState, path string) bool {
 		return true
 	}
 	first, _, _ := strings.Cut(path, "/")
-	if fixedPublicPaths[path] || util.IsReservedLanguageCode(first) {
+	// pagewrite.RouteConflict refuses a path the preview routes would take:
+	// the preview middleware cannot tell "news/preview/x" from "ru/preview/x".
+	if fixedPublicPaths[path] || util.IsReservedLanguageCode(first) || util.ShadowsPreviewRoute(path) {
 		return true
 	}
 	// Active language prefixes are stripped before public route matching, and
@@ -2194,11 +2203,7 @@ func (s *Source) createPageAlias(ctx context.Context, st *importState, pageID in
 		return
 	}
 
-	created, err := st.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
-		PageID:    pageID,
-		Alias:     alias,
-		CreatedAt: now,
-	})
+	created, err := pagewrite.AddImportedAlias(ctx, st.queries, pageID, alias, now)
 	if err != nil {
 		// A duplicate alias is expected when two Drupal nodes shared one path
 		// over time, and is not worth failing the import over. Any other
@@ -2213,7 +2218,7 @@ func (s *Source) createPageAlias(ctx context.Context, st *importState, pageID in
 		return
 	}
 	if !st.track(ctx, types.EntityAlias, created.ID, func(rollbackCtx context.Context) error {
-		return st.queries.DeletePageAlias(rollbackCtx, created.ID)
+		return pagewrite.DeleteAliasFromQueries(rollbackCtx, st.queries, created.ID)
 	}) {
 		return
 	}

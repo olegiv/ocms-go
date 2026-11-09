@@ -50,6 +50,13 @@ type Category struct {
 	LanguageCode string         `json:"language_code"`
 }
 
+type ClaimsCheck struct {
+	ProvenanceID int64         `json:"provenance_id"`
+	ClaimIndex   int64         `json:"claim_index"`
+	CheckedBy    sql.NullInt64 `json:"checked_by"`
+	CheckedAt    int64         `json:"checked_at"`
+}
+
 type Config struct {
 	Key          string        `json:"key"`
 	Value        string        `json:"value"`
@@ -67,6 +74,37 @@ type ConfigTranslation struct {
 	Value      string        `json:"value"`
 	UpdatedAt  time.Time     `json:"updated_at"`
 	UpdatedBy  sql.NullInt64 `json:"updated_by"`
+}
+
+type ContentProvenance struct {
+	ID            int64         `json:"id"`
+	PageID        int64         `json:"page_id"`
+	Revision      int64         `json:"revision"`
+	UserID        sql.NullInt64 `json:"user_id"`
+	Source        string        `json:"source"`
+	ApiKeyID      sql.NullInt64 `json:"api_key_id"`
+	OauthGrantID  string        `json:"oauth_grant_id"`
+	OauthClientID string        `json:"oauth_client_id"`
+	Transport     string        `json:"transport"`
+	ValidatedJson string        `json:"validated_json"`
+	ReportedJson  string        `json:"reported_json"`
+	CreatedAt     time.Time     `json:"created_at"`
+}
+
+type EditorialPreset struct {
+	Slug         string        `json:"slug"`
+	LanguageCode string        `json:"language_code"`
+	Name         string        `json:"name"`
+	Instructions string        `json:"instructions"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+}
+
+type EditorialStyleGuide struct {
+	LanguageCode string        `json:"language_code"`
+	Body         string        `json:"body"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
+	UpdatedAt    time.Time     `json:"updated_at"`
 }
 
 type Event struct {
@@ -121,6 +159,18 @@ type FormSubmission struct {
 	IsRead       bool           `json:"is_read"`
 	LanguageCode string         `json:"language_code"`
 	CreatedAt    time.Time      `json:"created_at"`
+}
+
+type IdempotencyKey struct {
+	UserID         int64          `json:"user_id"`
+	Tool           string         `json:"tool"`
+	RequestID      string         `json:"request_id"`
+	RequestHash    string         `json:"request_hash"`
+	ResultJson     sql.NullString `json:"result_json"`
+	EntityType     string         `json:"entity_type"`
+	EntityID       int64          `json:"entity_id"`
+	EntityRevision int64          `json:"entity_revision"`
+	CreatedAt      time.Time      `json:"created_at"`
 }
 
 type Language struct {
@@ -227,6 +277,62 @@ type ModuleMigration struct {
 	AppliedAt time.Time `json:"applied_at"`
 }
 
+type OauthClient struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	RedirectUris string `json:"redirect_uris"`
+	Source       string `json:"source"`
+	ExpiresAt    int64  `json:"expires_at"`
+}
+
+type OauthCode struct {
+	CodeHash    string `json:"code_hash"`
+	GrantID     string `json:"grant_id"`
+	RedirectUri string `json:"redirect_uri"`
+	Challenge   string `json:"challenge"`
+	CreatedAt   int64  `json:"created_at"`
+	ExpiresAt   int64  `json:"expires_at"`
+	ConsumedAt  int64  `json:"consumed_at"`
+}
+
+type OauthDcrPending struct {
+	ClientID     string `json:"client_id"`
+	SourceKey    string `json:"source_key"`
+	RegisteredAt int64  `json:"registered_at"`
+}
+
+type OauthDcrRegistration struct {
+	ClientID     string `json:"client_id"`
+	SourceKey    string `json:"source_key"`
+	RegisteredAt int64  `json:"registered_at"`
+	Provisional  int64  `json:"provisional"`
+}
+
+type OauthGrant struct {
+	ID             string `json:"id"`
+	UserID         int64  `json:"user_id"`
+	ClientID       string `json:"client_id"`
+	Scopes         string `json:"scopes"`
+	Resource       string `json:"resource"`
+	SessionVersion int64  `json:"session_version"`
+	CreatedAt      int64  `json:"created_at"`
+	ExpiresAt      int64  `json:"expires_at"`
+	RevokedAt      int64  `json:"revoked_at"`
+	LastUsedAt     int64  `json:"last_used_at"`
+}
+
+type OauthToken struct {
+	ID              string `json:"id"`
+	GrantID         string `json:"grant_id"`
+	AccessHash      string `json:"access_hash"`
+	RefreshHash     string `json:"refresh_hash"`
+	Scopes          string `json:"scopes"`
+	CreatedAt       int64  `json:"created_at"`
+	AccessExpiresAt int64  `json:"access_expires_at"`
+	RefreshUsedAt   int64  `json:"refresh_used_at"`
+	AccessRevokedAt int64  `json:"access_revoked_at"`
+}
+
 type Page struct {
 	ID                int64         `json:"id"`
 	Title             string        `json:"title"`
@@ -253,6 +359,14 @@ type Page struct {
 	Summary           string        `json:"summary"`
 	VideoUrl          string        `json:"video_url"`
 	VideoTitle        string        `json:"video_title"`
+	Revision          int64         `json:"revision"`
+}
+
+type PageAiAccess struct {
+	PageID     int64     `json:"page_id"`
+	AiEditable bool      `json:"ai_editable"`
+	SetBy      int64     `json:"set_by"`
+	SetAt      time.Time `json:"set_at"`
 }
 
 type PageAlias struct {
@@ -285,12 +399,15 @@ type PageTag struct {
 }
 
 type PageVersion struct {
-	ID        int64     `json:"id"`
-	PageID    int64     `json:"page_id"`
-	Title     string    `json:"title"`
-	Body      string    `json:"body"`
-	ChangedBy int64     `json:"changed_by"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           int64          `json:"id"`
+	PageID       int64          `json:"page_id"`
+	Title        string         `json:"title"`
+	Body         string         `json:"body"`
+	ChangedBy    int64          `json:"changed_by"`
+	CreatedAt    time.Time      `json:"created_at"`
+	Revision     sql.NullInt64  `json:"revision"`
+	SnapshotJson sql.NullString `json:"snapshot_json"`
+	Legacy       bool           `json:"legacy"`
 }
 
 type PagesFt struct {
@@ -299,6 +416,20 @@ type PagesFt struct {
 	MetaTitle       string `json:"meta_title"`
 	MetaDescription string `json:"meta_description"`
 	MetaKeywords    string `json:"meta_keywords"`
+}
+
+type PreviewLink struct {
+	ID             int64          `json:"id"`
+	TokenHash      string         `json:"token_hash"`
+	PageID         int64          `json:"page_id"`
+	Revision       int64          `json:"revision"`
+	CreatedBy      int64          `json:"created_by"`
+	SessionVersion int64          `json:"session_version"`
+	IssuingGrantID sql.NullString `json:"issuing_grant_id"`
+	IssuingKeyID   sql.NullInt64  `json:"issuing_key_id"`
+	CreatedAt      int64          `json:"created_at"`
+	ExpiresAt      int64          `json:"expires_at"`
+	RevokedAt      int64          `json:"revoked_at"`
 }
 
 type Redirect struct {

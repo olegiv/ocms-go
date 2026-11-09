@@ -20,7 +20,7 @@ templ Sidebar(pc *PageContext) {
 			<button
 				type="button"
 				class="sidebar-collapse-btn"
-				@click="sidebarCollapsed = !sidebarCollapsed; localStorage.setItem('sidebarCollapsed', sidebarCollapsed)"
+				@click="toggleSidebarCollapsed()"
 				title={ pc.T("nav.collapse_sidebar") }
 				aria-label={ pc.T("nav.collapse_sidebar") }
 				data-collapse-label={ pc.T("nav.collapse_sidebar") }
@@ -40,6 +40,7 @@ templ Sidebar(pc *PageContext) {
 				<div class="nav-section">
 					@navLink(pc, "/account", pc.T("account.title"), pc.IsActive("/account"), iconDashboard())
 					@navLinkPrefix(pc, "/account/security", pc.T("mfa.title"), pc.HasPrefix("/account/security"), iconShield())
+					@navLinkPrefix(pc, "/account/connected-apps", pc.T("connected.title"), pc.HasPrefix("/account/connected-apps"), iconShield())
 					@navLink(pc, "/", pc.T("account.visit_website"), false, iconGlobe())
 				</div>
 			} else {
@@ -82,6 +83,7 @@ templ Sidebar(pc *PageContext) {
 					if pc.IsAdmin() {
 						@navLinkPrefix(pc, "/admin/themes", pc.T("nav.themes"), pc.HasPrefix("/admin/themes"), iconThemes())
 						@navLinkPrefix(pc, "/admin/languages", pc.T("nav.languages"), pc.HasPrefix("/admin/languages"), iconLanguages())
+						@navLinkPrefix(pc,"/admin/editorial",pc.T("nav.editorial"),pc.HasPrefix("/admin/editorial"),iconPages())
 						@navLinkPrefix(pc, "/admin/config", pc.T("nav.settings"), pc.HasPrefix("/admin/config"), iconSettings())
 						@navLinkPrefix(pc, "/admin/cache", pc.T("nav.cache"), pc.HasPrefix("/admin/cache"), iconCache())
 						@navLinkPrefix(pc, "/admin/scheduler", pc.T("nav.scheduler"), pc.HasPrefix("/admin/scheduler"), iconScheduler())

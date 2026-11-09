@@ -45,6 +45,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/oauth"
+	"github.com/olegiv/ocms-go/internal/preview"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
 	"github.com/olegiv/ocms-go/internal/security"
@@ -109,6 +111,66 @@ func registerSettingsRoutes(r chi.Router, route string, get, update http.Handler
 	r.Get(route, get)
 	r.Put(route, update)
 	r.Post(route, update) // HTML forms can't send PUT
+}
+
+// oauthEndpoints are the OAuth authorization server handlers.
+type oauthEndpoints interface {
+	Discovery(http.ResponseWriter, *http.Request)
+	ProtectedResourceMetadata() http.Handler
+	Token(http.ResponseWriter, *http.Request)
+	Revoke(http.ResponseWriter, *http.Request)
+	Register(http.ResponseWriter, *http.Request)
+}
+
+// registerOAuthRoutes mounts the OAuth authorization server. Every route but
+// revocation answers only while mcpActive reports the MCP module active:
+// /api/mcp is the only resource the server protects, so with the module off
+// there is nothing to authorize, register a client for or issue a token for,
+// and an unauthenticated request must not reach client registration or the
+// client metadata fetch (2026-11-03 audit A-13). Revocation stays available
+// so a client can still retire the tokens it holds.
+func registerOAuthRoutes(r chi.Router, s oauthEndpoints, authorize http.HandlerFunc, mcpActive func(*http.Request) (bool, error),
+	apiLimit, htmlLimit, csrf func(http.Handler) http.Handler) {
+	gate := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			active, err := mcpActive(req)
+			if err != nil {
+				slog.Error("failed to check whether the MCP module is active", "error", err)
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+				return
+			}
+			if !active {
+				http.NotFound(w, req)
+				return
+			}
+			next.ServeHTTP(w, req)
+		})
+	}
+	r.Group(func(r chi.Router) {
+		r.Use(apiLimit)
+		r.Post("/oauth/revoke", s.Revoke)
+		r.Group(func(r chi.Router) {
+			r.Use(gate)
+			r.Get("/.well-known/oauth-authorization-server", s.Discovery)
+			r.Handle(oauth.MetadataPath, s.ProtectedResourceMetadata())
+			r.Post("/oauth/token", s.Token)
+			r.Post("/oauth/register", s.Register)
+		})
+	})
+	r.With(htmlLimit, gate, csrf).Get("/oauth/authorize", authorize)
+	r.With(htmlLimit, gate, csrf).Post("/oauth/authorize", authorize)
+}
+
+func registerPreviewRoutes(r chi.Router, h *handler.FrontendHandler) {
+	r.Route("/preview", func(pr chi.Router) {
+		pr.Get("/pages/{id}/revisions/{revision}", h.PreviewSession)
+		limiter := middleware.NewGlobalRateLimiter(2, 20)
+		pr.With(limiter.HTMLMiddleware()).Get("/share", h.PreviewShareLanding)
+		pr.With(limiter.HTMLMiddleware()).Post("/share/open", h.PreviewShare)
+		pr.Get("/", http.NotFound)
+		pr.NotFound(http.NotFound)
+	})
+	r.Get("/{lang}/preview/pages/{id}/revisions/{revision}", h.PreviewSession)
 }
 
 // registerFrontendRoutes registers common frontend public routes on the given router.
@@ -273,7 +335,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_MFA       Require a second factor for every account (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|staging|production (default: production, with the same hardening in staging)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_FORM_CAPTCHA  Require captcha for all public forms (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_WEBHOOK_FORM_DATA_MODE  form.submitted payload mode: redacted|none|full (default: redacted)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION  Reject production startup when webhook payload mode is full (default: false; production default when unset: true)\n")
@@ -318,7 +380,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := run(); err != nil {
+	if err := run(nil); err != nil {
 		var logged loggedRunError
 		if !errors.As(err, &logged) {
 			slog.Error("application exited with error", "error", err)
@@ -1169,7 +1231,7 @@ func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *
 	}
 	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
-	if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) {
+	if !themeStaticFileServable(w, r, info, err, themeName, cleanPath) || info == nil {
 		return
 	}
 	w.Header().Set("Cache-Control", themeStaticCacheControl)
@@ -1207,7 +1269,7 @@ func serveEmbeddedThemeFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, 
 // is not mistaken for a missing asset.
 func themeStaticFileServable(w http.ResponseWriter, r *http.Request, info fs.FileInfo, err error, themeName, file string) bool {
 	switch {
-	case err == nil && !info.IsDir():
+	case err == nil && info != nil && !info.IsDir():
 		return true
 	case err == nil, errors.Is(err, fs.ErrNotExist), errors.Is(err, fs.ErrInvalid),
 		errors.Is(err, syscall.ENOTDIR), errors.Is(err, syscall.EINVAL),
@@ -1223,7 +1285,7 @@ func themeStaticFileServable(w http.ResponseWriter, r *http.Request, info fs.Fil
 
 // runPostModulePostureAudits runs production security posture checks that depend on module state.
 func runPostModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql.DB, moduleRegistry *module.Registry, hookRegistry *module.HookRegistry) error {
-	if cfg.Env != "production" {
+	if !cfg.IsProductionLike() {
 		return nil
 	}
 	if cfg.RequireEmbedAllowedOrigins && strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
@@ -1282,12 +1344,12 @@ func runPreModulePostureAudits(
 	allowedEmbedUpstreamHosts map[string]struct{},
 	allowedWebhookHosts map[string]struct{},
 ) error {
-	if cfg.Env != "production" {
+	if !cfg.IsProductionLike() {
 		return nil
 	}
 	if hasDefaultAdminCreds {
 		return fmt.Errorf(
-			"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
+			"refusing to start outside development: default seeded admin credentials are still active for %s; rotate credentials before startup",
 			store.DefaultAdminEmail,
 		)
 	}
@@ -1380,7 +1442,7 @@ func configureMiddlewareDefaults(cfg *config.Config) error {
 
 // logProductionSecurityWarnings logs slog warnings for disabled production security settings.
 func logProductionSecurityWarnings(cfg *config.Config) {
-	if cfg.Env != "production" {
+	if !cfg.IsProductionLike() {
 		return
 	}
 	if !cfg.RequireFormCaptcha {
@@ -1553,6 +1615,17 @@ func applySiteURLOverride(ctx context.Context, db *sql.DB, rawURL string) error 
 	return nil
 }
 
+func loadModuleTemplateFuncs(renderer *render.Renderer, registry *module.Registry) {
+	funcs := registry.AllTemplateFuncs()
+	if len(funcs) == 0 {
+		return
+	}
+	renderer.AddTemplateFuncs(funcs)
+	if err := renderer.ReloadTemplates(); err != nil {
+		slog.Warn("failed to reload admin templates with module funcs", "error", err)
+	}
+}
+
 // loadActiveTheme determines and activates the appropriate theme.
 func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *theme.Manager, renderer *render.Renderer, cfg *config.Config) {
 	themeManager.SetFuncMap(renderer.TemplateFuncs())
@@ -1695,7 +1768,7 @@ func openDatabase(dsn string) (*sql.DB, error) {
 // and, in demo mode, rotates the demo and default admin passwords. It returns
 // the demo admin password for this startup, or "" when there is none.
 func seedDatabase(ctx context.Context, cfg *config.Config, db *sql.DB) (string, error) {
-	if err := store.Seed(ctx, db, cfg.DoSeed); err != nil {
+	if err := store.SeedWithAdminPassword(ctx, db, cfg.DoSeed, cfg.SeedAdminPassword); err != nil {
 		return "", fmt.Errorf("seeding database: %w", err)
 	}
 	// Seed demo content if both base seeding and demo mode are enabled
@@ -1748,7 +1821,7 @@ func seedDemoInformer(cfg *config.Config, db *sql.DB, registry *module.Registry,
 	}
 }
 
-func run() (runErr error) {
+func run(inspectRouter func(chi.Router) error) (runErr error) {
 	if err := loadEnvFile(); err != nil {
 		return err
 	}
@@ -1919,8 +1992,8 @@ func run() (runErr error) {
 	schedulerRegistry := scheduler.NewRegistry(db, logger)
 	sched := scheduler.New(db, logger, schedulerRegistry)
 	sched.SetWebhookDispatcher(webhookDispatcher)
-	if err := sched.Start(); err != nil {
-		return fmt.Errorf("starting scheduler: %w", err)
+	if startErr := startCoreScheduler(sched); startErr != nil {
+		return fmt.Errorf("starting scheduler: %w", startErr)
 	}
 	defer cleanup.within("scheduler", sched.Stop)
 
@@ -1947,11 +2020,28 @@ func run() (runErr error) {
 	redirectsMiddleware := middleware.NewRedirectsMiddleware(db)
 
 	// Create module context
+	var oauthService *oauth.Service
+	if cfg.OAuthEnabled {
+		oauthService, err = oauth.New(db, oauth.Options{
+			Issuer: cfg.SiteURL, Development: cfg.IsDevelopment(),
+			AllowedHosts:          oauth.SplitAllowedHosts(cfg.OAuthCIMDAllowedHosts),
+			PreRegisteredClients:  cfg.OAuthPreRegisteredClients,
+			AllowDCR:              cfg.OAuthAllowDCR,
+			DCRInitialAccessToken: cfg.OAuthDCRInitialAccessToken,
+			AccessTTL:             time.Duration(cfg.OAuthAccessTTL) * time.Second,
+			RefreshTTL:            time.Duration(cfg.OAuthRefreshTTLDays) * 24 * time.Hour,
+		})
+		if err != nil {
+			return fmt.Errorf("initializing OAuth: %w", err)
+		}
+	}
 	moduleCtx := &module.Context{
+		Webhooks:                 webhookDispatcher,
 		DB:                       db,
 		Store:                    store.New(db),
 		Logger:                   logger,
 		Config:                   cfg,
+		OAuth:                    oauthService,
 		Render:                   renderer,
 		Events:                   eventService,
 		Hooks:                    hookRegistry,
@@ -1999,15 +2089,7 @@ func run() (runErr error) {
 	// Set up hook registry to check module active status
 	hookRegistry.SetIsModuleActive(moduleRegistry.IsActive)
 
-	// Add module template functions to renderer
-	moduleFuncs := moduleRegistry.AllTemplateFuncs()
-	if len(moduleFuncs) > 0 {
-		renderer.AddTemplateFuncs(moduleFuncs)
-		// Reload admin templates with new module functions
-		if err := renderer.ReloadTemplates(); err != nil {
-			slog.Warn("failed to reload admin templates with module funcs", "error", err)
-		}
-	}
+	loadModuleTemplateFuncs(renderer, moduleRegistry)
 
 	slog.Info("module system initialized", "modules", moduleRegistry.Count())
 
@@ -2030,6 +2112,7 @@ func run() (runErr error) {
 
 	// Middleware stack
 	r.Use(chimw.RequestID)
+	r.Use(preview.RedactRequest)
 	// Snapshot trusted-proxy status before RealIP overwrites RemoteAddr,
 	// so downstream code (e.g. X-Forwarded-Proto resolution) can still
 	// check the original peer via middleware.WasFromTrustedProxy.
@@ -2050,7 +2133,7 @@ func run() (runErr error) {
 	// SecurityHeaders calls for the CSP, is logged and answered with a 500
 	// instead of dropping the connection. Timeout recovers the panics behind
 	// it itself.
-	r.Use(chimw.Logger)
+	r.Use(middleware.RedactedRequestLogger(chimw.Logger))
 	r.Use(chimw.Recoverer)
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.). It runs
 	// before every middleware that can answer on its own (bans, timeouts,
@@ -2063,6 +2146,7 @@ func run() (runErr error) {
 	// Third-party hosts join the CSP only while the module loading them is active.
 	securityConfig.CSPSources = moduleRegistry.ActiveCSPSources
 	r.Use(middleware.SecurityHeaders(securityConfig))
+	r.Use(preview.Middleware)
 	slog.Info("security headers middleware initialized",
 		"hsts", !cfg.IsDevelopment(),
 		"hsts_preload", securityConfig.HSTSPreload,
@@ -2119,23 +2203,27 @@ func run() (runErr error) {
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection, hookRegistry, mfaService)
+	authHandler.SetOAuthService(oauthService)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	usersHandler.SetMFAService(mfaService)
 	usersHandler.SetLoginProtection(loginProtection)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
+	pagesHandler.SetPreviewTTL(time.Duration(cfg.PreviewLinkTTLHours) * time.Hour)
 	pagesHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
 	pagesHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	if cfg.BlockSuspiciousPageHTML {
 		slog.Info("page suspicious HTML blocking policy enabled")
 	}
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
+	editorialHandler := handler.NewEditorialHandler(db, renderer, sessionManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
 	taxonomyHandler.SetCacheManager(cacheManager)
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, cfg.UploadsDir)
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService(), eventService)
+	frontendHandler.SetAgentSharePolicy(mcpserver.AgentSharePolicy(cfg))
 	frontendHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	if cfg.SanitizePageHTML {
 		slog.Info("frontend page HTML sanitization enabled")
@@ -2176,6 +2264,7 @@ func run() (runErr error) {
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager, cacheManager)
 	importExportHandler.SetUploadDir(cfg.UploadsDir)
 	importExportHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
+	importExportHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, cfg.UploadsDir)
 	docsHandler := handler.NewDocsHandler(renderer, sessionManager, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
 
@@ -2187,6 +2276,8 @@ func run() (runErr error) {
 
 	// Set cache manager on handlers that need cache invalidation
 	pagesHandler.SetCacheManager(cacheManager)
+	// Deleting media rewrites the pages that used it.
+	mediaHandler.SetCacheManager(cacheManager)
 
 	// Health check routes (public, returns additional details for authenticated callers)
 	r.Get("/health", healthHandler.Health)
@@ -2214,6 +2305,12 @@ func run() (runErr error) {
 		// interface from a single GET of the homepage.
 		r.Use(middleware.LinkHeaders)
 	}
+
+	// Preview routes intentionally bypass analytics and normal page caches.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.OptionalLoadUser(sessionManager, db))
+		registerPreviewRoutes(r, frontendHandler)
+	})
 
 	// Public discovery files are unprefixed routes. Keep them outside the
 	// language-aware child router so /{lang}/... exposes only frontend content
@@ -2264,6 +2361,16 @@ func run() (runErr error) {
 		r.Post(handler.RouteLanguage, authHandler.SetLanguage)
 	})
 
+	if oauthService != nil {
+		registerOAuthRoutes(r, oauthService, authHandler.OAuthAuthorize, func(req *http.Request) (bool, error) {
+			// Toggled at runtime from Admin > Modules, like the server card.
+			if !moduleRegistry.IsActive(mcpserver.ModuleName) {
+				return false, nil
+			}
+			return queries.IsModuleActive(req.Context(), mcpserver.ModuleName)
+		}, publicRateLimiter.Middleware(), publicRateLimiter.HTMLMiddleware(), csrfMiddleware)
+	}
+
 	// Account pages use the core layout and current database permissions.
 	// The two-factor changes that check a code share the login rate limit.
 	r.Group(func(r chi.Router) {
@@ -2273,7 +2380,10 @@ func run() (runErr error) {
 			middleware.LoadSiteConfig(db, nil),
 		)
 		r.Get(handler.RouteAccount, authHandler.Account)
+		r.Get(handler.RouteAccountConnectedApps, authHandler.ConnectedApps)
+		r.Post(handler.RouteAccountConnectedApps+"/revoke", authHandler.RevokeConnectedApp)
 		r.Get(handler.RouteAccountSecurity, authHandler.Security)
+		r.Post("/account/security/oauth/revoke", authHandler.RevokeOAuthGrant)
 		r.Get(handler.RouteAccountSecurityTOTP, authHandler.TOTPSetupForm)
 		r.With(loginProtection.Middleware()).Post(handler.RouteAccountSecurityTOTP, authHandler.TOTPSetup)
 		r.With(loginProtection.Middleware()).Post(handler.RouteAccountSecurityRecoveryCodes, authHandler.RegenerateRecoveryCodes)
@@ -2327,6 +2437,11 @@ func run() (runErr error) {
 			r.Post(handler.RoutePages+handler.RouteSuffixBulkDelete, pagesHandler.BulkDelete)
 			r.Post(handler.RoutePagesID+"/publish", pagesHandler.TogglePublish)
 			r.Get(handler.RoutePagesID+"/versions", pagesHandler.Versions)
+			r.Get(handler.RoutePagesID+"/versions/{versionId}", pagesHandler.RevisionReview)
+			r.Post(handler.RoutePagesID+"/claims/{index}", pagesHandler.CheckClaim)
+			r.Post(handler.RoutePagesID+"/translation-review", pagesHandler.ReviewTranslation)
+			r.Post(handler.RoutePagesID+"/preview-links", pagesHandler.CreatePreviewLink)
+			r.Post(handler.RoutePagesID+"/preview-links/{linkID}/revoke", pagesHandler.RevokePreviewLink)
 			r.Post(handler.RoutePagesID+"/versions/{versionId}/restore", pagesHandler.RestoreVersion)
 			r.Post(handler.RoutePagesID+handler.RouteSuffixTranslate, pagesHandler.Translate)
 
@@ -2435,6 +2550,7 @@ func run() (runErr error) {
 
 			// Configuration routes
 			registerSettingsRoutes(r, handler.RouteConfig, configHandler.List, configHandler.Update)
+			registerSettingsRoutes(r, handler.RouteEditorial, editorialHandler.Get, editorialHandler.Update)
 
 			// Theme management routes (activation is admin only)
 			r.Get("/themes", themesHandler.List)
@@ -2582,8 +2698,10 @@ func run() (runErr error) {
 		apiv2pages.Register(apiV2.API, pagesSvc)
 		mediaSvc := apiv2media.NewService(db, v2Queries, v2Events, cfg.UploadsDir)
 		mediaSvc.SetWebhookDispatcher(webhookDispatcher)
+		mediaSvc.SetCacheManager(cacheManager)
 		apiv2media.Register(apiV2.API, mediaSvc)
 		taxonomySvc := apiv2taxonomy.NewService(db, v2Queries, v2Events)
+		taxonomySvc.SetCacheManager(cacheManager)
 		apiv2taxonomy.Register(apiV2.API, taxonomySvc)
 		apiV2Docs, err := apiv2.NewDocsServer(templatesFS, apiV2)
 		if err != nil {
@@ -2644,6 +2762,11 @@ func run() (runErr error) {
 		WriteTimeout:      60 * time.Second, // Longer to allow for large uploads and slow connections
 		IdleTimeout:       60 * time.Second, // Reduced from 120s to mitigate slowloris attacks
 		MaxHeaderBytes:    1 << 20,          // 1MB max header size
+	}
+
+	// A route integration check can inspect the complete router before serving.
+	if inspectRouter != nil {
+		return inspectRouter(r)
 	}
 
 	// Catch stop signals before the port opens, so a signal sent once the

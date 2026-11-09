@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,53 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/config"
 )
+
+func TestInitNextStepsExplainProductionAfterBootstrap(t *testing.T) {
+	var output bytes.Buffer
+	printInitNextSteps(&output, "my-site", "localhost", 8080, true)
+	text := output.String()
+	for _, step := range []string{
+		"Change those credentials",
+		"OCMS_DO_SEED=false",
+		"Before serving public traffic, set OCMS_ENV=production",
+		"production configuration checklist in the README",
+	} {
+		if !strings.Contains(text, step) {
+			t.Errorf("init next steps are missing %q", step)
+		}
+	}
+}
+
+func TestRunInitRequiresLoopbackHost(t *testing.T) {
+	for _, host := range []string{"", "0.0.0.0", "[::]", "192.0.2.1", "192.168.1.2", "localhost\nOCMS_SERVER_HOST=0.0.0.0"} {
+		dir := filepath.Join(t.TempDir(), "site")
+		if err := runInit([]string{"-host", host, dir}); err == nil || !strings.Contains(err.Error(), "loopback -host") {
+			t.Errorf("init with host %q = %v, want loopback refusal", host, err)
+		}
+		if _, err := os.Stat(dir); !os.IsNotExist(err) {
+			t.Errorf("init with host %q touched the target directory: %v", host, err)
+		}
+	}
+	for host, want := range map[string]string{"127.0.0.2": "127.0.0.2", "::1": "[::1]", "[::1]": "[::1]"} {
+		dir := filepath.Join(t.TempDir(), "site")
+		if err := runInit([]string{"-host", host, dir}); err != nil {
+			t.Fatal(err)
+		}
+		if got := readEnvValue(t, filepath.Join(dir, ".env"), "OCMS_SERVER_HOST"); got != want {
+			t.Errorf("host %q wrote %q, want %q", host, got, want)
+		}
+	}
+}
+
+func TestInitNextStepsHonorPreservedEnvironment(t *testing.T) {
+	var output bytes.Buffer
+	printInitNextSteps(&output, "site", "127.0.0.2", 8181, false)
+	text := output.String()
+	if strings.Contains(text, "127.0.0.2") || strings.Contains(text, "changeme1234") ||
+		!strings.Contains(text, "host and port in the existing .env") {
+		t.Fatalf("next steps for an existing site: %s", text)
+	}
+}
 
 // TestParseCommand locks the back-compat dispatch invariant: bare invocations,
 // flag-only invocations (systemd/Docker style), and unknown tokens must all
@@ -78,6 +126,9 @@ func TestRunInitCreatesScaffold(t *testing.T) {
 	}
 	if perm := info.Mode().Perm(); perm&0o077 != 0 {
 		t.Errorf(".env accessible by group/other: %#o (want owner-only)", perm)
+	}
+	if mode := readEnvValue(t, envPath, "OCMS_ENV"); mode != "development" {
+		t.Errorf("seeded scaffold OCMS_ENV = %q, want explicit development", mode)
 	}
 
 	secret := readEnvValue(t, envPath, "OCMS_SESSION_SECRET")

@@ -69,7 +69,7 @@ func (m *Module) TrackingMiddleware() func(http.Handler) http.Handler {
 			next.ServeHTTP(rw, r)
 
 			// Track only successful HTML responses
-			if rw.status == http.StatusOK {
+			if rw.status == http.StatusOK && !strings.Contains(rw.Header().Get("Cache-Control"), "private") {
 				m.ctx.Logger.Debug("analytics: tracking page view", "path", r.URL.Path)
 				// Track asynchronously to not block response; Shutdown waits for it
 				m.bgWG.Go(func() { m.trackPageView(r) })

@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -299,6 +301,65 @@ func TestAuditRequiredSuspiciousPageHTMLPosture_RejectsSuspiciousPages(t *testin
 
 	if err := auditRequiredSuspiciousPageHTMLPosture(context.Background(), db); err == nil {
 		t.Fatal("expected error when page body contains suspicious HTML")
+	}
+}
+
+func TestUnsetEnvironmentAuditsExistingDrafts(t *testing.T) {
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "OCMS_") {
+			unsetEnv(t, name)
+		}
+	}
+	for _, name := range []string{"OCMS_SESSION_SECRET", "OCMS_MFA_KEY"} {
+		secret, err := generateSessionSecret()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(name, secret)
+	}
+	t.Setenv("OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
+	t.Setenv("OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
+
+	db, err := store.NewDB(filepath.Join(t.TempDir(), "existing.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if closeErr := db.Close(); closeErr != nil {
+			t.Error(closeErr)
+		}
+	})
+	if err = store.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(t.Context(), `
+		INSERT INTO users (email, password_hash, role, name)
+		VALUES ('legacy@example.test', 'unused', 'editor', 'Legacy editor');
+		INSERT INTO pages (title, slug, body, status, author_id, language_code)
+		VALUES ('Legacy draft', 'legacy-draft', '<iframe src="https://example.test"></iframe>', 'draft',
+			(SELECT id FROM users WHERE email='legacy@example.test'),
+			(SELECT code FROM languages WHERE is_default=1 LIMIT 1));
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = runPreModulePostureAudits(t.Context(), cfg, db, false, nil, nil)
+	const refusal = "refusing to start in production: found 1 page(s) with suspicious HTML markers"
+	if err == nil || !strings.Contains(err.Error(), refusal) {
+		t.Fatalf("unset OCMS_ENV with legacy draft: got %v, want %q", err, refusal)
+	}
+	t.Setenv("OCMS_ENV", "development")
+	cfg, err = config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = runPreModulePostureAudits(t.Context(), cfg, db, false, nil, nil); err != nil {
+		t.Fatalf("explicit development should accept the same draft: %v", err)
 	}
 }
 

@@ -97,12 +97,7 @@ func (h *UsersHandler) dispatchUserEvent(ctx context.Context, eventType string, 
 		Role:  user.Role,
 	}
 
-	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
-		slog.Error("failed to dispatch webhook event",
-			"error", err,
-			"event_type", eventType,
-			"user_id", user.ID)
-	}
+	webhook.DispatchEvent(ctx, h.dispatcher, eventType, data)
 }
 
 // List handles GET /admin/users - displays a paginated list of users.
@@ -731,26 +726,26 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
 	if middleware.IsDemoMode() {
-		h.sendDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteUser))
+		writeDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteUser))
 		return
 	}
 
 	currentUser := middleware.GetUser(r)
 	if currentUser == nil {
-		h.sendDeleteError(w, "Unauthorized")
+		writeDeleteError(w, "Unauthorized")
 		return
 	}
 
 	// Get user ID from URL
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.sendDeleteError(w, "Invalid user ID")
+		writeDeleteError(w, "Invalid user ID")
 		return
 	}
 
 	// Business rule: Cannot delete yourself
 	if currentUser.ID == id {
-		h.sendDeleteError(w, "Cannot delete your own account")
+		writeDeleteError(w, "Cannot delete your own account")
 		return
 	}
 
@@ -758,10 +753,10 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	deleteUser, err := h.queries.GetUserByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.sendDeleteError(w, "User not found")
+			writeDeleteError(w, "User not found")
 		} else {
 			slog.Error("failed to get user", "error", err)
-			h.sendDeleteError(w, "Error loading user")
+			writeDeleteError(w, "Error loading user")
 		}
 		return
 	}
@@ -771,20 +766,33 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		adminCount, err := h.queries.CountUsersByRole(r.Context(), model.RoleAdmin)
 		if err != nil {
 			slog.Error("failed to count admins", "error", err)
-			h.sendDeleteError(w, "Error checking admin count")
+			writeDeleteError(w, "Error checking admin count")
 			return
 		}
 		if adminCount <= 1 {
-			h.sendDeleteError(w, "Cannot delete the last admin")
+			writeDeleteError(w, "Cannot delete the last admin")
 			return
 		}
+	}
+
+	// Business rule: Cannot delete a user who still owns content. The database
+	// refuses it anyway (ON DELETE RESTRICT); say why instead of a generic error.
+	owns, err := h.userOwnsContent(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to check content owned by user", "error", err, "user_id", id)
+		writeDeleteError(w, "Error deleting user")
+		return
+	}
+	if owns {
+		writeDeleteError(w, i18n.T(h.deleteLang(r), "users.delete_owns_content"))
+		return
 	}
 
 	// Delete user
 	err = h.queries.DeleteUser(r.Context(), id)
 	if err != nil {
 		slog.Error("failed to delete user", "error", err)
-		h.sendDeleteError(w, "Error deleting user")
+		writeDeleteError(w, "Error deleting user")
 		return
 	}
 
@@ -858,6 +866,17 @@ func (h *UsersHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		owns, err := h.userOwnsContent(r.Context(), id)
+		if err != nil {
+			slog.Error("failed to check content owned by user for bulk delete", "error", err, "user_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting user"})
+			continue
+		}
+		if owns {
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: i18n.T(h.deleteLang(r), "users.delete_owns_content")})
+			continue
+		}
+
 		if err := h.queries.DeleteUser(r.Context(), id); err != nil {
 			slog.Error("failed to bulk delete user", "error", err, "user_id", id)
 			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting user"})
@@ -873,11 +892,21 @@ func (h *UsersHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	writeBulkActionSuccess(w, deleted, failed)
 }
 
-// sendDeleteError sends an error response for delete operations.
-func (h *UsersHandler) sendDeleteError(w http.ResponseWriter, message string) {
-	w.Header().Set("HX-Reswap", "none")
-	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
-	w.WriteHeader(http.StatusBadRequest)
+// userOwnsContent reports whether rows still name the user in a column that
+// restricts deleting them: pages, versions, media, API keys, webhooks,
+// scheduled tasks and the AI-access setting of a page.
+func (h *UsersHandler) userOwnsContent(ctx context.Context, id int64) (bool, error) {
+	owned, err := h.queries.CountUserOwnedContent(ctx, id)
+	return owned > 0, err
+}
+
+// deleteLang is the language of the delete refusals; tests build the handler
+// without a renderer.
+func (h *UsersHandler) deleteLang(r *http.Request) string {
+	if h.renderer == nil {
+		return i18n.GetDefaultLanguage()
+	}
+	return h.renderer.GetAdminLang(r)
 }
 
 // MaxBioLength is the maximum allowed length for a user bio.

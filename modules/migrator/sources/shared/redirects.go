@@ -7,8 +7,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 
+	"github.com/olegiv/ocms-go/internal/contentpath"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -51,48 +51,6 @@ func RedirectPathOccupied(ctx context.Context, queries *store.Queries, sourcePat
 // trailing "*" that does not follow a slash is treated as a prefix match, so
 // "/news*" also owns "/news" and "/newsletter".
 func WildcardRedirectMatchesPath(pattern, requestPath string) bool {
-	if strings.HasSuffix(pattern, "*") && !strings.HasSuffix(pattern, "**") {
-		prefix := strings.TrimSuffix(pattern, "*")
-		if !strings.HasSuffix(prefix, "/") {
-			requestPath = strings.TrimSuffix(requestPath, "/")
-			prefixWithoutSlash := strings.TrimSuffix(prefix, "/")
-			return requestPath == prefixWithoutSlash || strings.HasPrefix(requestPath, prefix)
-		}
-	}
-	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
-	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
-	return wildcardRedirectPartsMatch(patternParts, requestParts, 0, 0)
-}
-
-// wildcardRedirectPartsMatch walks pattern and request segments in step,
-// branching on "**" so it can consume any number of remaining segments.
-func wildcardRedirectPartsMatch(pattern, request []string, patternIndex, requestIndex int) bool {
-	if patternIndex >= len(pattern) {
-		return requestIndex >= len(request)
-	}
-	if requestIndex >= len(request) {
-		for ; patternIndex < len(pattern); patternIndex++ {
-			if pattern[patternIndex] != "**" {
-				return false
-			}
-		}
-		return true
-	}
-	switch pattern[patternIndex] {
-	case "*":
-		return wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
-	case "**":
-		if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex) {
-			return true
-		}
-		for end := requestIndex + 1; end <= len(request); end++ {
-			if wildcardRedirectPartsMatch(pattern, request, patternIndex+1, end) {
-				return true
-			}
-		}
-		return false
-	default:
-		return pattern[patternIndex] == request[requestIndex] &&
-			wildcardRedirectPartsMatch(pattern, request, patternIndex+1, requestIndex+1)
-	}
+	matched, _ := contentpath.MatchRedirect(requestPath, pattern, true)
+	return matched
 }

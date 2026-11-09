@@ -13,22 +13,17 @@ import (
 	"testing"
 )
 
-// TestUnguardedPublishPageStaysInImporters fails when code outside the
-// Developer and Migrator modules calls the store's PublishPage, which
-// publishes a page whatever its status. Those modules publish pages they
-// have just created. Everywhere else a page is published on the strength of
-// a status read earlier, and the unguarded update published it again after
-// the scheduler had, sending page.published twice (2026-10 audit backlog).
-// Use PublishUnpublishedPage or PublishScheduledPage, which change only a
-// page that still has the status read.
+// TestPagePublicationUsesLifecycleGuards forbids the store's unconditional
+// PublishPage query. Imports and generators now set initial publication fields
+// in the atomic insert. Existing pages use PublishUnpublishedPage or
+// PublishScheduledPage so racing editor/scheduler actions cannot publish twice.
 //
 // Bug state: call h.queries.PublishPage in PagesHandler.TogglePublish and
 // this names it.
-func TestUnguardedPublishPageStaysInImporters(t *testing.T) {
+func TestPagePublicationUsesLifecycleGuards(t *testing.T) {
 	root := filepath.Join("..", "..")
-	allowed := []string{"modules/developer/", "modules/migrator/"}
 	fset := token.NewFileSet()
-	calls := 0
+	guarded := 0
 	err := walkRepoFiles(root, func(rel string) bool {
 		return strings.HasSuffix(rel, ".go") && !strings.HasSuffix(rel, "_test.go") && !strings.Contains(rel, "/testdata/")
 	}, func(path, rel string) error {
@@ -42,16 +37,15 @@ func TestUnguardedPublishPageStaysInImporters(t *testing.T) {
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
-			if !ok || calledName(call) != "PublishPage" {
+			if !ok {
 				return true
 			}
-			calls++
-			for _, prefix := range allowed {
-				if strings.HasPrefix(rel, prefix) {
-					return true
-				}
+			switch calledName(call) {
+			case "PublishUnpublishedPage", "PublishScheduledPage":
+				guarded++
+			case "PublishPage":
+				t.Errorf("%s calls PublishPage, which publishes a page whatever its status; use PublishUnpublishedPage or PublishScheduledPage", fset.Position(call.Pos()))
 			}
-			t.Errorf("%s calls PublishPage, which publishes a page whatever its status; use PublishUnpublishedPage or PublishScheduledPage", fset.Position(call.Pos()))
 			return true
 		})
 		return nil
@@ -59,7 +53,7 @@ func TestUnguardedPublishPageStaysInImporters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if calls == 0 {
-		t.Fatal("found no PublishPage call at all, not even in the importers; the scan is broken")
+	if guarded == 0 {
+		t.Fatal("found no guarded publication call; the scan is broken")
 	}
 }

@@ -119,19 +119,19 @@ func TestSanitizeCustomCSS(t *testing.T) {
 			want:  ".st-btn:hover { background: #123456; } a { color: red; }",
 		},
 		{
-			name:  "closing style tag is stripped",
+			name:  "closing style tag is escaped",
 			input: "body{}</style><script>alert(1)</script>",
-			want:  "body{}><script>alert(1)</script>",
+			want:  `body{}<\/style><script>alert(1)<\/script>`,
 		},
 		{
 			name:  "closing style tag is case-insensitive",
 			input: "body{}</StYlE ><script>x</script>",
-			want:  "body{} ><script>x</script>",
+			want:  `body{}<\/StYlE ><script>x<\/script>`,
 		},
 		{
 			name:  "closing style tag without closing bracket",
 			input: "body{}</style",
-			want:  "body{}",
+			want:  `body{}<\/style`,
 		},
 		{
 			name:  "empty input",

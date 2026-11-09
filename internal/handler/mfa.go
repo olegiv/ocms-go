@@ -154,12 +154,16 @@ func (h *AuthHandler) grantSession(r *http.Request, user store.User, secondFacto
 		return fmt.Errorf("renewing the session token: %w", err)
 	}
 	h.clearPendingSignIn(ctx)
+	if lang := middleware.AdminLangPreference(r, h.sessionManager); lang != "" {
+		h.renderer.SetAdminLang(r, lang)
+	}
 
 	// Store user ID in session along with the user's current session_version
 	// so the auth middleware can detect if the credential is rotated under us.
 	h.sessionManager.Put(ctx, middleware.SessionKeyUserID, user.ID)
 	h.sessionManager.Put(ctx, middleware.SessionKeyUserSessionVersion, user.SessionVersion)
 	h.sessionManager.Put(ctx, middleware.SessionKeyMFAVerified, secondFactor != "")
+	h.sessionManager.Put(ctx, middleware.SessionKeyAuthenticatedAt, time.Now().UnixNano())
 
 	metadata := map[string]any{"email": user.Email}
 	if secondFactor != "" {
@@ -234,7 +238,7 @@ func (h *AuthHandler) LoginMFA(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.renderer.SetFlash(r, i18n.T(lang, "auth.welcome_back", user.Name), "success")
 	}
-	http.Redirect(w, r, loginDestination(user.Role), http.StatusSeeOther)
+	http.Redirect(w, r, h.postLoginDestination(r.Context(), user.Role), http.StatusSeeOther)
 }
 
 // flashRecoveryCodeUsed records a sign-in with a recovery code and tells the
@@ -416,7 +420,7 @@ func (h *AuthHandler) LoginMFASetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setNoStore(w)
-	renderTempl(w, r, adminviews.RecoveryCodesPage(h.authPageData(r, "mfa.recovery_codes_title"), enrolled.RecoveryCodes, loginDestination(user.Role)))
+	renderTempl(w, r, adminviews.RecoveryCodesPage(h.authPageData(r, "mfa.recovery_codes_title"), enrolled.RecoveryCodes, h.postLoginDestination(r.Context(), user.Role)))
 }
 
 // accountPageContext is the page context of the account pages.
@@ -479,6 +483,18 @@ func (h *AuthHandler) Security(w http.ResponseWriter, r *http.Request) {
 	}
 	if status.Enrolled {
 		data.EnrolledAt = h.renderer.FormatDateTimeLocale(status.EnrolledAt, pc.AdminLang)
+	}
+	if h.oauth != nil {
+		data.OAuthEnabled = true
+		grants, err := h.oauth.ListGrants(r.Context(), user.ID)
+		if err != nil {
+			logAndInternalError(w, "failed to load OAuth connections", "error", err)
+			return
+		}
+		for _, grant := range grants {
+			data.OAuthGrants = append(data.OAuthGrants, accountviews.OAuthGrant{
+				ID: grant.ID, Name: grant.ClientName, ClientID: grant.ClientID, Scopes: grant.Scopes})
+		}
 	}
 	renderTempl(w, r, accountviews.SecurityPage(pc, data))
 }

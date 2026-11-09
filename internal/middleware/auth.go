@@ -11,6 +11,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync/atomic"
 
 	"github.com/alexedwards/scs/v2"
@@ -42,6 +43,11 @@ const (
 	// SessionKeyMFAVerified is true on a session whose sign-in passed a
 	// second factor.
 	SessionKeyMFAVerified = "mfa_verified"
+	// SessionKeyAuthenticatedAt records a completed password/MFA sign-in in Unix nanoseconds.
+	SessionKeyAuthenticatedAt = "authenticated_at"
+	// OAuth return paths are server-created, relative paths, never client redirect URIs.
+	SessionKeyOAuthReturnTo    = "oauth_return_to"
+	SessionKeyOAuthReauthAfter = "oauth_reauth_after"
 )
 
 // mfaRequired mirrors OCMS_REQUIRE_MFA for isSessionStale.
@@ -400,14 +406,25 @@ func SetSessionManager(sm *scs.SessionManager) {
 	globalSessionManager = sm
 }
 
-// GetAdminLang retrieves the admin UI language preference from the session.
-// Falls back to Accept-Language header, then database default language.
-func GetAdminLang(r *http.Request) string {
-	// First, check session for saved preference
-	if globalSessionManager != nil {
-		if lang := globalSessionManager.GetString(r.Context(), SessionKeyAdminLang); lang != "" && i18n.IsSupported(lang) {
-			return lang
+// AdminLangPreference returns the explicit UI preference. A choice made
+// before sign-in overrides any older language stored in a session.
+func AdminLangPreference(r *http.Request, sm *scs.SessionManager) string {
+	if cookie, err := r.Cookie(AdminLanguageCookieName); err == nil && i18n.IsSupported(cookie.Value) {
+		return strings.ToLower(cookie.Value)
+	}
+	if sm != nil {
+		if lang := sm.GetString(r.Context(), SessionKeyAdminLang); i18n.IsSupported(lang) {
+			return strings.ToLower(lang)
 		}
+	}
+	return ""
+}
+
+// GetAdminLang uses an explicit UI preference, then Accept-Language and the
+// database default.
+func GetAdminLang(r *http.Request) string {
+	if lang := AdminLangPreference(r, globalSessionManager); lang != "" {
+		return lang
 	}
 	// Fall back to browser's Accept-Language header
 	if acceptLang := r.Header.Get("Accept-Language"); acceptLang != "" {

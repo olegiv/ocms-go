@@ -124,8 +124,8 @@ templ frontendBaseLayout(base BaseTemplateData) {
 				@templ.Raw(string(base.ModuleBodyTopHTML))
 			}
 			{ children... }
-			<!-- Alpine.js -->
-			<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-FYLKjwG3aohNhNZoVG8sY/5ntunm+MqylL90Q+rT3OM7AwV9/BKFjk/RjoIpIgsI" crossorigin="anonymous"></script>
+			<!-- Alpine.js CSP build -->
+			<script nonce={ templ.GetNonce(ctx) } defer src={ utils.ScriptURL("/static/dist/js/alpine.min.js") } integrity="sha384-Q4UOujiwqAb/jTt3ki4pdkETk4I3rIFQX8h271PLI41okj/YIKY7IQQFMw73wkrX" crossorigin="anonymous"></script>
 			<!-- Prism.js syntax highlighting -->
 			<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/prism-bundle.min.js") } integrity="sha384-/HRXpyLsWgi91NKkl3jPRfbRhgj2vlv4f6wwxcmGEe9hKePmXqpOaPf9B1uk1jeL" crossorigin="anonymous"></script>
 			<!-- Image lightbox -->

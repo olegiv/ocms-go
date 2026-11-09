@@ -20,6 +20,8 @@ function safeRedirectTarget(raw) {
     }
 }
 
+document.addEventListener('alpine:init', () => Alpine.data('mediaDropzone', mediaDropzone));
+
 function mediaDropzone() {
     return {
         // Common state

@@ -1,0 +1,23 @@
+{
+  "artifact_state": "Saved as an unscheduled production draft",
+  "language_code": "en",
+  "page_type": "post",
+  "status": "draft",
+  "scheduled_at": null,
+  "title": "From an AI draft to human review in oCMS",
+  "slug": "ocms-ai-drafts-human-review",
+  "summary": "A staging walkthrough of MCP draft authoring, cross-app continuation, linked translations, revision previews and human publication in oCMS.",
+  "meta_title": "AI drafts and human editorial review in oCMS",
+  "meta_description": "How oCMS connects AI drafts, linked translations and revision previews with human review, demonstrated with published examples on staging.",
+  "meta_keywords": "oCMS, MCP, AI content, editorial review, multilingual CMS, Claude, ChatGPT, Codex",
+  "canonical_url": "",
+  "body_file": "article-draft.html",
+  "local_figure": "assets/editorial-workflow.svg",
+  "featured_image_id": null,
+  "og_image_id": null,
+  "taxonomy": "Uses existing categories and tags",
+  "media": "The workflow illustration supplies the inline and featured image. The article displays the inline copy.",
+  "evidence": "r17-acceptance.md",
+  "scope": "Staging candidate report with acceptance results tied to their tested builds",
+  "publication_gate": "Editorial review and explicit approval of production publication"
+}

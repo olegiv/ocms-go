@@ -187,6 +187,8 @@ templ WidgetsPage(pc *PageContext, data WidgetsViewData) {
 					</div>
 				</div>
 				<script nonce={ templ.GetNonce(ctx) }>
+				document.addEventListener('alpine:init', () => Alpine.data('widgetsManager', widgetsManager));
+
 				function widgetsManager() {
 					return {
 						showAddModal: false,

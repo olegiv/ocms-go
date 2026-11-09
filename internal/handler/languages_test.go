@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -370,6 +371,18 @@ func TestLegacyLanguageRenamePropagatesDenormalizedCodes(t *testing.T) {
 	if renamed, err := queries.GetLanguageByCode(ctx, "fr"); err != nil || renamed.ID != legacy.ID {
 		t.Errorf("renamed language = %+v, err=%v", renamed, err)
 	}
+	page, err := queries.GetPageBySlug(ctx, "legacy-page")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Revision != 2 {
+		t.Fatalf("language rename did not advance revision: %d", page.Revision)
+	}
+	version, err := queries.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{PageID: page.ID, Revision: sql.NullInt64{Int64: 2, Valid: true}})
+	if err != nil || version.Legacy || !strings.Contains(version.SnapshotJson.String, `"language_code":"fr"`) {
+		t.Fatalf("language snapshot: %+v %v", version, err)
+	}
+
 }
 
 func TestLanguageDelete(t *testing.T) {

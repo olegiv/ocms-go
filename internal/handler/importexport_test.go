@@ -13,7 +13,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"html"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -195,12 +197,11 @@ func TestImportExportHandlerRejectsMediaFilesForJSONSession(t *testing.T) {
 	if err := h.stageImportPayload(req.Context(), encoded); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { h.discardStagedImport(req.Context()) })
 
 	recorder := httptest.NewRecorder()
 	h.Import(recorder, req)
-	if message := sm.GetString(req.Context(), "flash_error"); !strings.Contains(message, "media file import requires a ZIP archive") {
-		t.Fatalf("flash_error = %q", message)
-	}
+	assertImportErrorAlert(t, recorder, "Import failed: media file import requires a ZIP archive")
 	if _, staged, err := h.loadStagedImport(req.Context()); err != nil || !staged {
 		t.Fatalf("rejected JSON payload was removed from the staging area (staged=%v, err=%v)", staged, err)
 	}
@@ -210,6 +211,118 @@ func TestImportExportHandlerRejectsMediaFilesForJSONSession(t *testing.T) {
 	}
 	if pageCount != 0 {
 		t.Fatalf("imported page count = %d, want 0", pageCount)
+	}
+}
+
+func assertImportErrorAlert(t *testing.T, recorder *httptest.ResponseRecorder, message string) {
+	t.Helper()
+	response := recorder.Body.String()
+	if recorder.Code != http.StatusOK || !strings.Contains(response, `class="alert alert-error alert-animated"`) ||
+		!strings.Contains(response, `<span class="alert-message">`+html.EscapeString(message)+`</span>`) {
+		t.Fatalf("response status %d did not render the error alert %q", recorder.Code, message)
+	}
+}
+
+func TestImportInvalidJSONRendersErrorOnce(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	renderer, err := render.New(render.Config{TemplatesFS: os.DirFS("../../web/templates"), SessionManager: sm, DB: db, IsDev: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewImportExportHandler(db, renderer, sm)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("import_file", "export.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(part, "<script>"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/admin/import/validate", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req = addUserToContext(requestWithSession(sm, req), &user)
+	recorder := httptest.NewRecorder()
+	h.ImportValidate(recorder, req)
+	assertImportErrorAlert(t, recorder, "Invalid JSON format: invalid character '<' looking for beginning of value")
+	if _, staged, err := h.loadStagedImport(req.Context()); err != nil || staged {
+		t.Fatalf("invalid upload was staged: staged=%v, error=%v", staged, err)
+	}
+
+	next := httptest.NewRequest(http.MethodGet, "/admin/import", nil).WithContext(req.Context())
+	recorder = httptest.NewRecorder()
+	h.ImportForm(recorder, next)
+	if strings.Contains(recorder.Body.String(), "Invalid JSON format:") {
+		t.Fatal("import error remained visible on the next request")
+	}
+}
+
+func TestImportStorageFaultRendersSafeError(t *testing.T) {
+	for _, format := range []string{"JSON", "ZIP"} {
+		t.Run(format, func(t *testing.T) {
+			db, sm := testHandlerSetup(t)
+			user := createTestAdminUser(t, db)
+			renderer, err := render.New(render.Config{TemplatesFS: os.DirFS("../../web/templates"), SessionManager: sm, DB: db, IsDev: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			h := NewImportExportHandler(db, renderer, sm)
+			var diagnostics bytes.Buffer
+			h.logger = slog.New(slog.NewTextHandler(&diagnostics, nil))
+			if _, triggerErr := db.Exec(`CREATE TRIGGER fail_import_provenance BEFORE INSERT ON content_provenance
+				BEGIN SELECT RAISE(ABORT, 'fixture storage fault'); END`); triggerErr != nil {
+				t.Fatal(triggerErr)
+			}
+			payload, err := json.Marshal(transfer.ExportData{Version: transfer.ExportVersion, Pages: []transfer.ExportPage{{
+				ID: 1, Title: "Flash fixture", Slug: "flash-fixture", Status: "draft", AuthorEmail: user.Email,
+			}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if format == "ZIP" {
+				payload = metadataArchive(t, string(payload), false)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/admin/import", strings.NewReader("import_pages=on"))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req = addUserToContext(requestWithSession(sm, req), &user)
+			sm.Put(req.Context(), "import_is_zip", format == "ZIP")
+			if err := h.stageImportPayload(req.Context(), payload); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { h.discardStagedImport(req.Context()) })
+			recorder := httptest.NewRecorder()
+			h.Import(recorder, req)
+			assertImportErrorAlert(t, recorder, "The import could not be completed. Check the server log for details.")
+			if strings.Contains(recorder.Body.String(), "fixture storage fault") || !strings.Contains(diagnostics.String(), "fixture storage fault") {
+				t.Fatal("storage diagnostics must appear only in the log")
+			}
+			if _, err := store.New(db).GetPageBySlug(req.Context(), "flash-fixture"); !errors.Is(err, sql.ErrNoRows) {
+				t.Fatalf("storage fault did not roll back the page write: %v", err)
+			}
+		})
+	}
+}
+
+func TestImportDoesNotWritePrivateFlashKeys(t *testing.T) {
+	positions := token.NewFileSet()
+	file, err := parser.ParseFile(positions, "importexport.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for node := range ast.Preorder(file) {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || len(call.Args) != 3 {
+			continue
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		key, literal := call.Args[1].(*ast.BasicLit)
+		if ok && selector.Sel.Name == "Put" && literal && key.Kind == token.STRING && strings.HasPrefix(strings.Trim(key.Value, "\"`"), "flash") {
+			t.Errorf("%s writes %s directly. Use Renderer.SetFlash for an admin alert", positions.Position(call.Pos()), key.Value)
+		}
 	}
 }
 

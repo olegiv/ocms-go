@@ -161,7 +161,7 @@ Quick setup:
   OCMS_DO_SEED = "true"
 
 # Deploy
-fly deploy
+./.fly/scripts/deploy.sh
 
 # Optional: Set up scheduled reset
 # (Configure GitHub Actions or external cron)

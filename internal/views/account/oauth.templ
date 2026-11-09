@@ -1,0 +1,87 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package account
+
+import (
+	"github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+)
+
+// ConsentData is validated, escaped display data and a session-bound one-use token.
+type ConsentData struct {
+	Name, ClientID, ClientHost, RedirectHost, Nonce string
+	Scopes []string
+}
+
+// OAuthGrant is the minimal connection-management display model.
+type OAuthGrant struct { ID, Name, ClientID, Scopes string }
+
+templ OAuthConsent(pc *admin.PageContext, d ConsentData) {
+	@admin.AdminLayout(pc) {
+		@card.Card(card.Props{Class:"max-w-3xl"}) {
+			@card.Header() {
+				@card.Title() { { pc.T("oauth.consent_title") } }
+				@card.Description() { { pc.T("oauth.consent_description") } }
+			}
+			@card.Content() {
+				<p class="mb-4 text-lg font-semibold">{ d.Name }</p>
+				<dl class="mb-6 grid gap-3 [overflow-wrap:anywhere]">
+					<div><dt>{ pc.T("oauth.client_id") }</dt><dd>{ d.ClientID }</dd></div>
+					<div><dt>{ pc.T("oauth.client_host") }</dt><dd>
+						if d.ClientHost != "" {
+							{ d.ClientHost }
+						} else {
+							{ pc.T("oauth.local_registration") }
+						}
+					</dd></div>
+					<div><dt>{ pc.T("oauth.redirect_host") }</dt><dd>{ d.RedirectHost }</dd></div>
+					<div><dt>{ pc.T("account.name") }</dt><dd>{ pc.User.Name } ({ pc.User.Email })</dd></div>
+				</dl>
+				<p class="mb-2">{ pc.T("oauth.permissions") }</p>
+				<ul class="mb-6 list-disc pl-6">
+					for _, scope := range d.Scopes {
+						<li>{ pc.T("oauth.scope." + scope) } <code>{ scope }</code></li>
+					}
+				</ul>
+				<p class="mb-6 text-sm text-muted-foreground">{ pc.T("oauth.registered_name_note") }</p>
+				<form method="POST" action="/oauth/authorize" class="flex gap-3">
+					<input type="hidden" name="consent_token" value={ d.Nonce }/>
+					@button.Button(button.Props{Type:button.TypeSubmit,Attributes:templ.Attributes{"name":"decision","value":"allow"}}) {
+						{ pc.T("oauth.allow") }
+					}
+					@button.Button(button.Props{Type:button.TypeSubmit,Attributes:templ.Attributes{"name":"decision","value":"deny"},Variant:button.VariantOutline}) {
+						{ pc.T("oauth.deny") }
+					}
+				</form>
+			}
+		}
+	}
+}
+
+templ connectedApps(pc *admin.PageContext, grants []OAuthGrant) {
+	@card.Card(card.Props{Class:"mt-6 max-w-3xl"}) {
+		@card.Header() {
+			@card.Title() { { pc.T("oauth.connections") } }
+		}
+		@card.Content() {
+			if len(grants)==0 {
+				<p>{ pc.T("oauth.no_connections") }</p>
+			}
+			for _, grant := range grants {
+				<div class="mb-6 [overflow-wrap:anywhere]">
+					<p class="font-semibold">{ grant.Name }</p>
+					<p class="text-sm">{ grant.ClientID }</p>
+					<p class="my-2 text-sm">{ grant.Scopes }</p>
+					<form method="POST" action="/account/security/oauth/revoke">
+						<input type="hidden" name="grant_id" value={ grant.ID }/>
+						@button.Button(button.Props{Type:button.TypeSubmit,Variant:button.VariantDestructive}) {
+							{ pc.T("oauth.revoke") }
+						}
+					</form>
+				</div>
+			}
+		}
+	}
+}

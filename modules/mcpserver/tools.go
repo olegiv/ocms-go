@@ -9,12 +9,15 @@ import (
 	"log/slog"
 	"math"
 	"runtime/debug"
+	"slices"
 	"time"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	v2 "github.com/olegiv/ocms-go/internal/api/v2"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/oauth"
 )
 
 // Outcomes recorded in the per-call log line.
@@ -50,6 +53,7 @@ type callRecord struct {
 	// cause is the internal error behind an internal_error or cancelled
 	// outcome. It is logged, never sent to the client.
 	cause error
+	meta  mcp.Meta
 }
 
 // callRecordKey is the context key of the callRecord for the current call.
@@ -97,9 +101,10 @@ func callContext(ctx context.Context) (context.Context, context.CancelFunc) {
 // toolCall is what a tool handler knows about the call beyond its arguments.
 type toolCall struct {
 	// actor is who the v2 services see: the key with the drafts policy applied.
-	actor    v2.Actor
-	identity *identity
-	settings Settings
+	actor                     v2.Actor
+	identity                  *identity
+	settings                  Settings
+	clientName, clientVersion string
 }
 
 // toolFunc is the signature of a tool implementation. Handlers are methods on
@@ -123,11 +128,31 @@ func registerTool[In, Out any](fn toolFunc[In, Out]) func(*Module, *mcp.Server, 
 		if err != nil {
 			panic(fmt.Sprintf("tool %s: output schema: %v", spec.Name, err))
 		}
+		annotations := readOnlyAnnotations(spec.Title)
+		if spec.mutation != "" {
+			destructive := spec.mutation == mutationReplace
+			annotations.ReadOnlyHint = false
+			annotations.IdempotentHint = spec.mutation != mutationShare
+			annotations.DestructiveHint = &destructive
+		}
+		var meta mcp.Meta
+		if m.ctx != nil && m.ctx.OAuth != nil {
+			scope := spec.scope
+			if scope == "" {
+				scope = "mcp:access"
+			}
+			scopes := []string{model.PermissionMCPAccess}
+			if scope != model.PermissionMCPAccess {
+				scopes = append(scopes, scope)
+			}
+			meta = mcp.Meta{"securitySchemes": []map[string]any{{"type": "oauth2", "scopes": scopes}}}
+		}
 		mcp.AddTool(srv, &mcp.Tool{
+			Meta:         meta,
 			Name:         spec.Name,
 			Title:        spec.Title,
 			Description:  spec.Description,
-			Annotations:  readOnlyAnnotations(spec.Title),
+			Annotations:  annotations,
 			InputSchema:  inSchema,
 			OutputSchema: outSchema,
 		}, wrapTool(m, spec, fn))
@@ -139,10 +164,11 @@ func registerTool[In, Out any](fn toolFunc[In, Out]) func(*Module, *mcp.Server, 
 func readOnlyAnnotations(title string) *mcp.ToolAnnotations {
 	closedWorld := false
 	return &mcp.ToolAnnotations{
-		Title:          title,
-		ReadOnlyHint:   true,
-		IdempotentHint: true,
-		OpenWorldHint:  &closedWorld,
+		Title:           title,
+		ReadOnlyHint:    true,
+		IdempotentHint:  true,
+		OpenWorldHint:   &closedWorld,
+		DestructiveHint: &closedWorld,
 	}
 }
 
@@ -168,7 +194,7 @@ func wrapTool[In, Out any](m *Module, spec toolSpec, fn toolFunc[In, Out]) mcp.T
 		defer cancel()
 		defer func() {
 			if p := recover(); p != nil {
-				attrs := []any{"tool", spec.Name, "panic", fmt.Sprint(p), "stack", string(debug.Stack())}
+				attrs := []any{"tool", spec.Name, "panic", "recovered", "stack", string(debug.Stack())}
 				if id != nil {
 					attrs = append(attrs, "api_key_id", id.key.ID)
 				}
@@ -185,6 +211,14 @@ func wrapTool[In, Out any](m *Module, spec toolSpec, fn toolFunc[In, Out]) mcp.T
 			rec.outcome, rec.errorCode = outcomeUnauthenticated, codeUnauthorized
 			return nil, out, &toolError{Code: codeUnauthorized, Message: msgUnauthenticated}
 		}
+		if spec.scope != "" && !slices.Contains(id.scopes, spec.scope) {
+			rec.outcome, rec.errorCode = outcomeToolError, codeForbidden
+			if id.grantID != "" && m.ctx.OAuth != nil {
+				challenge := fmt.Sprintf("Bearer resource_metadata=%q, error=\"insufficient_scope\", scope=%q", m.ctx.OAuth.Issuer()+oauth.MetadataPath, spec.scope)
+				rec.meta = mcp.Meta{"mcp/www_authenticate": []string{challenge}}
+			}
+			return nil, out, &toolError{Code: codeForbidden, Message: "Additional permission required: " + spec.scope}
+		}
 
 		settings, refreshed := callCtx.Value(requestSettingsKey{}).(Settings)
 		if !refreshed {
@@ -192,6 +226,9 @@ func wrapTool[In, Out any](m *Module, spec toolSpec, fn toolFunc[In, Out]) mcp.T
 			settings = m.currentSettings()
 		}
 		call := &toolCall{actor: actorFor(id, settings), identity: id, settings: settings}
+		if client := req.ClientInfo(); client != nil {
+			call.clientName, call.clientVersion = clip(client.Name), clip(client.Version)
+		}
 		result, callErr := fn(m, callCtx, call, in)
 		if callErr == nil {
 			return nil, result, nil
@@ -232,7 +269,12 @@ func (m *Module) logToolCall(req *mcp.CallToolRequest, rec *callRecord, elapsed 
 		id, _ = identityFromRequest(req)
 	}
 	if id != nil {
-		attrs = append(attrs, "api_key_id", id.key.ID, "api_key_prefix", id.key.KeyPrefix)
+		attrs = append(attrs, "user_id", id.userID)
+		if id.grantID != "" {
+			attrs = append(attrs, "auth_type", "oauth", "grant_id", id.grantID, "oauth_client_id", id.clientID)
+		} else {
+			attrs = append(attrs, "auth_type", "api_key", "api_key_id", id.key.ID, "api_key_prefix", id.key.KeyPrefix)
+		}
 	}
 	if req != nil {
 		if client := req.ClientInfo(); client != nil {

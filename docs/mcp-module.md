@@ -5,8 +5,38 @@ other client of the [Model Context Protocol](https://modelcontextprotocol.io))
 read site content: they can search, list and read pages, media, tags and
 categories through typed tools.
 
-This first release is **read-only**. Every tool is marked read-only, and a
-drift test fails if a tool without that mark is registered.
+Content reads remain available under their existing policy. R1.5 adds opt-in
+owned draft creation/update/translation with `mcp:drafts`, retained retries,
+CAS, provenance and existing taxonomy/media. Publishing and deletion remain
+human actions. See [Draft authoring](draft-authoring.md) for exact contracts;
+[OAuth](oauth.md) records the completed R1.1 authentication acceptance and
+PHASE5 notes retain R1.5/R1.6 results. R1.7's latest verified staging build
+is `6c611040` (2026-11-05). Normal publication preserved the HTML and
+translation freshness. On `be0e9cc3`, translation review passed and the
+owner approved and manually
+published the component: final EN 27/9, RU 43/7 and DE 44/6 are Published,
+with both translations Current. See the
+[publication record](launch/r17-acceptance.md#human-staging-publication-and-final-demo--2026-11-05)
+and earlier [rollout record](launch/r17-acceptance.md#staging-translation-review-verification-on-be0e9cc3--2026-11-04).
+Earlier `ba044434` checks passed fresh Claude web/ChatGPT web OAuth/MFA
+reconnect, draft replay/conflict, share-policy and anonymous
+preview/revocation checks.
+The [upgrade record](launch/r17-acceptance.md#staging-upgrade-to-ba044434--2026-11-04)
+records exact identity and limits. The
+[final native/CLI follow-up](launch/r17-acceptance.md#final-native-and-cli-verification--2026-11-04)
+passed native-initiated Desktop reconnect and authoring plus both CLIs'
+OAuth/bearer authoring and credential lifecycle checks on the same SHA.
+Dependency revalidation found zero vulnerable imported Go packages/reachable
+symbols and zero npm findings, retaining the approved module-only OpenPGP
+warning.
+The [current acceptance record](launch/r17-acceptance.md) retains earlier web
+sharing/revocation and native/CLI multilingual draft results on `39d82c94`.
+The inline alt-text repair passed both web clients' resaves/readbacks and
+rendered previews on `16ac7161`. The focused `be0e9cc3` rollout did not
+repeat GUI/native/CLI reconnect, dependency, sharing or proxy-error checks;
+earlier results retain their tested builds. The final demo, editor
+verification and production draft are recorded in the
+[release decisions](launch/release-decisions.md).
 
 ## Features
 
@@ -17,17 +47,23 @@ drift test fails if a tool without that mark is registered.
   ([`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk)
   v1.8.0). It speaks protocol versions `2026-07-28`, `2025-11-25`,
   `2025-06-18`, `2025-03-26` and `2024-11-05`.
-- **10 read-only tools** that wrap the REST v2 services. REST and MCP share one
+- **21 registrations** over core authoring and REST v2 services (14 existing reads, six draft operations and explicit share issuance). Existing content tools share one
   set of visibility rules, validation and caching, and the tool input schemas
   come from the same struct tags as the REST parameters.
 - **API key authentication.** Keys need the `mcp:access` permission and are
   subject to every API key policy, including CIDR allowlists, expiry, maximum
   lifetime and IP-change revocation.
+- **Optional OAuth.** `OCMS_OAUTH_ENABLED=true` enables browser authorization,
+  fresh password/MFA sign-in, scoped consent, rotating refresh and account
+  revocation. The default remains off. The key or grant owner must currently
+  be an editor or admin; OAuth permissions also follow current grant scopes
+  and account credential version.
 - **Drafts are hidden by default.** An agent can see a draft only if an admin
   turns the drafts policy on **and** the agent's key holds `pages:read`.
 - **Admin page** at `/admin/mcp`. It shows the endpoint and ready-made client
   configuration, and holds the drafts policy, instructions for agents, the tool
-  catalog and the keys that have MCP access.
+  catalog and the connected-apps overview (OAuth connections and the API keys
+  that have MCP access, paginated; there is no separate API key table).
 - **Server card.** `/.well-known/mcp/server-card.json` advertises the endpoint
   while the module is active.
 - **Structured logs:** one line per dispatched tool call, including calls the
@@ -45,7 +81,8 @@ upgrade never opens a new remote endpoint on its own.
    (`mcp:access`). That alone lets agents read published content. Add
    **Pages → Read pages, including unpublished drafts** (`pages:read`) only if
    agents should see drafts (see below).
-3. Configure the client (see [Connecting clients](#connecting-clients)). The
+3. Configure the client (see [Connecting clients](#connecting-clients)), or
+   enable [browser OAuth](oauth.md). The
    admin page at **Admin → Modules → MCP Server** (`/admin/mcp`) shows ready-made
    snippets for the endpoint.
 
@@ -156,9 +193,13 @@ bearer headers. OAuth connections reserve the `Authorization` header, so use
 
 | Tool | Arguments | REST v2 counterpart | Returns |
 |---|---|---|---|
+| `get_authoring_context` | `brief`, `references`, `language_code`, `preset`, `task`, paging offsets | — | Bounded references with revisions, guidance and existing taxonomy/images/link choices |
+| `get_page_draft_schema` | — | — | Strict draft schemas and localized issue catalog |
+| `get_style_guide` | `language_code` | — | Editorial guide with fallback identity |
+| `list_presets` | `language_code` | — | Seeded article presets and language overrides |
 | `get_site_info` | — | `GET /api/v2/auth` | Site name, description, URL and default language; active languages; the key's name, prefix, permissions and expiry; whether drafts are visible; server details |
-| `search_pages` | `query` (1–200 chars), `page`, `per_page` (≤ 50) | — (MCP only) | Pages matching the words, each with a plain-text excerpt |
-| `list_pages` | `status`, `category_id`, `tag_id`, `page`, `per_page` (≤ 100), `include_taxonomy` | `GET /pages` | Page summaries without bodies, newest first |
+| `search_pages` | `query` (1–200 chars), `language_code`, `page`, `per_page` (≤ 50) | — (MCP only) | Pages matching the words, each with a plain-text excerpt |
+| `list_pages` | `status`, `language_code`, `category_id`, `tag_id`, `page`, `per_page` (≤ 100), `include_taxonomy` | `GET /pages` | Page summaries without bodies, newest first |
 | `get_page` | `id` **or** `slug`, `body_format` (`html` \| `markdown`) | `GET /pages/{id}`, `GET /pages/slug/{slug}` | Page with body, SEO metadata, author name, categories and tags |
 | `list_media` | `type`, `folder_id`, `search`, `page`, `per_page` (≤ 100) | `GET /media` | Media items, newest first, without variants |
 | `get_media` | `id` | `GET /media/{id}` | One media item with variants, folder and translations |
@@ -189,8 +230,8 @@ Notes:
   because each response is produced for one API key.
 
 REST operations without a tool are listed in `restOperationsNotExposed`
-(`modules/mcpserver/catalog.go`), each with its reason: write operations are
-deferred to a later release, and `status` is covered by MCP discovery.
+(`modules/mcpserver/catalog.go`), each with its reason: direct REST mutations are covered by draft tools with a different contract,
+and `status` is covered by MCP discovery.
 `TestEveryRESTOperationHasMCPDecision` fails when REST gains an operation that
 has neither a tool nor an entry there.
 
@@ -228,8 +269,10 @@ the message can quote server data.
 |---|---|
 | Published pages | Always, to any key with `mcp:access` |
 | Drafts (and scheduled, unpublished pages) | Only if **Expose drafts to AI agents** is on **and** the key holds `pages:read` |
+| Own AI-editable unscheduled drafts in authoring context | Also available with `mcp:drafts`; this exception does not broaden generic page reads |
 | Media, tags, categories | Always; they are public reads in REST v2 too |
-| Users, forms, submissions, settings, API keys | Never; no tool exposes them |
+| Editorial guides/presets | Read-only guidance with `mcp:access` |
+| User directories, forms/submissions, general configuration, API key directories | No corresponding tool |
 
 When drafts are not visible, the server removes `pages:read` from the key's
 effective permissions before calling the page services. The services then apply
@@ -248,7 +291,7 @@ it is blocked in demo mode.
 | Setting | Default | Description |
 |---|---|---|
 | Expose drafts to AI agents | Off | Lets keys that hold `pages:read` read unpublished drafts |
-| Instructions for AI agents | Empty | Up to 4000 characters of guidance sent to every client in the `initialize` / `server/discover` response, after the built-in orientation |
+| Instructions for AI agents | Empty | Up to 2400 characters of guidance sent to every client in the `initialize` / `server/discover` response, after the built-in orientation |
 
 Saving rebuilds the MCP server first, stores the settings second and swaps the
 new server in last, one save at a time. A failure therefore never leaves the
@@ -290,12 +333,12 @@ while the module is active. It carries:
   "protocolVersion": "2026-07-28",
   "serverInfo": {"name": "ocms", "title": "oCMS", "version": "1.0.0"},
   "transport": {"type": "streamable-http", "endpoint": "https://example.com/api/mcp"},
-  "capabilities": {"tools": {}, "rest": {"openapi": "https://example.com/api/v2/openapi.json"}}
+  "capabilities": {"tools": {}, "prompts": {}, "resources": {}, "rest": {"openapi": "https://example.com/api/v2/openapi.json"}}
 }
 ```
 
 `serverInfo` is exactly what the endpoint reports at `initialize`;
-`TestServerCardMatchesInitialize` keeps the two in step. `protocolVersion`
+`TestServerCardMatchesInitialize` and authoring capability tests keep identity and capabilities in step. `protocolVersion`
 advertises the endpoint's preferred supported revision; `version` is the
 card format version. The card does not claim SEP-2127 compatibility.
 While the module is inactive, the card omits the schema and protocol fields
@@ -327,7 +370,7 @@ security headers) runs before all of it.
 
 | Limit | Value |
 |---|---|
-| Request body | 256 KiB |
+| Request body | 512 KiB wire cap; 2 MiB SDK hard ceiling |
 | Concurrent requests | 32 |
 | Per-IP rate | 20 requests/s, burst 40 |
 | Per-key rate | 10 requests/s, burst 30 |
@@ -368,15 +411,20 @@ Other controls:
   tools return is website data, not instructions. Agents should still be run
   with the usual care for untrusted input, and drafts should stay hidden unless
   you need them.
-- **Read-only scope:** no tool writes data. Write tools will come with their
-  own policy layer.
+- **Draft-only authoring:** admin opt-in, current `mcp:drafts`, user ownership, AI access, no schedule, retained request IDs and revision checks. No publish/delete tool exists.
 
 ## Logging
 
-The module logs through `slog` with `module=mcp`:
+The module logs through `slog` with `module=mcp`. Tool-call records now also
+include the verified `user_id` and `auth_type`; OAuth records use `grant_id`
+and `oauth_client_id` in place of API key fields. Arguments and credentials
+remain excluded. OAuth-enabled unauthenticated MCP requests use the SDK's
+`resource_metadata` challenge; key authentication retains its existing
+challenge. The following key-mode details still apply:
 
 | Event | Level | Fields |
 |---|---|---|
+| Prompt/resource read, one line per `prompts/get` or `resources/read` | Info; Warn for cancellation; Error for internal failures | method, allowlisted name, user/grant/key identity, outcome, duration, error code; no arguments, full URI, content or exception text |
 | Tool call, one line per dispatched `tools/call` | Info; Warn for `cancelled`; Error for `internal_error` | `tool`, `outcome`, `duration_ms`, `api_key_id`, `api_key_prefix`, `client_name`, `client_version`, `protocol_version`, `error_code`, plus `error` (the cause) for internal and cancelled calls |
 | Panic in the endpoint, an MCP method or a tool | Error | `panic`, `stack`, plus `tool`/`method`/`ip` |
 | Key without `mcp:access`, cross-origin request, in-flight cap reached | Warn | `api_key_id`/`api_key_prefix` or `ip`, `origin` |
@@ -403,6 +451,8 @@ Some requests never reach the tool-call log:
 
 - requests the SDK rejects before dispatching them, such as undecodable
   parameters or a mismatched protocol version or header;
+- OAuth tool requests rejected before dispatch with an HTTP 403 scope-upgrade
+  challenge; their HTTP status remains in the access log;
 - JSON-RPC batches, which are answered with a 400.
 
 Client-supplied values (an unknown tool's name, the client's name and version)
@@ -466,10 +516,10 @@ Drift tests in `modules/mcpserver/drift_test.go`:
 |---|---|
 | `TestEveryRESTOperationHasMCPDecision` | A REST v2 operation has neither a tool nor a documented reason |
 | `TestToolInputConstraintsMatchREST` | MCP argument constraints diverge from the REST parameters |
-| `TestEveryRegisteredToolIsReadOnly` | A registered tool lacks the read-only annotations |
+| `TestEveryRegisteredToolHasTheExpectedMutationClass` | Read/create/update/share annotations do not match the closed catalog |
 | `TestCatalogSpecsWellFormed` | A catalog entry has an invalid or duplicate name, lacks a title or description, or declares both or neither of a REST mapping and an MCP-only reason |
 | `TestTranslationsCompleteAndUsedKeysExist` | en/ru keys diverge, or code uses an `mcp.*` key that does not exist |
-| `TestServerCardMatchesInitialize` | The server card's `serverInfo` differs from what `initialize` reports |
+| `TestServerCardMatchesInitialize` | The server card's identity or tool/prompt/resource capabilities differ from `initialize` |
 
 `internal/api/v2/drift_test.go` adds `TestInternalErrorsKeepTheirCause`, which
 fails when a v2 service builds an internal error without its cause. Without the
@@ -488,13 +538,77 @@ for REST and MCP together:
 - **Draft status with category or tag.** `list_pages` rejects `status: "draft"`
   combined with `category_id` or `tag_id`; these combinations are unsupported.
 
-## Follow-ups
+## Draft authoring (R1.5 development)
 
-- Write tools for pages, taxonomy and media upload, with an editorial policy
-  layer (drafts-only and no-deletes defaults) and `transport=mcp` audit
-  metadata.
-- OAuth 2.1 authorization for individual user sign-in and remote connectors
-  without request header access. The bearer-token verifier is the seam it
-  plugs into.
-- MCP resources and prompts.
-- A language filter for list and search tools (needs v2 service support).
+Enable draft authoring in Admin → MCP Server and grant `mcp:drafts`. The
+new tools are `create_draft_page`, `update_draft_page`,
+`create_translation_draft`, `get_my_draft`, `list_my_drafts` and
+`get_translation_status`. R1.6 enables explicit revision-pinned
+`create_preview_link` with expiring bearer access and lifecycle revocation.
+Save/read results remain session-only; see [Editorial review](editorial-review.md).
+**Let AI clients create share links** (on by default) controls that tool.
+The server rechecks the setting inside the issuance transaction. With sharing
+off, `create_preview_link` returns `share_links_disabled`.
+Existing agent links also stop working while sharing, draft tools, the MCP
+module or AI (`OCMS_AI_DISABLED=true`) is disabled. Human-issued links
+continue to work under their usual rules. An agent link can work again if all
+four controls allow it before it expires. To revoke it permanently, use the
+page editor or the **Share links issued by AI clients** card while the MCP
+module is active. The card includes paused links and records a
+`Preview share link revoked` event on revocation.
+Three content mutations require stable UUID request
+IDs; updates require the last-read revision. Own reads do not depend on the
+separate general drafts policy. All writes use the shared atomic service.
+The per-user rolling quota is 60 new successful content operations per hour;
+retained retries spend no additional quota. A user may hold at most 50
+unpublished AI drafts: creating another is refused with the non-retryable code
+`draft_limit_reached`, while updates continue. Each AI draft keeps its newest 20
+revisions; the `core:ai_revision_cleanup` scheduler job removes older ones that
+nothing still pins or references. See [Draft authoring](draft-authoring.md).
+
+## Authoring context (R1.4 development)
+
+Read-only prompts, resources, tool equivalents, editorial guidance and language
+filters are implemented locally. See [Authoring context](authoring-context.md)
+for the exact reference/visibility rules, limits, compact prompt arguments,
+resource URIs, role/CSRF policy and verification scope. Page list/detail results
+include their current revision. Generic page reads retain their existing draft
+policy; authoring context also supports the caller's own opted-in plain drafts.
+
+OAuth acceptance is complete for R1.1; see [OAuth](oauth.md). Real CMS draft
+creation/update/translation tools have R1.5 staging results. R1.6 editorial
+review/previews are deployed on staging, with tested Claude/ChatGPT web flows
+and the [transport rollout checks](../.claude/docs/PHASE5.md#r16-preview-transport-fly-rollout--2026-11-02).
+Current native Desktop/CLI draft coverage is in the
+[R1.7 record](launch/r17-acceptance.md).
+This section grants no deployment or remote Git action.
+
+R1.7 adds the [connected-app overview](connected-apps.md): account-owned
+OAuth/API-key metadata and revocation at `/account/connected-apps`, with an
+administrator overview/revoke in `/admin/mcp`. Credential hashes/values are
+absent from these views. Core maintenance drains retired OAuth evidence in
+bounded transactions while retaining all active-family replay evidence.
+Management/retention is deployed on staging. The latest verified runtime
+is `6c611040`, including the verified editor preservation fix. The
+`be0e9cc3` translation review made RU 43/6 and DE 44/5 Current against
+EN 27/7. The owner published the demo, and the ordinary publication check
+passed on `6c611040`. The demo walkthrough and production draft are complete.
+Earlier client results retain their recorded builds.
+
+
+## Page authoring foundations (R1.2 development)
+
+R1.2 adds shared atomic page writes, user-owned AI-edit consent, complete
+revisions/provenance and retained idempotency in core. R1.5 exposes gated CMS draft tools through this shared path. REST updates to AI-editable
+pages now require `base_revision`. See [Page writes](page-writes.md) for the
+compatibility rule, writer inventory, local verification and migration notes.
+
+
+## Draft validation engine (R1.3 development)
+
+`internal/ai/draft` supplies separate strict create/update schemas, localized
+validation issues, safe Markdown/media conversion and explicit link policy.
+Metadata-only edits preserve stored HTML. The generic MCP schema builder is
+tested against these types; R1.5 page-authoring tools now consume these contracts.
+See [Draft contract](draft-contract.md) for the payload rules, issue catalog,
+resolver boundary and verification.

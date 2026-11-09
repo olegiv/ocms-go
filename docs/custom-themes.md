@@ -476,6 +476,9 @@ validation error; it matches whole options, so `Post` is not checked by `Postcar
 ```
 
 `contains` matches substrings of the joined value and checks such boxes wrongly.
+When loading a custom HTML theme, oCMS logs the theme and template location if
+it finds a `contains` condition that emits a `checked` attribute in the form or a
+partial it calls. Replace that condition with `checkedOption` as shown above.
 
 ## Translations
 
@@ -604,6 +607,15 @@ iterate on.
 - Wrap all code in an IIFE to avoid global namespace pollution
 - Use `DOMContentLoaded` for initialization
 - Keep dependencies minimal — Alpine.js and htmx are already loaded by oCMS
+
+The bundled `/static/dist/js/alpine.min.js` uses the Alpine CSP build in every
+environment.
+If your layout pins this asset's integrity hash, copy the updated script tag
+from the starter theme. Register components with `Alpine.data()`
+on `alpine:init` from a theme script and call their methods from Alpine
+attributes. Move inline function bodies, arrow functions, and browser-global
+access into those methods. See the [Alpine CSP build documentation](https://alpinejs.dev/advanced/csp)
+for the supported expression syntax.
 
 ## Overriding Core Themes
 

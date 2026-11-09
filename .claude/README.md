@@ -60,11 +60,9 @@ Creates and manages the module system.
 - Adds i18n translations for modules
 
 ### security-auditor
-Scans for vulnerabilities and ensures security best practices.
-- Runs govulncheck for Go dependency vulnerabilities
-- Runs npm audit for JS dependency vulnerabilities
-- Reviews security configurations (CSRF, auth, rate limiting)
-- Creates audit reports in .audit/ directory
+Reviews source, configuration and existing scanner output with read-only tools.
+Returns Markdown findings and suggested fixes to the caller, who saves any
+separate section reports.
 
 ### frontend-developer
 Creates and modifies admin UI components using templ and templUI.
@@ -97,7 +95,7 @@ Start development server with hot reload.
 Test API endpoints with curl requests.
 
 ### /security-audit
-Perform a comprehensive security audit and store reports in `.audit/`.
+Hands off to the terminal launcher, which runs the audit and saves its report.
 
 ### /code-quality
 Run code quality checks for the Go project, including CSP template safety and high-risk DOM-XSS sink checks (`innerHTML`, redirect sinks).
@@ -109,7 +107,7 @@ Clean build artifacts and temp files.
 Review changes and prepare a commit message draft.
 
 ### /commit-do
-Create a commit with the prepared commit message.
+Hand off the prepared commit to the terminal helper for final approval.
 
 ### /templui-add
 Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps.
@@ -132,7 +130,7 @@ Invoke agents with `@agent-name` followed by your task:
 
 @module-developer Create a notification module with email hooks
 
-@security-auditor Scan for vulnerabilities and create audit report
+@security-auditor Review the authentication code and return your findings
 
 @frontend-developer Build a confirmation dialog for page deletion using templUI
 ```
@@ -218,16 +216,37 @@ You can also run the Claude slash-command workflow directly from shell:
 ./scripts/codex/proxy-claude-command.sh /security-audit
 ```
 
-The proxy runs `claude -p` with `--permission-mode dontAsk` and a per-command
-`--allowedTools` list. Rules for tools that run project or package code are
-exact (`scripts/test-gate.sh`, `go vet ./...`, `golangci-lint run ./...`,
-`npm audit`); git commands are allowed by prefix, so `git commit` runs the
-repository's hooks and `git diff --output=<file>` can write a file. Anything
-else is denied without a prompt, so a check that needs another tool is skipped
-and reported by the command rather than run. This is a best-effort fence, not
-a sandbox. Avoid `--dangerously-skip-permissions`: these
-commands read diffs, logs and scan output, and text in them could otherwise
-steer the session into any shell command.
+`commit-prepare` tests the staged tree by default. To prepare an exact
+selection without changing the real index, use
+`./scripts/codex-commands commit-prepare -- FILE ...` with individual
+repository-relative files. Put `quality` or `q` before `--` to also run
+`golangci-lint` in the snapshot. Preparation runs the asset build and full
+test gate in a fresh snapshot with the recorded shared tooling revision.
+Claude drafts from the tested diff with tools disabled. The local variant
+uses the same gate and saves a draft for you to edit.
+
+`commit-do` and `commit-do-local` run the same terminal command. Stage the
+files listed at preparation, then review and approve the displayed draft by
+typing `YES`. The command verifies the prepared parent and staged tree,
+reruns the snapshot gate, and keeps Git's hooks enabled. An active commit hook
+other than the shipped read-only checks requires a guarded commit workflow.
+
+`make security-audit` saves Claude's final Markdown in a new
+`.audit/run-*/report.md`. `make security-audit-local` runs the dependency
+scanners directly and saves its summary and logs in its own run directory.
+Both launchers create a private, unique run directory and keep it at that
+path as audit history. A run has a completed summary once `report.md` exists,
+even if the dependency checks found issues. If a run is interrupted, any
+logs remain in its directory. Earlier runs, dated reports, scanner logs,
+`TODO.md` and section notes stay where they are so existing links still resolve.
+When you ask `@security-auditor` for a section review, save its returned
+Markdown yourself if the section needs a separate file. The proxy's available
+checks are listed in `scripts/codex/security-audit-proxy.md`.
+
+Code quality and audit sessions use `dontAsk` with command-specific tool
+permissions. The proxy reports checks that require manual execution.
+Run snapshot preparation only for trusted code. A fresh snapshot controls
+which source is tested, and the proxy allowlist is a best-effort guard.
 
 ## When to Use Which
 
@@ -274,10 +293,10 @@ steer the session into any shell command.
 
 ### Security Audit
 ```
-# Quick vulnerability scan
-/security-audit
+# Fresh dependency scan in a terminal
+make security-audit-local
 
-# Comprehensive security review
+# Read-only section review in Claude Code
 @security-auditor Review all authentication flows and check for vulnerabilities
 ```
 

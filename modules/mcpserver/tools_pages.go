@@ -36,9 +36,10 @@ var errDraftsHidden = &toolError{
 
 // SearchPagesInput is the input of search_pages.
 type SearchPagesInput struct {
-	Query   string `json:"query" minLength:"1" maxLength:"200" doc:"Words to look for in page titles and bodies."`
-	Page    int    `json:"page,omitempty" default:"1" minimum:"1" maximum:"21474836" doc:"1-indexed page number (max 21474836)."`
-	PerPage int    `json:"per_page,omitempty" default:"10" minimum:"1" maximum:"50" doc:"Results per page (max 50)."`
+	LanguageCode string `json:"language_code,omitempty" minLength:"2" maxLength:"10" doc:"Filter by active language code."`
+	Query        string `json:"query" minLength:"1" maxLength:"200" doc:"Words to look for in page titles and bodies."`
+	Page         int    `json:"page,omitempty" default:"1" minimum:"1" maximum:"21474836" doc:"1-indexed page number (max 21474836)."`
+	PerPage      int    `json:"per_page,omitempty" default:"10" minimum:"1" maximum:"50" doc:"Results per page (max 50)."`
 }
 
 // SearchPagesResult is the output of search_pages.
@@ -62,6 +63,7 @@ type SearchHit struct {
 // ListPagesInput is the input of list_pages. Filters and paging mirror the
 // query parameters of GET /api/v2/pages (drift-tested).
 type ListPagesInput struct {
+	LanguageCode    string `json:"language_code,omitempty" minLength:"2" maxLength:"10" doc:"Filter by active language code."`
 	Status          string `json:"status,omitempty" enum:"draft,published" doc:"Only pages with this status. Drafts require draft visibility (see get_site_info)."`
 	CategoryID      int64  `json:"category_id,omitempty" minimum:"1" doc:"Only pages in this category id."`
 	TagID           int64  `json:"tag_id,omitempty" minimum:"1" doc:"Only pages with this tag id."`
@@ -78,6 +80,7 @@ type ListPagesResult struct {
 
 // PageSummary is a page without its body.
 type PageSummary struct {
+	Revision        int64            `json:"revision" doc:"Current revision; refresh authoring context if it differs from a recorded reference."`
 	ID              int64            `json:"id"`
 	Title           string           `json:"title"`
 	Slug            string           `json:"slug"`
@@ -133,11 +136,18 @@ type AuthorRef struct {
 // (the public site search) or, when drafts are visible, a match over every
 // page as in the admin search.
 func (m *Module) searchPages(ctx context.Context, call *toolCall, in SearchPagesInput) (SearchPagesResult, error) {
+	if in.LanguageCode != "" {
+		if _, err := m.guidanceLanguage(ctx, GuidanceInput{LanguageCode: in.LanguageCode}); err != nil {
+			return SearchPagesResult{}, err
+		}
+	}
+
 	page, perPage := normalizePaging(in.Page, in.PerPage, defaultSearchPerPage)
 	params := service.SearchParams{
-		Query:  in.Query,
-		Limit:  perPage,
-		Offset: (page - 1) * perPage,
+		Query:        in.Query,
+		LanguageCode: in.LanguageCode,
+		Limit:        perPage,
+		Offset:       (page - 1) * perPage,
 	}
 	var (
 		results []service.SearchResult
@@ -193,6 +203,7 @@ func (m *Module) listPages(ctx context.Context, call *toolCall, in ListPagesInpu
 	}
 	page, perPage := normalizePaging(in.Page, in.PerPage, defaultPagesPerPage)
 	result, err := m.svc.pages.List(ctx, call.actor, pages.ListFilter{
+		LanguageCode:      in.LanguageCode,
 		Page:              page,
 		PerPage:           perPage,
 		Status:            in.Status,
@@ -284,6 +295,7 @@ func (m *Module) getPage(ctx context.Context, call *toolCall, in GetPageInput) (
 func summarizePage(p pages.Page, urls pageURLs) PageSummary {
 	return PageSummary{
 		ID:              p.ID,
+		Revision:        p.Revision,
 		Title:           p.Title,
 		Slug:            p.Slug,
 		Status:          p.Status,

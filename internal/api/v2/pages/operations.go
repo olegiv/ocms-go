@@ -27,12 +27,13 @@ func Register(api huma.API, svc *Service) {
 
 // ListPagesInput carries pagination, filter, and include flags.
 type ListPagesInput struct {
-	Page     int    `query:"page" default:"1" minimum:"1" doc:"1-indexed page number."`
-	PerPage  int    `query:"per_page" default:"20" minimum:"1" maximum:"100" doc:"Items per page (max 100)."`
-	Status   string `query:"status" enum:"draft,published" doc:"Filter by page status. Requires pages:read for non-published."`
-	Category int64  `query:"category" doc:"Restrict results to this category id."`
-	Tag      int64  `query:"tag" doc:"Restrict results to this tag id."`
-	Include  string `query:"include" doc:"Comma-separated relations to populate: author, categories, tags."`
+	LanguageCode string `query:"language_code" minLength:"2" maxLength:"10" doc:"Filter by active language code."`
+	Page         int    `query:"page" default:"1" minimum:"1" doc:"1-indexed page number."`
+	PerPage      int    `query:"per_page" default:"20" minimum:"1" maximum:"100" doc:"Items per page (max 100)."`
+	Status       string `query:"status" enum:"draft,published" doc:"Filter by page status. Requires pages:read for non-published."`
+	Category     int64  `query:"category" doc:"Restrict results to this category id."`
+	Tag          int64  `query:"tag" doc:"Restrict results to this tag id."`
+	Include      string `query:"include" doc:"Comma-separated relations to populate: author, categories, tags."`
 }
 
 // PagesListMeta carries pagination metadata in list responses.
@@ -63,11 +64,12 @@ func registerList(api huma.API, svc *Service) {
 	}, func(ctx context.Context, in *ListPagesInput) (*ListPagesOutput, error) {
 		actor := v2.ActorFromContext(ctx)
 		f := ListFilter{
-			Page:       in.Page,
-			PerPage:    in.PerPage,
-			Status:     in.Status,
-			CategoryID: in.Category,
-			TagID:      in.Tag,
+			LanguageCode: in.LanguageCode,
+			Page:         in.Page,
+			PerPage:      in.PerPage,
+			Status:       in.Status,
+			CategoryID:   in.Category,
+			TagID:        in.Tag,
 		}
 		f.IncludeAuthor, f.IncludeCategories, f.IncludeTags = parseIncludes(in.Include)
 		result, err := svc.List(ctx, actor, f)
@@ -188,7 +190,7 @@ func registerUpdate(api huma.API, svc *Service) {
 		Method:      http.MethodPut,
 		Path:        "/pages/{id}",
 		Summary:     "Update a page",
-		Description: "Requires the `pages:write` permission. Only provided fields are modified; nullable columns can be cleared by sending null.",
+		Description: "Requires the `pages:write` permission. Only provided fields are modified. Updates to AI-editable pages require `base_revision`; any supplied revision is enforced. A conflict returns `revision_conflict` with the current revision and changed field names.",
 		Tags:        []string{"Pages"},
 		Security:    v2.PagesWriteSecurity,
 	}, func(ctx context.Context, in *UpdatePageInput) (*PageOutput, error) {

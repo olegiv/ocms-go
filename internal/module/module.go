@@ -19,10 +19,12 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/oauth"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
 // ShutdownTimeout is how long Registry.ShutdownAll gives the modules'
@@ -60,10 +62,12 @@ func WaitWithin(wg *sync.WaitGroup, d time.Duration) bool {
 // added here but forgotten there fails silently at runtime rather than at
 // compile time.
 type Context struct {
+	Webhooks          webhook.EventDispatcher // Optional; writes dispatch only after commit.
 	DB                *sql.DB
 	Store             *store.Queries
 	Logger            *slog.Logger
 	Config            *config.Config
+	OAuth             *oauth.Service // Nil unless the administrator enables MCP OAuth.
 	Render            *render.Renderer
 	Events            *service.EventService
 	Hooks             *HookRegistry

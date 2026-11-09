@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Production is the default (I-10).** Set `OCMS_ENV` explicitly before
+  upgrading a site that left it unset or empty. Production can refuse
+  startup on flagged page HTML, including drafts, or missing CAPTCHA
+  verification even with no public forms. Rendering sanitizes legacy HTML,
+  and even a title-only editor save can persist the sanitized body. API
+  keys without expiry, with a lifetime over 90 days, or without a per-key
+  source CIDR fail authentication. Existing sessions end. Every account
+  must pass MFA at sign-in, and accounts without MFA must enroll. Sign-in
+  requires HTTPS because the session cookie becomes Secure `__Host-session`.
+  Production also enables HSTS. Startup refuses non-HTTPS URLs for active
+  webhooks, scheduled HTTP tasks and embed providers, and refuses
+  `OCMS_WEBHOOK_FORM_DATA_MODE=full` under the production defaults.
+  Check the MFA key, trusted proxies and required allowlists before switching.
+  See the [upgrade checklist](README.md#upgrading-sites-with-no-ocms_env).
+- **Stricter script CSP (L-7).** Production and staging omit `'unsafe-eval'`.
+  Custom themes using the shipped Alpine asset need CSP-compatible
+  expressions and its current integrity hash.
+
+### Added
+- **Connected apps and OAuth retention (R1.7).** Account-owned OAuth
+  and MCP API-key metadata/revocation, administrator oversight, and bounded
+  transactional cleanup that preserves active-family refresh-replay evidence.
+  Adds a bundled author workflow and prepared launch/acceptance documents.
+  The EN/RU/DE authoring matrix passed on `39d82c94`. Native-initiated
+  Desktop reconnect and Claude Code/Codex OAuth and bearer checks passed
+  on `ba044434`. The owner published the reviewed demo on staging, and
+  `6c611040` passed an ordinary publication save with both translations
+  Current. See `docs/launch/r17-acceptance.md` for build-specific results.
+- **Editorial review and previews (R1.6).** Review recorded provenance,
+  validation and claims by revision. Open session previews or create
+  expiring, revocable share links for a selected revision. Share tokens
+  travel in the URL fragment and are redeemed in a POST body.
+- Review an existing translation against the current source revision
+  from the editor and record its updated source basis and reviewer.
+- **Draft authoring (R1.5).** Opt-in owned draft creation, updates, linked
+  translations and private reads over MCP, with original-input retries, revision
+  checks, rolling user quotas and separate provenance. Removes compatibility
+  scratch tools/flag and returns session preview URLs. See
+  `docs/draft-authoring.md`.
+- **Authoring context (R1.4).** Database-only reference grounding with shared
+  frontend routing, recorded revisions, bounded existing taxonomy/media and
+  duplicate/overlap feedback. Adds editorial style guides/presets, three MCP
+  prompts, resource/tool parity and language filters. R1.5 consumes this context for CMS draft writes; see `docs/authoring-context.md`.
+- **Draft validation engine (R1.3).** Strict create/update inputs, localized
+  issues, safe Markdown with existing media references, explicit link policy,
+  loss-aware Markdown reads and metadata updates that preserve rich HTML.
+  Shared sanitization preserves explicit link relations through saves and
+  rendering. MCP page-authoring tools remain R1.5; see `docs/draft-contract.md`.
+- **Atomic page-write foundations (R1.2).** Complete page revisions and
+  provenance, editor conflict handling, owner/admin AI-edit consent, retained
+  idempotency and revision tracking across API, scheduler, imports and cleanup.
+  REST updates to AI-editable pages require `base_revision`. This is foundation
+  work; MCP page-authoring tools remain scheduled for R1.5. See
+  `docs/page-writes.md`.
+- **Opt-in MCP OAuth (R1.1).** Authorization code with S256 PKCE, scoped
+  browser consent after fresh password/MFA sign-in, issuer/resource discovery,
+  bounded client metadata and optional public-client registration. SQLite
+  stores only opaque credential hashes; atomic code redemption, refresh
+  rotation/reuse revocation and current account checks protect access.
+  Connections can be revoked from Account → Security. The development/staging compatibility probe used
+  for R1.1 acceptance was retired in R1.5. Existing API key policies remain in force.
+  R1.1 real-client acceptance is complete; see `docs/oauth.md` and the
+  current client matrix in `.claude/docs/PHASE5.md`.
+
+### Fixed
+- Preserve punctuation and localized text in inline-image alt attributes
+  through sanitization, draft reads and Markdown resaves. Both web clients
+  verified repaired EN/RU/DE drafts and rendered previews on `16ac7161`.
+- Preserve unchanged page HTML on status and metadata saves so publication
+  does not falsely mark translations stale. Verified on staging `6c611040`.
+- Resolve R1.7 audit and first-party NilAway findings: constrain custom CSS
+  rendering, ZIP imports, redirect resolution, OAuth client capacity, page
+  cache invalidation, API-key policy transactions and site-owner execution
+  of backup/process helpers. Hardening is deployed at `39d82c94`.
+- Reject malformed API-key permission arrays instead of retaining partial
+  permissions after JSON decoding fails or encounters a non-string entry.
+
 ## [0.31.0] - 2026-11-04 - Editor formatting and page-text search
 
 ### Added

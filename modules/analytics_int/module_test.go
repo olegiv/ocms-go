@@ -24,6 +24,12 @@ import (
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
 
+func TestSaveSettingsRejectsNilBeforeDatabaseAccess(t *testing.T) {
+	if err := New().saveSettings(nil); err == nil {
+		t.Fatal("saveSettings(nil) must fail without changing stored settings")
+	}
+}
+
 // testModule creates a module instance with test database.
 func testModule(t *testing.T, db *sql.DB) *Module {
 	t.Helper()

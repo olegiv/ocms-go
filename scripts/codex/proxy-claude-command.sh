@@ -7,6 +7,9 @@ Usage:
   ./scripts/codex/proxy-claude-command.sh /command [args...]
 
 Commands: /commit-prepare, /commit-do, /code-quality, /security-audit
+
+/code-quality runs the repository's strict lint check before Claude.
+Exit 1 means findings; exit 3 means the check could not run.
 EOT
 }
 
@@ -22,40 +25,49 @@ if [[ "$slash_command" != /* ]]; then
   slash_command="/$slash_command"
 fi
 
-# Each command runs with a fixed list of tools; anything else is denied
-# without a prompt (--permission-mode dontAsk), and the command reports the
-# check it could not run. The commands read diffs, logs and scan output, so a
-# session that may run any shell command can be talked into one by text it
-# reads. Rules for tools that run project or package code (go, the linters,
+# The /code-quality and /security-audit sessions use this tool allowlist.
+# The commit commands delegate to separate helpers below.
+# With --permission-mode dontAsk, a denied tool cannot prompt for approval.
+# Audit and lint sessions read diffs, logs and scan output, so a session
+# with unrestricted shell access can be influenced by the text it reads.
+# Rules for tools that run project or package code (go, the linters,
 # npm) are exact: a prefix such as "go test*" would also allow "go test -exec
 # <program>", "go env*" would allow "go env -w", and "npm audit*" would allow
-# "npm audit fix", which installs packages. The git rules stay prefixes:
-# "git commit" runs the repository's own hooks, and diff, log and show accept
-# --output=<file>, which writes a file. This is a best-effort fence, not a
-# sandbox.
+# "npm audit fix", which installs packages. Git/date argument rules keep a
+# space after the command name: "git diff *" must not allow "git difftool".
+# Explicit Git output-file and external-diff options are denied below.
+# Git configuration and attributes can still select helpers for reads.
+# This is a best-effort fence, not a sandbox.
 read_tools=(
-  Read Glob Grep Agent Skill TodoWrite
-  "Bash(git status*)" "Bash(git diff*)" "Bash(git log*)" "Bash(git show*)"
-  "Bash(git rev-parse*)" "Bash(git ls-files*)" "Bash(git write-tree*)"
-  "Bash(date*)" "Bash(go version)" "Bash(go env GOWORK)" "Bash(go env GOTOOLDIR)"
+  Read Glob Grep
+  "Bash(git status)" "Bash(git status *)" "Bash(git diff)" "Bash(git diff *)"
+  "Bash(git log)" "Bash(git log *)" "Bash(git show)" "Bash(git show *)"
+  "Bash(git rev-parse)" "Bash(git rev-parse *)" "Bash(git ls-files)" "Bash(git ls-files *)"
+  "Bash(git write-tree)" "Bash(git write-tree *)"
+  "Bash(date)" "Bash(date *)" "Bash(go version)" "Bash(go env GOWORK)" "Bash(go env GOTOOLDIR)"
   "Bash(grep *)"
 )
 check_tools=(
   "Bash(scripts/test-gate.sh)" "Bash(./scripts/test-gate.sh)"
-  "Bash(go vet ./...)" "Bash(go build ./...)" "Bash(gofmt -l *)"
+  "Bash(go vet ./...)" "Bash(go build ./...)" "Bash(gofmt -l .)"
   "Bash(staticcheck ./...)" "Bash(errcheck -ignoregenerated ./...)" "Bash(golangci-lint run ./...)"
   "Bash(golangci-lint version)"
-  "Bash(nilaway ./...)" "Bash(goimports -l *)" "Bash(govulncheck *)"
+  "Bash(nilaway ./...)" "Bash(goimports -l .)"
 )
+project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 tools=("${read_tools[@]}" "${check_tools[@]}")
 case "$slash_command" in
-  /code-quality | /commit-prepare) ;;
+  /code-quality) tools+=(Agent Skill TodoWrite) ;;
+  /commit-prepare)
+    cd "$project_dir"
+    exec "$project_dir/scripts/codex/commit-prepare.sh" --proxy "$@"
+    ;;
   /commit-do)
-    tools+=("Bash(git add -- *)" "Bash(git commit *)")
+    cd "$project_dir"
+    exec "$project_dir/scripts/codex/commit-do.sh" "$@"
     ;;
   /security-audit)
-    # No mv: a pattern such as "mv .audit/*" cannot stop a "../" target.
-    tools+=("Bash(npm audit)" "Bash(npm audit --json)" "Bash(npm outdated)" "Bash(mkdir -p .audit/*)" "Edit(.audit/**)")
+    tools+=("Bash(govulncheck ./...)" "Bash(govulncheck -json ./...)" "Bash(npm audit)" "Bash(npm audit --json)" "Bash(npm outdated)")
     ;;
   *)
     echo "Error: $slash_command is not a proxied command."
@@ -75,4 +87,73 @@ if [[ $# -gt 0 ]]; then
 fi
 
 echo "Proxying to Claude command: $prompt"
-exec claude --permission-mode dontAsk --allowedTools "${tools[@]}" -p "$prompt"
+# A shared command or local settings can also approve formatter invocations.
+# Deny the write flag even when another allow rule matches.
+denied_tools=('Bash(gofmt *-w*)' 'Bash(goimports *-w*)')
+# Match the option boundaries so --output-indicator-* and --extended-regexp
+# still work. Include the abbreviations accepted by git diff --no-index.
+for git_option in --output --ext --ext- --ext-d --ext-di --ext-dif --ext-diff; do
+  for quote in '' "'" '"'; do
+    denied_tools+=("Bash(git * $quote$git_option$quote)" "Bash(git * $quote$git_option$quote *)")
+  done
+done
+denied_tools+=('Bash(git * --output=*)')
+for quote in "'" '"'; do
+  denied_tools+=("Bash(git * $quote--output=*)" "Bash(git * $quote--output$quote=*)")
+done
+# Keep git ls-files -o (list untracked files) available.
+for git_read in diff log show; do
+  denied_tools+=("Bash(git $git_read -o*)" "Bash(git $git_read * -o*)")
+done
+if [[ "$slash_command" == /security-audit ]]; then
+  prompt="Perform the oCMS security audit. Scope notes: $*"
+  denied_tools+=('Bash(mkdir *)' 'Bash(mv *)')
+fi
+claude_args=(--permission-mode dontAsk --allowedTools "${tools[@]}" -p "$prompt" --disallowedTools "${denied_tools[@]}")
+if [[ "$slash_command" == /code-quality ]]; then
+  # The shared command's variable-based hook invocation is not auto-approved.
+  # Run the fixed local check here so dontAsk cannot silently omit it. This
+  # grants no extra shell or install permissions to the Claude session.
+  strict_hook="$project_dir/.claude/hooks/go-strict-lint.sh"
+  if [[ ! -x "$strict_hook" ]]; then
+    echo "Error: /code-quality requires executable .claude/hooks/go-strict-lint.sh; initialize .claude/shared and restore the hook link." >&2
+    exit 3
+  fi
+  echo "== Strict lint (touched Go files) =="
+  strict_status=0
+  cd "$project_dir"
+  "$strict_hook" --check || strict_status=$?
+  case "$strict_status" in
+    0) ;;
+    1)
+      echo "Error: strict lint found issues; fix them before rerunning /code-quality." >&2
+      exit 1
+      ;;
+    *)
+      echo "Error: strict lint could not run (exit $strict_status); /code-quality is incomplete." >&2
+      exit 3
+      ;;
+  esac
+  claude_args+=(--append-system-prompt 'The repository proxy already ran .claude/hooks/go-strict-lint.sh --check successfully (exit 0). Use that result for the strict touched-file lint step; do not rerun the fallback hook invocation. Use goimports -l . and gofmt -l . for formatter checks and exclude generated files from the findings. Continue with the remaining /code-quality checks and report any checks that cannot run.')
+fi
+if [[ "$slash_command" == /security-audit ]]; then
+  cd "$project_dir"
+  run_dir=$("$project_dir/scripts/codex/security-audit.sh" --prepare)
+  # Keep the report's destination under launcher control. The session
+  # produces Markdown on stdout and gets no file-editing or agent tools.
+  claude_args+=(--disable-slash-commands --tools 'Bash,Read,Glob,Grep' --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+    --append-system-prompt "$(cat "$project_dir/scripts/codex/security-audit-proxy.md")")
+  (
+    cd "$run_dir"
+    trap 'rm -f -- report.incomplete' EXIT
+    (cd "$project_dir" && claude "${claude_args[@]}") > report.incomplete
+    if [[ ! -s report.incomplete ]]; then
+      echo 'Claude returned no audit report.' >&2
+      exit 2
+    fi
+    mv -- report.incomplete report.md
+  )
+  printf 'Security audit report generated: %s/report.md\n' "$run_dir"
+  exit 0
+fi
+exec claude "${claude_args[@]}"

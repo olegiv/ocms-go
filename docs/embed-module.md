@@ -64,6 +64,11 @@ Public (rate-limited, origin-pinned):
 | POST | `/embed/dify/chat-messages` | Proxy Dify chat-messages API |
 | GET | `/embed/dify/messages/{messageID}/suggested` | Proxy Dify suggested-replies API |
 
+The public Dify chat stream shares the application's 30-second request
+deadline. The proxy also sets a 90-second upstream deadline, but it inherits
+the request context, so the 30-second cap takes precedence. A stream that is
+still sending data at that point is cut off and may end before its final event.
+
 ## Template Functions
 
 Themes call these from their base layout:

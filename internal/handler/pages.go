@@ -21,7 +21,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/review"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -78,6 +81,7 @@ func defaultPagesSort(_, _ string) (string, string) {
 
 // PagesHandler handles page management routes.
 type PagesHandler struct {
+	previewTTL            time.Duration
 	db                    *sql.DB
 	queries               *store.Queries
 	renderer              *render.Renderer
@@ -140,6 +144,7 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 
 // PagesListData holds data for the pages list template.
 type PagesListData struct {
+	ReviewStates       map[int64]store.GetPageReviewStateRow
 	Pages              []store.Page
 	PagePublicURLs     map[int64]string             // Canonical public URL by page ID; empty means not routable
 	PageTags           map[int64][]store.Tag        // Map of page ID to tags
@@ -169,7 +174,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get status filter from query string
 	statusFilter := r.URL.Query().Get("status")
 	// Allow "scheduled" as a special filter in addition to regular statuses
-	if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && !isValidPageStatus(statusFilter) {
+	if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && statusFilter != "ai_review" && !isValidPageStatus(statusFilter) {
 		statusFilter = ""
 	}
 
@@ -194,6 +199,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	listParams := store.ListPagesSortedParams{
 		SortField: sortField,
 		SortDir:   sortDir,
+		AIReview:  statusFilter == "ai_review",
 	}
 
 	if pageTypeFilter != "" {
@@ -206,19 +212,19 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		if languageFilter != "" {
 			listParams.LanguageCode = util.NullStringFromValue(languageFilter)
 		}
-		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && statusFilter != "ai_review" {
 			listParams.Status = util.NullStringFromValue(statusFilter)
 		}
 	case languageFilter != "":
 		listParams.LanguageCode = util.NullStringFromValue(languageFilter)
-		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && statusFilter != "ai_review" {
 			listParams.Status = util.NullStringFromValue(statusFilter)
 		}
 	case categoryFilter > 0:
 		listParams.CategoryID = sql.NullInt64{Int64: categoryFilter, Valid: true}
 	case statusFilter == "scheduled":
 		listParams.ScheduledOnly = true
-	case statusFilter != "" && statusFilter != "all":
+	case statusFilter != "" && statusFilter != "all" && statusFilter != "ai_review":
 		listParams.Status = util.NullStringFromValue(statusFilter)
 	}
 
@@ -244,6 +250,15 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reviewStates := make(map[int64]store.GetPageReviewStateRow, len(pages))
+	for _, listed := range pages {
+		state, e := h.queries.GetPageReviewState(r.Context(), listed.ID)
+		if e != nil {
+			http.Error(w, "Cannot load review counts", 500)
+			return
+		}
+		reviewStates[listed.ID] = state
+	}
 	// Fetch tags for all displayed pages
 	pageTags := batchFetchRelated(r.Context(), pages,
 		func(p store.Page) int64 { return p.ID },
@@ -319,6 +334,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	pagination.SortDir = sortDir
 
 	data := PagesListData{
+		ReviewStates:       reviewStates,
 		Pages:              pages,
 		PageTags:           pageTags,
 		PageCategories:     pageCategories,
@@ -339,6 +355,11 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.title"), pagesBreadcrumbs(lang))
+	for _, listed := range pages {
+		if listed.Status == "draft" {
+			data.PagePublicURLs[listed.ID] = sessionPreviewPath(listed)
+		}
+	}
 	viewData := convertPagesListViewData(data, h.renderer, lang)
 	renderTempl(w, r, adminviews.PagesListPage(pc, viewData))
 }
@@ -360,19 +381,23 @@ type FeaturedImageData struct {
 
 // PageFormData holds data for the page form template.
 type PageFormData struct {
-	Page          *store.Page
-	PublicURL     string
-	Tags          []store.Tag
-	Categories    []store.Category   // Selected categories for the page
-	AllCategories []PageCategoryNode // All categories for selection (with tree structure)
-	FeaturedImage *FeaturedImageData
-	OgImage       *FeaturedImageData
-	Aliases       []store.PageAlias // URL aliases for the page
-	Statuses      []string
-	PageTypes     []string
-	Errors        map[string]string
-	FormValues    map[string]string
-	IsEdit        bool
+	AIEditable       bool
+	CanManageAI      bool
+	BaseRevision     int64
+	ConflictRevision int64
+	Page             *store.Page
+	PublicURL        string
+	Tags             []store.Tag
+	Categories       []store.Category   // Selected categories for the page
+	AllCategories    []PageCategoryNode // All categories for selection (with tree structure)
+	FeaturedImage    *FeaturedImageData
+	OgImage          *FeaturedImageData
+	Aliases          []store.PageAlias // URL aliases for the page
+	Statuses         []string
+	PageTypes        []string
+	Errors           map[string]string
+	FormValues       map[string]string
+	IsEdit           bool
 	// Language and translation support
 	Language         *store.Language       // Current page language
 	AllLanguages     []store.Language      // All active languages for selection
@@ -520,6 +545,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Parse form input
 	input := parsePageFormInput(r)
+	input.FormValues["base_revision"] = r.FormValue("base_revision")
 
 	// Default to the default language if not specified
 	if input.LanguageCode == "" {
@@ -650,7 +676,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
-	})
+	}, h.formWrite(r, input, nil))
 	if errors.Is(err, errPageRouteTaken) {
 		// A language claimed the prefix between validation and this write.
 		flashError(w, r, h.renderer, redirectAdminPagesNew,
@@ -662,24 +688,6 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, redirectAdminPagesNew, "Error creating page")
 		return
 	}
-
-	// Create initial version
-	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
-		PageID:    newPage.ID,
-		Title:     input.Title,
-		Body:      normalizedBody,
-		ChangedBy: userID,
-		CreatedAt: now,
-	})
-	if err != nil {
-		slog.Error("failed to create page version", "error", err)
-		// Page was created but version failed - log but don't fail the request
-	}
-
-	// Save tags, categories, and aliases
-	h.savePageTags(r.Context(), newPage.ID, r.Form["tags[]"])
-	h.savePageCategories(r.Context(), newPage.ID, r.Form["categories[]"])
-	h.savePageAliases(r.Context(), newPage.ID, r.Form["aliases[]"])
 
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": newPage.ID, "slug": newPage.Slug})
@@ -765,7 +773,23 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	// Load language and translation info
 	langInfo := h.loadPageLanguageInfo(r.Context(), page)
 
+	access, accessErr := h.queries.GetPageAIAccess(r.Context(), id)
+	if accessErr != nil && !errors.Is(accessErr, sql.ErrNoRows) {
+		logAndHTTPError(w, "Cannot load AI access", http.StatusInternalServerError, "failed to load page AI access", "error", accessErr, "page_id", id)
+		return
+	}
+	user, userErr := h.queries.GetUserByID(r.Context(), middleware.GetUserID(r))
+	if errors.Is(userErr, sql.ErrNoRows) {
+		http.Error(w, "Account unavailable", http.StatusUnauthorized)
+		return
+	}
+	if userErr != nil {
+		logAndInternalError(w, "failed to load page editor account", "error", userErr, "page_id", id, "user_id", middleware.GetUserID(r))
+		return
+	}
+
 	data := PageFormData{
+		AIEditable: access.AiEditable, CanManageAI: page.AuthorID == user.ID || user.Role == model.RoleAdmin, BaseRevision: page.Revision,
 		Page:             &page,
 		PublicURL:        publicPagePath(r.Context(), h.queries, page),
 		Tags:             tags,
@@ -787,6 +811,12 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "pages.edit"), pagesEditBreadcrumbs(adminLang, page.Title, page.ID))
 	viewData := convertPageFormViewData(data, h.renderer, adminLang, h.sanitizePageHTML)
+	viewData.PublicURL = sessionPreviewPath(page)
+	viewData.Review, err = h.reviewPanel(r, page, page.Revision)
+	if err != nil {
+		logAndHTTPError(w, "Cannot load editorial review", http.StatusInternalServerError, "failed to load editorial review", "error", err, "page_id", id, "revision", page.Revision)
+		return
+	}
 	renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 }
 
@@ -804,16 +834,17 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existingPage, ok := h.requirePageWithRedirect(w, r, id)
-	if !ok {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id)) {
 		return
 	}
-
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id)) {
+	existingPage, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		h.preservePageEdits(w, r, id, fmt.Errorf("load page before editing: %w", err))
 		return
 	}
 
 	input := parsePageFormInput(r)
+	input.FormValues["base_revision"] = r.FormValue("base_revision")
 
 	// Auto-generate slug if empty
 	if input.Slug == "" {
@@ -869,32 +900,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		// Load all categories and preserve selected categories for re-rendering
-		allCategories, err := h.queries.ListCategories(r.Context())
-		if err != nil {
-			slog.Error("failed to list categories", "error", err)
-			allCategories = []store.Category{}
-		}
-		categoryTree := buildPageCategoryTree(allCategories, nil, 0)
-
-		data := PageFormData{
-			Page:          &existingPage,
-			PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
-			Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
-			Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
-			AllCategories: categoryTree,
-			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
-			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
-			Statuses:      ValidPageStatuses,
-			PageTypes:     ValidPageTypes,
-			Errors:        validationErrors,
-			FormValues:    input.FormValues,
-			IsEdit:        true,
-		}
-
-		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, id))
-		viewData := convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)
-		renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
+		h.renderEditFormErrors(w, r, existingPage, input, validationErrors, http.StatusOK)
 		return
 	}
 
@@ -918,6 +924,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		publishedAt = existingPage.PublishedAt
 	}
 	normalizedBody, removedMarkup := h.normalizePageBodyForStorage(rawBody)
+
+	// Forms and the sanitizer normalize textarea newlines. Preserve existing
+	// bytes if line endings are the only difference after the normal body
+	// policy, so unchanged saves retain their translation fingerprints.
+	if strings.ReplaceAll(normalizedBody, "\r\n", "\n") == strings.ReplaceAll(existingPage.Body, "\r\n", "\n") {
+		normalizedBody = existingPage.Body
+	}
 
 	updatedPage, err := h.updatePageGuarded(r.Context(), store.UpdatePageParams{
 		ID:                id,
@@ -943,11 +956,23 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
-	}, existingPage.Slug)
+	}, existingPage.Slug, h.formWrite(r, input, submittedPageRevision(r), existingPage))
 	if errors.Is(err, errPageRouteTaken) {
 		// A language claimed the prefix between validation and this write.
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id),
 			"Slug conflicts with the URL prefix of an active language")
+		return
+	}
+	if h.pageConflict(w, r, err, existingPage, input) {
+		return
+	}
+	if errors.Is(err, review.ErrHardValidation) || errors.Is(err, review.ErrSiteURLRequired) {
+		message, _ := pageWriteMessage(lang, err)
+		h.renderEditFormErrors(w, r, existingPage, input, map[string]string{"body": message}, http.StatusUnprocessableEntity)
+		return
+	}
+	if message, ok := pageWriteMessage(lang, err); ok {
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), message)
 		return
 	}
 	if err != nil {
@@ -955,47 +980,6 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Error updating page")
 		return
 	}
-
-	// Update created_at separately if the user changed it
-	if !input.CreatedAt.IsZero() && !input.CreatedAt.Equal(existingPage.CreatedAt) {
-		_ = h.queries.UpdatePageCreatedAt(r.Context(), store.UpdatePageCreatedAtParams{
-			CreatedAt: input.CreatedAt,
-			ID:        id,
-		})
-	}
-
-	// Create new version (only if title or body changed)
-	if input.Title != existingPage.Title || normalizedBody != existingPage.Body {
-		_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
-			PageID:    id,
-			Title:     input.Title,
-			Body:      normalizedBody,
-			ChangedBy: middleware.GetUserID(r),
-			CreatedAt: now,
-		})
-		if err != nil {
-			slog.Error("failed to create page version", "error", err, "page_id", id)
-			// Don't fail the request - page was updated
-		}
-	}
-
-	// Update tags - clear existing and add new
-	if err = h.queries.ClearPageTags(r.Context(), id); err != nil {
-		slog.Error("failed to clear page tags", "error", err, "page_id", id)
-	}
-	h.savePageTags(r.Context(), id, r.Form["tags[]"])
-
-	// Update categories - clear existing and add new
-	if err = h.queries.ClearPageCategories(r.Context(), id); err != nil {
-		slog.Error("failed to clear page categories", "error", err, "page_id", id)
-	}
-	h.savePageCategories(r.Context(), id, r.Form["categories[]"])
-
-	// Update aliases - clear existing and add new
-	if err = h.queries.ClearPageAliases(r.Context(), id); err != nil {
-		slog.Error("failed to clear page aliases", "error", err, "page_id", id)
-	}
-	h.savePageAliases(r.Context(), id, r.Form["aliases[]"])
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": updatedPage.ID, "slug": updatedPage.Slug})
@@ -1049,7 +1033,7 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete the page (versions are cascade deleted by FK constraint)
-	err = h.queries.DeletePage(r.Context(), id)
+	err = h.deletePageAtomic(r, id)
 	if err != nil {
 		slog.Error("failed to delete page", "error", err, "page_id", id)
 		http.Error(w, "Error deleting page", http.StatusInternalServerError)
@@ -1113,7 +1097,7 @@ func (h *PagesHandler) deletePageForBulk(r *http.Request, id int64) (store.Page,
 		return store.Page{}, err
 	}
 
-	if err = h.queries.DeletePage(r.Context(), id); err != nil {
+	if err = h.deletePageAtomic(r, id); err != nil {
 		return store.Page{}, err
 	}
 
@@ -1127,6 +1111,50 @@ func (h *PagesHandler) deletePageForBulk(r *http.Request, id int64) (store.Page,
 	h.invalidatePageCache(id)
 
 	return page, nil
+}
+
+// renderEditFormErrors re-renders the edit form with the submitted values and
+// errs, so a refused save keeps the editor's changes.
+func (h *PagesHandler) renderEditFormErrors(w http.ResponseWriter, r *http.Request, existingPage store.Page, input pageFormInput, errs map[string]string, status int) {
+	lang := h.renderer.GetAdminLang(r)
+	// Load all categories and preserve selected categories for re-rendering
+	allCategories, err := h.queries.ListCategories(r.Context())
+	if err != nil {
+		slog.Error("failed to list categories", "error", err)
+		allCategories = nil
+	}
+	data := PageFormData{
+		Page:          &existingPage,
+		PublicURL:     publicPagePath(r.Context(), h.queries, existingPage),
+		Categories:    selectedPageCategoriesFromForm(r.Form["categories[]"]),
+		Aliases:       pageAliasesFromForm(r.Form["aliases[]"]),
+		AllCategories: buildPageCategoryTree(allCategories, nil, 0),
+		FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
+		OgImage:       h.loadImageData(r.Context(), input.OgImageID),
+		Statuses:      ValidPageStatuses,
+		PageTypes:     ValidPageTypes,
+		Errors:        errs,
+		FormValues:    input.FormValues,
+		IsEdit:        true,
+	}
+	// Keep the AI-access control and the editor's choice, as the edit page does.
+	if user := middleware.GetUser(r); user != nil {
+		data.CanManageAI = existingPage.AuthorID == user.ID || user.Role == model.RoleAdmin
+	}
+	access, err := h.queries.GetPageAIAccess(r.Context(), existingPage.ID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		slog.Error("failed to load page AI access", "error", err, "page_id", existingPage.ID)
+	}
+	data.AIEditable = access.AiEditable
+	if data.CanManageAI && r.FormValue("ai_access_present") != "" {
+		data.AIEditable = r.FormValue("allow_ai_edits") == "on"
+	}
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, existingPage.ID))
+	if status != http.StatusOK {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+	}
+	renderTempl(w, r, adminviews.PageFormPage(pc, convertPageFormViewData(data, h.renderer, lang, h.sanitizePageHTML)))
 }
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
@@ -1156,22 +1184,49 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	var updatedPage store.Page
 	action, eventType := "published", model.EventPagePublished
 
-	// Both updates apply only while the page still has the status read
-	// above, so a toggle racing the scheduler cannot publish it twice.
-	if page.Status == PageStatusPublished {
-		action, eventType = "unpublished", model.EventPageUnpublished
-		updatedPage, err = h.queries.UnpublishPage(r.Context(), store.UnpublishPageParams{
-			ID:        id,
-			UpdatedAt: now,
-		})
-	} else {
-		updatedPage, err = h.queries.PublishUnpublishedPage(r.Context(), store.PublishUnpublishedPageParams{
-			ID:          id,
-			UpdatedAt:   now,
-			PublishedAt: sql.NullTime{Time: now, Valid: true},
-		})
+	base, err := revisionForAction(r)
+	if err != nil {
+		flashError(w, r, h.renderer, redirectAdminPages, "Page revision required; reload and try again")
+		return
+	}
+	work, err := pagewrite.InTx(r.Context(), h.db, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
+		if editorErr := pagewrite.RequireEditor(r.Context(), work.Q, middleware.GetUserID(r)); editorErr != nil {
+			return editorErr
+		}
+		if _, trackErr := work.Track(r.Context(), id, base, true); trackErr != nil {
+			return trackErr
+		}
+		// Both updates apply only while the page still has the status read
+		// above, so a toggle racing the scheduler cannot publish it twice.
+		if page.Status == PageStatusPublished {
+			action, eventType = "unpublished", model.EventPageUnpublished
+			updatedPage, err = work.Q.UnpublishPage(r.Context(), store.UnpublishPageParams{
+				ID:        id,
+				UpdatedAt: now,
+			})
+		} else {
+			if validateErr := review.ValidatePublication(r.Context(), work.Q, page); validateErr != nil {
+				return validateErr
+			}
+			updatedPage, err = work.Q.PublishUnpublishedPage(r.Context(), store.PublishUnpublishedPageParams{
+				ID:          id,
+				UpdatedAt:   now,
+				PublishedAt: sql.NullTime{Time: now, Valid: true},
+			})
+		}
+
+		return err
+	})
+	if err == nil {
+		updatedPage = work.Pages[id]
 	}
 
+	// Explained refusals first: a deleted account's ErrEditorRequired also
+	// matches sql.ErrNoRows.
+	if message, ok := pageWriteMessage(h.renderer.GetAdminLang(r), err); ok {
+		flashError(w, r, h.renderer, redirectAdminPages, message)
+		return
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		flashError(w, r, h.renderer, redirectAdminPages, "The page status changed meanwhile; check it and try again")
 		return
@@ -1254,6 +1309,21 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, fmt.Sprintf("%s - %s", i18n.T(lang, "versions.title"), page.Title), pagesVersionsBreadcrumbs(lang, page.Title, page.ID))
 	viewData := convertPageVersionsViewData(data, h.renderer, lang)
+	for i, version := range versions {
+		if version.Revision.Valid {
+			fact, e := h.queries.GetContentProvenance(r.Context(), store.GetContentProvenanceParams{PageID: page.ID, Revision: version.Revision.Int64})
+			if e != nil && !errors.Is(e, sql.ErrNoRows) {
+				http.Error(w, "Cannot load revision attribution", 500)
+				return
+			}
+			viewData.Versions[i].VerifiedSource = fact.Source
+			viewData.Versions[i].RegisteredClient = fact.OauthClientID
+			if fact.ApiKeyID.Valid {
+				viewData.Versions[i].RegisteredClient = fmt.Sprintf("API key #%d", fact.ApiKeyID.Int64)
+			}
+		}
+	}
+
 	renderTempl(w, r, adminviews.PageVersionsPage(pc, viewData))
 }
 
@@ -1307,49 +1377,50 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizedBody, removedMarkup := h.normalizePageBodyForStorage(rawVersionBody)
 
-	// Update page with version content (keeping SEO fields and scheduling intact)
-	now := time.Now()
-	_, err = h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
-		ID:                id,
-		Title:             version.Title,
-		Slug:              page.Slug, // Keep the current slug
-		Body:              normalizedBody,
-		Summary:           page.Summary, // Keep the current summary
-		Status:            page.Status,  // Keep the current status
-		FeaturedImageID:   page.FeaturedImageID,
-		MetaTitle:         page.MetaTitle,
-		MetaDescription:   page.MetaDescription,
-		MetaKeywords:      page.MetaKeywords,
-		OgImageID:         page.OgImageID,
-		NoIndex:           page.NoIndex,
-		NoFollow:          page.NoFollow,
-		CanonicalUrl:      page.CanonicalUrl,
-		ScheduledAt:       page.ScheduledAt,       // Keep scheduling intact
-		LanguageCode:      page.LanguageCode,      // Keep language intact
-		HideFeaturedImage: page.HideFeaturedImage, // Keep setting intact
-		VideoUrl:          page.VideoUrl,          // Keep video intact
-		VideoTitle:        page.VideoTitle,        // Keep video title intact
-		UpdatedAt:         now,
-	})
+	base, err := revisionForAction(r)
 	if err != nil {
-		slog.Error("failed to restore page version", "error", err, "page_id", id, "version_id", versionId)
-		flashError(w, r, h.renderer, versionsURL, "Error restoring version")
+		flashError(w, r, h.renderer, versionsURL, "Page revision required; reopen version history")
 		return
 	}
-	h.invalidatePageCache(id)
-
-	// Create new version to record the restore
-	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
-		PageID:    id,
-		Title:     version.Title,
-		Body:      normalizedBody,
-		ChangedBy: middleware.GetUserID(r),
-		CreatedAt: now,
+	work, err := pagewrite.InTx(r.Context(), h.db, provenance.Principal{UserID: middleware.GetUserID(r), Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
+		if editorErr := pagewrite.RequireEditor(r.Context(), work.Q, middleware.GetUserID(r)); editorErr != nil {
+			return editorErr
+		}
+		current, workErr := work.Track(r.Context(), id, base, true)
+		if workErr != nil {
+			return workErr
+		}
+		recorded, workErr := work.Q.GetPageVersion(r.Context(), versionId)
+		if workErr != nil {
+			return workErr
+		}
+		if workErr = work.Restore(r.Context(), current, recorded, normalizedBody); workErr != nil {
+			return workErr
+		}
+		if current.Status == "published" || current.ScheduledAt.Valid {
+			restored, restoredErr := work.Q.GetPageByID(r.Context(), id)
+			if restoredErr != nil {
+				return restoredErr
+			}
+			return review.ValidatePublication(r.Context(), work.Q, restored)
+		}
+		return nil
 	})
 	if err != nil {
-		slog.Error("failed to create page version after restore", "error", err, "page_id", id)
-		// Don't fail the request - page was restored
+		lang := h.renderer.GetAdminLang(r)
+		message := i18n.T(lang, "pages.error_version_not_restored")
+		if reason, ok := pageWriteMessage(lang, err); ok {
+			message += " " + reason
+		} else {
+			slog.Error("failed to restore page version", "error", err, "page_id", id, "version_id", versionId)
+		}
+		flashError(w, r, h.renderer, versionsURL, message)
+		return
 	}
+	for changedID := range work.Pages {
+		h.invalidatePageCache(changedID)
+	}
+	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, work.Pages[id], middleware.GetUserEmail(r))
 
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page version restored", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "version_id": versionId})
@@ -1400,65 +1471,74 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	// Create the translated page with same title but empty body
 	now := time.Now()
 	userID := middleware.GetUserID(r)
-	translatedPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
-		Title:             sourcePage.Title, // Keep same title (user will translate)
-		Slug:              translatedSlug,
-		Body:              "",              // Empty body for translation
-		Summary:           "",              // Empty summary for translation
-		Status:            PageStatusDraft, // Always start as draft
-		AuthorID:          userID,
-		FeaturedImageID:   sourcePage.FeaturedImageID,
-		MetaTitle:         "",
-		MetaDescription:   "",
-		MetaKeywords:      "",
-		OgImageID:         sql.NullInt64{},
-		NoIndex:           0,
-		NoFollow:          0,
-		CanonicalUrl:      "",
-		ScheduledAt:       sql.NullTime{},
-		LanguageCode:      tc.TargetLang.Code,
-		HideFeaturedImage: sourcePage.HideFeaturedImage,
-		PageType:          sourcePage.PageType,         // Inherit page type from source
-		ExcludeFromLists:  sourcePage.ExcludeFromLists, // Inherit exclude flag from source
-		PublishedAt:       sql.NullTime{},              // Not published yet
-		CreatedAt:         now,
-		UpdatedAt:         now,
-		VideoUrl:          sourcePage.VideoUrl,   // Inherit video from source
-		VideoTitle:        sourcePage.VideoTitle, // Inherit video title from source
-	})
+	base, err := revisionForAction(r)
 	if err != nil {
-		slog.Error("failed to create translated page", "error", err)
-		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
+		flashError(w, r, h.renderer, redirectURL, "Page revision required; reopen the editor")
 		return
 	}
-
-	// Create initial version for the translated page
-	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
-		PageID:    translatedPage.ID,
-		Title:     translatedPage.Title,
-		Body:      translatedPage.Body,
-		ChangedBy: userID,
-		CreatedAt: now,
+	var translatedPage store.Page
+	work, err := pagewrite.InTx(r.Context(), h.db, provenance.Principal{UserID: userID, Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
+		if editorErr := pagewrite.RequireEditor(r.Context(), work.Q, userID); editorErr != nil {
+			return editorErr
+		}
+		if _, trackErr := work.Track(r.Context(), id, base, true); trackErr != nil {
+			return trackErr
+		}
+		if slugErr := pagewrite.SlugAvailable(r.Context(), work.Q, translatedSlug, 0); slugErr != nil {
+			return slugErr
+		}
+		var createErr error
+		translatedPage, createErr = work.Q.CreatePage(r.Context(), store.CreatePageParams{
+			Title:             sourcePage.Title, // Keep same title (user will translate)
+			Slug:              translatedSlug,
+			Body:              "",              // Empty body for translation
+			Summary:           "",              // Empty summary for translation
+			Status:            PageStatusDraft, // Always start as draft
+			AuthorID:          userID,
+			FeaturedImageID:   sourcePage.FeaturedImageID,
+			MetaTitle:         "",
+			MetaDescription:   "",
+			MetaKeywords:      "",
+			OgImageID:         sql.NullInt64{},
+			NoIndex:           0,
+			NoFollow:          0,
+			CanonicalUrl:      "",
+			ScheduledAt:       sql.NullTime{},
+			LanguageCode:      tc.TargetLang.Code,
+			HideFeaturedImage: sourcePage.HideFeaturedImage,
+			PageType:          sourcePage.PageType,         // Inherit page type from source
+			ExcludeFromLists:  sourcePage.ExcludeFromLists, // Inherit exclude flag from source
+			PublishedAt:       sql.NullTime{},              // Not published yet
+			CreatedAt:         now,
+			UpdatedAt:         now,
+			VideoUrl:          sourcePage.VideoUrl,   // Inherit video from source
+			VideoTitle:        sourcePage.VideoTitle, // Inherit video title from source
+		})
+		if createErr != nil {
+			return createErr
+		}
+		work.Created(translatedPage)
+		return work.LinkTranslation(r.Context(), id, tc.TargetLang.Code, translatedPage.ID)
 	})
 	if err != nil {
-		slog.Error("failed to create page version for translation", "error", err)
-		// Don't fail - page was created
+		lang := h.renderer.GetAdminLang(r)
+		message := i18n.T(lang, "pages.error_translation_not_created")
+		if reason, ok := pageWriteMessage(lang, err); ok {
+			message += " " + reason
+		} else {
+			slog.Error("failed to create page translation", "error", err, "page_id", id, "language", langCode)
+		}
+		flashError(w, r, h.renderer, redirectURL, message)
+		return
 	}
-
-	// Create translation link from source to translated page
-	_, err = h.queries.CreateTranslation(r.Context(), store.CreateTranslationParams{
-		EntityType:    model.EntityTypePage,
-		EntityID:      id,
-		LanguageID:    tc.TargetLang.ID,
-		TranslationID: translatedPage.ID,
-		CreatedAt:     now,
-	})
-	if err != nil {
-		slog.Error("failed to create translation link", "error", err)
-		// Page was created, so we should still redirect to it
-	} else if h.cacheManager != nil {
+	translatedPage = work.Pages[translatedPage.ID]
+	for changedID := range work.Pages {
+		h.invalidatePageCache(changedID)
+	}
+	if h.cacheManager != nil {
 		h.cacheManager.Translation.InvalidateType(model.EntityTypePage)
 	}
+	h.dispatchPageEvent(r.Context(), model.EventPageCreated, translatedPage, middleware.GetUserEmail(r))
 
 	slog.Info("page translation created",
 		"source_page_id", id,
@@ -1603,6 +1683,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	formValues := map[string]string{
 		"title":               title,
 		"slug":                slug,
+		"slug_edited":         r.PostFormValue("slug_edited"),
 		"body":                body,
 		"summary":             summary,
 		"status":              status,
@@ -1700,6 +1781,13 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 // path segment, discovered inside the write's own transaction.
 var errPageRouteTaken = errors.New("page route is taken by a language prefix")
 
+// pageFormWrite carries the editor, displayed revision and form-related work.
+type pageFormWrite struct {
+	UserID       int64
+	BaseRevision *int64
+	Related      func(*pagewrite.Tx, store.Page) error
+}
+
 // createPageGuarded writes a page only if no active language owns its slug,
 // deciding both inside one transaction.
 //
@@ -1709,59 +1797,69 @@ var errPageRouteTaken = errors.New("page route is taken by a language prefix")
 // namespace, and both writes land. Reading the languages through this
 // transaction ties the answer to the write, so SQLite refuses the second
 // writer rather than interleaving them.
-func (h *PagesHandler) createPageGuarded(
-	ctx context.Context, params store.CreatePageParams,
-) (store.Page, error) {
-	return h.writePageGuarded(ctx, params.Slug, "", func(queries *store.Queries) (store.Page, error) {
-		return queries.CreatePage(ctx, params)
+func (h *PagesHandler) createPageGuarded(ctx context.Context, params store.CreatePageParams, option pageFormWrite) (store.Page, error) {
+	return h.writePageGuarded(ctx, params.Slug, "", option, func(work *pagewrite.Tx) (store.Page, error) {
+		page, err := work.Q.CreatePage(ctx, params)
+		if err != nil {
+			return store.Page{}, err
+		}
+		work.Created(page)
+		return page, nil
 	})
 }
 
-// updatePageGuarded is createPageGuarded for an edit. A slug left unchanged
-// skips the check, exactly as the form validation does: a language that
-// already shadows a stored page is a pre-existing condition, and refusing to
-// save any other edit to that page would trap its content.
-func (h *PagesHandler) updatePageGuarded(
-	ctx context.Context, params store.UpdatePageParams, currentSlug string,
-) (store.Page, error) {
-	return h.writePageGuarded(ctx, params.Slug, currentSlug, func(queries *store.Queries) (store.Page, error) {
-		return queries.UpdatePage(ctx, params)
+func (h *PagesHandler) updatePageGuarded(ctx context.Context, params store.UpdatePageParams, currentSlug string, option pageFormWrite) (store.Page, error) {
+	return h.writePageGuarded(ctx, params.Slug, currentSlug, option, func(work *pagewrite.Tx) (store.Page, error) {
+		if _, err := work.Track(ctx, params.ID, option.BaseRevision, true); err != nil {
+			return store.Page{}, err
+		}
+		return work.Q.UpdatePage(ctx, params)
 	})
 }
 
-func (h *PagesHandler) writePageGuarded(
-	ctx context.Context, slug, currentSlug string, write func(*store.Queries) (store.Page, error),
-) (store.Page, error) {
-	if h.db == nil {
-		// Never skip the guard quietly. A handler without a database handle
-		// cannot open the transaction this check depends on, and writing
-		// anyway would put back the unguarded path the transaction replaced.
-		return store.Page{}, errors.New("page write requires a database handle")
+func (h *PagesHandler) writePageGuarded(ctx context.Context, slug, currentSlug string, option pageFormWrite, write func(*pagewrite.Tx) (store.Page, error)) (store.Page, error) {
+	if option.UserID <= 0 {
+		return store.Page{}, pagewrite.ErrEditorRequired
 	}
-	tx, err := h.db.BeginTx(ctx, nil)
-	if err != nil {
-		return store.Page{}, fmt.Errorf("begin page write: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	queries := store.New(h.db).WithTx(tx)
-	if slug != currentSlug {
-		conflict, conflictErr := PageRouteConflict(ctx, queries, slug)
-		if conflictErr != nil {
-			return store.Page{}, conflictErr
+	var page store.Page
+	work, err := pagewrite.InTx(ctx, h.db, provenance.Principal{UserID: option.UserID, Source: "human", Transport: "admin"}, func(work *pagewrite.Tx) error {
+		if err := pagewrite.RequireEditor(ctx, work.Q, option.UserID); err != nil {
+			return err
 		}
-		if conflict != "" {
-			return store.Page{}, errPageRouteTaken
+		if slug != currentSlug {
+			if err := pagewrite.SlugAvailable(ctx, work.Q, slug, 0); err != nil {
+				conflict, conflictErr := pagewrite.RouteConflict(ctx, work.Q, slug)
+				if conflictErr != nil {
+					return conflictErr
+				}
+				if conflict != "" {
+					return errPageRouteTaken
+				}
+				// Edits may keep their own alias. The caller checks that namespace below.
+				if currentSlug == "" {
+					return err
+				}
+			}
 		}
-	}
-	page, err := write(queries)
+		var err error
+		page, err = write(work)
+		if err != nil {
+			return err
+		}
+		if slug != currentSlug {
+			if err = pagewrite.SlugAvailable(ctx, work.Q, slug, page.ID); err != nil {
+				return err
+			}
+		}
+		if option.Related != nil {
+			return option.Related(work, page)
+		}
+		return nil
+	})
 	if err != nil {
 		return store.Page{}, err
 	}
-	if err := tx.Commit(); err != nil {
-		return store.Page{}, fmt.Errorf("commit page write: %w", err)
-	}
-	return page, nil
+	return work.Pages[page.ID], nil
 }
 
 // PageRouteConflict reports the message for a page slug or alias path that an
@@ -1784,30 +1882,7 @@ func (h *PagesHandler) writePageGuarded(
 // answer: the admin form, the v2 API, and anything added later. A path that
 // skips it stores a URL that resolves to something else.
 func PageRouteConflict(ctx context.Context, queries *store.Queries, path string) (string, error) {
-	firstSegment, rest, _ := strings.Cut(path, "/")
-	if rest == "" && util.IsReservedPageSlug(firstSegment) {
-		return fmt.Sprintf("Conflicts with the application route /%s", firstSegment), nil
-	}
-	if pattern := util.ReservedRoutePath(path); pattern != "" {
-		if prefix, ok := strings.CutSuffix(pattern, "/**"); ok {
-			prefix = strings.TrimSuffix(prefix, "/*")
-			return fmt.Sprintf("Conflicts with the application routes under /%s/", prefix), nil
-		}
-		return fmt.Sprintf("Conflicts with the application route /%s", pattern), nil
-	}
-	if firstSegment == "" || !util.IsRoutableLanguageCode(firstSegment) {
-		return "", nil
-	}
-	languages, err := queries.ListActiveLanguages(ctx)
-	if err != nil {
-		return "", fmt.Errorf("list active languages: %w", err)
-	}
-	for _, language := range languages {
-		if language.Code == firstSegment {
-			return fmt.Sprintf("Conflicts with the URL prefix of active language %q", language.Code), nil
-		}
-	}
-	return "", nil
+	return pagewrite.RouteConflict(ctx, queries, path)
 }
 
 func (h *PagesHandler) pageRouteConflict(ctx context.Context, path string) string {
@@ -1839,7 +1914,12 @@ func (h *PagesHandler) validatePageAliases(ctx context.Context, aliases []string
 			return fmt.Sprintf("Alias /%s is listed twice", alias)
 		}
 		seen[alias] = true
-		if conflict := h.pageRouteConflict(ctx, alias); conflict != "" {
+		conflict, err := pagewrite.AliasRouteConflict(ctx, h.queries, alias, pageID)
+		if err != nil {
+			slog.Error("database error checking page route conflicts", "error", err, "path", alias)
+			return "Error checking for route conflicts"
+		}
+		if conflict != "" {
 			return fmt.Sprintf("Alias /%s: %s", alias, conflict)
 		}
 		taken, err := h.queries.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{
@@ -1871,12 +1951,20 @@ func pageAliasesFromForm(values []string) []store.PageAlias {
 // loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is
 // not valid or the media record cannot be found.
 func (h *PagesHandler) loadImageData(ctx context.Context, id sql.NullInt64) *FeaturedImageData {
-	if !id.Valid {
+	data, err := h.queryImageData(ctx, id)
+	if err != nil {
 		return nil
+	}
+	return data
+}
+
+func (h *PagesHandler) queryImageData(ctx context.Context, id sql.NullInt64) (*FeaturedImageData, error) {
+	if !id.Valid {
+		return nil, nil
 	}
 	media, err := h.queries.GetMediaByID(ctx, id.Int64)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	return &FeaturedImageData{
 		ID:        media.ID,
@@ -1884,39 +1972,18 @@ func (h *PagesHandler) loadImageData(ctx context.Context, id sql.NullInt64) *Fea
 		Filepath:  model.MediaURL(model.VariantOriginal, media.Uuid, media.Filename),
 		Thumbnail: model.MediaURL("thumbnail", media.Uuid, media.Filename),
 		Mimetype:  media.MimeType,
-	}
+	}, nil
 }
 
 // validateFeaturedImageSize checks if a featured image meets minimum size requirements.
 // Returns an error message if the image is too small, empty string if valid or no image set.
-func (h *PagesHandler) validateFeaturedImageSize(ctx context.Context, featuredImageID sql.NullInt64, lang string) string {
-	if !featuredImageID.Valid {
-		return "" // No featured image set, valid
-	}
-
-	media, err := h.queries.GetMediaByID(ctx, featuredImageID.Int64)
-	if err != nil {
-		// If we can't find the media, let other validation handle it
+func (h *PagesHandler) validateFeaturedImageSize(ctx context.Context, id sql.NullInt64, lang string) string {
+	err := pagewrite.FeaturedImageSize(ctx, h.queries, id)
+	var dimensions *pagewrite.FeaturedImageSizeError
+	if !errors.As(err, &dimensions) {
 		return ""
-	}
-
-	// Check if media has dimensions (it's an image)
-	if !media.Width.Valid || !media.Height.Valid {
-		return "" // Not an image or dimensions not available
-	}
-
-	width := media.Width.Int64
-	height := media.Height.Int64
-
-	if width < model.MinFeaturedImageWidth || height < model.MinFeaturedImageHeight {
-		return i18n.T(lang, "pages.error.featured_image_too_small",
-			model.MinFeaturedImageWidth,
-			model.MinFeaturedImageHeight,
-			width,
-			height)
-	}
-
-	return ""
+	} // Missing assignments fail in the transaction.
+	return i18n.T(lang, "pages.error.featured_image_too_small", model.MinFeaturedImageWidth, model.MinFeaturedImageHeight, dimensions.Width, dimensions.Height)
 }
 
 func (h *PagesHandler) logSuspiciousPageContentEvent(r *http.Request, pageID int64, slug, body, action string) {
@@ -1968,11 +2035,10 @@ func validatePageBodySecurityPolicy(body string, blockSuspicious bool) string {
 // OCMS_SANITIZE_PAGE_HTML on it is the sanitized body, together with what the
 // page HTML policy removed (security.RemovedMarkup) for the save message.
 func (h *PagesHandler) normalizePageBodyForStorage(raw string) (body string, removed []string) {
-	if h == nil || !h.sanitizePageHTML {
+	if h == nil {
 		return raw, nil
 	}
-	body = security.SanitizePageHTML(raw)
-	return body, security.RemovedMarkup(raw, body)
+	return security.NormalizePageHTMLForStorage(raw, h.sanitizePageHTML)
 }
 
 // removedMarkupShown caps how many removed items a save warning lists, and
@@ -2024,69 +2090,4 @@ func removedMarkupWarning(action string, removed []string) string {
 		more = fmt.Sprintf(" and %d more", len(removed)-removedMarkupShown)
 	}
 	return fmt.Sprintf("%s, but markup the site does not allow was removed: %s%s. Check the page.", action, strings.Join(shown, ", "), more)
-}
-
-// savePageTags saves tag associations for a page from form values.
-func (h *PagesHandler) savePageTags(ctx context.Context, pageID int64, tagIDStrs []string) {
-	saveBatchAssociations(tagIDStrs, func(tagID int64) error {
-		return h.queries.AddTagToPage(ctx, store.AddTagToPageParams{
-			PageID: pageID,
-			TagID:  tagID,
-		})
-	}, "page_tags")
-}
-
-// savePageCategories saves category associations for a page from form values.
-func (h *PagesHandler) savePageCategories(ctx context.Context, pageID int64, categoryIDStrs []string) {
-	saveBatchAssociations(categoryIDStrs, func(categoryID int64) error {
-		return h.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
-			PageID:     pageID,
-			CategoryID: categoryID,
-		})
-	}, "page_categories")
-}
-
-// savePageAliases saves URL aliases for a page from form values.
-// Aliases can be simple slugs or path-like strings with slashes (e.g., "blog/post/55").
-func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasStrs []string) {
-	now := time.Now()
-	for _, alias := range aliasStrs {
-		alias = strings.TrimSpace(alias)
-		if alias == "" {
-			continue
-		}
-		// Validate alias format (allows path-like aliases with slashes)
-		if !util.IsValidAlias(alias) {
-			slog.Warn("skipping invalid alias format", "page_id", pageID, "alias", alias)
-			continue
-		}
-		// An alias is matched against the path the language middleware has
-		// already stripped, so one beginning with an active language code —
-		// "eng" or "eng/team" — is dead on arrival, and so is an alias that an
-		// application route answers, such as "login" or "uploads/2016/report".
-		// validatePageAliases has already refused these on the form; this
-		// catches a language activated between that check and the save. A
-		// failed lookup keeps the alias, because an update has already cleared
-		// the old ones.
-		conflict, err := PageRouteConflict(ctx, h.queries, alias)
-		if err != nil {
-			slog.Error("database error re-checking page alias; keeping it",
-				"error", err, "page_id", pageID, "alias", alias)
-		} else if conflict != "" {
-			slog.Warn("skipping alias that a language prefix or application route would shadow",
-				"page_id", pageID, "alias", alias, "reason", conflict)
-			continue
-		}
-		_, err = h.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
-			PageID:    pageID,
-			Alias:     alias,
-			CreatedAt: now,
-		})
-		if err != nil {
-			slog.Error("failed to add alias to page",
-				"error", err,
-				"page_id", pageID,
-				"alias", alias)
-		}
-	}
 }

@@ -1,57 +1,87 @@
 #!/usr/bin/env bash
-# Commit the staged changes with the message prepared by commit-prepare.sh.
-#
-# Only what is staged is committed: stage the files the message describes by
-# name first. The test gate runs on the working tree, so unstaged or untracked
-# changes that would make the tested tree differ from the commit are refused,
-# and the index must not change while the gate runs. Gitignored files are not
-# refused: the gate still compiles and tests them, but they are not committed.
+# Use the approved draft and exact tested tree from the local terminal.
 set -euo pipefail
 
-ROOT_DIR="$(git rev-parse --show-toplevel)"
-cd "$ROOT_DIR"
-STATE_DIR="$ROOT_DIR/.git/.codex"
-MSG_FILE="$STATE_DIR/commit-message.txt"
-
-if git diff --cached --quiet; then
-  echo "Nothing is staged. Stage the files the prepared message describes"
-  echo "(git add -- <file>...), then rerun."
+if [[ $# -ne 0 ]]; then
+  echo 'Usage: commit-do (approve the prepared message in your terminal)' >&2
   exit 2
 fi
-
-if [[ ! -s "$MSG_FILE" ]]; then
-  echo "No prepared commit message found at $MSG_FILE"
-  echo "Run ./scripts/codex/commit-prepare.sh first."
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+state_dir="$(git rev-parse --absolute-git-dir)/.codex"
+if [[ ! -s "$state_dir/tested-tree" || ! -s "$state_dir/commit-message.txt" ]]; then
+  echo 'Run commit-prepare before approving a commit.' >&2
   exit 2
 fi
-
-# Submodules hold no Go code the suite builds (same rule as .githooks/pre-push).
-if ! git diff --quiet --ignore-submodules || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
-  echo "Unstaged or untracked changes would be tested but not committed."
-  echo "Stage, stash or remove them first:"
-  git status --short
+scratch="$state_dir/commit.lock"
+if ! mkdir -- "$scratch"; then
+  echo 'Another commit preparation or approval is in progress.' >&2
   exit 2
 fi
+trap 'rm -rf -- "$scratch"' EXIT
+read -r base tree < "$state_dir/tested-tree"
+cp -- "$state_dir/commit-message.txt" "$scratch/message"
 
-"$ROOT_DIR/scripts/check-no-absolute-paths.sh" --staged
+check_candidate() {
+  if [[ $(git rev-parse HEAD) != "$base" || $(git write-tree) != "$tree" ]]; then
+    echo 'HEAD or the staged tree differs from preparation. Prepare the intended changes again.' >&2
+    exit 2
+  fi
+  for operation in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD rebase-merge rebase-apply; do
+    if [[ -e $(git rev-parse --git-path "$operation") ]]; then
+      echo 'Finish the in-progress Git operation before using commit-do.' >&2
+      exit 2
+    fi
+  done
+}
 
-tested_tree="$(git write-tree)"
-if ! "$ROOT_DIR/scripts/test-gate.sh"; then
-  echo "Tests failed; nothing was committed."
-  exit 1
-fi
-if [[ "$(git write-tree)" != "$tested_tree" ]]; then
-  echo "The index changed while the tests ran; rerun to test what will be committed."
+check_hooks() {
+  for name in pre-commit prepare-commit-msg commit-msg; do
+    hook=$(git rev-parse --git-path "hooks/$name")
+    [[ -f "$hook" && -x "$hook" ]] || continue
+    if [[ "$name" == pre-commit ]]; then
+      # The shipped path checker and approval hook do not change the index.
+      # Require their checked-in bytes, including the path checker's helper.
+      if cmp -s "$hook" <(git cat-file blob "$base:.githooks/pre-commit") &&
+        cmp -s scripts/check-no-absolute-paths.sh <(git cat-file blob "$base:scripts/check-no-absolute-paths.sh"); then
+        continue
+      fi
+      shared=$(git rev-parse "$base:.claude/shared")
+      if cmp -s "$hook" <(git -C .claude/shared cat-file blob "$shared:global/hooks/pre-commit"); then
+        continue
+      fi
+    fi
+    printf 'Cannot establish tree integrity with active %s hook %s. Use a guarded commit workflow.\n' "$name" "$hook" >&2
+    exit 2
+  done
+}
+
+check_candidate
+check_hooks
+if [[ ! -t 0 || ! -t 1 ]]; then
+  echo 'Commit approval requires an interactive terminal.' >&2
   exit 2
 fi
+"$root/scripts/codex/test-snapshot.sh" "$tree"
+check_candidate
+"$root/scripts/check-no-absolute-paths.sh" --staged
 
-# Running this script is the approval the interactive pre-commit hook asks
-# for, and the tree checks a hook would add ran above.
-git commit --no-verify -F "$MSG_FILE"
-# The message described this commit only: remove it, so a later run cannot
-# commit other staged changes under it and must prepare its own.
-rm -f "$MSG_FILE"
+printf '\nApprove one commit of tree %s with this message?\n\n' "$tree"
+cat "$scratch/message"
+printf '\nType YES to commit: '
+if ! read -r answer || [[ "$answer" != YES ]]; then
+  echo 'Commit declined.' >&2
+  exit 2
+fi
+check_candidate
+check_hooks
 
-echo
-echo "Commit created (tested tree $tested_tree); the prepared message was used and removed."
+# Freeze the approved contents even if another process stages a file while
+# Git is committing. Git still runs the effective commit hooks.
+(
+  export GIT_INDEX_FILE="$scratch/index"
+  git read-tree "$tree"
+  git commit --cleanup=verbatim --file "$scratch/message"
+)
+rm -f -- "$state_dir/tested-tree" "$state_dir/commit-message.txt"
 git status --short

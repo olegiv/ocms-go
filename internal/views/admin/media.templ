@@ -228,7 +228,7 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 				</ul>
 				<!-- New Folder Form -->
 				<div class="new-folder-form" x-show="showNewFolder" x-cloak>
-					<form hx-post="/admin/media/folders" hx-target="#folder-list" hx-swap="beforeend" @htmx:after:request="showNewFolder = false; newFolderName = ''">
+					<form hx-post="/admin/media/folders" hx-target="#folder-list" hx-swap="beforeend" @htmx:after:request="resetNewFolder()">
 						@input.Input(input.Props{
 							Name:        "name",
 							Type:        input.TypeText,
@@ -437,13 +437,27 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 			</main>
 		</div>
 		<script nonce={ templ.GetNonce(ctx) }>
-		function folderManager() {
-			return {
+		document.addEventListener('alpine:init', () => {
+			Alpine.data('folderManager', () => ({
 				showNewFolder: false,
 				newFolderName: '',
+				resetNewFolder() {
+					this.showNewFolder = false;
+					this.newFolderName = '';
+				}
+			}));
+			Alpine.data('mediaFolder', () => ({
+				editing: false,
+				showDelete: false,
 				newName: '',
-				saveRename(folderId) {
+				startRename() {
+					this.newName = this.$root.querySelector('.folder-name').textContent;
+					this.editing = true;
+					this.$nextTick(() => this.$refs.renameInput.focus());
+				},
+				saveRename() {
 					if (!this.newName.trim()) return;
+					const folderId = this.$root.dataset.folderId;
 					fetch(`/admin/media/folders/${folderId}`, {
 						method: 'PUT',
 						headers: {
@@ -457,14 +471,14 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 						}
 					});
 				}
-			};
-		}
+			}));
+		});
 		</script>
 	}
 }
 
 templ mediaFolderItem(pc *PageContext, data MediaLibraryViewData, folder MediaFolderView) {
-	<li class="folder-item" data-folder-id={ fmt.Sprintf("%d", folder.ID) } x-data="{ editing: false, showDelete: false }">
+	<li class="folder-item" data-folder-id={ fmt.Sprintf("%d", folder.ID) } x-data="mediaFolder">
 		<div class="folder-link-wrapper">
 			<a href={ templ.SafeURL(fmt.Sprintf("/admin/media?folder=%d", folder.ID)) } class={ "folder-link", templ.KV("active", data.FolderID != nil && *data.FolderID == folder.ID) }>
 				@iconFolder16()
@@ -474,16 +488,16 @@ templ mediaFolderItem(pc *PageContext, data MediaLibraryViewData, folder MediaFo
 					class="folder-name-input"
 					x-show="editing"
 					x-model="newName"
-					@keydown.enter={ fmt.Sprintf("saveRename(%d)", folder.ID) }
+					@keydown.enter="saveRename()"
 					@keydown.escape="editing = false"
 					@blur="editing = false"
-					x-ref={ fmt.Sprintf("renameInput%d", folder.ID) }
+					x-ref="renameInput"
 					x-cloak
 					maxlength="255"
 				/>
 			</a>
 			<div class="folder-actions">
-				<button type="button" class="folder-action-btn" @click={ fmt.Sprintf("editing = true; newName = $el.closest('.folder-link-wrapper').querySelector('.folder-name').textContent; $nextTick(() => $refs.renameInput%d.focus())", folder.ID) } title={ pc.T("media.rename") }>
+				<button type="button" class="folder-action-btn" @click="startRename()" title={ pc.T("media.rename") }>
 					@iconPencil12()
 				</button>
 				<button type="button" class="folder-action-btn folder-action-danger" @click="showDelete = true" title={ pc.T("btn.delete") }>

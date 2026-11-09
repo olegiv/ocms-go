@@ -296,8 +296,8 @@ func TestPageHTMLKeepsTableBorderAttribute(t *testing.T) {
 
 // TestSanitizePageHTMLKeepsEditorFormatting replays markup captured from the
 // admin editor (TinyMCE 8.10, issue #202) through the page sanitizer: every
-// format must come back with only the trailing semicolons dropped (and the
-// policy's rel="nofollow" added to links), and a second pass must not change
+// format must come back with only the trailing semicolons dropped (and
+// rel="noopener" added to links opening a new tab), and a second pass must not change
 // it again. The drift tests compare the rule list with itself; only replayed
 // editor output catches a style the editor writes that the list lacks.
 func TestSanitizePageHTMLKeepsEditorFormatting(t *testing.T) {
@@ -346,8 +346,8 @@ var editorReplayCases = []struct{ name, editor, want string }{
 	{"image centre", `<img style="display: block; margin-left: auto; margin-right: auto;" src="/uploads/a.png" alt="c">`, `<img style="display: block; margin-left: auto; margin-right: auto" src="/uploads/a.png" alt="c">`},
 	{"image advanced tab", `<img style="border-style: solid; border-width: 2px; margin: 10px 20px;" src="/uploads/a.png" alt="b">`, `<img style="border-style: solid; border-width: 2px; margin: 10px 20px" src="/uploads/a.png" alt="b">`},
 	{"image vertical space", `<img style="margin-bottom: 10px; margin-top: 10px;" src="/uploads/a.png" alt="v">`, `<img style="margin-bottom: 10px; margin-top: 10px" src="/uploads/a.png" alt="v">`},
-	{"text colour on a link", `<p><span style="color: #e03e2d;">Before <a style="color: #e03e2d;" href="/x">linked</a> after</span></p>`, `<p><span style="color: #e03e2d">Before <a style="color: #e03e2d" href="/x" rel="nofollow">linked</a> after</span></p>`},
-	{"highlight on a link", `<p><span style="background-color: #fbeeb8;">A <a style="background-color: #fbeeb8;" href="/y">link</a></span></p>`, `<p><span style="background-color: #fbeeb8">A <a style="background-color: #fbeeb8" href="/y" rel="nofollow">link</a></span></p>`},
+	{"text colour on a link", `<p><span style="color: #e03e2d;">Before <a style="color: #e03e2d;" href="/x">linked</a> after</span></p>`, `<p><span style="color: #e03e2d">Before <a style="color: #e03e2d" href="/x">linked</a> after</span></p>`},
+	{"highlight on a link", `<p><span style="background-color: #fbeeb8;">A <a style="background-color: #fbeeb8;" href="/y">link</a></span></p>`, `<p><span style="background-color: #fbeeb8">A <a style="background-color: #fbeeb8" href="/y">link</a></span></p>`},
 	{
 		"whole list item formatted",
 		`<ul><li style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt; font-style: italic; font-weight: bold;"><em><span style="color: #2dc26b; font-family: georgia, palatino, serif; font-size: 18pt;"><strong>Item</strong></span></em></li></ul>`,
@@ -362,5 +362,5 @@ var editorReplayCases = []struct{ name, editor, want string }{
 		`<table style="border-collapse: collapse; margin-left: auto; margin-right: auto; width: 100%" border="1"><colgroup><col style="width: 50%"><col style="width: 50%"></colgroup><tbody><tr><td style="background-color: #fbeeb8; border: 2px dotted #000000; vertical-align: top">a</td><td style="text-align: center">b</td></tr></tbody></table>`,
 	},
 	{"resized table", `<table style="border-collapse: collapse; width: 100.035%;" border="1"><tbody><tr><td style="width: 49.9824%;">a</td></tr></tbody></table>`, `<table style="border-collapse: collapse; width: 100.035%" border="1"><tbody><tr><td style="width: 49.9824%">a</td></tr></tbody></table>`},
-	{"link opening in a new tab", `<p><a href="https://example.com/x" target="_blank" rel="noopener noreferrer">ext</a></p>`, `<p><a href="https://example.com/x" target="_blank" rel="nofollow noopener">ext</a></p>`},
+	{"link opening in a new tab", `<p><a href="https://example.com/x" target="_blank" rel="noopener noreferrer">ext</a></p>`, `<p><a href="https://example.com/x" target="_blank" rel="noopener noreferrer">ext</a></p>`},
 }

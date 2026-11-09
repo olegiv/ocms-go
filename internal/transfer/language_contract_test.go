@@ -730,6 +730,7 @@ func TestDryRunRenameCountsCreatedAndInvalidStrategyFails(t *testing.T) {
 		ConflictStrategy: ConflictStrategy("bogus"), ImportPages: true,
 	})
 	require.ErrorContains(t, err, "invalid conflict strategy")
+	require.NotNil(t, result)
 	require.False(t, result.Success)
 	var pageCount int
 	require.NoError(t, ts.DB.QueryRowContext(ts.Ctx, `SELECT COUNT(*) FROM pages`).Scan(&pageCount))
@@ -805,6 +806,7 @@ func TestConflictRenameFailedPageDoesNotRebindMenuToExistingPage(t *testing.T) {
 		ConflictStrategy: ConflictRename, ImportPages: true, ImportMenus: true,
 	})
 	require.ErrorContains(t, err, "referenced page \"about\" was not imported")
+	require.NotNil(t, result)
 	require.False(t, result.Success)
 	require.Zero(t, result.GetIDMap("pages")[10])
 	_, err = ts.Queries.GetMenuBySlugAndLanguage(ts.Ctx, store.GetMenuBySlugAndLanguageParams{
@@ -855,6 +857,7 @@ func TestConflictRenameFailedTaxonomyRollsBackInsteadOfRebinding(t *testing.T) {
 		ConflictStrategy: ConflictRename, ImportCategories: true, ImportTags: true, ImportPages: true,
 	})
 	require.ErrorContains(t, err, "imported parent category")
+	require.NotNil(t, result)
 	require.False(t, result.Success)
 	require.Zero(t, result.GetIDMap("pages")[4])
 	_, err = ts.Queries.GetPageBySlug(ts.Ctx, "imported-page")
@@ -887,6 +890,7 @@ func TestTaxonomyAssociationFailureRollsBackImport(t *testing.T) {
 		ConflictStrategy: ConflictSkip, ImportTags: true, ImportPages: true,
 	})
 	require.ErrorContains(t, err, "forced page tag failure")
+	require.NotNil(t, result)
 	require.False(t, result.Success)
 	_, err = ts.Queries.GetPageBySlug(ts.Ctx, "imported")
 	require.ErrorIs(t, err, sql.ErrNoRows)
@@ -911,6 +915,7 @@ func TestCategoryParentFailureRollsBackImport(t *testing.T) {
 		ConflictStrategy: ConflictSkip, ImportCategories: true,
 	})
 	require.ErrorContains(t, err, "forced category parent failure")
+	require.NotNil(t, result)
 	require.False(t, result.Success)
 	_, err = ts.Queries.GetCategoryBySlug(ts.Ctx, "parent")
 	require.ErrorIs(t, err, sql.ErrNoRows)

@@ -16,7 +16,7 @@ Error responses use `no-store`.
 | Cache | Purpose | Invalidation |
 |-------|---------|--------------|
 | **Config** | Site settings (site_name, etc.) | On config update |
-| **Sitemap** | Generated sitemap.xml | On page and language changes, theme activation and settings, and Migrator imports; also expires after 1 hour |
+| **Sitemap** | Generated sitemap.xml | On page, tag, category, and language changes, theme activation and settings, and Migrator imports. Expires after 1 hour |
 | **Pages** | Published page content | On page create/update/delete |
 | **Menus** | Menu structure and items | On menu/item changes |
 | **Languages** | Active languages list | On language changes |
@@ -107,6 +107,7 @@ cacheManager.InvalidateTranslations() // Clear translations
 Caches are automatically invalidated when content changes:
 
 - **Page created/updated/deleted** → Page cache + Sitemap cache
+- **Tag or category created/updated/deleted in admin or REST** → Sitemap cache. Deletions also clear affected pages from the page cache.
 - **Menu/item changed** → Menu cache
 - **Config changed** → Config cache
 - **Language changed** → Language cache

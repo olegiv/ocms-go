@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
@@ -454,7 +455,7 @@ func TestMediaServiceDeleteRejectsMalformedUUIDBeforeDatabaseMutation(t *testing
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	err = NewMediaService(db, uploadRoot).Delete(ctx, media.ID)
+	_, err = NewMediaService(db, uploadRoot).Delete(ctx, media.ID)
 	if err == nil || !strings.Contains(err.Error(), "invalid media UUID") {
 		t.Fatalf("Delete() error = %v, want malformed UUID rejection", err)
 	}
@@ -518,7 +519,7 @@ func TestMediaServiceDeleteKeepsCapturedRootAcrossReplacement(t *testing.T) {
 			t.Fatalf("WriteFile(replacement): %v", err)
 		}
 	}
-	if err := svc.Delete(ctx, media.ID); err != nil {
+	if _, err := svc.Delete(ctx, media.ID); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {
@@ -562,12 +563,22 @@ func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	page, err := queries.CreatePage(ctx, store.CreatePageParams{Title: "Media references", Slug: "media-references", Status: "draft", AuthorID: user.ID, LanguageCode: language.Code, PageType: "post", FeaturedImageID: sql.NullInt64{Int64: media.ID, Valid: true}, OgImageID: sql.NullInt64{Int64: media.ID, Valid: true}, CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	uploadRoot := t.TempDir()
 	svc := NewMediaService(db, uploadRoot)
 	svc.deleteMediaFiles = func(*os.Root, string) error { return errors.New("injected cleanup failure") }
-	err = svc.Delete(ctx, media.ID)
-	if !errors.Is(err, ErrMediaFilesNotRemoved) || !strings.Contains(err.Error(), "injected cleanup failure") {
+	pages, err := svc.Delete(ctx, media.ID)
+	if err == nil || !errors.Is(err, ErrMediaFilesNotRemoved) || !strings.Contains(err.Error(), "injected cleanup failure") {
 		t.Fatalf("Delete() error = %v, want ErrMediaFilesNotRemoved with the cleanup failure", err)
+	}
+	// The records are gone, so the caller still owes the page its after-commit
+	// side effects (R2 P3-8): the changed page comes back with the error.
+	if len(pages) != 1 || pages[0].ID != page.ID || pages[0].Revision != 2 || pages[0].FeaturedImageID.Valid {
+		t.Fatalf("Delete() returned %+v, want the one page it revisioned, as committed", pages)
 	}
 	if _, err := queries.GetMediaByID(ctx, media.ID); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("media row lookup = %v, want committed deletion", err)
@@ -576,11 +587,23 @@ func TestMediaServiceDeleteCleanupFailureIsReturnedAfterCommit(t *testing.T) {
 	if err != nil || len(variants) != 0 {
 		t.Fatalf("variant rows = %+v, error = %v; want committed deletion", variants, err)
 	}
+	changed, err := queries.GetPageByID(ctx, page.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.FeaturedImageID.Valid || changed.OgImageID.Valid || changed.Revision != 2 {
+		t.Fatalf("media cleanup was not revisioned once: %+v", changed)
+	}
+	version, err := queries.GetPageVersionByRevision(ctx, store.GetPageVersionByRevisionParams{PageID: page.ID, Revision: sql.NullInt64{Int64: 2, Valid: true}})
+	if err != nil || version.Legacy || !version.SnapshotJson.Valid {
+		t.Fatalf("media cleanup snapshot: %+v %v", version, err)
+	}
+
 }
 
 func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *testing.T) {
 	const mediaUUID = "550e8400-e29b-41d4-a716-446655440000"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := t.Context()
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 	queries := store.New(db)
@@ -618,15 +641,26 @@ func TestMediaServiceDeleteCancellationBeforeCommitPreservesRowsAndFiles(t *test
 	}
 
 	svc := NewMediaService(db, uploadRoot)
-	svc.beforeMediaCommit = cancel
-	err = svc.Delete(ctx, media.ID)
-	if err == nil || !errors.Is(err, context.Canceled) || errors.Is(err, ErrMediaFilesNotRemoved) {
-		t.Fatalf("Delete() error = %v, want context.Canceled, not a completed delete", err)
-	}
-	if _, err := queries.GetMediaByID(context.Background(), media.ID); err != nil {
+	synctest.Test(t, func(t *testing.T) {
+		deleteCtx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		svc.beforeMediaCommit = func() {
+			cancel()
+			// Let database/sql finish its automatic rollback before Commit.
+			synctest.Wait()
+		}
+		pages, deleteErr := svc.Delete(deleteCtx, media.ID)
+		if !errors.Is(deleteErr, context.Canceled) || errors.Is(deleteErr, sql.ErrTxDone) || errors.Is(deleteErr, ErrMediaFilesNotRemoved) {
+			t.Fatalf("Delete() error = %v, want cancellation without transaction or cleanup errors", deleteErr)
+		}
+		if len(pages) != 0 {
+			t.Fatalf("Delete() returned pages %+v for a rolled-back delete", pages)
+		}
+	})
+	if _, err := queries.GetMediaByID(ctx, media.ID); err != nil {
 		t.Fatalf("media row was not rolled back: %v", err)
 	}
-	variants, err := queries.GetMediaVariants(context.Background(), media.ID)
+	variants, err := queries.GetMediaVariants(ctx, media.ID)
 	if err != nil || len(variants) != 1 {
 		t.Fatalf("variant rows = %+v, error = %v; want rollback", variants, err)
 	}

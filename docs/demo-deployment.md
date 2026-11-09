@@ -82,6 +82,7 @@ OCMS_UPLOADS_DIR=/app/data/uploads  # Example for containerized deployments
 
 1. [Fly.io CLI](https://fly.io/docs/hands-on/install-flyctl/) installed
 2. Fly.io account (free tier is sufficient)
+3. Git checkout and Docker with support for Linux AMD64 builds
 
 ### Quick Start
 
@@ -99,12 +100,12 @@ fly volumes create ocms_data --size 1 --region fra
 fly secrets set OCMS_SESSION_SECRET="$(openssl rand -base64 32)" --app ocms-demo
 
 # Deploy
-fly deploy
+./.fly/scripts/deploy.sh
 ```
 
-Fly deploys with the project Dockerfile. The image build generates
-`web/static/dist` from source, so committed dist files and GitHub release
-archives are not required.
+The deployment script uses the source and Fly configuration from committed
+`HEAD`. Commit intended demo changes before deploying. The image build
+generates `web/static/dist` from that source and excludes local site modules.
 
 ### Configuration
 
@@ -196,7 +197,7 @@ The project includes a multi-stage `Dockerfile` that:
 Build and run locally:
 
 ```bash
-docker build -t ocms-demo .
+git archive HEAD | docker build -t ocms-demo -
 # --stop-timeout 60 lets the app drain requests (up to 30 seconds) and shut down on docker stop
 # The image defaults to OCMS_ENV=production, which refuses to start without
 # OCMS_TRUSTED_PROXIES and OCMS_API_ALLOWED_CIDRS; use development for a local try-out

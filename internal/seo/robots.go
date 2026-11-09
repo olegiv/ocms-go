@@ -46,6 +46,7 @@ func (b *RobotsBuilder) Build() string {
 		defaultDisallow := []string{
 			"/admin",
 			"/account",
+			"/oauth",
 			"/login",
 			"/logout",
 			"/session",

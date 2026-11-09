@@ -354,6 +354,14 @@ func TestImportStoriesSetsStatusTimestampsAndTaxonomy(t *testing.T) {
 	if tracker.countOf(types.EntityPost) != 1 {
 		t.Errorf("post was not tracked, so it would be invisible to undo")
 	}
+	written, historyErr := queries.ListPages(ctx, store.ListPagesParams{Limit: 100})
+	if historyErr != nil {
+		t.Fatal(historyErr)
+	}
+	for _, saved := range written {
+		testutil.AssertPageRevision(t, queries, saved.ID, 1)
+	}
+
 }
 
 func TestImportStoriesGivesCollidingTitlesDistinctSlugs(t *testing.T) {
@@ -596,6 +604,14 @@ func TestImportStaticPagesHonorsActiveFlag(t *testing.T) {
 	if hidden.Status != model.PageStatusDraft || hidden.PublishedAt.Valid {
 		t.Errorf("inactive page should be a draft, got status %q published_at %v", hidden.Status, hidden.PublishedAt)
 	}
+	written, historyErr := queries.ListPages(ctx, store.ListPagesParams{Limit: 100})
+	if historyErr != nil {
+		t.Fatal(historyErr)
+	}
+	for _, saved := range written {
+		testutil.AssertPageRevision(t, queries, saved.ID, 1)
+	}
+
 }
 
 // TestImportStaticPagesStripsMarkupFromMetaDescription covers audit finding
@@ -662,6 +678,14 @@ func TestImportEncyclopediaCreatesOnePagePerEntry(t *testing.T) {
 			t.Errorf("encyclopedia body is missing %q", want)
 		}
 	}
+	written, historyErr := queries.ListPages(ctx, store.ListPagesParams{Limit: 100})
+	if historyErr != nil {
+		t.Fatal(historyErr)
+	}
+	for _, saved := range written {
+		testutil.AssertPageRevision(t, queries, saved.ID, 1)
+	}
+
 }
 
 func TestImportCategoriesMapsTopicsAndReusesExisting(t *testing.T) {
@@ -1809,7 +1833,7 @@ func TestStagesReportTheProgressPhaseTheyWork(t *testing.T) {
 // imported even when attaching its taxonomy fails, and the failure is still
 // reported. No test made a destination write fail, so every
 // AddError("Failed to create ...") branch in the package was unreachable.
-func TestAssociationFailureStillCountsThePage(t *testing.T) {
+func TestAssociationFailureRollsBackThePage(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 	queries := store.New(db)
@@ -1832,8 +1856,7 @@ func TestAssociationFailureStillCountsThePage(t *testing.T) {
 		t.Fatalf("seed category: %v", err)
 	}
 
-	// Remove the join table so the association fails while the page write
-	// succeeds — the precise split the contract is about.
+	// Remove the join table so a failed association must roll back its page.
 	if _, err := db.Exec(`DROP TABLE page_categories`); err != nil {
 		t.Fatalf("drop join table: %v", err)
 	}
@@ -1844,17 +1867,17 @@ func TestAssociationFailureStillCountsThePage(t *testing.T) {
 		map[int64]int64{3: category.ID}, map[int64]int64{}, nil, nil,
 		result, &mockTracker{}, nil)
 
-	if result.PostsImported != 1 {
-		t.Errorf("PostsImported = %d; the page was written, so it must be counted", result.PostsImported)
+	if result.PostsImported != 0 {
+		t.Errorf("PostsImported = %d; a failed atomic page must not be counted", result.PostsImported)
 	}
 	if len(result.Errors) != 1 {
 		t.Fatalf("the association failure must be reported, got %v", result.Errors)
 	}
-	if !strings.Contains(result.Errors[0], "category") {
+	if !strings.Contains(result.Errors[0], "page_categories") {
 		t.Errorf("the error should name what failed: %q", result.Errors[0])
 	}
-	if _, err := queries.GetPageBySlug(ctx, "hotel-review"); err != nil {
-		t.Errorf("the page itself should still exist: %v", err)
+	if _, err := queries.GetPageBySlug(ctx, "hotel-review"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("the failed atomic page must not exist: %v", err)
 	}
 }
 

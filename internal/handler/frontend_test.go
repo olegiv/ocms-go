@@ -27,6 +27,9 @@ import (
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/pagewrite"
+	"github.com/olegiv/ocms-go/internal/preview"
+	"github.com/olegiv/ocms-go/internal/provenance"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -580,11 +583,23 @@ func TestFrontendHandler_TrustedPageBody_SanitizesWhenEnabled(t *testing.T) {
 func createDraftPage(t *testing.T, db *sql.DB, authorID int64) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO pages (title, slug, body, status, author_id, page_type) VALUES (?, ?, ?, ?, ?, ?)`,
-		"Draft Page", "draft-page", "<p>Draft content</p>", "draft", authorID, "post",
+		`INSERT INTO pages (title, slug, body, status, author_id, page_type, language_code) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		"Draft Page", "draft-page", "<p>Draft content</p>", "draft", authorID, "post", "en",
 	)
 	if err != nil {
 		t.Fatalf("failed to create draft page: %v", err)
+	}
+	page, err := store.New(db).GetPageBySlug(t.Context(), "draft-page")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordFrontendFixture(t, db, page)
+}
+
+func recordFrontendFixture(t *testing.T, db *sql.DB, page store.Page) {
+	t.Helper()
+	if _, err := pagewrite.InTx(t.Context(), db, provenance.Principal{UserID: page.AuthorID, Source: "human", Transport: "test"}, func(work *pagewrite.Tx) error { work.Created(page); return nil }); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1376,6 +1391,11 @@ func TestAdminDraftLinkServesOnlyToStaff(t *testing.T) {
 	}
 
 	queries := store.New(db)
+	recorded, err := queries.GetPageByID(t.Context(), frenchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordFrontendFixture(t, db, recorded)
 	router := languageAwareAliasTestRouter(db, NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil))
 	for _, slug := range []string{"draft-page", "brouillon"} {
 		page, err := queries.GetPageBySlug(context.Background(), slug)
@@ -1521,6 +1541,59 @@ func TestFrontendHandler_NotFound_ResolvesUnprefixedMultiSegmentAlias(t *testing
 	}
 	if location := w.Header().Get("Location"); location != "/node-one" {
 		t.Fatalf("Location = %q; want %q", location, "/node-one")
+	}
+}
+
+func TestLegacyPreviewAliasRedirectsAndCanBeRetained(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	const alias = "docs/preview/share/guide"
+	pageID := createPublishedAliasPage(t, db, "existing-guide", "en", alias, admin.ID)
+	createPublishedAliasPage(t, db, "redacted-guide", "en", "docs/preview/share/redacted", admin.ID)
+	logs := captureLogs(t)
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	router := preview.RedactRequest(preview.Middleware(languageAwareAliasTestRouter(db, h)))
+
+	for _, tc := range []struct {
+		method, path, location string
+		status                 int
+	}{
+		{http.MethodGet, "/" + alias, "/existing-guide", http.StatusMovedPermanently},
+		{http.MethodHead, "/" + alias, "/existing-guide", http.StatusMovedPermanently},
+		{http.MethodGet, "/docs/preview/share/redacted", "/redacted-guide", http.StatusMovedPermanently},
+		{http.MethodGet, "/docs/preview/share/%67uide", "", http.StatusNotFound},
+		{http.MethodGet, "/docs/preview/share/synthetic-legacy-bearer", "", http.StatusNotFound},
+	} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+		if w.Code != tc.status || w.Header().Get("Location") != tc.location {
+			t.Errorf("%s %s: status = %d, location = %q", tc.method, tc.path, w.Code, w.Header().Get("Location"))
+		}
+		if w.Header().Get("Referrer-Policy") != "no-referrer" {
+			t.Errorf("%s %s lost preview privacy headers", tc.method, tc.path)
+		}
+	}
+	if strings.Contains(logs.String(), "synthetic-legacy-bearer") {
+		t.Error("a legacy bearer reached the frontend log")
+	}
+
+	form := NewPagesHandler(db, nil, sm)
+	if message := form.validatePageAliases(t.Context(), []string{alias}, pageID); message != "" {
+		t.Errorf("cannot retain an existing alias: %s", message)
+	}
+	for _, otherID := range []int64{0, pageID + 1} {
+		if message := form.validatePageAliases(t.Context(), []string{alias}, otherID); message == "" {
+			t.Errorf("page %d can take a reserved alias it does not own", otherID)
+		}
+	}
+
+	if _, err := db.Exec(`INSERT INTO languages (code, name, native_name, is_active, direction) VALUES ('docs', 'Docs', 'Docs', 1, 'ltr')`); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/"+alias, nil))
+	if w.Code != http.StatusNotFound || w.Header().Get("Location") != "" {
+		t.Errorf("legacy alias took an active language route: status = %d, location = %q", w.Code, w.Header().Get("Location"))
 	}
 }
 

@@ -1,16 +1,23 @@
 // Copyright (c) 2025-2026 Oleg Ivanchenko
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+// Package config loads and validates the oCMS runtime configuration.
 package config
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
 )
+
+// validEnvs lists the accepted OCMS_ENV values. Every value but
+// "development" gets the production hardening (IsProductionLike).
+var validEnvs = []string{"development", "staging", "production"}
 
 // placeholderSecretPrefixes mark values copied from documentation or example
 // files without being replaced; the repository's own example secrets
@@ -37,17 +44,27 @@ var publicTestSecretPrefixes = []string{
 
 // Config holds the application configuration loaded from environment variables.
 type Config struct {
-	DBPath        string `env:"OCMS_DB_PATH" envDefault:"./data/ocms.db"`
-	SessionSecret string `env:"OCMS_SESSION_SECRET,required"`
-	ServerHost    string `env:"OCMS_SERVER_HOST" envDefault:"localhost"`
-	ServerPort    int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
-	Env           string `env:"OCMS_ENV" envDefault:"development"`
-	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
-	ErrorLogPath  string `env:"OCMS_ERROR_LOG_PATH"` // Optional path for a separate error log file (5xx/ERROR+)
-	CustomDir     string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
-	UploadsDir    string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
-	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
-	SiteURL       string `env:"OCMS_SITE_URL"` // Full site URL written into site config on startup (overrides the admin setting)
+	PreviewLinkTTLHours int    `env:"OCMS_PREVIEW_LINK_TTL_HOURS" envDefault:"24"`
+	DBPath              string `env:"OCMS_DB_PATH" envDefault:"./data/ocms.db"`
+	SessionSecret       string `env:"OCMS_SESSION_SECRET,required"`
+	ServerHost          string `env:"OCMS_SERVER_HOST" envDefault:"localhost"`
+	ServerPort          int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
+	Env                 string `env:"OCMS_ENV" envDefault:"production"`
+	LogLevel            string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
+	ErrorLogPath        string `env:"OCMS_ERROR_LOG_PATH"` // Optional path for a separate error log file (5xx/ERROR+)
+	CustomDir           string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
+	UploadsDir          string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
+	ActiveTheme         string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
+	SiteURL             string `env:"OCMS_SITE_URL"` // Full site URL written into site config on startup (overrides the admin setting)
+
+	OAuthEnabled               bool   `env:"OCMS_OAUTH_ENABLED" envDefault:"false"`
+	OAuthCIMDAllowedHosts      string `env:"OCMS_OAUTH_CIMD_ALLOWED_HOSTS" envDefault:"claude.ai,chatgpt.com"`
+	OAuthPreRegisteredClients  string `env:"OCMS_OAUTH_PRE_REGISTERED_CLIENTS"`
+	OAuthAllowDCR              bool   `env:"OCMS_OAUTH_ALLOW_DCR" envDefault:"false"`
+	OAuthDCRInitialAccessToken string `env:"OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN"`
+	OAuthAccessTTL             int    `env:"OCMS_OAUTH_ACCESS_TTL" envDefault:"3600"`
+	OAuthRefreshTTLDays        int    `env:"OCMS_OAUTH_REFRESH_TTL_DAYS" envDefault:"30"`
+	AIDisabled                 bool   `env:"OCMS_AI_DISABLED" envDefault:"false"`
 
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching
@@ -96,6 +113,12 @@ type Config struct {
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
+	// SeedAdminPassword replaces the documented default password of the
+	// admin OCMS_DO_SEED creates; RequireSeedAdminPassword refuses to seed
+	// without one, for a first boot reachable from other hosts (the Fly
+	// staging bootstrap).
+	SeedAdminPassword        string `env:"OCMS_SEED_ADMIN_PASSWORD"`
+	RequireSeedAdminPassword bool   `env:"OCMS_REQUIRE_SEED_ADMIN_PASSWORD" envDefault:"false"`
 
 	// Public forms security policy
 	RequireFormCaptcha                 bool   `env:"OCMS_REQUIRE_FORM_CAPTCHA" envDefault:"false"`                   // Require captcha on all public form submissions
@@ -118,6 +141,17 @@ type Config struct {
 // IsDevelopment returns true if the application is running in development mode.
 func (c Config) IsDevelopment() bool {
 	return c.Env == "development"
+}
+
+// IsProductionLike reports whether the production hardening applies: the
+// secure defaults, the startup refusals and the secret checks. It holds for
+// every environment except development, so staging, which serves the public
+// Internet too, cannot start with a weaker posture than production. An empty
+// Env only occurs in a Config built by hand (Load defaults it to
+// production) and is not production-like. Code outside this package asks
+// this method instead of comparing Env (TestNothingComparesEnvOutsideConfig).
+func (c Config) IsProductionLike() bool {
+	return c.Env != "" && !c.IsDevelopment()
 }
 
 // ServerAddr returns the full server address in host:port format.
@@ -177,28 +211,51 @@ func Load() (*Config, error) {
 	if err := env.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
+	applyOAuthCIMDHostsSetting(cfg)
+
+	// A typo such as "prod" or "Production" must not start with an unknown
+	// posture. Refuse anything outside the known set instead.
+	if !slices.Contains(validEnvs, cfg.Env) {
+		return nil, fmt.Errorf("OCMS_ENV must be one of %s, got %q", strings.Join(validEnvs, ", "), cfg.Env)
+	}
 
 	applyProductionSecurityDefaults(cfg)
 
-	// Production hardening: prevent default seeding in production
+	if cfg.PreviewLinkTTLHours < 1 || cfg.PreviewLinkTTLHours > 24 {
+		return nil, fmt.Errorf("preview link TTL must be 1–24 hours")
+	}
+	if cfg.OAuthEnabled && strings.TrimSpace(cfg.SiteURL) == "" {
+		return nil, fmt.Errorf("OCMS_SITE_URL is required when OAuth is enabled")
+	}
+	if cfg.OAuthEnabled && (cfg.OAuthAccessTTL < 60 || cfg.OAuthAccessTTL > 86400 || cfg.OAuthRefreshTTLDays < 1 || cfg.OAuthRefreshTTLDays > 90) {
+		return nil, fmt.Errorf("OAuth access TTL must be 60–86400 seconds and refresh TTL 1–90 days")
+	}
+	if err := ValidateDCRInitialAccessToken(cfg.OAuthDCRInitialAccessToken); err != nil {
+		return nil, err
+	}
+
+	// Production hardening, for staging too: prevent default seeding
 	// (allowed when demo mode is explicitly enabled).
-	if cfg.Env == "production" && cfg.DoSeed && os.Getenv("OCMS_DEMO_MODE") != "true" {
-		return nil, fmt.Errorf("OCMS_DO_SEED must be false in production")
+	if cfg.IsProductionLike() && cfg.DoSeed && os.Getenv("OCMS_DEMO_MODE") != "true" {
+		return nil, fmt.Errorf("OCMS_DO_SEED must be false outside development")
 	}
-	if cfg.Env == "production" && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
-		return nil, fmt.Errorf("OCMS_API_ALLOWED_CIDRS must be configured in production when OCMS_REQUIRE_API_ALLOWED_CIDRS is enabled")
+	if err := validateSeedAdminPassword(cfg); err != nil {
+		return nil, err
 	}
-	if cfg.Env == "production" && cfg.RequireTrustedProxies && strings.TrimSpace(cfg.TrustedProxies) == "" {
-		return nil, fmt.Errorf("OCMS_TRUSTED_PROXIES must be configured in production when OCMS_REQUIRE_TRUSTED_PROXIES is enabled")
+	if cfg.IsProductionLike() && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
+		return nil, fmt.Errorf("OCMS_API_ALLOWED_CIDRS must be configured outside development when OCMS_REQUIRE_API_ALLOWED_CIDRS is enabled")
 	}
-	if cfg.Env == "production" && cfg.RequireEmbedProxyToken && strings.TrimSpace(cfg.EmbedProxyToken) == "" {
-		return nil, fmt.Errorf("OCMS_EMBED_PROXY_TOKEN must be configured in production when OCMS_REQUIRE_EMBED_PROXY_TOKEN is enabled")
+	if cfg.IsProductionLike() && cfg.RequireTrustedProxies && strings.TrimSpace(cfg.TrustedProxies) == "" {
+		return nil, fmt.Errorf("OCMS_TRUSTED_PROXIES must be configured outside development when OCMS_REQUIRE_TRUSTED_PROXIES is enabled")
 	}
-	if cfg.Env == "production" && cfg.RequireSanitizePageHTML && !cfg.SanitizePageHTML {
-		return nil, fmt.Errorf("OCMS_SANITIZE_PAGE_HTML must be true in production when OCMS_REQUIRE_SANITIZE_PAGE_HTML is enabled")
+	if cfg.IsProductionLike() && cfg.RequireEmbedProxyToken && strings.TrimSpace(cfg.EmbedProxyToken) == "" {
+		return nil, fmt.Errorf("OCMS_EMBED_PROXY_TOKEN must be configured outside development when OCMS_REQUIRE_EMBED_PROXY_TOKEN is enabled")
 	}
-	if cfg.Env == "production" && cfg.RequireBlockSuspiciousPageHTML && !cfg.BlockSuspiciousPageHTML {
-		return nil, fmt.Errorf("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML must be true in production when OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is enabled")
+	if cfg.IsProductionLike() && cfg.RequireSanitizePageHTML && !cfg.SanitizePageHTML {
+		return nil, fmt.Errorf("OCMS_SANITIZE_PAGE_HTML must be true outside development when OCMS_REQUIRE_SANITIZE_PAGE_HTML is enabled")
+	}
+	if cfg.IsProductionLike() && cfg.RequireBlockSuspiciousPageHTML && !cfg.BlockSuspiciousPageHTML {
+		return nil, fmt.Errorf("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML must be true outside development when OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is enabled")
 	}
 	cfg.WebhookFormDataMode = strings.ToLower(strings.TrimSpace(cfg.WebhookFormDataMode))
 	if cfg.WebhookFormDataMode == "" {
@@ -209,8 +266,8 @@ func Load() (*Config, error) {
 	default:
 		return nil, fmt.Errorf("OCMS_WEBHOOK_FORM_DATA_MODE must be one of: redacted, none, full")
 	}
-	if cfg.Env == "production" && cfg.RequireWebhookFormDataMinimization && cfg.WebhookFormDataMode == "full" {
-		return nil, fmt.Errorf("OCMS_WEBHOOK_FORM_DATA_MODE=full is not allowed in production when OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is enabled")
+	if cfg.IsProductionLike() && cfg.RequireWebhookFormDataMinimization && cfg.WebhookFormDataMode == "full" {
+		return nil, fmt.Errorf("OCMS_WEBHOOK_FORM_DATA_MODE=full is not allowed outside development when OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is enabled")
 	}
 	if cfg.APIMaxTTLDays < 0 {
 		return nil, fmt.Errorf("OCMS_API_KEY_MAX_TTL_DAYS must be >= 0")
@@ -219,7 +276,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("OCMS_API_KEY_MAX_TTL_DAYS must be <= %d", MaxAPITTLDays)
 	}
 
-	if err := validateSecret("OCMS_SESSION_SECRET", cfg.SessionSecret, cfg.Env == "production"); err != nil {
+	if err := validateSecret("OCMS_SESSION_SECRET", cfg.SessionSecret, cfg.IsProductionLike()); err != nil {
 		return nil, err
 	}
 	if token := strings.TrimSpace(cfg.EmbedProxyToken); token != "" && isPlaceholderSecret(token) {
@@ -233,6 +290,42 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+// DCRInitialAccessTokenLength is the hex-encoded length of 32 random bytes.
+const DCRInitialAccessTokenLength = 64
+
+// ValidateDCRInitialAccessToken accepts an unset token or a randomly generated
+// hexadecimal credential for protected OAuth client registration.
+func ValidateDCRInitialAccessToken(token string) error {
+	if token == "" {
+		return nil
+	}
+	if len(token) == DCRInitialAccessTokenLength {
+		normalized := strings.ToLower(token)
+		if _, err := hex.DecodeString(token); err == nil &&
+			countDistinctChars(normalized) >= MinProductionSessionSecretDistinctChars && !isRepeatedPattern(normalized) {
+			return nil
+		}
+	}
+	return fmt.Errorf("OCMS_OAUTH_DCR_INITIAL_ACCESS_TOKEN must be 64 random hex characters; generate it with openssl rand -hex 32")
+}
+
+// MinSeedAdminPasswordLength is the shortest OCMS_SEED_ADMIN_PASSWORD
+// accepted, the same minimum the admin UI applies to every password.
+const MinSeedAdminPasswordLength = 12
+
+// validateSeedAdminPassword checks OCMS_SEED_ADMIN_PASSWORD and refuses to
+// seed the documented default password when OCMS_REQUIRE_SEED_ADMIN_PASSWORD
+// is on (2026-11-03 audit C-2).
+func validateSeedAdminPassword(cfg *Config) error {
+	if cfg.SeedAdminPassword != "" && len(cfg.SeedAdminPassword) < MinSeedAdminPasswordLength {
+		return fmt.Errorf("OCMS_SEED_ADMIN_PASSWORD must be at least %d characters", MinSeedAdminPasswordLength)
+	}
+	if cfg.DoSeed && cfg.RequireSeedAdminPassword && cfg.SeedAdminPassword == "" {
+		return fmt.Errorf("OCMS_SEED_ADMIN_PASSWORD must be set when OCMS_DO_SEED and OCMS_REQUIRE_SEED_ADMIN_PASSWORD are enabled")
+	}
+	return nil
+}
+
 // validateMFAConfig checks the two-factor settings. OCMS_MFA_KEY seals every
 // enrolled TOTP secret, so it gets the session secret's checks and must not
 // be the session secret itself. A requirement nobody can meet is refused at
@@ -243,7 +336,7 @@ func validateMFAConfig(cfg *Config) error {
 		cfg.MFAKey = ""
 	}
 	if cfg.MFAKey != "" {
-		if err := validateSecret("OCMS_MFA_KEY", cfg.MFAKey, cfg.Env == "production"); err != nil {
+		if err := validateSecret("OCMS_MFA_KEY", cfg.MFAKey, cfg.IsProductionLike()); err != nil {
 			return err
 		}
 		if cfg.MFAKey == cfg.SessionSecret {
@@ -368,7 +461,7 @@ func isRepeatedPattern(s string) bool {
 }
 
 func applyProductionSecurityDefaults(cfg *Config) {
-	if cfg == nil || cfg.Env != "production" {
+	if cfg == nil || !cfg.IsProductionLike() {
 		return
 	}
 

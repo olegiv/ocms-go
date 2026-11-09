@@ -91,11 +91,7 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 					method="POST"
 					action="/admin/export"
 					class="p-6"
-					x-data={ `{
-						includeMedia: true,
-						includeMediaFiles: false,
-						get willBeZip() { return this.includeMedia && this.includeMediaFiles; }
-					}` }
+					x-data="{ includeMedia: true, includeMediaFiles: false }"
 				>
 				<div class="export-sections">
 					<!-- Content Section -->
@@ -296,16 +292,15 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 					@iconInfo()
 					<p>{ pc.T("export.info") }</p>
 				</div>
-				<div class="export-info zip-info warning-notice" x-show="willBeZip" x-cloak>
+				<div class="export-info zip-info warning-notice" x-show="includeMedia && includeMediaFiles" x-cloak>
 					@iconArchive()
 					<p>{ pc.T("export.zip_info") }</p>
 				</div>
 				<div class="form-actions">
 					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						@iconDownload()
-						<span x-text={ fmt.Sprintf("willBeZip ? '%s' : '%s'", pc.T("export.download_zip"), pc.T("export.download")) }>
-							{ pc.T("export.download") }
-						</span>
+						<span x-show="!includeMedia || !includeMediaFiles">{ pc.T("export.download") }</span>
+						<span x-show="includeMedia && includeMediaFiles" x-cloak>{ pc.T("export.download_zip") }</span>
 					}
 				</div>
 				</form>
@@ -384,8 +379,8 @@ templ importFileUpload(pc *PageContext) {
 								</div>
 							</div>
 							<div class="media-dropzone-file-info">
-								<span class="media-dropzone-file-name" x-text="selectedFile?.name"></span>
-								<span class="media-dropzone-file-size" x-text="formatSize(selectedFile?.size || 0)"></span>
+								<span class="media-dropzone-file-name" x-text="selectedFile && selectedFile.name"></span>
+								<span class="media-dropzone-file-size" x-text="formatSize(selectedFile ? selectedFile.size : 0)"></span>
 							</div>
 							<button
 								type="button"
@@ -716,6 +711,8 @@ templ importResults(pc *PageContext, data ImportViewData) {
 // importUploaderScript renders the Alpine.js import uploader component.
 templ importUploaderScript() {
 	<script nonce={ templ.GetNonce(ctx) }>
+	document.addEventListener('alpine:init', () => Alpine.data('importUploader', importUploader));
+
 	function importUploader() {
 		return {
 			selectedFile: null,

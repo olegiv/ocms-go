@@ -9,6 +9,7 @@ package logging
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -341,57 +342,19 @@ func (h *EventLogHandler) extractCategory(r slog.Record) string {
 // extractMetadata collects all log attributes into a JSON string.
 // It also includes the request path from context if available.
 func (h *EventLogHandler) extractMetadata(ctx context.Context, r slog.Record) string {
-	// Build a simple JSON object from attributes
-	var sb strings.Builder
-	sb.WriteString("{")
-	first := true
-
-	// Add request path from context if available
+	attrs := make(map[string]string, r.NumAttrs()+1)
 	if path := middleware.GetRequestPath(ctx); path != "" {
-		sb.WriteString(`"path":"`)
-		sb.WriteString(escapeJSON(path))
-		sb.WriteString(`"`)
-		first = false
+		attrs["path"] = path
 	}
-
 	r.Attrs(func(a slog.Attr) bool {
-		if a.Key == "category" {
-			return true // Skip category, already extracted
+		if a.Key != "category" {
+			attrs[a.Key] = a.Value.String()
 		}
-		if !first {
-			sb.WriteString(",")
-		}
-		first = false
-		sb.WriteString(`"`)
-		sb.WriteString(escapeJSON(a.Key))
-		sb.WriteString(`":"`)
-		sb.WriteString(escapeJSON(a.Value.String()))
-		sb.WriteString(`"`)
 		return true
 	})
-
-	sb.WriteString("}")
-	return sb.String()
-}
-
-// escapeJSON escapes special characters in a string for JSON.
-func escapeJSON(s string) string {
-	var sb strings.Builder
-	for _, r := range s {
-		switch r {
-		case '"':
-			sb.WriteString(`\"`)
-		case '\\':
-			sb.WriteString(`\\`)
-		case '\n':
-			sb.WriteString(`\n`)
-		case '\r':
-			sb.WriteString(`\r`)
-		case '\t':
-			sb.WriteString(`\t`)
-		default:
-			sb.WriteRune(r)
-		}
+	encoded, err := json.Marshal(attrs)
+	if err != nil {
+		return "{}"
 	}
-	return sb.String()
+	return string(encoded)
 }
