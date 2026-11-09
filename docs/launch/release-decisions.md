@@ -1,6 +1,6 @@
 # R1 release decisions
 
-Updated 2026-11-08. The OpenPGP disposition below is owner-approved for the
+Updated 2026-11-09. The OpenPGP disposition below is owner-approved for the
 reviewed build, with the staging-target recheck recorded below; other
 decisions retain their stated status. This record does not authorize
 commit, push, deployment or publication. The
@@ -76,6 +76,28 @@ publication.
 |---|---|---|
 | GO-2026-5932 / `golang.org/x/crypto/openpgp` | Keep `golang.org/x/crypto v0.58.0` for Argon2 password hashing and bcrypt imports. oCMS does not import OpenPGP; the tested build has no vulnerable imported packages or reachable symbols. OpenPGP imports are outside this disposition. | Owner-approved not applicable; revalidated on `ba044434` for Linux/amd64, CGO disabled; future revalidation conditions remain |
 | GHSA-g3hv-75wg-m249 / transitive `minimatch` | `035ac1dd` imports master fix `a325de44`: vendor the existing Klaro 0.7.22 browser JS/CSS and BSD license, removing its unused Babel/ESLint/minimatch npm chain. No major override or advisory suppression. | Resolved; `ba044434` npm audit reports zero findings and reviewed vendor bytes match |
+| CVE-2026-122132 / `github.com/go-chi/chi/v5` | The advisory applies to `v5.5.0`. oCMS does not register `RedirectSlashes`, and that middleware is absent from the checked Linux/amd64 binary. | Owner-approved pin at `v5.5.0` pending a fixed release. See [Chi open redirect](#chi-open-redirect-cve-2026-122132). |
+
+### Chi open redirect (CVE-2026-122132)
+
+Mend flagged `github.com/go-chi/chi/v5 v5.5.0` for an open redirect in
+`RedirectSlashes`. A request path with an encoded tab can cause the
+middleware to send a redirect that a browser resolves to an external host.
+The Go vulnerability database did not list this CVE for Chi on 2026-11-09,
+so the clean `govulncheck` result did not cover it. See the
+[CVE advisory](https://www.vulncheck.com/advisories/go-chi-chi-5.2.2-through-5.5.0-open-redirect-via-redirectslashes-middleware).
+
+The server does not register `RedirectSlashes`. `go version -m` confirmed
+Chi `v5.5.0` in the Linux/amd64 build with CGO disabled, and `go tool nm`
+found no `RedirectSlashes` symbol. The module version is affected, but the
+vulnerable middleware is unreachable in the checked build. As of
+2026-11-09, `v5.5.0` was the latest stable release and the
+[upstream fix](https://github.com/go-chi/chi/pull/1238) was still open. Keep
+the pin until a fixed release is available, then update Chi and recheck
+the release build. Reassess sooner if the server starts using this
+middleware.
+
+### Historical OpenPGP and minimatch checks
 
 The owner approved retaining the required crypto module and recording this
 advisory as not applicable to the reviewed local build. The scope is the
